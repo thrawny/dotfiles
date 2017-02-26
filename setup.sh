@@ -124,6 +124,25 @@ print_success() {
   printf "\e[0;32m  [✔] $1\e[0m\n"
 }
 
+symlink_file() {
+    sourceFile=$1
+    targetFile=$2
+
+    if [ ! -e "$targetFile" ]; then
+      execute "ln -fs $sourceFile $targetFile" "$targetFile → $sourceFile"
+    elif [ "$(readlink "$targetFile")" == "$sourceFile" ]; then
+      print_success "$targetFile → $sourceFile"
+    else
+      ask_for_confirmation "'$targetFile' already exists, do you want to overwrite it?"
+      if answer_is_yes; then
+        rm -rf "$targetFile"
+        execute "ln -fs $sourceFile $targetFile" "$targetFile → $sourceFile"
+      else
+        print_error "$targetFile → $sourceFile"
+      fi
+    fi
+}
+
 # Warn user this script will overwrite current dotfiles
 while true; do
   read -p "Warning: this will overwrite your current dotfiles. Continue? [y/n] " yn
@@ -133,3 +152,91 @@ while true; do
     * ) echo "Please answer yes or no.";;
   esac
 done
+
+SCRIPT_DIR="$(cd "$(dirname "$0")"; pwd -P)"
+DOTFILES_DIR="$(dirname "$SCRIPT_DIR")"
+
+dir=~/dotfiles                        # dotfiles directory
+dir_backup=~/dotfiles_old             # old dotfiles backup directory
+
+export DOTFILES_DIR
+DOTFILES_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+
+
+# Create dotfiles_old in homedir
+echo -n "Creating $dir_backup for backup of any existing dotfiles in ~..."
+mkdir -p $dir_backup
+echo "done"
+
+# Change to the dotfiles directory
+echo -n "Changing to the $dir directory..."
+cd $dir
+echo "done"
+
+
+
+declare -a FILES_TO_SYMLINK=(
+
+  'vim'
+  'Xdefaults'
+  'xsessionrc'
+  'zshrc'
+  # 'shell/bash_profile'
+  # 'shell/bash_prompt'
+  # 'shell/bashrc'
+
+  # 'git/gitattributes'
+  # 'git/gitconfig'
+  # 'git/gitignore'
+
+)
+
+declare -a FILES_TO_SYMLINK_IN_CONFIG=(
+
+  'i3'
+
+)
+
+for i in ${FILES_TO_SYMLINK[@]}; do
+  echo "Moving any existing dotfiles from ~ to $dir_backup"
+  mv ~/.${i##*/} ~/dotfiles_old/
+done
+
+for i in ${FILES_TO_SYMLINK_IN_CONFIG[@]}; do
+  echo "Moving any existing dotfiles from ~/.config to $dir_backup"
+  mv ~/.config/${i##*/} ~/dotfiles_old/
+done
+
+
+main() {
+
+  local i=''
+  local sourceFile=''
+  local targetFile=''
+
+  # - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+  for i in ${FILES_TO_SYMLINK[@]}; do
+
+    sourceFile="$(pwd)/$i"
+    targetFile="$HOME/.$(printf "%s" "$i" | sed "s/.*\/\(.*\)/\1/g")"
+
+    symlink_file $sourceFile $targetFile
+
+  done
+
+  for i in ${FILES_TO_SYMLINK_IN_CONFIG[@]}; do
+
+    sourceFile="$(pwd)/$i"
+    targetFile="$HOME/.config/$(printf "%s" "$i" | sed "s/.*\/\(.*\)/\1/g")"
+
+    symlink_file $sourceFile $targetFile
+
+  done
+
+}
+
+main
+
+# source ~/.zshrc
+echo "Dont forget to source .zshrc"
