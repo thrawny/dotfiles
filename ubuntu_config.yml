@@ -1,0 +1,22 @@
+- name: docker group is present
+  group:
+    name: docker
+    state: present
+  become: yes
+
+- name: "{{ ansible_user }} is added to the docker group"
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: yes
+  become: yes
+
+- name: virtualenvwrapper conf is added to .zsh.local
+  lineinfile:
+    dest: "{{ home_dir }}/.zsh.local"
+    line:  "{{ item }}"
+    state: present
+    create: yes
+  with_items:
+    - "export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3"
+    - "source ~/.local/bin/virtualenvwrapper.sh"

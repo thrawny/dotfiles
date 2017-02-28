@@ -1,0 +1,26 @@
+- name: symlinks for all are present
+  file:
+    state: link
+    dest: "{{ home_dir }}/.{{ item.name }}"
+    src: "{{ dotfiles_dir }}/{{ item.dir|default('') }}{{ item.name }}"
+  with_items:
+    - {'name': 'vim'}
+    - {'name': 'zshrc', 'dir': 'shell/'}
+
+- name: symlinks for linux are present
+  file:
+    state: link
+    dest: "{{ home_dir }}/{{ item.dest|default('.') }}{{ item.name }}"
+    src: "{{ dotfiles_dir }}/linux/{{ item.name }}"
+  with_items:
+    - {'name': 'Xdefaults'}
+    - {'name': 'xsessionrc'}
+    - {'name': 'i3', 'dest': '.config/'}
+  when: ansible_distribution == 'Ubuntu'
+
+- name: symlinks for macosx are present
+  file:
+    state: link
+    dest: "{{ home_dir }}/.{{ item }}"
+    src: "{{ dotfiles_dir }}/{{ item }}"
+  with_items: []

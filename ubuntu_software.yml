@@ -1,0 +1,62 @@
+- name: packages needed to install other packages are present
+  apt:
+    name: "{{ item }}"
+    update_cache: yes
+  with_items:
+    - apt-transport-https
+    - ca-certificates
+    - curl
+    - software-properties-common
+  become: yes
+
+- name: docker apt key is present
+  become: yes
+  apt_key: keyserver=hkp://keyserver.ubuntu.com:80 id=58118E89F3A912897C070ADBF76221572C52609D
+
+- name: 3rd party deb repos are present
+  apt_repository:
+    repo: "{{ item }}"
+    state: present
+  with_items:
+    - deb http://debian.sur5r.net/i3/ xenial universe
+    - deb https://apt.dockerproject.org/repo ubuntu-xenial main
+  become: yes
+
+- name: sur5r-keyring is present
+  apt:
+    name: sur5r-keyring
+    update_cache: yes
+    allow_unauthenticated: yes
+  become: yes
+
+- name: ubuntu packages are present
+  apt:
+    name: "{{ item }}"
+    update_cache: yes
+  with_items:
+    - python
+    - python-dev
+    - python-setuptools
+    - python-pip
+    - python3
+    - python3-dev
+    - python3-setuptools
+    - python3-pip
+    - build-essential
+    - libssl-dev
+    - libpq-dev
+    - git
+    - postgresql-client-common
+    - redis-tools
+    - rxvt-unicode-256color
+    - vim-gtk3
+    - i3
+    - docker-engine
+  become: yes
+  when: ansible_distribution == 'Ubuntu'
+
+- name: virtualenvwrapper is present
+  pip:
+    name: virtualenvwrapper
+    extra_args: --user
+    executable: /usr/bin/pip3

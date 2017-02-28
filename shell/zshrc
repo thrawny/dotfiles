@@ -5,6 +5,10 @@
 export ZSH=$HOME/.oh-my-zsh
 export WORKON_HOME=~/.venvs
 
+alias pi="pip install -r requirements.txt"
+alias pc="pip-compile"
+alias gpo="git push -u origin"
+
 ZSH_THEME="af-magic"
 
 plugins=(git)
