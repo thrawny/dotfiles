@@ -11,4 +11,5 @@
     - include: ubuntu_config.yml
       when: ansible_distribution == 'Ubuntu'
     - include: vim.yml
+    - include: fonts.yml
 
