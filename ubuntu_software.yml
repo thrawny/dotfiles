@@ -1,3 +1,5 @@
+# vim:ft=ansible:
+
 - name: packages needed to install other packages are present
   apt:
     name: "{{ item }}"
@@ -63,6 +65,7 @@
     purge: yes
   with_items:
     - unity-webapps-common
+  become: yes
 
 - name: virtualenvwrapper is present
   pip:

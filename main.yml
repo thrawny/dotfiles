@@ -1,4 +1,5 @@
 # vim:ft=ansible:
+
 - hosts: localhost
   vars:
     home_dir: "{{ lookup('env', 'HOME')}}"
@@ -9,4 +10,5 @@
       when: ansible_distribution == 'Ubuntu'
     - include: ubuntu_config.yml
       when: ansible_distribution == 'Ubuntu'
+    - include: vim.yml
 

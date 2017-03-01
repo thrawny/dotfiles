@@ -1,3 +1,5 @@
+# vim:ft=ansible:
+
 - name: docker group is present
   group:
     name: docker

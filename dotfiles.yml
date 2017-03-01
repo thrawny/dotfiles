@@ -1,3 +1,5 @@
+# vim:ft=ansible:
+
 - name: symlinks for all are present
   file:
     state: link
