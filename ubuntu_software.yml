@@ -55,6 +55,14 @@
   become: yes
   when: ansible_distribution == 'Ubuntu'
 
+- name: unwanted packages are absent
+  apt:
+    name: "{{ item }}"
+    state: absent
+    purge: yes
+  with_items:
+    - unity-webapps-common
+
 - name: virtualenvwrapper is present
   pip:
     name: virtualenvwrapper
