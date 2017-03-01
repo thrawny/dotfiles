@@ -1,0 +1,12 @@
+# vim:ft=ansible:
+- hosts: localhost
+  vars:
+    home_dir: "{{ lookup('env', 'HOME')}}"
+    dotfiles_dir: "{{ home_dir }}/dotfiles"
+  tasks:
+    - include: dotfiles.yml
+    - include: ubuntu_software.yml
+      when: ansible_distribution == 'Ubuntu'
+    - include: ubuntu_config.yml
+      when: ansible_distribution == 'Ubuntu'
+
