@@ -164,3 +164,4 @@ mouse_warping output
 
 bindsym $mod+m exec python3 ~/bin/nextfind.py # use dmenu to select an open window
 exec --no-startup-id nm-applet
+exec --no-startup-id nitrogen --restore

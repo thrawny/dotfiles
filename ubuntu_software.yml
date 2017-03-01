@@ -52,6 +52,7 @@
     - vim-gtk3
     - i3
     - docker-engine
+    - nitrogen
   become: yes
   when: ansible_distribution == 'Ubuntu'
 
