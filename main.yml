@@ -6,6 +6,7 @@
     dotfiles_dir: "{{ home_dir }}/dotfiles"
   tasks:
     - include: dotfiles.yml
+      tags: ['dotfiles']
     - include: ubuntu_software.yml
       when: ansible_distribution == 'Ubuntu'
     - include: ubuntu_config.yml
