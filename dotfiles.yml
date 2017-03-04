@@ -33,3 +33,4 @@
     dest: "{{ home_dir }}/.{{ item }}"
     src: "{{ dotfiles_dir }}/{{ item }}"
   with_items: []
+  when: ansible_distribution == 'Darwin'
