@@ -12,5 +12,6 @@
     - include: ubuntu_config.yml
       when: ansible_distribution == 'Ubuntu'
     - include: vim.yml
+      tags: ['dotfiles']
     - include: fonts.yml
 

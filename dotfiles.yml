@@ -27,10 +27,33 @@
     src: "{{ dotfiles_dir }}/linux/i3_scripts"
   when: ansible_distribution == 'Ubuntu'
 
-- name: symlinks for macosx are present
+- name: symlinks for osx are present
   file:
     state: link
-    dest: "{{ home_dir }}/.{{ item }}"
-    src: "{{ dotfiles_dir }}/{{ item }}"
-  with_items: []
-  when: ansible_distribution == 'Darwin'
+    dest: "{{ home_dir }}/.{{ item.name }}"
+    src: "{{ dotfiles_dir }}/{{ item.dir|default('') }}{{ item.name }}"
+  with_items:
+    - {'name': 'tmux.conf', 'dir': 'shell/'}
+  when: ansible_distribution == 'MacOSX'
+
+- name: virtualenvwrapper conf is added to .zsh.local
+  lineinfile:
+    dest: "{{ home_dir }}/.zsh.local"
+    line:  "{{ item }}"
+    state: present
+    create: yes
+  with_items:
+    - "export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3"
+    - "source ~/.local/bin/virtualenvwrapper.sh"
+  when: ansible_distribution == 'Ubuntu'
+
+- name: virtualenvwrapper conf is added to .zsh.local
+  lineinfile:
+    dest: "{{ home_dir }}/.zsh.local"
+    line:  "{{ item }}"
+    state: present
+    create: yes
+  with_items:
+    - "export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3"
+    - "source /usr/local/bin/virtualenvwrapper.sh"
+  when: ansible_distribution == 'MacOSX'

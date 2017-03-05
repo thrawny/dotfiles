@@ -1,17 +1,26 @@
-# If you come from bash you might have to change your $PATH.
-# export PATH=$HOME/bin:/usr/local/bin:$PATH
-
-# Path to your oh-my-zsh installation.
+# Exports
 export ZSH=$HOME/.oh-my-zsh
 export WORKON_HOME=~/.venvs
+export NVM_DIR=$HOME/.nvm
 
+# Load nvm if present
+[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+
+# Aliases
 alias pi="pip install -r requirements.txt"
 alias pc="pip-compile"
 alias gpo="git push -u origin"
+alias fig="docker-compose"
 
 ZSH_THEME="af-magic"
 
-plugins=(git)
+plugins=(git history history-substring-search docker)
+
+# OSX specific stuff
+if [[ "$(uname)" == "Darwin" ]]; then
+  export PATH=$HOME/bin:/usr/local/bin:$PATH
+  plugins+=(osx brew)
+fi;
 
 source $ZSH/oh-my-zsh.sh
 
