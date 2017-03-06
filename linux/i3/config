@@ -137,6 +137,8 @@ bindsym $mod+Shift+0 move container to workspace $ws10
 set $primary_monitor VGA-1
 set $secondary_monitor VGA-2
 
+workspace "$ws1" output $primary_monitor
+workspace "$ws2" output $primary_monitor
 workspace "$ws3" output $primary_monitor
 workspace "$ws4" output $primary_monitor
 workspace "$ws5" output $secondary_monitor
@@ -181,14 +183,25 @@ bindsym $mod+r mode "resize"
 
 bar {
         output $primary_monitor
-        font pango:monospace 10
-        status_command i3status
+        font pango:SourceCodePro 10
+        # status_command i3status
+        status_command i3blocks
+        # tray_output primary
+        #class                 border  backgr  text
+        # colors {
+        #     focused_workspace  #000000 #AFD700 #066900
+        #     inactive_workspace #333333 #000000 #AAAAAA
+        #     active_workspace   #333333 #000000 #FFFFFF
+        #     urgent_workspace   #333333 #066900 #AFD700
+        # }
+
 }
 
 bar {
         output $secondary_monitor
-        font pango:monospace 12
+        font pango:SourceCodePro 10
         status_command i3status  # -c ~/.i3/i3status.conf
+        tray_output none
 }
 
 mouse_warping output
@@ -199,3 +212,5 @@ exec --no-startup-id nitrogen --restore
 
 bindsym $mod+m exec ~/i3_scripts/nextfind.py # use dmenu to select an open window
 exec_always ~/i3_scripts/per_workspace_layout.pl
+
+exec --no-startup-id urxvt
