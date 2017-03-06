@@ -18,7 +18,6 @@
     - {'name': 'Xdefaults'}
     - {'name': 'xsessionrc'}
     - {'name': 'i3', 'dest': '.config/'}
-    - {'name': 'i3blocks.conf'}
   when: ansible_distribution == 'Ubuntu'
 
 - name: i3_scripts is symlinked to ~/i3_scripts
