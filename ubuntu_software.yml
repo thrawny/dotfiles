@@ -53,6 +53,7 @@
     - rxvt-unicode-256color
     - vim-gtk3
     - i3
+    - i3blocks
     - docker-engine
     - nitrogen
   become: yes
