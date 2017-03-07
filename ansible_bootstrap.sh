@@ -1,6 +1,6 @@
 #!/bin/bash
 
-sudo apt install \
+sudo apt install -y \
   build-essential \
   libssl-dev \
   libffi-dev \
@@ -12,4 +12,8 @@ sudo apt install \
 pip2 install --user virtualenv
 virtualenv -p python2 --system-site-packages ~/dotfiles_venv
 ~/dotfiles_venv/bin/pip install ansible
+
 ~/dotfiles_venv/bin/ansible-playbook -K ~/dotfiles/main.yml
+
+chsh -s /usr/bin/zsh
+env zsh

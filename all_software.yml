@@ -1,0 +1,4 @@
+- name: "oh-my-zsh is present"
+  git:
+    repo: "git://github.com/robbyrussell/oh-my-zsh.git"
+    dest: "{{ home_dir }}/.oh-my-zsh"

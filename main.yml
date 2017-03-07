@@ -7,6 +7,7 @@
   tasks:
     - include: dotfiles.yml
       tags: ['dotfiles']
+    - include: all_software.yml
     - include: ubuntu_software.yml
       when: ansible_distribution == 'Ubuntu'
     - include: ubuntu_config.yml

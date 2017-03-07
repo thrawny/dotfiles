@@ -56,6 +56,7 @@
     - i3blocks
     - docker-engine
     - nitrogen
+    - zsh
   become: yes
 
 - name: unwanted packages are absent
