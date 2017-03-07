@@ -98,16 +98,16 @@ bindsym $mod+a focus parent
 #bindsym $mod+d focus child
 
 # workspace definitions
-set $ws1 1 stuff
-set $ws2 2 stuff
-set $ws3 3 chrome
-set $ws4 4 git
-set $ws5 5 pycharm
-set $ws6 6 term
-set $ws7 7 term
-set $ws8 8 term
-set $ws9 9 term
-set $ws10 10 stuff
+set $ws1 1: stuff
+set $ws2 2: stuff
+set $ws3 3: chrome
+set $ws4 4: git
+set $ws5 5: pycharm
+set $ws6 6: term
+set $ws7 7: term
+set $ws8 8: term
+set $ws9 9: term
+set $ws10 10: stuff
 
 
 # switch to workspace
@@ -212,3 +212,5 @@ exec --no-startup-id nitrogen --restore
 
 bindsym $mod+m exec ~/i3_scripts/nextfind.py # use dmenu to select an open window
 exec_always ~/i3_scripts/per_workspace_layout.pl
+
+bindsym $mod+p exec i3lock
