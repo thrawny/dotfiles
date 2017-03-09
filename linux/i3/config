@@ -147,6 +147,7 @@ workspace "$ws10" output $secondary_monitor
 assign [class="Google-chrome"] $ws3
 assign [class="GitKraken"] $ws4
 assign [class="jetbrains-pycharm-ce"] $ws5
+assign [class="jetbrains-pycharm"] $ws5
 
 # reload the configuration file
 bindsym $mod+Shift+c reload
