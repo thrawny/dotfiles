@@ -39,11 +39,9 @@
     - python
     - python-dev
     - python-setuptools
-    - python-pip
     - python3
     - python3-dev
     - python3-setuptools
-    - python3-pip
     - build-essential
     - libssl-dev
     - libpq-dev
@@ -68,8 +66,18 @@
     - unity-webapps-common
   become: yes
 
+- name: install pip
+  easy_install:
+    name: pip
+    state: latest
+    executable: "{{ item }}"
+  with_items:
+    - easy_install
+    - easy_install3
+  become: yes
+
 - name: virtualenvwrapper is present
   pip:
     name: virtualenvwrapper
     extra_args: --user
-    executable: /usr/bin/pip3
+    executable: pip3
