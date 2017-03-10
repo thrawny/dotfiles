@@ -1,0 +1,46 @@
+let mapleader = ","
+
+nnoremap <Leader>v :e ~/.ideavimrc<CR>
+nnoremap <Leader>sv :source ~/.ideavimrc<CR>
+
+"Searching
+nnoremap <Leader>o :nohlsearch<CR>
+" search as characters are entered
+set incsearch
+" highlight matches
+set hlsearch
+" dont wanna highlight searches whenever i source vimrc
+nohlsearch
+" ignore case sensitivity
+set ignorecase
+" we want smartcase though
+set smartcase
+
+nnoremap Y y$
+nnoremap <C-d> <C-d>zz
+nnoremap <C-u> <C-u>zz
+nnoremap n nzzzv
+nnoremap N Nzzzv
+
+nnoremap <leader>l ,
+nnoremap \b :action HideAllWindows<cr> :action ViewToolButtons<cr>
+nnoremap <leader>, :action VimFilePrevious<cr>
+
+" easy system clipboard copy/paste
+noremap <space>y "*y
+noremap <space>Y "*Y
+noremap <space>p "*p
+noremap <space>P "*P
+
+" code refactoring
+nnoremap <space>rr :action RenameElement<cr>
+
+nnoremap zC :action CollapseRegionRecursively<CR>
+nnoremap zO :action ExpandRegionRecursively<CR>
+
+nnoremap <c-l> <c-w>l
+nnoremap <c-j> <c-w>j
+nnoremap <c-h> <c-w>h
+nnoremap <c-k> <c-w>k
+
+set surround
