@@ -23,6 +23,7 @@
   with_items:
     - "deb http://debian.sur5r.net/i3/ {{ ansible_distribution_release }} universe"
     - "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    - "ppa:ubuntu-desktop/ubuntu-make"
   become: yes
 
 - name: sur5r-keyring is present
@@ -66,6 +67,7 @@
     - zsh
     - linux-image-extra-virtual
     - "linux-image-extra-{{ uname }}"
+    - ubuntu-make
   become: yes
 
 - name: unwanted packages are absent
