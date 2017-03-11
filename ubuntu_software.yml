@@ -68,6 +68,7 @@
     - linux-image-extra-virtual
     - "linux-image-extra-{{ uname }}"
     - ubuntu-make
+    - pavucontrol
   become: yes
 
 - name: unwanted packages are absent
