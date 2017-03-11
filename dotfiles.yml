@@ -8,6 +8,7 @@
   with_items:
     - {'name': 'vim'}
     - {'name': 'zshrc', 'dir': 'shell/'}
+    - {'name': 'ideavimrc', 'dir': 'misc/'}
 
 - name: symlinks for linux are present
   file:
