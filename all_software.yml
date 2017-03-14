@@ -1,3 +1,5 @@
+# vim:ft=ansible:
+
 - name: "oh-my-zsh is present"
   git:
     repo: "git://github.com/robbyrussell/oh-my-zsh.git"

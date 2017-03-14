@@ -210,6 +210,7 @@ mouse_warping output
 bindsym $mod+b workspace back_and_forth
 exec --no-startup-id nm-applet
 exec --no-startup-id nitrogen --restore
+exec --no-startup-id pasystray
 
 bindsym $mod+m exec ~/i3_scripts/nextfind.py # use dmenu to select an open window
 exec_always ~/i3_scripts/per_workspace_layout.pl

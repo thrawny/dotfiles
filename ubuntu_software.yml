@@ -12,8 +12,8 @@
   become: yes
 
 - name: docker apt key is present
-  become: yes
   apt_key: url=https://download.docker.com/linux/ubuntu/gpg id=9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+  become: yes
 
 - name: 3rd party deb repos are present
   apt_repository:
@@ -38,10 +38,7 @@
   changed_when: false
   register: uname_result
 
-- set_fact:
-    uname: "{{ uname_result.stdout }}"
-
-- name: ubuntu packages are present
+- name: ubuntu development packages are present
   apt:
     name: "{{ item }}"
     update_cache: yes
@@ -58,17 +55,26 @@
     - git
     - postgresql-client-common
     - redis-tools
+    - docker-ce
+    - linux-image-extra-virtual
+    - "linux-image-extra-{{ uname_result.stdout }}"
+    - ubuntu-make
+  become: yes
+
+- name: ubuntu gui packages are present
+  apt:
+    name: "{{ item }}"
+    update_cache: yes
+  with_items:
+    - zsh
     - rxvt-unicode-256color
     - vim-gtk3
     - i3
     - i3blocks
-    - docker-ce
     - nitrogen
-    - zsh
-    - linux-image-extra-virtual
-    - "linux-image-extra-{{ uname }}"
-    - ubuntu-make
     - pavucontrol
+    - pasystray
+    - lxappearance
   become: yes
 
 - name: unwanted packages are absent
