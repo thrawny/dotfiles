@@ -1,0 +1,9 @@
+# vim:ft=ansible:
+
+- name: "custom zsh theme is symlinked to .oh-my-zsh/custom"
+  file:
+    state: link
+    dest: "{{ home_dir }}/.oh-my-zsh/custom/{{ item }}"
+    src: "{{ dotfiles_dir }}/shell/{{ item }}"
+  with_items:
+    - thrawny.zsh-theme

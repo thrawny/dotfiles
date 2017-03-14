@@ -6,7 +6,7 @@ export NVM_DIR=$HOME/.nvm
 # Load nvm if present
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
 
-ZSH_THEME="af-magic"
+ZSH_THEME="thrawny"
 
 plugins=(git history history-substring-search docker)
 
