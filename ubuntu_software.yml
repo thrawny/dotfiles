@@ -75,6 +75,7 @@
     - pavucontrol
     - pasystray
     - lxappearance
+    - network-manager-openvpn-gnome
   become: yes
 
 - name: unwanted packages are absent
