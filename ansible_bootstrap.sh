@@ -1,13 +1,16 @@
 #!/bin/bash
 
+set -e
+
 sudo apt install -y \
   build-essential \
   libssl-dev \
   libffi-dev \
   python-dev \
   python-apt \
-  python-pip \
   curl
+
+sudo easy_install pip
 
 pip2 install --user virtualenv
 virtualenv -p python2 --system-site-packages ~/dotfiles_venv
