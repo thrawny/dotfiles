@@ -26,7 +26,7 @@ URxvt*color14: #4eb4fa
 URxvt*color15: #d0d0d0
 
 ! Font
-urxvt.font: xft:Sauce Code Powerline:regular:size=10
-urxvt.boldfont: xft:Sauce Code Powerline:bold:size=10
-URxvt*font: xft:Sauce Code Powerline:pixelsize=15:antialias=true:hinting=true
-URxvt*boldFont: xft:Sauce Code Powerline:bold:pixelsize=15:antialias=true:hinting=true
+urxvt.font: xft:Sauce Code Powerline:regular:size=15
+urxvt.boldfont: xft:Sauce Code Powerline:bold:size=15
+URxvt*font: xft:Sauce Code Powerline:pixelsize=30:antialias=true:hinting=true
+URxvt*boldFont: xft:Sauce Code Powerline:bold:pixelsize=30:antialias=true:hinting=true

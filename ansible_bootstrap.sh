@@ -8,6 +8,7 @@ sudo apt install -y \
   libffi-dev \
   python-dev \
   python-apt \
+  python-setuptools \
   curl
 
 sudo easy_install pip
