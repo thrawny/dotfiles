@@ -98,15 +98,15 @@ bindsym $mod+a focus parent
 #bindsym $mod+d focus child
 
 # workspace definitions
-set $ws1 1: stuff
-set $ws2 2: stuff
+set $ws1 1: term
+set $ws2 2: slack
 set $ws3 3: chrome
-set $ws4 4: git
-set $ws5 5: pycharm
+set $ws4 4: pycharm
+set $ws5 5: git
 set $ws6 6: term
 set $ws7 7: term
 set $ws8 8: term
-set $ws9 9: term
+set $ws9 9: vbox
 set $ws10 10: stuff
 
 
@@ -134,20 +134,21 @@ bindsym $mod+Shift+8 move container to workspace $ws8
 bindsym $mod+Shift+9 move container to workspace $ws9
 bindsym $mod+Shift+0 move container to workspace $ws10
 
-set $primary_monitor eDP-1-1
+set $primary_monitor eDP-1
 set $secondary_monitor DP-1-1-2-8
 
 workspace "$ws1" output $primary_monitor
 workspace "$ws2" output $primary_monitor
 workspace "$ws3" output $primary_monitor
-workspace "$ws4" output $primary_monitor
-workspace "$ws5" output $secondary_monitor
+workspace "$ws5" output $primary_monitor
+workspace "$ws4" output $secondary_monitor
 workspace "$ws10" output $secondary_monitor
 
 assign [class="Google-chrome"] $ws3
-assign [class="GitKraken"] $ws4
-assign [class="jetbrains-pycharm-ce"] $ws5
-assign [class="jetbrains-pycharm"] $ws5
+assign [class="GitKraken"] $ws5
+assign [class="jetbrains-pycharm-ce"] $ws4
+assign [class="jetbrains-pycharm"] $ws4
+assign [class="VirtualBox"] $ws9
 
 # reload the configuration file
 bindsym $mod+Shift+c reload

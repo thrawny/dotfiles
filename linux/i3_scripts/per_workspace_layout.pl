@@ -16,7 +16,7 @@ use AnyEvent::I3;
 use v5.10;
 
 my %layouts = (
-    '5: pycharm' => 'tabbed',
+    '4: pycharm' => 'tabbed',
 );
 
 my $i3 = i3();
