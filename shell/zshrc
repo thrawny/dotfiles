@@ -2,6 +2,7 @@
 export ZSH=$HOME/.oh-my-zsh
 export WORKON_HOME=~/.venvs
 export NVM_DIR=$HOME/.nvm
+export PYTHONDONTWRITEBYTECODE=1
 
 # Load nvm if present
 [ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
@@ -18,11 +19,21 @@ fi;
 
 source $ZSH/oh-my-zsh.sh
 
+unalias -m "gpo"
+
 # Aliases
 alias pi="pip install -r requirements.txt"
 alias pc="pip-compile"
-alias gpo="git push -u origin $(git_current_branch)"
 alias fig="docker-compose"
 alias svh="sudo vim /etc/hosts"
+alias vbm="VBoxManage"
+alias pycheck='flake8 && isort && pytest'
+alias pyupdatecheck='pip-compile --upgrade --dry-run | diff -i requirements.txt -'
+alias fig='docker-compose'
+
+# Functions
+function gpo() {
+  git push -u origin $(git_current_branch)
+}
 
 [ -f ~/.zsh.local ] && source ~/.zsh.local
