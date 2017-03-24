@@ -54,6 +54,7 @@
     - libpq-dev
     - git
     - postgresql-client-common
+    - postgresql-client
     - redis-tools
     - docker-ce
     - linux-image-extra-virtual
