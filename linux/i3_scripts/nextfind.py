@@ -56,7 +56,10 @@ def get_named_windows():
 
             if windows.get(results1.group(3)) == None:
                 windows[results1.group(3)] = []
-            windows[results1.group(3).strip()].append(results1.group(1))
+            try:
+                windows[results1.group(3).strip()].append(results1.group(1))
+            except KeyError:
+                pass
 
     return (current, windows)
 
