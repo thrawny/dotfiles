@@ -58,3 +58,18 @@
     - "export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3"
     - "source /usr/local/bin/virtualenvwrapper.sh"
   when: ansible_distribution == 'MacOSX'
+
+
+- name: ~/.local/bin directory is present
+  file:
+    path: "{{ home_dir }}/.local/bin"
+    state: directory
+    recurse: yes
+
+- name: scripts are symlinked to ~/.local/bin
+  file:
+    state: link
+    dest: "{{ home_dir }}/.local/bin/{{ item }}"
+    src: "{{ dotfiles_dir }}/scripts/{{ item }}"
+  with_items:
+    - git-cleanup-repo
