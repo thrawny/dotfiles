@@ -60,6 +60,7 @@
     - linux-image-extra-virtual
     - "linux-image-extra-{{ uname_result.stdout }}"
     - ubuntu-make
+    - openvpn
   become: yes
 
 - name: ubuntu gui packages are present
@@ -76,7 +77,6 @@
     - pavucontrol
     - pasystray
     - lxappearance
-    - network-manager-openvpn-gnome
   become: yes
 
 - name: unwanted packages are absent
