@@ -103,9 +103,9 @@ set $ws2 2: slack
 set $ws3 3: chrome
 set $ws4 4: pycharm
 set $ws5 5: git
-set $ws6 6: term
-set $ws7 7: term
-set $ws8 8: term
+set $ws6 6: stuff
+set $ws7 7: stuff
+set $ws8 8: stuff
 set $ws9 9: vbox
 set $ws10 10: stuff
 
@@ -135,7 +135,7 @@ bindsym $mod+Shift+9 move container to workspace $ws9
 bindsym $mod+Shift+0 move container to workspace $ws10
 
 set $primary_monitor eDP-1
-set $secondary_monitor DP-1-1-2-8
+set $secondary_monitor HDMI-1
 
 workspace "$ws1" output $primary_monitor
 workspace "$ws2" output $primary_monitor
@@ -144,11 +144,11 @@ workspace "$ws5" output $primary_monitor
 workspace "$ws4" output $secondary_monitor
 workspace "$ws10" output $secondary_monitor
 
-assign [class="Google-chrome"] $ws3
 assign [class="GitKraken"] $ws5
 assign [class="jetbrains-pycharm-ce"] $ws4
 assign [class="jetbrains-pycharm"] $ws4
 assign [class="VirtualBox"] $ws9
+assign [class="Slack"] $ws2
 
 # reload the configuration file
 bindsym $mod+Shift+c reload
@@ -201,19 +201,28 @@ bar {
 
 bar {
         output $secondary_monitor
-        font pango:SourceCodePro 10
+        font pango:SourceCodePro 15
         # status_command i3blocks -c ~/.config/i3/i3blocks.conf
         tray_output none
 }
 
 mouse_warping output
 
-bindsym $mod+b workspace back_and_forth
+bindsym $mod+o workspace back_and_forth
 exec --no-startup-id nm-applet
-exec --no-startup-id nitrogen --restore
 exec --no-startup-id pasystray
 
+# Screen conf
+exec --no-startup-id xrandr --output eDP-1 --auto --pos 0x2160 --scale 1x1 --output HDMI-1 --auto --scale 1.5x1.5 --pos 0x0
+# exec --no-startup-id xrandr --output eDP-1 --auto --pos 640x2880 --scale 1x1 --output HDMI-1 --auto --scale 2x2 --pos 0x0
+
+exec --no-startup-id nitrogen --restore
+
 bindsym $mod+m exec ~/i3_scripts/nextfind.py # use dmenu to select an open window
+
 exec_always ~/i3_scripts/per_workspace_layout.pl
+
+# TODO: Make work
+# exec_always ~/i3_scripts/keyboard_layout.sh
 
 bindsym $mod+p exec i3lock
