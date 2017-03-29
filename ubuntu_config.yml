@@ -22,3 +22,12 @@
   with_items:
     - "export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3"
     - "source ~/.local/bin/virtualenvwrapper.sh"
+
+- name: xorg conf files are symlinked to /usr/share/X11/xorg.conf.d
+  file:
+    state: link
+    dest: "/usr/share/X11/xorg.conf.d/{{ item }}"
+    src: "{{ dotfiles_dir }}/linux/xorg/{{ item }}"
+  with_items:
+    - "80-synaptics.conf"
+  become: yes
