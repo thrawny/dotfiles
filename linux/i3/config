@@ -134,8 +134,8 @@ bindsym $mod+Shift+8 move container to workspace $ws8
 bindsym $mod+Shift+9 move container to workspace $ws9
 bindsym $mod+Shift+0 move container to workspace $ws10
 
-set $primary_monitor eDP-1
-set $secondary_monitor HDMI-1
+set $primary_monitor eDP1
+set $secondary_monitor HDMI1
 
 workspace "$ws1" output $primary_monitor
 workspace "$ws2" output $primary_monitor
@@ -208,12 +208,12 @@ bar {
 
 mouse_warping output
 
-bindsym $mod+o workspace back_and_forth
+bindsym $mod+Tab workspace back_and_forth
 exec --no-startup-id nm-applet
 exec --no-startup-id pasystray
 
 # Screen conf
-exec --no-startup-id xrandr --output eDP-1 --auto --pos 0x2160 --scale 1x1 --output HDMI-1 --auto --scale 1.5x1.5 --pos 0x0
+exec --no-startup-id xrandr --output eDP1 --auto --pos 0x2160 --scale 1x1 --output HDMI1 --auto --scale 1.5x1.5 --pos 0x0
 # exec --no-startup-id xrandr --output eDP-1 --auto --pos 640x2880 --scale 1x1 --output HDMI-1 --auto --scale 2x2 --pos 0x0
 
 exec --no-startup-id nitrogen --restore
