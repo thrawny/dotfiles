@@ -108,6 +108,8 @@ set $ws7 7: stuff
 set $ws8 8: stuff
 set $ws9 9: vbox
 set $ws10 10: stuff
+set $ws1 1: 
+set $ws3 3: 
 
 
 # switch to workspace

@@ -173,6 +173,7 @@ noremap N Nzzzv
 noremap <Leader>, <C-^>zz
 noremap <Leader>v :e $MYVIMRC<CR>
 noremap <Leader>z :e ~/.zshrc<CR>
+noremap <Leader>i :e ~/dotfiles/linux/i3/config<CR>
 noremap <Leader>tm :e ~/.tmux.conf<CR>
 noremap <Leader>sv :source $MYVIMRC<CR>
 noremap <localleader>b :NERDTreeToggle<CR>
