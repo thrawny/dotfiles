@@ -30,3 +30,8 @@ urxvt.font: xft:Sauce Code Powerline:regular:size=15
 urxvt.boldfont: xft:Sauce Code Powerline:bold:size=15
 URxvt*font: xft:Sauce Code Powerline:pixelsize=30:antialias=true:hinting=true
 URxvt*boldFont: xft:Sauce Code Powerline:bold:pixelsize=30:antialias=true:hinting=true
+
+URxvt*scrollTtyOutput:      false
+URxvt*scrollWithBuffer:     true
+URxvt*scrollTtyKeypress:    true
+urxvt*saveLines:            100000
