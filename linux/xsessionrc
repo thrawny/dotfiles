@@ -1,5 +1,7 @@
-xmodmap -e 'clear lock'
-xmodmap -e 'keycode 0x42=Escape'
+# xmodmap -e 'clear lock'
+# xmodmap -e 'keycode 0x42=Escape'
+setxkbmap -option caps:swapescape
+
 xmodmap -e 'keycode 94 = asciitilde asciitilde'
 
 # key delay / repeat
