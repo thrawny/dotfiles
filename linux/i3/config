@@ -38,6 +38,7 @@ bindsym $mod+Shift+q kill
 
 # start dmenu (a program launcher)
 bindsym $mod+d exec i3-dmenu-desktop
+# bindsym $mod+d exec rofi -modi drun -show drun
 # There also is the (new) i3-dmenu-desktop which only displays applications
 # shipping a .desktop file. It is a wrapper around dmenu, so you need that
 # installed.
@@ -98,18 +99,16 @@ bindsym $mod+a focus parent
 #bindsym $mod+d focus child
 
 # workspace definitions
-set $ws1 1: term
-set $ws2 2: slack
-set $ws3 3: chrome
-set $ws4 4: pycharm
-set $ws5 5: git
+set $ws1 1: 
+set $ws2 2: 
+set $ws3 3: 
+set $ws4 4: 
+set $ws5 5: 
 set $ws6 6: stuff
 set $ws7 7: stuff
 set $ws8 8: stuff
 set $ws9 9: vbox
 set $ws10 10: stuff
-set $ws1 1: 
-set $ws3 3: 
 
 
 # switch to workspace
@@ -143,12 +142,18 @@ workspace "$ws1" output $primary_monitor
 workspace "$ws2" output $primary_monitor
 workspace "$ws3" output $primary_monitor
 workspace "$ws5" output $primary_monitor
+workspace "$ws6" output $primary_monitor
+workspace "$ws7" output $primary_monitor
+workspace "$ws8" output $primary_monitor
+workspace "$ws9" output $primary_monitor
 workspace "$ws4" output $secondary_monitor
 workspace "$ws10" output $secondary_monitor
 
 assign [class="GitKraken"] $ws5
 assign [class="jetbrains-pycharm-ce"] $ws4
+for_window [class="jetbrains-pycharm-ce"] layout tabbed
 assign [class="jetbrains-pycharm"] $ws4
+for_window [class="jetbrains-pycharm"] layout tabbed
 assign [class="VirtualBox"] $ws9
 assign [class="Slack"] $ws2
 
@@ -187,7 +192,7 @@ bindsym $mod+r mode "resize"
 
 bar {
         output $primary_monitor
-        font pango: Sauce Code Powerline 20
+        font pango: Sauce Code Powerline 21
         # status_command i3status
         status_command i3blocks -c ~/.config/i3/i3blocks.conf
         # tray_output primary
@@ -203,14 +208,17 @@ bar {
 
 bar {
         output $secondary_monitor
-        font pango:SourceCodePro 15
+        font pango: Sauce Code Powerline 15
         # status_command i3blocks -c ~/.config/i3/i3blocks.conf
         tray_output none
 }
 
 mouse_warping output
-
 bindsym $mod+Tab workspace back_and_forth
+
+focus_on_window_activation focus
+# for_window [urgent=latest] focus
+
 exec --no-startup-id nm-applet
 exec --no-startup-id pasystray
 
@@ -221,8 +229,9 @@ exec --no-startup-id xrandr --output eDP1 --auto --pos 0x2160 --scale 1x1 --outp
 exec --no-startup-id nitrogen --restore
 
 bindsym $mod+m exec ~/i3_scripts/nextfind.py # use dmenu to select an open window
+# bindsym $mod+m exec rofi -show window
 
-exec_always ~/i3_scripts/per_workspace_layout.pl
+# exec_always ~/i3_scripts/per_workspace_layout.pl
 
 # Pulse Audio controls
 bindsym XF86AudioRaiseVolume exec --no-startup-id pactl set-sink-volume 0 +5% #increase sound volume
@@ -233,8 +242,9 @@ bindsym XF86AudioMute exec --no-startup-id pactl set-sink-mute 0 toggle # mute s
 bindsym XF86MonBrightnessUp exec xbacklight -inc 20 # increase screen brightness
 bindsym XF86MonBrightnessDown exec xbacklight -dec 20 # decrease screen brightness
 
-
 # TODO: Make work
 # exec_always ~/i3_scripts/keyboard_layout.sh
 
-bindsym $mod+p exec i3lock
+bindsym $mod+p exec i3lock -c "#101010"
+
+bindsym $mod+z exec --no-startup-id ~/dotfiles/scripts/keyboard_layout_switch
