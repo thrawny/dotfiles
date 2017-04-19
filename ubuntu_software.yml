@@ -103,3 +103,8 @@
     name: virtualenvwrapper
     extra_args: --user
     executable: pip3
+
+- name: i3blocks-contrib repo is present
+  git:
+    repo: "git://github.com/vivien/i3blocks-contrib"
+    dest: "{{ home_dir }}/i3blocks-contrib"
