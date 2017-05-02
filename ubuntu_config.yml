@@ -29,5 +29,5 @@
     dest: "/usr/share/X11/xorg.conf.d/{{ item }}"
     src: "{{ dotfiles_dir }}/linux/xorg/{{ item }}"
   with_items:
-    - "80-synaptics.conf"
+    - "80-libinput.conf"
   become: yes
