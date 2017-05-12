@@ -29,7 +29,6 @@ alias svh="sudo vim /etc/hosts"
 alias vbm="VBoxManage"
 alias pycheck='flake8 && isort && pytest'
 alias pyupdatecheck='pip-compile --upgrade --dry-run | diff -i requirements.txt -'
-alias fig='docker-compose'
 alias vpn='sudo openvpn'
 
 # Functions
