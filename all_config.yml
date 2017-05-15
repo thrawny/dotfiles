@@ -4,6 +4,6 @@
   file:
     state: link
     dest: "{{ home_dir }}/.oh-my-zsh/custom/{{ item }}"
-    src: "{{ dotfiles_dir }}/shell/{{ item }}"
+    src: "{{ dotfiles_dir }}/misc/{{ item }}"
   with_items:
     - thrawny.zsh-theme
