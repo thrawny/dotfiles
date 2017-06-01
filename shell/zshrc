@@ -27,7 +27,7 @@ alias pc="pip-compile"
 alias fig="docker-compose"
 alias svh="sudo vim /etc/hosts"
 alias vbm="VBoxManage"
-alias pycheck='flake8 && isort && pytest'
+alias pycheck='isort && flake8 && pytest'
 alias pyupdatecheck='pip-compile --upgrade --dry-run | diff -i requirements.txt -'
 alias vpn='sudo openvpn'
 
