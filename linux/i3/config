@@ -156,6 +156,7 @@ assign [class="jetbrains-pycharm"] $ws4
 for_window [class="jetbrains-pycharm"] layout tabbed
 assign [class="VirtualBox"] $ws9
 assign [class="Slack"] $ws2
+assign [class="google-chrome"] $ws3
 
 # reload the configuration file
 bindsym $mod+Shift+c reload
@@ -247,3 +248,14 @@ bindsym XF86MonBrightnessDown exec xbacklight -dec 20 # decrease screen brightne
 bindsym $mod+p exec i3lock -c "#101010"
 
 bindsym $mod+z exec --no-startup-id ~/dotfiles/scripts/keyboard_layout_switch
+
+exec --no-startup-id i3-msg 'workspace $ws1; append_layout workspace-1.json'
+exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt'
+exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt'
+exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt'
+exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt'
+exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt'
+exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt'
+
+exec --no-startup-id i3-msg 'workspace $ws2; exec /usr/bin/slack'
+exec --no-startup-id i3-msg 'workspace $ws3; exec /usr/bin/google-chrome-stable'
