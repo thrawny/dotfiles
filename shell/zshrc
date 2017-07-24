@@ -11,6 +11,8 @@ ZSH_THEME="thrawny"
 
 plugins=(git history history-substring-search docker)
 
+export PATH=$HOME/.local/bin:$PATH
+
 # OSX specific stuff
 if [[ "$(uname)" == "Darwin" ]]; then
   export PATH=$HOME/bin:/usr/local/bin:$PATH
