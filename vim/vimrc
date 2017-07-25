@@ -191,6 +191,8 @@ augroup plugin_commentary
     au!
     au FileType htmldjango setlocal commentstring={#\ %s\ #}
     au FileType php setlocal commentstring=//\ %s
+    au FileType Jenkinsfile setlocal commentstring=//\ %s
+    au FileType groovy setlocal commentstring=//\ %s
 augroup END
 
 augroup ft_html
