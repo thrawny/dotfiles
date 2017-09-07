@@ -13,7 +13,7 @@ set $mod Mod4
 
 # Font for window titles. Will also be used by the bar unless a different font
 # is used in the bar {} block below.
-font pango: Sauce Code Powerline 20
+font pango: Sauce Code Powerline 10
 
 # This font is widely installed, provides lots of unicode glyphs, right-to-left
 # text rendering and scalability on retina/hidpi displays (thanks to pango).
@@ -45,10 +45,6 @@ bindsym $mod+d exec rofi -modi drun -font "Sauce Code Powerline 21" -show drun
 # bindsym $mod+d exec --no-startup-id i3-dmenu-desktop
 
 # change focus
-# bindsym $mod+h exec "~/.config/i3/move-cursor-window-center.sh focus left"
-# bindsym $mod+j exec "~/.config/i3/move-cursor-window-center.sh focus down"
-# bindsym $mod+k exec "~/.config/i3/move-cursor-window-center.sh focus up"
-# bindsym $mod+l exec "~/.config/i3/move-cursor-window-center.sh focus right"
 bindsym $mod+h focus left
 bindsym $mod+j focus down
 bindsym $mod+k focus up
@@ -193,7 +189,7 @@ bindsym $mod+r mode "resize"
 
 bar {
         output $primary_monitor
-        font pango: Sauce Code Powerline 21
+        font pango: Sauce Code Powerline 10
         # status_command i3status
         status_command i3blocks -c ~/.config/i3/i3blocks.conf
         # tray_output primary
@@ -204,12 +200,11 @@ bar {
         #     active_workspace   #333333 #000000 #FFFFFF
         #     urgent_workspace   #333333 #066900 #AFD700
         # }
-
 }
 
 bar {
         output $secondary_monitor
-        font pango: Sauce Code Powerline 15
+        font pango: Sauce Code Powerline 10
         # status_command i3blocks -c ~/.config/i3/i3blocks.conf
         tray_output none
 }
@@ -251,10 +246,6 @@ bindsym $mod+z exec --no-startup-id ~/dotfiles/scripts/keyboard_layout_switch
 exec --no-startup-id i3-msg 'workspace $ws1; append_layout workspace-1.json'
 exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt'
 exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt'
-exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt -cd ~/vpns'
-exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt -cd ~/vpns'
-exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt -cd ~/vpns'
-exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt -cd ~/vpns'
 
 exec --no-startup-id i3-msg 'workspace $ws2; exec /usr/bin/slack'
 exec --no-startup-id i3-msg 'workspace $ws3; exec /usr/bin/google-chrome-stable'
