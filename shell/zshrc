@@ -32,10 +32,19 @@ alias vbm="VBoxManage"
 alias pycheck='isort && flake8 && pytest'
 alias pyupdatecheck='pip-compile --upgrade --dry-run | diff -i requirements.txt -'
 alias vpn='sudo openvpn'
+alias kc='kubectl'
+alias kt='kubetail'
+alias kca='kubectl apply -f'
+alias pbcopy='xclip -selection clipboard'
+alias pbpaste='xclip -selection clipboard -o'
 
 # Functions
 function gpo() {
   git push -u origin $(git_current_branch)
+}
+
+function kcaev() {
+  envsubst < $1 | kubectl apply -f -
 }
 
 [ -f ~/.zsh.local ] && source ~/.zsh.local
