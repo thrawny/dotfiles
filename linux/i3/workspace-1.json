@@ -4,7 +4,7 @@
     "border": "normal",
     "floating": "auto_off",
     "layout": "tabbed",
-    "percent": 1,
+    "percent": null,
     "type": "con",
     "nodes": [
         {

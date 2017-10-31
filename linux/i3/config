@@ -150,6 +150,7 @@ assign [class="jetbrains-pycharm-ce"] $ws4
 for_window [class="jetbrains-pycharm-ce"] layout tabbed
 assign [class="jetbrains-pycharm"] $ws4
 for_window [class="jetbrains-pycharm"] layout tabbed
+for_window [class="jetbrains-datagrip"] layout tabbed
 assign [class="VirtualBox"] $ws9
 assign [class="Slack"] $ws2
 assign [class="google-chrome"] $ws3
