@@ -78,6 +78,7 @@
     - pavucontrol
     - pasystray
     - lxappearance
+    - fonts-font-awesome
   become: yes
 
 - name: unwanted packages are absent
