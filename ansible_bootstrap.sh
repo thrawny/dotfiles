@@ -6,15 +6,16 @@ sudo apt install -y \
   build-essential \
   libssl-dev \
   libffi-dev \
-  python-dev \
-  python-apt \
-  python-setuptools \
+  python3-dev \
+  python3-apt \
+  python3-setuptools \
+  python3-venv \
   curl
 
-sudo easy_install pip
+curl https://bootstrap.pypa.io/get-pip.py | sudo python
 
-pip2 install --user virtualenv
-virtualenv -p python2 --system-site-packages ~/dotfiles_venv
+pip install --user virtualenv
+virtualenv --system-site-packages ~/dotfiles_venv
 ~/dotfiles_venv/bin/pip install ansible
 
 ~/dotfiles_venv/bin/ansible-playbook -K ~/dotfiles/main.yml
