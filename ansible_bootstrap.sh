@@ -12,10 +12,10 @@ sudo apt install -y \
   python3-venv \
   curl
 
-curl https://bootstrap.pypa.io/get-pip.py | sudo python
+curl https://bootstrap.pypa.io/get-pip.py | sudo python3
 
 pip install --user virtualenv
-virtualenv --system-site-packages ~/dotfiles_venv
+python3 -m venv --system-site-packages ~/dotfiles_venv
 ~/dotfiles_venv/bin/pip install ansible
 
 ~/dotfiles_venv/bin/ansible-playbook -K ~/dotfiles/main.yml
