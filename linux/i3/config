@@ -218,6 +218,7 @@ focus_on_window_activation focus
 
 exec --no-startup-id nm-applet
 exec --no-startup-id pasystray
+exec --no-startup-id clipit
 
 # Screen conf
 exec --no-startup-id xrandr --output eDP1 --auto --pos 0x2160 --scale 1x1 --output DP1-2-8 --auto --scale 1.5x1.5 --pos 0x0

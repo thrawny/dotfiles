@@ -5,7 +5,8 @@ export NVM_DIR=$HOME/.nvm
 export PYTHONDONTWRITEBYTECODE=1
 
 # Load nvm if present
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
 ZSH_THEME="thrawny"
 
@@ -39,7 +40,10 @@ alias kc='kubectl'
 alias kt='kubetail'
 alias kca='kubectl apply -f'
 alias kcn='kubectl -n kube-system'
+alias kcp='kubectl get pods'
 alias gsha='git rev-parse HEAD | cut -c1-9'
+alias kcl='kubectl logs -f'
+alias kcu='kubectl config use-context'
 
 # Functions
 function gpo() {
