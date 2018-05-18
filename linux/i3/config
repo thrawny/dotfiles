@@ -13,7 +13,7 @@ set $mod Mod4
 
 # Font for window titles. Will also be used by the bar unless a different font
 # is used in the bar {} block below.
-font pango: Source Code Pro for Powerline 10
+font pango: Source Code Pro for Powerline 21
 
 # This font is widely installed, provides lots of unicode glyphs, right-to-left
 # text rendering and scalability on retina/hidpi displays (thanks to pango).
@@ -191,7 +191,7 @@ bindsym $mod+r mode "resize"
 
 bar {
         output $primary_monitor
-        font pango: Source Code Pro for Powerline 10
+        font pango: Source Code Pro for Powerline 20
         # status_command i3status
         status_command i3blocks -c ~/.config/i3/i3blocks.conf
         # tray_output primary
@@ -206,7 +206,7 @@ bar {
 
 bar {
         output $secondary_monitor
-        font pango: Source Code Pro for Powerline 10
+        font pango: Source Code Pro for Powerline 20
         # status_command i3blocks -c ~/.config/i3/i3blocks.conf
         tray_output none
 }
@@ -250,5 +250,5 @@ exec --no-startup-id i3-msg 'workspace $ws1; append_layout workspace-1.json'
 exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt'
 exec --no-startup-id i3-msg 'workspace $ws1; exec /usr/bin/rxvt'
 
-exec --no-startup-id i3-msg 'workspace $ws2; exec /usr/bin/slack'
+exec --no-startup-id i3-msg 'workspace $ws2; exec /snap/bin/slack --force-device-scale-factor=2'
 exec --no-startup-id i3-msg 'workspace $ws3; exec /usr/bin/google-chrome-stable'

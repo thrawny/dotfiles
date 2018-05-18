@@ -8,4 +8,3 @@ echo "deb http://debian.sur5r.net/i3/ $(grep '^DISTRIB_CODENAME=' /etc/lsb-relea
 apt update
 apt install i3
 rm ./keyring.deb
-exit
