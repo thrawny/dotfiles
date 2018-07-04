@@ -54,4 +54,9 @@ function kcaev() {
   envsubst < $1 | kubectl apply -f -
 }
 
+# Autocomplete
+source <(kubectl completion zsh)
+source <(helm completion zsh)
+
+
 [ -f ~/.zsh.local ] && source ~/.zsh.local
