@@ -1,7 +1,4 @@
-# xmodmap -e 'clear lock'
-# xmodmap -e 'keycode 0x42=Escape'
-
-export GDK_SCALE=2
+# `export GDK_SCALE=2
 
 setxkbmap -option caps:swapescape
 
