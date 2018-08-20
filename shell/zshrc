@@ -55,8 +55,9 @@ function kcaev() {
 }
 
 # Autocomplete
-source <(kubectl completion zsh)
-source <(helm completion zsh)
+# source <(kubectl completion zsh)
+# source <(helm completion zsh)
+source aws_zsh_completer.sh
 
 
 [ -f ~/.zsh.local ] && source ~/.zsh.local
