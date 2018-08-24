@@ -1,1 +1,10 @@
 # vim:ft=ansible:
+
+- name: "vscode settings files are symlinked"
+  file:
+    state: link
+    dest: "{{ home_dir }}/Library/Application Support/Code/User/{{ item }}"
+    src: "{{ dotfiles_dir }}/vscode/{{ item }}"
+  with_items:
+    - settings.json
+    - keybindings.json

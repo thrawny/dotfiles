@@ -1,0 +1,45 @@
+{
+    "keyboard.dispatch": "keyCode",
+    "vim.handleKeys": {
+        "<C-w>": false,
+        "<C-k>": false,
+        "<C-o>": false,
+    },
+    "vim.normalModeKeyBindingsNonRecursive": [
+        {
+            "before": ["<leader>", ","],
+            "commands": [
+                "workbench.action.openNextRecentlyUsedEditorInGroup"
+            ]
+        },
+        {
+            "before": ["<leader>", "o"],
+            "commands": [":nohl"]
+        }
+    ],
+    "vim.leader": ",",
+    "vim.hlsearch": true,
+    "window.zoomLevel": -1,
+    "files.autoSave": "afterDelay",
+    "workbench.editor.showTabs": false,
+    "editor.minimap.enabled" : false,
+    "explorer.openEditors.visible": 0,
+    "explorer.confirmDelete": false,
+    "workbench.colorTheme": "Monokai",
+    // "yaml.schemas": {
+    //     "Kubernetes": "*.yaml"
+    // },
+    // "yaml.customTags": [
+    //     "!FindInMap sequence",
+    //     "!GetAtt",
+    //     "!GetAZs",
+    //     "!ImportValue",
+    //     "!Join sequence",
+    //     "!Ref",
+    //     "!Select sequence",
+    //     "!Split sequence",
+    //     "!Sub",
+    //     "!Not sequence",
+    //     "!Equals sequence"
+    // ]
+}

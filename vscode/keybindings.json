@@ -1,0 +1,123 @@
+// Place your key bindings in this file to overwrite the defaults
+[
+    {
+        "key": "ctrl+h",
+        "command": "workbench.action.focusLeftGroup"
+    },
+    {
+        "key": "ctrl+k ctrl+left",
+        "command": "-workbench.action.focusLeftGroup"
+    },
+    {
+        "key": "ctrl+l",
+        "command": "workbench.action.focusRightGroup"
+    },
+    {
+        "key": "ctrl+k ctrl+right",
+        "command": "-workbench.action.focusRightGroup"
+    },
+    {
+        "key": "alt+;",
+        "command": "workbench.action.terminal.toggleTerminal"
+    },
+    {
+        "key": "ctrl+`",
+        "command": "-workbench.action.terminal.toggleTerminal"
+    },
+    {
+        "key": "ctrl+r",
+        "command": "workbench.action.quickOpenNavigateNextInRecentFilesPicker",
+        "when": "inQuickOpen && inRecentFilesPicker"
+    },
+    {
+        "key": "ctrl+r",
+        "command": "-workbench.action.quickOpenNavigateNextInRecentFilesPicker",
+        "when": "inQuickOpen && inRecentFilesPicker"
+    },
+    {
+        "key": "cmd+k",
+        "command": "-git.commitAll",
+        "when": "!inDebugMode && !terminalFocus"
+    },
+    {
+        "key": "cmd+e",
+        "command": "workbench.action.quickOpenNavigateNext",
+        "when": "inQuickOpen"
+    },
+    {
+        "key": "cmd+e",
+        "command": "workbench.action.openNextRecentlyUsedEditorInGroup"
+    },
+    {
+        "key": "cmd+e",
+        "command": "workbench.action.openNextRecentlyUsedEditorInGroup"
+    },
+    // {
+    //     "key": "ctrl+tab",
+    //     "command": "-workbench.action.quickOpenNavigateNextInEditorPicker",
+    //     "when": "inEditorsPicker && inQuickOpen"
+    // },
+    {
+        "key": "cmd+e",
+        "command": "-actions.findWithSelection"
+    },
+    {
+        "key": "cmd+e",
+        "command": "-workbench.action.openRecent"
+    },
+    {
+        "key": "cmd+e",
+        "command": "--actions.find"
+    },
+    {
+        "key": "cmd+e",
+        "command": "--workbench.action.openRecent"
+    },
+    {
+        "key": "ctrl+tab",
+        "command": "-workbench.action.quickOpenNavigateNext",
+        "when": "inQuickOpen"
+    },
+    {
+        "key": "ctrl+tab",
+        "command": "-workbench.action.openNextRecentlyUsedEditorInGroup"
+    },
+    {
+        "key": "cmd+e",
+        "command": "workbench.action.quickOpenNavigateNextInEditorPicker",
+        "when": "inEditorsPicker && inQuickOpen"
+    },
+    {
+        "key": "ctrl+tab",
+        "command": "-workbench.action.quickOpenNavigateNextInEditorPicker",
+        "when": "inEditorsPicker && inQuickOpen"
+    },
+    {
+        "key": "alt+f12",
+        "command": "-workbench.action.terminal.focus",
+        "when": "!terminalFocus"
+    },
+    {
+        "key": "cmd+;",
+        "command": "-workbench.action.tasks.configureTaskRunner"
+    },
+    {
+        "key": "cmd+;",
+        "command": "workbench.action.terminal.toggleTerminal"
+    },
+    {
+        "key": "cmd+;",
+        "command": "workbench.action.terminal.focus",
+        "when": "!terminalFocus"
+    },
+    {
+        "key": "ctrl+d",
+        "command": "-workbench.action.debug.run",
+        "when": "!inDebugMode && !terminalFocus"
+    },
+    {
+        "key": "cmd+p",
+        "command": "-editor.action.triggerParameterHints",
+        "when": "editorHasSignatureHelpProvider && editorTextFocus"
+    }
+]

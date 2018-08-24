@@ -13,6 +13,8 @@
       when: ansible_distribution == 'Ubuntu'
     - include: ubuntu_config.yml
       when: ansible_distribution == 'Ubuntu'
+    - include: osx_config.yml
+      when: ansible_distribution == 'MacOSX'
     - include: vim.yml
       tags: ['dotfiles']
     - include: fonts.yml
