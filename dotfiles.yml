@@ -56,7 +56,7 @@
     create: yes
   with_items:
     - "export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3"
-    - "source /usr/local/bin/virtualenvwrapper.sh"
+    - "source {{ home_dir }}/Library/Python/3.7/bin/virtualenvwrapper.sh"
   when: ansible_distribution == 'MacOSX'
 
 
