@@ -4,3 +4,9 @@
   git:
     repo: "git://github.com/robbyrussell/oh-my-zsh.git"
     dest: "{{ home_dir }}/.oh-my-zsh"
+
+- name: "nvm is present"
+  git:
+    repo: "git://github.com/creationix/nvm.git"
+    dest: "{{ home_dir }}/.nvm"
+    update: no
