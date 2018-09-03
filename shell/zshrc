@@ -9,7 +9,7 @@ export NVM_DIR="$HOME/.nvm"
 
 ZSH_THEME="thrawny"
 
-plugins=(git history history-substring-search docker pip python)
+plugins=(git history history-substring-search docker pip python zsh-autosuggestions)
 
 [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && PATH="$HOME/.local/bin:${PATH}"
 
@@ -25,6 +25,7 @@ fi;
 source $ZSH/oh-my-zsh.sh
 
 unalias -m "gpo"
+unalias -m "gp"
 
 # Aliases
 alias pi="pip install -r requirements.txt"
@@ -36,7 +37,7 @@ alias pycheck='isort && flake8 && pytest'
 alias pyupdatecheck='pip-compile --upgrade --dry-run | diff -i requirements.txt -'
 alias vpn='sudo openvpn'
 alias kc='kubectl'
-alias kt='kubetail'
+alias kt='stern'
 alias kca='kubectl apply -f'
 alias kcn='kubectl -n kube-system'
 alias kcp='kubectl get pods'
@@ -47,6 +48,10 @@ alias kcu='kubectl config use-context'
 # Functions
 function gpo() {
   git push -u origin $(git_current_branch)
+}
+
+function gp() {
+  git push --force-with-lease
 }
 
 function kcaev() {
