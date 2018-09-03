@@ -15,7 +15,11 @@
         {
             "before": ["<leader>", "o"],
             "commands": [":nohl"]
-        }
+        },
+        // {
+        //     "before": ["<space>", "y"],
+        //     "after": ["\"","*", "y"],
+        // },
     ],
     "vim.leader": ",",
     "vim.hlsearch": true,
@@ -26,6 +30,14 @@
     "explorer.openEditors.visible": 0,
     "explorer.confirmDelete": false,
     "workbench.colorTheme": "Monokai",
+    "terminal.integrated.shellArgs.osx": [],
+    "terminal.integrated.fontFamily": "Meslo LG S DZ for Powerline",
+    "workbench.editor.enablePreview": false,
+    "workbench.editor.enablePreviewFromQuickOpen": true,
+    "python.venvPath": "~/.venvs",
+    "workbench.startupEditor": "newUntitledFile"
+    // "editor.fontFamily": "Source Code Pro For Powerline",
+    // "editor.fontSize": 12
     // "yaml.schemas": {
     //     "Kubernetes": "*.yaml"
     // },
