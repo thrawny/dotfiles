@@ -9,7 +9,7 @@ export NVM_DIR="$HOME/.nvm"
 
 ZSH_THEME="thrawny"
 
-plugins=(git history history-substring-search docker pip python zsh-autosuggestions)
+plugins=(git github history history-substring-search docker pip python zsh-autosuggestions)
 
 [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && PATH="$HOME/.local/bin:${PATH}"
 
@@ -44,6 +44,7 @@ alias kcp='kubectl get pods'
 alias gsha='git rev-parse HEAD | cut -c1-9'
 alias kcl='kubectl logs -f'
 alias kcu='kubectl config use-context'
+alias hb='hub browse'
 
 # Functions
 function gpo() {
@@ -57,6 +58,11 @@ function gp() {
 function kcaev() {
   envsubst < $1 | kubectl apply -f -
 }
+
+function pr() {
+  open "$(hub pull-request -m $(git_current_branch))"
+}
+
 
 # Autocomplete
 # source <(kubectl completion zsh)
