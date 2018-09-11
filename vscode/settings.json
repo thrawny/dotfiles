@@ -27,6 +27,7 @@
     "files.autoSave": "afterDelay",
     "workbench.editor.showTabs": false,
     "editor.minimap.enabled" : false,
+    "editor.fontSize": 12,
     "explorer.openEditors.visible": 0,
     "explorer.confirmDelete": false,
     "workbench.colorTheme": "Monokai",
@@ -35,7 +36,11 @@
     "workbench.editor.enablePreview": false,
     "workbench.editor.enablePreviewFromQuickOpen": true,
     "python.venvPath": "~/.venvs",
-    "workbench.startupEditor": "newUntitledFile"
+    "workbench.startupEditor": "newUntitledFile",
+    "gitlens.currentLine.enabled": false,
+    "gitlens.hovers.currentLine.over": "line",
+    "gitlens.codeLens.enabled": false,
+    "gitlens.settings.mode": "advanced"
     // "editor.fontFamily": "Source Code Pro For Powerline",
     // "editor.fontSize": 12
     // "yaml.schemas": {
