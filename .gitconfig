@@ -1,0 +1,20 @@
+[user]
+	name = Jonas Lergell
+	email = jonaslergell@gmail.com
+[pull]
+  rebase = true
+[rebase]
+  # Support fixup and squash commits
+  autoSquash = true
+  # Stash dirty worktree
+  autoStash = true
+[push]
+  default = simple
+[filter "lfs"]
+	clean = git-lfs clean -- %f
+	smudge = git-lfs smudge -- %f
+	process = git-lfs filter-process
+	required = true
+[core]
+	pager = less -F -X
+	excludesfile = ~/.gitignoreglobal
