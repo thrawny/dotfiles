@@ -35,15 +35,6 @@
         "when": "inQuickOpen && inRecentFilesPicker"
     },
     {
-        "key": "cmd+k",
-        "command": "-git.commitAll",
-        "when": "!inDebugMode && !terminalFocus"
-    },
-    {
-        "key": "cmd+e",
-        "command": "workbench.action.openNextRecentlyUsedEditorInGroup"
-    },
-    {
         "key": "cmd+e",
         "command": "workbench.action.openNextRecentlyUsedEditorInGroup"
     },
@@ -155,5 +146,14 @@
         "key": "cmd+i",
         "command": "-expandLineSelection",
         "when": "textInputFocus"
+    },
+    {
+        "key": "cmd+9",
+        "command": "-workbench.view.scm",
+        "when": "editorFocus"
+    },
+    {
+        "key": "cmd+9",
+        "command": "-workbench.action.lastEditorInGroup"
     }
 ]
