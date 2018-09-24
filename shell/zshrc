@@ -60,6 +60,10 @@ function kcaev() {
 }
 
 function pr() {
+  open "https://github.com/${GITHUB_ORG}/${PWD##*/}/pull/new/$(git_current_branch)"
+}
+
+function cpr() {
   open "$(hub pull-request -m $(git_current_branch))"
 }
 
