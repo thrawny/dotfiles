@@ -52,7 +52,7 @@
     ],
     "vim.leader": ",",
     "vim.hlsearch": true,
-    "window.zoomLevel": -0.5,
+    // "window.zoomLevel": -0.5,
     "files.autoSave": "afterDelay",
     "workbench.editor.showTabs": false,
     "editor.minimap.enabled" : false,
@@ -84,7 +84,11 @@
     "explorer.confirmDragAndDrop": false,
     "files.trimTrailingWhitespace": true,
     "files.trimFinalNewlines": true,
-    "search.location": "panel"
+    "files.insertFinalNewline": true,
+    "search.location": "panel",
+    "go.testFlags": [
+        "-test.v"
+    ],
     // "editor.fontFamily": "Source Code Pro For Powerline",
     // "editor.fontSize": 12
     // "yaml.schemas": {

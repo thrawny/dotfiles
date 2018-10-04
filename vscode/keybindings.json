@@ -155,5 +155,49 @@
     {
         "key": "cmd+9",
         "command": "-workbench.action.lastEditorInGroup"
+    },
+    {
+        "key": "cmd+k",
+        "command": "-git.commitAll",
+        "when": "!inDebugMode && !terminalFocus"
+    },
+    {
+        "key": "cmd+k",
+        "command": "-workbench.action.terminal.clear",
+        "when": "terminalFocus"
+    },
+    {
+        "key": "cmd+t",
+        "command": "-git.sync"
+    },
+    {
+        "key": "cmd+t",
+        "command": "-workbench.action.showAllSymbols"
+    },
+    {
+        "key": "cmd+w",
+        "command": "workbench.action.closeEditorsInGroup"
+    },
+    {
+        "key": "cmd+k w",
+        "command": "-workbench.action.closeEditorsInGroup"
+    },
+    {
+        "key": "cmd+w",
+        "command": "-workbench.action.closeActiveEditor"
+    },
+    {
+        "key": "cmd+w",
+        "command": "-workbench.action.closeGroup",
+        "when": "activeEditorGroupEmpty && multipleEditorGroups"
+    },
+    {
+        "key": "alt+w",
+        "command": "go.test.cursor"
+    },
+    {
+        "key": "alt+w",
+        "command": "-gitlens.diffLineWithWorking",
+        "when": "editorTextFocus && gitlens:keymap == 'alternate' && gitlens:activeFileStatus =~ /tracked/"
     }
 ]
