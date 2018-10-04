@@ -59,13 +59,21 @@ function kcaev() {
   envsubst < $1 | kubectl apply -f -
 }
 
-function pr() {
-  open "https://github.com/${GITHUB_ORG}/${PWD##*/}/pull/new/$(git_current_branch)"
+function projname() {
+  basename $(git rev-parse --show-toplevel)
 }
 
-function cpr() {
-  open "$(hub pull-request -m $(git_current_branch))"
+function pr() {
+  open "https://github.com/${GITHUB_ORG}/$(projname)/pull/new/$(git_current_branch)"
 }
+
+function ci() {
+  open "https://app.wercker.com/${GITHUB_ORG}/$(projname)/runs"
+}
+
+# function cpr() {
+#   open "$(hub pull-request -m $(git_current_branch))"
+# }
 
 
 # Autocomplete
