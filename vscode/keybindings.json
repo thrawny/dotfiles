@@ -199,5 +199,10 @@
         "key": "alt+w",
         "command": "-gitlens.diffLineWithWorking",
         "when": "editorTextFocus && gitlens:keymap == 'alternate' && gitlens:activeFileStatus =~ /tracked/"
+    },
+    {
+        "key": "shift+cmd+\\",
+        "command": "-editor.action.jumpToBracket",
+        "when": "editorTextFocus"
     }
 ]

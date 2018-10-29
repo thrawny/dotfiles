@@ -86,9 +86,15 @@
     "files.trimFinalNewlines": true,
     "files.insertFinalNewline": true,
     "search.location": "panel",
+    "search.exclude": {
+        "**/.history": true
+    },
     "go.testFlags": [
         "-test.v"
     ],
+    "[javascript]": {
+        "editor.tabSize": 2
+    }
     // "editor.fontFamily": "Source Code Pro For Powerline",
     // "editor.fontSize": 12
     // "yaml.schemas": {
