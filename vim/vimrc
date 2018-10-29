@@ -229,3 +229,7 @@ augroup filetypedetect
     setf html
   endfunc
 augroup END
+
+au BufReadPost ~/.kube/config set syntax=yaml
+au BufReadPost *yaml* set syntax=yaml
+
