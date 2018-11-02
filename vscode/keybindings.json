@@ -204,5 +204,15 @@
         "key": "shift+cmd+\\",
         "command": "-editor.action.jumpToBracket",
         "when": "editorTextFocus"
+    },
+    {
+        "key": "cmd+m",
+        "command": "workbench.action.files.openFileFolder",
+        "when": "fileDialog == 'local'"
+    },
+    {
+        "key": "cmd+o",
+        "command": "-workbench.action.files.openFileFolder",
+        "when": "fileDialog == 'local'"
     }
 ]
