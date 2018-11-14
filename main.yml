@@ -5,8 +5,6 @@
     home_dir: "{{ lookup('env', 'HOME')}}"
     dotfiles_dir: "{{ home_dir }}/dotfiles"
   tasks:
-    - include: dotfiles.yml
-      tags: ['dotfiles']
     - include: all_software.yml
     - include: all_config.yml
     - include: ubuntu_software.yml
@@ -18,6 +16,4 @@
     - include: osx_software.yml
       when: ansible_distribution == 'MacOSX'
     - include: vim.yml
-      tags: ['dotfiles']
     - include: fonts.yml
-

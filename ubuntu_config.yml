@@ -1,5 +1,34 @@
 # vim:ft=ansible:
 
+- name: virtualenvwrapper conf is added to .zsh.local
+  lineinfile:
+    dest: "{{ home_dir }}/.zsh.local"
+    line:  "{{ item }}"
+    state: present
+    create: yes
+  with_items:
+    - "export VIRTUALENVWRAPPER_PYTHON=/usr/bin/python3"
+    - "source ~/.local/bin/virtualenvwrapper.sh"
+  when: ansible_distribution == 'Ubuntu'
+
+- name: symlinks for linux are present
+  file:
+    state: link
+    dest: "{{ home_dir }}/{{ item.dest|default('.') }}{{ item.name }}"
+    src: "{{ dotfiles_dir }}/linux/{{ item.name }}"
+  with_items:
+    - {'name': 'Xdefaults'}
+    - {'name': 'xsessionrc'}
+    - {'name': 'i3', 'dest': '.config/'}
+  when: ansible_distribution == 'Ubuntu'
+
+- name: i3_scripts is symlinked to ~/i3_scripts
+  file:
+    state: link
+    dest: "{{ home_dir }}/i3_scripts"
+    src: "{{ dotfiles_dir }}/linux/i3_scripts"
+  when: ansible_distribution == 'Ubuntu'
+
 - name: docker group is present
   group:
     name: docker

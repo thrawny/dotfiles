@@ -1,5 +1,15 @@
 # vim:ft=ansible:
 
+- name: symlinks for all are present
+  file:
+    state: link
+    dest: "{{ home_dir }}/.{{ item.name }}"
+    src: "{{ dotfiles_dir }}/{{ item.dir|default('') }}{{ item.name }}"
+  with_items:
+    - {'name': 'vim'}
+    - {'name': 'zshrc', 'dir': 'shell/'}
+    - {'name': 'ideavimrc', 'dir': 'misc/'}
+
 - name: "custom zsh theme is symlinked to .oh-my-zsh/custom"
   file:
     state: link
@@ -7,3 +17,9 @@
     src: "{{ dotfiles_dir }}/misc/{{ item }}"
   with_items:
     - thrawny.zsh-theme
+
+- name: ~/.local/bin directory is present
+  file:
+    path: "{{ home_dir }}/.local/bin"
+    state: directory
+    recurse: yes

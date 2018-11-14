@@ -9,3 +9,8 @@
     - {'name': 'python3'}
     - {'name': 'yarn', 'options': 'without-node'}
     - {'name': 'tmux'}
+
+- name: virtualenvwrapper is present
+  pip:
+    name: virtualenvwrapper
+    executable: pip3

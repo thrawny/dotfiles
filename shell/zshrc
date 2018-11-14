@@ -11,11 +11,14 @@ ZSH_THEME="thrawny"
 
 plugins=(git github history history-substring-search docker pip python zsh-autosuggestions)
 
+PATH=$PATH:$HOME/dotfiles/bin
+
 [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && PATH="$HOME/.local/bin:${PATH}"
+
+export PATH
 
 # OSX specific stuff
 if [[ "$(uname)" == "Darwin" ]]; then
-  # export PATH=$HOME/bin:/usr/local/bin:$PATH
   plugins+=(osx)
 else
   alias pbcopy='xclip -selection clipboard'
