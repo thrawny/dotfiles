@@ -1,6 +1,5 @@
-[user]
-	name = Jonas Lergell
-	email = jonaslergell@gmail.com
+[include]
+  path = .gitconfig.local
 [pull]
   rebase = true
 [rebase]
@@ -11,10 +10,10 @@
 [push]
   default = simple
 [filter "lfs"]
-	clean = git-lfs clean -- %f
-	smudge = git-lfs smudge -- %f
-	process = git-lfs filter-process
-	required = true
+  clean = git-lfs clean -- %f
+  smudge = git-lfs smudge -- %f
+  process = git-lfs filter-process
+  required = true
 [core]
-	pager = less -F -X
-	excludesfile = ~/.gitignoreglobal
+  pager = less -F -X
+  excludesfile = ~/.gitignoreglobal

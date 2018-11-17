@@ -9,6 +9,8 @@
     - {'name': 'vim'}
     - {'name': 'zshrc', 'dir': 'shell/'}
     - {'name': 'ideavimrc', 'dir': 'misc/'}
+    - {'name': 'gitconfig', 'dir': 'git/'}
+    - {'name': 'gitignoreglobal', 'dir': 'git/'}
 
 - name: "custom zsh theme is symlinked to .oh-my-zsh/custom"
   file:
