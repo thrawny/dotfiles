@@ -10,7 +10,17 @@ export NVM_DIR="$HOME/.nvm"
 
 ZSH_THEME="thrawny"
 
-plugins=(git github history history-substring-search docker pip python zsh-autosuggestions)
+plugins=(
+  git
+  github
+  history
+  history-substring-search
+  docker
+  pip
+  python
+  zsh-autosuggestions
+  jira
+)
 
 PATH=$PATH:$GOPATH/bin:$HOME/dotfiles/bin
 
