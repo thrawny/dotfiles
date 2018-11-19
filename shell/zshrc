@@ -79,8 +79,12 @@ function projname() {
   basename $(git rev-parse --show-toplevel)
 }
 
+function github_org() {
+  git config --get remote.origin.url | ggrep -oP '.*:\K(.*)(?=/.*)'
+}
+
 function pr() {
-  open "https://github.com/${GITHUB_ORG}/$(projname)/pull/new/$(git_current_branch)"
+  open "https://github.com/$(github_org)/$(projname)/pull/new/$(git_current_branch)"
 }
 
 function ci() {
