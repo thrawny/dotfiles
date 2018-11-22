@@ -20,6 +20,7 @@ plugins=(
   python
   zsh-autosuggestions
   jira
+  web-search
 )
 
 PATH=$PATH:$GOPATH/bin:$HOME/dotfiles/bin
@@ -61,6 +62,7 @@ alias kcl='kubectl logs -f'
 alias kcu='kubectl config use-context'
 alias hb='hub browse'
 alias gt='go test ./...'
+alias b='bat -p --pager=never'
 
 # Functions
 function gpo() {
