@@ -16,7 +16,6 @@ plugins=(
   history
   history-substring-search
   docker
-  pip
   python
   zsh-autosuggestions
   jira
@@ -63,6 +62,7 @@ alias kcu='kubectl config use-context'
 alias hb='hub browse'
 alias gt='go test ./...'
 alias b='bat -p --pager=never'
+alias pip='pip3'
 
 # Functions
 function gpo() {
@@ -91,6 +91,10 @@ function pr() {
 
 function ci() {
   open "https://app.wercker.com/${GITHUB_ORG}/$(projname)/runs"
+}
+
+function ktc() {
+  stern $1 -c $1 -e "kube-probe|Checking status..."
 }
 
 # function cpr() {
