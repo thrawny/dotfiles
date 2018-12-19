@@ -28,3 +28,16 @@
   with_items:
     - settings.json
     - keybindings.json
+
+- name: "launchagents are symlinked"
+  file:
+    state: link
+    dest: "{{ home_dir }}/Library/LaunchAgents/{{ item }}"
+    src: "{{ dotfiles_dir }}/osx/{{ item }}"
+  with_items:
+    - com.jle.brew-update.plist
+
+- name: "launchagents are loaded"
+  command: "launchctl load {{ item }}"
+  with_items:
+    - com.jle.brew-update.plist
