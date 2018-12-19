@@ -23,7 +23,7 @@ plugins=(
 )
 
 PATH=$PATH:$GOPATH/bin:$HOME/dotfiles/bin
-
+[[ ":$PATH:" != *":/usr/local/bin:"* ]] && PATH="/usr/local/bin:${PATH}"
 [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && PATH="$HOME/.local/bin:${PATH}"
 
 export PATH
@@ -95,6 +95,12 @@ function ci() {
 
 function ktc() {
   stern $1 -c $1 -e "kube-probe|Checking status..."
+}
+
+function sd() {
+  stage=${1:-"production"}
+  ref=${2:-$(git_current_branch)}
+  open "${SAMSON_URL}/projects/$(projname)/stages/${stage}/deploys/new?reference=${ref}"
 }
 
 # function cpr() {
