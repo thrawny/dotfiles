@@ -8,5 +8,6 @@ venv
 .pytest_cache
 .history
 .wercker
-lab.py
-lab.js
+lab
+lab.*
+tilt.profile
