@@ -60,7 +60,7 @@ alias gsha='git rev-parse HEAD | cut -c1-9'
 alias kcl='kubectl logs -f'
 alias kcu='kubectl config use-context'
 alias hb='hub browse'
-alias gt='go test ./...'
+alias gt='go test ./... && gofmt -w .'
 alias b='bat -p --pager=never'
 alias pip='pip3'
 
