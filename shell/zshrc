@@ -63,6 +63,7 @@ alias hb='hub browse'
 alias gt='go test ./... && gofmt -w .'
 alias b='bat -p --pager=never'
 alias pip='pip3'
+alias tilt='KUBECONFIG=~/.kube/docker-for-desktop tilt'
 
 # Functions
 function gpo() {
@@ -90,7 +91,7 @@ function pr() {
 }
 
 function ci() {
-  open "https://app.wercker.com/${GITHUB_ORG}/$(projname)/runs"
+  open "https://app.wercker.com/$(github_org)/$(projname)/runs"
 }
 
 function ktc() {
@@ -102,6 +103,7 @@ function sd() {
   ref=${2:-$(git_current_branch)}
   open "${SAMSON_URL}/projects/$(projname)/stages/${stage}/deploys/new?reference=${ref}"
 }
+
 
 # function cpr() {
 #   open "$(hub pull-request -m $(git_current_branch))"
