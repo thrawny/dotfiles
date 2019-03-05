@@ -64,6 +64,9 @@ alias gt='go test ./... && gofmt -w .'
 alias b='bat -p --pager=never'
 alias pip='pip3'
 alias tilt='KUBECONFIG=~/.kube/docker-for-desktop tilt'
+alias kubectl-extract-context='kc config view --minify=true --flatten --context'
+alias kec='kubectl-extract-context'
+alias ci='openci'
 
 # Functions
 function gpo() {
@@ -88,10 +91,6 @@ function github_org() {
 
 function pr() {
   open "https://github.com/$(github_org)/$(projname)/pull/new/$(git_current_branch)"
-}
-
-function ci() {
-  open "https://app.wercker.com/$(github_org)/$(projname)/runs"
 }
 
 function ktc() {
