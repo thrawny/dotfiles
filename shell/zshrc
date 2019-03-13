@@ -3,6 +3,7 @@ export ZSH=$HOME/.oh-my-zsh
 export WORKON_HOME=~/.venvs
 export PYTHONDONTWRITEBYTECODE=1
 export GOPATH=$HOME/go
+export EDITOR=vim
 
 # Load nvm if present
 export NVM_DIR="$HOME/.nvm"
@@ -62,7 +63,6 @@ alias kcu='kubectl config use-context'
 alias hb='hub browse'
 alias gt='go test ./... && gofmt -w .'
 alias b='bat -p --pager=never'
-alias pip='pip3'
 alias tilt='KUBECONFIG=~/.kube/docker-for-desktop tilt'
 alias kubectl-extract-context='kc config view --minify=true --flatten --context'
 alias kec='kubectl-extract-context'
@@ -113,6 +113,8 @@ function sd() {
 # source <(kubectl completion zsh)
 source <(helm completion zsh)
 source <(kops completion zsh)
+source <(kubesec completion zsh)
+
 
 
 [ -f ~/.zsh.local ] && source ~/.zsh.local
