@@ -58,15 +58,22 @@ alias kca='kubectl apply -f'
 alias kcn='kubectl -n kube-system'
 alias kcp='kubectl get pods'
 alias gsha='git rev-parse HEAD | cut -c1-9'
-alias kcl='kubectl logs -f'
+alias kclf='kubectl logs -f'
+alias kcl='kubectl logs'
 alias kcu='kubectl config use-context'
 alias hb='hub browse'
-alias gt='go test ./... && gofmt -w .'
+alias gt='gofmt -w . && golangci-lint run --skip-files lab.go && go test ./...'
 alias b='bat -p --pager=never'
 alias tilt='KUBECONFIG=~/.kube/docker-for-desktop tilt'
 alias kubectl-extract-context='kc config view --minify=true --flatten --context'
 alias kec='kubectl-extract-context'
 alias ci='openci'
+alias vkcp='watch -n 1 kubectl get pods'
+alias kvcp='watch -n 1 kubectl get pods'
+
+function gtrm() {
+  git tag --delete $1 && git push --delete origin $1
+}
 
 # Functions
 function gpo() {
@@ -111,9 +118,12 @@ function sd() {
 
 # Autocomplete
 # source <(kubectl completion zsh)
-source <(helm completion zsh)
+# source <(helm completion zsh)
+source <(helm completion zsh | sed -E 's/\["(.+)"\]/\[\1\]/g')  # Fixed in v2.13.3
 source <(kops completion zsh)
 source <(kubesec completion zsh)
+
+# source <(spl completion zsh)
 
 
 
