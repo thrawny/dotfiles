@@ -1,3 +1,6 @@
+set visualbell
+set noerrorbells
+
 let mapleader = ","
 
 nnoremap <Leader>v :e ~/.ideavimrc<CR>
