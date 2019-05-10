@@ -123,8 +123,6 @@ source <(helm completion zsh | sed -E 's/\["(.+)"\]/\[\1\]/g')  # Fixed in v2.13
 source <(kops completion zsh)
 source <(kubesec completion zsh)
 
-# source <(spl completion zsh)
-
 
 
 [ -f ~/.zsh.local ] && source ~/.zsh.local
