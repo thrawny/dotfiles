@@ -70,6 +70,7 @@ alias kec='kubectl-extract-context'
 alias ci='openci'
 alias vkcp='watch -n 1 kubectl get pods'
 alias kvcp='watch -n 1 kubectl get pods'
+alias v='watch -n 1'
 
 function gtrm() {
   git tag --delete $1 && git push --delete origin $1
