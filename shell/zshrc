@@ -71,6 +71,9 @@ alias ci='openci'
 alias vkcp='watch -n 1 kubectl get pods'
 alias kvcp='watch -n 1 kubectl get pods'
 alias v='watch -n 1'
+alias kcd='kc drain --ignore-daemonsets --delete-local-data --force'
+
+eval $(thefuck --alias f)
 
 function gtrm() {
   git tag --delete $1 && git push --delete origin $1

@@ -95,7 +95,11 @@
     "[javascript]": {
         "editor.tabSize": 2
     },
-    "terminal.integrated.copyOnSelection": true
+    "terminal.integrated.copyOnSelection": true,
+    "breadcrumbs.enabled": true,
+    "workbench.activityBar.visible": false,
+    "workbench.statusBar.visible": true,
+    "editor.fontFamily": "SauceCodePro Nerd Font Mono,Menlo, Monaco, 'Courier New', monospace"
     // "editor.fontFamily": "Source Code Pro For Powerline",
     // "editor.fontSize": 12
     // "yaml.schemas": {
