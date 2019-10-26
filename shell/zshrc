@@ -23,8 +23,8 @@ plugins=(
   web-search
 )
 
-PATH=$PATH:$GOPATH/bin:$HOME/dotfiles/bin
 [[ ":$PATH:" != *":/usr/local/bin:"* ]] && PATH="/usr/local/bin:${PATH}"
+PATH=$GOPATH/bin:$HOME/dotfiles/bin:$PATH
 [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && PATH="$HOME/.local/bin:${PATH}"
 
 export PATH

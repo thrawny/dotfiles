@@ -9,6 +9,14 @@
     - {'name': 'python3'}
     - {'name': 'yarn', 'options': 'without-node'}
     - {'name': 'tmux'}
+    - {'name': 'git'}
+    - {'name': 'go'}
+    - {'name': 'kubernetes-cli'}
+    - {'name': 'kubernetes-helm'}
+    - {'name': 'postgresql'}
+    - {'name': 'redis'}
+    - {'name': 'the_silver_searcher'}
+    - {'name': 'zsh'}
 
 - name: virtualenvwrapper is present
   pip:
