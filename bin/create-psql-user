@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -eou pipefail
+shopt -s nullglob
+
+cat << EOF
+CREATE DATABASE $1;
+CREATE USER $1 WITH ENCRYPTED PASSWORD '$2';
+GRANT ALL PRIVILEGES ON DATABASE $1 TO $1;
+EOF
