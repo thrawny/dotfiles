@@ -42,6 +42,7 @@ source $ZSH/oh-my-zsh.sh
 
 unalias -m "gpo"
 unalias -m "gp"
+unalias -m "gcam"
 
 # Aliases
 alias pi="pip install -r requirements.txt"
@@ -72,14 +73,13 @@ alias vkcp='watch -n 1 kubectl get pods'
 alias kvcp='watch -n 1 kubectl get pods'
 alias v='watch -n 1'
 alias kcd='kc drain --ignore-daemonsets --delete-local-data --force'
+alias gcam="git add -A && git commit -m"
 
-eval $(thefuck --alias f)
-
+# Functions
 function gtrm() {
   git tag --delete $1 && git push --delete origin $1
 }
 
-# Functions
 function gpo() {
   git push -u origin $(git_current_branch)
 }
@@ -114,19 +114,19 @@ function sd() {
   open "${SAMSON_URL}/projects/$(projname)/stages/${stage}/deploys/new?reference=${ref}"
 }
 
+function kcpf() {
+  while true; do
+    kubectl port-forward "$@"
+  done
+}
 
-# function cpr() {
-#   open "$(hub pull-request -m $(git_current_branch))"
-# }
+. /usr/local/opt/asdf/asdf.sh
+. /usr/local/opt/asdf/etc/bash_completion.d/asdf.bash
 
-
-# Autocomplete
-# source <(kubectl completion zsh)
-# source <(helm completion zsh)
-source <(helm completion zsh | sed -E 's/\["(.+)"\]/\[\1\]/g')  # Fixed in v2.13.3
+source <(kubectl completion zsh)
+source <(helm completion zsh)
 source <(kops completion zsh)
 source <(kubesec completion zsh)
 
-
-
 [ -f ~/.zsh.local ] && source ~/.zsh.local
+
