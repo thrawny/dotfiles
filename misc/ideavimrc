@@ -27,7 +27,7 @@ nnoremap N Nzzzv
 
 nnoremap <leader>l ,
 nnoremap \b :action HideAllWindows<cr> :action ViewToolButtons<cr>
-nnoremap <leader>, :action VimFilePrevious<cr>
+nnoremap <leader>, <C-S-6>
 
 " easy system clipboard copy/paste
 noremap <space>y "*y
