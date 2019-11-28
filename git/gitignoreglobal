@@ -11,3 +11,5 @@ venv
 lab
 lab.*
 tilt.profile
+.terraform
+*.tfstate*
