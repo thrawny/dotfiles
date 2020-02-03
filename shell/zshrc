@@ -74,6 +74,10 @@ alias kvcp='watch -n 1 kubectl get pods'
 alias v='watch -n 1'
 alias kcd='kc drain --ignore-daemonsets --delete-local-data --force'
 alias gcam="git add -A && git commit -m"
+alias tfa='terraform apply'
+alias bu='brew upgrade'
+alias mp='microplane'
+
 
 # Functions
 function gtrm() {
@@ -105,7 +109,7 @@ function pr() {
 }
 
 function ktc() {
-  stern $1 -c $1 -e "kube-probe|Checking status..."
+  stern $1 -c $1 -e "kube-probe|Checking status...|health check"
 }
 
 function sd() {
@@ -120,6 +124,10 @@ function kcpf() {
   done
 }
 
+function asudo() {
+  export $(awsudo default)
+}
+
 . /usr/local/opt/asdf/asdf.sh
 . /usr/local/opt/asdf/etc/bash_completion.d/asdf.bash
 
@@ -127,6 +135,7 @@ source <(kubectl completion zsh)
 source <(helm completion zsh)
 source <(kops completion zsh)
 source <(kubesec completion zsh)
+source /usr/local/bin/aws_zsh_completer.sh
 
 [ -f ~/.zsh.local ] && source ~/.zsh.local
 
