@@ -57,6 +57,7 @@ alias kc='kubectl'
 alias kt='stern'
 alias kca='kubectl apply -f'
 alias kcn='kubectl -n kube-system'
+alias kci='kubectl -n istio-system'
 alias kcp='kubectl get pods'
 alias gsha='git rev-parse HEAD | cut -c1-9'
 alias kclf='kubectl logs -f'
@@ -109,13 +110,7 @@ function pr() {
 }
 
 function ktc() {
-  stern $1 -c $1 -e "kube-probe|Checking status...|health check"
-}
-
-function sd() {
-  stage=${1:-"production"}
-  ref=${2:-$(git_current_branch)}
-  open "${SAMSON_URL}/projects/$(projname)/stages/${stage}/deploys/new?reference=${ref}"
+  stern $1 -c $1 -e "kube-probe|Checking status...|health check|Accepted connection from /100"
 }
 
 function kcpf() {
@@ -128,8 +123,16 @@ function asudo() {
   export $(awsudo default)
 }
 
-. /usr/local/opt/asdf/asdf.sh
-. /usr/local/opt/asdf/etc/bash_completion.d/asdf.bash
+function dbp() {
+  docker build -t $1 . && docker push $1
+}
+
+function jsonlog() {
+  stern $s --output raw | jq -r -R 'fromjson? | "\(.["@timestamp"]) [\(.level)] - \(.message)"'
+}
+
+. $HOME/.asdf/asdf.sh
+. $HOME/.asdf/completions/asdf.bash
 
 source <(kubectl completion zsh)
 source <(helm completion zsh)
