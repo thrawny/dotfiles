@@ -20,20 +20,9 @@ git remote prune origin
 # local master is out of date.
 git branch --merged origin/master | grep -v 'master$' | xargs git branch -D
 
-# Now the same, but including remote branches.
-# MERGED_ON_REMOTE=`git branch -r --merged origin/master | sed 's/ *origin\///' | grep -v 'master$'`
 
-# if [ "$MERGED_ON_REMOTE" ]; then
-# 	echo "The following remote branches are fully merged and will be removed:"
-# 	echo $MERGED_ON_REMOTE
-
-# 	read -p "Continue (y/N)? "
-# 	if [ "$REPLY" == "y" ]; then
-# 		git branch -r --merged origin/master | sed 's/ *origin\///' \
-# 			| grep -v 'master$' | xargs -I% git push origin :% 2>&1 \
-# 			| grep --colour=never 'deleted'
-# 		echo "Done!"
-# 	fi
-# fi
+# delete branches that have been squash-merged
+# https://github.com/not-an-aardvark/git-delete-squashed
+git for-each-ref refs/heads/ "--format=%(refname:short)" | while read branch; do mergeBase=$(git merge-base master $branch) && [[ $(git cherry master $(git commit-tree $(git rev-parse $branch\^{tree}) -p $mergeBase -m _)) == "-"* ]] && git branch -D $branch; done
 
 git pull
