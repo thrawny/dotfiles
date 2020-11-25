@@ -13,3 +13,6 @@ lab.*
 tilt.profile
 .terraform
 *.tfstate*
+.envrc
+telepresence.log
+.run
