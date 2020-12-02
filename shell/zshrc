@@ -40,6 +40,9 @@ fi;
 
 source $ZSH/oh-my-zsh.sh
 
+bindkey ^F forward-word
+bindkey ^f forward-word
+
 unalias -m "gpo"
 unalias -m "gp"
 unalias -m "gcam"
@@ -78,7 +81,6 @@ alias gcam="git add -A && git commit -m"
 alias tfa='terraform apply'
 alias bu='brew upgrade'
 alias mp='microplane'
-
 
 # Functions
 function gtrm() {
@@ -127,8 +129,12 @@ function dbp() {
   docker build -t $1 . && docker push $1
 }
 
-function jsonlog() {
-  stern $s --output raw | jq -r -R 'fromjson? | "\(.["@timestamp"]) [\(.level)] - \(.message)"'
+function ktjq() {
+  stern $1 --output raw | jq -r -R 'fromjson? | "\(.["@timestamp"]) [\(.level)] - \(.message)"'
+}
+
+function uuid() {
+  python3 -c "import uuid;print(uuid.uuid4())"
 }
 
 . $HOME/.asdf/asdf.sh
@@ -138,7 +144,8 @@ source <(kubectl completion zsh)
 source <(helm completion zsh)
 source <(kops completion zsh)
 source <(kubesec completion zsh)
-source /usr/local/bin/aws_zsh_completer.sh
+# source /usr/local/bin/aws_zsh_completer.sh
 
 [ -f ~/.zsh.local ] && source ~/.zsh.local
 
+eval "$(direnv hook zsh)"
