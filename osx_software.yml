@@ -1,22 +1,23 @@
 # vim:ft=ansible:
 
-- name: brew packages are installed
-  homebrew:
-    name: "{{ item.name }}"
-    update_homebrew: yes
-    install_options: "{{ item.options|default(omit)}}"
-  with_items:
-    - {'name': 'python3'}
-    - {'name': 'yarn', 'options': 'without-node'}
-    - {'name': 'tmux'}
-    - {'name': 'git'}
-    - {'name': 'go'}
-    - {'name': 'kubernetes-cli'}
-    - {'name': 'kubernetes-helm'}
-    - {'name': 'postgresql'}
-    - {'name': 'redis'}
-    - {'name': 'the_silver_searcher'}
-    - {'name': 'zsh'}
+# - name: brew packages are installed
+#   homebrew:
+#     name: "{{ item.name }}"
+#     update_homebrew: yes
+#     install_options: "{{ item.options|default(omit)}}"
+#   with_items:
+#     - {'name': 'python3'}
+#     - {'name': 'yarn', 'options': 'without-node'}
+#     - {'name': 'tmux'}
+#     - {'name': 'git'}
+#     - {'name': 'go'}
+#     - {'name': 'kubernetes-cli'}
+#     - {'name': 'kubernetes-helm'}
+#     - {'name': 'postgresql'}
+#     - {'name': 'redis'}
+#     - {'name': 'the_silver_searcher'}
+#     - {'name': 'zsh'}
+#     - {'name': 'asdf'}
 
 - name: virtualenvwrapper is present
   pip:

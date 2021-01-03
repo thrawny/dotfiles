@@ -137,14 +137,14 @@ function uuid() {
   python3 -c "import uuid;print(uuid.uuid4())"
 }
 
-. $HOME/.asdf/asdf.sh
-. $HOME/.asdf/completions/asdf.bash
+. /usr/local/opt/asdf/asdf.sh
 
-source <(kubectl completion zsh)
-source <(helm completion zsh)
-source <(kops completion zsh)
-source <(kubesec completion zsh)
-# source /usr/local/bin/aws_zsh_completer.sh
+# source <(kubectl completion zsh)
+# source <(helm completion zsh)
+# source <(kops completion zsh)
+# source <(kubesec completion zsh)
+
+source /usr/local/bin/aws_zsh_completer.sh
 
 [ -f ~/.zsh.local ] && source ~/.zsh.local
 
