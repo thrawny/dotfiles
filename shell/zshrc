@@ -69,7 +69,6 @@ alias kcu='kubectl config use-context'
 alias hb='hub browse'
 alias gt='gofmt -w . && golangci-lint run --skip-files lab.go && go test ./...'
 alias b='bat -p --pager=never'
-alias tilt='KUBECONFIG=~/.kube/docker-for-desktop tilt'
 alias kubectl-extract-context='kc config view --minify=true --flatten --context'
 alias kec='kubectl-extract-context'
 alias ci='openci'
@@ -135,6 +134,14 @@ function ktjq() {
 
 function uuid() {
   python3 -c "import uuid;print(uuid.uuid4())"
+}
+
+function wtfpipeoutput () {
+  cat <<EOF
+command &> out          # for both going to out, works in bash and zsh
+command >out 2>&1       # for both going to out
+command > out 2>error   # std out to out, stderr to error
+EOF
 }
 
 . $HOME/.asdf/asdf.sh

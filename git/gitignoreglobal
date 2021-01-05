@@ -16,3 +16,5 @@ tilt.profile
 .envrc
 telepresence.log
 .run
+tabort*
+.terraform.lock.hcl
