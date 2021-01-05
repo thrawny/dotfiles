@@ -80,6 +80,7 @@ alias gcam="git add -A && git commit -m"
 alias tfa='terraform apply'
 alias bu='brew upgrade'
 alias mp='microplane'
+alias gcr='git-cleanup-repo'
 
 # Functions
 function gtrm() {

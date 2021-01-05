@@ -3,26 +3,35 @@
 #
 # Author: Rob Miller <rob@bigfish.co.uk>
 # Adapted from the original by Yorick Sijsling
+# Further adaptions by Jonas Lergell
+
+main=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
 
 git stash
 
-git checkout master &> /dev/null
+git checkout $main &> /dev/null
 
-# Make sure we're working with the most up-to-date version of master.
+# Make sure we're working with the most up-to-date version of main.
 git fetch
 
 # Prune obsolete remote tracking branches. These are branches that we
 # once tracked, but have since been deleted on the remote.
 git remote prune origin
 
-# List all the branches that have been merged fully into master, and
-# then delete them. We use the remote master here, just in case our
-# local master is out of date.
-git branch --merged origin/master | grep -v 'master$' | xargs git branch -D
+# List all the branches that have been merged fully into main, and
+# then delete them. We use the remote main here, just in case our
+# local main is out of date.
+git branch --merged origin/$main | grep -v "$main\$" | xargs git branch -D
 
+for branch in $(git for-each-ref refs/heads --format="%(refname:short)" | grep -v "$main\$"); do  # Go through each branch
+  # git cherry prefixes each commit with "+" if it's not included and "-" if it is, so check if there are no "+" lines:
+  if [[ ! $(git cherry origin/$main $branch | grep "^+") ]]; then
+    git branch -D $branch
+  fi
+done
 
 # delete branches that have been squash-merged
 # https://github.com/not-an-aardvark/git-delete-squashed
-git for-each-ref refs/heads/ "--format=%(refname:short)" | while read branch; do mergeBase=$(git merge-base master $branch) && [[ $(git cherry master $(git commit-tree $(git rev-parse $branch\^{tree}) -p $mergeBase -m _)) == "-"* ]] && git branch -D $branch; done
+git for-each-ref refs/heads/ "--format=%(refname:short)" | while read branch; do mergeBase=$(git merge-base $main $branch) && [[ $(git cherry $main $(git commit-tree $(git rev-parse $branch\^{tree}) -p $mergeBase -m _)) == "-"* ]] && git branch -D $branch; done
 
 git pull
