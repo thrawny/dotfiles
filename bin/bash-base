@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+shopt -s nullglob
+
+main() {
+  if [[ -f "$1" ]]; then
+    existing-file "$1"
+  else
+    new-file "$1"
+  fi
+
+  chmod +x "$1"
+}
+
+header() {
+  cat <<EOF
+#!/usr/bin/env bash
+
+[[ "\${TRACE}" ]] && set -x
+set -eou pipefail
+shopt -s nullglob
+
+main() {
+EOF
+}
+
+footer() {
+  cat <<EOF
+}
+
+main "\$@"
+EOF
+}
+
+new-file() {
+  header > "$1"
+  footer >> "$1"
+}
+
+existing-file() {
+  local temp_file
+  temp_file="$(mktemp)"
+
+  header > "${temp_file}"
+  # Remove shebang-line, indent with 2 spaces and clean up whitespace-only lines
+  grep -v "#!/" "$1" | sed -e 's/^/  /g' -e 's/[[:blank:]]*$//g' >> "${temp_file}"
+  footer >> "${temp_file}"
+
+  mv "${temp_file}" "$1"
+}
+
+main "$@"
