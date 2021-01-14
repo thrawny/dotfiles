@@ -16,7 +16,7 @@
   required = true
 [core]
   pager = less -F -X
-  excludesfile = /Users/jle/.gitignoreglobal
+  excludesfile = ~/.gitignoreglobal
   autocrlf = input
 [url "git@github.com:"]
   insteadOf = https://github.com/
