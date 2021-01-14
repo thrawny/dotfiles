@@ -2,20 +2,30 @@
 # Repo: https://github.com/andyfleming/oh-my-zsh
 # Direct Link: https://github.com/andyfleming/oh-my-zsh/blob/master/themes/af-magic.zsh-theme
 autoload -U colors; colors
-source /usr/local/etc/zsh-kubectl-prompt/kubectl.zsh
-zstyle ':zsh-kubectl-prompt:' namespace false
 
 if [ $UID -eq 0 ]; then NCOLOR="red"; else NCOLOR="green"; fi
 local return_code="%(?..%{$fg[red]%}%? ↵%{$reset_color%})"
 
-# primary prompt
-PROMPT='$FG[032](${ZSH_KUBECTL_PROMPT}) $FG[237]------------------------------------------------------------%{$reset_color%}
+if [ -s "/usr/local/etc/zsh-kubectl-prompt/kubectl.zsh" ]; then
+  source /usr/local/etc/zsh-kubectl-prompt/kubectl.zsh
+  zstyle ':zsh-kubectl-prompt:' namespace false
+
+PROMPT='$FG[237]$FG[032](${ZSH_KUBECTL_PROMPT}) $FG[237]------------------------------------------------------------%{$reset_color%}
 $FG[032]%~\
 $(git_prompt_info) \
 $FG[105]%(!.#.»)%{$reset_color%} '
+
+else
+
+  PROMPT='$FG[237]$FG[237]------------------------------------------------------------%{$reset_color%}
+$FG[032]%~\
+$(git_prompt_info) \
+$FG[105]%(!.#.»)%{$reset_color%} '
+
+fi
+
 PROMPT2='%{$fg[red]%}\ %{$reset_color%}'
 RPS1='${return_code}'
-
 
 # color vars
 eval my_gray='$FG[237]'
