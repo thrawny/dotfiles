@@ -1,0 +1,13 @@
+tap "superbrothers/zsh-kubectl-prompt"
+
+brew "asdf"
+brew "awscli"
+brew "helm"
+brew "helmfile"
+brew "kubernetes-cli"
+brew "kubeval"
+brew "stern"
+brew "terraform"
+brew "zsh-kubectl-prompt"
+brew "datawire/blackbird/telepresence"
+brew "postgresql"
