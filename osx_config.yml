@@ -20,6 +20,11 @@
     - {'name': 'tmux.conf', 'dir': 'shell/'}
   when: ansible_distribution == 'MacOSX'
 
+- name: check if vscode is installed
+  ansible.builtin.stat:
+    path: "{{ home_dir }}/Library/Application Support/Code"
+  register: vscode
+
 - name: "vscode settings files are symlinked"
   file:
     state: link
@@ -28,6 +33,7 @@
   with_items:
     - settings.json
     - keybindings.json
+  when: vscode.stat.isdir is defined and vscode.stat.isdir
 
 - name: "launchagents are symlinked"
   file:
@@ -41,3 +47,6 @@
   command: "launchctl load {{ item }}"
   with_items:
     - com.jle.brew-update.plist
+
+- name: "osx setup has been run"
+  ansible.builtin.script: "{{ dotfiles_dir }}/osx/setup.sh"
