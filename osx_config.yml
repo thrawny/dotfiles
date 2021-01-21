@@ -50,3 +50,9 @@
 
 - name: "osx setup has been run"
   ansible.builtin.script: "{{ dotfiles_dir }}/osx/setup.sh"
+
+- name: ~/Screenshots folder is present
+  file:
+    path: "{{ home_dir }}/Screenshots"
+    state: directory
+    recurse: yes

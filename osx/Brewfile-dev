@@ -1,4 +1,5 @@
 tap "superbrothers/zsh-kubectl-prompt"
+tap "instrumenta/instrumenta"
 
 brew "asdf"
 brew "awscli"
@@ -9,5 +10,4 @@ brew "kubeval"
 brew "stern"
 brew "terraform"
 brew "zsh-kubectl-prompt"
-brew "datawire/blackbird/telepresence"
 brew "postgresql"

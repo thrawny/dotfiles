@@ -38,6 +38,13 @@ else
   alias pbpaste='xclip -selection clipboard -o'
 fi;
 
+if type brew &>/dev/null; then
+  FPATH=$(brew --prefix)/share/zsh/site-functions:$FPATH
+
+  autoload -Uz compinit
+  compinit
+fi
+
 source $ZSH/oh-my-zsh.sh
 
 bindkey ^F forward-word
@@ -104,7 +111,7 @@ function projname() {
 }
 
 function github_org() {
-  git config --get remote.origin.url | ggrep -oP '.*:\K(.*)(?=/.*)'
+  git config --get remote.origin.url | ggrep -oP '.*github.com[:|/]\K(.*)(?=/.*)'
 }
 
 function pr() {
