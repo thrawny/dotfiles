@@ -6,6 +6,7 @@
 # Further adaptions by Jonas Lergell
 
 main=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
+eternal_branches="$main\$|test\$|sandbox\$|develop\$|master\$|development\$|staging\$"
 
 git stash
 
@@ -21,9 +22,10 @@ git remote prune origin
 # List all the branches that have been merged fully into main, and
 # then delete them. We use the remote main here, just in case our
 # local main is out of date.
-git branch --merged origin/$main | grep -v "$main\$" | xargs git branch -D
 
-for branch in $(git for-each-ref refs/heads --format="%(refname:short)" | grep -v "$main\$"); do  # Go through each branch
+git branch --merged origin/$main | grep -vE $eternal_branches | xargs git branch -D
+
+for branch in $(git for-each-ref refs/heads --format="%(refname:short)" | grep -vE $eternal_branches); do  # Go through each branch
   # git cherry prefixes each commit with "+" if it's not included and "-" if it is, so check if there are no "+" lines:
   if [[ ! $(git cherry origin/$main $branch | grep "^+") ]]; then
     git branch -D $branch
