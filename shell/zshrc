@@ -13,7 +13,6 @@ ZSH_THEME="thrawny"
 
 plugins=(
   git
-  github
   history
   history-substring-search
   docker
