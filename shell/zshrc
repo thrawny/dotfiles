@@ -87,6 +87,7 @@ alias tfa='terraform apply'
 alias bu='brew upgrade'
 alias mp='microplane'
 alias gcr='git-cleanup-repo'
+alias pr='gh pr create --web'
 
 # Functions
 function gtrm() {
@@ -103,18 +104,6 @@ function gp() {
 
 function kcaev() {
   envsubst < $1 | kubectl apply -f -
-}
-
-function projname() {
-  basename $(git rev-parse --show-toplevel)
-}
-
-function github_org() {
-  git config --get remote.origin.url | ggrep -oP '.*github.com[:|/]\K(.*)(?=/.*)'
-}
-
-function pr() {
-  open "https://github.com/$(github_org)/$(projname)/pull/new/$(git_current_branch)"
 }
 
 function ktc() {
