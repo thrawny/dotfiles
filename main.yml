@@ -5,8 +5,8 @@
     home_dir: "{{ lookup('env', 'HOME')}}"
     dotfiles_dir: "{{ home_dir }}/dotfiles"
   tasks:
-    - include: all_software.yml
     - include: all_config.yml
+    - include: all_software.yml
     - include: ubuntu_software.yml
       when: ansible_distribution == 'Ubuntu'
     - include: ubuntu_config.yml

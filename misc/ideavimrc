@@ -47,3 +47,4 @@ nnoremap <c-h> <c-w>h
 nnoremap <c-k> <c-w>k
 
 set surround
+set ideajoin

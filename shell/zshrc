@@ -4,6 +4,7 @@ export WORKON_HOME=~/.venvs
 export PYTHONDONTWRITEBYTECODE=1
 export GOPATH=$HOME/go
 export EDITOR=vim
+export AWS_PAGER=""
 
 # Load nvm if present
 export NVM_DIR="$HOME/.nvm"
@@ -62,32 +63,33 @@ alias vbm="VBoxManage"
 alias pycheck='isort && flake8 && pytest'
 alias pyupdatecheck='pip-compile --upgrade --dry-run | diff -i requirements.txt -'
 alias vpn='sudo openvpn'
-alias kc='kubectl'
+alias k='kubectl'
 alias kt='stern'
-alias kca='kubectl apply -f'
-alias kcn='kubectl -n kube-system'
-alias kci='kubectl -n istio-system'
-alias kcp='kubectl get pods'
+alias ka='kubectl apply -f'
+alias kn='kubectl -n kube-system'
+alias ki='kubectl -n istio-system'
+alias kp='kubectl get pods'
 alias gsha='git rev-parse HEAD | cut -c1-9'
-alias kclf='kubectl logs -f'
-alias kcl='kubectl logs'
-alias kcu='kubectl config use-context'
+alias klf='kubectl logs -f'
+alias kl='kubectl logs'
+alias ku='kubectl config use-context'
 alias hb='gh repo view --web'
 alias gt='gofmt -w . && golangci-lint run --skip-files lab.go && go test ./...'
 alias b='bat -p --pager=never'
 alias kubectl-extract-context='kc config view --minify=true --flatten --context'
 alias kec='kubectl-extract-context'
 alias ci='openci'
-alias vkcp='watch -n 1 kubectl get pods'
-alias kvcp='watch -n 1 kubectl get pods'
+alias vkp='watch -n 1 kubectl get pods'
+alias kvp='watch -n 1 kubectl get pods'
 alias v='watch -n 1'
-alias kcd='kc drain --ignore-daemonsets --delete-local-data --force'
+alias kd='kc drain --ignore-daemonsets --delete-local-data --force'
 alias gcam="git add -A && git commit -m"
 alias tfa='terraform apply'
 alias bu='brew upgrade'
 alias mp='microplane'
 alias gcr='git-cleanup-repo'
 alias pr='gh pr create --web'
+alias kdp='kubectl describe pod'
 
 # Functions
 function gtrm() {
