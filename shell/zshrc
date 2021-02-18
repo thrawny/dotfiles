@@ -53,6 +53,7 @@ bindkey ^f forward-word
 unalias -m "gpo"
 unalias -m "gp"
 unalias -m "gcam"
+unalias -m "gcm"
 
 # Aliases
 alias pi="pip install -r requirements.txt"
@@ -90,6 +91,11 @@ alias mp='microplane'
 alias gcr='git-cleanup-repo'
 alias pr='gh pr create --web'
 alias kdp='kubectl describe pod'
+alias striplines='tr -d "\n"'
+alias knp='kubectl -n kube-system get pod'
+alias kd='kubectl delete'
+alias gcm='git commit -m'
+alias kdf='kubectl delete -f'
 
 # Functions
 function gtrm() {
