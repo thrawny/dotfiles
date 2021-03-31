@@ -34,3 +34,9 @@ defaults write com.apple.commerce AutoUpdate -bool true
 
 defaults write com.googlecode.iterm2.plist PrefsCustomFolder -string "${HOME}/osx/iterm2"
 defaults write com.googlecode.iterm2.plist LoadPrefsFromCustomFolder -bool true
+
+defaults write -g NSUserKeyEquvalents '{
+"Minimise"="\u200b";
+"Minimize"="\u200b";
+"Minimize All"="\u200b";
+}'

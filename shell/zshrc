@@ -75,7 +75,7 @@ alias klf='kubectl logs -f'
 alias kl='kubectl logs'
 alias ku='kubectl config use-context'
 alias hb='gh repo view --web'
-alias gt='gofmt -w . && golangci-lint run --skip-files lab.go && go test ./...'
+alias gt='gofmt -w . && golangci-lint run --skip-files lab.go --skip-dirs lab && go test ./...'
 alias b='bat -p --pager=never'
 alias kubectl-extract-context='kc config view --minify=true --flatten --context'
 alias kec='kubectl-extract-context'
@@ -115,7 +115,7 @@ function kcaev() {
 }
 
 function ktc() {
-  stern $1 -c $1 -e "kube-probe|Checking status...|health check|Accepted connection from /100"
+  stern $1 -c $1 -e "kube-probe|Checking status...|health check|Accepted connection from /100" ${@:2}
 }
 
 function kcpf() {

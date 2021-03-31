@@ -10,6 +10,7 @@ venv
 .wercker
 lab
 lab.*
+lab*.json
 tilt.profile
 .terraform
 *.tfstate*
@@ -19,3 +20,5 @@ telepresence.log
 tabort*
 .terraform.lock.hcl
 .secrets
+.scrt
+.ssh
