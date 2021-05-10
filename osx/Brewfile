@@ -1,3 +1,5 @@
+tap "homebrew/cask-fonts"
+
 brew "bash"
 brew "bat"
 brew "cowsay"
@@ -26,4 +28,7 @@ brew "wget"
 brew "yq"
 brew "zsh"
 brew "netcat"
-brew "adoptopenjdk"
+brew "svn"
+
+cask "adoptopenjdk"
+cask "font-source-code-pro-for-powerline"
