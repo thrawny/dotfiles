@@ -96,6 +96,7 @@ alias knp='kubectl -n kube-system get pod'
 alias kd='kubectl delete'
 alias gcm='git commit -m'
 alias kdf='kubectl delete -f'
+alias gp='git push --force-with-lease --force-if-includes'
 
 # Functions
 function gtrm() {
@@ -104,10 +105,6 @@ function gtrm() {
 
 function gpo() {
   git push -u origin $(git_current_branch)
-}
-
-function gp() {
-  git push --force-with-lease
 }
 
 function kcaev() {
@@ -133,7 +130,7 @@ function dbp() {
 }
 
 function ktjq() {
-  stern $1 --output raw | jq -r -R 'fromjson? | "\(.["@timestamp"]) [\(.level)] - \(.message)"'
+  stern $1 --output raw | jq -r -R 'fromjson? | "\(.["timestamp"]) [\(.level)] - \(.message)"'
 }
 
 function uuid() {
