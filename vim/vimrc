@@ -35,9 +35,6 @@ Plugin 'jelera/vim-javascript-syntax'
 " Select blocks in python
 Plugin 'michaeljsmith/vim-indent-object'
 
-" Git wrapper
-Plugin 'tpope/vim-fugitive'
-
 Plugin 'vim-airline/vim-airline'
 Plugin 'vim-airline/vim-airline-themes'
 set laststatus=2 " Always display the statusline in all windows

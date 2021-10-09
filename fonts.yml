@@ -4,7 +4,7 @@
   git:
     repo: https://github.com/powerline/fonts.git
     dest: "{{ home_dir }}/Downloads/fonts"
- when: ansible_distribution == 'Ubuntu'
+  when: ansible_distribution == 'Ubuntu'
 
 - name: ensure fonts are copied to /usr/share/fonts/opentype
   command: "cp -r {{ home_dir }}/Downloads/fonts/SourceCodePro /usr/share/fonts/opentype/"

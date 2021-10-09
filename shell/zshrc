@@ -145,6 +145,10 @@ command > out 2>error   # std out to out, stderr to error
 EOF
 }
 
+. $(brew --prefix asdf)/asdf.sh
+
+source <(kubectl completion zsh)
+
 [ -f ~/.zsh.local ] && source ~/.zsh.local
 
 eval "$(direnv hook zsh)"
