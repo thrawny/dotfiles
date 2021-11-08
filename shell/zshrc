@@ -32,7 +32,7 @@ export PATH
 # OSX specific stuff
 if [[ "$(uname)" == "Darwin" ]]; then
   export LANG="C"
-  plugins+=(osx)
+  plugins+=(macos)
 else
   alias pbcopy='xclip -selection clipboard'
   alias pbpaste='xclip -selection clipboard -o'
