@@ -6,14 +6,19 @@ autoload -U colors; colors
 if [ $UID -eq 0 ]; then NCOLOR="red"; else NCOLOR="green"; fi
 local return_code="%(?..%{$fg[red]%}%? ↵%{$reset_color%})"
 
-if [ -s "/usr/local/etc/zsh-kubectl-prompt/kubectl.zsh" ]; then
-  source /usr/local/etc/zsh-kubectl-prompt/kubectl.zsh
+if [ -s "/opt/homebrew/etc/zsh-kubectl-prompt/kubectl.zsh" ]; then
+  source /opt/homebrew/etc/zsh-kubectl-prompt/kubectl.zsh
   zstyle ':zsh-kubectl-prompt:' namespace false
 
-PROMPT='$FG[237]$FG[032](${ZSH_KUBECTL_PROMPT}) $FG[237]------------------------------------------------------------%{$reset_color%}
+  if [ "$TERM_PROGRAM" = "WarpTerminal" ]; then
+    git rev-parse --is-inside-work-tree &>/dev/null && temp_git_prompt=" $(git_prompt_info) " || temp_git_prompt=""
+    PROMPT='$FG[032]%~ $FG[237]$FG[032](${ZSH_KUBECTL_PROMPT}) $(git_prompt_info) $FG[105]%(!.#.»)%{$reset_color%} '
+  else
+    PROMPT='$FG[237]$FG[032](${ZSH_KUBECTL_PROMPT}) $FG[237]------------------------------------------------------------%{$reset_color%}
 $FG[032]%~\
 $(git_prompt_info) \
 $FG[105]%(!.#.»)%{$reset_color%} '
+  fi
 
 else
 
