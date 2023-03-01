@@ -1,6 +1,1 @@
 # vim:ft=ansible:
-
-- name: virtualenvwrapper is present
-  pip:
-    name: virtualenvwrapper
-    executable: pip3

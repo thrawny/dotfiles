@@ -29,6 +29,8 @@ brew "yq"
 brew "zsh"
 brew "netcat"
 brew "svn"
+brew "asdf"
+brew "autojump"
 
 cask "adoptopenjdk"
 cask "font-source-code-pro-for-powerline"

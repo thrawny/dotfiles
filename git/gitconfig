@@ -22,3 +22,5 @@
   insteadOf = https://github.com/
 [init]
   defaultBranch = main
+[rerere]
+	enabled = 1

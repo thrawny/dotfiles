@@ -20,5 +20,7 @@ telepresence.log
 tabort*
 .terraform.lock.hcl
 .secrets
+.secrets*
 .scrt
 .ssh
+Dockerfile.lab
