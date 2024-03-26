@@ -9,7 +9,6 @@ syntax on
 set number
 set numberwidth=3
 set hidden
-set cursorline
 set tw=80
 set mouse=a
 set timeoutlen=1000 ttimeoutlen=10
@@ -35,13 +34,9 @@ set ignorecase
 set smartcase
 
 " Looks
-set guifont=Menlo\ Regular\ for\ Powerline:h12
+" set guifont=Menlo\ Regular\ for\ Powerline:h12
 let g:molokai_original = 1
 colorscheme molokai
-" Correct colors in terminal
-" if !has("gui_running")
-"   set term=screen-256color
-" endif
 
 " My own mappings
 " Rebind <Leader> key
