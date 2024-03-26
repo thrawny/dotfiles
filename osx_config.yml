@@ -1,29 +1,29 @@
 # vim:ft=ansible:
 
-- name: virtualenvwrapper conf is added to .zsh.local
-  lineinfile:
-    dest: "{{ home_dir }}/.zsh.local"
-    line:  "{{ item }}"
-    state: present
-    create: yes
-  with_items:
-    - "export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3"
-    - "source /usr/local/bin/virtualenvwrapper.sh"
-  when: ansible_distribution == 'MacOSX'
+# - name: virtualenvwrapper conf is added to .zsh.local
+#   lineinfile:
+#     dest: "{{ home_dir }}/.zsh.local"
+#     line:  "{{ item }}"
+#     state: present
+#     create: yes
+#   with_items:
+#     - "export VIRTUALENVWRAPPER_PYTHON=/usr/local/bin/python3"
+#     - "source /usr/local/bin/virtualenvwrapper.sh"
+#   when: ansible_distribution == 'MacOSX'
 
-- name: symlinks for osx are present
-  file:
-    state: link
-    dest: "{{ home_dir }}/.{{ item.name }}"
-    src: "{{ dotfiles_dir }}/{{ item.dir|default('') }}{{ item.name }}"
-  with_items:
-    - {'name': 'tmux.conf', 'dir': 'shell/'}
-  when: ansible_distribution == 'MacOSX'
+# - name: symlinks for osx are present
+#   file:
+#     state: link
+#     dest: "{{ home_dir }}/.{{ item.name }}"
+#     src: "{{ dotfiles_dir }}/{{ item.dir|default('') }}{{ item.name }}"
+#   with_items:
+#     - {'name': 'tmux.conf', 'dir': 'shell/'}
+#   when: ansible_distribution == 'MacOSX'
 
-- name: check if vscode is installed
-  ansible.builtin.stat:
-    path: "{{ home_dir }}/Library/Application Support/Code"
-  register: vscode
+# - name: check if vscode is installed
+#   ansible.builtin.stat:
+#     path: "{{ home_dir }}/Library/Application Support/Code"
+#   register: vscode
 
 # - name: "vscode settings files are symlinked"
 #   file:
@@ -56,3 +56,9 @@
     path: "{{ home_dir }}/Screenshots"
     state: directory
     recurse: yes
+
+- name: neovim config
+  file:
+    state: link
+    dest: "{{ home_dir }}/.config/nvim"
+    src: "{{ dotfiles_dir }}/nvim"
