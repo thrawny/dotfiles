@@ -24,3 +24,4 @@ tabort*
 .scrt
 .ssh
 Dockerfile.lab
+.spr.yml
