@@ -1,1 +1,4 @@
 *.lock.json
+nvim/undo/*
+nvim/backup/*
+nvim/swap/*

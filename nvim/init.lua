@@ -26,6 +26,7 @@ o.ttimeoutlen = 10
 o.backupdir = vim.fn.expand("~/.config/nvim/backup//")
 o.directory = vim.fn.expand("~/.config/nvim/swap//")
 o.undodir = vim.fn.expand("~/.config/nvim/undo//")
+o.undofile = true
 o.backup = true
 o.swapfile = false
 o.autoread = true
