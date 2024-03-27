@@ -67,6 +67,7 @@ map("n", "<Leader>tm", ":e ~/.tmux.conf<CR>", { noremap = true })
 map("n", "<Leader>sv", ":source $MYVIMRC<CR>", { noremap = true })
 map("n", "<localleader>b", ":NERDTreeToggle<CR>", { noremap = true })
 map("n", "<localleader>,", ",", { noremap = true })
+map("n", "<leader>ff", ":Telescope find_files<cr>", { noremap = true })
 
 -- Expression mapping (might need adjustment for Lua)
 -- map('n', 'gp', '`[' .. vim.fn.strpart(vim.fn.getregtype(), 0, 1) .. '`]', {noremap = true, expr = true})
