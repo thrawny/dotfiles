@@ -1,38 +1,8 @@
-local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
-if not vim.loop.fs_stat(lazypath) then
-  vim.fn.system({
-    "git",
-    "clone",
-    "--filter=blob:none",
-    "https://github.com/folke/lazy.nvim.git",
-    "--branch=stable", -- latest stable release
-    lazypath,
-  })
-end
-vim.opt.rtp:prepend(lazypath)
+require('setup-lazy')
 
 vim.g.mapleader = ','
 
-require("lazy").setup({
-  "tpope/vim-surround",
-  {
-    "christoomey/vim-tmux-navigator",
-    cmd = {
-      "TmuxNavigateLeft",
-      "TmuxNavigateDown",
-      "TmuxNavigateUp",
-      "TmuxNavigateRight",
-      "TmuxNavigatePrevious",
-    },
-    keys = {
-      { "<c-h>", "<cmd><C-U>TmuxNavigateLeft<cr>" },
-      { "<c-j>", "<cmd><C-U>TmuxNavigateDown<cr>" },
-      { "<c-k>", "<cmd><C-U>TmuxNavigateUp<cr>" },
-      { "<c-l>", "<cmd><C-U>TmuxNavigateRight<cr>" },
-      { "<c-\\>", "<cmd><C-U>TmuxNavigatePrevious<cr>" },
-    },
-  }
-})
+require('plugins')
 
 local set = vim.opt
 local cmd = vim.cmd
@@ -52,9 +22,9 @@ o.tw = 80
 o.mouse = 'a'
 o.timeoutlen = 1000
 o.ttimeoutlen = 10
-o.backupdir = vim.fn.expand('~/.vim/backup//')
-o.directory = vim.fn.expand('~/.vim/swap//')
-o.undodir = vim.fn.expand('~/.vim/undo//')
+o.backupdir = vim.fn.expand('~/.config/nvim/backup//')
+o.directory = vim.fn.expand('~/.config/nvim/swap//')
+o.undodir = vim.fn.expand('~/.config/nvim/undo//')
 o.backup = true
 o.swapfile = false
 o.autoread = true
@@ -111,18 +81,3 @@ map('', '<space>P', '"*P', {noremap = true})
 -- Looks
 vim.g.molokai_original = 1
 cmd('colorscheme molokai')
-
--- Auto commands
-vim.api.nvim_create_autocmd('BufReadPost', {
-    pattern = '~/.kube/config',
-    command = 'set syntax=yaml'
-})
-
-vim.api.nvim_create_user_command('FormatXML', function()
-  -- You will need to translate your Vimscript function into Lua, or use vim.cmd for external commands.
-  -- This example just shows how to define a command; the function body needs to be adapted.
-end, {})
-
-vim.api.nvim_create_user_command('FormatJson', function()
-  vim.cmd('%!python3 -m json.tool')
-end, {})
