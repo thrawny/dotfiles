@@ -1,4 +1,4 @@
-# vim:ft=ansible:
+# vim:ft=yaml.ansible:
 
 - name: packages needed to install other packages are present
   apt:

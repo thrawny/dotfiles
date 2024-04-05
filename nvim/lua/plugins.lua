@@ -68,6 +68,14 @@ require("lazy").setup({
 			"nvim-treesitter/nvim-treesitter",
 			build = ":TSUpdate",
 		},
+		{
+			"numToStr/Comment.nvim",
+			opts = {
+				-- add any options here
+			},
+			lazy = false,
+		},
+		"mfussenegger/nvim-ansible",
 	},
 })
 

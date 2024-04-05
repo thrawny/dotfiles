@@ -1,4 +1,4 @@
-# vim:ft=ansible:
+# vim:ft=yaml.ansible:
 
 - name: virtualenvwrapper conf is added to .zsh.local
   lineinfile:
