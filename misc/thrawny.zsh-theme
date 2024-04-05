@@ -21,12 +21,17 @@ $FG[105]%(!.#.»)%{$reset_color%} '
   fi
 
 else
-
-  PROMPT='$FG[237]$FG[237]------------------------------------------------------------%{$reset_color%}
+  if [ "$TERM_PROGRAM" = "WarpTerminal" ]; then
+    PROMPT='$FG[237]$FG[237]%{$reset_color%}
 $FG[032]%~\
 $(git_prompt_info) \
 $FG[105]%(!.#.»)%{$reset_color%} '
-
+  else
+    PROMPT='$FG[237]$FG[237]------------------------------------------------------------%{$reset_color%}
+$FG[032]%~\
+$(git_prompt_info) \
+$FG[105]%(!.#.»)%{$reset_color%} '
+  fi
 fi
 
 PROMPT2='%{$fg[red]%}\ %{$reset_color%}'

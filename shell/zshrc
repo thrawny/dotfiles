@@ -152,3 +152,5 @@ source <(kubectl completion zsh)
 [ -f ~/.zsh.local ] && source ~/.zsh.local
 
 eval "$(direnv hook zsh)"
+
+eval "$(/opt/homebrew/bin/brew shellenv)"
