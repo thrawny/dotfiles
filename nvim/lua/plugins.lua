@@ -76,7 +76,9 @@ require("lazy").setup({
 			lazy = false,
 		},
 		"mfussenegger/nvim-ansible",
+		"m4xshen/autoclose.nvim",
 	},
 })
 
 require("mason").setup()
+require("autoclose").setup()

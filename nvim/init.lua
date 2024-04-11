@@ -40,10 +40,6 @@ o.hlsearch = true
 o.ignorecase = true
 o.smartcase = true
 
--- Insert mode mappings
-map("i", "{<CR>", "{<CR>}<Esc>ko", { noremap = true })
-map("i", "({<CR>", "({<CR>});<Esc>ko", { noremap = true })
-
 -- Normal mode mappings for easier moving between buffers
 map("n", "<Leader>n", "<esc>:bp<CR>", { noremap = true })
 map("n", "<Leader>m", "<esc>:bn<CR>", { noremap = true })
@@ -68,9 +64,6 @@ map("n", "<Leader>sv", ":source $MYVIMRC<CR>", { noremap = true })
 map("n", "<localleader>b", ":NERDTreeToggle<CR>", { noremap = true })
 map("n", "<localleader>,", ",", { noremap = true })
 map("n", "<leader>ff", ":Telescope find_files<cr>", { noremap = true })
-
--- Expression mapping (might need adjustment for Lua)
--- map('n', 'gp', '`[' .. vim.fn.strpart(vim.fn.getregtype(), 0, 1) .. '`]', {noremap = true, expr = true})
 
 -- Visual mode remap for searching the selected text
 map("v", "//", "y/\\V<C-R>=escape(@\",'/\\')<CR><CR>", { noremap = true })
