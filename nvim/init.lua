@@ -1,6 +1,7 @@
 require("setup-lazy")
 
 vim.g.mapleader = ","
+vim.g.coq_settings = { auto_start = "shut-up" }
 
 require("plugins")
 
@@ -26,7 +27,7 @@ o.ttimeoutlen = 10
 o.backupdir = vim.fn.expand("~/.config/nvim/backup//")
 o.directory = vim.fn.expand("~/.config/nvim/swap//")
 o.undodir = vim.fn.expand("~/.config/nvim/undo//")
-o.undofile = true
+o.undofile = false
 o.backup = true
 o.swapfile = false
 o.autoread = true
