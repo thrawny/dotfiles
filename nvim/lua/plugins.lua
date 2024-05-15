@@ -94,12 +94,14 @@ require("lazy").setup({
 			"ms-jpq/coq.artifacts",
 			branch = "artifacts",
 		},
+		{ "folke/neodev.nvim", opts = {} },
 	},
 })
 
 local coq = require("coq")
 local lsp = require("lspconfig")
 
+require("neodev").setup()
 require("mason").setup()
 require("autoclose").setup()
 lsp.lua_ls.setup(coq.lsp_ensure_capabilities({
