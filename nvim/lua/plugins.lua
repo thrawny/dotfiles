@@ -16,12 +16,9 @@ require("lazy").setup({
 			{ "<c-l>", "<cmd><C-U>TmuxNavigateRight<cr>" },
 			{ "<c-\\>", "<cmd><C-U>TmuxNavigatePrevious<cr>" },
 		},
-		{
-			"williamboman/mason.nvim",
-		},
-		{
-			"nvimtools/none-ls.nvim",
-		},
+		"williamboman/mason.nvim",
+		"williamboman/mason-lspconfig.nvim",
+		"nvimtools/none-ls.nvim",
 		{
 			"stevearc/conform.nvim",
 			event = { "BufWritePre" },
@@ -46,6 +43,7 @@ require("lazy").setup({
 					javascript = { { "prettierd", "prettier" } },
 					yaml = { { "prettierd", "prettier" } },
 					json = { { "prettierd", "prettier" } },
+					xml = { "xmlformat" },
 				},
 				-- Set up format-on-save
 				format_on_save = { timeout_ms = 500, lsp_fallback = true },
@@ -95,6 +93,14 @@ require("lazy").setup({
 			branch = "artifacts",
 		},
 		{ "folke/neodev.nvim", opts = {} },
+		{
+			"jay-babu/mason-null-ls.nvim",
+			event = { "BufReadPre", "BufNewFile" },
+			dependencies = {
+				"williamboman/mason.nvim",
+				"nvimtools/none-ls.nvim",
+			},
+		},
 	},
 })
 
@@ -103,6 +109,14 @@ local lsp = require("lspconfig")
 
 require("neodev").setup()
 require("mason").setup()
+require("mason-lspconfig").setup({
+	ensure_installed = { "lua_ls" },
+	automatic_installation = true,
+})
+require("mason-null-ls").setup({
+	ensure_installed = { "stylua", "xmlformatter" },
+	automatic_installation = true,
+})
 require("autoclose").setup()
 lsp.lua_ls.setup(coq.lsp_ensure_capabilities({
 	on_init = function(client)

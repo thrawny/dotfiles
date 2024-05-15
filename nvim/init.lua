@@ -5,6 +5,8 @@ vim.g.coq_settings = { auto_start = "shut-up" }
 
 require("plugins")
 
+local builtin = require("telescope.builtin")
+
 local set = vim.opt
 local cmd = vim.cmd
 local o = vim.o
@@ -59,12 +61,13 @@ map("n", "N", "Nzzzv", { noremap = true })
 map("n", "<Leader>,", "<C-^>zz", { noremap = true })
 map("n", "<Leader>v", ":e $MYVIMRC<CR>", { noremap = true })
 map("n", "<Leader>z", ":e ~/.zshrc<CR>", { noremap = true })
-map("n", "<Leader>i", ":e ~/dotfiles/linux/i3/config<CR>", { noremap = true })
-map("n", "<Leader>tm", ":e ~/.tmux.conf<CR>", { noremap = true })
 map("n", "<Leader>sv", ":source $MYVIMRC<CR>", { noremap = true })
 map("n", "<localleader>b", ":NERDTreeToggle<CR>", { noremap = true })
 map("n", "<localleader>,", ",", { noremap = true })
-map("n", "<leader>ff", ":Telescope find_files<cr>", { noremap = true })
+vim.keymap.set("n", "<leader>ff", builtin.find_files, {})
+vim.keymap.set("n", "<leader>fg", builtin.live_grep, {})
+vim.keymap.set("n", "<leader>fb", builtin.buffers, {})
+vim.keymap.set("n", "<leader>fh", builtin.help_tags, {})
 
 -- Visual mode remap for searching the selected text
 map("v", "//", "y/\\V<C-R>=escape(@\",'/\\')<CR><CR>", { noremap = true })
