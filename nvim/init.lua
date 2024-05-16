@@ -1,8 +1,10 @@
 require("setup-lazy")
 
 vim.g.mapleader = ","
-vim.g.coq_settings = { auto_start = "shut-up" }
--- vim.g.coq_settings["keymap.recommended"] = false
+vim.g.coq_settings = {
+	auto_start = "shut-up",
+	["keymap.recommended"] = false,
+}
 
 require("plugins")
 
@@ -79,14 +81,18 @@ map("", "<space>Y", '"*Y', { noremap = true })
 map("", "<space>p", '"*p', { noremap = true })
 map("", "<space>P", '"*P', { noremap = true })
 
+-- Copilot, should override coq
+map("i", "<Tab>", "pumvisible() ? '<C-N>' : copilot#Accept('<Tab>')", { noremap = true, expr = true, silent = true })
+map(
+	"i",
+	"<CR>",
+	"pumvisible() ? (complete_info().selected == -1 ? '<C-e><CR>' : '<C-y>') : '<CR>'",
+	{ noremap = true, expr = true, silent = true }
+)
+map("i", "<Esc>", "pumvisible() ? '<C-e><Esc>' : '<Esc>'", { noremap = true, expr = true, silent = true })
+map("i", "<C-c>", "pumvisible() ? '<C-e><C-c>' : '<C-c>'", { noremap = true, expr = true, silent = true })
+map("i", "<BS>", "pumvisible() ? '<C-e><BS>' : '<BS>'", { noremap = true, expr = true, silent = true })
+
 -- Looks
 vim.g.molokai_original = 1
 cmd("colorscheme molokai")
-
--- Copilot, should override coq
-vim.api.nvim_set_keymap(
-	"i",
-	"<Tab>",
-	"pumvisible() ? '<C-N>' : copilot#Accept('<Tab>')",
-	{ noremap = true, expr = true, silent = true }
-)
