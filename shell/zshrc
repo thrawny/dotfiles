@@ -136,6 +136,11 @@ function uuid() {
   python3 -c "import uuid;print(uuid.uuid4())"
 }
 
+# warp ai blocks
+c() {
+    echo "# $*"
+}
+
 function wtfpipeoutput () {
   cat <<EOF
 command &> out          # for both going to out, works in bash and zsh
