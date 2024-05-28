@@ -101,6 +101,11 @@ require("lazy").setup({
 				"nvimtools/none-ls.nvim",
 			},
 		},
+		"github/copilot.vim",
+		{
+			"nvim-lualine/lualine.nvim",
+			dependencies = { "nvim-tree/nvim-web-devicons" },
+		},
 	},
 })
 
@@ -118,6 +123,11 @@ require("mason-null-ls").setup({
 	automatic_installation = true,
 })
 require("autoclose").setup()
+require("lualine").setup({
+	options = {
+		theme = "molokai",
+	},
+})
 lsp.lua_ls.setup(coq.lsp_ensure_capabilities({
 	on_init = function(client)
 		local path = client.workspace_folders[1].name

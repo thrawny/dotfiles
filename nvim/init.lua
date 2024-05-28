@@ -3,7 +3,11 @@ require("setup-lazy")
 vim.g.mapleader = ","
 vim.g.coq_settings = {
 	auto_start = "shut-up",
-	["keymap.recommended"] = false,
+	keymap = {
+		recommended = false,
+		jump_to_mark = "<nop>",
+		pre_select = true,
+	},
 }
 
 require("plugins")
@@ -94,5 +98,5 @@ map("i", "<C-c>", "pumvisible() ? '<C-e><C-c>' : '<C-c>'", { noremap = true, exp
 map("i", "<BS>", "pumvisible() ? '<C-e><BS>' : '<BS>'", { noremap = true, expr = true, silent = true })
 
 -- Looks
-vim.g.molokai_original = 1
+-- vim.g.molokai_original = 1
 cmd("colorscheme molokai")
