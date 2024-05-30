@@ -100,3 +100,7 @@ map("i", "<BS>", "pumvisible() ? '<C-e><BS>' : '<BS>'", { noremap = true, expr =
 -- Looks
 -- vim.g.molokai_original = 1
 cmd("colorscheme molokai_old")
+
+vim.api.nvim_create_user_command("Format", function()
+	require("conform").format({ async = true, lsp_fallback = true })
+end, {})
