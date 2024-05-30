@@ -99,4 +99,4 @@ map("i", "<BS>", "pumvisible() ? '<C-e><BS>' : '<BS>'", { noremap = true, expr =
 
 -- Looks
 -- vim.g.molokai_original = 1
-cmd("colorscheme molokai")
+cmd("colorscheme molokai_old")
