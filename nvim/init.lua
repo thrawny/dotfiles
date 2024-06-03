@@ -6,7 +6,7 @@ vim.g.coq_settings = {
 	keymap = {
 		recommended = false,
 		jump_to_mark = "<nop>",
-		pre_select = true,
+		pre_select = false,
 	},
 }
 
