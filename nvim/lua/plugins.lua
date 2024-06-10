@@ -45,6 +45,7 @@ require("lazy").setup({
 					javascript = { { "prettierd", "prettier" } },
 					yaml = { { "prettierd", "prettier" } },
 					json = { { "prettierd", "prettier" } },
+					markdown = { { "prettierd", "prettier" } },
 					xml = { "xmlformat" },
 				},
 				-- Set up format-on-save
@@ -78,7 +79,6 @@ require("lazy").setup({
 			lazy = false,
 		},
 		"mfussenegger/nvim-ansible",
-		"m4xshen/autoclose.nvim",
 		{
 			"stevearc/oil.nvim",
 			opts = {},
@@ -145,7 +145,6 @@ require("mason-null-ls").setup({
 	ensure_installed = { "stylua", "xmlformatter" },
 	automatic_installation = true,
 })
-require("autoclose").setup()
 require("lualine").setup({
 	options = {
 		theme = "molokai",
@@ -157,6 +156,10 @@ require("obsidian").setup({
 			name = "notes",
 			path = notesPath,
 		},
+	},
+
+	ui = {
+		enable = false,
 	},
 })
 
@@ -191,3 +194,25 @@ lsp.lua_ls.setup(coq.lsp_ensure_capabilities({
 		Lua = {},
 	},
 }))
+
+require("nvim-treesitter.configs").setup({
+	ensure_installed = "all",
+
+	auto_install = true,
+
+	highlight = {
+		enable = true,
+	},
+})
+
+require("conform").formatters.injected = {
+	-- Set the options field
+	options = {
+		-- Set individual option values
+		ignore_errors = true,
+		lang_to_formatters = {
+			json = { { "prettierd", "prettier" } },
+			xml = { "xmlformat" },
+		},
+	},
+}

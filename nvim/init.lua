@@ -97,10 +97,20 @@ map("i", "<Esc>", "pumvisible() ? '<C-e><Esc>' : '<Esc>'", { noremap = true, exp
 map("i", "<C-c>", "pumvisible() ? '<C-e><C-c>' : '<C-c>'", { noremap = true, expr = true, silent = true })
 map("i", "<BS>", "pumvisible() ? '<C-e><BS>' : '<BS>'", { noremap = true, expr = true, silent = true })
 
+map("n", "<Leader>oq", ":ObsidianQuickSwitch<CR>", { noremap = true })
+
 -- Looks
 -- vim.g.molokai_original = 1
 cmd("colorscheme molokai_old")
 
-vim.api.nvim_create_user_command("Format", function()
-	require("conform").format({ async = true, lsp_fallback = true })
-end, {})
+vim.api.nvim_create_user_command("Format", function(args)
+	local range = nil
+	if args.count ~= -1 then
+		local end_line = vim.api.nvim_buf_get_lines(0, args.line2 - 1, args.line2, true)[1]
+		range = {
+			start = { args.line1, 0 },
+			["end"] = { args.line2, end_line:len() },
+		}
+	end
+	require("conform").format({ async = true, lsp_fallback = true, range = range })
+end, { range = true })
