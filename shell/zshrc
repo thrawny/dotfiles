@@ -96,6 +96,7 @@ alias gcm='git commit -m'
 alias kdf='kubectl delete -f'
 alias gp='git push --force-with-lease --force-if-includes'
 alias cat='bat --style=header,grid,snip --theme "Monokai Extended Origin"'
+alias poetry-activate='source $(poetry env info --path)/bin/activate'
 
 # Functions
 function gtrm() {

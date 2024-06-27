@@ -11,6 +11,7 @@ venv
 lab
 lab.*
 lab*.json
+lab-*
 tilt.profile
 .terraform
 *.tfstate*

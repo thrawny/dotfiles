@@ -6,11 +6,11 @@
     dest: "{{ home_dir }}/.{{ item.name }}"
     src: "{{ dotfiles_dir }}/{{ item.dir|default('') }}{{ item.name }}"
   with_items:
-    - {'name': 'vim'}
-    - {'name': 'zshrc', 'dir': 'shell/'}
-    - {'name': 'ideavimrc', 'dir': 'misc/'}
-    - {'name': 'gitconfig', 'dir': 'git/'}
-    - {'name': 'gitignoreglobal', 'dir': 'git/'}
+    - { "name": "vim" }
+    - { "name": "zshrc", "dir": "shell/" }
+    - { "name": "ideavimrc", "dir": "misc/" }
+    - { "name": "gitconfig", "dir": "git/" }
+    - { "name": "gitignoreglobal", "dir": "git/" }
 
 - name: "custom zsh theme is symlinked to .oh-my-zsh/custom"
   file:
@@ -25,3 +25,9 @@
     path: "{{ home_dir }}/.local/bin"
     state: directory
     recurse: yes
+
+- name: direnvrc is symlinked to ~/.config/direnv/direnvrc
+  file:
+    state: link
+    dest: "{{ home_dir }}/.config/direnv/direnvrc"
+    src: "{{ dotfiles_dir }}/misc/direnvrc"
