@@ -57,7 +57,8 @@ unalias -m "gcm"
 alias pi="pip install -r requirements.txt"
 alias pc="pip-compile"
 alias fig="docker-compose"
-alias svh="sudo vim /etc/hosts"
+alias vim=nvim
+alias svh="sudo nvim /etc/hosts"
 alias vbm="VBoxManage"
 alias pycheck='isort && flake8 && pytest'
 alias pyupdatecheck='pip-compile --upgrade --dry-run | diff -i requirements.txt -'
@@ -77,7 +78,6 @@ alias gotest='golangci-lint run --fix -E goimports --skip-files lab.go --skip-di
 alias b='bat -p --pager=never'
 alias kubectl-extract-context='kc config view --minify=true --flatten --context'
 alias kec='kubectl-extract-context'
-alias ci='openci'
 alias vkp='watch -n 1 kubectl get pods'
 alias kvp='watch -n 1 kubectl get pods'
 alias v='watch -n 1'
