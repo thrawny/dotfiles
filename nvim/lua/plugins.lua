@@ -1,4 +1,4 @@
-local notesPath = vim.fn.expand("~") .. "/Library/Mobile Documents/com~apple~CloudDocs/Obsidian/Notes"
+local notesPath = vim.fn.expand("~") .. "/notes"
 
 require("lazy").setup({
 	"tpope/vim-surround",

@@ -29,7 +29,7 @@ export PATH
 if [[ "$(uname)" == "Darwin" ]]; then
   export LANG="C"
   plugins+=(macos)
-  eval "$(/opt/homebrew/bin/brew shellenv)"
+  # eval "$(/opt/homebrew/bin/brew shellenv)"
   export ASDF_DIR=/opt/homebrew/opt/asdf/libexec
 else
   alias pbcopy='xclip -selection clipboard'
@@ -57,7 +57,7 @@ unalias -m "gcm"
 alias pi="pip install -r requirements.txt"
 alias pc="pip-compile"
 alias fig="docker-compose"
-alias vim=nvim
+# alias vim=nvim
 alias svh="sudo nvim /etc/hosts"
 alias vbm="VBoxManage"
 alias pycheck='isort && flake8 && pytest'
@@ -95,7 +95,7 @@ alias kd='kubectl delete'
 alias gcm='git commit -m'
 alias kdf='kubectl delete -f'
 alias gp='git push --force-with-lease --force-if-includes'
-alias cat='bat --style=header,grid,snip --theme "Monokai Extended Origin"'
+# alias cat='bat --style=header,grid,snip --theme "Monokai Extended Origin"'
 alias poetry-activate='source $(poetry env info --path)/bin/activate'
 
 # Functions
@@ -153,10 +153,10 @@ EOF
 [ -f /opt/homebrew/opt/asdf/libexec/asdf.sh ] && . /opt/homebrew/opt/asdf/libexec/asdf.sh
 [ -f /opt/homebrew/etc/profile.d/autojump.sh ] && . /opt/homebrew/etc/profile.d/autojump.sh
 
-source <(kubectl completion zsh)
+# source <(kubectl completion zsh)
 
 [ -f ~/.zsh.local ] && source ~/.zsh.local
 
-eval "$(direnv hook zsh)"
+# eval "$(direnv hook zsh)"
 
-eval "$(/opt/homebrew/bin/brew shellenv)"
+# eval "$(/opt/homebrew/bin/brew shellenv)"
