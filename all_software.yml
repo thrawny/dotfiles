@@ -1,5 +1,3 @@
-# vim:ft=yaml.ansible:
-
 - name: "oh-my-zsh is present"
   git:
     repo: "git@github.com:ohmyzsh/ohmyzsh.git"

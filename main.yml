@@ -1,19 +1,16 @@
-# vim:ft=yaml.ansible:
-
 - hosts: localhost
   vars:
     home_dir: "{{ lookup('env', 'HOME')}}"
     dotfiles_dir: "{{ home_dir }}/dotfiles"
   tasks:
-    - include_tasks: all_config.yml
-    - include_tasks: all_software.yml
-    - include_tasks: ubuntu_software.yml
-      when: ansible_distribution == 'Ubuntu'
-    - include_tasks: ubuntu_config.yml
-      when: ansible_distribution == 'Ubuntu'
-    - include_tasks: osx_config.yml
-      when: ansible_distribution == 'MacOSX'
-    - include_tasks: osx_software.yml
-      when: ansible_distribution == 'MacOSX'
-    - include_tasks: vim.yml
-    - include_tasks: fonts.yml
+  - include_tasks: all_config.yml
+  - include_tasks: all_software.yml
+  - include_tasks: ubuntu_software.yml
+    when: ansible_distribution == 'Ubuntu'
+  - include_tasks: ubuntu_config.yml
+    when: ansible_distribution == 'Ubuntu'
+  - include_tasks: osx_config.yml
+    when: ansible_distribution == 'MacOSX'
+  - include_tasks: osx_software.yml
+    when: ansible_distribution == 'MacOSX'
+  - include_tasks: fonts.yml
