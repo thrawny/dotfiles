@@ -23,9 +23,3 @@
     path: "{{ home_dir }}/Screenshots"
     state: directory
     recurse: yes
-
-- name: neovim config
-  file:
-    state: link
-    dest: "{{ home_dir }}/.config/nvim"
-    src: "{{ dotfiles_dir }}/nvim"

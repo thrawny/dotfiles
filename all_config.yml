@@ -35,3 +35,15 @@
     state: link
     dest: "{{ home_dir }}/.config/ghostty/config"
     src: "{{ dotfiles_dir }}/misc/ghostty-config"
+
+- name: neovim config
+  file:
+    state: link
+    dest: "{{ home_dir }}/.config/nvim"
+    src: "{{ dotfiles_dir }}/nvim"
+
+- name: default npm packages
+  file:
+    path: "{{ home_dir }}/.default-npm-packages"
+    src: "{{ dotfiles_dir }}/misc/default-npm-packages"
+    state: link
