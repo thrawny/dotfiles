@@ -1,0 +1,255 @@
+{
+    "editor.inlineSuggest.enabled": true,
+    "files.autoSave": "onFocusChange",
+    "files.insertFinalNewline": true,
+    "files.trimFinalNewlines": true,
+    "files.trimTrailingWhitespace": true,
+    "terminal.external.osxExec": "warp.app",
+    "vim.leader": ",",
+    "vim.normalModeKeyBindingsNonRecursive": [
+        {
+            "before": [
+                "<leader>",
+                "<leader>"
+            ],
+            "commands": [
+                {
+                    "command": "workbench.action.openPreviousEditorFromHistory"
+                },
+                {
+                    "command": "workbench.action.acceptSelectedQuickOpenItem"
+                }
+            ]
+        },
+        {
+            "before": [
+                "<space>",
+                "r",
+                "r"
+            ],
+            "commands": [
+                "editor.action.rename"
+            ]
+        },
+        {
+            "before": [
+                "<space>",
+                "p"
+            ],
+            "after": [
+                "\"",
+                "*",
+                "p"
+            ]
+        },
+        {
+            "before": [
+                "<leader>",
+                "o"
+            ],
+            "commands": [
+                ":nohl"
+            ]
+        },
+        {
+            "before": [
+                "<C-l>"
+            ],
+            "commands": [
+                "workbench.action.navigateRight"
+            ]
+        },
+        {
+            "before": [
+                "<C-j>"
+            ],
+            "commands": [
+                "workbench.action.navigateDown"
+            ]
+        },
+        {
+            "before": [
+                "<C-h>"
+            ],
+            "commands": [
+                "workbench.action.navigateLeft"
+            ]
+        },
+        {
+            "before": [
+                "<C-k>"
+            ],
+            "commands": [
+                "workbench.action.navigateUp"
+            ]
+        }
+    ],
+    "vim.visualModeKeyBindingsNonRecursive": [
+        {
+            "before": [
+                "<space>",
+                "p"
+            ],
+            "after": [
+                "\"",
+                "*",
+                "p"
+            ]
+        },
+        {
+            "before": [
+                "<space>",
+                "y"
+            ],
+            "after": [
+                "\"",
+                "*",
+                "y"
+            ]
+        }
+    ],
+    "vim.incsearch": true,
+    "vim.hlsearch": true,
+    "explorer.confirmDelete": false,
+    "editor.formatOnSave": true,
+    "[yaml]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "kennylong.kubernetes-yaml-formatter"
+    },
+    "[jsonc]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit"
+    },
+    "[typescript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.tabSize": 2
+    },
+    "[typescriptreact]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "[javascript]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.tabSize": 2
+    },
+    "[javascriptreact]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.tabSize": 2
+    },
+    "[markdown]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode"
+    },
+    "terminal.integrated.fontSize": 13,
+    "workbench.editor.showTabs": "single",
+    "files.restoreUndoStack": false,
+    "workbench.colorCustomizations": {
+        "problemsErrorIcon.foreground": "#00000000"
+    },
+    "github.copilot.enable": {
+        "*": true,
+        "plaintext": false,
+        "markdown": true,
+        "scminput": false
+    },
+    "[json]": {
+        "editor.defaultFormatter": "vscode.json-language-features"
+    },
+    "typescript.tsdk": "./node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "cSpell.userWords": [
+        "capalo",
+        "kanel",
+        "Kustomization",
+        "kustomize",
+        "mqtt",
+        "opentelemetry",
+        "otel",
+        "OTLP",
+        "SEMATTRS",
+        "SEMRESATTRS",
+        "Todos",
+        "unnest",
+        "zerolog"
+    ],
+    "tailwindCSS.includeLanguages": {
+        "templ": "html"
+    },
+    "files.associations": {
+        "*.css": "tailwindcss"
+    },
+    "workbench.colorTheme": "Darcula",
+    "editor.fontFamily": "Source Code Pro For Powerline",
+    "editor.fontSize": 13,
+    "go.toolsManagement.autoUpdate": true,
+    "editor.snippetSuggestions": "none",
+    "typescript.suggest.objectLiteralMethodSnippets.enabled": false,
+    "typescript.suggest.classMemberSnippets.enabled": false,
+    "javascript.suggest.classMemberSnippets.enabled": false,
+    "search.useIgnoreFiles": true,
+    "search.smartCase": true,
+    "search.useGlobalIgnoreFiles": true,
+    "workbench.sideBar.location": "left",
+    "explorer.confirmDragAndDrop": false,
+    "editor.acceptSuggestionOnCommitCharacter": false,
+    "hediet.vscode-drawio.resizeImages": null,
+    "hediet.vscode-drawio.theme": "sketch",
+    "editor.inlineSuggest.suppressSuggestions": true,
+    "debug.onTaskErrors": "abort",
+    "cursor.cpp.disabledLanguages": [
+        "plaintext",
+        "scminput"
+    ],
+    "cSpell.enabled": false,
+    "[go]": {
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "always"
+        }
+    },
+    "[python]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "always",
+            "source.unusedImports": "always",
+        }
+    },
+    "git.openRepositoryInParentFolders": "never",
+    "[sql]": {
+        "editor.formatOnSave": false
+    },
+    "launch": {
+        "version": "0.2.0",
+        "configurations": [
+            {
+                "name": "go run",
+                "type": "go",
+                "request": "launch",
+                "mode": "debug",
+                "program": "${file}",
+                "showLog": true,
+                "cwd": "${workspaceFolder}"
+            }
+        ],
+        "compounds": []
+    },
+    "vs-kubernetes": {
+        "disable-linters": [
+            "resource-limits"
+        ],
+        "vs-kubernetes.crd-code-completion": "enabled"
+    },
+    "jupyter.askForKernelRestart": false,
+    "scratchpads.defaultFiletype": "csv",
+    "rest-client.previewColumn": "current",
+    "rest-client.showResponseInDifferentTab": true,
+    "sqltools.highlightQuery": false,
+    "[csv]": {
+        "editor.inlayHints.maximumLength": 0
+    },
+    "[dynamic csv]": {
+        "editor.inlayHints.maximumLength": 0
+    },
+    "jupyter.runStartupCommands": []
+}
