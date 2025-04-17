@@ -12,6 +12,9 @@ lab
 lab.*
 lab*.json
 lab-*
+*.lab.*
+*_lab.py
+lab_test.go
 tilt.profile
 .terraform
 *.tfstate*
@@ -19,10 +22,12 @@ tilt.profile
 telepresence.log
 .run
 tabort*
-.terraform.lock.hcl
 .secrets
 .secrets*
 .scrt
 .ssh
 Dockerfile.lab
 .spr.yml
+*debug_bin*
+*.ipynb
+.venv

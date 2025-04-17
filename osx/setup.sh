@@ -19,7 +19,7 @@ defaults write com.apple.finder ShowStatusBar -bool true
 defaults write com.apple.finder ShowPathbar -bool true
 defaults write com.apple.finder WarnOnEmptyTrash -bool false
 
-chflags nohidden ~/Library && xattr -d com.apple.FinderInfo ~/Library
+chflags nohidden ~/Library
 
 defaults write com.apple.dock minimize-to-application -bool true
 defaults write com.apple.dock mru-spaces -bool false
@@ -35,10 +35,4 @@ defaults write com.apple.commerce AutoUpdate -bool true
 defaults write com.googlecode.iterm2.plist PrefsCustomFolder -string "${HOME}/dotfiles/osx/iterm2"
 defaults write com.googlecode.iterm2.plist LoadPrefsFromCustomFolder -bool true
 
-# defaults write com.apple.menuextra.clock DateFormat -string "yyyy-MM-dd HH:mm"
-
-defaults write -g NSUserKeyEquvalents '{
-"Minimise"="\u200b";
-"Minimize"="\u200b";
-"Minimize All"="\u200b";
-}'
+defaults write com.apple.menuextra.clock DateFormat -string "yyyy-MM-dd HH:mm"

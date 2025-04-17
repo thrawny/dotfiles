@@ -31,3 +31,9 @@
     state: link
     dest: "{{ home_dir }}/.config/direnv/direnvrc"
     src: "{{ dotfiles_dir }}/misc/direnvrc"
+
+- name: ghostty is symlinked to ~/.config/ghostty/config
+  file:
+    state: link
+    dest: "{{ home_dir }}/.config/ghostty/config"
+    src: "{{ dotfiles_dir }}/misc/ghostty-config"

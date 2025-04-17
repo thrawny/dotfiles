@@ -1,95 +1,6 @@
 set nocompatible              " be iMproved, required
 filetype off                  " required
 
-" set the runtime path to include Vundle and initialize
-set rtp+=~/.vim/bundle/Vundle.vim
-call vundle#begin()
-Plugin 'VundleVim/Vundle.vim'
-
-Plugin 'ctrlp.vim'
-let g:ctrlp_working_path_mode = 'rw'
-let g:ctrlp_custom_ignore = 'node_modules\|DS_Store\|git\|dist'
-set wildignore+=*/.git/*,*/.hg/*,*/.svn/*
-set wildignore+=*.pyc
-
-Plugin 'surround.vim'
-
-Plugin 'The-NERD-tree'
-let NERDTreeIgnore = ['\.pyc$', '__pycache__', '.git', '.idea']
-let NERDTreeShowHidden=1
-
-Plugin 'bronson/vim-trailing-whitespace'
-
-Plugin 'xolox/vim-misc'
-
-Plugin 'Vitality' " Tmux bar cursor in insert mode
-
-Plugin 'christoomey/vim-tmux-navigator'
-
-" Change two selections. use cx or cxx
-" X in Visual mode !!!
-Plugin 'tommcdo/vim-exchange'
-
-Plugin 'jelera/vim-javascript-syntax'
-
-" Select blocks in python
-Plugin 'michaeljsmith/vim-indent-object'
-
-Plugin 'vim-airline/vim-airline'
-Plugin 'vim-airline/vim-airline-themes'
-set laststatus=2 " Always display the statusline in all windows
-"set showtabline=2 " Always display the tabline, even if there is only one tab
-set noshowmode " Hide the default mode text (e.g. -- INSERT -- below the statusline)
-let g:airline_powerline_fonts = 1
-let g:airline_theme = 'badwolf'
-
-Plugin 'mattn/emmet-vim'
-let g:user_emmet_leader_key='<C-w>'
-
-Plugin 'pangloss/vim-javascript'
-
-Plugin 'othree/html5.vim'
-
-Plugin 'klen/python-mode'
-let g:pymode_syntax = 1
-let g:pymode_syntax_all = 1
-let g:pymode_folding = 0
-let g:pymode_rope = 0
-let g:pymode_options_colorcolumn = 0
-let g:pymode_lint = 0
-
-Plugin 'hail2u/vim-css3-syntax'
-Plugin 'Raimondi/delimitMate'
-
-Plugin 'tpope/vim-commentary'
-
-Plugin 'othree/xml.vim'
-Plugin 'tpope/vim-unimpaired'
-Plugin 'tpope/vim-repeat'
-
-Plugin 'ervandew/supertab'
-let g:SuperTabDefaultCompletionType = "<c-n>"
-
-" Silver search
-Plugin 'rking/ag.vim'
-if executable('ag')
-  " Use ag over grep
-  set grepprg=ag\ --nogroup\ --nocolor
-
-  " Use ag in CtrlP for listing files. Lightning fast and respects .gitignore
-  let g:ctrlp_user_command = 'ag %s -l --nocolor -g ""'
-
-  " ag is fast enough that CtrlP doesn't need to cache
-  let g:ctrlp_use_caching = 0
-endif
-
-Plugin 'robbles/logstash.vim'
-
-Plugin 'ekalinin/Dockerfile.vim'
-
-Plugin 'chase/vim-ansible-yaml'
-
-call vundle#end()            " required
 filetype plugin indent on    " required
 
 "Basic stuff
@@ -184,14 +95,6 @@ noremap <space>Y "*Y
 noremap <space>p "*p
 noremap <space>P "*P
 
-augroup plugin_commentary
-    au!
-    au FileType htmldjango setlocal commentstring={#\ %s\ #}
-    au FileType php setlocal commentstring=//\ %s
-    au FileType Jenkinsfile setlocal commentstring=//\ %s
-    au FileType groovy setlocal commentstring=//\ %s
-augroup END
-
 augroup ft_html
   au!
 
@@ -261,4 +164,3 @@ endfunction
 command! FormatXML call DoPrettyXML()
 
 command! FormatJson :%!python3 -m json.tool
-
