@@ -1,4 +1,4 @@
-local notesPath = vim.fn.expand("~") .. "/Library/Mobile Documents/com~apple~CloudDocs/Obsidian/Notes"
+local notesPath = vim.fn.expand("~") .. "/work-notes"
 
 require("lazy").setup({
 	"tpope/vim-surround",
@@ -150,18 +150,19 @@ require("lualine").setup({
 		theme = "molokai",
 	},
 })
-require("obsidian").setup({
-	workspaces = {
-		{
-			name = "notes",
-			path = notesPath,
-		},
-	},
-
-	ui = {
-		enable = false,
-	},
-})
+-- require("obsidian").setup({
+--
+-- 	workspaces = {
+-- 		{
+-- 			name = "work_notes",
+-- 			path = notesPath,
+-- 		},
+-- 	},
+--
+-- 	ui = {
+-- 		enable = false,
+-- 	},
+-- })
 
 lsp.lua_ls.setup(coq.lsp_ensure_capabilities({
 	on_init = function(client)

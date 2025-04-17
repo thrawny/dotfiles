@@ -31,7 +31,7 @@ export PATH
 if [[ "$(uname)" == "Darwin" ]]; then
   export LANG="C"
   plugins+=(macos)
-  eval "$(/opt/homebrew/bin/brew shellenv)"
+  # eval "$(/opt/homebrew/bin/brew shellenv)"
   export ASDF_DIR=/opt/homebrew/opt/asdf/libexec
 else
   alias pbcopy='xclip -selection clipboard'
@@ -41,8 +41,8 @@ fi;
 if type brew &>/dev/null; then
   FPATH=$(brew --prefix)/share/zsh/site-functions:$FPATH
 
-  autoload -Uz compinit
-  compinit
+#  autoload -Uz compinit
+#  compinit
 fi
 
 source $ZSH/oh-my-zsh.sh
@@ -173,10 +173,10 @@ EOF
 [ -f /opt/homebrew/opt/asdf/libexec/asdf.sh ] && . /opt/homebrew/opt/asdf/libexec/asdf.sh
 [ -f /opt/homebrew/etc/profile.d/autojump.sh ] && . /opt/homebrew/etc/profile.d/autojump.sh
 
-source <(kubectl completion zsh)
+# source <(kubectl completion zsh)
 
 [ -f ~/.zsh.local ] && source ~/.zsh.local
 
 eval "$(direnv hook zsh)"
 
-eval "$(/opt/homebrew/bin/brew shellenv)"
+# eval "$(/opt/homebrew/bin/brew shellenv)"
