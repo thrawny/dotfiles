@@ -251,5 +251,23 @@
     "[dynamic csv]": {
         "editor.inlayHints.maximumLength": 0
     },
-    "jupyter.runStartupCommands": []
+    "jupyter.runStartupCommands": [],
+    "cursor.general.globalCursorIgnoreList": [
+        "**/.env",
+        "**/.env.*",
+        "**/credentials.json",
+        "**/credentials.*.json",
+        "**/secret.json",
+        "**/secrets.json",
+        "**/*.key",
+        "**/*.pem",
+        "**/*.pfx",
+        "**/*.p12",
+        "**/*.crt",
+        "**/*.cer",
+        "**/id_rsa",
+        "**/id_dsa",
+        "**/.ssh/id_*",
+        "**/.envrc"
+    ]
 }
