@@ -24,11 +24,21 @@
     state: directory
     recurse: yes
 
+- name: ~/.config/direnv is present
+  file:
+    path: "{{ home_dir }}/.config/direnv"
+    state: directory
+
 - name: direnvrc is symlinked to ~/.config/direnv/direnvrc
   file:
     state: link
     dest: "{{ home_dir }}/.config/direnv/direnvrc"
     src: "{{ dotfiles_dir }}/misc/direnvrc"
+
+- name: ~/.config/ghostty is present
+  file:
+    path: "{{ home_dir }}/.config/ghostty"
+    state: directory
 
 - name: ghostty is symlinked to ~/.config/ghostty/config
   file:
