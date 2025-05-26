@@ -269,5 +269,6 @@
         "**/id_dsa",
         "**/.ssh/id_*",
         "**/.envrc"
-    ]
+    ],
+    "explorer.autoReveal": false
 }
