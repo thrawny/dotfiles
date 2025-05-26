@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+# Script to move all windows of a specific app to a target workspace
+# Usage: ./move-app-windows.sh <app-name> <target-workspace>
+
+if [ $# -lt 2 ]; then
+    echo "Usage: $0 <app-name> <target-workspace>"
+    echo "Example: $0 \"Cursor\" 3"
+    exit 1
+fi
+
+APP_NAME="$1"
+TARGET_WORKSPACE="$2"
+
+echo "Moving all '$APP_NAME' windows to workspace $TARGET_WORKSPACE..."
+
+moved_count=0
+while true; do
+    # Get one window ID for the specified app that's NOT already in target workspace
+    WINDOW_ID=$(aerospace list-windows --all --format "%{app-name}|%{workspace}|%{window-id}" | \
+        grep "^$APP_NAME|" | \
+        grep -v "|$TARGET_WORKSPACE|" | \
+        head -1 | \
+        cut -d'|' -f3)
+    
+    # If no more windows found outside target workspace, break
+    if [ -z "$WINDOW_ID" ]; then
+        break
+    fi
+    
+    # Move the window
+    if aerospace move-node-to-workspace --window-id "$WINDOW_ID" "$TARGET_WORKSPACE" 2>/dev/null; then
+        echo "Moved window $WINDOW_ID"
+        ((moved_count++))
+    else
+        echo "Failed to move window $WINDOW_ID"
+        break
+    fi
+    
+    # Small delay to let aerospace process the move
+    sleep 0.1
+done
+
+echo "Moved $moved_count '$APP_NAME' window(s) to workspace $TARGET_WORKSPACE"
