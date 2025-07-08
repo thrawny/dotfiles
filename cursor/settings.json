@@ -270,5 +270,6 @@
         "**/.ssh/id_*",
         "**/.envrc"
     ],
-    "explorer.autoReveal": false
+    "explorer.autoReveal": false,
+    "git.autofetch": true
 }

@@ -102,6 +102,7 @@ alias tp='terraform plan'
 alias ta='terraform apply'
 alias taf='terraform apply -auto-approve'
 alias kz='kubectl kustomize'
+alias claude="$HOME/.claude/local/claude"
 
 # Functions
 function gtrm() {
