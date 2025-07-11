@@ -2,3 +2,6 @@
 nvim/undo/*
 nvim/backup/*
 nvim/swap/*
+
+# uv virtual environment
+.venv/

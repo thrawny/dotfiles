@@ -1,0 +1,16 @@
+[project]
+name = "dotfiles"
+version = "0.1.0"
+description = "Personal dotfiles repository with Ansible automation for macOS and Ubuntu"
+requires-python = ">=3.12"
+dependencies = [
+    "ansible>=10.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ansible-lint",
+]
+
+[tool.uv]
+dev-dependencies = []
