@@ -23,6 +23,7 @@ plugins=(
 PATH=$PATH:$GOPATH/bin:$HOME/dotfiles/bin
 [[ ":$PATH:" != *":/usr/local/bin:"* ]] && PATH="/usr/local/bin:${PATH}"
 [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && PATH="$HOME/.local/bin:${PATH}"
+[[ ":$PATH:" != *":$HOME/.claude/local:"* ]] && PATH="$HOME/.claude/local:${PATH}"
 
 export PATH
 
