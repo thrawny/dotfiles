@@ -57,3 +57,14 @@
     path: "{{ home_dir }}/.default-npm-packages"
     src: "{{ dotfiles_dir }}/misc/default-npm-packages"
     state: link
+
+- name: ~/.claude directory is present
+  file:
+    path: "{{ home_dir }}/.claude"
+    state: directory
+
+- name: claude commands directory is symlinked
+  file:
+    state: link
+    dest: "{{ home_dir }}/.claude/commands"
+    src: "{{ dotfiles_dir }}/claude/commands"
