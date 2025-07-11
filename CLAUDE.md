@@ -8,6 +8,12 @@ This is a personal dotfiles repository that manages development environment conf
 
 ## Key Commands
 
+### Python Environment Setup
+- `uv sync` - Install all Python dependencies (Ansible)
+- `uv add <package>` - Add new Python dependency
+- `uv remove <package>` - Remove Python dependency
+- Environment automatically activated via direnv when entering the directory
+
 ### Setup and Deployment
 - `ansible-playbook main.yml` - Deploy all configurations and software
 - `ansible-playbook main.yml --tags "osx"` - Deploy only macOS-specific configurations
@@ -49,8 +55,9 @@ The repository uses symlinks to connect dotfiles to their target locations:
 - **Shell**: ZSH with oh-my-zsh and custom "thrawny" theme
 - **Editor**: Neovim with Lua configuration, telescope, and various plugins
 - **Terminal**: Support for both iTerm2 (macOS) and ghostty
-- **Package Management**: Homebrew (macOS), APT (Ubuntu), asdf for runtime versions
+- **Package Management**: Homebrew (macOS), APT (Ubuntu), asdf for runtime versions, uv for Python
 - **Version Control**: Git with custom aliases and cleanup scripts
+- **Python Environment**: Managed by uv with automatic activation via direnv
 
 ## Important Aliases and Functions
 
