@@ -23,3 +23,9 @@
     path: "{{ home_dir }}/Screenshots"
     state: directory
     recurse: yes
+
+- name: "aerospace.toml is symlinked"
+  file:
+    state: link
+    dest: "{{ home_dir }}/.aerospace.toml"
+    src: "{{ dotfiles_dir }}/aerospace/aerospace.toml"
