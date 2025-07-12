@@ -1,0 +1,341 @@
+#!/bin/bash
+set -euo pipefail
+
+# Script to run Claude Code in a secure devcontainer environment
+# Replicates VS Code devcontainer functionality without IDE dependency
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DOTFILES_DIR="$(dirname "$SCRIPT_DIR")"
+CURRENT_DIR="$(pwd)"
+CONTAINER_NAME="" # Will be set in main()
+IMAGE_NAME="claude-code-devcontainer"
+WITH_POSTGRES=false
+REBUILD_IMAGE=false
+NETWORK_NAME=""
+POSTGRES_CONTAINER_NAME=""
+
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+log_info() {
+    echo -e "${GREEN}[INFO]${NC} $1"
+}
+
+log_warn() {
+    echo -e "${YELLOW}[WARN]${NC} $1"
+}
+
+log_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+# Check if Docker is running
+check_docker() {
+    if ! docker info >/dev/null 2>&1; then
+        log_error "Docker is not running. Please start Docker and try again."
+        exit 1
+    fi
+}
+
+# Detect git worktree and get repository information
+detect_git_setup() {
+    # Check if we're in a git repository
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+        # Check if this is a worktree
+        if git rev-parse --is-inside-worktree >/dev/null 2>&1; then
+            # Get the main repository path
+            GIT_COMMON_DIR=$(git rev-parse --git-common-dir)
+            if [[ "$GIT_COMMON_DIR" != ".git" ]]; then
+                # This is a worktree
+                IS_WORKTREE=true
+                MAIN_REPO_PATH=$(dirname "$GIT_COMMON_DIR")
+                log_info "Detected git worktree. Main repository: $MAIN_REPO_PATH"
+            else
+                # This is the main repository
+                IS_WORKTREE=false
+                MAIN_REPO_PATH="$CURRENT_DIR"
+                log_info "Detected main git repository"
+            fi
+        else
+            # Regular git repo
+            IS_WORKTREE=false
+            MAIN_REPO_PATH="$CURRENT_DIR"
+            log_info "Detected git repository"
+        fi
+    else
+        # Not a git repository
+        IS_WORKTREE=false
+        MAIN_REPO_PATH=""
+        log_info "Not a git repository"
+    fi
+}
+
+# Build Docker image
+build_image() {
+    local build_args=()
+    if [[ "$REBUILD_IMAGE" == "true" ]]; then
+        log_info "--rebuild flag detected. Forcing rebuild of image '$IMAGE_NAME'..."
+        build_args+=("--no-cache")
+    elif ! docker image inspect "$IMAGE_NAME" >/dev/null 2>&1; then
+        log_info "Docker image '$IMAGE_NAME' not found. Building..."
+    else
+        log_info "Docker image already exists. Use --rebuild to force."
+        return 0 # No build needed
+    fi
+
+    # Check if devcontainer files exist
+    if [[ ! -d "$DOTFILES_DIR/claude/devcontainer" ]]; then
+        log_error "Devcontainer files not found in dotfiles directory."
+        log_error "Expected location: $DOTFILES_DIR/claude/devcontainer"
+        exit 1
+    fi
+
+    # Build the image directly from the devcontainer directory
+    log_info "Building Docker image..."
+    docker build -t "$IMAGE_NAME" \
+        "${build_args[@]}" \
+        --build-arg TZ="${TZ:-Europe/Stockholm}" \
+        -f "$DOTFILES_DIR/claude/devcontainer/Dockerfile" \
+        "$DOTFILES_DIR/claude/devcontainer"
+
+    log_info "Docker image built successfully."
+}
+
+# Stop and remove existing container if it exists
+cleanup_container() {
+    if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}$"; then
+        log_info "Stopping and removing existing container: $CONTAINER_NAME"
+        docker stop "$CONTAINER_NAME" >/dev/null 2>&1 || true
+        docker rm "$CONTAINER_NAME" >/dev/null 2>&1 || true
+    fi
+}
+
+# Start PostgreSQL container if requested
+run_postgres_container() {
+    POSTGRES_CONTAINER_NAME="${CONTAINER_NAME}-postgres"
+    NETWORK_NAME="${CONTAINER_NAME}-network"
+
+    log_info "Setting up PostgreSQL..."
+
+    # Check for PostgreSQL password
+    if [[ -z "${POSTGRES_PASSWORD:-}" ]]; then
+        log_error "POSTGRES_PASSWORD environment variable is not set."
+        log_error "Please set it to a secure password for the 'postgres' user."
+        exit 1
+    fi
+
+    # Create network if it doesn't exist
+    if ! docker network inspect "$NETWORK_NAME" >/dev/null 2>&1; then
+        log_info "Creating Docker network: $NETWORK_NAME"
+        docker network create "$NETWORK_NAME"
+    fi
+
+    # Start container if it exists but is stopped, otherwise create it
+    if docker ps -a --format '{{.Names}}' | grep -q "^${POSTGRES_CONTAINER_NAME}$"; then
+        if ! docker ps --format '{{.Names}}' | grep -q "^${POSTGRES_CONTAINER_NAME}$"; then
+            log_info "Starting existing PostgreSQL container..."
+            docker start "$POSTGRES_CONTAINER_NAME" > /dev/null
+        else
+            log_info "PostgreSQL container is already running."
+        fi
+    else
+        log_info "Starting new PostgreSQL container: $POSTGRES_CONTAINER_NAME"
+        log_info "PostgreSQL data will be stored in volume: ${POSTGRES_CONTAINER_NAME}-data"
+        docker run -d \
+            --name "$POSTGRES_CONTAINER_NAME" \
+            --network "$NETWORK_NAME" \
+            -e "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}" \
+            -e "POSTGRES_USER=${POSTGRES_USER:-postgres}" \
+            -e "POSTGRES_DB=${POSTGRES_DB:-postgres}" \
+            -v "${POSTGRES_CONTAINER_NAME}-data:/var/lib/postgresql/data" \
+            --restart unless-stopped \
+            timescale/timescaledb:latest-pg17
+    fi
+
+    log_info "PostgreSQL container is available at hostname '$POSTGRES_CONTAINER_NAME' on the container network."
+}
+
+# Run the container
+run_container() {
+    log_info "Starting Claude Code devcontainer..."
+    log_info "Container name: $CONTAINER_NAME"
+    log_info "Workspace: $CURRENT_DIR"
+
+    CREDENTIALS="$(security find-generic-password -s "Claude Code-credentials" -w)"
+
+    # Prepare mount arguments based on git setup
+    MOUNT_ARGS=(
+        # Persistent volumes for bash history and config
+        "-v" "claude-code-bashhistory-${CONTAINER_NAME}:/commandhistory"
+        "-v" "claude-code-config-${CONTAINER_NAME}:/home/node/.claude"
+    )
+
+    # Set up workspace and workdir based on git configuration
+    if [[ "$IS_WORKTREE" == "true" ]]; then
+        # For worktrees, mount both the main repo and current directory at their host paths
+        MOUNT_ARGS+=("-v" "$MAIN_REPO_PATH:$MAIN_REPO_PATH")
+        MOUNT_ARGS+=("-v" "$CURRENT_DIR:$CURRENT_DIR")
+        CONTAINER_WORKDIR="$CURRENT_DIR"
+        log_info "Mounting main repository: $MAIN_REPO_PATH"
+        log_info "Mounting worktree: $CURRENT_DIR"
+    else
+        # For regular directories, mount at /workspace
+        MOUNT_ARGS+=("-v" "$CURRENT_DIR:/workspace")
+        CONTAINER_WORKDIR="/workspace"
+        log_info "Mounting workspace: $CURRENT_DIR -> /workspace"
+    fi
+
+    # Add network arguments if postgres is enabled
+    if [[ "$WITH_POSTGRES" == "true" ]]; then
+        NETWORK_NAME="${CONTAINER_NAME}-network"
+        MOUNT_ARGS+=("--network" "$NETWORK_NAME")
+        log_info "Connecting to network: $NETWORK_NAME"
+    fi
+
+    # Mount dotfiles claude commands if they exist
+    if [[ -d "$DOTFILES_DIR/claude/commands" ]]; then
+        MOUNT_ARGS+=("-v" "$DOTFILES_DIR/claude/commands:/home/node/.claude/commands:ro")
+        log_info "Mounting Claude commands from: $DOTFILES_DIR/claude/commands"
+    fi
+
+    # Mount other useful dotfiles if they exist
+    if [[ -f "$DOTFILES_DIR/git/gitconfig" ]]; then
+        MOUNT_ARGS+=("-v" "$DOTFILES_DIR/git/gitconfig:/home/node/.gitconfig:ro")
+    fi
+
+    # Prepare environment variables
+    ENV_ARGS=()
+    if [[ "$WITH_POSTGRES" == "true" ]]; then
+        ENV_ARGS+=(
+            "-e" "POSTGRES_HOST=${CONTAINER_NAME}-postgres"
+            "-e" "POSTGRES_PASSWORD=${POSTGRES_PASSWORD}"
+            "-e" "POSTGRES_USER=${POSTGRES_USER:-postgres}"
+            "-e" "POSTGRES_DB=${POSTGRES_DB:-postgres}"
+        )
+    fi
+    ENV_ARGS+=("-e" "DEVCONTAINER=true")
+
+    # Run container with all the necessary flags
+    docker run -d \
+        --name "$CONTAINER_NAME" \
+        --cap-add=NET_ADMIN \
+        --cap-add=NET_RAW \
+        --workdir="$CONTAINER_WORKDIR" \
+        "${ENV_ARGS[@]}" \
+        "${MOUNT_ARGS[@]}" \
+        "$IMAGE_NAME" \
+        sleep infinity
+    # docker exec -u root "$CONTAINER_NAME" /usr/local/bin/init-firewall.sh
+    docker exec "$CONTAINER_NAME" /bin/bash -c "echo '$CREDENTIALS' > /home/node/.claude/.credentials.json"
+    docker cp "$HOME/.claude/.claude.json" "$CONTAINER_NAME:/home/node/.claude/.claude.json"
+    docker exec -it "$CONTAINER_NAME" /bin/zsh
+}
+
+# Cleanup function for script exit
+cleanup() {
+    log_info "Cleaning up..."
+}
+
+# Set up trap for cleanup
+trap cleanup EXIT
+
+# Main execution
+main() {
+    log_info "Claude Code Devcontainer Launcher"
+    log_info "=================================="
+
+    # Parse arguments
+    custom_container_name=""
+    while (( "$#" )); do
+        case "$1" in
+            --with-postgres)
+                WITH_POSTGRES=true
+                shift
+                ;;
+            --rebuild)
+                REBUILD_IMAGE=true
+                shift
+                ;;
+            -h|--help)
+                # Let the main help handler catch this.
+                # The script will exit via that logic later.
+                # We just need to consume the argument.
+                shift
+                ;;
+            -*)
+                log_error "Unsupported flag: $1"
+                exit 1
+                ;;
+            *)
+                # The first non-flag argument is the container name
+                if [[ -z "$custom_container_name" ]]; then
+                    custom_container_name="$1"
+                else
+                    log_error "Too many arguments. Only one container name is allowed."
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    # Set container name based on parsing result
+    if [[ -n "$custom_container_name" ]]; then
+        CONTAINER_NAME="$custom_container_name"
+    else
+        CONTAINER_NAME="claude-code-$(basename "$CURRENT_DIR")"
+    fi
+
+    check_docker
+    detect_git_setup
+    build_image
+    cleanup_container
+
+    if [[ "$WITH_POSTGRES" == "true" ]]; then
+        run_postgres_container
+    fi
+
+    run_container
+}
+
+# Show help if requested
+if [[ "${1:-}" == "--help" ]] || [[ "${1:-}" == "-h" ]]; then
+    cat << EOF
+Claude Code Devcontainer Launcher
+
+Usage: $0 [CONTAINER_NAME] [OPTIONS]
+
+This script launches a Claude Code development environment in a secure Docker container.
+The container includes firewall restrictions and mounts your current directory as the workspace.
+
+Options:
+  --with-postgres          Start and link a PostgreSQL container for the workspace.
+  --rebuild                Force a rebuild of the Docker image.
+  -h, --help               Show this help message.
+
+Environment Variables:
+  POSTGRES_PASSWORD        Required when using --with-postgres.
+  POSTGRES_USER            Optional user for PostgreSQL (default: postgres).
+  POSTGRES_DB              Optional database name for PostgreSQL (default: postgres).
+  TZ                       Timezone (default: America/Los_Angeles)
+
+Arguments:
+  CONTAINER_NAME           Optional name for the container (default: claude-code-<current_dir_name>)
+
+Examples:
+  $0 my-project
+  $0 --with-postgres my-project
+  $0 --rebuild
+  POSTGRES_PASSWORD=mysecretpassword $0 --with-postgres
+
+Requirements:
+  - Docker must be running
+EOF
+    exit 0
+fi
+
+# Run main function
+main "$@"
