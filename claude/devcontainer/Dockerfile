@@ -1,26 +1,22 @@
-FROM node:20
+FROM mcr.microsoft.com/devcontainers/javascript-node:1-24-bookworm
 
 ARG TZ
 ENV TZ="$TZ"
 
 # Install basic development tools and iptables/ipset
 RUN apt update && apt install -y less \
-  git \
-  procps \
-  sudo \
   fzf \
-  zsh \
   man-db \
   unzip \
   gnupg2 \
-  gh \
   iptables \
   ipset \
   iproute2 \
   dnsutils \
   aggregate \
   jq \
-  postgresql-client
+  postgresql-client \
+  tmux
 
 # Ensure default node user has access to /usr/local/share
 RUN mkdir -p /usr/local/share/npm-global && \
@@ -49,8 +45,13 @@ RUN ARCH=$(dpkg --print-architecture) && \
   rm "git-delta_0.18.2_${ARCH}.deb"
 
 # Install go
-RUN curl -LsSf https://go.dev/dl/go1.24.5.linux-amd64.tar.gz | tar -xz -C /usr/local
+RUN ARCH=$(dpkg --print-architecture) && \
+  curl -LsSf https://go.dev/dl/go1.24.5.linux-${ARCH}.tar.gz | tar -xz -C /usr/local
 ENV PATH=$PATH:/usr/local/go/bin
+
+ENV CGO_ENABLED=0
+
+RUN chsh -s /bin/zsh node
 
 # Set up non-root user
 USER node
