@@ -31,5 +31,3 @@ Dockerfile.lab
 *debug_bin*
 *.ipynb
 .venv
-CLAUDE.md
-.claude/settings.local.json
