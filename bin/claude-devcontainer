@@ -95,11 +95,18 @@ build_image() {
 
     # Build the image directly from the devcontainer directory
     log_info "Building Docker image..."
-    docker build -t "$IMAGE_NAME" \
-        "${build_args[@]}" \
-        --build-arg TZ="${TZ:-Europe/Stockholm}" \
-        -f "$DOTFILES_DIR/claude/devcontainer/Dockerfile" \
-        "$DOTFILES_DIR/claude/devcontainer"
+    if (( ${#build_args[@]} )); then
+        docker build -t "$IMAGE_NAME" \
+            "${build_args[@]}" \
+            --build-arg TZ="${TZ:-Europe/Stockholm}" \
+            -f "$DOTFILES_DIR/claude/devcontainer/Dockerfile" \
+            "$DOTFILES_DIR/claude/devcontainer"
+    else
+        docker build -t "$IMAGE_NAME" \
+            --build-arg TZ="${TZ:-Europe/Stockholm}" \
+            -f "$DOTFILES_DIR/claude/devcontainer/Dockerfile" \
+            "$DOTFILES_DIR/claude/devcontainer"
+    fi
 
     log_info "Docker image built successfully."
 }
@@ -206,6 +213,10 @@ run_container() {
         MOUNT_ARGS+=("-v" "$DOTFILES_DIR/git/gitconfig:/home/node/.gitconfig:ro")
     fi
 
+    if [[ -f "$HOME/.gitconfig.local" ]]; then
+        MOUNT_ARGS+=("-v" "$HOME/.gitconfig.local:/home/node/.gitconfig.local:ro")
+    fi
+
     # Prepare environment variables
     ENV_ARGS=()
     if [[ "$WITH_POSTGRES" == "true" ]]; then
@@ -230,7 +241,12 @@ run_container() {
         sleep infinity
     # docker exec -u root "$CONTAINER_NAME" /usr/local/bin/init-firewall.sh
     docker exec "$CONTAINER_NAME" /bin/bash -c "echo '$CREDENTIALS' > /home/node/.claude/.credentials.json"
-    docker cp "$HOME/.claude/.claude.json" "$CONTAINER_NAME:/home/node/.claude/.claude.json"
+    if [[ -f "$HOME/.claude/.claude.json" ]]; then
+        docker cp "$HOME/.claude/.claude.json" "$CONTAINER_NAME:/home/node/.claude/.claude.json"
+    else
+        log_info "No .claude.json file found in $HOME/.claude. Using default claude.json."
+        docker cp "$DOTFILES_DIR/claude/devcontainer/claude.json" "$CONTAINER_NAME:/home/node/.claude/.claude.json"
+    fi
     docker exec -it "$CONTAINER_NAME" /bin/zsh
 }
 

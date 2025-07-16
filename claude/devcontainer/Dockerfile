@@ -18,6 +18,9 @@ RUN apt update && apt install -y less \
   postgresql-client \
   tmux
 
+# Ensure Git trusts all directories to avoid "dubious ownership" errors when host UID doesn't match container UID
+RUN git config --system --add safe.directory '*'
+
 # Ensure default node user has access to /usr/local/share
 RUN mkdir -p /usr/local/share/npm-global && \
   chown -R node:node /usr/local/share
@@ -64,6 +67,8 @@ ENV NPM_CONFIG_PREFIX=/usr/local/share/npm-global
 ENV PATH=$PATH:/usr/local/share/npm-global/bin:/home/node/.local/bin
 
 RUN uv python install
+RUN uv tool install ruff
+RUN uv tool install ty
 
 RUN uv python list
 RUN go version

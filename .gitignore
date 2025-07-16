@@ -5,3 +5,4 @@ nvim/swap/*
 
 # uv virtual environment
 .venv/
+claude/devcontainer/claude.json
