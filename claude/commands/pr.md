@@ -1,5 +1,5 @@
 ---
-allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(git push:*), Bash(gh pr create:*)
+allowed-tools: Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(git push:*), Bash(gh pr:*)
 description: Create a pull request with context analysis
 ---
 
@@ -9,11 +9,11 @@ description: Create a pull request with context analysis
 - Current git diff (staged and unstaged changes): !`git diff HEAD`
 - Current branch: !`git branch --show-current`
 - Recent commits on current branch: !`git log --oneline -10`
-- Branch comparison with main: !`git diff master...HEAD --stat`
+- Branch comparison with main: !`git diff main...HEAD --stat`
 
 ## Your task
 
-Based on the above git context, create a pull request. Follow these guidelines:
+Based on the above git context, create a pull request or push the current branch if a pull request exists already. Follow these guidelines:
 
 1. **Analyze the changes**: Look at all commits and changes that will be included in the PR
 2. **Ensure branch is pushed**: Check if the current branch is pushed to remote and push if needed

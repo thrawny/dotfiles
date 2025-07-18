@@ -1,13 +1,15 @@
 ---
-allowed-tools: Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr checks:*), Bash(git branch:*), Bash(sleep:*)
+allowed-tools: Bash(gh pr list:*), Bash(gh pr view:*), Bash(gh pr checks:*), Bash(gh api:*), Bash(git branch:*), Bash(sleep:*)
+argument-hint: wait time
 description: Monitor current branch's PR status with wait periods, identify and fix issues until ready to merge
 ---
 
 ## Context
 
-- Current branch: !`git branch --show-current`
-- Find PR for current branch: !`gh pr list --head $(git branch --show-current) --json number,title,state`
-- Initial PR status: !`gh pr view <detected-PR> --json state,mergeable,reviewDecision,title`
+- `gh pr view <PR> --json state,mergeable,reviewDecision,title` - Get structured status info
+- `gh api repos/<org>/<repo>/pulls/<PR>/comments` - Get review comments on the PR
+- `gh pr view <PR> --comments` - Show recent comments and review feedback
+- `gh pr checks <PR>` - Show CI/CD check status and any failures
 
 ## Your task
 
@@ -27,6 +29,7 @@ Based on the above context, monitor the PR associated with the current branch an
 
    - Wait for the specified time period
    - Check PR status using these commands:
+     - `gh api repos/<org>/<repo>/pulls/<PR>/comments` - Get review comments on the PR
      - `gh pr view <PR> --comments` - Show recent comments and review feedback
      - `gh pr checks <PR>` - Show CI/CD check status and any failures
      - `gh pr view <PR> --json state,mergeable,reviewDecision,title` - Get structured status info
