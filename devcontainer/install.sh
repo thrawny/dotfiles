@@ -36,6 +36,12 @@ main() {
     else
         echo "Info: Could not change default shell to zsh (sudo access may not be available)"
     fi
+
+    if nvim --version &>/dev/null; then
+        echo "Prepping nvim..."
+        nvim --headless '+Lazy install' +q || true
+    fi
+
 }
 
 main "$@"
