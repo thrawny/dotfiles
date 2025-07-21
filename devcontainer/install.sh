@@ -10,7 +10,13 @@ main() {
         curl -LsSf https://astral.sh/uv/install.sh | sh
         PATH="$HOME/.local/bin:$PATH"
     fi
-    uv sync
+    if [ -f "$HOME/.zshrc" ]; then
+        mv "$HOME/.zshrc" "$HOME/.zshrc.bak"
+    fi
+    if [ -f "$HOME/.gitconfig" ]; then
+        mv "$HOME/.gitconfig" "$HOME/.gitconfig.bak"
+    fi
+
     uv run ansible-playbook main.yml
 }
 
