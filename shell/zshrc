@@ -1,7 +1,6 @@
 # Exports
 export ZSH_DISABLE_COMPFIX=true
 export ZSH=$HOME/.oh-my-zsh
-export WORKON_HOME=~/.venvs
 export PYTHONDONTWRITEBYTECODE=1
 export GOPATH=$HOME/go
 export EDITOR=nvim
@@ -16,8 +15,6 @@ plugins=(
   docker
   python
   zsh-autosuggestions
-  jira
-  web-search
 )
 
 PATH=$PATH:$GOPATH/bin:$HOME/dotfiles/bin
@@ -103,12 +100,13 @@ alias kd='kubectl delete'
 alias gcm='git commit -m'
 alias kdf='kubectl delete -f'
 alias gp='git push --force-with-lease --force-if-includes'
-alias cat='bat --style=header,grid,snip --theme "Monokai Extended Origin"'
-alias poetry-activate='source $(poetry env info --path)/bin/activate'
 alias tp='terraform plan'
 alias ta='terraform apply'
 alias taf='terraform apply -auto-approve'
 alias kz='kubectl kustomize'
+if bat --version &>/dev/null; then
+  alias cat='bat --style=header,grid,snip --theme "Monokai Extended Origin"'
+fi
 
 # Functions
 function gtrm() {
