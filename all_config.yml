@@ -9,6 +9,7 @@
   - { "name": "ideavimrc", "dir": "misc/" }
   - { "name": "gitconfig", "dir": "git/" }
   - { "name": "gitignoreglobal", "dir": "git/" }
+  - { "name": "tmux.conf", "dir": "shell/" }
 
 - name: "custom zsh theme is symlinked to .oh-my-zsh/custom"
   file:
