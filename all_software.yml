@@ -2,6 +2,7 @@
   git:
     repo: "git@github.com:ohmyzsh/ohmyzsh.git"
     dest: "{{ home_dir }}/.oh-my-zsh"
+    accept_hostkey: yes
 
 - name: "zsh auto suggestions are present"
   git:
