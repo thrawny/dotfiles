@@ -219,7 +219,8 @@
         "editor.codeActionsOnSave": {
             "source.organizeImports": "always",
             "source.unusedImports": "always",
-        }
+        },
+        "diffEditor.ignoreTrimWhitespace": false
     },
     "python.terminal.activateEnvironment": true,
     "git.openRepositoryInParentFolders": "never",
@@ -278,5 +279,7 @@
         "**/.envrc"
     ],
     "explorer.autoReveal": false,
-    "git.autofetch": true
+    "git.autofetch": true,
+    "diffEditor.hideUnchangedRegions.enabled": true,
+    "diffEditor.renderSideBySide": false
 }

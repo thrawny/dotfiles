@@ -15,6 +15,7 @@ description: Template for creating new Claude commands - generates a complete co
 Based on the description provided, create a claude code command with the following structure:
 
 ### 1. Parse the command description
+
 - Extract the command name from the description
 - Identify the main purpose and functionality
 - Determine what tools will be needed
@@ -33,10 +34,7 @@ description: <brief one-line description>
 
 ## Context
 
-<!-- Use !`command` to execute commands and include their output -->
-- Current directory: !`pwd`
-- Git status: !`git status --short`
-<!-- Add more context commands as needed -->
+<!-- Use ! and backticked commands to execute commands and include their output -->
 
 ## Your task
 
@@ -60,59 +58,41 @@ If [condition], then [action]. Otherwise, [alternative action].
 Choose appropriate tools based on command type:
 
 **File operations:**
+
 - `Read, Write, Edit, MultiEdit, Glob, Grep`
 
 **Git operations:**
+
 - `Bash(git status:*), Bash(git add:*), Bash(git commit:*), Bash(git push:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*)`
 
 **GitHub operations:**
+
 - `Bash(gh pr:*), Bash(gh api:*), Bash(gh repo:*)`
 
 **General development:**
+
 - `Bash(npm:*), Bash(yarn:*), Bash(pip:*), Bash(cargo:*), Bash(go:*)`
 
 **System operations:**
+
 - `Bash(ls:*), Bash(cat:*), Bash(grep:*), Bash(find:*), Bash(mkdir:*), Bash(cp:*), Bash(mv:*), Bash(rm:*)`
 
 **Monitoring/waiting:**
+
 - `Bash(sleep:*), Bash(curl:*), Bash(ping:*)`
 
 **Specific command restrictions:**
+
 - `Bash(docker run:*), Bash(kubectl:*), Bash(terraform:*)`
 
 ### 4. Context command examples
 
-Use `!`backticks`` for dynamic context:
-
-```markdown
-## Context
-
-<!-- File system context -->
-- Current directory: !`pwd`
-- Directory contents: !`ls -la`
-- Disk usage: !`df -h .`
-
-<!-- Git context -->
-- Current branch: !`git branch --show-current`
-- Git status: !`git status --porcelain`
-- Recent commits: !`git log --oneline -5`
-- Unstaged changes: !`git diff`
-- Staged changes: !`git diff --cached`
-
-<!-- Project context -->
-- Package.json: !`cat package.json | jq '.scripts'`
-- Dependencies: !`npm list --depth=0`
-- Environment: !`env | grep NODE`
-
-<!-- System context -->
-- Running processes: !`ps aux | head -10`
-- System load: !`uptime`
-- Memory usage: !`free -h`
-```
+Use ! and backticked commands to execute commands and include their output.
 
 ### 5. Task guideline patterns
 
 **Simple execution pattern:**
+
 ```markdown
 1. **Analyze the current state**: Check [specific conditions]
 2. **Execute the main action**: Run [specific commands]
@@ -120,7 +100,10 @@ Use `!`backticks`` for dynamic context:
 4. **Provide feedback**: Report [status/results]
 ```
 
+````
+
 **Interactive workflow pattern:**
+
 ```markdown
 1. **Gather information**: Analyze [context/requirements]
 2. **Ask for confirmation**: If [condition], ask user to confirm [action]
@@ -129,6 +112,7 @@ Use `!`backticks`` for dynamic context:
 ```
 
 **Monitoring loop pattern:**
+
 ```markdown
 1. **Initialize monitoring**: Set up [monitoring target]
 2. **Enter monitoring loop**:
@@ -141,6 +125,7 @@ Use `!`backticks`` for dynamic context:
 ```
 
 **File processing pattern:**
+
 ```markdown
 1. **Locate target files**: Find files matching [pattern/criteria]
 2. **Analyze file contents**: Read and understand [file structure/content]
@@ -158,6 +143,7 @@ argument-hint: timeout in seconds (default: 120)
 ```
 
 In the task section:
+
 ```markdown
 2. **Handle arguments**:
    - Accept timeout parameter: `/command-name 300`
@@ -178,33 +164,39 @@ In the task section:
 ### 8. Common command types to reference
 
 **Build/Test commands:**
+
 - Run build processes
 - Execute test suites
 - Check code quality
 - Deploy applications
 
 **Git workflow commands:**
+
 - Create smart commits
 - Manage branches
 - Create/update pull requests
 - Clean up repositories
 
 **Project management:**
+
 - Initialize new projects
 - Update dependencies
 - Generate documentation
 - Manage configurations
 
 **Development tools:**
+
 - Start development servers
 - Watch for file changes
 - Format code
 - Lint and fix issues
 
 **System administration:**
+
 - Monitor services
 - Manage processes
 - Check system health
 - Backup/restore data
 
 Create a complete, working command file that follows these patterns and can be immediately used as a slash command.
+````
