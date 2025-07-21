@@ -1,18 +1,18 @@
 require("setup-lazy")
 
 vim.g.mapleader = ","
-vim.g.coq_settings = {
-	auto_start = "shut-up",
-	keymap = {
-		recommended = false,
-		jump_to_mark = "<nop>",
-		pre_select = false,
-	},
-}
+-- vim.g.coq_settings = {
+-- 	auto_start = "shut-up",
+-- 	keymap = {
+-- 		recommended = false,
+-- 		jump_to_mark = "<nop>",
+-- 		pre_select = false,
+-- 	},
+-- }
 
 require("plugins")
 
-local builtin = require("telescope.builtin")
+-- local builtin = require("telescope.builtin")
 
 local set = vim.opt
 local cmd = vim.cmd
@@ -71,10 +71,10 @@ map("n", "<Leader>z", ":e ~/.zshrc<CR>", { noremap = true })
 map("n", "<Leader>sv", ":source $MYVIMRC<CR>", { noremap = true })
 map("n", "<localleader>b", ":NERDTreeToggle<CR>", { noremap = true })
 map("n", "<localleader>,", ",", { noremap = true })
-vim.keymap.set("n", "<leader>ff", builtin.find_files, {})
-vim.keymap.set("n", "<leader>fg", builtin.live_grep, {})
-vim.keymap.set("n", "<leader>fb", builtin.buffers, {})
-vim.keymap.set("n", "<leader>fh", builtin.help_tags, {})
+-- vim.keymap.set("n", "<leader>ff", builtin.find_files, {})
+-- vim.keymap.set("n", "<leader>fg", builtin.live_grep, {})
+-- vim.keymap.set("n", "<leader>fb", builtin.buffers, {})
+-- vim.keymap.set("n", "<leader>fh", builtin.help_tags, {})
 
 -- Visual mode remap for searching the selected text
 map("v", "//", "y/\\V<C-R>=escape(@\",'/\\')<CR><CR>", { noremap = true })
@@ -86,31 +86,31 @@ map("", "<space>p", '"*p', { noremap = true })
 map("", "<space>P", '"*P', { noremap = true })
 
 -- Copilot, should override coq
-map("i", "<Tab>", "pumvisible() ? '<C-N>' : copilot#Accept('<Tab>')", { noremap = true, expr = true, silent = true })
-map(
-	"i",
-	"<CR>",
-	"pumvisible() ? (complete_info().selected == -1 ? '<C-e><CR>' : '<C-y>') : '<CR>'",
-	{ noremap = true, expr = true, silent = true }
-)
-map("i", "<Esc>", "pumvisible() ? '<C-e><Esc>' : '<Esc>'", { noremap = true, expr = true, silent = true })
-map("i", "<C-c>", "pumvisible() ? '<C-e><C-c>' : '<C-c>'", { noremap = true, expr = true, silent = true })
-map("i", "<BS>", "pumvisible() ? '<C-e><BS>' : '<BS>'", { noremap = true, expr = true, silent = true })
+-- map("i", "<Tab>", "pumvisible() ? '<C-N>' : copilot#Accept('<Tab>')", { noremap = true, expr = true, silent = true })
+-- map(
+-- 	"i",
+-- 	"<CR>",
+-- 	"pumvisible() ? (complete_info().selected == -1 ? '<C-e><CR>' : '<C-y>') : '<CR>'",
+-- 	{ noremap = true, expr = true, silent = true }
+-- )
+-- map("i", "<Esc>", "pumvisible() ? '<C-e><Esc>' : '<Esc>'", { noremap = true, expr = true, silent = true })
+-- map("i", "<C-c>", "pumvisible() ? '<C-e><C-c>' : '<C-c>'", { noremap = true, expr = true, silent = true })
+-- map("i", "<BS>", "pumvisible() ? '<C-e><BS>' : '<BS>'", { noremap = true, expr = true, silent = true })
 
-map("n", "<Leader>oq", ":ObsidianQuickSwitch<CR>", { noremap = true })
+-- map("n", "<Leader>oq", ":ObsidianQuickSwitch<CR>", { noremap = true })
 
 -- Looks
 -- vim.g.molokai_original = 1
 cmd("colorscheme molokai_old")
 
-vim.api.nvim_create_user_command("Format", function(args)
-	local range = nil
-	if args.count ~= -1 then
-		local end_line = vim.api.nvim_buf_get_lines(0, args.line2 - 1, args.line2, true)[1]
-		range = {
-			start = { args.line1, 0 },
-			["end"] = { args.line2, end_line:len() },
-		}
-	end
-	require("conform").format({ async = true, lsp_fallback = true, range = range })
-end, { range = true })
+-- vim.api.nvim_create_user_command("Format", function(args)
+-- 	local range = nil
+-- 	if args.count ~= -1 then
+-- 		local end_line = vim.api.nvim_buf_get_lines(0, args.line2 - 1, args.line2, true)[1]
+-- 		range = {
+-- 			start = { args.line1, 0 },
+-- 			["end"] = { args.line2, end_line:len() },
+-- 		}
+-- 	end
+-- 	require("conform").format({ async = true, lsp_fallback = true, range = range })
+-- end, { range = true })
