@@ -18,15 +18,15 @@
   pager = less -F -X
   excludesfile = ~/.gitignoreglobal
   autocrlf = input
-[url "git@github.com:"]
-  insteadOf = https://github.com/
+# [url "git@github.com:"]
+#   insteadOf = https://github.com/
 [init]
   defaultBranch = main
 [rerere]
 	enabled = 1
 [credential "https://github.com"]
-	helper = 
+	helper =
 	helper = !/opt/homebrew/bin/gh auth git-credential
 [credential "https://gist.github.com"]
-	helper = 
+	helper =
 	helper = !/opt/homebrew/bin/gh auth git-credential
