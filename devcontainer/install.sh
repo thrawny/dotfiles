@@ -42,6 +42,10 @@ main() {
         nvim --headless '+Lazy install' +q || true
     fi
 
+    if gh --version &>/dev/null; then
+        gh auth setup-git
+    fi
+
 }
 
 main "$@"
