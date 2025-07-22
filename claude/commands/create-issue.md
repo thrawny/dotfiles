@@ -1,18 +1,14 @@
 ---
-allowed-tools: Read, Write, Glob, Grep, Bash(mkdir:*), Bash(ls:*), Edit, MultiEdit
+allowed-tools: Read, Write, Glob, Grep, Bash(mkdir:*), Bash(ls:*), Edit, MultiEdit, Bash(rg:*), Bash(mkdir:*)
 argument-hint: <subfolder>/<issue-name> or just <issue-name>
 description: Creates a structured issue file with description and definition of done checklist
 ---
 
-## Context
-
-!`ls -la | grep issues`
-!`find issues -name "*.md" | wc -l`
-!`find issues -name "*.md" | sort -V | tail -5`
-
 ## Your task
 
-Create a structured issue file in the issues directory with an incrementing issue number and proper description and definition of done sections. Follow these guidelines:
+Root issue folder: docs/issues
+
+Create a structured issue file in the docs/issues directory with an incrementing issue number and proper description and definition of done sections. Follow these guidelines:
 
 1. **Parse the arguments**:
 
@@ -53,13 +49,16 @@ If no argument is provided, prompt the user for the issue name. If the file alre
 ```markdown
 # Issue #{number}: [Issue Title]
 
-## Description
+**Status**: Not Started
+**Dependencies**: None
 
-[Describe the issue, bug, or feature request in detail. Include context, user impact, and business value.]
+## Overview
+
+[Describe the issue, bug, or feature request in detail. Include context, user impact, and business value. Make it short, 5-10 lines.]
 
 ## Technical Implementation
 
-[Describe the technical approach, architecture changes, dependencies, and implementation details.]
+[Describe the technical approach, architecture changes, dependencies, and implementation details. Make it short, 5-10 lines.]
 
 ## Definition of Done
 
