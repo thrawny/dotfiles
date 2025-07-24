@@ -1,8 +1,6 @@
 {
   "permissions": {
     "allow": [
-      "Bash(rg:*)",
-      "Bash(ls:*)",
       "Bash(golangci-lint run:*)",
       "Bash(go build:*)",
       "Bash(go test:*)",
@@ -12,5 +10,18 @@
     ],
     "deny": []
   },
-  "model": "sonnet"
+  "model": "sonnet",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/dotfiles/claude/hooks/bash_command.py"
+          }
+        ]
+      }
+    ]
+  }
 }
