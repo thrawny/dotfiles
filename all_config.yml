@@ -69,3 +69,9 @@
     state: link
     dest: "{{ home_dir }}/.claude/commands"
     src: "{{ dotfiles_dir }}/claude/commands"
+
+- name: claude settings.json is symlinked
+  file:
+    state: link
+    dest: "{{ home_dir }}/.claude/settings.json"
+    src: "{{ dotfiles_dir }}/claude/settings.json"

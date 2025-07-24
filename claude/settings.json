@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(rg:*)",
+      "Bash(ls:*)",
+      "Bash(golangci-lint run:*)",
+      "Bash(go build:*)",
+      "Bash(go test:*)",
+      "Bash(go mod tidy)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr checks:*)"
+    ],
+    "deny": []
+  },
+  "model": "sonnet"
+}

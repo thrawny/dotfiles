@@ -18,6 +18,7 @@ This is a personal dotfiles repository that manages development environment conf
 - `ansible-playbook main.yml` - Deploy all configurations and software
 - `ansible-playbook main.yml --tags "osx"` - Deploy only macOS-specific configurations
 - `ansible-playbook main.yml --tags "ubuntu"` - Deploy only Ubuntu-specific configurations
+- When running the ansible playbook, run it with 'ansible-playbook main.yml'
 
 ### macOS Specific
 - `brew bundle --file=osx/Brewfile` - Install all Homebrew packages
