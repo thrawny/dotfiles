@@ -35,7 +35,7 @@ import sys
 # Define validation rules as a list of (regex pattern, message) tuples
 _VALIDATION_RULES = [
     (
-        r"^grep\b(?!.*\|)",
+        r"^grep\b(?!.*(?<!\|)\|(?!\|))",
         "Use the 'Grep' tool instead of bash grep for better integration and features",
     ),
     (
@@ -67,6 +67,9 @@ _VALIDATION_RULES = [
         "Use the 'Read' tool with offset parameter instead of tail",
     ),
 ]
+
+# Hook did not catch this:
+# grep -r "go test" /Users/jonas/code/kanel-backend-2 || echo "No go test commands found"
 
 
 def _validate_command(command: str) -> list[str]:

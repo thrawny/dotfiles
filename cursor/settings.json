@@ -281,5 +281,8 @@
     "explorer.autoReveal": false,
     "git.autofetch": true,
     "diffEditor.hideUnchangedRegions.enabled": true,
-    "diffEditor.renderSideBySide": false
+    "diffEditor.renderSideBySide": false,
+    "gitlens.currentLine.enabled": false,
+    "gitlens.codeLens.authors.enabled": false,
+    "gitlens.codeLens.recentChange.enabled": false
 }
