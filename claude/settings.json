@@ -6,7 +6,8 @@
       "Bash(go test:*)",
       "Bash(go mod tidy)",
       "Bash(gh pr view:*)",
-      "Bash(gh pr checks:*)"
+      "Bash(gh pr checks:*)",
+      "mcp__ide__getDiagnostics"
     ],
     "deny": []
   },

@@ -75,3 +75,9 @@
     state: link
     dest: "{{ home_dir }}/.claude/settings.json"
     src: "{{ dotfiles_dir }}/claude/settings.json"
+
+- name: claude agents directory is symlinked
+  file:
+    state: link
+    dest: "{{ home_dir }}/.claude/agents"
+    src: "{{ dotfiles_dir }}/claude/agents"
