@@ -119,11 +119,6 @@
   //   "command": "workbench.action.debug.restart",
   // },
   {
-    "key": "cmd+enter",
-    "command": "sqltools.executeCurrentQuery",
-    "when": "editorTextFocus && editorLangId == 'sql'"
-  },
-  {
     "key": "alt+w",
     "command": "workbench.action.debug.start"
   },
@@ -221,5 +216,20 @@
     "key": "ctrl+d",
     "command": "-workbench.action.debug.run",
     "when": "!inDebugMode && !terminalFocus"
+  },
+  {
+    "key": "shift+cmd+e",
+    "command": "-pgsql.runQuery",
+    "when": "editorTextFocus && editorLangId == 'sql'"
+  },
+  {
+    "key": "cmd+enter",
+    "command": "pgsql.runQuery",
+    "when": "editorTextFocus && editorLangId == 'sql'"
+  },
+  {
+    "key": "shift+enter",
+    "command": "-pgsql.runQuery",
+    "when": "editorTextFocus && editorLangId == 'sql'"
   }
 ]
