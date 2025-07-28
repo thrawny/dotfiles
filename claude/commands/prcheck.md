@@ -24,6 +24,7 @@ Based on the above context, monitor the PR associated with the current branch an
 
    - Default to 120 seconds if no argument provided
    - Allow user to specify custom wait time in seconds (e.g., `/prcheck 120`)
+   - Start by waiting the specified time, then do the first round of checks
 
 3. **Enter monitoring loop**:
 
