@@ -62,5 +62,5 @@ If no argument is provided, prompt the user for the issue name. If the file alre
 
 ## Definition of Done
 
-[List of subtasks to tick off to complete the issue.]
+[List of subtasks to tick off to complete the issue. Max 4]
 ```
