@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Write, Edit, MultiEdit, Glob, Grep, TodoWrite, Task, Bash(git:*), Bash(gh:*), Bash(rg:*), Bash(mkdir:*)
+allowed-tools: Read, Write, Edit, MultiEdit, Glob, Grep, TodoWrite, Task, Bash(git:*), Bash(gh:*), Bash(mkdir:*)
 argument-hint: <issue-number> or <issue-path>
 description: Intelligently work on an issue with step-by-step analysis and implementation
 ---
