@@ -81,3 +81,9 @@
     state: link
     dest: "{{ home_dir }}/.claude/agents"
     src: "{{ dotfiles_dir }}/claude/agents"
+
+- name: claude CLAUDE.md is symlinked
+  file:
+    state: link
+    dest: "{{ home_dir }}/.claude/CLAUDE.md"
+    src: "{{ dotfiles_dir }}/claude/CLAUDE-GLOBAL.md"

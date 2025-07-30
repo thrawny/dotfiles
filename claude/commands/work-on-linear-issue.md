@@ -7,16 +7,19 @@ description: Start working on an existing Linear issue - creates branch and upda
 ## Context
 
 ! Get current git status
+
 ```bash
 git status
 ```
 
 ! Get current branch name
+
 ```bash
 git branch --show-current
 ```
 
 ! List available Linear teams
+
 ```
 mcp__linear__list_teams
 ```
@@ -53,12 +56,10 @@ This command helps you transition from issue planning to active development. Fol
      - If on main/master branch with uncommitted changes, stash them with message referencing the issue
      - If on feature branch with uncommitted changes, ask user what to do (commit, stash, or abort)
    - Create and checkout new branch with generated name
-   - Push branch to origin with upstream tracking
 
 5. **Update Linear issue status**:
 
-   - Update issue status to "In Progress" or equivalent available status
-   - Add a comment noting that work has started: "Started working on this issue\n\nBranch: `{branch-name}`"
+   - Update issue status to "In Progress"
 
 6. **Provide work summary**:
    - Display Linear issue URL and key
