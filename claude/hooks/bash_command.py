@@ -66,6 +66,10 @@ _VALIDATION_RULES = [
         r"^tail\s+",
         "Use the 'Read' tool with offset parameter instead of tail",
     ),
+    (
+        r"^goimports\s+-w\b",
+        "Use 'golangci-lint run --fix' instead of goimports -w for comprehensive Go formatting and linting",
+    ),
 ]
 
 # Hook did not catch this:
