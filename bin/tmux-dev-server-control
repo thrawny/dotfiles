@@ -54,7 +54,7 @@ check_dependencies() {
 }
 
 show_usage() {
-  echo "Usage: tmux-workspace-control <action> [options]"
+  echo "Usage: tmux-dev-server-control <action> [options]"
   echo ""
   echo "Actions:"
   echo "  start [-d <directory>] <command...> - Start a dev server in tmux session"
@@ -62,16 +62,16 @@ show_usage() {
   echo "  logs <session-name> [lines]        - Show recent logs from session"
   echo "  status [session-name]              - Show status of sessions"
   echo "  monitor <session-name>             - Attach to session for monitoring"
-  echo "  list                               - List all workspace sessions"
+  echo "  list                               - List all dev server sessions"
   echo ""
   echo "Session Naming: Auto-generated as 'foldername-command-slug'"
   echo "Workspace Roots: ${DEV_WORKSPACE_ROOTS}"
   echo ""
   echo "Examples:"
-  echo "  tmux-workspace-control start npm run dev                    # -> myproject-npm-run-dev"
-  echo "  tmux-workspace-control start -d ~/code/backend go run main  # -> backend-go-run-main"
-  echo "  tmux-workspace-control logs myproject-npm-run-dev 100"
-  echo "  tmux-workspace-control status"
+  echo "  tmux-dev-server-control start npm run dev                    # -> myproject-npm-run-dev"
+  echo "  tmux-dev-server-control start -d ~/code/backend go run main  # -> backend-go-run-main"
+  echo "  tmux-dev-server-control logs myproject-npm-run-dev 100"
+  echo "  tmux-dev-server-control status"
 }
 
 generate_session_name() {
@@ -149,45 +149,13 @@ validate_git_repo() {
   return 0
 }
 
-detect_project_type() {
-  local target_dir="${1:-$PWD}"
-  local project_type=""
-
-  if [[ -f "$target_dir/package.json" ]]; then
-    if grep -q '"next":\|"react":\|"vue":\|"@angular/' "$target_dir/package.json" 2>/dev/null; then
-      project_type="frontend"
-    elif grep -q '"express":\|"fastify":\|"koa":' "$target_dir/package.json" 2>/dev/null; then
-      project_type="backend-node"
-    else
-      project_type="node"
-    fi
-  elif [[ -f "$target_dir/go.mod" ]]; then
-    project_type="backend-go"
-  elif [[ -f "$target_dir/requirements.txt" ]] || [[ -f "$target_dir/pyproject.toml" ]] || [[ -f "$target_dir/main.py" ]]; then
-    if [[ -f "$target_dir/manage.py" ]] || grep -q "django\|flask\|fastapi" "$target_dir/requirements.txt" "$target_dir/pyproject.toml" 2>/dev/null; then
-      project_type="backend-python"
-    else
-      project_type="python"
-    fi
-  elif [[ -f "$target_dir/docker-compose.yml" ]] || [[ -f "$target_dir/compose.yml" ]]; then
-    project_type="docker"
-  elif [[ -f "$target_dir/Dockerfile" ]]; then
-    project_type="docker"
-  else
-    project_type="unknown"
-  fi
-
-  echo "$project_type"
-}
 
 validate_command() {
   local target_dir="$1"
   shift
   local command="$*"
-  local project_type
-  project_type=$(detect_project_type "$target_dir")
 
-  # Common allowed patterns based on project type
+  # Simple allowlist of allowed command patterns
   local allowed_patterns=(
     # Node.js / Frontend
     "^npm (run|start)"
@@ -199,15 +167,16 @@ validate_command() {
     # Go
     "^go run"
     "^go build"
-    "^make (run|dev|start)"
 
     # Python
     "^python manage.py runserver"
     "^python -m "
-    "^python main.py"
+    "^python main.py.*"
+    "^python .*\.py"
     "^flask run"
     "^uvicorn "
     "^gunicorn "
+    "^uv run "
 
     # Docker
     "^docker-compose up"
@@ -226,27 +195,10 @@ validate_command() {
     fi
   done
 
-  echo "Error: Command not allowed for project type '$project_type'"
+  echo "Error: Command not allowed"
   echo "Command: $command"
   echo ""
-  echo "Allowed patterns for $project_type:"
-  case "$project_type" in
-    frontend|node)
-      echo "  npm run dev, npm start, yarn dev, pnpm dev, npx next dev"
-      ;;
-    backend-go)
-      echo "  go run main.go, go run ., make run"
-      ;;
-    backend-python)
-      echo "  python manage.py runserver, flask run, uvicorn main:app --reload"
-      ;;
-    docker)
-      echo "  docker-compose up, compose up -d"
-      ;;
-    *)
-      echo "  Project type not recognized. Common patterns: npm run dev, go run ., python manage.py runserver"
-      ;;
-  esac
+  echo "Allowed patterns: npm run, go run, python, make, docker-compose, etc."
   return 1
 }
 
@@ -273,7 +225,7 @@ handle_start() {
 
   if [[ $# -lt 1 ]]; then
     echo "Error: start requires command"
-    echo "Usage: tmux-workspace-control start [-d <directory>] <command...>"
+    echo "Usage: tmux-dev-server-control start [-d <directory>] <command...>"
     return 1
   fi
 
@@ -288,23 +240,36 @@ handle_start() {
 
   if session_exists "$session_name"; then
     echo "Session '$session_name' already exists"
-    echo "Stop it first with: tmux-workspace-control stop $session_name"
+    echo "Stop it first with: tmux-dev-server-control stop $session_name"
     return 1
   fi
 
   echo "Starting session '$session_name' in $target_dir"
   echo "Command: $command"
 
-  tmux new-session -d -s "$session_name" -c "$target_dir" "$command"
+  # Wrap the command to capture failures and keep session alive for debugging
+  local wrapped_cmd="($command) || { exit_code=\$?; echo ''; echo \"Command failed with exit code: \$exit_code\"; echo 'Keeping session alive for debugging...'; sleep 30; }"
+  tmux new-session -d -s "$session_name" -c "$target_dir" bash -c "$wrapped_cmd"
 
   # Wait a moment and check if session is still running
-  sleep 1
+  sleep 2
   if session_exists "$session_name"; then
-    echo "✓ Session '$session_name' started successfully"
-    echo "Monitor with: tmux-workspace-control monitor $session_name"
-    echo "Logs with: tmux-workspace-control logs $session_name"
+    # Check if we can see error output indicating failure
+    local output
+    output=$(tmux capture-pane -t "$session_name" -p)
+    if [[ "$output" == *"Command failed with exit code"* ]]; then
+      echo "✗ Command failed immediately. Output:"
+      echo "----------------------------------------"
+      echo "$output"
+      tmux kill-session -t "$session_name"
+      return 1
+    else
+      echo "✓ Session '$session_name' started successfully"
+      echo "Monitor with: tmux-dev-server-control monitor $session_name"
+      echo "Logs with: tmux-dev-server-control logs $session_name"
+    fi
   else
-    echo "✗ Session '$session_name' failed to start or exited immediately"
+    echo "✗ Session '$session_name' exited immediately"
     return 1
   fi
 }
@@ -312,7 +277,7 @@ handle_start() {
 handle_stop() {
   if [[ $# -lt 1 ]]; then
     echo "Error: stop requires session name"
-    echo "Usage: tmux-workspace-control stop <session-name>"
+    echo "Usage: tmux-dev-server-control stop <session-name>"
     return 1
   fi
 
@@ -332,7 +297,7 @@ handle_stop() {
 handle_logs() {
   if [[ $# -lt 1 ]]; then
     echo "Error: logs requires session name"
-    echo "Usage: tmux-workspace-control logs <session-name> [lines]"
+    echo "Usage: tmux-dev-server-control logs <session-name> [lines]"
     return 1
   fi
 
@@ -367,10 +332,10 @@ handle_status() {
       echo "Session '$session_name': NOT FOUND"
     fi
   else
-    echo "Workspace Development Sessions:"
-    echo "=============================="
+    echo "Development Server Sessions:"
+    echo "============================"
 
-    # Get all sessions and filter for workspace sessions
+    # Get all sessions and filter for dev server sessions
     if tmux list-sessions >/dev/null 2>&1; then
       tmux list-sessions -F "#{session_name}" | while read -r sess; do
         if [[ "$sess" =~ ^[a-zA-Z0-9_-]+-[a-zA-Z0-9_-]+$ ]]; then
@@ -388,7 +353,7 @@ handle_status() {
 handle_monitor() {
   if [[ $# -lt 1 ]]; then
     echo "Error: monitor requires session name"
-    echo "Usage: tmux-workspace-control monitor <session-name>"
+    echo "Usage: tmux-dev-server-control monitor <session-name>"
     return 1
   fi
 
@@ -406,8 +371,8 @@ handle_monitor() {
 }
 
 handle_list() {
-  echo "Workspace Development Sessions:"
-  echo "=============================="
+  echo "Development Server Sessions:"
+  echo "============================"
 
   if tmux list-sessions >/dev/null 2>&1; then
     local found_workspace_sessions=false
@@ -422,10 +387,10 @@ handle_list() {
     done
 
     if [[ "$found_workspace_sessions" == "false" ]]; then
-      echo "No workspace sessions found"
+      echo "No dev server sessions found"
       echo ""
       echo "Start a session with:"
-      echo "  tmux-workspace-control start project-service 'command'"
+      echo "  tmux-dev-server-control start 'command'"
     fi
   else
     echo "No active tmux sessions"
