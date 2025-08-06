@@ -6,7 +6,7 @@ description: Generate a detailed Product Requirements Document (PRD) from a feat
 
 ## Context
 
-Use Glob to check for existing PRD files and directory structure.
+Use Glob to check for existing feature directories and PRD files.
 
 ## Your task
 
@@ -46,14 +46,15 @@ Based on the provided feature description, create a detailed Product Requirement
      - Open Questions
 
 4. **Save the PRD**:
-   - Create `/docs/prds` directory if it doesn't exist
-   - Save as `[feature-name].md` in the `/docs/prds` directory
-   - Use kebab-case for the feature name in filename
+   - Create `/docs/features` directory if it doesn't exist
+   - Create feature-specific directory: `/docs/features/[feature-name]/`
+   - Save as `prd.md` in the feature directory
+   - Use kebab-case for the feature name in folder name
    - Ensure the document is well-formatted and readable
 
 5. **Provide completion summary**:
    - Confirm the PRD has been created
-   - Mention the file location
-   - Suggest next steps (e.g., using `/generate-tasks` command)
+   - Mention the file location (e.g., `/docs/features/user-profile/prd.md`)
+   - Suggest next steps (e.g., using `/generate-tasks user-profile` command)
 
 Target the PRD for a **junior developer** audience - be explicit, unambiguous, and avoid unnecessary jargon. Provide enough detail for clear understanding of the feature's purpose and core logic.

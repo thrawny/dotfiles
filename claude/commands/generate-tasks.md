@@ -1,12 +1,12 @@
 ---
 allowed-tools: Read, Write, Glob, Grep, TodoWrite
-argument-hint: path to PRD file (e.g., /docs/prds/feature-name.md)
+argument-hint: feature name or path to PRD file (e.g., user-profile or /docs/features/user-profile/prd.md)
 description: Generate a detailed task list from an existing PRD for implementation
 ---
 
 ## Context
 
-<!-- Check current directory and available PRD files -->
+<!-- Check current directory and available feature directories -->
 
 ## Your task
 
@@ -14,8 +14,9 @@ Based on an existing Product Requirements Document (PRD), create a detailed, ste
 
 1. **Locate and analyze the PRD**:
 
-   - Read the specified PRD file (provided as argument)
-   - If no argument provided, look for PRD files in `/docs/prds/` directory
+   - If argument is a full path (contains `/`), read the specified PRD file directly
+   - If argument is a feature name, look for `/docs/features/[feature-name]/prd.md`
+   - If no argument provided, list available feature directories in `/docs/features/`
    - Analyze functional requirements, user stories, and technical considerations
    - Extract key implementation needs from the PRD
 
@@ -75,9 +76,9 @@ Based on an existing Product Requirements Document (PRD), create a detailed, ste
      ```
 
 8. **Save the task list**:
-   - Create `/docs/tasks` directory if it doesn't exist
-   - Save as `tasks-[prd-file-name].md` in `/docs/tasks/` directory
-   - Extract base name from input PRD file for naming
-   - Example: `user-profile.md` → `tasks-user-profile.md`
+   - Save as `tasks.md` in the same feature directory as the PRD
+   - Use the same feature directory structure: `/docs/features/[feature-name]/tasks.md`
+   - Extract feature name from PRD path or argument for directory location
+   - Example: `user-profile` → `/docs/features/user-profile/tasks.md`
 
 Target audience is a **junior developer** who will implement the feature with awareness of the existing codebase context. Tasks should be clear, specific, and actionable.

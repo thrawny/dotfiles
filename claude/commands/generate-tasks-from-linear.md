@@ -6,7 +6,7 @@ description: Generate a detailed task list from a Linear issue for implementatio
 
 ## Context
 
-<!-- Check current directory and available task files -->
+<!-- Check current directory and available feature directories -->
 
 ## Your task
 
@@ -75,9 +75,10 @@ Based on an existing Linear issue, create a detailed, step-by-step task list to 
      ```
 
 8. **Save the task list**:
-   - Create `/docs/tasks` directory if it doesn't exist
-   - Save as `tasks-[issue-id].md` in `/docs/tasks/` directory
-   - Use Linear issue ID for naming (e.g., T-962 → `tasks-T-962.md`)
+   - Create `/docs/features` directory if it doesn't exist
+   - Create feature directory using issue ID: `/docs/features/[issue-id]/`
+   - Save as `tasks.md` in the feature directory
+   - Use Linear issue ID for feature folder (e.g., T-962 → `/docs/features/T-962/tasks.md`)
    - Include reference to source Linear issue in the file
 
 Target audience is a **junior developer** who will implement the feature with awareness of the existing codebase context. Tasks should be clear, specific, and actionable.

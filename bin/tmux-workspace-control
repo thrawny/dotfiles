@@ -9,15 +9,15 @@ DEV_WORKSPACE_ROOTS="${DEV_WORKSPACE_ROOTS:-$HOME/code}"
 
 main() {
   check_dependencies
-  
+
   if [[ $# -lt 1 ]]; then
     show_usage
     return 1
   fi
-  
+
   local action="$1"
   shift
-  
+
   case "$action" in
     start)
       handle_start "$@"
@@ -58,7 +58,7 @@ show_usage() {
   echo ""
   echo "Actions:"
   echo "  start [-d <directory>] <command...> - Start a dev server in tmux session"
-  echo "  stop <session-name>                - Stop a dev server session"  
+  echo "  stop <session-name>                - Stop a dev server session"
   echo "  logs <session-name> [lines]        - Show recent logs from session"
   echo "  status [session-name]              - Show status of sessions"
   echo "  monitor <session-name>             - Attach to session for monitoring"
@@ -78,32 +78,32 @@ generate_session_name() {
   local directory="$1"
   shift
   local command="$*"
-  
+
   # Get the directory name
   local folder_name
   folder_name=$(basename "$directory")
-  
+
   # Slugify the command: replace spaces and special chars with hyphens, lowercase
   local command_slug
   command_slug=$(echo "$command" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-zA-Z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
-  
+
   # Truncate if too long (tmux has session name limits)
   if [[ ${#command_slug} -gt 30 ]]; then
     command_slug="${command_slug:0:30}"
   fi
-  
+
   echo "${folder_name}-${command_slug}"
 }
 
 validate_session_name() {
   local session_name="$1"
-  
+
   # Check format: foldername-command-slug (more flexible now)
   if [[ ! "$session_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
     echo "Error: Invalid session name format: '$session_name'"
     return 1
   fi
-  
+
   return 0
 }
 
@@ -111,16 +111,16 @@ validate_workspace() {
   local target_dir="${1:-$PWD}"
   local workspace_roots
   IFS=',' read -ra workspace_roots <<< "$DEV_WORKSPACE_ROOTS"
-  
+
   # Expand tilde in target_dir
   target_dir="${target_dir/#\~/$HOME}"
-  
+
   # Convert to absolute path
   target_dir=$(cd "$target_dir" 2>/dev/null && pwd) || {
     echo "Error: Directory '$1' does not exist"
     return 1
   }
-  
+
   for root in "${workspace_roots[@]}"; do
     # Expand tilde
     root="${root/#\~/$HOME}"
@@ -128,7 +128,7 @@ validate_workspace() {
       return 0
     fi
   done
-  
+
   echo "Error: Target directory is outside workspace boundaries"
   echo "Target: $target_dir"
   echo "Allowed workspace roots: ${DEV_WORKSPACE_ROOTS}"
@@ -138,7 +138,7 @@ validate_workspace() {
 
 validate_git_repo() {
   local target_dir="${1:-$PWD}"
-  
+
   # Check if target directory is in a git repo
   if ! (cd "$target_dir" && git rev-parse --git-dir >/dev/null 2>&1); then
     echo "Error: Target directory is not within a git repository"
@@ -152,7 +152,7 @@ validate_git_repo() {
 detect_project_type() {
   local target_dir="${1:-$PWD}"
   local project_type=""
-  
+
   if [[ -f "$target_dir/package.json" ]]; then
     if grep -q '"next":\|"react":\|"vue":\|"@angular/' "$target_dir/package.json" 2>/dev/null; then
       project_type="frontend"
@@ -163,7 +163,7 @@ detect_project_type() {
     fi
   elif [[ -f "$target_dir/go.mod" ]]; then
     project_type="backend-go"
-  elif [[ -f "$target_dir/requirements.txt" ]] || [[ -f "$target_dir/pyproject.toml" ]]; then
+  elif [[ -f "$target_dir/requirements.txt" ]] || [[ -f "$target_dir/pyproject.toml" ]] || [[ -f "$target_dir/main.py" ]]; then
     if [[ -f "$target_dir/manage.py" ]] || grep -q "django\|flask\|fastapi" "$target_dir/requirements.txt" "$target_dir/pyproject.toml" 2>/dev/null; then
       project_type="backend-python"
     else
@@ -176,7 +176,7 @@ detect_project_type() {
   else
     project_type="unknown"
   fi
-  
+
   echo "$project_type"
 }
 
@@ -186,7 +186,7 @@ validate_command() {
   local command="$*"
   local project_type
   project_type=$(detect_project_type "$target_dir")
-  
+
   # Common allowed patterns based on project type
   local allowed_patterns=(
     # Node.js / Frontend
@@ -195,36 +195,37 @@ validate_command() {
     "^pnpm (dev|start|build)"
     "^npx "
     "^node "
-    
+
     # Go
     "^go run"
     "^go build"
     "^make (run|dev|start)"
-    
+
     # Python
     "^python manage.py runserver"
     "^python -m "
+    "^python main.py"
     "^flask run"
     "^uvicorn "
     "^gunicorn "
-    
+
     # Docker
     "^docker-compose up"
     "^compose up"
     "^docker run"
-    
+
     # General dev tools
     "^make (dev|run|start)"
     "^./scripts/"
     "^bin/"
   )
-  
+
   for pattern in "${allowed_patterns[@]}"; do
     if [[ "$command" =~ $pattern ]]; then
       return 0
     fi
   done
-  
+
   echo "Error: Command not allowed for project type '$project_type'"
   echo "Command: $command"
   echo ""
@@ -256,7 +257,7 @@ session_exists() {
 
 handle_start() {
   local target_dir="$PWD"
-  
+
   # Parse -d option for directory
   while [[ $# -gt 0 ]]; do
     case $1 in
@@ -269,33 +270,33 @@ handle_start() {
         ;;
     esac
   done
-  
+
   if [[ $# -lt 1 ]]; then
     echo "Error: start requires command"
     echo "Usage: tmux-workspace-control start [-d <directory>] <command...>"
     return 1
   fi
-  
+
   local command="$*"
   local session_name
   session_name=$(generate_session_name "$target_dir" "$command")
-  
+
   validate_session_name "$session_name" || return 1
-  validate_workspace "$target_dir" || return 1  
+  validate_workspace "$target_dir" || return 1
   validate_git_repo "$target_dir" || return 1
   validate_command "$target_dir" "$command" || return 1
-  
+
   if session_exists "$session_name"; then
     echo "Session '$session_name' already exists"
     echo "Stop it first with: tmux-workspace-control stop $session_name"
     return 1
   fi
-  
+
   echo "Starting session '$session_name' in $target_dir"
   echo "Command: $command"
-  
+
   tmux new-session -d -s "$session_name" -c "$target_dir" "$command"
-  
+
   # Wait a moment and check if session is still running
   sleep 1
   if session_exists "$session_name"; then
@@ -314,15 +315,15 @@ handle_stop() {
     echo "Usage: tmux-workspace-control stop <session-name>"
     return 1
   fi
-  
+
   local session_name="$1"
   validate_session_name "$session_name" || return 1
-  
+
   if ! session_exists "$session_name"; then
     echo "Session '$session_name' does not exist"
     return 1
   fi
-  
+
   echo "Stopping session '$session_name'..."
   tmux kill-session -t "$session_name"
   echo "✓ Session '$session_name' stopped"
@@ -334,19 +335,19 @@ handle_logs() {
     echo "Usage: tmux-workspace-control logs <session-name> [lines]"
     return 1
   fi
-  
+
   local session_name="$1"
   local lines="${2:-50}"
-  
+
   validate_session_name "$session_name" || return 1
-  
+
   if ! session_exists "$session_name"; then
     echo "Session '$session_name' does not exist"
     echo "Available sessions:"
     handle_list
     return 1
   fi
-  
+
   echo "Last $lines lines from session '$session_name':"
   echo "----------------------------------------"
   tmux capture-pane -t "$session_name" -p | tail -n "$lines"
@@ -354,10 +355,10 @@ handle_logs() {
 
 handle_status() {
   local session_name="${1:-}"
-  
+
   if [[ -n "$session_name" ]]; then
     validate_session_name "$session_name" || return 1
-    
+
     if session_exists "$session_name"; then
       echo "Session '$session_name': RUNNING"
       tmux display-message -t "$session_name" -p "Working directory: #{pane_current_path}"
@@ -368,7 +369,7 @@ handle_status() {
   else
     echo "Workspace Development Sessions:"
     echo "=============================="
-    
+
     # Get all sessions and filter for workspace sessions
     if tmux list-sessions >/dev/null 2>&1; then
       tmux list-sessions -F "#{session_name}" | while read -r sess; do
@@ -390,15 +391,15 @@ handle_monitor() {
     echo "Usage: tmux-workspace-control monitor <session-name>"
     return 1
   fi
-  
+
   local session_name="$1"
   validate_session_name "$session_name" || return 1
-  
+
   if ! session_exists "$session_name"; then
     echo "Session '$session_name' does not exist"
     return 1
   fi
-  
+
   echo "Attaching to session '$session_name'..."
   echo "Use Ctrl+A then D to detach"
   tmux attach -t "$session_name"
@@ -407,10 +408,10 @@ handle_monitor() {
 handle_list() {
   echo "Workspace Development Sessions:"
   echo "=============================="
-  
+
   if tmux list-sessions >/dev/null 2>&1; then
     local found_workspace_sessions=false
-    
+
     tmux list-sessions -F "#{session_name} #{session_created} #{session_attached}" | while read -r sess created attached; do
       if [[ "$sess" =~ ^[a-zA-Z0-9_-]+-[a-zA-Z0-9_-]+$ ]]; then
         found_workspace_sessions=true
@@ -419,7 +420,7 @@ handle_list() {
         echo "$sess [$status] (created: $(date -r "$created" '+%Y-%m-%d %H:%M'))"
       fi
     done
-    
+
     if [[ "$found_workspace_sessions" == "false" ]]; then
       echo "No workspace sessions found"
       echo ""

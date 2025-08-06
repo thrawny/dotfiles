@@ -1,6 +1,6 @@
 ---
 allowed-tools: Read, Write, Edit, MultiEdit, Glob, Grep, TodoWrite, Bash, Task
-argument-hint: task file path or identifier (e.g., /docs/tasks/tasks-feature-name.md or T-962)
+argument-hint: feature name or task file path (e.g., user-profile, T-962, or /docs/features/user-profile/tasks.md)
 description: Automatically process task list and create PR - fully autonomous implementation workflow
 ---
 
@@ -13,13 +13,12 @@ This command is for **autonomous agent workflows** without human supervision. It
 Based on a task file path or identifier, locate the corresponding task file and implement all tasks autonomously, culminating in a pull request.
 
 1. **Initialize autonomous workflow**:
-   - If argument looks like a path (`/docs/tasks/...`), use it directly
-   - If argument looks like an identifier (e.g., `T-962`, `feature-name`), search for:
-     - `/docs/tasks/tasks-{identifier}.md`
-     - `/docs/tasks/{identifier}.md`
-   - If task file doesn't exist, list available task files and ask user to specify
-   - Extract feature/issue name from task file for branch naming
-   - Create git branch using format: `feature/{extracted-name}` or `{identifier}`
+   - If argument looks like a path (`/docs/features/...`), use it directly
+   - If argument is an identifier (e.g., `T-962`, `user-profile`), look for:
+     - `/docs/features/{identifier}/tasks.md`
+   - If task file doesn't exist, list available feature directories and ask user to specify
+   - Extract feature/issue name from argument or task file path for branch naming
+   - Create git branch using format: `feature/{identifier}` or `{identifier}`
 
 2. **Load and parse task list**:
    - Read the complete task file

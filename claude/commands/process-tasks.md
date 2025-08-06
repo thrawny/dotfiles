@@ -1,20 +1,21 @@
 ---
 allowed-tools: Read, Write, Edit, MultiEdit, Glob, Grep, TodoWrite
-argument-hint: path to task list file (e.g., /docs/tasks/tasks-feature-name.md)
+argument-hint: feature name or path to task file (e.g., user-profile or /docs/features/user-profile/tasks.md)
 description: Execute tasks from a task list with proper workflow management
 ---
 
 ## Context
 
-Use Glob to check for existing task files and directory structure. Check git status if needed.
+Use Glob to check for existing feature directories and task files. Check git status if needed.
 
 ## Your task
 
 Execute tasks from a task list markdown file following proper development workflow with testing, staging, and committing.
 
 1. **Load and analyze task list**:
-   - Read the specified task list file (provided as argument)
-   - If no argument provided, look for task files in `/docs/tasks/` directory
+   - If argument is a full path (contains `/`), read the specified task file directly
+   - If argument is a feature name or identifier, look for `/docs/features/[identifier]/tasks.md`
+   - If no argument provided, list available feature directories in `/docs/features/`
    - Identify the next pending sub-task to work on
    - Review relevant files section for context
 
@@ -49,7 +50,7 @@ Execute tasks from a task list markdown file following proper development workfl
    - Mark the parent task as completed `[x]`
 
 5. **Task list maintenance**:
-   - Update the task list file after each sub-task completion
+   - Update the feature's tasks.md file after each sub-task completion
    - Add newly discovered tasks as they emerge during implementation
    - Update the "Relevant Files" section with any new files created/modified
    - Keep file descriptions accurate and current
