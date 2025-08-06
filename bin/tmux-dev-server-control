@@ -57,6 +57,11 @@ check_dependencies() {
     echo "Install with: brew install tmux (macOS) or apt-get install tmux (Ubuntu)"
     exit 1
   fi
+  
+  if ! command -v direnv >/dev/null 2>&1; then
+    echo "Warning: direnv is not installed - .envrc files will be ignored"
+    echo "Install with: brew install direnv (macOS) or apt-get install direnv (Ubuntu)"
+  fi
 }
 
 show_usage() {
@@ -195,6 +200,9 @@ validate_command() {
     "^make (dev|run|start)"
     "^./scripts/"
     "^bin/"
+    
+    # Environment management
+    "^direnv exec "
   )
 
   for pattern in "${allowed_patterns[@]}"; do
@@ -250,13 +258,20 @@ Usage: tmux-dev-server-control start [-d <directory>] <command...>"
     return 1
   fi
 
+  # Check for .envrc and wrap with direnv if present
+  if [[ -f "$target_dir/.envrc" ]] && command -v direnv >/dev/null 2>&1; then
+    command="direnv exec \"$target_dir\" $command"
+    echo "Found .envrc - using direnv to load environment"
+  fi
+
   echo "Starting session '$session_name' in $target_dir"
   echo "Command: $command"
 
   # Wrap the command to capture failures and keep session alive for debugging
   # Since we've already validated the command against allowlist, we can safely construct the wrapper
   # Validate that command doesn't contain dangerous characters beyond what we expect
-  if [[ "$command" =~ [\;\&\|\`\$\(\)] ]]; then
+  # Allow quotes for direnv exec commands
+  if [[ "$command" =~ [\;\&\|\`] ]] || [[ "$command" =~ \$\( ]] || [[ "$command" =~ \(\) ]]; then
     error "Command contains potentially dangerous characters: $command"
   fi
   
