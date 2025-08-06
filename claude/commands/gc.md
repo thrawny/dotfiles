@@ -1,6 +1,7 @@
 ---
 allowed-tools: Bash(git add:*), Bash(git status:*), Bash(git commit:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*)
 description: Create a smart git commit with context analysis
+model: claude-3-5-haiku-20241022
 ---
 
 ## Context
@@ -19,7 +20,7 @@ Based on the above git context, create a single well-crafted git commit. Follow 
    - **NEVER commit .envrc files** - These are local environment configurations that should not be shared
 3. **Write a meaningful commit message** that:
    - Uses imperative mood (e.g., "Add feature" not "Added feature")
-   - Is concise but descriptive
+   - Is concise but descriptive (max 4 lines of text)
    - Follows the existing commit message style shown in recent commits
    - Explains the "why" rather than just the "what"
 4. **Include the Claude signature**: End the commit with the standard Claude Code signature
