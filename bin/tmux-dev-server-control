@@ -7,6 +7,12 @@ shopt -s nullglob
 # Default workspace roots - can be overridden by environment variable
 DEV_WORKSPACE_ROOTS="${DEV_WORKSPACE_ROOTS:-$HOME/code}"
 
+# Error reporting function
+error() {
+  echo "Error: $*" >&2
+  return 1
+}
+
 main() {
   check_dependencies
 
@@ -80,12 +86,14 @@ generate_session_name() {
   local command="$*"
 
   # Get the directory name
-  local folder_name
-  folder_name=$(basename "$directory")
+  local folder_name="${directory##*/}"
 
   # Slugify the command: replace spaces and special chars with hyphens, lowercase
-  local command_slug
-  command_slug=$(echo "$command" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-zA-Z0-9]/-/g' | sed 's/--*/-/g' | sed 's/^-\|-$//g')
+  local command_slug="${command,,}"              # lowercase
+  command_slug="${command_slug//[^a-zA-Z0-9]/-}"  # replace non-alphanumeric with hyphens
+  command_slug="${command_slug//+(-)/-}"         # collapse multiple hyphens
+  command_slug="${command_slug#-}"               # remove leading hyphen
+  command_slug="${command_slug%-}"               # remove trailing hyphen
 
   # Truncate if too long (tmux has session name limits)
   if [[ ${#command_slug} -gt 30 ]]; then
@@ -100,8 +108,7 @@ validate_session_name() {
 
   # Check format: foldername-command-slug (more flexible now)
   if [[ ! "$session_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-    echo "Error: Invalid session name format: '$session_name'"
-    return 1
+    error "Invalid session name format: '$session_name'"
   fi
 
   return 0
@@ -110,15 +117,14 @@ validate_session_name() {
 validate_workspace() {
   local target_dir="${1:-$PWD}"
   local workspace_roots
-  IFS=',' read -ra workspace_roots <<< "$DEV_WORKSPACE_ROOTS"
+  mapfile -td ',' workspace_roots <<< "$DEV_WORKSPACE_ROOTS,"
 
   # Expand tilde in target_dir
   target_dir="${target_dir/#\~/$HOME}"
 
   # Convert to absolute path
   target_dir=$(cd "$target_dir" 2>/dev/null && pwd) || {
-    echo "Error: Directory '$1' does not exist"
-    return 1
+    error "Directory '$1' does not exist"
   }
 
   for root in "${workspace_roots[@]}"; do
@@ -129,11 +135,10 @@ validate_workspace() {
     fi
   done
 
-  echo "Error: Target directory is outside workspace boundaries"
-  echo "Target: $target_dir"
-  echo "Allowed workspace roots: ${DEV_WORKSPACE_ROOTS}"
-  echo "Use a directory within your workspace or update DEV_WORKSPACE_ROOTS"
-  return 1
+  error "Target directory is outside workspace boundaries
+Target: $target_dir
+Allowed workspace roots: ${DEV_WORKSPACE_ROOTS}
+Use a directory within your workspace or update DEV_WORKSPACE_ROOTS"
 }
 
 validate_git_repo() {
@@ -141,10 +146,9 @@ validate_git_repo() {
 
   # Check if target directory is in a git repo
   if ! (cd "$target_dir" && git rev-parse --git-dir >/dev/null 2>&1); then
-    echo "Error: Target directory is not within a git repository"
-    echo "Directory: $target_dir"
-    echo "Dev server sessions must be run from within git repositories"
-    return 1
+    error "Target directory is not within a git repository
+Directory: $target_dir
+Dev server sessions must be run from within git repositories"
   fi
   return 0
 }
@@ -173,6 +177,10 @@ validate_command() {
     "^python -m "
     "^python main.py.*"
     "^python .*\.py"
+    "^python3 manage.py runserver"
+    "^python3 -m "
+    "^python3 main.py.*"
+    "^python3 .*\.py"
     "^flask run"
     "^uvicorn "
     "^gunicorn "
@@ -195,11 +203,10 @@ validate_command() {
     fi
   done
 
-  echo "Error: Command not allowed"
-  echo "Command: $command"
-  echo ""
-  echo "Allowed patterns: npm run, go run, python, make, docker-compose, etc."
-  return 1
+  error "Command not allowed
+Command: $command
+
+Allowed patterns: npm run, go run, python, make, docker-compose, etc."
 }
 
 session_exists() {
@@ -224,9 +231,8 @@ handle_start() {
   done
 
   if [[ $# -lt 1 ]]; then
-    echo "Error: start requires command"
-    echo "Usage: tmux-dev-server-control start [-d <directory>] <command...>"
-    return 1
+    error "start requires command
+Usage: tmux-dev-server-control start [-d <directory>] <command...>"
   fi
 
   local command="$*"
@@ -248,7 +254,13 @@ handle_start() {
   echo "Command: $command"
 
   # Wrap the command to capture failures and keep session alive for debugging
-  local wrapped_cmd="($command) || { exit_code=\$?; echo ''; echo \"Command failed with exit code: \$exit_code\"; echo 'Keeping session alive for debugging...'; sleep 30; }"
+  # Since we've already validated the command against allowlist, we can safely construct the wrapper
+  # Validate that command doesn't contain dangerous characters beyond what we expect
+  if [[ "$command" =~ [\;\&\|\`\$\(\)] ]]; then
+    error "Command contains potentially dangerous characters: $command"
+  fi
+  
+  local wrapped_cmd="($command) || { exit_code=\$?; echo ''; echo 'Command failed with exit code: '\$exit_code; echo 'Keeping session alive for debugging...'; sleep 30; }"
   tmux new-session -d -s "$session_name" -c "$target_dir" bash -c "$wrapped_cmd"
 
   # Wait a moment and check if session is still running
@@ -276,9 +288,8 @@ handle_start() {
 
 handle_stop() {
   if [[ $# -lt 1 ]]; then
-    echo "Error: stop requires session name"
-    echo "Usage: tmux-dev-server-control stop <session-name>"
-    return 1
+    error "stop requires session name
+Usage: tmux-dev-server-control stop <session-name>"
   fi
 
   local session_name="$1"
@@ -296,9 +307,8 @@ handle_stop() {
 
 handle_logs() {
   if [[ $# -lt 1 ]]; then
-    echo "Error: logs requires session name"
-    echo "Usage: tmux-dev-server-control logs <session-name> [lines]"
-    return 1
+    error "logs requires session name
+Usage: tmux-dev-server-control logs <session-name> [lines]"
   fi
 
   local session_name="$1"
@@ -337,7 +347,9 @@ handle_status() {
 
     # Get all sessions and filter for dev server sessions
     if tmux list-sessions >/dev/null 2>&1; then
-      tmux list-sessions -F "#{session_name}" | while read -r sess; do
+      local sessions
+      mapfile -t sessions < <(tmux list-sessions -F "#{session_name}")
+      for sess in "${sessions[@]}"; do
         if [[ "$sess" =~ ^[a-zA-Z0-9_-]+-[a-zA-Z0-9_-]+$ ]]; then
           local status
           status=$(tmux display-message -t "$sess" -p "#{pane_current_path} | #{pane_current_command}")
@@ -352,9 +364,8 @@ handle_status() {
 
 handle_monitor() {
   if [[ $# -lt 1 ]]; then
-    echo "Error: monitor requires session name"
-    echo "Usage: tmux-dev-server-control monitor <session-name>"
-    return 1
+    error "monitor requires session name
+Usage: tmux-dev-server-control monitor <session-name>"
   fi
 
   local session_name="$1"
@@ -376,8 +387,11 @@ handle_list() {
 
   if tmux list-sessions >/dev/null 2>&1; then
     local found_workspace_sessions=false
-
-    tmux list-sessions -F "#{session_name} #{session_created} #{session_attached}" | while read -r sess created attached; do
+    local sessions_info
+    mapfile -t sessions_info < <(tmux list-sessions -F "#{session_name} #{session_created} #{session_attached}")
+    
+    for session_line in "${sessions_info[@]}"; do
+      read -r sess created attached <<< "$session_line"
       if [[ "$sess" =~ ^[a-zA-Z0-9_-]+-[a-zA-Z0-9_-]+$ ]]; then
         found_workspace_sessions=true
         local status="detached"

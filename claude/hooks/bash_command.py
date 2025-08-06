@@ -74,6 +74,7 @@ _VALIDATION_RULES = [
 
 # Hook did not catch this:
 # grep -r "go test" /Users/jonas/code/kanel-backend-2 || echo "No go test commands found"
+# grep -n "func Test" /Users/jonas/code/kf1-go/internal/device/weco_hybo_test.go | tail -1
 
 
 def _validate_command(command: str) -> list[str]:
