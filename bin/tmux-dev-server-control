@@ -31,6 +31,9 @@ main() {
     stop)
       handle_stop "$@"
       ;;
+    restart)
+      handle_restart "$@"
+      ;;
     logs)
       handle_logs "$@"
       ;;
@@ -70,6 +73,7 @@ show_usage() {
   echo "Actions:"
   echo "  start [-d <directory>] <command...> - Start a dev server in tmux session"
   echo "  stop <session-name>                - Stop a dev server session"
+  echo "  restart [-d <directory>] <command...> - Restart a dev server session"
   echo "  logs <session-name> [lines]        - Show recent logs from session"
   echo "  status [session-name]              - Show status of sessions"
   echo "  monitor <session-name>             - Attach to session for monitoring"
@@ -81,6 +85,7 @@ show_usage() {
   echo "Examples:"
   echo "  tmux-dev-server-control start npm run dev                    # -> myproject-npm-run-dev"
   echo "  tmux-dev-server-control start -d ~/code/backend go run main  # -> backend-go-run-main"
+  echo "  tmux-dev-server-control restart npm run dev                  # Stop and restart existing session"
   echo "  tmux-dev-server-control logs myproject-npm-run-dev 100"
   echo "  tmux-dev-server-control status"
 }
@@ -254,7 +259,17 @@ Usage: tmux-dev-server-control start [-d <directory>] <command...>"
 
   if session_exists "$session_name"; then
     echo "Session '$session_name' already exists"
-    echo "Stop it first with: tmux-dev-server-control stop $session_name"
+    echo ""
+    echo "Recent logs (last 10 lines):"
+    echo "----------------------------------------"
+    tmux capture-pane -t "$session_name" -p | tail -n 10
+    echo "----------------------------------------"
+    echo ""
+    echo "Options:"
+    echo "  - Restart session: tmux-dev-server-control restart -d $target_dir $command"
+    echo "  - Stop and restart: tmux-dev-server-control stop $session_name && tmux-dev-server-control start ..."
+    echo "  - Monitor existing: tmux-dev-server-control monitor $session_name"
+    echo "  - View more logs: tmux-dev-server-control logs $session_name [lines]"
     return 1
   fi
 
@@ -318,6 +333,48 @@ Usage: tmux-dev-server-control stop <session-name>"
   echo "Stopping session '$session_name'..."
   tmux kill-session -t "$session_name"
   echo "✓ Session '$session_name' stopped"
+}
+
+handle_restart() {
+  local target_dir="$PWD"
+
+  # Parse -d option for directory
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -d|--directory)
+        target_dir="$2"
+        shift 2
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
+  if [[ $# -lt 1 ]]; then
+    error "restart requires command
+Usage: tmux-dev-server-control restart [-d <directory>] <command...>"
+  fi
+
+  local command="$*"
+  local session_name
+  session_name=$(generate_session_name "$target_dir" "$command")
+
+  validate_session_name "$session_name" || return 1
+
+  # Check if session exists and stop it
+  if session_exists "$session_name"; then
+    echo "Stopping existing session '$session_name'..."
+    tmux kill-session -t "$session_name"
+    echo "✓ Session stopped"
+    echo ""
+  else
+    echo "No existing session '$session_name' found - starting new session"
+    echo ""
+  fi
+
+  # Start the session (reuse the start logic)
+  handle_start -d "$target_dir" "$command"
 }
 
 handle_logs() {
