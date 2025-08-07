@@ -44,31 +44,39 @@ _VALIDATION_RULES = [
     ),
     (
         r"^find\s+.*-name\b",
-        "Use the 'Glob' tool with patterns like '**/*.ext' instead of find commands",
+        "Use the 'Glob' tool with patterns like '**/*.ext' or '**/filename*' instead of find -name commands",
     ),
     (
         r"^find\s+.*-type\s+f",
-        "Use the 'Glob' tool with appropriate patterns instead of find commands",
+        "Use the 'Glob' tool with patterns like '**/*' or '**/*.ext' instead of find -type f commands",
     ),
     (
         r"^ls\s+",
-        "Use the 'LS' tool instead of bash ls for better integration",
+        "Use the 'LS' tool with path parameter instead of bash ls for structured output",
     ),
     (
         r"^cat\s+",
-        "Use the 'Read' tool instead of cat for better file access and formatting",
+        "Use the 'Read' tool with file_path parameter instead of cat for syntax highlighting and line numbers",
     ),
     (
         r"^head\s+",
-        "Use the 'Read' tool with limit parameter instead of head",
+        "Use the 'Read' tool with limit parameter (e.g., limit=10) instead of head",
     ),
     (
         r"^tail\s+",
-        "Use the 'Read' tool with offset parameter instead of tail",
+        "Use the 'Read' tool with negative offset parameter (e.g., offset=-10) to read from end instead of tail",
     ),
     (
         r"^goimports\s+-w\b",
         "Use 'golangci-lint run --fix' instead of goimports -w for comprehensive Go formatting and linting",
+    ),
+    (
+        r"^grep\b.*\|.*\btail\b",
+        "Use the 'Grep' tool with output_mode='content', -n=true, and head_limit parameter instead of piped grep commands",
+    ),
+    (
+        r"^sed\s+",
+        "Use the 'Edit' tool with old_string/new_string parameters or 'MultiEdit' for multiple replacements instead of sed",
     ),
 ]
 
