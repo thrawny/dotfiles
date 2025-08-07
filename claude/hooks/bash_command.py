@@ -73,8 +73,8 @@ _VALIDATION_RULES = [
 ]
 
 # Hook did not catch this:
-# grep -r "go test" /Users/jonas/code/kanel-backend-2 || echo "No go test commands found"
 # grep -n "func Test" /Users/jonas/code/kf1-go/internal/device/weco_hybo_test.go | tail -1
+# sed -i '' 's/positive = import, negative = export/negative = import, positive = export (PyControl convention)/g' /Users/jonas/code/kf1-go/internal/domain/device.go
 
 
 def _validate_command(command: str) -> list[str]:

@@ -57,7 +57,7 @@ Based on the provided feature description, create a detailed Product Requirement
 
 5. **Provide completion summary**:
    - Display the created Linear issue URL and key
-   - Show suggested branch name format: `{issue-key}-{kebab-case-title}`
+   - Show suggested folder name format: `{issue-id}-{descriptive-name}`
    - Suggest next steps (e.g., using `/generate-tasks` command)
 
 Target the PRD for a **junior developer** audience - be explicit, unambiguous, and avoid unnecessary jargon. Provide enough detail for clear understanding of the feature's purpose and core logic.
