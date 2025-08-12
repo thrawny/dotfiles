@@ -35,7 +35,7 @@ import sys
 # Define validation rules as a list of (regex pattern, message) tuples
 _VALIDATION_RULES = [
     (
-        r"^grep\b(?!.*(?<!\|)\|(?!\|))",
+        r"(?:^|&&\s*)grep\b",
         "Use the 'Grep' tool instead of bash grep for better integration and features",
     ),
     (
@@ -71,7 +71,7 @@ _VALIDATION_RULES = [
         "Use 'golangci-lint run --fix' instead of goimports -w for comprehensive Go formatting and linting",
     ),
     (
-        r"^grep\b.*\|.*\btail\b",
+        r"(?:^|&&\s*)grep\b.*\|.*\b(?:tail|head)\b",
         "Use the 'Grep' tool with output_mode='content', -n=true, and head_limit parameter instead of piped grep commands",
     ),
     (
@@ -81,6 +81,10 @@ _VALIDATION_RULES = [
     (
         r"grep\s+-r\b",
         "Use the 'Grep' tool with recursive search instead of grep -r for better integration and filtering",
+    ),
+    (
+        r"^go\s+build\s+\./",
+        "Use 'go run ./path/to/main.go' instead of 'go build' to avoid creating untracked binaries in the repository root",
     ),
 ]
 

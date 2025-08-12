@@ -38,6 +38,7 @@ Based on the provided feature description, create a detailed Product Requirement
 4. **Create the Linear issue**:
    - List available teams and select the most appropriate one
    - Get available issue statuses and labels for the team
+   - **Present the proposed issue content** (title and description) for user review before creating
    - Create issue with the PRD content as description
    - Default to "Todo" status and assign to user
    - Generate appropriate title from the feature description
