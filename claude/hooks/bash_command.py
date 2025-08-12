@@ -78,11 +78,17 @@ _VALIDATION_RULES = [
         r"^sed\s+",
         "Use the 'Edit' tool with old_string/new_string parameters or 'MultiEdit' for multiple replacements instead of sed",
     ),
+    (
+        r"grep\s+-r\b",
+        "Use the 'Grep' tool with recursive search instead of grep -r for better integration and filtering",
+    ),
 ]
 
 # Hook did not catch this:
-# grep -n "func Test" /Users/jonas/code/kf1-go/internal/device/weco_hybo_test.go | tail -1
-# sed -i '' 's/positive = import, negative = export/negative = import, positive = export (PyControl convention)/g' /Users/jonas/code/kf1-go/internal/domain/device.go
+# grep -n "MaxDischargeCurrent\|MaxChargeCurrent" examples/*.json | head -20
+# grep -E "maxChargeCurrent|maxDischargeCurrent" examples/weco-hybo-test.json
+# cd /Users/jonas/code/pycontrol && grep -A5 "def get_pcs_inlet_outlet_temperature" devices/weco.py
+# grep -n "def get_remote_mode\|def get_load_priority_mode" /Users/jonas/code/pycontrol/devices/weco.py | head -10
 
 
 def _validate_command(command: str) -> list[str]:
