@@ -1,0 +1,197 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#   "claude-code-sdk",
+#   "typing-extensions",
+# ]
+# ///
+"""
+Claude Code Work Timer - Runs Claude Code for a specified duration
+and creates a PR when time is nearly up.
+"""
+
+import argparse
+import asyncio
+import logging
+import sys
+from datetime import datetime, timedelta
+from pathlib import Path
+
+from claude_code_sdk import (
+    AssistantMessage,
+    ClaudeCodeOptions,
+    TextBlock,
+    query,
+)
+
+# System prompt template for long-running tasks
+LONG_TASK_SYSTEM_PROMPT = """
+You are working on a long-duration task that will run for {duration} hours.
+The session started at {start_time} and will end at {end_time}.
+You have until {work_until} to work on the task, after which you'll need to wrap up.
+
+Please work continuously and thoroughly on the task.
+IMPORTANT: Continuously update a file called 'tasklog.md' with your progress, decisions, and current status. This file should contain a running log of what you're working on, what you've completed, and what's next.
+CRITICAL: After every major code change, use the code review agent to review your code.
+Fix ALL issues the code reviewer identifies before proceeding.
+The code reviewer helps ensure high-quality, secure code.
+
+Remember you have ample time, so be thorough rather than rushed.
+
+When you receive the wrap-up prompt, finish your current work, run all tests and linting, and create a PR.
+"""
+
+
+async def run_claude_task(prompt: str, options: ClaudeCodeOptions = None):
+    """Run a single Claude Code query and print the response."""
+    logger = logging.getLogger(__name__)
+    try:
+        async for message in query(prompt=prompt, options=options):
+            if isinstance(message, AssistantMessage):
+                for block in message.content:
+                    if isinstance(block, TextBlock):
+                        logger.info(block.text)
+    except Exception as e:
+        logger.error(f"Error running Claude: {e}")
+        return False
+    return True
+
+
+async def main():
+    # Setup logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    logger = logging.getLogger(__name__)
+
+    parser = argparse.ArgumentParser(
+        description="Run Claude Code for a specified duration"
+    )
+    parser.add_argument("task", help="Initial task/prompt for Claude Code")
+    parser.add_argument(
+        "-d",
+        "--duration",
+        type=float,
+        default=1.0,
+        help="Duration in hours (default: 1.0)",
+    )
+    parser.add_argument(
+        "-b",
+        "--buffer",
+        type=int,
+        default=10,
+        help="Buffer time in minutes before finish (default: 10)",
+    )
+    parser.add_argument("--cwd", type=Path, help="Working directory for Claude Code")
+    parser.add_argument(
+        "--debug", action="store_true", help="Run only one iteration for debugging"
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable verbose debug logging"
+    )
+    parser.add_argument(
+        "--continue-conversation",
+        action="store_true",
+        help="Continue the conversation from the last message",
+    )
+    parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Bypass permissions",
+        default=True,
+    )
+
+    args = parser.parse_args()
+    logger.info(f"Arguments: {args}")
+
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    # Calculate timing
+    start_time = datetime.now()
+    end_time = start_time + timedelta(hours=args.duration)
+    buffer_time = timedelta(minutes=args.buffer)
+    work_until = end_time - buffer_time
+
+    # Setup options
+    options = ClaudeCodeOptions()
+
+    if args.force:
+        options.permission_mode = "bypassPermissions"
+
+    # Only add the long task system prompt if not in debug mode
+    if not args.debug:
+        options.append_system_prompt = LONG_TASK_SYSTEM_PROMPT.format(
+            duration=args.duration,
+            start_time=start_time.strftime("%H:%M:%S"),
+            end_time=end_time.strftime("%H:%M:%S"),
+            work_until=work_until.strftime("%H:%M:%S"),
+        )
+    if args.cwd:
+        options.cwd = args.cwd
+
+    logger.info(f"Starting work session: {args.duration} hours")
+    logger.info(f"Will work until: {work_until.strftime('%H:%M:%S')}")
+    logger.info(f"Final wrap-up at: {end_time.strftime('%H:%M:%S')}")
+    logger.info("-" * 50)
+
+    # Initial task
+    logger.info(f"Starting task: {args.task}")
+    success = await run_claude_task(args.task, options)
+    if not success:
+        logger.error("Failed to start initial task")
+        return 1
+
+    # Continue working until time to wrap up
+    iteration = 1
+    while datetime.now() < work_until:
+        remaining = work_until - datetime.now()
+        logger.info(f"--- Iteration {iteration} ---")
+        logger.info(f"Time remaining: {remaining}")
+
+        # After first iteration, continue the conversation
+        if iteration > 1:
+            options.continue_conversation = args.continue_conversation
+
+        success = await run_claude_task(
+            f"Continue working on the current task: {args.task}", options
+        )
+        if not success:
+            logger.error("Error occurred, waiting 5 minutes before continuing...")
+            await asyncio.sleep(300)  # Wait 5 minutes
+            continue
+
+        iteration += 1
+
+        # Break after first iteration if debug mode
+        if args.debug:
+            logger.info("[DEBUG MODE: Stopping after one iteration]")
+            break
+
+        # Small delay between iterations
+        await asyncio.sleep(5)
+
+    # Final wrap-up and PR creation
+    logger.info("=" * 50)
+    logger.info("TIME TO WRAP UP!")
+    logger.info("=" * 50)
+
+    wrap_up_prompt = (
+        "Please finish up the current work, ensure all tests pass, "
+        "run any linting/formatting commands."
+    )
+
+    # Continue conversation for wrap-up
+    options.continue_conversation = args.continue_conversation
+    await run_claude_task(wrap_up_prompt, options)
+
+    logger.info("Work session completed!")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(asyncio.run(main()))

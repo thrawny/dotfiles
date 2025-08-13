@@ -5,7 +5,9 @@ description = "Personal dotfiles repository with Ansible automation for macOS an
 requires-python = ">=3.12"
 dependencies = [
     "ansible>=10.0.0",
+    "claude-code-sdk>=0.0.20",
     "fastmcp>=2.11.1",
+    "requests>=2.32.4",
 ]
 
 [project.optional-dependencies]
