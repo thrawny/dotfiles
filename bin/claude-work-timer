@@ -15,6 +15,7 @@ import argparse
 import asyncio
 import logging
 import sys
+import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -43,7 +44,7 @@ When you receive the wrap-up prompt, finish your current work, run all tests and
 """
 
 
-async def run_claude_task(prompt: str, options: ClaudeCodeOptions = None):
+async def run_claude_query(prompt: str, options: ClaudeCodeOptions = None):
     """Run a single Claude Code query and print the response."""
     logger = logging.getLogger(__name__)
     try:
@@ -52,10 +53,90 @@ async def run_claude_task(prompt: str, options: ClaudeCodeOptions = None):
                 for block in message.content:
                     if isinstance(block, TextBlock):
                         logger.info(block.text)
+        return "success"
     except Exception as e:
-        logger.error(f"Error running Claude: {e}")
+        error_str = str(e)
+        logger.error(f"Error running Claude: {error_str}")
+
+        # Check for API errors that we should retry
+        if any(
+            err in error_str for err in ["500", "529", "Overloaded", "api_error", "503"]
+        ):
+            return "api_error"
+
+        return "error"
+
+
+async def run_claude_task(
+    prompt: str,
+    base_options: dict,
+    session_id: str = None,
+    continue_conversation: bool = False,
+    max_retries: int = 2,
+    retry_delay: int = 180,
+):
+    """
+    Run a Claude task with automatic retry logic for API errors.
+
+    Args:
+        prompt: The prompt to send to Claude
+        base_options: Base options dict for ClaudeCodeOptions
+        session_id: Session ID for resuming on error
+        continue_conversation: Whether to continue existing conversation
+        max_retries: Maximum number of retry attempts
+        retry_delay: Delay in seconds between retries
+
+    Returns:
+        True if successful, False if failed after retries
+    """
+    logger = logging.getLogger(__name__)
+
+    # Create initial options
+    options = ClaudeCodeOptions(
+        **base_options,
+        continue_conversation=continue_conversation,
+        extra_args={"session-id": session_id}
+        if session_id and not continue_conversation
+        else {},
+    )
+
+    # Try the initial request
+    result = await run_claude_query(prompt, options)
+
+    if result == "success":
+        return True
+    elif result != "api_error":
         return False
-    return True
+
+    # Handle API errors with retries
+    for attempt in range(max_retries):
+        logger.info(f"API error detected (attempt {attempt + 1}/{max_retries})")
+        logger.info(
+            f"Waiting {retry_delay} seconds before resuming session {session_id}..."
+        )
+        await asyncio.sleep(retry_delay)
+
+        # Create resume options
+        if session_id:
+            resume_options = ClaudeCodeOptions(
+                **base_options,
+                resume=session_id,
+            )
+        else:
+            # If no session ID, just retry with same options
+            resume_options = options
+
+        result = await run_claude_query(
+            "Please continue where you left off", resume_options
+        )
+
+        if result == "success":
+            return True
+        elif result != "api_error":
+            return False
+
+    logger.error(f"Failed after {max_retries} retry attempts")
+    return False
 
 
 async def main():
@@ -117,22 +198,24 @@ async def main():
     buffer_time = timedelta(minutes=args.buffer)
     work_until = end_time - buffer_time
 
-    # Setup options
-    options = ClaudeCodeOptions()
+    # Generate a session ID for this work session
+    session_id = str(uuid.uuid4())
+    logger.info(f"Session ID: {session_id}")
 
-    if args.force:
-        options.permission_mode = "bypassPermissions"
+    # Setup base options
+    base_options = {
+        "permission_mode": "bypassPermissions" if args.force else None,
+        "cwd": args.cwd,
+    }
 
     # Only add the long task system prompt if not in debug mode
     if not args.debug:
-        options.append_system_prompt = LONG_TASK_SYSTEM_PROMPT.format(
+        base_options["append_system_prompt"] = LONG_TASK_SYSTEM_PROMPT.format(
             duration=args.duration,
             start_time=start_time.strftime("%H:%M:%S"),
             end_time=end_time.strftime("%H:%M:%S"),
             work_until=work_until.strftime("%H:%M:%S"),
         )
-    if args.cwd:
-        options.cwd = args.cwd
 
     logger.info(f"Starting work session: {args.duration} hours")
     logger.info(f"Will work until: {work_until.strftime('%H:%M:%S')}")
@@ -141,25 +224,32 @@ async def main():
 
     # Initial task
     logger.info(f"Starting task: {args.task}")
-    success = await run_claude_task(args.task, options)
+    success = await run_claude_task(
+        prompt=args.task,
+        base_options=base_options,
+        session_id=session_id,
+        continue_conversation=False,
+    )
+
     if not success:
         logger.error("Failed to start initial task")
         return 1
 
     # Continue working until time to wrap up
     iteration = 1
+
     while datetime.now() < work_until:
         remaining = work_until - datetime.now()
         logger.info(f"--- Iteration {iteration} ---")
         logger.info(f"Time remaining: {remaining}")
 
-        # After first iteration, continue the conversation
-        if iteration > 1:
-            options.continue_conversation = args.continue_conversation
-
         success = await run_claude_task(
-            f"Continue working on the current task: {args.task}", options
+            prompt=f"Continue working on the current task: {args.task}",
+            base_options=base_options,
+            session_id=session_id,
+            continue_conversation=args.continue_conversation,
         )
+
         if not success:
             logger.error("Error occurred, waiting 5 minutes before continuing...")
             await asyncio.sleep(300)  # Wait 5 minutes
@@ -185,9 +275,12 @@ async def main():
         "run any linting/formatting commands."
     )
 
-    # Continue conversation for wrap-up
-    options.continue_conversation = args.continue_conversation
-    await run_claude_task(wrap_up_prompt, options)
+    await run_claude_task(
+        prompt=wrap_up_prompt,
+        base_options=base_options,
+        session_id=session_id,
+        continue_conversation=args.continue_conversation,
+    )
 
     logger.info("Work session completed!")
     return 0

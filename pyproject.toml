@@ -10,10 +10,5 @@ dependencies = [
     "requests>=2.32.4",
 ]
 
-[project.optional-dependencies]
-dev = [
-    "ansible-lint",
-]
-
 [tool.uv]
-dev-dependencies = []
+dev-dependencies = ["ansible-lint>=25.6.1", "ruff>=0.12.9"]
