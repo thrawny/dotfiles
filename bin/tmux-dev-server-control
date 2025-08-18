@@ -101,18 +101,128 @@ generate_session_name() {
   # Get the directory name
   local folder_name="${directory##*/}"
 
-  # Slugify the command: replace spaces and special chars with hyphens, lowercase
-  local command_slug="${command,,}"              # lowercase
-  command_slug="${command_slug//[^a-zA-Z0-9]/-}"  # replace non-alphanumeric with hyphens
-  command_slug="${command_slug//+(-)/-}"         # collapse multiple hyphens
-  command_slug="${command_slug#-}"               # remove leading hyphen
-  command_slug="${command_slug%-}"               # remove trailing hyphen
-
-  # Truncate if too long (tmux has session name limits)
-  if [[ ${#command_slug} -gt 30 ]]; then
-    command_slug="${command_slug:0:30}"
-  fi
-
+  # Process command for readability
+  local cmd_words=($command)
+  local main_cmd="${cmd_words[0]##*/}"  # Get base command name (e.g., "python3" from "/usr/bin/python3")
+  
+  # Handle common patterns
+  case "$main_cmd" in
+    python|python3|py)
+      # For Python modules: "python -m http.server 8000" -> "py-http_server-8000"
+      if [[ "${cmd_words[1]}" == "-m" ]] && [[ -n "${cmd_words[2]}" ]]; then
+        local module="${cmd_words[2]}"
+        module="${module//./_}"  # Replace dots with underscores
+        command_slug="py-${module}"
+        
+        # Add port or other key args for common modules
+        if [[ "${module}" == "http_server" ]] && [[ -n "${cmd_words[3]}" ]]; then
+          command_slug="${command_slug}-${cmd_words[3]}"
+        fi
+      else
+        # Regular Python script: "python main.py --env prod" -> "py-main-prod"
+        local script="${cmd_words[1]##*/}"
+        script="${script%.py}"  # Remove .py extension
+        command_slug="py-${script}"
+        
+        # Look for key arguments
+        for ((i=2; i<${#cmd_words[@]}; i++)); do
+          case "${cmd_words[i]}" in
+            -c|--config|--env|-e)
+              if [[ $((i+1)) -lt ${#cmd_words[@]} ]]; then
+                local arg="${cmd_words[$((i+1))]}"
+                arg="${arg##*/}"  # Remove path
+                arg="${arg%.*}"   # Remove extension
+                command_slug="${command_slug}-${arg}"
+                break
+              fi
+              ;;
+            -p|--port)
+              if [[ $((i+1)) -lt ${#cmd_words[@]} ]]; then
+                command_slug="${command_slug}-p${cmd_words[$((i+1))]}"
+                break
+              fi
+              ;;
+          esac
+        done
+      fi
+      ;;
+    npm|yarn|pnpm|bun)
+      # Package manager: "npm run dev" -> "npm-dev"
+      if [[ "${cmd_words[1]}" == "run" ]] && [[ -n "${cmd_words[2]}" ]]; then
+        command_slug="${main_cmd}-${cmd_words[2]}"
+      else
+        command_slug="${main_cmd}-${cmd_words[1]}"
+      fi
+      ;;
+    go)
+      # Go commands: "go run main.go" -> "go-main"
+      if [[ "${cmd_words[1]}" == "run" ]]; then
+        local file="${cmd_words[2]##*/}"
+        file="${file%.go}"  # Remove .go extension
+        command_slug="go-${file}"
+      else
+        command_slug="go-${cmd_words[1]}"
+      fi
+      ;;
+    uv)
+      # UV: "uv run main.py -c config" -> "uv-main-config"
+      if [[ "${cmd_words[1]}" == "run" ]]; then
+        local script="${cmd_words[2]##*/}"
+        script="${script%.py}"  # Remove .py extension
+        command_slug="uv-${script}"
+        
+        # Add key arguments if present
+        for ((i=3; i<${#cmd_words[@]}; i++)); do
+          case "${cmd_words[i]}" in
+            -c|--config)
+              # Add config name if it follows
+              if [[ $((i+1)) -lt ${#cmd_words[@]} ]]; then
+                local config="${cmd_words[$((i+1))]}"
+                # Shorten common patterns but keep uniqueness
+                config="${config##*/}"  # Remove path if present
+                config="${config%.yaml}"  # Remove extension
+                config="${config%.yml}"
+                config="${config%.json}"
+                command_slug="${command_slug}-${config}"
+                break  # Only take first key argument
+              fi
+              ;;
+            -p|--port)
+              # Add port if it follows
+              if [[ $((i+1)) -lt ${#cmd_words[@]} ]]; then
+                command_slug="${command_slug}-p${cmd_words[$((i+1))]}"
+                break
+              fi
+              ;;
+          esac
+        done
+      else
+        command_slug="uv-${cmd_words[1]}"
+      fi
+      ;;
+    docker|docker-compose)
+      # Docker: "docker compose up" -> "docker-up"
+      local short_cmd="${main_cmd/docker-compose/dc}"
+      short_cmd="${short_cmd/docker/dk}"
+      command_slug="${short_cmd}-${cmd_words[1]}"
+      ;;
+    *)
+      # Default: just use the main command and first arg
+      command_slug="${main_cmd}${cmd_words[1]:+-}${cmd_words[1]}"
+      ;;
+  esac
+  
+  # Clean up the slug
+  command_slug="${command_slug,,}"  # lowercase
+  command_slug="${command_slug//[^a-z0-9_-]/-}"  # replace special chars with hyphens
+  command_slug="${command_slug//+(-)/-}"  # collapse multiple hyphens
+  command_slug="${command_slug#-}"  # remove leading hyphen
+  command_slug="${command_slug%-}"  # remove trailing hyphen
+  
+  # Truncate if needed (keep it reasonable)
+  local max_cmd_length=30
+  command_slug="${command_slug:0:$max_cmd_length}"
+  
   echo "${folder_name}-${command_slug}"
 }
 
