@@ -524,7 +524,9 @@ Usage: tmux-dev-server-control logs <session-name> [lines]"
 
   echo "Last $lines lines from session '$session_name':"
   echo "----------------------------------------"
-  tmux capture-pane -t "$session_name" -p | tail -n "$lines"
+  # Capture full scrollback buffer (-S -), remove empty lines, then tail
+  # Also handle potential carriage returns from some programs
+  tmux capture-pane -t "$session_name" -p -S - | tr -d '\r' | grep -v '^$' | tail -n "$lines"
 }
 
 handle_status() {
