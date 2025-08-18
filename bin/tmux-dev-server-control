@@ -95,6 +95,9 @@ generate_session_name() {
   shift
   local command="$*"
 
+  # Remove trailing slash if present
+  directory="${directory%/}"
+  
   # Get the directory name
   local folder_name="${directory##*/}"
 
