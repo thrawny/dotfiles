@@ -276,10 +276,24 @@ Usage: tmux-dev-server-control start [-d <directory>] <command...>"
     return 1
   fi
 
-  # Check for .envrc and wrap with direnv if present
-  if [[ -f "$target_dir/.envrc" ]] && command -v direnv >/dev/null 2>&1; then
-    command="direnv exec \"$target_dir\" $command"
-    echo "Found .envrc - using direnv to load environment"
+  # Check for .envrc in current or parent directories and wrap with direnv if present
+  if command -v direnv >/dev/null 2>&1; then
+    local check_dir="$target_dir"
+    local found_envrc=false
+    
+    # Walk up the directory tree looking for .envrc
+    while [[ "$check_dir" != "/" ]]; do
+      if [[ -f "$check_dir/.envrc" ]]; then
+        found_envrc=true
+        echo "Found .envrc in $check_dir - using direnv to load environment"
+        break
+      fi
+      check_dir=$(dirname "$check_dir")
+    done
+    
+    if [[ "$found_envrc" == "true" ]]; then
+      command="direnv exec \"$target_dir\" $command"
+    fi
   fi
 
   echo "Starting session '$session_name' in $target_dir"
