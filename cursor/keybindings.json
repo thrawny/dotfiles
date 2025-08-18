@@ -231,5 +231,14 @@
     "key": "shift+enter",
     "command": "-pgsql.runQuery",
     "when": "editorTextFocus && editorLangId == 'sql'"
+  },
+  {
+    "key": "cmd+b",
+    "command": "-workbench.action.toggleSidebarVisibility"
+  },
+  {
+    "key": "shift+cmd+b",
+    "command": "-workbench.action.tasks.build",
+    "when": "taskCommandsRegistered"
   }
 ]
