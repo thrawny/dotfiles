@@ -50,7 +50,7 @@ When you receive the wrap-up prompt, finish your current work, run all tests and
 """
 
 
-async def run_claude_query(prompt: str, options: ClaudeCodeOptions):
+async def run_claude_query(prompt: str, options: ClaudeCodeOptions) -> bool:
     """Run a single Claude Code query and print the response."""
     logger = logging.getLogger(__name__)
     try:
@@ -59,7 +59,7 @@ async def run_claude_query(prompt: str, options: ClaudeCodeOptions):
                 for block in message.content:
                     if isinstance(block, TextBlock):
                         logger.info(block.text)
-        return "success"
+        return True
     except Exception as e:
         error_str = str(e)
         logger.error(f"Error running Claude: {error_str}")
@@ -68,9 +68,9 @@ async def run_claude_query(prompt: str, options: ClaudeCodeOptions):
         if any(
             err in error_str for err in ["500", "529", "Overloaded", "api_error", "503"]
         ):
-            return "api_error"
+            return False
 
-        return "error"
+        raise e
 
 
 async def run_claude_task(
@@ -108,10 +108,8 @@ async def run_claude_task(
     # Try the initial request
     result = await run_claude_query(prompt, options)
 
-    if result == "success":
+    if result:
         return True
-    elif result != "api_error":
-        return False
 
     # Handle API errors with retries
     for attempt in range(max_retries):
@@ -135,9 +133,9 @@ async def run_claude_task(
             "Please continue where you left off", resume_options
         )
 
-        if result == "success":
+        if result:
             return True
-        elif result != "api_error":
+        else:
             return False
 
     logger.error(f"Failed after {max_retries} retry attempts")
@@ -161,8 +159,8 @@ async def main():
         "-d",
         "--duration",
         type=float,
-        default=1.0,
-        help="Duration in hours (default: 1.0)",
+        default=0.0,
+        help="Duration in hours (default: 0.0)",
     )
     parser.add_argument(
         "-b",
@@ -190,18 +188,34 @@ async def main():
         help="Bypass permissions",
         default=True,
     )
+    parser.add_argument(
+        "-i",
+        "--iterations",
+        type=int,
+        help="Number of iterations to run (default: 1)",
+        default=1,
+    )
 
     args = parser.parse_args()
     logger.info(f"Arguments: {args}")
+
+    # iterations and duration are mutually exclusive
+    if args.iterations > 0 and args.duration > 0:
+        logger.error("Iterations and duration are mutually exclusive")
+        return 1
 
     if args.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
     # Calculate timing
     start_time = datetime.now()
-    end_time = start_time + timedelta(hours=args.duration)
-    buffer_time = timedelta(minutes=args.buffer)
-    work_until = end_time - buffer_time
+    if args.duration > 0:
+        end_time = start_time + timedelta(hours=args.duration)
+        buffer_time = timedelta(minutes=args.buffer)
+        work_until = end_time - buffer_time
+    else:
+        end_time = None
+        work_until = None
 
     # Generate a session ID for this work session
     session_id = str(uuid.uuid4())
@@ -213,8 +227,8 @@ async def main():
         "cwd": args.cwd,
     }
 
-    # Only add the long task system prompt if not in debug mode
-    if not args.debug:
+    # Only add the long task system prompt if not in debug mode and using duration
+    if not args.debug and args.duration > 0:
         base_options["append_system_prompt"] = LONG_TASK_SYSTEM_PROMPT.format(
             duration=args.duration,
             start_time=start_time.strftime("%H:%M:%S"),
@@ -222,43 +236,43 @@ async def main():
             work_until=work_until.strftime("%H:%M:%S"),
         )
 
-    logger.info(f"Starting work session: {args.duration} hours")
-    logger.info(f"Will work until: {work_until.strftime('%H:%M:%S')}")
-    logger.info(f"Final wrap-up at: {end_time.strftime('%H:%M:%S')}")
+    if args.duration > 0:
+        logger.info(f"Starting work session: {args.duration} hours")
+        logger.info(f"Will work until: {work_until.strftime('%H:%M:%S')}")
+        logger.info(f"Final wrap-up at: {end_time.strftime('%H:%M:%S')}")
+    else:
+        logger.info(f"Starting iteration-based session: {args.iterations} iterations")
     logger.info("-" * 50)
 
-    # Initial task
-    logger.info(f"Starting task: {args.task}")
-    success = await run_claude_task(
-        prompt=args.task,
-        base_options=base_options,
-        session_id=session_id,
-        resume=False,
-    )
-
-    if not success:
-        logger.error("Failed to start initial task")
-        return 1
-
-    # Continue working until time to wrap up
     iteration = 1
 
-    while datetime.now() < work_until:
-        remaining = work_until - datetime.now()
+    while (work_until is not None and datetime.now() < work_until) or (
+        args.iterations > 0 and iteration <= args.iterations
+    ):
+        remaining_time = work_until - datetime.now() if work_until is not None else None
+        remaining_iterations = args.iterations - iteration + 1
+
         logger.info(f"--- Iteration {iteration} ---")
-        logger.info(f"Time remaining: {remaining}")
+        if remaining_time is not None:
+            logger.info(f"Time remaining: {remaining_time}")
+        else:
+            logger.info(f"Iterations remaining: {remaining_iterations}")
 
         # Generate a new session ID for this iteration
         iteration_session_id = str(uuid.uuid4())
         logger.info(f"Iteration session ID: {iteration_session_id}")
 
         # Step 1: Continue coding the task (fresh context each iteration)
-        logger.info("[Step 1/5] Continuing work on task...")
+        logger.info("[Step 1/5] Doing work on task...")
+        if iteration == 1:
+            prompt = args.task
+        else:
+            prompt = f"Continue working on the current task: {args.task}. Focus on making progress and implementing features. Update tasklog.md with what you're doing."
         success = await run_claude_task(
-            prompt=f"Continue working on the current task: {args.task}. Focus on making progress and implementing features. Update tasklog.md with what you're doing.",
+            prompt=prompt,
             base_options=base_options,
             session_id=iteration_session_id,
-            resume=True,
+            resume=False,
         )
 
         if not success:
