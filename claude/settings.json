@@ -48,12 +48,12 @@
       }
     ]
   },
-  "feedbackSurveyState": {
-    "lastShownTime": 1753970401047
-  },
-  "autoCompact": false,
   "statusLine": {
     "type": "command",
     "command": "python ~/dotfiles/claude/status_line.py"
-  }
+  },
+  "feedbackSurveyState": {
+    "lastShownTime": 1753970401047
+  },
+  "autoCompact": false
 }
