@@ -34,10 +34,15 @@ You have until {work_until} to work on the task, after which you'll need to wrap
 
 Please work continuously and thoroughly on the task.
 IMPORTANT: Continuously update a file called 'tasklog.md' with your progress, decisions, and current status. This file should contain a running log of what you're working on, what you've completed, and what's next.
-CRITICAL: After every major code change, use the code review agent to review your code.
-Fix ALL issues the code reviewer identifies before proceeding.
-The code reviewer helps ensure high-quality, secure code.
 
+The workflow for each iteration is:
+1. CODE: Continue implementing the task, making progress on features
+2. REVIEW: Use the code-reviewer agent to review your changes
+3. FIX: Address ALL issues identified by the code reviewer
+4. SIMPLIFY: Use the complexity-reducer agent to analyze complexity
+5. APPLY: Implement the simplifications suggested by the agent
+
+This structured workflow ensures high-quality, maintainable code.
 Remember you have ample time, so be thorough rather than rushed.
 
 When you receive the wrap-up prompt, finish your current work, run all tests and linting, and create a PR.
@@ -70,8 +75,7 @@ async def run_claude_query(prompt: str, options: ClaudeCodeOptions = None):
 async def run_claude_task(
     prompt: str,
     base_options: dict,
-    session_id: str = None,
-    continue_conversation: bool = False,
+    session_id: str,
     max_retries: int = 2,
     retry_delay: int = 180,
 ):
@@ -81,8 +85,7 @@ async def run_claude_task(
     Args:
         prompt: The prompt to send to Claude
         base_options: Base options dict for ClaudeCodeOptions
-        session_id: Session ID for resuming on error
-        continue_conversation: Whether to continue existing conversation
+        session_id: Session ID for the conversation
         max_retries: Maximum number of retry attempts
         retry_delay: Delay in seconds between retries
 
@@ -94,10 +97,7 @@ async def run_claude_task(
     # Create initial options
     options = ClaudeCodeOptions(
         **base_options,
-        continue_conversation=continue_conversation,
-        extra_args={"session-id": session_id}
-        if session_id and not continue_conversation
-        else {},
+        extra_args={"session-id": session_id},
     )
 
     # Try the initial request
@@ -228,7 +228,6 @@ async def main():
         prompt=args.task,
         base_options=base_options,
         session_id=session_id,
-        continue_conversation=False,
     )
 
     if not success:
@@ -243,16 +242,83 @@ async def main():
         logger.info(f"--- Iteration {iteration} ---")
         logger.info(f"Time remaining: {remaining}")
 
+        # Generate a new session ID for this iteration
+        iteration_session_id = str(uuid.uuid4())
+        logger.info(f"Iteration session ID: {iteration_session_id}")
+
+        # Step 1: Continue coding the task (fresh context each iteration)
+        logger.info(f"[Step 1/5] Continuing work on task...")
         success = await run_claude_task(
-            prompt=f"Use code reviewer to review the current work, fix any issues, then continue with the current task: {args.task}",
+            prompt=f"Continue working on the current task: {args.task}. Focus on making progress and implementing features. Update tasklog.md with what you're doing.",
             base_options=base_options,
-            session_id=session_id,
-            continue_conversation=args.continue_conversation,
+            session_id=iteration_session_id,
         )
 
         if not success:
-            logger.error("Error occurred, waiting 5 minutes before continuing...")
-            await asyncio.sleep(300)  # Wait 5 minutes
+            logger.error(
+                "Error in coding phase, waiting 5 minutes before continuing..."
+            )
+            await asyncio.sleep(300)
+            continue
+
+        # Step 2: Code review
+        logger.info(f"[Step 2/5] Running code review...")
+        success = await run_claude_task(
+            prompt="Use the code-reviewer agent to review all the code you've written in this iteration. The agent will identify any issues with quality, security, or maintainability.",
+            base_options=base_options,
+            session_id=iteration_session_id,
+        )
+
+        if not success:
+            logger.error(
+                "Error in review phase, waiting 5 minutes before continuing..."
+            )
+            await asyncio.sleep(300)
+            continue
+
+        # Step 3: Fix review issues
+        logger.info(f"[Step 3/5] Fixing issues from code review...")
+        success = await run_claude_task(
+            prompt="Fix ALL issues identified by the code reviewer. Make sure to address every concern raised about code quality, security, and maintainability.",
+            base_options=base_options,
+            session_id=iteration_session_id,
+        )
+
+        if not success:
+            logger.error(
+                "Error fixing review issues, waiting 5 minutes before continuing..."
+            )
+            await asyncio.sleep(300)
+            continue
+
+        # Step 4: Analyze complexity
+        logger.info(f"[Step 4/5] Analyzing code complexity...")
+        success = await run_claude_task(
+            prompt="Use the complexity-reducer agent to analyze any overly complex code from this iteration. The agent will identify unnecessary abstractions and suggest simplifications.",
+            base_options=base_options,
+            session_id=iteration_session_id,
+        )
+
+        if not success:
+            logger.error(
+                "Error in complexity analysis, waiting 5 minutes before continuing..."
+            )
+            await asyncio.sleep(300)
+            continue
+
+        # Step 5: Apply simplifications
+        logger.info(f"[Step 5/5] Applying simplification suggestions...")
+        success = await run_claude_task(
+            prompt="Apply the simplifications suggested by the complexity-reducer agent. Implement all the recommended changes to make the code simpler and more maintainable.",
+            base_options=base_options,
+            session_id=iteration_session_id,
+        )
+
+        if not success:
+            logger.error(
+                "Error applying simplifications, waiting 5 minutes before continuing..."
+            )
+            await asyncio.sleep(300)
             continue
 
         iteration += 1
@@ -275,11 +341,14 @@ async def main():
         "run any linting/formatting commands."
     )
 
+    # Generate a new session ID for wrap-up
+    wrapup_session_id = str(uuid.uuid4())
+    logger.info(f"Wrap-up session ID: {wrapup_session_id}")
+
     await run_claude_task(
         prompt=wrap_up_prompt,
         base_options=base_options,
-        session_id=session_id,
-        continue_conversation=args.continue_conversation,
+        session_id=wrapup_session_id,
     )
 
     logger.info("Work session completed!")
