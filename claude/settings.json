@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 /Users/thrawny/dotfiles/claude/hooks/autoformat.py"
+            "command": "python3 ~/dotfiles/claude/hooks/autoformat.py"
           }
         ]
       }
