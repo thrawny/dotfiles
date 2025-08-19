@@ -83,8 +83,8 @@ _VALIDATION_RULES = [
         "Use the 'Grep' tool with recursive search instead of grep -r for better integration and filtering",
     ),
     (
-        r"^go\s+build\s+\./",
-        "Use 'go run ./path/to/main.go' instead of 'go build' to avoid creating untracked binaries in the repository root",
+        r"^go\s+build\b(?!.*\s-o\s)",
+        "Use 'go build -o build/binary_name' to specify output location, or use 'go run' instead to avoid creating untracked binaries",
     ),
 ]
 
