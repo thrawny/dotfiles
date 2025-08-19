@@ -31,7 +31,10 @@ class Checker(TypedDict):
 FORMATTERS: dict[str, list[Checker]] = {
     # Python
     ".py": [
-        {"name": "Ruff Linter", "command": ["ruff", "check", "--fix", "{file}"]},
+        {
+            "name": "Ruff Linter",
+            "command": ["ruff", "check", "--fix", "--unfixable", "F401", "{file}"],
+        },
         {"name": "Ruff Formatter", "command": ["ruff", "format", "{file}"]},
         {"name": "Type Checker", "command": ["basedpyright", "{file}"]},
     ],

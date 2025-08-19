@@ -35,6 +35,17 @@
           }
         ]
       }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 /Users/thrawny/dotfiles/claude/hooks/autoformat.py"
+          }
+        ]
+      }
     ]
   },
   "feedbackSurveyState": {

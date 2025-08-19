@@ -244,7 +244,7 @@ async def main():
         logger.info(f"Time remaining: {remaining}")
 
         success = await run_claude_task(
-            prompt=f"Continue working on the current task: {args.task}",
+            prompt=f"Use code reviewer to review the current work, fix any issues, then continue with the current task: {args.task}",
             base_options=base_options,
             session_id=session_id,
             continue_conversation=args.continue_conversation,
