@@ -18,6 +18,7 @@ import sys
 import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from claude_code_sdk import (
     AssistantMessage,
@@ -49,7 +50,7 @@ When you receive the wrap-up prompt, finish your current work, run all tests and
 """
 
 
-async def run_claude_query(prompt: str, options: ClaudeCodeOptions = None):
+async def run_claude_query(prompt: str, options: ClaudeCodeOptions):
     """Run a single Claude Code query and print the response."""
     logger = logging.getLogger(__name__)
     try:
@@ -74,8 +75,9 @@ async def run_claude_query(prompt: str, options: ClaudeCodeOptions = None):
 
 async def run_claude_task(
     prompt: str,
-    base_options: dict,
+    base_options: dict[str, Any],
     session_id: str,
+    resume: bool,
     max_retries: int = 2,
     retry_delay: int = 180,
 ):
@@ -97,8 +99,11 @@ async def run_claude_task(
     # Create initial options
     options = ClaudeCodeOptions(
         **base_options,
-        extra_args={"session-id": session_id},
     )
+    if resume:
+        options.resume = session_id
+    else:
+        options.extra_args = {"session-id": session_id}
 
     # Try the initial request
     result = await run_claude_query(prompt, options)
@@ -228,6 +233,7 @@ async def main():
         prompt=args.task,
         base_options=base_options,
         session_id=session_id,
+        resume=False,
     )
 
     if not success:
@@ -247,11 +253,12 @@ async def main():
         logger.info(f"Iteration session ID: {iteration_session_id}")
 
         # Step 1: Continue coding the task (fresh context each iteration)
-        logger.info(f"[Step 1/5] Continuing work on task...")
+        logger.info("[Step 1/5] Continuing work on task...")
         success = await run_claude_task(
             prompt=f"Continue working on the current task: {args.task}. Focus on making progress and implementing features. Update tasklog.md with what you're doing.",
             base_options=base_options,
             session_id=iteration_session_id,
+            resume=True,
         )
 
         if not success:
@@ -262,11 +269,12 @@ async def main():
             continue
 
         # Step 2: Code review
-        logger.info(f"[Step 2/5] Running code review...")
+        logger.info("[Step 2/5] Running code review...")
         success = await run_claude_task(
             prompt="Use the code-reviewer agent to review all the code you've written in this iteration. The agent will identify any issues with quality, security, or maintainability.",
             base_options=base_options,
             session_id=iteration_session_id,
+            resume=True,
         )
 
         if not success:
@@ -277,11 +285,12 @@ async def main():
             continue
 
         # Step 3: Fix review issues
-        logger.info(f"[Step 3/5] Fixing issues from code review...")
+        logger.info("[Step 3/5] Fixing issues from code review...")
         success = await run_claude_task(
             prompt="Fix ALL issues identified by the code reviewer. Make sure to address every concern raised about code quality, security, and maintainability.",
             base_options=base_options,
             session_id=iteration_session_id,
+            resume=True,
         )
 
         if not success:
@@ -292,11 +301,12 @@ async def main():
             continue
 
         # Step 4: Analyze complexity
-        logger.info(f"[Step 4/5] Analyzing code complexity...")
+        logger.info("[Step 4/5] Analyzing code complexity...")
         success = await run_claude_task(
             prompt="Use the complexity-reducer agent to analyze any overly complex code from this iteration. The agent will identify unnecessary abstractions and suggest simplifications.",
             base_options=base_options,
             session_id=iteration_session_id,
+            resume=True,
         )
 
         if not success:
@@ -307,11 +317,12 @@ async def main():
             continue
 
         # Step 5: Apply simplifications
-        logger.info(f"[Step 5/5] Applying simplification suggestions...")
+        logger.info("[Step 5/5] Applying simplification suggestions...")
         success = await run_claude_task(
             prompt="Apply the simplifications suggested by the complexity-reducer agent. Implement all the recommended changes to make the code simpler and more maintainable.",
             base_options=base_options,
             session_id=iteration_session_id,
+            resume=True,
         )
 
         if not success:
@@ -349,6 +360,7 @@ async def main():
         prompt=wrap_up_prompt,
         base_options=base_options,
         session_id=wrapup_session_id,
+        resume=False,
     )
 
     logger.info("Work session completed!")
