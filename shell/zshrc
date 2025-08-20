@@ -97,6 +97,8 @@ alias tfa='terraform apply'
 alias bu='brew upgrade'
 alias mp='microplane'
 alias gcr='git-cleanup-repo'
+alias ccv='claude'
+alias ccvy='claude --dangerously-skip-permissions'
 alias pr='gh pr create --web'
 alias kdp='kubectl describe pod'
 alias striplines='tr -d "\n"'
@@ -160,31 +162,6 @@ c() {
 function al() {
   profile=${AWS_PROFILE:-default}
   aws sso login --profile $profile
-}
-
-function ccv() {
-  local env_vars=(
-    "ENABLE_BACKGROUND_TASKS=true"
-    "FORCE_AUTO_BACKGROUND_TASKS=true"
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=true"
-    "CLAUDE_CODE_ENABLE_UNIFIED_READ_TOOL=true"
-  )
-
-  local claude_args=()
-
-  if [[ "$1" == "-y" ]]; then
-    claude_args+=("--dangerously-skip-permissions")
-  elif [[ "$1" == "-r" ]]; then
-    claude_args+=("--resume")
-  elif [[ "$1" == "-c" ]]; then
-    claude_args+=("--continue")
-  elif [[ "$1" == "-ry" ]] || [[ "$1" == "-yr" ]]; then
-    claude_args+=("--resume" "--dangerously-skip-permissions")
-  elif [[ "$1" == "-yc" ]] || [[ "$1" == "-cy" ]]; then
-    claude_args+=("--continue" "--dangerously-skip-permissions")
-  fi
-
-  env "${env_vars[@]}" claude "${claude_args[@]}"
 }
 
 

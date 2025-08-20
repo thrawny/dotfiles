@@ -52,6 +52,9 @@
     "type": "command",
     "command": "python ~/dotfiles/claude/status_line.py"
   },
+  "env": {
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "true"
+  },
   "feedbackSurveyState": {
     "lastShownTime": 1753970401047
   },
