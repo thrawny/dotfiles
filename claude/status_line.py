@@ -77,6 +77,60 @@ def calculate_context_size(session_data):
     return None
 
 
+def truncate_branch_name(branch, max_length=20):
+    """Truncate branch name if it's too long"""
+    if len(branch) > max_length:
+        return branch[: max_length - 3] + "..."
+    return branch
+
+
+def get_git_branch():
+    """Get the current git branch name, trying multiple methods"""
+    # Try method 1: use git command
+    try:
+        result = subprocess.run(
+            ["git", "symbolic-ref", "--short", "HEAD"],
+            capture_output=True,
+            text=True,
+            timeout=1,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except (
+        subprocess.TimeoutExpired,
+        subprocess.CalledProcessError,
+        FileNotFoundError,
+    ):
+        pass
+
+    # Try method 2 & 3: read from .git files
+    if os.path.exists(".git"):
+        try:
+            # Check if .git is a file (worktree) or directory (regular repo)
+            if os.path.isfile(".git"):
+                # It's a worktree - read the gitdir path
+                with open(".git", "r") as f:
+                    gitdir_line = f.read().strip()
+                    if gitdir_line.startswith("gitdir: "):
+                        gitdir = gitdir_line[8:]
+                        head_file = os.path.join(gitdir, "HEAD")
+                        if os.path.exists(head_file):
+                            with open(head_file, "r") as f:
+                                ref = f.read().strip()
+                                if ref.startswith("ref: refs/heads/"):
+                                    return ref.replace("ref: refs/heads/", "")
+            else:
+                # Regular repo
+                with open(".git/HEAD", "r") as f:
+                    ref = f.read().strip()
+                    if ref.startswith("ref: refs/heads/"):
+                        return ref.replace("ref: refs/heads/", "")
+        except:  # noqa: E722
+            pass
+
+    return None
+
+
 # Get current context size
 context_info = ""
 context_data = calculate_context_size(data)
@@ -104,45 +158,10 @@ if context_data:
     else:
         context_info = f" | 📝 {token_display}"
 
-# Check for git branch (with worktree support)
+# Get git branch and format it
+branch = get_git_branch()
 git_branch = ""
-try:
-    # Use git to get the branch name - works with regular repos and worktrees
-    result = subprocess.run(
-        ["git", "symbolic-ref", "--short", "HEAD"],
-        capture_output=True,
-        text=True,
-        timeout=1,
-    )
-    if result.returncode == 0:
-        branch = result.stdout.strip()
-        git_branch = f" | 🌿 {branch}"
-except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
-    # Fallback to checking .git/HEAD if git command fails
-    if os.path.exists(".git"):
-        try:
-            # Check if .git is a file (worktree) or directory (regular repo)
-            if os.path.isfile(".git"):
-                # It's a worktree - read the gitdir path
-                with open(".git", "r") as f:
-                    gitdir_line = f.read().strip()
-                    if gitdir_line.startswith("gitdir: "):
-                        gitdir = gitdir_line[8:]
-                        head_file = os.path.join(gitdir, "HEAD")
-                        if os.path.exists(head_file):
-                            with open(head_file, "r") as f:
-                                ref = f.read().strip()
-                                if ref.startswith("ref: refs/heads/"):
-                                    git_branch = (
-                                        f" | 🌿 {ref.replace('ref: refs/heads/', '')}"
-                                    )
-            else:
-                # Regular repo
-                with open(".git/HEAD", "r") as f:
-                    ref = f.read().strip()
-                    if ref.startswith("ref: refs/heads/"):
-                        git_branch = f" | 🌿 {ref.replace('ref: refs/heads/', '')}"
-        except:  # noqa: E722
-            pass
+if branch:
+    git_branch = f" | 🌿 {truncate_branch_name(branch)}"
 
 print(f"[{model}] 📁 {current_dir}{git_branch}{context_info}")

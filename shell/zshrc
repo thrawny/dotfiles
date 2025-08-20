@@ -6,6 +6,11 @@ export GOPATH=$HOME/go
 export EDITOR=nvim
 export AWS_PAGER=''
 
+# Locale settings for UTF-8 support (including tmux)
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+export LC_CTYPE=en_US.UTF-8
+
 ZSH_THEME="thrawny"
 
 plugins=(
@@ -29,7 +34,6 @@ HAS_WORKBREW=$([[ -d /opt/workbrew ]] && echo 1 || echo 0)
 
 # OSX specific stuff
 if [[ "$(uname)" == "Darwin" ]]; then
-  export LANG="C"
   plugins+=(macos)
   if [[ "$HAS_WORKBREW" == "0" ]]; then
     eval "$(/opt/homebrew/bin/brew shellenv)"
