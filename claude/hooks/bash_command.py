@@ -86,6 +86,10 @@ _VALIDATION_RULES = [
         r"^go\s+build\b(?!.*\s-o\s)",
         "Use 'go build -o build/binary_name' to specify output location, or use 'go run' instead to avoid creating untracked binaries",
     ),
+    (
+        r"(?:^|&&\s*)pip\s+install\b",
+        "Use 'uv add <package>' instead of pip install for better dependency management and faster installation",
+    ),
 ]
 
 # Hook did not catch this:
