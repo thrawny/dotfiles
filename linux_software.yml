@@ -1,0 +1,14 @@
+# Generic Linux software installation (distribution-agnostic)
+
+# Starship - Cross-platform prompt
+- name: "Check if starship is installed"
+  command: which starship
+  register: starship_check
+  ignore_errors: yes
+  changed_when: false
+
+- name: "Install Starship (Linux)"
+  shell: |
+    curl -sS https://starship.rs/install.sh | sh -s -- -y
+  when: starship_check.rc != 0
+  become: yes

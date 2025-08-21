@@ -47,6 +47,12 @@
     dest: "{{ home_dir }}/.config/ghostty/config"
     src: "{{ dotfiles_dir }}/misc/ghostty-config"
 
+- name: starship.toml is symlinked to ~/.config/starship.toml
+  file:
+    state: link
+    dest: "{{ home_dir }}/.config/starship.toml"
+    src: "{{ dotfiles_dir }}/misc/starship.toml"
+
 - name: neovim config
   file:
     state: link

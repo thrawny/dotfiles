@@ -265,9 +265,14 @@ if direnv version &>/dev/null; then
   eval "$(direnv hook zsh)"
 fi
 
-# ===== Prompt (temporarily using simple prompt, will be replaced by Starship) =====
-# Simple prompt for now
-PS1='%F{blue}%~%f %F{green}❯%f '
+# ===== Starship Prompt =====
+# Initialize Starship prompt if installed
+if command -v starship &> /dev/null; then
+  eval "$(starship init zsh)"
+else
+  # Fallback prompt if Starship is not installed
+  PS1='%F{blue}%~%f %F{green}❯%f '
+fi
 
 # ===== Local Overrides =====
 [ -f ~/.zsh.local ] && source ~/.zsh.local

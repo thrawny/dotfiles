@@ -1,0 +1,111 @@
+# Starship prompt configuration
+
+# Format of the prompt
+format = """
+$username\
+$hostname\
+$directory\
+$git_branch\
+$git_state\
+$git_status\
+$git_metrics\
+$kubernetes\
+$docker_context\
+$python\
+$golang\
+$nodejs\
+$rust\
+$terraform\
+$package\
+$cmd_duration\
+$line_break\
+$character"""
+
+# Directory settings
+[directory]
+truncation_length = 3
+truncate_to_repo = true
+style = "bold cyan"
+
+# Git branch
+[git_branch]
+symbol = " "
+style = "bold purple"
+format = "on [$symbol$branch]($style) "
+
+# Git status
+[git_status]
+style = "bold red"
+format = '([\[$all_status$ahead_behind\]]($style) )'
+conflicted = "="
+ahead = "⇡${count}"
+behind = "⇣${count}"
+diverged = "⇕⇡${ahead_count}⇣${behind_count}"
+untracked = "?"
+stashed = "\\$"
+modified = "!"
+staged = "+"
+renamed = "»"
+deleted = "✘"
+
+# Command duration
+[cmd_duration]
+min_time = 500
+format = "took [$duration]($style) "
+style = "bold yellow"
+
+# Character (prompt symbol)
+[character]
+success_symbol = "[❯](bold green)"
+error_symbol = "[❯](bold red)"
+vicmd_symbol = "[❮](bold green)"
+
+# Kubernetes (optional - shows current context)
+[kubernetes]
+disabled = false
+format = 'on [$symbol$context]($style) '
+symbol = "☸ "
+style = "bold blue"
+
+# Docker context
+[docker_context]
+format = "via [$symbol$context]($style) "
+symbol = "🐳 "
+style = "blue bold"
+only_with_files = true
+detect_files = ["docker-compose.yml", "docker-compose.yaml", "Dockerfile"]
+
+# Go
+[golang]
+format = "via [$symbol($version )]($style)"
+symbol = "🐹 "
+style = "bold cyan"
+
+# Node.js
+[nodejs]
+format = "via [$symbol($version )]($style)"
+symbol = "⬢ "
+style = "bold green"
+
+# Rust
+[rust]
+format = "via [$symbol($version )]($style)"
+symbol = "🦀 "
+style = "bold red"
+
+# Terraform
+[terraform]
+format = "via [$symbol$workspace]($style) "
+symbol = "💠 "
+style = "bold purple"
+
+# Python
+[python]
+format = "via [$symbol($version )]($style)"
+symbol = "🐍 "
+style = "yellow bold"
+
+# Package
+[package]
+format = "is [$symbol$version]($style) "
+symbol = "📦 "
