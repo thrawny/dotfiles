@@ -269,6 +269,7 @@ EOF
 
 # Direnv
 if direnv version &>/dev/null; then
+  eval "$(direnv hook zsh)"
 fi
 
 # ===== Starship Prompt =====
