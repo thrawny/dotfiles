@@ -23,10 +23,19 @@
     repo: "https://github.com/zsh-users/zsh-autosuggestions"
     dest: "{{ home_dir }}/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
 
-# - name: "tmux plugin manager is present"
-#   git:
-#     repo: "https://github.com/tmux-plugins/tpm"
-#     dest: "{{ home_dir }}/.tmux/plugins/tpm"
+# Tmux Plugin Manager
+- name: "Ensure tmux plugins directory exists"
+  file:
+    path: "{{ home_dir }}/.tmux/plugins"
+    state: directory
+    mode: '0755'
 
-#- name: "tmux plugins have been installed"
-#  command: "{{ home_dir }}/.tmux/plugins/tpm/bin/install_plugins"
+- name: "tmux plugin manager is present"
+  git:
+    repo: "https://github.com/tmux-plugins/tpm"
+    dest: "{{ home_dir }}/.tmux/plugins/tpm"
+
+- name: "tmux plugins have been installed"
+  command: "{{ home_dir }}/.tmux/plugins/tpm/bin/install_plugins"
+  args:
+    creates: "{{ home_dir }}/.tmux/plugins/tmux-yank"
