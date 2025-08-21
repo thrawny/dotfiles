@@ -8,3 +8,5 @@ window-padding-x = 10
 window-padding-y = 5
 cursor-style-blink = false
 
+
+keybind = shift+enter=text:\\\n\r
