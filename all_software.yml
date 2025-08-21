@@ -1,3 +1,17 @@
+# Zinit - Modern Zsh Plugin Manager
+- name: "Ensure Zinit parent directory exists"
+  file:
+    path: "{{ home_dir }}/.local/share/zinit"
+    state: directory
+    mode: '0755'
+
+- name: "Zinit is installed"
+  git:
+    repo: "https://github.com/zdharma-continuum/zinit.git"
+    dest: "{{ home_dir }}/.local/share/zinit/zinit.git"
+    force: yes
+
+# TODO: Remove after migration is complete
 - name: "oh-my-zsh is present"
   git:
     repo: "git@github.com:ohmyzsh/ohmyzsh.git"
