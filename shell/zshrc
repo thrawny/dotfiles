@@ -91,9 +91,10 @@ zinit wait lucid for \
     OMZP::docker \
     OMZP::python
 
-# Load kubectl plugin when kubectl is used
-zinit ice wait'0' lucid trigger-load'!kubectl'
-zinit snippet OMZP::kubectl
+# Load kubectl completions if kubectl is installed
+if command -v kubectl &> /dev/null; then
+    source <(kubectl completion zsh)
+fi
 
 # ===== Performance Plugins =====
 # Syntax highlighting (load after compinit)
@@ -268,7 +269,6 @@ EOF
 
 # Direnv
 if direnv version &>/dev/null; then
-  eval "$(direnv hook zsh)"
 fi
 
 # ===== Starship Prompt =====
