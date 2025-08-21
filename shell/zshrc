@@ -76,7 +76,13 @@ zinit light zsh-users/zsh-completions
 
 # Initialize completion system (ignore insecure directories from Homebrew)
 autoload -Uz compinit
-compinit -i
+# VS Code needs full compinit, others can ignore insecure directories
+if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ -n "$VSCODE_INJECTION" ]]; then
+    compinit -u
+else
+    compinit -i
+fi
+
 zinit cdreplay -q
 
 # ===== Deferred Plugins (Turbo Mode) =====
