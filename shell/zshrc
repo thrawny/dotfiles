@@ -77,7 +77,14 @@ zinit light zsh-users/zsh-completions
 # Initialize completion system (ignore insecure directories from Homebrew)
 autoload -Uz compinit
 # VS Code needs full compinit, others can ignore insecure directories
-if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ -n "$VSCODE_INJECTION" ]]; then
+# Force fresh completion rebuild if dump is corrupted
+if [[ ! -f ~/.zcompdump || ! -s ~/.zcompdump ]]; then
+    if [[ "$TERM_PROGRAM" == "vscode" ]] || [[ -n "$VSCODE_INJECTION" ]]; then
+        compinit -u
+    else
+        compinit
+    fi
+elif [[ "$TERM_PROGRAM" == "vscode" ]] || [[ -n "$VSCODE_INJECTION" ]]; then
     compinit -u
 else
     compinit -i
@@ -96,9 +103,10 @@ if command -v kubectl &> /dev/null; then
     source <(kubectl completion zsh)
 fi
 
-# ===== Performance Plugins =====
+# ===== Performance Plugins ====
+
 # Syntax highlighting (load after compinit)
-zinit ice wait lucid atinit"ZINIT[COMPINIT_OPTS]=-C; zicompinit; zicdreplay"
+zinit ice wait lucid
 zinit light zdharma-continuum/fast-syntax-highlighting
 
 # Auto suggestions (with vi-mode compatibility)

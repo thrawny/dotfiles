@@ -29,7 +29,7 @@
     "deny": [],
     "defaultMode": "acceptEdits"
   },
-  "model": "sonnet",
+  "model": "opus",
   "hooks": {
     "PreToolUse": [
       {
