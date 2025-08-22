@@ -7,5 +7,16 @@ window-padding-x = 10
 window-padding-y = 5
 cursor-style-blink = false
 
+# Fix for gray background on italic/emphasized text
+font-synthetic-style = false
+minimum-contrast = 1.2
+
+# Fix selection colors for better visibility
+selection-background = #49483e
+selection-foreground = #f8f8f2
+
+# Brighten dark colors for better visibility with Claude Code
+palette = 0=#5c5c5c
+palette = 8=#808080
 
 keybind = shift+enter=text:\\\n\r

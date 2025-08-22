@@ -87,6 +87,10 @@ _VALIDATION_RULES = [
         "Use 'go build -o build/binary_name' to specify output location, or use 'go run' instead to avoid creating untracked binaries",
     ),
     (
+        r"^go\s+build\b.*\s-o\s+(?!(?:build|bin|dist|out|target|\.build|tmp|/)[/\w])",
+        "Use 'go build -o build/binary_name' with a proper path (e.g., build/, bin/, dist/) to avoid cluttering the project root with binaries",
+    ),
+    (
         r"(?:^|&&\s*)pip\s+install\b",
         "Use 'uv add <package>' instead of pip install for better dependency management and faster installation",
     ),
