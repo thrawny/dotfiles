@@ -12,3 +12,25 @@
     curl -sS https://starship.rs/install.sh | sh -s -- -y
   when: starship_check.rc != 0
   become: yes
+
+# Direnv - Environment variable management
+- name: "Check if direnv is installed"
+  command: which direnv
+  register: direnv_check
+  ignore_errors: yes
+  changed_when: false
+
+- name: "Ensure ~/.local/bin directory exists"
+  file:
+    path: "{{ ansible_env.HOME }}/.local/bin"
+    state: directory
+    mode: '0755'
+  when: direnv_check.rc != 0
+
+- name: "Install direnv (Linux)"
+  shell: |
+    export bin_path="{{ ansible_env.HOME }}/.local/bin"
+    curl -sfL https://direnv.net/install.sh | bash
+  environment:
+    bin_path: "{{ ansible_env.HOME }}/.local/bin"
+  when: direnv_check.rc != 0
