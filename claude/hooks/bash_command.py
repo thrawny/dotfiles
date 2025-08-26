@@ -29,6 +29,7 @@ Make sure to change your path to your actual script.
 """
 
 import json
+import os
 import re
 import sys
 
@@ -132,7 +133,33 @@ def main():
     if not command:
         sys.exit(0)
 
-    issues = _validate_command(command)
+    # Check if bypass is enabled via environment variable
+    if os.environ.get("CLAUDE_CODE_ALLOW_ALL_FILE_OPS") == "1":
+        # Allow bypassing search and file operation validations
+        # but still validate other rules like go build and pip install
+        bypass_patterns = [
+            r"(?:^|&&\s*)grep\b",
+            r"^rg\b(?!.*\|)",
+            r"^find\s+.*-name\b",
+            r"^find\s+.*-type\s+f",
+            r"^ls\s+",
+            r"^cat\s+",
+            r"^head\s+",
+            r"^tail\s+",
+            r"(?:^|&&\s*)grep\b.*\|.*\b(?:tail|head)\b",
+            r"^sed\s+",
+            r"grep\s+-r\b",
+        ]
+
+        # Filter out bypassed rules
+        issues = []
+        for pattern, message in _VALIDATION_RULES:
+            if pattern not in bypass_patterns:
+                if re.search(pattern, command):
+                    issues.append(message)
+    else:
+        issues = _validate_command(command)
+
     if issues:
         for message in issues:
             print(f"• {message}", file=sys.stderr)
