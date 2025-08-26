@@ -108,7 +108,7 @@ _VALIDATION_RULES = [
 
 
 def _validate_command(command: str) -> list[str]:
-    issues = []
+    issues: list[str] = []
     for pattern, message in _VALIDATION_RULES:
         if re.search(pattern, command):
             issues.append(message)

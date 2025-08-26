@@ -3,6 +3,7 @@ import json
 import os
 import subprocess
 import sys
+from typing import Any
 
 # Read JSON from stdin
 data = json.load(sys.stdin)
@@ -13,7 +14,7 @@ current_dir = os.path.basename(data["workspace"]["current_dir"])
 
 
 # Calculate current context size from transcript
-def calculate_context_tokens(transcript_path):
+def calculate_context_tokens(transcript_path: str) -> dict[str, int] | None:
     """Calculate the current context size from the transcript file using actual token counts"""
     try:
         # Read the transcript file
@@ -66,7 +67,7 @@ def calculate_context_tokens(transcript_path):
         return None
 
 
-def calculate_context_size(session_data):
+def calculate_context_size(session_data: dict[str, Any]) -> dict[str, int] | None:
     """Calculate the current context size being sent to Claude"""
     # Check if we have transcript_path
     if "transcript_path" in session_data:
@@ -77,14 +78,14 @@ def calculate_context_size(session_data):
     return None
 
 
-def truncate_branch_name(branch, max_length=20):
+def truncate_branch_name(branch: str, max_length: int = 20) -> str:
     """Truncate branch name if it's too long"""
     if len(branch) > max_length:
         return branch[: max_length - 3] + "..."
     return branch
 
 
-def get_git_branch():
+def get_git_branch() -> str | None:
     """Get the current git branch name, trying multiple methods"""
     # Try method 1: use git command
     try:

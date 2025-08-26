@@ -5,10 +5,35 @@ description = "Personal dotfiles repository with Ansible automation for macOS an
 requires-python = ">=3.12"
 dependencies = [
     "ansible>=10.0.0",
+    "anyio>=4.10.0",
+    "asyncclick>=8.2.2.2",
     "claude-code-sdk>=0.0.20",
     "fastmcp>=2.11.1",
     "requests>=2.32.4",
 ]
 
+[project.scripts]
+claude-work-timer = "claude_tools.work_timer:cli_main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["claude_tools"]
+
 [tool.uv]
-dev-dependencies = ["ansible-lint>=25.6.1", "ruff>=0.12.9"]
+dev-dependencies = [
+    "ansible-lint>=25.6.1",
+    "basedpyright>=1.31.3",
+    "ruff>=0.12.9",
+]
+
+[tool.basedpyright]
+exclude = [".venv", "venv", "__pycache__", ".git", "linux/i3_scripts"]
+venvPath = "."
+venv = ".venv"
+reportExplicitAny = false  # Allow explicit Any types for dynamic data
+reportAny = false  # Allow Any types in general (needed for JSON, kwargs, etc.)
+reportUnusedCallResult = false  # Don't require _ = for unused call results
+reportImplicitOverride = false  # Don't require @override decorator
