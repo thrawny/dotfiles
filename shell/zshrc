@@ -194,8 +194,8 @@ alias tfa='terraform apply'
 alias bu='brew upgrade'
 alias mp='microplane'
 alias gcr='git-cleanup-repo'
-alias ccv='claude'
-alias ccvy='claude --dangerously-skip-permissions'
+alias c='claude'
+alias cy='claude --dangerously-skip-permissions'
 alias pr='gh pr create --web'
 alias kdp='kubectl describe pod'
 alias striplines='tr -d "\n"'
@@ -251,10 +251,6 @@ function uuid() {
   python3 -c "import uuid;print(uuid.uuid4())"
 }
 
-# warp ai blocks
-c() {
-    echo "# $*"
-}
 
 function al() {
   profile=${AWS_PROFILE:-default}
