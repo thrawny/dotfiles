@@ -8,6 +8,7 @@ from pathlib import Path
 import asyncclick as click
 from claude_code_sdk import ClaudeCodeOptions, query
 
+from .core import print_claude_response
 from .duration import DurationType
 
 
@@ -84,8 +85,7 @@ async def cli(
         click.echo(f"🚀 Iteration {iteration} - {remaining / 60:.1f} minutes remaining")
 
         try:
-            async for _ in query(prompt=task, options=options):
-                pass  # Just consume the response
+            await print_claude_response(query(prompt=task, options=options))
             click.echo(f"✅ Iteration {iteration} complete")
         except KeyboardInterrupt:
             click.echo("\n⏹️  Stopped by user")

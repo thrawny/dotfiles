@@ -3,9 +3,11 @@
 import asyncio
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime, timedelta
-from typing import Any
+from typing import Any, Callable
 
+import asyncclick as click
 from claude_code_sdk import AssistantMessage, ClaudeCodeOptions, TextBlock, query
 
 from .prompts import (
@@ -35,15 +37,33 @@ def calculate_session_timing(
     return start_time, None, None
 
 
+async def print_claude_response(
+    response_iterator: AsyncIterator[Any],
+    printer: Callable[[str], None] | None = None,
+) -> None:
+    """Print Claude's response messages as they stream in.
+
+    Args:
+        response_iterator: Async iterator from query()
+        printer: Optional custom print function (defaults to click.echo)
+    """
+    if printer is None:
+        printer = click.echo
+
+    async for message in response_iterator:
+        if isinstance(message, AssistantMessage):
+            for block in message.content:
+                if isinstance(block, TextBlock):
+                    printer(block.text)
+
+
 async def run_claude_query(prompt: str, options: ClaudeCodeOptions) -> bool:
     """Run a single Claude Code query and print the response."""
     logger = logging.getLogger(__name__)
     try:
-        async for message in query(prompt=prompt, options=options):
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        logger.info(block.text)
+        await print_claude_response(
+            query(prompt=prompt, options=options), printer=logger.info
+        )
         return True
     except Exception as e:
         error_str = str(e)
