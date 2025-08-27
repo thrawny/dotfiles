@@ -18,6 +18,9 @@ main() {
         mv "$HOME/.gitconfig" "$HOME/.gitconfig.bak"
     fi
 
+    echo "Setting up Python environment with uv..."
+    uv sync
+    
     uv run ansible-playbook main.yml
 
     echo "Configuring git..."

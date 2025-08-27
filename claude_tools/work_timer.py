@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 
 from .core import run_work_session
+from .duration import DurationType
 
 
 @click.command()
@@ -14,16 +15,16 @@ from .core import run_work_session
 @click.option(
     "-d",
     "--duration",
-    type=float,
-    default=0.0,
-    help="Duration in hours (default: 0.0)",
+    type=DurationType,
+    default="0",
+    help='Duration (e.g., "2h", "90m", "1h30m", or "1.5" for hours)',
 )
 @click.option(
     "-b",
     "--buffer",
-    type=int,
-    default=10,
-    help="Buffer time in minutes before finish (default: 10)",
+    type=DurationType,
+    default="10m",
+    help='Buffer time before finish (e.g., "10m", "5m", or "0.167" for hours)',
 )
 @click.option("--cwd", type=click.Path(path_type=Path), help="Working directory")
 @click.option("--debug", is_flag=True, help="Run only one iteration for debugging")
@@ -45,7 +46,7 @@ from .core import run_work_session
 async def main(
     task: str,
     duration: float,
-    buffer: int,
+    buffer: float,
     cwd: Path | None,
     debug: bool,
     verbose: bool,
@@ -61,19 +62,26 @@ async def main(
     )
     logger = logging.getLogger(__name__)
 
-    logger.info(f"Task: {task}")
-    logger.info(f"Duration: {duration}, Iterations: {iterations}")
+    if verbose:
+        logger.info(f"Task: {task}")
+        logger.info(f"Duration: {duration}, Iterations: {iterations}")
+    else:
+        click.echo(f"📋 Task: {task}")
+        click.echo(f"⏰ Duration: {duration}h, Iterations: {iterations}")
 
     # Validate mutually exclusive options
     if iterations > 0 and duration > 0:
-        logger.error("Iterations and duration are mutually exclusive")
+        click.echo("❌ Error: Iterations and duration are mutually exclusive", err=True)
         return 1
+
+    # Convert buffer from hours to minutes for run_work_session
+    buffer_minutes = int(buffer * 60)
 
     # Run the work session
     return await run_work_session(
         task=task,
         duration=duration,
-        buffer=buffer,
+        buffer=buffer_minutes,
         cwd=str(cwd) if cwd else None,
         debug=debug,
         force=force,

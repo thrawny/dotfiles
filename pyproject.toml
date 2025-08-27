@@ -14,6 +14,7 @@ dependencies = [
 
 [project.scripts]
 claude-work-timer = "claude_tools.work_timer:cli_main"
+claude-loop = "claude_tools.simple_loop:cli_main"
 
 [build-system]
 requires = ["hatchling"]
