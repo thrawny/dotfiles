@@ -48,8 +48,8 @@ def calculate_context_tokens(transcript_path: str) -> dict[str, int] | None:
                         + usage.get("cache_read_input_tokens", 0)
                     )
 
-                    # Calculate percentage of context used (200k limit)
-                    percentage = min(100, max(0, round((input_tokens / 200000) * 100)))
+                    # Calculate percentage of context used (150k limit for compact warnings)
+                    percentage = min(100, max(0, round((input_tokens / 150000) * 100)))
 
                     return {
                         "tokens": input_tokens,
@@ -147,15 +147,13 @@ if context_data:
     else:
         token_display = str(tokens)
 
-    # Add percentage if significant (>50%)
-    if percentage >= 50:
+    # Add percentage if significant (>86% which is ~130k tokens with 150k base)
+    if percentage >= 86:
         # Show percentage with color coding
-        if percentage >= 90:
+        if percentage >= 93:  # ~140k tokens
             context_info = f" | 📝 {token_display} ({percentage}%‼️)"
-        elif percentage >= 75:
+        else:  # ~130k-140k tokens
             context_info = f" | 📝 {token_display} ({percentage}%⚠️)"
-        else:
-            context_info = f" | 📝 {token_display} ({percentage}%)"
     else:
         context_info = f" | 📝 {token_display}"
 

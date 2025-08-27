@@ -39,6 +39,12 @@ from .duration import DurationType
     default=True,
     help="Bypass permissions (default: True)",
 )
+@click.option(
+    "-m",
+    "--model",
+    type=str,
+    help="Model to use (e.g., 'haiku', 'sonnet', 'opus')",
+)
 async def cli(
     task: str,
     duration: float,
@@ -46,6 +52,7 @@ async def cli(
     cwd: Path | None,
     verbose: bool,
     force: bool,
+    model: str | None,
 ) -> None:
     """Run Claude Code in a simple loop for a specified duration.
 
@@ -63,6 +70,8 @@ async def cli(
     end_time = datetime.now() + timedelta(hours=duration)
     iteration = 0
 
+    model_display = model if model else "default"
+    click.echo(f"🤖 Model: {model_display}")
     click.echo(f"🔄 Starting simple loop for {duration} hours")
     click.echo(f"📋 Task: {task}")
     click.echo(f"⏰ Will run until: {end_time.strftime('%H:%M:%S')}")
@@ -73,6 +82,7 @@ async def cli(
     options = ClaudeCodeOptions(
         cwd=str(cwd) if cwd else None,
         permission_mode="bypassPermissions" if force else None,
+        model=model if model else None,
     )
 
     while datetime.now() < end_time:

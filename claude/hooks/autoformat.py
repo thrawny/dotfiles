@@ -42,7 +42,7 @@ FORMATTERS: dict[str, list[Checker]] = {
     ".go": [
         {
             "name": "Go Linter",
-            "command": ["golangci-lint", "run", "--fast", "--fix", "{file}"],
+            "command": ["golangci-lint", "run", "--fast-only", "--fix", "{file}"],
         },
         {"name": "Go Formatter", "command": ["golangci-lint", "fmt", "{file}"]},
     ],

@@ -27,13 +27,13 @@
       "WebFetch",
       "WebSearch"
     ],
+    "deny": [],
     "ask": [
       "Bash(rm:*)"
     ],
-    "deny": [],
     "defaultMode": "acceptEdits"
   },
-  "model": "opus",
+  "model": "sonnet",
   "hooks": {
     "PreToolUse": [
       {
