@@ -15,14 +15,14 @@ from .duration import DurationType
 @click.option(
     "-d",
     "--duration",
-    type=DurationType,
+    type=DurationType(),
     default="0",
     help='Duration (e.g., "2h", "90m", "1h30m", or "1.5" for hours)',
 )
 @click.option(
     "-b",
     "--buffer",
-    type=DurationType,
+    type=DurationType(),
     default="10m",
     help='Buffer time before finish (e.g., "10m", "5m", or "0.167" for hours)',
 )

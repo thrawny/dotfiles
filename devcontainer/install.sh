@@ -21,6 +21,10 @@ main() {
     echo "Setting up Python environment with uv..."
     uv sync
     
+    # Install the package globally with its CLI entrypoints
+    echo "Installing CLI commands globally..."
+    uv tool install --editable .
+    
     uv run ansible-playbook main.yml
 
     echo "Configuring git..."

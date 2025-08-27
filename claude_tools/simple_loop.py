@@ -16,14 +16,14 @@ from .duration import DurationType
 @click.option(
     "-d",
     "--duration",
-    type=DurationType,
+    type=DurationType(),
     default="30m",
     help='Duration (e.g., "1h", "30m", "1h30m", "90m", or "0.5" for hours)',
 )
 @click.option(
     "-w",
     "--wait",
-    type=DurationType,
+    type=DurationType(),
     default="30s",
     help='Wait time between iterations (e.g., "30s", "1m", "5m", or "0.0083" for hours)',
 )

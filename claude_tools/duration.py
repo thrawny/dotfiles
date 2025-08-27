@@ -3,7 +3,7 @@
 import re
 from typing import Any
 
-import click
+import asyncclick as click
 
 
 def parse_duration(value: str | float | int) -> float:
