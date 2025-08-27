@@ -31,12 +31,20 @@ from .duration import DurationType
     "--cwd", type=click.Path(exists=True, path_type=Path), help="Working directory"
 )
 @click.option("-v", "--verbose", is_flag=True, help="Enable verbose debug logging")
+@click.option(
+    "-f",
+    "--force",
+    is_flag=True,
+    default=True,
+    help="Bypass permissions (default: True)",
+)
 async def cli(
     task: str,
     duration: float,
     wait: float,
     cwd: Path | None,
     verbose: bool,
+    force: bool,
 ) -> None:
     """Run Claude Code in a simple loop for a specified duration.
 
@@ -61,7 +69,10 @@ async def cli(
     click.echo(f"⏸️  Wait time between iterations: {wait_seconds}s")
     click.echo()
 
-    options = ClaudeCodeOptions(cwd=str(cwd) if cwd else None)
+    options = ClaudeCodeOptions(
+        cwd=str(cwd) if cwd else None,
+        permission_mode="bypassPermissions" if force else None,
+    )
 
     while datetime.now() < end_time:
         iteration += 1
