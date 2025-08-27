@@ -27,6 +27,9 @@
       "WebFetch",
       "WebSearch"
     ],
+    "ask": [
+      "Bash(rm:*)"
+    ],
     "deny": [],
     "defaultMode": "acceptEdits"
   },
