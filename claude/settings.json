@@ -33,7 +33,6 @@
     ],
     "defaultMode": "acceptEdits"
   },
-  "model": "sonnet",
   "hooks": {
     "PreToolUse": [
       {
