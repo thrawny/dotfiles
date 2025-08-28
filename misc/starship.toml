@@ -17,7 +17,6 @@ $golang\
 $nodejs\
 $rust\
 $terraform\
-$package\
 $cmd_duration\
 $line_break\
 $character"""
@@ -78,19 +77,19 @@ detect_files = ["docker-compose.yml", "docker-compose.yaml", "Dockerfile"]
 
 # Go
 [golang]
-format = "via [$symbol($version )]($style)"
+format = "via [$symbol($version)]($style) "
 symbol = "🐹 "
 style = "bold cyan"
 
 # Node.js
 [nodejs]
-format = "via [$symbol($version )]($style)"
+format = "via [$symbol($version)]($style) "
 symbol = "⬢ "
 style = "bold green"
 
 # Rust
 [rust]
-format = "via [$symbol($version )]($style)"
+format = "via [$symbol($version)]($style) "
 symbol = "🦀 "
 style = "bold red"
 
@@ -102,14 +101,10 @@ style = "bold purple"
 
 # Python
 [python]
-format = "via [$symbol($version )]($style)"
+format = "via [$symbol($version)]($style) "
 symbol = "🐍 "
 style = "yellow bold"
 
-# Package
-[package]
-format = "is [$symbol$version]($style)"
-symbol = "📦 "
 
 # Devpod indicator
 [env_var.DEVPOD]
