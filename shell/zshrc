@@ -313,5 +313,10 @@ else
   PS1='%F{blue}%~%f %F{green}❯%f '
 fi
 
+# ===== Auto-start tmux in devpod =====
+if [[ -n "$DEVPOD" ]] && [[ -z "$TMUX" ]]; then
+  tmux new-session -A -s main
+fi
+
 # ===== Local Overrides =====
 [ -f ~/.zsh.local ] && source ~/.zsh.local
