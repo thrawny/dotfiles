@@ -9,6 +9,7 @@ $git_branch\
 $git_state\
 $git_status\
 $git_metrics\
+$env_var\
 $kubernetes\
 $docker_context\
 $python\
@@ -31,7 +32,7 @@ style = "bold cyan"
 [git_branch]
 symbol = " "
 style = "bold purple"
-format = "on [$symbol$branch]($style) "
+format = "on [$symbol$branch]($style)"
 
 # Git status
 [git_status]
@@ -109,3 +110,8 @@ style = "yellow bold"
 [package]
 format = "is [$symbol$version]($style) "
 symbol = "📦 "
+
+# Devpod indicator
+[env_var.DEVPOD]
+format = "in [📦 devpod]($style) "
+style = "bold blue"
