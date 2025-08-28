@@ -315,12 +315,9 @@ fi
 
 # ===== Auto-start tmux in devpod =====
 if [[ -n "$DEVPOD" ]] && [[ -z "$TMUX" ]]; then
-  tmux new-session -A -s main
-fi
-
-# Make exit detach from tmux in devpod sessions
-if [[ -n "$DEVPOD" ]] && [[ -n "$TMUX" ]]; then
-  alias exit='tmux detach'
+  # Attach to existing session or create new one, then exit shell when done
+  tmux attach-session -t main 2>/dev/null || tmux new-session -s main
+  exit
 fi
 
 # ===== Local Overrides =====
