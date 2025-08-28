@@ -25,7 +25,8 @@
       "mcp__linear__list_issue_labels",
       "Fetch",
       "WebFetch",
-      "WebSearch"
+      "WebSearch",
+      "Bash(git log:*)"
     ],
     "deny": [],
     "ask": [

@@ -39,23 +39,23 @@ FORMATTERS: dict[str, list[Checker]] = {
         {"name": "Type Checker", "command": ["basedpyright", "{file}"]},
     ],
     # Go
-    ".go": [
-        {
-            "name": "Go Linter",
-            "command": ["golangci-lint", "run", "--fast-only", "--fix", "{file}"],
-        },
-        {
-            "name": "Go Formatter",
-            "command": [
-                "golangci-lint",
-                "fmt",
-                "--enable=gofmt",
-                "--enable=gofumpt",
-                "--enable=gci",
-                "{file}",
-            ],
-        },
-    ],
+    # ".go": [
+    #     {
+    #         "name": "Go Linter",
+    #         "command": ["golangci-lint", "run", "--fast-only", "--fix", "{file}"],
+    #     },
+    #     {
+    #         "name": "Go Formatter",
+    #         "command": [
+    #             "golangci-lint",
+    #             "fmt",
+    #             "--enable=gofmt",
+    #             "--enable=gofumpt",
+    #             "--enable=gci",
+    #             "{file}",
+    #         ],
+    #     },
+    # ],
     # Add more languages here as needed:
     # ".rs": [["rustfmt", "{file}"]],
     # ".js": [["prettier", "--write", "{file}"]],
