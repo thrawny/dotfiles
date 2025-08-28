@@ -318,5 +318,10 @@ if [[ -n "$DEVPOD" ]] && [[ -z "$TMUX" ]]; then
   tmux new-session -A -s main
 fi
 
+# Make exit detach from tmux in devpod sessions
+if [[ -n "$DEVPOD" ]] && [[ -n "$TMUX" ]]; then
+  alias exit='tmux detach'
+fi
+
 # ===== Local Overrides =====
 [ -f ~/.zsh.local ] && source ~/.zsh.local
