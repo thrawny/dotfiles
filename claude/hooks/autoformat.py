@@ -44,7 +44,17 @@ FORMATTERS: dict[str, list[Checker]] = {
             "name": "Go Linter",
             "command": ["golangci-lint", "run", "--fast-only", "--fix", "{file}"],
         },
-        {"name": "Go Formatter", "command": ["golangci-lint", "fmt", "{file}"]},
+        {
+            "name": "Go Formatter",
+            "command": [
+                "golangci-lint",
+                "fmt",
+                "--enable=gofmt",
+                "--enable=gofumpt",
+                "--enable=gci",
+                "{file}",
+            ],
+        },
     ],
     # Add more languages here as needed:
     # ".rs": [["rustfmt", "{file}"]],
