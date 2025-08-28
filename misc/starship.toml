@@ -30,9 +30,9 @@ style = "bold cyan"
 
 # Git branch
 [git_branch]
-symbol = " "
+symbol = ""
 style = "bold purple"
-format = "on [$symbol$branch]($style)"
+format = "on [$symbol$branch]($style) "
 
 # Git status
 [git_status]
@@ -108,7 +108,7 @@ style = "yellow bold"
 
 # Package
 [package]
-format = "is [$symbol$version]($style) "
+format = "is [$symbol$version]($style)"
 symbol = "📦 "
 
 # Devpod indicator
