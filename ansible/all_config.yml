@@ -4,9 +4,9 @@
     dest: "{{ home_dir }}/.{{ item.name }}"
     src: "{{ dotfiles_dir }}/{{ item.dir|default('') }}{{ item.name }}"
   with_items:
-  - { "name": "vim" }
+  - { "name": "vim", "dir": "config/" }
   - { "name": "zshrc", "dir": "shell/" }
-  - { "name": "ideavimrc", "dir": "misc/" }
+  - { "name": "ideavimrc", "dir": "config/jetbrains/" }
   - { "name": "gitconfig", "dir": "git/" }
   - { "name": "gitignoreglobal", "dir": "git/" }
   - { "name": "tmux.conf", "dir": "shell/" }
@@ -15,7 +15,7 @@
 #   file:
 #     state: link
 #     dest: "{{ home_dir }}/.oh-my-zsh/custom/{{ item }}"
-#     src: "{{ dotfiles_dir }}/misc/{{ item }}"
+#     src: "{{ dotfiles_dir }}/config/themes/{{ item }}"
 #   with_items:
 #   - thrawny.zsh-theme
 
@@ -25,44 +25,34 @@
     state: directory
     recurse: yes
 
-- name: ~/.config/direnv is present
-  file:
-    path: "{{ home_dir }}/.config/direnv"
-    state: directory
-
-- name: direnvrc is symlinked to ~/.config/direnv/direnvrc
+- name: direnv config folder is symlinked
   file:
     state: link
-    dest: "{{ home_dir }}/.config/direnv/direnvrc"
-    src: "{{ dotfiles_dir }}/misc/direnvrc"
+    dest: "{{ home_dir }}/.config/direnv"
+    src: "{{ dotfiles_dir }}/config/direnv"
 
-- name: ~/.config/ghostty is present
-  file:
-    path: "{{ home_dir }}/.config/ghostty"
-    state: directory
-
-- name: ghostty is symlinked to ~/.config/ghostty/config
+- name: ghostty config folder is symlinked
   file:
     state: link
-    dest: "{{ home_dir }}/.config/ghostty/config"
-    src: "{{ dotfiles_dir }}/misc/ghostty-config"
+    dest: "{{ home_dir }}/.config/ghostty"
+    src: "{{ dotfiles_dir }}/config/ghostty"
 
-- name: starship.toml is symlinked to ~/.config/starship.toml
+- name: starship config folder is symlinked
   file:
     state: link
-    dest: "{{ home_dir }}/.config/starship.toml"
-    src: "{{ dotfiles_dir }}/misc/starship.toml"
+    dest: "{{ home_dir }}/.config/starship"
+    src: "{{ dotfiles_dir }}/config/starship"
 
-- name: neovim config
+- name: neovim config folder is symlinked
   file:
     state: link
     dest: "{{ home_dir }}/.config/nvim"
-    src: "{{ dotfiles_dir }}/nvim"
+    src: "{{ dotfiles_dir }}/config/nvim"
 
 - name: default npm packages
   file:
     path: "{{ home_dir }}/.default-npm-packages"
-    src: "{{ dotfiles_dir }}/misc/default-npm-packages"
+    src: "{{ dotfiles_dir }}/config/npm/default-packages"
     state: link
 
 - name: ~/.claude directory is present
@@ -94,25 +84,8 @@
     dest: "{{ home_dir }}/.claude/CLAUDE.md"
     src: "{{ dotfiles_dir }}/claude/CLAUDE-GLOBAL.md"
 
-- name: ~/.config/k9s directory is present
-  file:
-    path: "{{ home_dir }}/.config/k9s"
-    state: directory
-
-- name: k9s config.yaml is symlinked
+- name: k9s config folder is symlinked
   file:
     state: link
-    dest: "{{ home_dir }}/.config/k9s/config.yaml"
-    src: "{{ dotfiles_dir }}/k9s/config.yaml"
-
-- name: k9s views.yaml is symlinked
-  file:
-    state: link
-    dest: "{{ home_dir }}/.config/k9s/views.yaml"
-    src: "{{ dotfiles_dir }}/k9s/views.yaml"
-
-- name: k9s skins directory is symlinked
-  file:
-    state: link
-    dest: "{{ home_dir }}/.config/k9s/skins"
-    src: "{{ dotfiles_dir }}/k9s/skins"
+    dest: "{{ home_dir }}/.config/k9s"
+    src: "{{ dotfiles_dir }}/config/k9s"

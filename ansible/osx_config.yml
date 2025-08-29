@@ -9,7 +9,7 @@
   file:
     state: link
     dest: "{{ home_dir }}/Library/Application Support/Cursor/User/{{ item }}"
-    src: "{{ dotfiles_dir }}/cursor/{{ item }}"
+    src: "{{ dotfiles_dir }}/config/cursor/{{ item }}"
   with_items:
   - settings.json
   - keybindings.json
@@ -28,4 +28,4 @@
   file:
     state: link
     dest: "{{ home_dir }}/.aerospace.toml"
-    src: "{{ dotfiles_dir }}/aerospace/aerospace.toml"
+    src: "{{ dotfiles_dir }}/config/aerospace/aerospace.toml"

@@ -30,7 +30,8 @@
     ],
     "deny": [],
     "ask": [
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Bash(mv:*)"
     ],
     "defaultMode": "acceptEdits"
   },

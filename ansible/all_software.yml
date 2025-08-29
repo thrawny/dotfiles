@@ -11,13 +11,6 @@
     dest: "{{ home_dir }}/.local/share/zinit/zinit.git"
     force: yes
 
-# TODO: Remove after migration is complete
-# - name: "oh-my-zsh is present"
-#   git:
-#     repo: "git@github.com:ohmyzsh/ohmyzsh.git"
-#     dest: "{{ home_dir }}/.oh-my-zsh"
-#     accept_hostkey: yes
-
 - name: "zsh auto suggestions are present"
   git:
     repo: "https://github.com/zsh-users/zsh-autosuggestions"
