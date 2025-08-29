@@ -103,6 +103,23 @@ map("", "<space>P", '"*P', { noremap = true })
 -- vim.g.molokai_original = 1
 cmd("colorscheme molokai_old")
 
+-- Enable true colors and transparent background
+vim.opt.termguicolors = true
+vim.cmd([[
+  highlight Normal guibg=NONE ctermbg=NONE guifg=#E6E6E6 ctermfg=254
+  highlight NonText guibg=NONE ctermbg=NONE guifg=#E6E6E6 ctermfg=254
+  highlight LineNr guibg=NONE ctermbg=NONE guifg=#C0C0C0 ctermfg=250
+  highlight SignColumn guibg=NONE ctermbg=NONE
+  highlight EndOfBuffer guibg=NONE ctermbg=NONE guifg=#C0C0C0 ctermfg=250
+  
+  " Statusline/Powerline transparency
+  highlight StatusLine guibg=NONE ctermbg=NONE
+  highlight StatusLineNC guibg=NONE ctermbg=NONE
+  highlight TabLine guibg=NONE ctermbg=NONE
+  highlight TabLineFill guibg=NONE ctermbg=NONE
+  highlight TabLineSel guibg=NONE ctermbg=NONE
+]])
+
 -- vim.api.nvim_create_user_command("Format", function(args)
 -- 	local range = nil
 -- 	if args.count ~= -1 then

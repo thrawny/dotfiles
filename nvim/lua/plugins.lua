@@ -146,7 +146,43 @@ require("lazy").setup({
 -- })
 require("lualine").setup({
 	options = {
-		theme = "molokai",
+		theme = "auto",
+		section_separators = '',
+		component_separators = '',
+		globalstatus = true,
+		-- Molokai theme colors with transparent backgrounds
+		theme = {
+			normal = {
+				a = {bg = 'NONE', fg = '#66d9ef', gui = 'bold'},  -- cyan
+				b = {bg = 'NONE', fg = '#f92672'},                -- pink
+				c = {bg = 'NONE', fg = '#ef5939'},                -- orange
+			},
+			insert = {
+				a = {bg = 'NONE', fg = '#a6e22e', gui = 'bold'},  -- green
+				b = {bg = 'NONE', fg = '#f92672'},                -- pink
+				c = {bg = 'NONE', fg = '#ef5939'},                -- orange
+			},
+			visual = {
+				a = {bg = 'NONE', fg = '#e6db74', gui = 'bold'},  -- yellow
+				b = {bg = 'NONE', fg = '#f92672'},                -- pink
+				c = {bg = 'NONE', fg = '#ef5939'},                -- orange
+			},
+			replace = {
+				a = {bg = 'NONE', fg = '#ff0000', gui = 'bold'},  -- red
+				b = {bg = 'NONE', fg = '#f92672'},                -- pink
+				c = {bg = 'NONE', fg = '#ef5939'},                -- orange
+			},
+			command = {
+				a = {bg = 'NONE', fg = '#66d9ef', gui = 'bold'},  -- cyan
+				b = {bg = 'NONE', fg = '#f92672'},                -- pink
+				c = {bg = 'NONE', fg = '#ef5939'},                -- orange
+			},
+			inactive = {
+				a = {bg = 'NONE', fg = '#f92672', gui = 'bold'},  -- pink
+				b = {bg = 'NONE', fg = '#f8f8f2'},               -- white
+				c = {bg = 'NONE', fg = '#808080'},               -- gray
+			},
+		},
 	},
 })
 -- require("obsidian").setup({
