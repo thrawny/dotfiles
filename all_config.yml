@@ -93,3 +93,26 @@
     state: link
     dest: "{{ home_dir }}/.claude/CLAUDE.md"
     src: "{{ dotfiles_dir }}/claude/CLAUDE-GLOBAL.md"
+
+- name: ~/.config/k9s directory is present
+  file:
+    path: "{{ home_dir }}/.config/k9s"
+    state: directory
+
+- name: k9s config.yaml is symlinked
+  file:
+    state: link
+    dest: "{{ home_dir }}/.config/k9s/config.yaml"
+    src: "{{ dotfiles_dir }}/k9s/config.yaml"
+
+- name: k9s views.yaml is symlinked
+  file:
+    state: link
+    dest: "{{ home_dir }}/.config/k9s/views.yaml"
+    src: "{{ dotfiles_dir }}/k9s/views.yaml"
+
+- name: k9s skins directory is symlinked
+  file:
+    state: link
+    dest: "{{ home_dir }}/.config/k9s/skins"
+    src: "{{ dotfiles_dir }}/k9s/skins"

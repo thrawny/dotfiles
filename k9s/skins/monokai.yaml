@@ -1,0 +1,118 @@
+# -----------------------------------------------------------------------------
+# Monokai skin - matches Ghostty Molokai theme
+# -----------------------------------------------------------------------------
+
+# Styles matching Ghostty config and tmux status bar
+foreground: &foreground "#f0f0f0"
+background: &background "#1c1c1c"
+current_line: &current_line "#2d2a2e"
+selection: &selection "#49483e"
+comment: &comment "#808080"
+cyan: &cyan "#78dce8"
+green: &green "#a9dc76"
+orange: &orange "#fd971f"
+pink: &pink "#ff6188"
+purple: &purple "#ab9df2"
+red: &red "#ff6188"
+yellow: &yellow "#ffd866"
+white: &white "#fcfcfa"
+gray: &gray "#5c5c5c"
+
+# Skin...
+k9s:
+  # General K9s styles
+  body:
+    fgColor: *foreground
+    bgColor: *background
+    logoColor: *purple
+  # Command prompt styles
+  prompt:
+    fgColor: *foreground
+    bgColor: *background
+    suggestColor: *purple
+  # ClusterInfoView styles.
+  info:
+    fgColor: *pink
+    sectionColor: *foreground
+  # Dialog styles.
+  dialog:
+    fgColor: *foreground
+    bgColor: *current_line
+    buttonFgColor: *foreground
+    buttonBgColor: *purple
+    buttonFocusFgColor: *background
+    buttonFocusBgColor: *yellow
+    labelFgColor: *yellow
+    fieldFgColor: *foreground
+  frame:
+    # Borders styles.
+    border:
+      fgColor: *selection
+      focusColor: *purple
+    # MenuView attributes and styles.
+    menu:
+      fgColor: *foreground
+      keyColor: *pink
+      # Used for favorite namespaces
+      numKeyColor: *pink
+    # CrumbView attributes for history navigation.
+    crumbs:
+      fgColor: *foreground
+      bgColor: *current_line
+      activeColor: *yellow
+    # Resource status and update styles
+    status:
+      newColor: *cyan
+      modifyColor: *purple
+      addColor: *green
+      errorColor: *red
+      highlightColor: *yellow
+      killColor: *comment
+      completedColor: *comment
+    # Border title styles.
+    title:
+      fgColor: *foreground
+      bgColor: *current_line
+      highlightColor: *yellow
+      counterColor: *purple
+      filterColor: *pink
+  views:
+    # Charts skins...
+    charts:
+      bgColor: *background
+      defaultDialColors:
+        - *purple
+        - *pink
+      defaultChartColors:
+        - *purple
+        - *pink
+    # TableView attributes.
+    table:
+      fgColor: *foreground
+      bgColor: *background
+      # Header row styles.
+      header:
+        fgColor: *foreground
+        bgColor: *current_line
+        sorterColor: *cyan
+    # Xray view attributes.
+    xray:
+      fgColor: *foreground
+      bgColor: *background
+      cursorColor: *current_line
+      graphicColor: *purple
+      showIcons: false
+    # YAML info styles.
+    yaml:
+      keyColor: *pink
+      colonColor: *comment
+      valueColor: *foreground
+    # Logs styles.
+    logs:
+      fgColor: *foreground
+      bgColor: *background
+      indicator:
+        fgColor: *foreground
+        bgColor: *purple
+        toggleOnColor: *green
+        toggleOffColor: *comment
