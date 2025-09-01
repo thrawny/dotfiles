@@ -156,10 +156,29 @@ generate_session_name() {
       ;;
     go)
       # Go commands: "go run main.go" -> "go-main"
+      # "go run ./cmd/solis-s6-simulator/main.go" -> "go-solis-s6-simulator"
       if [[ "${cmd_words[1]}" == "run" ]]; then
-        local file="${cmd_words[2]##*/}"
-        file="${file%.go}"  # Remove .go extension
-        command_slug="go-${file}"
+        local file_path="${cmd_words[2]}"
+        
+        # If it's a path to main.go, extract the parent directory name
+        if [[ "$file_path" == *"/main.go" ]]; then
+          # Get the parent directory name (e.g., solis-s6-simulator from ./cmd/solis-s6-simulator/main.go)
+          local parent_dir="${file_path%/main.go}"
+          parent_dir="${parent_dir##*/}"  # Get just the directory name
+          
+          # If we got a meaningful directory name, use it
+          if [[ -n "$parent_dir" ]] && [[ "$parent_dir" != "." ]] && [[ "$parent_dir" != ".." ]]; then
+            command_slug="go-${parent_dir}"
+          else
+            # Fallback to just "go-main"
+            command_slug="go-main"
+          fi
+        else
+          # Not main.go, extract the base filename
+          local file="${file_path##*/}"
+          file="${file%.go}"  # Remove .go extension
+          command_slug="go-${file}"
+        fi
       else
         command_slug="go-${cmd_words[1]}"
       fi
