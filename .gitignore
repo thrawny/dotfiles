@@ -6,3 +6,6 @@ nvim/swap/*
 # uv virtual environment
 .venv/
 claude/devcontainer/claude.json
+
+config/k9s/clusters/*
+config/k9s/aliases.yaml

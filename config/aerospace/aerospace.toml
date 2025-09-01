@@ -201,13 +201,13 @@ if.app-id = 'com.jetbrains.goland'
 run = 'layout tiling'
 
 [[on-window-detected]]
-if.app-id = 'com.todesktop.230313mzl4w4u92'  # Cursor
+if.app-id = 'com.todesktop.230313mzl4w4u92' # Cursor
 run = 'layout tiling'
 
 # Browsers
-[[on-window-detected]]
-if.app-id = 'company.thebrowser.Browser'  # Arc
-run = 'layout tiling'
+# [[on-window-detected]]
+# if.app-id = 'company.thebrowser.Browser'  # Arc
+# run = 'layout tiling'
 
 # ============================================================================
 # FLOATING APPS - Move to workspace 1 with floating layout
@@ -219,11 +219,11 @@ if.app-id = 'com.microsoft.teams2'
 run = ['layout floating', 'move-node-to-workspace 1']
 
 [[on-window-detected]]
-if.app-id = 'com.tinyspeck.slackmacgap'  # Slack
+if.app-id = 'com.tinyspeck.slackmacgap'               # Slack
 run = ['layout floating', 'move-node-to-workspace 1']
 
 [[on-window-detected]]
-if.app-id = 'com.apple.MobileSMS'  # Messages
+if.app-id = 'com.apple.MobileSMS'                     # Messages
 run = ['layout floating', 'move-node-to-workspace 1']
 
 [[on-window-detected]]
@@ -249,7 +249,7 @@ if.app-id = 'app.mqttx'
 run = ['layout floating', 'move-node-to-workspace 1']
 
 [[on-window-detected]]
-if.app-id = 'com.postmanlabs.mac'  # Postman
+if.app-id = 'com.postmanlabs.mac'                     # Postman
 run = ['layout floating', 'move-node-to-workspace 1']
 
 [[on-window-detected]]
