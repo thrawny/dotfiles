@@ -25,7 +25,7 @@ main() {
     echo "Installing CLI commands globally..."
     uv tool install --editable .
     
-    uv run ansible-playbook main.yml
+    uv run ansible-playbook ansible/main.yml
 
     echo "Configuring git..."
     if [ -n "${GIT_USER:-}" ]; then
