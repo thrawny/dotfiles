@@ -37,11 +37,11 @@
     dest: "{{ home_dir }}/.config/ghostty"
     src: "{{ dotfiles_dir }}/config/ghostty"
 
-- name: starship config folder is symlinked
+- name: starship config is symlinked
   file:
     state: link
-    dest: "{{ home_dir }}/.config/starship"
-    src: "{{ dotfiles_dir }}/config/starship"
+    dest: "{{ home_dir }}/.config/starship.toml"
+    src: "{{ dotfiles_dir }}/config/starship/starship.toml"
 
 - name: neovim config folder is symlinked
   file:
