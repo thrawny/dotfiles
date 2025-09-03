@@ -37,6 +37,12 @@
     dest: "{{ home_dir }}/.config/ghostty"
     src: "{{ dotfiles_dir }}/config/ghostty"
 
+- name: codex config symlinked
+  file:
+    state: link
+    dest: "{{ home_dir }}/.codex/config.toml"
+    src: "{{ dotfiles_dir }}/config/codex/config.toml"
+
 - name: starship config is symlinked
   file:
     state: link

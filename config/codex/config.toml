@@ -1,0 +1,30 @@
+# Codex CLI configuration
+# This repository manages dotfiles via Ansible and symlinks.
+# Target path: ~/.config/codex/config.toml (symlink from repo)
+
+[core]
+# Preferred editor used by Codex for opening files
+editor = "nvim"
+# Default shell for spawned tasks
+shell = "zsh"
+
+[ui]
+# Theme preference: "auto", "light", or "dark"
+theme = "auto"
+
+# Uncomment and configure a default model/provider if applicable.
+# [models]
+# provider = "openai"      # e.g., "openai", "anthropic", "local"
+# model = ""               # e.g., "gpt-4o", "claude-3.5-sonnet", etc.
+
+# Add any project-specific settings below as needed.
+
+[projects."/Users/jonas/code/kanel-backend"]
+trust_level = "trusted"
+
+[projects."/Users/jonas/dotfiles"]
+trust_level = "trusted"
+
+[mcp_servers.context7]
+command = "npx"
+args = ["-y", "@upstash/context7-mcp"]
