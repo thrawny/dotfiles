@@ -1,6 +1,6 @@
 # Codex CLI configuration
 # This repository manages dotfiles via Ansible and symlinks.
-# Target path: ~/.config/codex/config.toml (symlink from repo)
+# Target path: ~/.codex/config.toml (symlink from repo)
 
 [core]
 # Preferred editor used by Codex for opening files
@@ -11,6 +11,10 @@ shell = "zsh"
 [ui]
 # Theme preference: "auto", "light", or "dark"
 theme = "auto"
+
+# Play a notification sound when Codex emits notifications (mirrors Claude's Glass.aiff)
+# Codex passes a JSON string as argv[1]; the script ignores it and plays the sound.
+notify = ["python3", "~/dotfiles/config/codex/notify.py"]
 
 # Uncomment and configure a default model/provider if applicable.
 # [models]

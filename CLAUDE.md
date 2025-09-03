@@ -16,9 +16,8 @@ This is a personal dotfiles repository that manages development environment conf
 
 ### Setup and Deployment
 - `ansible-playbook main.yml` - Deploy all configurations and software
-- `ansible-playbook main.yml --tags "osx"` - Deploy only macOS-specific configurations
-- `ansible-playbook main.yml --tags "ubuntu"` - Deploy only Ubuntu-specific configurations
-- When running the ansible playbook, run it with 'ansible-playbook main.yml'
+- When running the ansible playbook, run it with `ansible-playbook main.yml`.
+- Note: Tag-specific runs are not used; OS-specific tasks are selected automatically via Ansible facts (`when:` conditions).
 
 ### macOS Specific
 - `brew bundle --file=osx/Brewfile` - Install all Homebrew packages
@@ -33,7 +32,7 @@ This is a personal dotfiles repository that manages development environment conf
 ### Ansible Structure
 - `main.yml` - Main playbook that orchestrates all tasks
 - `all_config.yml` - Cross-platform configuration symlinks (vim, zsh, git, etc.)
-- `all_software.yml` - Cross-platform software installation (oh-my-zsh, plugins)
+- `all_software.yml` - Cross-platform software installation (zinit, tmux plugins)
 - `osx_config.yml` & `osx_software.yml` - macOS-specific configurations
 - `ubuntu_config.yml` & `ubuntu_software.yml` - Ubuntu-specific configurations
 
@@ -53,7 +52,7 @@ The repository uses symlinks to connect dotfiles to their target locations:
 - App configs → `~/.config/ghostty/config`, `~/.config/direnv/direnvrc`
 
 ### Development Environment
-- **Shell**: ZSH with oh-my-zsh and custom "thrawny" theme
+- **Shell**: ZSH using zinit (loads selected Oh My Zsh plugins via `OMZP::` snippets). Oh My Zsh itself is not installed.
 - **Editor**: Neovim with Lua configuration, telescope, and various plugins
 - **Terminal**: Support for both iTerm2 (macOS) and ghostty
 - **Package Management**: Homebrew (macOS), APT (Ubuntu), asdf for runtime versions, uv for Python

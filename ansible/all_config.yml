@@ -43,6 +43,13 @@
     dest: "{{ home_dir }}/.codex/config.toml"
     src: "{{ dotfiles_dir }}/config/codex/config.toml"
 
+# hack - claude commands symlinked to codex prompts - will see if this works well
+- name: claude commands symlinked to codex prompts
+  file:
+    state: link
+    dest: "{{ home_dir }}/.codex/prompts"
+    src: "{{ dotfiles_dir }}/claude/commands"
+
 - name: starship config is symlinked
   file:
     state: link

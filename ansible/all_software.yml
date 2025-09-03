@@ -11,11 +11,6 @@
     dest: "{{ home_dir }}/.local/share/zinit/zinit.git"
     force: yes
 
-- name: "zsh auto suggestions are present"
-  git:
-    repo: "https://github.com/zsh-users/zsh-autosuggestions"
-    dest: "{{ home_dir }}/.oh-my-zsh/custom/plugins/zsh-autosuggestions"
-
 # Tmux Plugin Manager
 - name: "Ensure tmux plugins directory exists"
   file:
