@@ -1,6 +1,6 @@
-# CLAUDE.md
+# Repository Guide
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This document provides guidance for working with code and automation in this repository.
 
 ## Repository Overview
 
