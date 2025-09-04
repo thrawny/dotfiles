@@ -13,8 +13,8 @@ shell = "zsh"
 theme = "auto"
 
 # Play a notification sound when Codex emits notifications (mirrors Claude's Glass.aiff)
-# Codex passes a JSON string as argv[1]; the script ignores it and plays the sound.
-notify = ["python3", "~/dotfiles/config/codex/notify.py"]
+# Codex appends a JSON payload as an extra argv; run via bash -lc so it's ignored.
+notify = ["notify"]
 
 # Uncomment and configure a default model/provider if applicable.
 # [models]
