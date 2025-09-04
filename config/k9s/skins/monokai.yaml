@@ -113,6 +113,6 @@ k9s:
       bgColor: *background
       indicator:
         fgColor: *foreground
-        bgColor: *purple
+        bgColor: *current_line
         toggleOnColor: *green
         toggleOffColor: *comment
