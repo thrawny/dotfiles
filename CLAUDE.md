@@ -1,85 +1,70 @@
-# Repository Guide
+# Repository Guide (Agent Focus)
 
-This document provides guidance for working with code and automation in this repository.
+This guide distills what an agent needs to know to make safe, precise code changes in this dotfiles repo. It emphasizes source-of-truth locations and symlink rules; system setup steps are included only when necessary for verification.
 
-## Repository Overview
+## Overview
 
-This is a personal dotfiles repository that manages development environment configuration across macOS and Ubuntu systems using Ansible. The setup automates the installation and configuration of development tools, shell environments, and application settings.
+This repository manages cross-platform dotfiles with Ansible. Source files live inside this repo; Ansible symlinks them into the home directory on target machines.
 
-## Key Commands
+## Agent Essentials
 
-### Python Environment Setup
-- `uv sync` - Install all Python dependencies (Ansible)
-- `uv add <package>` - Add new Python dependency
-- `uv remove <package>` - Remove Python dependency
-- Environment automatically activated via direnv when entering the directory
+- Source of truth: edit files in-repo only; Ansible handles symlinks on install.
+- Primary areas to edit: `shell/`, `git/`, `config/`, `ansible/`, `osx/`, `linux/`.
+- When adding a new config, create it under `config/` (or relevant dir) and add a symlink task in `ansible/all_config.yml` if it should appear in `$HOME`.
+- You generally do not need to run package managers (Homebrew/APT) or OS setup scripts to modify repo content.
 
-### Setup and Deployment
-- `ansible-playbook main.yml` - Deploy all configurations and software
-- When running the ansible playbook, run it with `ansible-playbook main.yml`.
-- Note: Tag-specific runs are not used; OS-specific tasks are selected automatically via Ansible facts (`when:` conditions).
+## Paths: Source → Target
 
-### macOS Specific
-- `brew bundle --file=osx/Brewfile` - Install all Homebrew packages
-- `./osx/setup.sh` - Configure macOS system defaults
-- `brew bundle cleanup --file=osx/Brewfile` - Remove packages not in Brewfile
+- Shell: `shell/zshrc` → `~/.zshrc`, `shell/tmux.conf` → `~/.tmux.conf`
+- Editors: `config/vim` → `~/.vim`, `config/nvim` → `~/.config/nvim`
+- Git: `git/gitconfig` → `~/.gitconfig`, `git/gitignoreglobal` → `~/.gitignoreglobal`
+- Apps: `config/ghostty` → `~/.config/ghostty`, `config/direnv` → `~/.config/direnv`
+- Extras: `config/starship/starship.toml` → `~/.config/starship.toml`, `config/k9s` → `~/.config/k9s`, `config/npm/default-packages` → `~/.default-npm-packages`
+- Codex/Claude: `config/codex/config.toml` → `~/.codex/config.toml`, `claude/commands` → `~/.codex/prompts` and `~/.claude/commands`, `claude/settings.json` → `~/.claude/settings.json`, `claude/agents` → `~/.claude/agents`, `claude/CLAUDE-GLOBAL.md` → `~/.claude/CLAUDE.md`
 
-### Git Repository Management
-- `git-cleanup-repo` - Clean up merged branches and prune obsolete tracking branches (custom script in bin/)
+Refer to `ansible/all_config.yml` for the authoritative symlink list.
 
-## Architecture
+## Ansible Structure
 
-### Ansible Structure
-- `main.yml` - Main playbook that orchestrates all tasks
-- `all_config.yml` - Cross-platform configuration symlinks (vim, zsh, git, etc.)
-- `all_software.yml` - Cross-platform software installation (zinit, tmux plugins)
-- `osx_config.yml` & `osx_software.yml` - macOS-specific configurations
-- `ubuntu_config.yml` & `ubuntu_software.yml` - Ubuntu-specific configurations
+- `ansible/main.yml` orchestrates all tasks.
+- Cross-platform: `ansible/all_config.yml`, `ansible/all_software.yml`.
+- Linux-wide: `ansible/linux_software.yml` (when `ansible_system == 'Linux'`).
+- Ubuntu-only: `ansible/ubuntu_software.yml`, `ansible/ubuntu_config.yml` (when `ansible_distribution == 'Ubuntu'`).
+- macOS-only: `ansible/osx_software.yml`, `ansible/osx_config.yml` (when `ansible_distribution == 'MacOSX'`).
 
-### Key Directories
-- `bin/` - Custom shell scripts and utilities
-- `git/` - Git configuration files (gitconfig, gitignoreglobal)
-- `nvim/` - Neovim configuration with Lua setup
-- `shell/` - Shell configuration (zshrc, tmux.conf)
-- `osx/` - macOS-specific files including Brewfiles and system defaults
-- `misc/` - Miscellaneous configs (ghostty, direnv, themes, etc.)
+## Common Agent Tasks
 
-### Configuration Management
-The repository uses symlinks to connect dotfiles to their target locations:
-- Shell configs → `~/.zshrc`, `~/.tmux.conf`
-- Editor configs → `~/.vim`, `~/.config/nvim`
-- Git configs → `~/.gitconfig`, `~/.gitignoreglobal`
-- App configs → `~/.config/ghostty/config`, `~/.config/direnv/direnvrc`
+- Update an existing dotfile: edit its source file in this repo (see Paths section). No immediate action is needed unless you want to re-run symlinks on a machine.
+- Add a new config file: place it under `config/` (or relevant dir) and add a corresponding `file` task in `ansible/all_config.yml` to create the symlink.
+- Modify shell aliases/functions: edit `shell/zshrc`.
+- Update Neovim/Vim configs: edit `config/nvim` or `config/vim`.
 
-### Development Environment
-- **Shell**: ZSH using zinit (loads selected Oh My Zsh plugins via `OMZP::` snippets). Oh My Zsh itself is not installed.
-- **Editor**: Neovim with Lua configuration, telescope, and various plugins
-- **Terminal**: Support for both iTerm2 (macOS) and ghostty
-- **Package Management**: Homebrew (macOS), APT (Ubuntu), asdf for runtime versions, uv for Python
-- **Version Control**: Git with custom aliases and cleanup scripts
-- **Python Environment**: Managed by uv with automatic activation via direnv
+## Verification (optional)
 
-## Important Aliases and Functions
+- Python env: `uv sync` installs Ansible locally; `.envrc` activates it via direnv.
+- Apply symlinks on a machine: `ansible-playbook ansible/main.yml`.
+  - OS-specific tasks are selected via Ansible facts (`when:` conditions); no tags are required.
 
-### Git Aliases
-- `gcam` - git add -A && git commit -m
-- `gcm` - git commit -m  
-- `gp` - git push --force-with-lease --force-if-includes
-- `gpo` - git push -u origin current_branch
-- `gcr` - git-cleanup-repo (clean merged branches)
+## Python Setup
 
-### Kubernetes/Docker
-- `k` - kubectl
-- `kt` - stern (log tailing)
-- `fig` - docker-compose
+- Tooling: uses `uv` for dependency management and `direnv` for auto-activation.
+  - Entering this directory activates the environment via `.envrc` (`layout uv`).
+  - If direnv is not enabled, run `uv sync` and then use `uv run …` or activate `.venv` manually.
+- Requirements: Python `>=3.12` (managed by `uv`).
+- Install dependencies: `uv sync` (add `--dev` to include dev tools like ruff/pyright/ansible-lint).
+- Add/remove deps: `uv add <pkg>`, `uv remove <pkg>`.
+- Project package: `claude_tools/` (module with small CLIs and helpers). Entrypoints are defined in `pyproject.toml`:
+  - `claude-work-timer` → `claude_tools.work_timer:cli_main`
+  - `claude-loop` → `claude_tools.simple_loop:cli_main`
+- Run scripts (without activating venv explicitly):
+  - `uv run claude-work-timer "refactor X" -d 1h`
+  - `uv run claude-loop "fix type errors" -d 30m -w 30s`
+  - Or module form: `uv run -m claude_tools.work_timer --help`
+- Notes:
+  - `config/codex/notify.py` is a small Python helper used by Codex notifications.
+  - These tools expect Claude/Codex to be installed/configured; they orchestrate workflows but are optional for editing files.
 
-### Development
-- `vim` - aliased to nvim
-- `cat` - aliased to bat with custom theme
-- `gotest` - golangci-lint fmt && golangci-lint run --fix && go test
+## Notes
 
-## Path Modifications
-Custom binaries are added from:
-- `$HOME/dotfiles/bin` - Custom scripts
-- `$HOME/.local/bin` - User-installed binaries
-- `$HOME/.claude/local` - Claude Code binaries
+- Repo directories of interest: `config/` (nvim, vim, ghostty, direnv, themes, codex, k9s, npm, starship), `shell/`, `git/`, `ansible/`, `osx/`, `linux/`, `claude/`, `claude_tools/`, `bin/`.
+- Shell convenience commands, package managers, and desktop apps are not required for typical agent edits, so are intentionally omitted here.
