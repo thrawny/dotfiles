@@ -18,6 +18,20 @@ import os
 import platform
 import subprocess
 import sys
+from datetime import datetime
+
+
+def _log_event(msg: str) -> None:
+    """Append a debug line to ~/.codex/notify-hook.log (best-effort)."""
+    try:
+        log_path = os.path.expanduser(os.environ.get("NOTIFY_LOG_FILE", "~/.codex/notify-hook.log"))
+        os.makedirs(os.path.dirname(log_path), exist_ok=True)
+        ts = datetime.now().isoformat(timespec="seconds")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{ts}] {msg}\n")
+    except Exception:
+        # Never fail the hook due to logging issues
+        pass
 
 
 def macos_notify() -> None:
@@ -33,6 +47,7 @@ def macos_notify() -> None:
 
 def main(argv: list[str]) -> int:
     system = platform.system()
+    _log_event(f"notify invoked (system={system}) argv={argv[1:]}")
     if system == "Darwin":
         macos_notify()
     # Linux and others: no-op

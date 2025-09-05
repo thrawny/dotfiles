@@ -115,6 +115,19 @@ zinit ice wait lucid
 zinit light zdharma-continuum/fast-syntax-highlighting
 
 # Auto suggestions (with vi-mode compatibility)
+# Make forward-word perform partial accept (next word) instead of full accept
+# Must be set before loading zsh-autosuggestions
+ZSH_AUTOSUGGEST_PARTIAL_ACCEPT_WIDGETS+=(
+  forward-word
+  emacs-forward-word
+  vi-forward-word
+)
+# Ensure these widgets are NOT treated as full-accept
+if typeset -p ZSH_AUTOSUGGEST_ACCEPT_WIDGETS >/dev/null 2>&1; then
+  ZSH_AUTOSUGGEST_ACCEPT_WIDGETS=(${ZSH_AUTOSUGGEST_ACCEPT_WIDGETS:#forward-word})
+  ZSH_AUTOSUGGEST_ACCEPT_WIDGETS=(${ZSH_AUTOSUGGEST_ACCEPT_WIDGETS:#emacs-forward-word})
+  ZSH_AUTOSUGGEST_ACCEPT_WIDGETS=(${ZSH_AUTOSUGGEST_ACCEPT_WIDGETS:#vi-forward-word})
+fi
 zinit ice wait lucid atload"!_zsh_autosuggest_start"
 zinit light zsh-users/zsh-autosuggestions
 
