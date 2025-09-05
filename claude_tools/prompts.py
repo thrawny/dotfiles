@@ -37,3 +37,26 @@ Wait for the agent to complete its analysis.""",
 Focus on making the code cleaner and easier to understand.
 After simplifying, ensure everything still works.""",
 }
+
+# System prompt to enable bounded progress snapshot memory.
+PROGRESS_SNAPSHOT_SYSTEM_PROMPT = """Use a bounded progress snapshot for memory at '{memory_file}'.
+If it exists, read it silently and internalize a brief digest.
+Assume the task remains in progress; do not state or imply completion.
+
+Focus your response on:
+1) what you changed this iteration,
+2) the current problem/failure with concrete evidence,
+3) a short prioritized next-actions list,
+4) any risks/unknowns.
+
+After responding, overwrite the file with a concise snapshot (<=200 lines) using this schema:
+End Goal: one line.
+Approach: brief plan.
+Steps Done (this iteration): short bullets.
+Current Problem/Failure: exact error/log or mismatch.
+Evidence: build/test status and simple metrics if available.
+Next Actions: prioritized, small, actionable bullets.
+Relevant Files: repo paths.
+Notes/Assumptions: optional context.
+Updated: ISO timestamp.
+"""

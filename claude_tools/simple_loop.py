@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import asyncclick as click
 from claude_code_sdk import ClaudeCodeOptions, query
+from .prompts import PROGRESS_SNAPSHOT_SYSTEM_PROMPT
 
 from .core import print_claude_response
 from .duration import DurationType
@@ -45,6 +46,11 @@ from .duration import DurationType
     type=str,
     help="Model to use (e.g., 'haiku', 'sonnet', 'opus')",
 )
+@click.option(
+    "--memory/--no-memory",
+    default=True,
+    help="Use progress.md snapshot memory between iterations (default: on)",
+)
 async def cli(
     task: str,
     duration: float,
@@ -53,6 +59,7 @@ async def cli(
     verbose: bool,
     force: bool,
     model: str | None,
+    memory: bool,
 ) -> None:
     """Run Claude Code in a simple loop for a specified duration.
 
@@ -78,11 +85,22 @@ async def cli(
     wait_seconds = int(wait * 3600)  # Convert hours to seconds
     click.echo(f"⏸️  Wait time between iterations: {wait_seconds}s")
     click.echo()
+    if memory:
+        click.echo("🧠 Memory: enabled → ./progress.md")
+    else:
+        click.echo("🧠 Memory: disabled")
+
+    # Prepare a lightweight system prompt to use progress.md as a bounded snapshot
+    memory_prompt = None
+    if memory:
+        mf = str(Path("./progress.md"))
+        memory_prompt = PROGRESS_SNAPSHOT_SYSTEM_PROMPT.format(memory_file=mf)
 
     options = ClaudeCodeOptions(
         cwd=str(cwd) if cwd else None,
         permission_mode="bypassPermissions" if force else None,
         model=model if model else None,
+        append_system_prompt=memory_prompt,
     )
 
     while datetime.now() < end_time:
