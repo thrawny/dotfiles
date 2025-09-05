@@ -37,6 +37,11 @@
     dest: "{{ home_dir }}/.config/ghostty"
     src: "{{ dotfiles_dir }}/config/ghostty"
 
+- name: ~/.codex directory is present
+  file:
+    path: "{{ home_dir }}/.codex"
+    state: directory
+
 - name: codex config symlinked
   file:
     state: link
