@@ -44,23 +44,23 @@ Then wait for the user's research query.
 4. **Wait for all sub-agents to complete and synthesize findings:**
 
    - IMPORTANT: Wait for ALL sub-agent tasks to complete before proceeding
-   - Compile all sub-agent results (both codebase and thoughts findings)
+   - Compile all sub-agent results (codebase findings and any docs/ or external notes)
    - Prioritize live codebase findings as primary source of truth
-   - Use thoughts/ findings as supplementary historical context
+   - Use docs/ or external notes as supplementary historical context
    - Connect findings across different components
    - Include specific file paths and line numbers for reference
-   - Verify all thoughts/ paths are correct (e.g., thoughts/allison/ not thoughts/shared/ for personal files)
+   - Verify referenced paths are correct for this repository
    - Highlight patterns, connections, and architectural decisions
    - Answer the user's specific questions with concrete evidence
 
 5. **Gather metadata for the research document:**
 
    - generate all relevant metadata
-   - Filename: `thoughts/shared/research/YYYY-MM-DD_HH-MM-SS_topic.md`
+   - Filename: `docs/research/YYYY-MM-DD_HH-MM-SS_topic.md`
 
 6. **Generate research document:**
 
-   - Use the metadata gathered in step 4
+   - Use the metadata gathered in step 5
    - Structure the document with YAML frontmatter followed by content:
 
      ```markdown
@@ -79,10 +79,10 @@ Then wait for the user's research query.
 
      # Research: [User's Question/Topic]
 
-     **Date**: [Current date and time with timezone from step 4]
+     **Date**: [Current date and time with timezone from step 5]
      **Researcher**: [Researcher name]
-     **Git Commit**: [Current commit hash from step 4]
-     **Branch**: [Current branch name from step 4]
+     **Git Commit**: [Current commit hash from step 5]
+     **Branch**: [Current branch name from step 5]
      **Repository**: [Repository name]
 
      ## Research Question
@@ -114,38 +114,29 @@ Then wait for the user's research query.
 
      [Patterns, conventions, and design decisions discovered]
 
-     ## Historical Context (from thoughts/)
+     ## Historical Context (optional)
 
-     [Relevant insights from thoughts/ directory with references]
+     [Relevant insights from docs/ or an external knowledge base, if configured]
 
-     - `thoughts/shared/something.md` - Historical decision about X
-     - `thoughts/local/notes.md` - Past exploration of Y
-       Note: Paths exclude "searchable/" even if found there
+     - `docs/decisions/something.md` - Historical decision about X
+     - External KB link - Past exploration of Y
 
      ## Related Research
 
-     [Links to other research documents in thoughts/shared/research/]
+     [Links to other research documents in docs/research/]
 
      ## Open Questions
 
      [Any areas that need further investigation]
      ```
 
-7. **Add GitHub permalinks (if applicable):**
-
-   - Check if on main branch or if commit is pushed: `git branch --show-current` and `git status`
-   - If on main/master or pushed, generate GitHub permalinks:
-     - Get repo info: `gh repo view --json owner,name`
-     - Create permalinks: `https://github.com/{owner}/{repo}/blob/{commit}/{file}#L{line}`
-   - Replace local file references with permalinks in the document
-
-8. **Sync and present findings:**
+7. **Sync and present findings:**
 
    - Present a concise summary of findings to the user
    - Include key file references for easy navigation
    - Ask if they have follow-up questions or need clarification
 
-9. **Handle follow-up questions:**
+8. **Handle follow-up questions:**
    - If the user has follow-up questions, append to the same research document
    - Update the frontmatter fields `last_updated` and `last_updated_by` to reflect the update
    - Add `last_updated_note: "Added follow-up research for [brief description]"` to frontmatter
@@ -157,30 +148,23 @@ Then wait for the user's research query.
 
 - Always use parallel Task agents to maximize efficiency and minimize context usage
 - Always run fresh codebase research - never rely solely on existing research documents
-- The thoughts/ directory provides historical context to supplement live findings
+- The docs/ directory or an external notes repo can provide historical context to supplement live findings
 - Focus on finding concrete file paths and line numbers for developer reference
 - Research documents should be self-contained with all necessary context
 - Each sub-agent prompt should be specific and focused on read-only operations
 - Consider cross-component connections and architectural patterns
 - Include temporal context (when the research was conducted)
-- Link to GitHub when possible for permanent references
+- Linking to GitHub is optional; local paths are acceptable
 - Keep the main agent focused on synthesis, not deep file reading
 - Encourage sub-agents to find examples and usage patterns, not just definitions
-- Explore all of thoughts/ directory, not just research subdirectory
+- Explore relevant docs/ directories, not just research
 - **File reading**: Always read mentioned files FULLY (no limit/offset) before spawning sub-tasks
 - **Critical ordering**: Follow the numbered steps exactly
   - ALWAYS read mentioned files first before spawning sub-tasks (step 1)
   - ALWAYS wait for all sub-agents to complete before synthesizing (step 4)
   - ALWAYS gather metadata before writing the document (step 5 before step 6)
   - NEVER write the research document with placeholder values
-- **Path handling**: The thoughts/searchable/ directory contains hard links for searching
-  - Always document paths by removing ONLY "searchable/" - preserve all other subdirectories
-  - Examples of correct transformations:
-    - `thoughts/searchable/allison/old_stuff/notes.md` → `thoughts/allison/old_stuff/notes.md`
-    - `thoughts/searchable/shared/prs/123.md` → `thoughts/shared/prs/123.md`
-    - `thoughts/searchable/global/shared/templates.md` → `thoughts/global/shared/templates.md`
-  - NEVER change allison/ to shared/ or vice versa - preserve the exact directory structure
-  - This ensures paths are correct for editing and navigation
+ 
 - **Frontmatter consistency**:
   - Always include frontmatter at the beginning of research documents
   - Keep frontmatter fields consistent across all research documents

@@ -24,8 +24,8 @@ Please provide:
 
 I'll analyze this information and work with you to create a comprehensive plan.
 
-Tip: You can also invoke this command with a ticket file directly: `/create_plan thoughts/allison/tickets/eng_1234.md`
-For deeper analysis, try: `/create_plan think deeply about thoughts/allison/tickets/eng_1234.md`
+Tip: You can also invoke this command with a ticket file directly: `/create_plan path/to/ticket.md`
+For deeper analysis, try: `/create_plan think deeply about path/to/ticket.md`
 ```
 
 Then wait for the user's input.
@@ -36,7 +36,7 @@ Then wait for the user's input.
 
 1. **Read all mentioned files immediately and FULLY**:
 
-   - Ticket files (e.g., `thoughts/allison/tickets/eng_1234.md`)
+   - Ticket files (e.g., `path/to/ticket.md`)
    - Research documents
    - Related implementation plans
    - Any JSON/data files mentioned
@@ -45,14 +45,12 @@ Then wait for the user's input.
    - **NEVER** read files partially - if a file is mentioned, read it completely
 
 2. **Spawn initial research tasks to gather context**:
-   Before asking the user any questions, use specialized agents to research in parallel:
+   Before asking the user any questions, run targeted research in parallel when available:
 
-   - Use the **codebase-locator** agent to find all files related to the ticket/task
-   - Use the **codebase-analyzer** agent to understand how the current implementation works
-   - If relevant, use the **thoughts-locator** agent to find any existing thoughts documents about this feature
-   - If a Linear ticket is mentioned, use the **linear-ticket-reader** agent to get full details
+   - Use available research agents (e.g., software-research-analyst) and/or direct code search
+   - Focus searches on likely components, configs, tests, and integration points
 
-   These agents will:
+   These efforts should:
 
    - Find relevant source files, configs, and tests
    - Trace data flow and key functions
@@ -100,29 +98,14 @@ After getting initial clarifications:
    - Read the specific files/directories they mention
    - Only proceed once you've verified the facts yourself
 
-2. **Create a research todo list** using TodoWrite to track exploration tasks
+2. **Create a research todo list** to track exploration tasks
 
 3. **Spawn parallel sub-tasks for comprehensive research**:
 
-   - Create multiple Task agents to research different aspects concurrently
-   - Use the right agent for each type of research:
+   - Create multiple focused tasks to research different aspects concurrently (if supported)
+   - Use research agents you have (e.g., software-research-analyst) for deeper investigation
 
-   **For deeper investigation:**
-
-   - **codebase-locator** - To find more specific files (e.g., "find all files that handle [specific component]")
-   - **codebase-analyzer** - To understand implementation details (e.g., "analyze how [system] works")
-   - **codebase-pattern-finder** - To find similar features we can model after
-
-   **For historical context:**
-
-   - **thoughts-locator** - To find any research, plans, or decisions about this area
-   - **thoughts-analyzer** - To extract key insights from the most relevant documents
-
-   **For related tickets:**
-
-   - **linear-searcher** - To find similar issues or past implementations
-
-   Each agent knows how to:
+   Each task should:
 
    - Find the right files and code patterns
    - Identify conventions and patterns to follow
@@ -178,7 +161,7 @@ Once aligned on approach:
 
 After structure approval:
 
-1. **Write the plan** to `thoughts/shared/plans/{descriptive_name}.md`
+1. **Write the plan** to `docs/plans/{descriptive_name}.md`
 2. **Use this template structure**:
 
 ````markdown
@@ -280,22 +263,19 @@ After structure approval:
 
 ## References
 
-- Original ticket: `thoughts/allison/tickets/eng_XXXX.md`
-- Related research: `thoughts/shared/research/[relevant].md`
+- Original ticket: `[path/to/ticket.md]`
+- Related research: `docs/research/[relevant].md`
 - Similar implementation: `[file:line]`
 
 ```
 
-### Step 5: Sync and Review
+### Step 5: Review
 
-1. **Sync the thoughts directory**:
-   - This ensures the plan is properly indexed and available
-
-2. **Present the draft plan location**:
+1. **Present the draft plan location**:
 ```
 
 I've created the initial implementation plan at:
-`thoughts/shared/plans/[filename].md`
+`docs/plans/[filename].md`
 
 Please review it and let me know:
 
@@ -306,13 +286,13 @@ Please review it and let me know:
 
 ````
 
-3. **Iterate based on feedback** - be ready to:
+2. **Iterate based on feedback** - be ready to:
 - Add missing phases
 - Adjust technical approach
 - Clarify success criteria (both automated and manual)
 - Add/remove scope items
 
-4. **Continue refining** until the user is satisfied
+3. **Continue refining** until the user is satisfied
 
 ## Important Guidelines
 
@@ -341,7 +321,7 @@ Please review it and let me know:
 - Include "what we're NOT doing"
 
 5. **Track Progress**:
-- Use TodoWrite to track planning tasks
+- Track planning tasks in your todo list
 - Update todos as you complete research
 - Mark planning tasks complete when done
 
@@ -449,7 +429,7 @@ tasks = [
 User: /implementation_plan
 Assistant: I'll help you create a detailed implementation plan...
 
-User: We need to add parent-child tracking for Claude sub-tasks. See thoughts/allison/tickets/eng_1478.md
+User: We need to add parent-child tracking for Claude sub-tasks. See path/to/ticket.md
 Assistant: Let me read that ticket file completely first...
 
 [Reads file fully]
