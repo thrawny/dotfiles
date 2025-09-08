@@ -175,6 +175,8 @@ bindkey ^F forward-word
 bindkey ^f forward-word
 
 # ===== Aliases =====
+alias h='history'
+alias l='ls -lFh'
 alias pi="pip install -r requirements.txt"
 alias pc="pip-compile"
 alias fig="docker-compose"
