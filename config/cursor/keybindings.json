@@ -223,11 +223,6 @@
     "when": "editorTextFocus && editorLangId == 'sql'"
   },
   {
-    "key": "cmd+enter",
-    "command": "pgsql.runQuery",
-    "when": "editorTextFocus && editorLangId == 'sql'"
-  },
-  {
     "key": "shift+enter",
     "command": "-pgsql.runQuery",
     "when": "editorTextFocus && editorLangId == 'sql'"
@@ -240,5 +235,23 @@
     "key": "shift+cmd+b",
     "command": "-workbench.action.tasks.build",
     "when": "taskCommandsRegistered"
+  },
+  {
+    "key": "cmd+0",
+    "command": "workbench.action.toggleSidebarVisibility"
+  },
+  {
+    "key": "cmd+0",
+    "command": "-workbench.action.focusSideBar"
+  },
+  {
+    "key": "shift+enter",
+    "command": "pgsql.runCurrentStatement",
+    "when": "editorTextFocus && editorLangId == 'sql'"
+  },
+  {
+    "key": "shift+option+enter",
+    "command": "-pgsql.runQuery",
+    "when": "editorTextFocus && editorLangId == 'sql'"
   }
 ]

@@ -14,6 +14,12 @@
   smudge = git-lfs smudge -- %f
   process = git-lfs filter-process
   required = true
+[filter "claude-settings"]
+  clean = jq 'del(.model)'
+  smudge = cat
+[filter "cursor-settings"]
+  clean = jq --arg a pgsql.serverGroups --arg b pgsql.connections 'del(.[$a], .[$b])'
+  smudge = cat
 [core]
   pager = less -F -X
   excludesfile = ~/.gitignoreglobal
