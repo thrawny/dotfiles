@@ -7,12 +7,7 @@
   - include_tasks: all_software.yml
   - include_tasks: linux_software.yml
     when: ansible_system == 'Linux'
-  - include_tasks: ubuntu_software.yml
-    when: ansible_distribution == 'Ubuntu'
-  - include_tasks: ubuntu_config.yml
-    when: ansible_distribution == 'Ubuntu'
   - include_tasks: osx_config.yml
     when: ansible_distribution == 'MacOSX'
   - include_tasks: osx_software.yml
     when: ansible_distribution == 'MacOSX'
-  - include_tasks: fonts.yml

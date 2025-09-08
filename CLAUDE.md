@@ -9,7 +9,7 @@ This repository manages cross-platform dotfiles with Ansible. Source files live 
 ## Agent Essentials
 
 - Source of truth: edit files in-repo only; Ansible handles symlinks on install.
-- Primary areas to edit: `shell/`, `git/`, `config/`, `ansible/`, `osx/`, `linux/`.
+- Primary areas to edit: `shell/`, `git/`, `config/`, `ansible/`, `osx/`.
 - When adding a new config, create it under `config/` (or relevant dir) and add a symlink task in `ansible/all_config.yml` if it should appear in `$HOME`.
 - You generally do not need to run package managers (Homebrew/APT) or OS setup scripts to modify repo content.
 
@@ -29,7 +29,6 @@ Refer to `ansible/all_config.yml` for the authoritative symlink list.
 - `ansible/main.yml` orchestrates all tasks.
 - Cross-platform: `ansible/all_config.yml`, `ansible/all_software.yml`.
 - Linux-wide: `ansible/linux_software.yml` (when `ansible_system == 'Linux'`).
-- Ubuntu-only: `ansible/ubuntu_software.yml`, `ansible/ubuntu_config.yml` (when `ansible_distribution == 'Ubuntu'`).
 - macOS-only: `ansible/osx_software.yml`, `ansible/osx_config.yml` (when `ansible_distribution == 'MacOSX'`).
 
 ## Common Agent Tasks
@@ -66,5 +65,5 @@ Refer to `ansible/all_config.yml` for the authoritative symlink list.
 
 ## Notes
 
-- Repo directories of interest: `config/` (nvim, vim, ghostty, direnv, themes, codex, claude, k9s, npm, starship, zsh, tmux, git), `ansible/`, `osx/`, `linux/`, `claude_tools/`, `bin/`.
+- Repo directories of interest: `config/` (nvim, vim, ghostty, direnv, themes, codex, claude, k9s, npm, starship, zsh, tmux, git), `ansible/`, `osx/`, `claude_tools/`, `bin/`.
 - Shell convenience commands, package managers, and desktop apps are not required for typical agent edits, so are intentionally omitted here.

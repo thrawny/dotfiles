@@ -1,8 +1,0 @@
-# `export GDK_SCALE=2
-
-setxkbmap -option caps:swapescape
-
-xmodmap -e 'keycode 94 = asciitilde asciitilde'
-
-# key delay / repeat
-xset r rate 180 25

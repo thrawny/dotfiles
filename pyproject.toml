@@ -1,7 +1,7 @@
 [project]
 name = "dotfiles"
 version = "0.1.0"
-description = "Personal dotfiles repository with Ansible automation for macOS and Ubuntu"
+description = "Personal dotfiles repository with Ansible automation for macOS and Linux"
 requires-python = ">=3.12"
 dependencies = [
     "ansible>=10.0.0",
@@ -31,7 +31,7 @@ dev-dependencies = [
 ]
 
 [tool.basedpyright]
-exclude = [".venv", "venv", "__pycache__", ".git", "linux/i3_scripts"]
+exclude = [".venv", "venv", "__pycache__", ".git"]
 venvPath = "."
 venv = ".venv"
 reportExplicitAny = false  # Allow explicit Any types for dynamic data
