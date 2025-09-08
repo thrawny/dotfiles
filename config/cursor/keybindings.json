@@ -245,13 +245,13 @@
     "command": "-workbench.action.focusSideBar"
   },
   {
-    "key": "shift+enter",
+    "key": "cmd+enter",
     "command": "pgsql.runCurrentStatement",
     "when": "editorTextFocus && editorLangId == 'sql'"
   },
   {
-    "key": "shift+option+enter",
-    "command": "-pgsql.runQuery",
+    "key": "shift+alt+enter",
+    "command": "pgsql.runQuery",
     "when": "editorTextFocus && editorLangId == 'sql'"
   }
 ]
