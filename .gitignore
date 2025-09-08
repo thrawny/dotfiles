@@ -1,11 +1,8 @@
 *.lock.json
-nvim/undo/*
-nvim/backup/*
-nvim/swap/*
 
-# uv virtual environment
-.venv/
-claude/devcontainer/claude.json
+config/nvim/undo/*
+config/nvim/backup/*
+config/nvim/swap/*
 
 config/k9s/clusters/*
 config/k9s/aliases.yaml

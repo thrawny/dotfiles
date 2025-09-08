@@ -5,11 +5,11 @@
     src: "{{ dotfiles_dir }}/{{ item.dir|default('') }}{{ item.name }}"
   with_items:
   - { "name": "vim", "dir": "config/" }
-  - { "name": "zshrc", "dir": "shell/" }
+  - { "name": "zshrc", "dir": "config/zsh/" }
   - { "name": "ideavimrc", "dir": "config/jetbrains/" }
-  - { "name": "gitconfig", "dir": "git/" }
-  - { "name": "gitignoreglobal", "dir": "git/" }
-  - { "name": "tmux.conf", "dir": "shell/" }
+  - { "name": "gitconfig", "dir": "config/git/" }
+  - { "name": "gitignoreglobal", "dir": "config/git/" }
+  - { "name": "tmux.conf", "dir": "config/tmux/" }
 
 # - name: "custom zsh theme is symlinked to .oh-my-zsh/custom"
 #   file:
