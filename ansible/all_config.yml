@@ -48,12 +48,11 @@
     dest: "{{ home_dir }}/.codex/config.toml"
     src: "{{ dotfiles_dir }}/config/codex/config.toml"
 
-# hack - claude commands symlinked to codex prompts - will see if this works well
 - name: codex prompts directory is symlinked
   file:
     state: link
     dest: "{{ home_dir }}/.codex/prompts"
-    src: "{{ dotfiles_dir }}/codex/prompts"
+    src: "{{ dotfiles_dir }}/config/codex/prompts"
 
 - name: starship config is symlinked
   file:
@@ -82,25 +81,25 @@
   file:
     state: link
     dest: "{{ home_dir }}/.claude/commands"
-    src: "{{ dotfiles_dir }}/claude/commands"
+    src: "{{ dotfiles_dir }}/config/claude/commands"
 
 - name: claude settings.json is symlinked
   file:
     state: link
     dest: "{{ home_dir }}/.claude/settings.json"
-    src: "{{ dotfiles_dir }}/claude/settings.json"
+    src: "{{ dotfiles_dir }}/config/claude/settings.json"
 
 - name: claude agents directory is symlinked
   file:
     state: link
     dest: "{{ home_dir }}/.claude/agents"
-    src: "{{ dotfiles_dir }}/claude/agents"
+    src: "{{ dotfiles_dir }}/config/claude/agents"
 
 - name: claude CLAUDE.md is symlinked
   file:
     state: link
     dest: "{{ home_dir }}/.claude/CLAUDE.md"
-    src: "{{ dotfiles_dir }}/claude/CLAUDE-GLOBAL.md"
+    src: "{{ dotfiles_dir }}/config/claude/CLAUDE-GLOBAL.md"
 
 - name: k9s config folder is symlinked
   file:

@@ -6,7 +6,7 @@ description: Template for creating new Claude commands - generates a complete co
 
 ## Context
 
-- If in dotfiles repo, create command in `claude/commands/`
+- If in dotfiles repo, create command in `config/claude/commands/`
 - If in other repo, create command in `.claude/commands/<command-name>.md`
 - Use kebab-case for command names (e.g., `my-command.md`)
 

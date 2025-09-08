@@ -18,7 +18,7 @@ Make sure to change your path to your actual script.
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/dotfiles/claude/hooks/bash_command.py"
+            "command": "python3 ~/dotfiles/config/claude/hooks/bash_command.py"
           }
         ]
       }
