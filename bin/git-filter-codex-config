@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Git clean filter for config/codex/config.toml
+# Outputs everything up to (and including) the sentinel line,
+# dropping any content below it in the cleaned version.
+
+awk 'x{next} {print} /^# *@local-only-below/ {x=1}'
+

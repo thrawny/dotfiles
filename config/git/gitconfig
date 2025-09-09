@@ -20,6 +20,10 @@
 [filter "cursor-settings"]
   clean = jq --arg a pgsql.serverGroups --arg b pgsql.connections 'del(.[$a], .[$b])'
   smudge = cat
+[filter "codex-config"]
+  clean = ./bin/git-filter-codex-config
+  smudge = cat
+  required = true
 [core]
   pager = less -F -X
   excludesfile = ~/.gitignoreglobal

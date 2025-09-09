@@ -1,2 +1,3 @@
 config/claude/settings.json filter=claude-settings
 config/cursor/settings.json filter=cursor-settings
+config/codex/config.toml filter=codex-config
