@@ -1,24 +1,6 @@
-# Codex CLI configuration
-# This repository manages dotfiles via Ansible and symlinks.
-# Target path: ~/.codex/config.toml (symlink from repo)
+editor = "cursor"
 
-[core]
-# Preferred editor used by Codex for opening files
-editor = "nvim"
-# Default shell for spawned tasks
-shell = "zsh"
-
-[ui]
-# Theme preference: "auto", "light", or "dark"
-theme = "auto"
-
-
-# Uncomment and configure a default model/provider if applicable.
-# [models]
-# provider = "openai"      # e.g., "openai", "anthropic", "local"
-# model = ""               # e.g., "gpt-4o", "claude-3.5-sonnet", etc.
-
-# Add any project-specific settings below as needed.
+notify = ["notify"]
 
 [mcp_servers.context7]
 command = "npx"

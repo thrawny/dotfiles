@@ -6,3 +6,7 @@ config/nvim/swap/*
 
 config/k9s/clusters/*
 config/k9s/aliases.yaml
+
+config/codex/*
+!config/codex/config.toml
+!config/codex/prompts

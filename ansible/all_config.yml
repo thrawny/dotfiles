@@ -37,22 +37,11 @@
     dest: "{{ home_dir }}/.config/ghostty"
     src: "{{ dotfiles_dir }}/config/ghostty"
 
-- name: ~/.codex directory is present
-  file:
-    path: "{{ home_dir }}/.codex"
-    state: directory
-
-- name: codex config symlinked
+- name: codex folder is symlinked
   file:
     state: link
-    dest: "{{ home_dir }}/.codex/config.toml"
-    src: "{{ dotfiles_dir }}/config/codex/config.toml"
-
-- name: codex prompts directory is symlinked
-  file:
-    state: link
-    dest: "{{ home_dir }}/.codex/prompts"
-    src: "{{ dotfiles_dir }}/config/codex/prompts"
+    dest: "{{ home_dir }}/.codex"
+    src: "{{ dotfiles_dir }}/config/codex"
 
 - name: starship config is symlinked
   file:
