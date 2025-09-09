@@ -51,6 +51,11 @@ if type brew &>/dev/null; then
   FPATH=$(brew --prefix)/share/zsh/site-functions:$FPATH
 fi
 
+# Activate mise shims if installed (rootless runtimes)
+if command -v mise &>/dev/null; then
+  eval "$(mise activate zsh)"
+fi
+
 # ===== Zinit Annexes =====
 zinit light-mode for \
     zdharma-continuum/zinit-annex-bin-gem-node \
