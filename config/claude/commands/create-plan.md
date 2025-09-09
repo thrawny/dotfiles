@@ -47,12 +47,13 @@ Then wait for the user's input.
 2. **Spawn initial research tasks to gather context**:
    Before asking the user any questions, run targeted research in parallel when available:
 
-   - Use available research agents (e.g., software-research-analyst) and/or direct code search
-   - Focus searches on likely components, configs, tests, and integration points
+   - Use the **codebase-locator** agent to find all files related to the ticket/task
+   - Use the **codebase-analyzer** agent to understand how the current implementation works
 
-   These efforts should:
+   These agents will:
 
    - Find relevant source files, configs, and tests
+   - Identify the specific directories to focus on
    - Trace data flow and key functions
    - Return detailed explanations with file:line references
 

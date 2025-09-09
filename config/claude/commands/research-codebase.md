@@ -32,6 +32,13 @@ Then wait for the user's research query.
 3. **Spawn parallel sub-agent tasks for comprehensive research:**
 
    - Create multiple Task agents to research different aspects concurrently
+   - We now have specialized agents that know how to do specific research tasks:
+
+   **For codebase research:**
+
+   - Use the **codebase-locator** agent to find WHERE files and components live
+   - Use the **codebase-analyzer** agent to understand HOW specific code works
+   - Use the **codebase-pattern-finder** agent if you need examples of similar implementations
 
    The key is to use these agents intelligently:
 
@@ -160,11 +167,12 @@ Then wait for the user's research query.
 - Explore relevant docs/ directories, not just research
 - **File reading**: Always read mentioned files FULLY (no limit/offset) before spawning sub-tasks
 - **Critical ordering**: Follow the numbered steps exactly
+
   - ALWAYS read mentioned files first before spawning sub-tasks (step 1)
   - ALWAYS wait for all sub-agents to complete before synthesizing (step 4)
   - ALWAYS gather metadata before writing the document (step 5 before step 6)
   - NEVER write the research document with placeholder values
- 
+
 - **Frontmatter consistency**:
   - Always include frontmatter at the beginning of research documents
   - Keep frontmatter fields consistent across all research documents
