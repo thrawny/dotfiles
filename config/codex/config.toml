@@ -12,9 +12,6 @@ shell = "zsh"
 # Theme preference: "auto", "light", or "dark"
 theme = "auto"
 
-# Play a notification sound when Codex emits notifications
-# Direct approach: call Python with absolute paths to avoid PATH/shell expansion issues.
-notify = ["/usr/bin/python3", "/Users/jonas/dotfiles/bin/notify"]
 
 # Uncomment and configure a default model/provider if applicable.
 # [models]
