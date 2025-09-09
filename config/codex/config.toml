@@ -23,12 +23,6 @@ notify = ["/usr/bin/python3", "/Users/jonas/dotfiles/bin/notify"]
 
 # Add any project-specific settings below as needed.
 
-[projects."/Users/jonas/code/kanel-backend"]
-trust_level = "trusted"
-
-[projects."/Users/jonas/dotfiles"]
-trust_level = "trusted"
-
 [mcp_servers.context7]
 command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
