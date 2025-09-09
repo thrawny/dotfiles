@@ -32,3 +32,5 @@ trust_level = "trusted"
 [mcp_servers.context7]
 command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
+
+# @local-only-below
