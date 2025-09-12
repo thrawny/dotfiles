@@ -92,6 +92,20 @@ setup_codex_cli() {
   # No additional config writes here; Ansible handles ~/.codex via ansible/all_config.yml
 }
 
+prime_zinit() {
+  # Warm zinit and plugin caches so first SSH is fast
+  if command -v zsh &>/dev/null; then
+    echo "Priming zinit (installing manager + plugins)..."
+    # Ensure ~/.zshrc is in place before this point (ansible has run)
+    # Suppress devpod tmux auto-start and run interactive zsh to trigger zinit
+    DEVPOD= ZDOTDIR="$HOME" zsh -i -c 'true' || true
+    # Run an explicit update to fetch any turbo/deferred plugins in parallel
+    DEVPOD= ZDOTDIR="$HOME" zsh -i -c 'zinit update --parallel || true' || true
+  else
+    echo "Skipping zinit priming: zsh not found"
+  fi
+}
+
 main() {
   ensure_uv
   ensure_mise
@@ -115,6 +129,9 @@ main() {
 
   # Apply dotfile symlinks and other setup
   uv run ansible-playbook ansible/main.yml
+
+  # Pre-download zinit and all declared plugins to avoid first-login fetch
+  prime_zinit
 
   # Optional: install Claude Code CLI and setup config from env
   setup_claude_code_cli
