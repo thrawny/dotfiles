@@ -3,9 +3,7 @@ set -euo pipefail
 
 # Warn if local UI-managed settings differ from their example templates,
 # ignoring specific, known-local fields.
-# Non-blocking by default. Set DOTFILES_STRICT_HOOKS=1 to block on diff.
-
-strict_mode=${DOTFILES_STRICT_HOOKS:-0}
+# Warn-only: this hook never blocks commits.
 
 have_jq=1
 command -v jq >/dev/null 2>&1 || have_jq=0
@@ -25,14 +23,13 @@ warn_diff() {
       diff -u <(jq -S "$jq_filter" "$example") <(jq -S "$jq_filter" "$real") || true
       echo >&2
       echo "Consider updating the example with non-secret defaults. Known-local fields are ignored in this check." >&2
-      echo "Set DOTFILES_STRICT_HOOKS=1 to block commits when differences exist." >&2
-      [ "$strict_mode" = "1" ] && exit 1
+      : # warn only; never block
     fi
   else
     if ! diff -u "$example" "$real" >/dev/null 2>&1; then
       echo "[dotfiles hook] Detected local changes in $name (jq not found; raw diff, cannot ignore fields):" >&2
       diff -u "$example" "$real" || true
-      [ "$strict_mode" = "1" ] && exit 1
+      : # warn only; never block
     fi
   fi
 }
@@ -64,7 +61,7 @@ warn_diff_codex() {
     echo "[dotfiles hook] Codex base differs from example (comparing only lines above sentinel):" >&2
     diff -u <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$example") \
             <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$real") || true
-    [ "$strict_mode" = "1" ] && exit 1
+    : # warn only; never block
   fi
 }
 
