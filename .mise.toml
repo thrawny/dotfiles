@@ -1,0 +1,5 @@
+[settings]
+# Silence deprecation warning by explicitly enabling idiomatic version files
+# for Python (this repo has a .python-version).
+idiomatic_version_file_enable_tools = ["python"]
+

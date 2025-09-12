@@ -77,16 +77,6 @@ setup_codex_cli() {
     echo "Skipping Codex CLI install: node not found"
   fi
 
-  # Support an env var similar to CLAUDE_CODE_CREDENTIALS, but without writing files.
-  # If a Codex-specific key is provided, expose it as OPENAI_API_KEY for the codex CLI.
-  if [[ -n "${CODEX_OPENAI_API_KEY:-}" && -z "${OPENAI_API_KEY:-}" ]]; then
-    export OPENAI_API_KEY="${CODEX_OPENAI_API_KEY}"
-    echo "Set OPENAI_API_KEY from CODEX_OPENAI_API_KEY"
-  elif [[ -n "${CODEX_API_KEY:-}" && -z "${OPENAI_API_KEY:-}" ]]; then
-    export OPENAI_API_KEY="${CODEX_API_KEY}"
-    echo "Set OPENAI_API_KEY from CODEX_API_KEY"
-  fi
-
   # If CODEX_CREDENTIALS is provided (JSON matching auth.json), seed ~/.codex/auth.json
   # This mirrors CLAUDE_CODE_CREDENTIALS behavior for ChatGPT subscription-based auth.
   if [[ -n "${CODEX_CREDENTIALS:-}" ]]; then
