@@ -2,6 +2,13 @@ editor = "cursor"
 
 notify = ["notify"]
 
+model_reasoning_effort = "high"
+
+sandbox_mode = "workspace-write"
+
+[tools]
+web_search = true
+
 [mcp_servers.context7]
 command = "npx"
 args = ["-y", "@upstash/context7-mcp"]

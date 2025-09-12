@@ -36,6 +36,7 @@
     ],
     "defaultMode": "acceptEdits"
   },
+  "model": "opus",
   "hooks": {
     "PreToolUse": [
       {
@@ -73,9 +74,6 @@
   "statusLine": {
     "type": "command",
     "command": "python ~/dotfiles/config/claude/status_line.py"
-  },
-  "feedbackSurveyState": {
-    "lastShownTime": 1753970401047
   },
   "autoCompact": false
 }

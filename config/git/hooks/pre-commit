@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Warn if local UI-managed settings differ from their example templates,
+# ignoring specific, known-local fields.
+# Non-blocking by default. Set DOTFILES_STRICT_HOOKS=1 to block on diff.
+
+strict=${DOTFILES_STRICT_HOOKS:-}
+
+have_jq=1
+command -v jq >/dev/null 2>&1 || have_jq=0
+
+warn_diff() {
+  local name="$1"; shift
+  local real="$1"; shift
+  local example="$1"; shift
+  local jq_filter="${1:-.}"; shift || true
+
+  [ -f "$real" ] || return 0
+  [ -f "$example" ] || return 0
+
+  if [ $have_jq -eq 1 ] && [[ "$real" == *.json && "$example" == *.json ]]; then
+    if ! diff -u <(jq -S "$jq_filter" "$example") <(jq -S "$jq_filter" "$real") >/dev/null; then
+      echo "[dotfiles hook] Detected local changes in $name (ignored fields filtered with jq):" >&2
+      diff -u <(jq -S "$jq_filter" "$example") <(jq -S "$jq_filter" "$real") || true
+      echo >&2
+      echo "Consider updating the example with non-secret defaults. Known-local fields are ignored in this check." >&2
+      echo "Set DOTFILES_STRICT_HOOKS=1 to block commits when differences exist." >&2
+      [ -n "$strict" ] && exit 1
+    fi
+  else
+    if ! diff -u "$example" "$real" >/dev/null 2>&1; then
+      echo "[dotfiles hook] Detected local changes in $name (jq not found; raw diff, cannot ignore fields):" >&2
+      diff -u "$example" "$real" || true
+      [ -n "$strict" ] && exit 1
+    fi
+  fi
+}
+
+# Hard-coded ignored fields:
+# - Cursor: pgsql.serverGroups, pgsql.connections
+# - Claude: model
+warn_diff \
+  "Cursor settings" \
+  "config/cursor/settings.json" \
+  "config/cursor/settings.example.json" \
+  'del(.pgsql.serverGroups, .pgsql.connections)'
+
+warn_diff \
+  "Claude settings" \
+  "config/claude/settings.json" \
+  "config/claude/settings.example.json" \
+  'del(.model)'
+
+exit 0
+

@@ -15,14 +15,12 @@
   process = git-lfs filter-process
   required = true
 [filter "claude-settings"]
-  clean = jq 'del(.model)'
-  smudge = cat
+  ; deprecated: moved to template+ignore
 [filter "cursor-settings"]
-  clean = jq --arg a pgsql.serverGroups --arg b pgsql.connections 'del(.[$a], .[$b])'
-  smudge = cat
+  ; deprecated: moved to template+ignore
 [filter "codex-config"]
-  clean = ./bin/git-filter-codex-config
-  smudge = cat
+  clean = bash ./config/git/git-filter-codex-config clean
+  smudge = bash ./config/git/git-filter-codex-config smudge
   required = true
 [core]
   pager = less -F -X
