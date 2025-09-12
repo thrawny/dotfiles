@@ -5,7 +5,7 @@ set -euo pipefail
 # ignoring specific, known-local fields.
 # Non-blocking by default. Set DOTFILES_STRICT_HOOKS=1 to block on diff.
 
-strict=${DOTFILES_STRICT_HOOKS:-}
+strict_mode=${DOTFILES_STRICT_HOOKS:-0}
 
 have_jq=1
 command -v jq >/dev/null 2>&1 || have_jq=0
@@ -26,13 +26,13 @@ warn_diff() {
       echo >&2
       echo "Consider updating the example with non-secret defaults. Known-local fields are ignored in this check." >&2
       echo "Set DOTFILES_STRICT_HOOKS=1 to block commits when differences exist." >&2
-      [ -n "$strict" ] && exit 1
+      [ "$strict_mode" = "1" ] && exit 1
     fi
   else
     if ! diff -u "$example" "$real" >/dev/null 2>&1; then
       echo "[dotfiles hook] Detected local changes in $name (jq not found; raw diff, cannot ignore fields):" >&2
       diff -u "$example" "$real" || true
-      [ -n "$strict" ] && exit 1
+      [ "$strict_mode" = "1" ] && exit 1
     fi
   fi
 }
@@ -44,13 +44,13 @@ warn_diff \
   "Cursor settings" \
   "config/cursor/settings.json" \
   "config/cursor/settings.example.json" \
-  'del(.pgsql.serverGroups, .pgsql.connections)'
+  'del(.["pgsql.serverGroups"], .["pgsql.connections"])'
 
 warn_diff \
   "Claude settings" \
   "config/claude/settings.json" \
   "config/claude/settings.example.json" \
-  'del(.model)'
+  'del(.model, .feedbackSurveyState)'
 
 # Codex: compare only the base (above sentinel) between example and local.
 warn_diff_codex() {
@@ -64,7 +64,7 @@ warn_diff_codex() {
     echo "[dotfiles hook] Codex base differs from example (comparing only lines above sentinel):" >&2
     diff -u <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$example") \
             <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$real") || true
-    [ -n "$strict" ] && exit 1
+    [ "$strict_mode" = "1" ] && exit 1
   fi
 }
 

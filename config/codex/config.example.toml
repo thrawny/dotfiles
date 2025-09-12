@@ -13,9 +13,8 @@ web_search = true
 command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
 
+# @local-only-below
+
 [sandbox_workspace_write]
 writable_roots = ["/Users/jonas/Library/Caches/go-build"]
 network_access = true
-
-# @local-only-below
-

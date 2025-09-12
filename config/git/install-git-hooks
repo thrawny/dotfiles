@@ -14,7 +14,7 @@ cd "$repo_root"
 if [ ! -d config/git/hooks ]; then
   echo "No hooks directory found at $repo_root/config/git/hooks" >&2
   exit 1
-}
+fi
 
 git config core.hooksPath config/git/hooks
 chmod +x config/git/hooks/* || true
