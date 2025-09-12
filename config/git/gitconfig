@@ -18,10 +18,6 @@
   ; deprecated: moved to template+ignore
 [filter "cursor-settings"]
   ; deprecated: moved to template+ignore
-[filter "codex-config"]
-  clean = bash ./config/git/git-filter-codex-config clean
-  smudge = bash ./config/git/git-filter-codex-config smudge
-  required = true
 [core]
   pager = less -F -X
   excludesfile = ~/.gitignoreglobal

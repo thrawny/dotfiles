@@ -52,5 +52,22 @@ warn_diff \
   "config/claude/settings.example.json" \
   'del(.model)'
 
-exit 0
+# Codex: compare only the base (above sentinel) between example and local.
+warn_diff_codex() {
+  local real="config/codex/config.toml"
+  local example="config/codex/config.example.toml"
+  local sentinel_regex='^# *@local-only-below'
+  [ -f "$real" ] || return 0
+  [ -f "$example" ] || return 0
+  if ! diff -u <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$example") \
+                 <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$real") >/dev/null; then
+    echo "[dotfiles hook] Codex base differs from example (comparing only lines above sentinel):" >&2
+    diff -u <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$example") \
+            <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$real") || true
+    [ -n "$strict" ] && exit 1
+  fi
+}
 
+warn_diff_codex
+
+exit 0

@@ -25,6 +25,57 @@
     state: directory
     recurse: yes
 
+- name: Ensure Codex config exists (seed from example if missing/empty)
+  vars:
+    codex_dest: "{{ dotfiles_dir }}/config/codex/config.toml"
+    codex_src: "{{ dotfiles_dir }}/config/codex/config.example.toml"
+  block:
+  - name: stat Codex config
+    ansible.builtin.stat:
+      path: "{{ codex_dest }}"
+    register: codex_cfg
+  - name: seed Codex config from example
+    ansible.builtin.copy:
+      src: "{{ codex_src }}"
+      dest: "{{ codex_dest }}"
+      remote_src: true
+      mode: '0644'
+    when: (not codex_cfg.stat.exists) or ((codex_cfg.stat.size | default(0)) | int == 0)
+
+- name: Ensure Claude settings exist (seed from example if missing/empty)
+  vars:
+    claude_dest: "{{ dotfiles_dir }}/config/claude/settings.json"
+    claude_src: "{{ dotfiles_dir }}/config/claude/settings.example.json"
+  block:
+  - name: stat Claude settings
+    ansible.builtin.stat:
+      path: "{{ claude_dest }}"
+    register: claude_cfg
+  - name: seed Claude settings from example
+    ansible.builtin.copy:
+      src: "{{ claude_src }}"
+      dest: "{{ claude_dest }}"
+      remote_src: true
+      mode: '0644'
+    when: (not claude_cfg.stat.exists) or ((claude_cfg.stat.size | default(0)) | int == 0)
+
+- name: Ensure Cursor settings exist (seed from example if missing/empty)
+  vars:
+    cursor_dest: "{{ dotfiles_dir }}/config/cursor/settings.json"
+    cursor_src: "{{ dotfiles_dir }}/config/cursor/settings.example.json"
+  block:
+  - name: stat Cursor settings
+    ansible.builtin.stat:
+      path: "{{ cursor_dest }}"
+    register: cursor_cfg
+  - name: seed Cursor settings from example
+    ansible.builtin.copy:
+      src: "{{ cursor_src }}"
+      dest: "{{ cursor_dest }}"
+      remote_src: true
+      mode: '0644'
+    when: (not cursor_cfg.stat.exists) or ((cursor_cfg.stat.size | default(0)) | int == 0)
+
 - name: direnv config folder is symlinked
   file:
     state: link
