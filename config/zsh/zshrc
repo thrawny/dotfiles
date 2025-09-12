@@ -232,6 +232,10 @@ alias kz='kubectl kustomize'
 if bat --version &>/dev/null; then
   alias cat='bat --style=header,grid,snip --theme "Monokai Extended Origin"'
 fi
+if [[ "$(uname)" == "Darwin" ]]; then
+  alias cct="security find-generic-password -s \"Claude Code-credentials\" -w | jq -c '{claudeAiOauth}'"
+fi
+alias ct="cat ~/.codex/auth.json | jq -c"
 
 # ===== Functions =====
 function gtrm() {

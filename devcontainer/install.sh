@@ -68,6 +68,40 @@ setup_claude_code_cli() {
   fi
 }
 
+setup_codex_cli() {
+  # Install Codex CLI via npm if Node is available
+  if command -v node &>/dev/null; then
+    echo "Installing @openai/codex via npm..."
+    npm install -g @openai/codex || true
+  else
+    echo "Skipping Codex CLI install: node not found"
+  fi
+
+  # Support an env var similar to CLAUDE_CODE_CREDENTIALS, but without writing files.
+  # If a Codex-specific key is provided, expose it as OPENAI_API_KEY for the codex CLI.
+  if [[ -n "${CODEX_OPENAI_API_KEY:-}" && -z "${OPENAI_API_KEY:-}" ]]; then
+    export OPENAI_API_KEY="${CODEX_OPENAI_API_KEY}"
+    echo "Set OPENAI_API_KEY from CODEX_OPENAI_API_KEY"
+  elif [[ -n "${CODEX_API_KEY:-}" && -z "${OPENAI_API_KEY:-}" ]]; then
+    export OPENAI_API_KEY="${CODEX_API_KEY}"
+    echo "Set OPENAI_API_KEY from CODEX_API_KEY"
+  fi
+
+  # If CODEX_CREDENTIALS is provided (JSON matching auth.json), seed ~/.codex/auth.json
+  # This mirrors CLAUDE_CODE_CREDENTIALS behavior for ChatGPT subscription-based auth.
+  if [[ -n "${CODEX_CREDENTIALS:-}" ]]; then
+    mkdir -p "$HOME/.codex" 2>/dev/null || true
+    local codex_auth="${HOME}/.codex/auth.json"
+    if [[ ! -s "${codex_auth}" ]]; then
+      echo "Writing ~/.codex/auth.json from CODEX_CREDENTIALS"
+      printf '%s' "$CODEX_CREDENTIALS" > "${codex_auth}"
+      chmod 600 "${codex_auth}" 2>/dev/null || true
+    fi
+  fi
+
+  # No additional config writes here; Ansible handles ~/.codex via ansible/all_config.yml
+}
+
 main() {
   ensure_uv
   ensure_mise
@@ -94,6 +128,9 @@ main() {
 
   # Optional: install Claude Code CLI and setup config from env
   setup_claude_code_cli
+
+  # Optional: install Codex CLI and wire env var for key
+  setup_codex_cli
 
   echo "Configuring git..."
   if [ -n "${GIT_USER:-}" ]; then
