@@ -1,11 +1,8 @@
 editor = "cursor"
-
 notify = ["notify"]
-
-model_reasoning_effort = "high"
-
 sandbox_mode = "workspace-write"
 model = "gpt-5"
+model_reasoning_effort = "high"
 
 [tools]
 web_search = true
