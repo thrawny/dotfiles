@@ -51,9 +51,10 @@ if type brew &>/dev/null; then
   FPATH=$(brew --prefix)/share/zsh/site-functions:$FPATH
 fi
 
-# Activate mise shims if installed (rootless runtimes)
+# Enable mise tools without shell activation (no direnv-like behavior)
 if command -v mise &>/dev/null; then
-  eval "$(mise activate zsh)"
+  # Just expose shims; avoid `mise activate` to prevent per-dir prompts
+  export PATH="$HOME/.local/share/mise/shims:$PATH"
 fi
 
 # ===== Zinit Annexes =====

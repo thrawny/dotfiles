@@ -18,6 +18,10 @@ ensure_mise() {
     curl -fsSL https://mise.jdx.dev/install.sh | sh
     export PATH="$HOME/.local/bin:$PATH"
   fi
+  # Trust repo config to suppress interactive prompts
+  if command -v mise &>/dev/null; then
+    "$HOME/.local/bin/mise" trust "$HOME/dotfiles/.mise.toml" 2>/dev/null || true
+  fi
 }
 
 ensure_python() {
@@ -31,6 +35,8 @@ ensure_python() {
 
 ensure_node() {
   # Install Node (rootless) via mise if none is present
+  # Always ensure mise shims are on PATH
+  export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
   if ! command -v node &>/dev/null; then
     local ver="${DOTFILES_NODE_VERSION:-24}"
     echo "Installing Node ${ver} with mise..."
@@ -157,8 +163,13 @@ main() {
   fi
 
   if nvim --version &>/dev/null; then
-    echo "Prepping nvim..."
-    nvim --headless '+Lazy install' +q || true
+    # Only run lazy.nvim tasks when nvim >= 0.8 to avoid Debian oldstable errors
+    if nvim --headless '+lua print((vim.version().major*100+vim.version().minor) >= 8 and "ok" or "no")' +q 2>/dev/null | grep -q ok; then
+      echo "Prepping nvim (lazy install)..."
+      nvim --headless '+Lazy! install' +q || true
+    else
+      echo "Skipping nvim prep: Neovim < 0.8"
+    fi
   fi
 
   if gh --version &>/dev/null; then

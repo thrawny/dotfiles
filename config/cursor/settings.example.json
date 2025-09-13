@@ -293,5 +293,6 @@
   "gitlens.codeLens.authors.enabled": false,
   "gitlens.codeLens.recentChange.enabled": false,
   "git.branchProtectionPrompt": "alwaysCommit",
-  "gitlens.graph.layout": "editor"
+  "gitlens.graph.layout": "editor",
+  "python.terminal.activateEnvironment": false
 }
