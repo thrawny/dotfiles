@@ -294,5 +294,6 @@
   "gitlens.codeLens.recentChange.enabled": false,
   "git.branchProtectionPrompt": "alwaysCommit",
   "gitlens.graph.layout": "editor",
-  "python.terminal.activateEnvironment": false
+  "python.terminal.activateEnvironment": false,
+  "window.openFoldersInNewWindow": "on"
 }
