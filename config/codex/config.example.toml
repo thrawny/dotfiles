@@ -14,5 +14,5 @@ args = ["-y", "@upstash/context7-mcp"]
 # @local-only-below
 
 [sandbox_workspace_write]
-writable_roots = ["/Users/jonas/Library/Caches/go-build"]
+writable_roots = ["/Users/jonas/Library/Caches"]
 network_access = true
