@@ -1,18 +1,18 @@
 editor = "cursor"
 notify = ["notify"]
 sandbox_mode = "workspace-write"
-model = "gpt-5"
-model_reasoning_effort = "high"
-
-[tools]
-web_search = true
+model = "gpt-5-codex"
 
 [mcp_servers.context7]
 command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
 
-# @local-only-below
+[tools]
+web_search = true
 
 [sandbox_workspace_write]
 writable_roots = ["/Users/jonas/Library/Caches"]
 network_access = true
+
+[projects."/Users/jonas/dotfiles"]
+trust_level = "trusted"

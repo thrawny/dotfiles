@@ -49,18 +49,18 @@ warn_diff \
   "config/claude/settings.example.json" \
   'del(.model, .feedbackSurveyState)'
 
-# Codex: compare only the base (above sentinel) between example and local.
+# Codex: compare shared keys using yq (ignore local-only sections).
 warn_diff_codex() {
   local real="config/codex/config.toml"
   local example="config/codex/config.example.toml"
-  local sentinel_regex='^# *@local-only-below'
   [ -f "$real" ] || return 0
   [ -f "$example" ] || return 0
-  if ! diff -u <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$example") \
-                 <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$real") >/dev/null; then
-    echo "[dotfiles hook] Codex base differs from example (comparing only lines above sentinel):" >&2
-    diff -u <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$example") \
-            <(awk 'x{next} {print} /# *@local-only-below/ {x=1}' "$real") || true
+  local filter='del(.projects, .sandbox_workspace_write.writable_roots, .model, .model_reasoning_effort)'
+  if ! diff -u <(yq -p=toml -o=json "$filter" "$example" | jq -S '.') \
+                 <(yq -p=toml -o=json "$filter" "$real" | jq -S '.') >/dev/null; then
+    echo "[dotfiles hook] Codex shared keys differ from example (ignoring projects.*, sandbox_workspace_write.writable_roots, model, model_reasoning_effort):" >&2
+    diff -u <(yq -p=toml -o=json "$filter" "$example" | jq -S '.') \
+            <(yq -p=toml -o=json "$filter" "$real" | jq -S '.') || true
     : # warn only; never block
   fi
 }
