@@ -29,7 +29,7 @@ macOS is `*-darwin`, so allow cross-building to the tester’s Linux platform an
 ```bash
 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 \
   NIXPKGS_ALLOW_BROKEN=1 \
-  nix build --dry-run .#nixosConfigurations.tester.config.system.build.toplevel
+  nix build --dry-run ./nix#nixosConfigurations.tester.config.system.build.toplevel
 ```
 
 Notes:
@@ -55,9 +55,9 @@ When you want to materialise the closure:
 3. Re-run the build without `--dry-run`:
 
    ```bash
-   NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 \
+NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 \
      NIXPKGS_ALLOW_BROKEN=1 \
-     nix build .#nixosConfigurations.tester.config.system.build.toplevel
+     nix build ./nix#nixosConfigurations.tester.config.system.build.toplevel
    ```
 
 What to expect:
@@ -72,8 +72,8 @@ SSH into the builder and run the flake from the shared checkout:
 
 ```bash
 ssh builder@linux-builder
-cd ~/dotfiles/nix
-nix build .#nixosConfigurations.tester.config.system.build.toplevel
+cd ~/dotfiles
+nix build ./nix#nixosConfigurations.tester.config.system.build.toplevel
 ```
 
 - This avoids SSH session timeouts on macOS and uses the builder’s native system string.
@@ -84,7 +84,7 @@ nix build .#nixosConfigurations.tester.config.system.build.toplevel
 The dry-run/build steps ensure the activation DAG compiles. To confirm the example seeding logic quickly:
 
 ```bash
-nix eval --expr '\n  let\n    cfg = (builtins.getFlake ".").nixosConfigurations.tester;\n  in cfg.config.home-manager.users.jonas.home.activation.seedClaudeSettings.text\n'
+nix eval --expr '\n  let\n    cfg = (builtins.getFlake "./nix").nixosConfigurations.tester;\n  in cfg.config.home-manager.users.jonas.home.activation.seedClaudeSettings.text\n'
 ```
 
 - Replace the attribute path if you renamed the host/user.
