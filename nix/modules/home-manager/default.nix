@@ -1,6 +1,7 @@
-{ lib, pkgs, dotfiles, username, theme, ... }:
+{ lib, pkgs, dotfiles, username, theme, ... }@args:
 let
   hmLib = lib.hm;
+  gitIdentity = { name = null; email = null; } // (args.gitIdentity or { });
   seedExample = example: destination:
     hmLib.dag.entryBefore [ "linkGeneration" ] ''
       repo=${lib.escapeShellArg dotfiles}
@@ -38,11 +39,19 @@ in {
     python313
     starship
     uv
-    playerctl
+    gh
   ];
 
   home.activation.seedClaudeSettings =
     seedExample "config/claude/settings.example.json" "config/claude/settings.json";
   home.activation.seedCursorSettings =
     seedExample "config/cursor/settings.example.json" "config/cursor/settings.json";
+
+  home.file.".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
+    text = lib.concatStringsSep "\n" (
+      [ "[user]" ]
+      ++ lib.optionals (gitIdentity.name != null) [ "\tname = ${gitIdentity.name}" ]
+      ++ lib.optionals (gitIdentity.email != null) [ "\temail = ${gitIdentity.email}" ]
+    ) + "\n";
+  };
 }
