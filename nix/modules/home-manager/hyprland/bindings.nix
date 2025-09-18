@@ -43,10 +43,9 @@ let
   ];
 
   tilingBinds = [
-    "${mod}, RETURN, exec, kitty"
+    "${mod}, RETURN, exec, ghostty"
     "${mod}, SPACE, exec, fuzzel"
     "${mod}, W, killactive"
-    "${mod}, Backspace, killactive"
     "${mod}, J, togglesplit"
     "${mod}, P, pseudo"
     "${mod}, V, togglefloating"

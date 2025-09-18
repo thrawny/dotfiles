@@ -1,4 +1,4 @@
-{ lib, pkgs, dotfiles, username, ... }:
+{ lib, pkgs, dotfiles, username, theme, ... }:
 let
   hmLib = lib.hm;
   seedExample = example: destination:
@@ -20,10 +20,12 @@ in {
     ./hyprlock.nix
     ./hyprpaper.nix
     ./k9s.nix
+    ./mako.nix
     ./nvim.nix
     ./npm.nix
     ./starship.nix
     ./tmux.nix
+    ./waybar.nix
     ./zsh.nix
   ];
 

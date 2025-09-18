@@ -1,0 +1,42 @@
+@import "theme.css";
+
+* {
+  font-family: "CaskaydiaCove Nerd Font", "JetBrains Mono", sans-serif;
+  font-size: 13px;
+  color: var(--waybar-fg);
+}
+
+window#waybar {
+  background-color: var(--waybar-bg);
+  border-bottom: 1px solid var(--waybar-border);
+}
+
+#clock,
+#battery,
+#bluetooth,
+#network,
+#pulseaudio,
+#tray,
+#workspaces {
+  padding: 0 8px;
+}
+
+#workspaces button {
+  border: none;
+  padding: 0 4px;
+  background: transparent;
+  color: var(--waybar-muted);
+}
+
+#workspaces button.active {
+  color: var(--waybar-accent);
+}
+
+#battery.warning,
+#battery.critical {
+  color: var(--waybar-warning);
+}
+
+#battery.critical {
+  font-weight: bold;
+}
