@@ -36,6 +36,7 @@ in {
     python313
     starship
     uv
+    playerctl
   ];
 
   home.activation.seedClaudeSettings =
