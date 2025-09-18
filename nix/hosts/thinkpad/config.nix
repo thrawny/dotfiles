@@ -6,7 +6,7 @@
   ];
 
   dotfiles = {
-    username = "jonas";
+    username = "thrawny";
     fullName = "Jonas Lergell";
     email = "jonaslergell@gmail.com";
   };
