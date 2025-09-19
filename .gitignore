@@ -10,3 +10,5 @@ config/k9s/aliases.yaml
 config/codex/*
 !config/codex/config.example.toml
 !config/codex/prompts
+
+result

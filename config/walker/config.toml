@@ -30,25 +30,14 @@ width = 600
 # Enable typeahead
 typeahead = { enabled = true }
 
-# Modules to enable
-[modules]
-applications = true
-runner = true
-ssh = false
-finder = false
-commands = false
-websearch = false
-
-# Applications module config
-[[modules.applications]]
+# Modules configuration
+[[modules]]
 name = "applications"
 prefix = ""
 
-# Runner module config
-[[modules.runner]]
+[[modules]]
 name = "runner"
 prefix = "!"
 
 # Theme stylesheet
-[theme]
-style = "style.css"
+theme = "style.css"
