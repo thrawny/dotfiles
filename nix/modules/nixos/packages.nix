@@ -32,6 +32,7 @@ let
     powertop
     fastfetch
     docker-compose
+    code-cursor-fhs
   ];
 
   selectedSystemPackages =
