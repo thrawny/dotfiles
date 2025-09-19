@@ -13,15 +13,29 @@ let
     ++ [ "${mod} SHIFT, 0, movetoworkspace, 10" ];
 
   focusBinds = [
+    # Vim-style bindings
+    "${mod}, h, movefocus, l"
+    "${mod}, j, movefocus, d"
+    "${mod}, k, movefocus, u"
+    "${mod}, l, movefocus, r"
+    # Arrow key alternatives
     "${mod}, LEFT, movefocus, l"
     "${mod}, RIGHT, movefocus, r"
     "${mod}, UP, movefocus, u"
     "${mod}, DOWN, movefocus, d"
+    # Workspace navigation
     "${mod}, comma, workspace, -1"
     "${mod}, period, workspace, +1"
+    "${mod}, TAB, workspace, previous"
   ];
 
   swapBinds = [
+    # Vim-style bindings
+    "${mod} SHIFT, h, swapwindow, l"
+    "${mod} SHIFT, j, swapwindow, d"
+    "${mod} SHIFT, k, swapwindow, u"
+    "${mod} SHIFT, l, swapwindow, r"
+    # Arrow key alternatives
     "${mod} SHIFT, left, swapwindow, l"
     "${mod} SHIFT, right, swapwindow, r"
     "${mod} SHIFT, up, swapwindow, u"
@@ -29,10 +43,16 @@ let
   ];
 
   resizeBinds = [
+    # Standard resize bindings
     "${mod}, minus, resizeactive, -100 0"
     "${mod}, equal, resizeactive, 100 0"
     "${mod} SHIFT, minus, resizeactive, 0 -100"
     "${mod} SHIFT, equal, resizeactive, 0 100"
+    # Vim-style directional resize
+    "${mod} CTRL, h, resizeactive, -100 0"
+    "${mod} CTRL, l, resizeactive, 100 0"
+    "${mod} CTRL, k, resizeactive, 0 -100"
+    "${mod} CTRL, j, resizeactive, 0 100"
   ];
 
   sessionBinds = [
@@ -46,13 +66,15 @@ let
     "${mod}, RETURN, exec, ghostty"
     "${mod}, SPACE, exec, fuzzel"
     "${mod}, W, killactive"
-    "${mod}, J, togglesplit"
+    "${mod}, T, togglesplit"  # Changed from J to avoid conflict with vim j
     "${mod}, P, pseudo"
     "${mod}, V, togglefloating"
+    "${mod}, F, fullscreen"  # Simplified fullscreen binding
     "${mod} SHIFT, Plus, fullscreen"
     "${mod} SHIFT, SPACE, exec, pkill -SIGUSR1 waybar"
     "${mod}, S, togglespecialworkspace, magic"
     "${mod} SHIFT, S, movetoworkspace, special:magic"
+    "${mod}, M, focuscurrentorlast"  # Focus back-and-forth like aerospace
   ];
 
   scrollBinds = [
