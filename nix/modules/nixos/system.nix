@@ -72,6 +72,25 @@ in {
     services.blueman.enable = true;
     networking.networkmanager.enable = true;
 
+    # Keyd for system-wide key remapping (works in all apps including Electron)
+    services.keyd = {
+      enable = true;
+      keyboards = {
+        default = {
+          ids = ["*"];
+          settings = {
+            main = {
+              capslock = "esc";
+              esc = "capslock";
+            };
+            "shift" = {
+              "102nd" = "S-grave";  # Shift+< produces Shift+grave which is ~
+            };
+          };
+        };
+      };
+    };
+
     fonts.packages = with pkgs; [
       noto-fonts
       noto-fonts-emoji
