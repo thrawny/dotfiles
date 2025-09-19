@@ -35,9 +35,9 @@ info:
 rollback:
 	sudo nixos-rebuild switch --rollback
 
-# Format all nix files
+# Format all nix files (using treefmt from nixfmt-tree)
 fmt:
-	nixfmt nix/**/*.nix
+	treefmt
 
 # Home manager only
 home:

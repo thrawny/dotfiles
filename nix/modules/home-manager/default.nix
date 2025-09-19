@@ -1,8 +1,20 @@
-{ config, lib, pkgs, dotfiles, username, ... }@args:
+{
+  config,
+  lib,
+  pkgs,
+  dotfiles,
+  username,
+  ...
+}@args:
 let
   hmLib = lib.hm;
-  gitIdentity = { name = null; email = null; } // (args.gitIdentity or { });
-  seedExample = example: destination:
+  gitIdentity = {
+    name = null;
+    email = null;
+  }
+  // (args.gitIdentity or { });
+  seedExample =
+    example: destination:
     hmLib.dag.entryBefore [ "linkGeneration" ] ''
       repo=${lib.escapeShellArg dotfiles}
       example_path="$repo/${example}"
@@ -11,7 +23,8 @@ let
         install -Dm0644 "$example_path" "$dest_path"
       fi
     '';
-in {
+in
+{
   imports = [
     ./direnv.nix
     ./git.nix
@@ -43,16 +56,12 @@ in {
     gh
   ];
 
-  home.activation.seedCodexConfig =
-    seedExample "config/codex/config.example.toml" "config/codex/config.toml";
-  home.activation.seedClaudeSettings =
-    seedExample "config/claude/settings.example.json" "config/claude/settings.json";
-  home.activation.seedCursorSettings =
-    seedExample "config/cursor/settings.example.json" "config/cursor/settings.json";
+  home.activation.seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
+  home.activation.seedClaudeSettings = seedExample "config/claude/settings.example.json" "config/claude/settings.json";
+  home.activation.seedCursorSettings = seedExample "config/cursor/settings.example.json" "config/cursor/settings.json";
 
   # Codex configuration
-  home.file.".codex".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex";
+  home.file.".codex".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex";
 
   # Claude configuration
   home.file.".claude/commands".source =
@@ -71,10 +80,12 @@ in {
     config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/cursor/keybindings.linux.json";
 
   home.file.".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
-    text = lib.concatStringsSep "\n" (
-      [ "[user]" ]
-      ++ lib.optionals (gitIdentity.name != null) [ "\tname = ${gitIdentity.name}" ]
-      ++ lib.optionals (gitIdentity.email != null) [ "\temail = ${gitIdentity.email}" ]
-    ) + "\n";
+    text =
+      lib.concatStringsSep "\n" (
+        [ "[user]" ]
+        ++ lib.optionals (gitIdentity.name != null) [ "\tname = ${gitIdentity.name}" ]
+        ++ lib.optionals (gitIdentity.email != null) [ "\temail = ${gitIdentity.email}" ]
+      )
+      + "\n";
   };
 }

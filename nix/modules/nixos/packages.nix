@@ -1,4 +1,8 @@
-{ pkgs, lib, excludePackages ? [ ] }:
+{
+  pkgs,
+  lib,
+  excludePackages ? [ ],
+}:
 let
   hyprlandPackages = with pkgs; [
     hyprshot
@@ -12,7 +16,7 @@ let
     walker
     waybar
     wl-clipboard
-    networkmanagerapplet  # Provides nm-connection-editor GUI
+    networkmanagerapplet # Provides nm-connection-editor GUI
   ];
 
   systemPackages = with pkgs; [
@@ -36,10 +40,10 @@ let
     code-cursor-fhs
   ];
 
-  selectedSystemPackages =
-    lib.lists.subtractLists excludePackages systemPackages;
+  selectedSystemPackages = lib.lists.subtractLists excludePackages systemPackages;
   allSystemPackages = hyprlandPackages ++ selectedSystemPackages;
-in {
+in
+{
   systemPackages = allSystemPackages;
   homePackages = with pkgs; [ ];
 }

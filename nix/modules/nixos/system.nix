@@ -1,4 +1,9 @@
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 let
   cfg = config.dotfiles;
   username = cfg.username;
@@ -12,7 +17,8 @@ let
     name = cfg.fullName;
     email = cfg.email;
   };
-in {
+in
+{
   options.dotfiles = {
     username = lib.mkOption {
       type = lib.types.str;
@@ -43,14 +49,22 @@ in {
     nixpkgs.config.allowUnfree = true;
 
     # Enable flakes and nix command
-    nix.settings.experimental-features = [ "nix-command" "flakes" ];
+    nix.settings.experimental-features = [
+      "nix-command"
+      "flakes"
+    ];
 
     services.xserver.enable = false;
 
     users.users.${username} = {
       isNormalUser = true;
       home = userHome;
-      extraGroups = [ "wheel" "video" "audio" "input" ];
+      extraGroups = [
+        "wheel"
+        "video"
+        "audio"
+        "input"
+      ];
       shell = pkgs.zsh;
     };
 
@@ -70,10 +84,13 @@ in {
       settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd Hyprland";
     };
 
-    environment.systemPackages = packages.systemPackages ++ (with pkgs; [
-      nixfmt-rfc-style  # Nix formatter (provides nixfmt command)
-      nil               # Nix Language Server
-    ]);
+    environment.systemPackages =
+      packages.systemPackages
+      ++ (with pkgs; [
+        nixfmt-rfc-style # Nix formatter (provides nixfmt command)
+        nil # Nix Language Server
+        nixfmt-tree # Treefmt pre-configured for Nix files
+      ]);
     programs.direnv.enable = true;
 
     services.resolved.enable = true;
@@ -99,7 +116,7 @@ in {
       enable = true;
       keyboards = {
         default = {
-          ids = ["*"];
+          ids = [ "*" ];
           settings = {
             main = {
               # Swap Caps Lock and Escape
@@ -113,7 +130,7 @@ in {
               # rightcontrol = "rightalt";
             };
             "shift" = {
-              "102nd" = "S-grave";  # Shift+< produces Shift+grave which is ~
+              "102nd" = "S-grave"; # Shift+< produces Shift+grave which is ~
             };
           };
         };

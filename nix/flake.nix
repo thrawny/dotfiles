@@ -8,15 +8,23 @@
     nixos-hardware.url = "github:NixOS/nixos-hardware";
   };
 
-  outputs = { nixpkgs, home-manager, nixos-hardware, ... }:
+  outputs =
+    {
+      nixpkgs,
+      home-manager,
+      nixos-hardware,
+      ...
+    }:
     let
       lib = nixpkgs.lib;
-      mkHost = { system, modules }:
+      mkHost =
+        { system, modules }:
         lib.nixosSystem {
           inherit system;
           modules = [
             home-manager.nixosModules.home-manager
-          ] ++ modules;
+          ]
+          ++ modules;
         };
     in
     {

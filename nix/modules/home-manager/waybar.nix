@@ -9,7 +9,13 @@
         height = 26;
         "modules-left" = [ "hyprland/workspaces" ];
         "modules-center" = [ "clock" ];
-        "modules-right" = [ "tray" "network" "bluetooth" "pulseaudio" "battery" ];
+        "modules-right" = [
+          "tray"
+          "network"
+          "bluetooth"
+          "pulseaudio"
+          "battery"
+        ];
 
         "hyprland/workspaces" = {
           on-click = "activate";
@@ -33,7 +39,13 @@
         };
 
         network = {
-          "format-icons" = [ "󰤯" "󰤟" "󰤢" "󰤥" "󰤨" ];
+          "format-icons" = [
+            "󰤯"
+            "󰤟"
+            "󰤢"
+            "󰤥"
+            "󰤨"
+          ];
           "format-wifi" = "{icon}";
           "format-ethernet" = "󰀂";
           "format-disconnected" = "󰤮";
@@ -56,7 +68,11 @@
           format = "{icon}";
           "format-muted" = "󰝟";
           "format-icons" = {
-            default = [ "󰕿" "󰖀" "󰕾" ];
+            default = [
+              "󰕿"
+              "󰖀"
+              "󰕾"
+            ];
             headphones = "󰋋";
             handsfree = "󰋎";
           };
@@ -70,8 +86,30 @@
           "format-charging" = "{icon}";
           "format-plugged" = "";
           "format-icons" = {
-            charging = [ "󰢜" "󰂆" "󰂇" "󰂈" "󰢝" "󰂉" "󰢞" "󰂊" "󰂋" "󰂅" ];
-            default = [ "󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰂂" "󰁹" ];
+            charging = [
+              "󰢜"
+              "󰂆"
+              "󰂇"
+              "󰂈"
+              "󰢝"
+              "󰂉"
+              "󰢞"
+              "󰂊"
+              "󰂋"
+              "󰂅"
+            ];
+            default = [
+              "󰁺"
+              "󰁻"
+              "󰁼"
+              "󰁽"
+              "󰁾"
+              "󰁿"
+              "󰂀"
+              "󰂁"
+              "󰂂"
+              "󰁹"
+            ];
           };
           "format-full" = "󰂅";
           "tooltip-format-discharging" = "{power:>1.0f}W↓ {capacity}%";

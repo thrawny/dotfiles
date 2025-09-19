@@ -3,7 +3,10 @@
   fileSystems."/" = {
     device = "tmpfs";
     fsType = "tmpfs";
-    options = [ "mode=0755" "size=2G" ];
+    options = [
+      "mode=0755"
+      "size=2G"
+    ];
   };
 
   fileSystems."/mnt/host" = {

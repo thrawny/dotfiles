@@ -9,7 +9,9 @@ let
     ++ [ "${mod}, 0, workspace, 10" ];
 
   moveWorkspaceBinds =
-    (map (n: "${mod} SHIFT, ${builtins.toString n}, movetoworkspace, ${builtins.toString n}") workspaceDigits)
+    (map (
+      n: "${mod} SHIFT, ${builtins.toString n}, movetoworkspace, ${builtins.toString n}"
+    ) workspaceDigits)
     ++ [ "${mod} SHIFT, 0, movetoworkspace, 10" ];
 
   focusBinds = [
@@ -66,27 +68,27 @@ let
     "${mod}, RETURN, exec, ghostty"
     "${mod}, SPACE, exec, walker"
     "${mod}, W, killactive"
-    "${mod}, T, togglesplit"  # Changed from J to avoid conflict with vim j
+    "${mod}, T, togglesplit" # Changed from J to avoid conflict with vim j
     "${mod}, P, pseudo"
     "${mod}, V, togglefloating"
-    "${mod}, F, fullscreen"  # Simplified fullscreen binding
+    "${mod}, F, fullscreen" # Simplified fullscreen binding
     "${mod} SHIFT, Plus, fullscreen"
     "${mod} SHIFT, SPACE, exec, pkill -SIGUSR1 waybar"
     "${mod}, S, togglespecialworkspace, magic"
     "${mod} SHIFT, S, movetoworkspace, special:magic"
-    "${mod}, M, focuscurrentorlast"  # Focus back-and-forth like aerospace
+    "${mod}, M, focuscurrentorlast" # Focus back-and-forth like aerospace
   ];
 
   # Group (tabbed) layout bindings - similar to i3's tabbed mode
   groupBinds = [
-    "${mod}, G, togglegroup"  # Create/destroy group
-    "${mod}, bracketright, changegroupactive, f"  # Next tab in group
-    "${mod}, bracketleft, changegroupactive, b"  # Previous tab in group
-    "${mod} CTRL, G, moveoutofgroup"  # Remove window from group
-    "${mod} SHIFT, G, lockactivegroup, toggle"  # Lock/unlock group
+    "${mod}, G, togglegroup" # Create/destroy group
+    "${mod}, bracketright, changegroupactive, f" # Next tab in group
+    "${mod}, bracketleft, changegroupactive, b" # Previous tab in group
+    "${mod} CTRL, G, moveoutofgroup" # Remove window from group
+    "${mod} SHIFT, G, lockactivegroup, toggle" # Lock/unlock group
     # Alternative vim-style navigation in groups
-    "${mod} ALT, l, changegroupactive, f"  # Next tab (vim-style)
-    "${mod} ALT, h, changegroupactive, b"  # Previous tab (vim-style)
+    "${mod} ALT, l, changegroupactive, f" # Next tab (vim-style)
+    "${mod} ALT, h, changegroupactive, b" # Previous tab (vim-style)
   ];
 
   scrollBinds = [
