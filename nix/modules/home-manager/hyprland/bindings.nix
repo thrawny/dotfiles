@@ -77,6 +77,18 @@ let
     "${mod}, M, focuscurrentorlast"  # Focus back-and-forth like aerospace
   ];
 
+  # Group (tabbed) layout bindings - similar to i3's tabbed mode
+  groupBinds = [
+    "${mod}, G, togglegroup"  # Create/destroy group
+    "${mod}, bracketright, changegroupactive, f"  # Next tab in group
+    "${mod}, bracketleft, changegroupactive, b"  # Previous tab in group
+    "${mod} CTRL, G, moveoutofgroup"  # Remove window from group
+    "${mod} SHIFT, G, lockactivegroup, toggle"  # Lock/unlock group
+    # Alternative vim-style navigation in groups
+    "${mod} ALT, l, changegroupactive, f"  # Next tab (vim-style)
+    "${mod} ALT, h, changegroupactive, b"  # Previous tab (vim-style)
+  ];
+
   scrollBinds = [
     "${mod}, mouse_down, workspace, e+1"
     "${mod}, mouse_up, workspace, e-1"
@@ -105,6 +117,7 @@ in
   wayland.windowManager.hyprland.settings = {
     bind = lib.concatLists [
       tilingBinds
+      groupBinds
       focusBinds
       workspaceBinds
       moveWorkspaceBinds
