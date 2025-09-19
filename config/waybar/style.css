@@ -1,14 +1,19 @@
-@import "theme.css";
+@define-color waybar-bg rgba(28, 28, 28, 0.92);
+@define-color waybar-border #3a3a3a;
+@define-color waybar-fg #f0f0f0;
+@define-color waybar-muted #808080;
+@define-color waybar-accent #66d9ef;
+@define-color waybar-warning #f92672;
 
 * {
   font-family: "CaskaydiaCove Nerd Font", "JetBrains Mono", sans-serif;
   font-size: 13px;
-  color: var(--waybar-fg);
+  color: @waybar-fg;
 }
 
 window#waybar {
-  background-color: var(--waybar-bg);
-  border-bottom: 1px solid var(--waybar-border);
+  background-color: @waybar-bg;
+  border-bottom: 1px solid @waybar-border;
 }
 
 #clock,
@@ -25,16 +30,16 @@ window#waybar {
   border: none;
   padding: 0 4px;
   background: transparent;
-  color: var(--waybar-muted);
+  color: @waybar-muted;
 }
 
 #workspaces button.active {
-  color: var(--waybar-accent);
+  color: @waybar-accent;
 }
 
 #battery.warning,
 #battery.critical {
-  color: var(--waybar-warning);
+  color: @waybar-warning;
 }
 
 #battery.critical {
