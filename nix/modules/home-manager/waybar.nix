@@ -33,20 +33,23 @@
         };
 
         network = {
-          "format-wifi" = "󰤨 {essid}";
+          "format-icons" = [ "󰤯" "󰤟" "󰤢" "󰤥" "󰤨" ];
+          "format-wifi" = "{icon}";
           "format-ethernet" = "󰀂";
-          "format-disconnected" = "󰖪";
-          "tooltip-format-wifi" = "{essid}\n⇣{bandwidthDownBytes} ⇡{bandwidthUpBytes}";
+          "format-disconnected" = "󰤮";
+          "tooltip-format-wifi" = "{essid} ({frequency} GHz)\n⇣{bandwidthDownBytes} ⇡{bandwidthUpBytes}";
           "tooltip-format-ethernet" = "⇣{bandwidthDownBytes} ⇡{bandwidthUpBytes}";
+          "tooltip-format-disconnected" = "Disconnected";
           interval = 3;
-          "on-click" = "ghostty -e nmcli";
+          "on-click" = "nm-connection-editor";
         };
 
         bluetooth = {
           format = "󰂯";
           "format-disabled" = "󰂲";
-          "tooltip-format" = "Devices: {num_connections}";
-          "on-click" = "ghostty -e bluetoothctl";
+          "format-connected" = "󰂱";
+          "tooltip-format" = "Devices connected: {num_connections}";
+          "on-click" = "blueman-manager";
         };
 
         pulseaudio = {
@@ -63,14 +66,20 @@
         };
 
         battery = {
-          format = "{capacity}% {icon}";
-          "format-charging" = "󰂄 {capacity}%";
-          "format-plugged" = "󰂄";
-          "format-icons" = [ "󰁺" "󰁻" "󰁼" "󰁽" "󰁿" "󰂁" "󰂂" "󰁹" ];
-          "tooltip-format" = "{timeTo}";
+          format = "{icon}";
+          "format-charging" = "{icon}";
+          "format-plugged" = "";
+          "format-icons" = {
+            charging = [ "󰢜" "󰂆" "󰂇" "󰂈" "󰢝" "󰂉" "󰢞" "󰂊" "󰂋" "󰂅" ];
+            default = [ "󰁺" "󰁻" "󰁼" "󰁽" "󰁾" "󰁿" "󰂀" "󰂁" "󰂂" "󰁹" ];
+          };
+          "format-full" = "󰂅";
+          "tooltip-format-discharging" = "{power:>1.0f}W↓ {capacity}%";
+          "tooltip-format-charging" = "{power:>1.0f}W↑ {capacity}%";
+          interval = 5;
           states = {
-            warning = 0.20;
-            critical = 0.10;
+            warning = 20;
+            critical = 10;
           };
         };
 

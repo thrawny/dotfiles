@@ -1,16 +1,16 @@
 [
   {
-    "key": "ctrl+;",
+    "key": "alt+;",
     "command": "workbench.action.terminal.toggleTerminal",
     "when": "terminal.active"
   },
   {
-    "key": "ctrl+`",
+    "key": "alt+`",
     "command": "-workbench.action.terminal.toggleTerminal",
     "when": "terminal.active"
   },
   {
-    "key": "shift+ctrl+a",
+    "key": "shift+alt+a",
     "command": "workbench.action.showCommands"
   },
   {
@@ -18,20 +18,20 @@
     "command": "-workbench.action.showCommands"
   },
   {
-    "key": "ctrl+e",
+    "key": "alt+e",
     "command": "workbench.action.quickOpen"
   },
   {
-    "key": "ctrl+p",
+    "key": "alt+p",
     "command": "-workbench.action.quickOpen"
   },
   {
-    "key": "ctrl+e",
+    "key": "alt+e",
     "command": "workbench.action.quickOpenNavigateNextInFilePicker",
     "when": "inFilesPicker && inQuickOpen"
   },
   {
-    "key": "ctrl+p",
+    "key": "alt+p",
     "command": "-workbench.action.quickOpenNavigateNextInFilePicker",
     "when": "inFilesPicker && inQuickOpen"
   },
@@ -41,12 +41,12 @@
     "when": "editorHasCodeActionsProvider && textInputFocus && !editorReadonly"
   },
   {
-    "key": "ctrl+.",
+    "key": "alt+.",
     "command": "-editor.action.quickFix",
     "when": "editorHasCodeActionsProvider && textInputFocus && !editorReadonly"
   },
   {
-    "key": "ctrl+b",
+    "key": "alt+b",
     "command": "editor.action.revealDefinition",
     "when": "editorHasDefinitionProvider && editorTextFocus && !isInEmbeddedEditor"
   },
@@ -56,70 +56,61 @@
     "when": "editorHasDefinitionProvider && editorTextFocus && !isInEmbeddedEditor"
   },
   {
-    "key": "ctrl+[",
+    "key": "alt+[",
     "command": "workbench.action.navigateBack",
     "when": "canNavigateBack"
   },
   {
-    "key": "ctrl+-",
+    "key": "alt+-",
     "command": "-workbench.action.navigateBack",
     "when": "canNavigateBack"
   },
   {
-    "key": "ctrl+]",
+    "key": "alt+]",
     "command": "workbench.action.navigateForward",
     "when": "canNavigateForward"
   },
   {
-    "key": "ctrl+shift+-",
+    "key": "alt+shift+-",
     "command": "-workbench.action.navigateForward",
     "when": "canNavigateForward"
   },
   {
-    "key": "ctrl+[Semicolon]",
+    "key": "alt+[Semicolon]",
     "command": "workbench.action.terminal.focus",
     "when": "accessibilityModeEnabled && accessibleViewOnLastLine && terminalHasBeenCreated && accessibleViewCurrentProviderId == 'terminal' || accessibilityModeEnabled && accessibleViewOnLastLine && terminalProcessSupported && accessibleViewCurrentProviderId == 'terminal'"
   },
   {
-    "key": "ctrl+down",
+    "key": "alt+down",
     "command": "-workbench.action.terminal.focus",
     "when": "accessibilityModeEnabled && accessibleViewOnLastLine && terminalHasBeenCreated && accessibleViewCurrentProviderId == 'terminal' || accessibilityModeEnabled && accessibleViewOnLastLine && terminalProcessSupported && accessibleViewCurrentProviderId == 'terminal'"
   },
   {
-    "key": "shift+ctrl+p",
+    "key": "shift+alt+p",
     "command": "-workbench.action.quickOpenNavigatePreviousInFilePicker",
     "when": "inFilesPicker && inQuickOpen"
   },
   {
-    "key": "ctrl+p",
+    "key": "alt+p",
     "command": "editor.action.triggerParameterHints",
     "when": "editorHasSignatureHelpProvider && editorTextFocus"
   },
   {
-    "key": "shift+ctrl+space",
+    "key": "shift+alt+space",
     "command": "-editor.action.triggerParameterHints",
     "when": "editorHasSignatureHelpProvider && editorTextFocus"
   },
   {
-    "key": "ctrl+shift+p",
+    "key": "alt+shift+p",
     "command": "editor.action.showHover",
     "when": "editorTextFocus"
-  },
-  {
-    "key": "ctrl+k ctrl+i",
-    "command": "-editor.action.showHover",
-    "when": "editorTextFocus"
-  },
-  {
-    "key": "shift+ctrl+o",
-    "command": "search.action.openNewEditor"
   },
   {
     "key": "alt+w",
     "command": "workbench.action.debug.start"
   },
   {
-    "key": "alt+ctrl+b",
+    "key": "alt+shift+b",
     "command": "editor.action.goToImplementation",
     "when": "editorHasImplementationProvider && editorTextFocus && !isInEmbeddedEditor"
   },
@@ -149,11 +140,6 @@
   },
   {
     "key": "ctrl+n",
-    "command": "-editor.action.rejectGPT4",
-    "when": "editorTextFocus && hasGPT4Diff"
-  },
-  {
-    "key": "ctrl+n",
     "command": "-editor.action.inlineDiffs.rejectPartialEdit",
     "when": "editorTextFocus && (arbitrary function)"
   },
@@ -178,11 +164,11 @@
     "when": "editorTextFocus && vim.active && vim.mode == 'Normal'"
   },
   {
-    "key": "ctrl+i",
+    "key": "alt+i",
     "command": "composerMode.agent"
   },
   {
-    "key": "ctrl+l",
+    "key": "alt+l",
     "command": "composerMode.chat"
   },
   {
@@ -192,21 +178,6 @@
       "text": "\\\\r\n"
     },
     "when": "terminalFocus"
-  },
-  {
-    "key": "shift+ctrl+e",
-    "command": "composer.showBackgroundAgentHistory",
-    "when": "backgroundComposerEnabled || showBackgroundAgentHistoryAction"
-  },
-  {
-    "key": "ctrl+e",
-    "command": "-composer.showBackgroundAgentHistory",
-    "when": "backgroundComposerEnabled || showBackgroundAgentHistoryAction"
-  },
-  {
-    "key": "shift+ctrl+e",
-    "command": "-workbench.view.explorer",
-    "when": "viewContainer.workbench.view.explorer.enabled"
   },
   {
     "key": "ctrl+d",
@@ -233,15 +204,15 @@
     "when": "taskCommandsRegistered"
   },
   {
-    "key": "ctrl+0",
+    "key": "alt+0",
     "command": "workbench.action.toggleSidebarVisibility"
   },
   {
-    "key": "ctrl+0",
+    "key": "alt+0",
     "command": "-workbench.action.focusSideBar"
   },
   {
-    "key": "ctrl+enter",
+    "key": "alt+enter",
     "command": "pgsql.runCurrentStatement",
     "when": "editorTextFocus && editorLangId == 'sql'"
   },

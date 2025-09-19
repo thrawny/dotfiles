@@ -19,6 +19,9 @@
         "0=#5c5c5c"
         "8=#808080"
       ];
+      keybind = [
+        "shift+enter=text:\\n"
+      ];
     };
   };
 }

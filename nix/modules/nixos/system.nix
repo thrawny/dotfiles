@@ -37,7 +37,13 @@ in {
     networking.hostName = lib.mkDefault "nixos";
     system.stateVersion = "25.11";
 
+    # Set timezone
+    time.timeZone = "Europe/Stockholm";
+
     nixpkgs.config.allowUnfree = true;
+
+    # Enable flakes and nix command
+    nix.settings.experimental-features = [ "nix-command" "flakes" ];
 
     services.xserver.enable = false;
 
@@ -64,13 +70,29 @@ in {
       settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd Hyprland";
     };
 
-    environment.systemPackages = packages.systemPackages;
+    environment.systemPackages = packages.systemPackages ++ (with pkgs; [
+      nixfmt-rfc-style  # Nix formatter (provides nixfmt command)
+      nil               # Nix Language Server
+    ]);
     programs.direnv.enable = true;
 
     services.resolved.enable = true;
     hardware.bluetooth.enable = true;
     services.blueman.enable = true;
     networking.networkmanager.enable = true;
+
+    # Allow passwordless nixos-rebuild for wheel group
+    security.sudo.extraRules = [
+      {
+        groups = [ "wheel" ];
+        commands = [
+          {
+            command = "/run/current-system/sw/bin/nixos-rebuild";
+            options = [ "NOPASSWD" ];
+          }
+        ];
+      }
+    ];
 
     # Keyd for system-wide key remapping (works in all apps including Electron)
     services.keyd = {
@@ -85,10 +107,10 @@ in {
               esc = "capslock";
 
               # Swap Alt and Ctrl for Mac-like layout
-              leftalt = "leftcontrol";
-              leftcontrol = "leftalt";
-              rightalt = "rightcontrol";
-              rightcontrol = "rightalt";
+              # leftalt = "leftcontrol";
+              # leftcontrol = "leftalt";
+              # rightalt = "rightcontrol";
+              # rightcontrol = "rightalt";
             };
             "shift" = {
               "102nd" = "S-grave";  # Shift+< produces Shift+grave which is ~

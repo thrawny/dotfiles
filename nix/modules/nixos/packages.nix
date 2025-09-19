@@ -12,6 +12,7 @@ let
     walker
     waybar
     wl-clipboard
+    networkmanagerapplet  # Provides nm-connection-editor GUI
   ];
 
   systemPackages = with pkgs; [

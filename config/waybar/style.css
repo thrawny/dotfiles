@@ -45,3 +45,8 @@ window#waybar {
 #battery.critical {
   font-weight: bold;
 }
+
+/* Add spacing after network icon */
+#network {
+  padding-right: 12px;
+}
