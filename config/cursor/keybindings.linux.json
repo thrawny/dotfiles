@@ -1,11 +1,11 @@
 [
   {
-    "key": "ctrl+;",
+    "key": "alt+;",
     "command": "workbench.action.terminal.toggleTerminal",
     "when": "terminal.active"
   },
   {
-    "key": "ctrl+`",
+    "key": "alt+`",
     "command": "-workbench.action.terminal.toggleTerminal",
     "when": "terminal.active"
   },
