@@ -1,0 +1,195 @@
+/* Walker Molokai Theme */
+
+/* Define color variables */
+@define-color molokai-bg #1c1c1c;
+@define-color molokai-surface #3a3a3a;
+@define-color molokai-text #f0f0f0;
+@define-color molokai-muted #808080;
+@define-color molokai-accent #66d9ef;
+@define-color molokai-warning #f92672;
+
+/* Reset all elements */
+#window,
+#box,
+#search,
+#password,
+#input,
+#prompt,
+#clear,
+#typeahead,
+#list,
+child,
+scrollbar,
+slider,
+#item,
+#text,
+#label,
+#sub,
+#activationlabel {
+  all: unset;
+}
+
+* {
+  font-family: "CaskaydiaMono Nerd Font", monospace;
+  font-size: 13px;
+}
+
+/* Window */
+#window {
+  background: transparent;
+  color: @molokai-text;
+}
+
+/* Main box container */
+#box {
+  background: alpha(@molokai-bg, 0.95);
+  padding: 20px;
+  border: 2px solid @molokai-accent;
+  border-radius: 6px;
+}
+
+/* Search container */
+#search {
+  background: @molokai-surface;
+  padding: 10px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+}
+
+/* Prompt (search icon) */
+#prompt {
+  color: @molokai-accent;
+  margin-right: 10px;
+  font-size: 16px;
+}
+
+/* Clear button */
+#clear {
+  color: @molokai-muted;
+  padding: 0 10px;
+}
+
+#clear:hover {
+  color: @molokai-warning;
+}
+
+/* Input field */
+#input {
+  background: none;
+  color: @molokai-text;
+  padding: 0;
+}
+
+#input placeholder {
+  opacity: 0.5;
+  color: @molokai-muted;
+}
+
+/* Typeahead suggestion */
+#typeahead {
+  color: @molokai-muted;
+  opacity: 0.5;
+}
+
+/* List */
+#list {
+  background: transparent;
+}
+
+/* List items */
+child {
+  padding: 8px 12px;
+  background: transparent;
+  border-radius: 4px;
+  margin: 2px 0;
+}
+
+child:selected,
+child:hover {
+  background: @molokai-surface;
+}
+
+/* Item layout */
+#item {
+  padding: 0;
+}
+
+#item.active {
+  font-style: italic;
+}
+
+/* Icon */
+#icon {
+  margin-right: 10px;
+  -gtk-icon-transform: scale(0.8);
+}
+
+/* Text */
+#text {
+  color: @molokai-text;
+}
+
+#label {
+  font-weight: normal;
+}
+
+/* Selected state */
+child:selected #text,
+child:selected #label,
+child:hover #text,
+child:hover #label {
+  color: @molokai-accent;
+}
+
+/* Sub text (description) */
+#sub {
+  color: @molokai-muted;
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* Activation label */
+#activationlabel {
+  color: @molokai-muted;
+  font-size: 11px;
+  margin-left: auto;
+  padding-left: 10px;
+}
+
+/* Scrollbar styling */
+scrollbar {
+  background: @molokai-surface;
+  border-radius: 4px;
+  margin-left: 4px;
+}
+
+scrollbar slider {
+  background: @molokai-accent;
+  border-radius: 4px;
+  min-width: 8px;
+}
+
+/* Spinner */
+#spinner {
+  color: @molokai-accent;
+}
+
+/* Module switcher bar */
+#bar {
+  background: @molokai-surface;
+  padding: 8px;
+  margin-bottom: 10px;
+  border-radius: 4px;
+}
+
+.barentry {
+  padding: 4px 8px;
+  margin: 0 4px;
+  border-radius: 4px;
+  color: @molokai-muted;
+}
+
+.barentry.active {
+  background: @molokai-accent;
+  color: @molokai-bg;
+}

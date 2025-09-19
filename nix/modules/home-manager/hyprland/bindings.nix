@@ -64,7 +64,7 @@ let
 
   tilingBinds = [
     "${mod}, RETURN, exec, ghostty"
-    "${mod}, SPACE, exec, fuzzel"
+    "${mod}, SPACE, exec, walker"
     "${mod}, W, killactive"
     "${mod}, T, togglesplit"  # Changed from J to avoid conflict with vim j
     "${mod}, P, pseudo"

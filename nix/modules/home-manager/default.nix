@@ -26,6 +26,7 @@ in {
     ./npm.nix
     ./starship.nix
     ./tmux.nix
+    ./walker.nix
     ./waybar.nix
     ./zsh.nix
   ];

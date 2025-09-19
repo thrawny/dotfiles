@@ -7,7 +7,7 @@
       background = "#1c1c1c";
       foreground = "#F0F0F0";
       "font-family" = "CaskaydiaMono Nerd Font";
-      "font-size" = 11;
+      "font-size" = 10;
       "window-padding-x" = 10;
       "window-padding-y" = 5;
       "cursor-style-blink" = false;

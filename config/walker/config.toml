@@ -1,0 +1,54 @@
+# Walker configuration with Molokai theme
+
+# Placeholder entries (always displayed)
+placeholder = "Type to search..."
+
+# List configuration
+list = { height = 400 }
+
+# Activation mode (how to open items)
+activation_mode = { disabled = false, use_f_keys = false, use_alt = false }
+
+# Search settings
+search = { delay = 0, hide_icons = false, margin = 0, hide_spinner = false }
+
+# Icons configuration
+icons = { hide = false, size = 28, image_height = 200 }
+
+# Scrollbar settings
+scrollbar = { policy = "automatic" }
+
+# Orientation
+orientation = "vertical"
+
+# Fullscreen mode
+fullscreen = false
+
+# Window width
+width = 600
+
+# Enable typeahead
+typeahead = { enabled = true }
+
+# Modules to enable
+[modules]
+applications = true
+runner = true
+ssh = false
+finder = false
+commands = false
+websearch = false
+
+# Applications module config
+[[modules.applications]]
+name = "applications"
+prefix = ""
+
+# Runner module config
+[[modules.runner]]
+name = "runner"
+prefix = "!"
+
+# Theme stylesheet
+[theme]
+style = "style.css"

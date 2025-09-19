@@ -9,7 +9,7 @@ let
     playerctl
     gnome-themes-extra
     pavucontrol
-    fuzzel
+    walker
     waybar
     wl-clipboard
   ];
