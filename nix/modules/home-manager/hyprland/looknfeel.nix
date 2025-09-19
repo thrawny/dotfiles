@@ -1,24 +1,29 @@
-{ theme, ... }:
-let
-  palette = theme.palette;
-in
+{ ... }:
 {
   wayland.windowManager.hyprland.settings = {
     general = {
       gaps_in = 5;
       gaps_out = 20;
-      "col.active_border" = palette.accent;
-      "col.inactive_border" = palette.border;
+
+      border_size = 2;
+
+      # Molokai colors: cyan accent, dark gray borders
+      "col.active_border" = "rgba(66d9efee)";
+      "col.inactive_border" = "rgba(3a3a3aaa)";
+
+      resize_on_border = false;
+      allow_tearing = false;
+      layout = "dwindle";
     };
 
     decoration = {
       rounding = 6;
       shadow = {
-        enabled = false;
-        range = 30;
+        enabled = true;
+        range = 2;
         render_power = 3;
         ignore_window = true;
-        color = "rgba(0, 0, 0, 0.27)";
+        color = "rgba(1a1a1aee)";
       };
       blur = {
         enabled = true;
@@ -55,6 +60,20 @@ in
       ];
     };
 
-    misc.disable_hyprland_logo = true;
+    dwindle = {
+      pseudotile = true;
+      preserve_split = true;
+      force_split = 2; # Always split on the right
+    };
+
+    master = {
+      new_status = "master";
+    };
+
+    misc = {
+      disable_hyprland_logo = true;
+      disable_splash_rendering = true;
+      focus_on_activate = true;
+    };
   };
 }

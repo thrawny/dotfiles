@@ -1,16 +1,13 @@
-{ lib, theme, ... }:
-let
-  palette = theme.palette;
-  withAlpha = color: let base = lib.strings.removePrefix "#" color; in "#${base}ff";
-in
+{ ... }:
 {
   services.mako = {
     enable = true;
     settings = {
-      background-color = withAlpha palette.background;
-      text-color = withAlpha palette.text;
-      border-color = withAlpha palette.border;
-      progress-color = withAlpha palette.accent;
+      # Molokai colors with full opacity
+      background-color = "#1c1c1cff";
+      text-color = "#f0f0f0ff";
+      border-color = "#3a3a3aff";
+      progress-color = "#66d9efff";
 
       width = 420;
       height = 110;

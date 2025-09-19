@@ -1,4 +1,4 @@
-{ config, dotfiles, theme, ... }:
+{ config, dotfiles, ... }:
 {
   programs.waybar = {
     enable = true;
@@ -82,18 +82,14 @@
   home.file.".config/waybar/style.css".source =
     config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/waybar/style.css";
 
-  home.file.".config/waybar/theme.css".text =
-    let
-      palette = theme.palette;
-    in
-    ''
-      :root {
-        --waybar-bg: ${palette.backgroundAlpha};
-        --waybar-border: ${palette.border};
-        --waybar-fg: ${palette.text};
-        --waybar-muted: ${palette.textMuted};
-        --waybar-accent: ${palette.accent};
-        --waybar-warning: ${palette.warning};
-      }
-    '';
+  home.file.".config/waybar/theme.css".text = ''
+    :root {
+      --waybar-bg: rgba(28, 28, 28, 0.92);
+      --waybar-border: #3a3a3a;
+      --waybar-fg: #f0f0f0;
+      --waybar-muted: #808080;
+      --waybar-accent: #66d9ef;
+      --waybar-warning: #f92672;
+    }
+  '';
 }

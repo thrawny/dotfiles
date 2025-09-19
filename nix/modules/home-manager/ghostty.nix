@@ -1,10 +1,4 @@
-{ theme, ... }:
-let
-  fonts = (theme.fonts or {}).terminal or {
-    family = "CaskaydiaMono Nerd Font";
-    size = 13;
-  };
-in
+{ ... }:
 {
   programs.ghostty = {
     enable = true;
@@ -12,8 +6,8 @@ in
       theme = "Molokai";
       background = "#1c1c1c";
       foreground = "#F0F0F0";
-      "font-family" = fonts.family;
-      "font-size" = fonts.size;
+      "font-family" = "CaskaydiaMono Nerd Font";
+      "font-size" = 11;
       "window-padding-x" = 10;
       "window-padding-y" = 5;
       "cursor-style-blink" = false;

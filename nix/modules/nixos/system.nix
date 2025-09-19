@@ -4,25 +4,6 @@ let
   username = cfg.username;
   userHome = "/home/${username}";
   dotfiles = "${userHome}/dotfiles";
-  theme = {
-    palette = {
-      background = "#11111b";
-      backgroundAlpha = "rgba(17, 17, 27, 0.92)";
-      surface = "#1e1e2e";
-      border = "#313244";
-      text = "#cdd6f4";
-      textMuted = "#6c7086";
-      accent = "#89b4fa";
-      warning = "#f38ba8";
-      success = "#a6e3a1";
-    };
-    fonts = {
-      terminal = {
-        family = "CaskaydiaMono Nerd Font";
-        size = 13;
-      };
-    };
-  };
   packages = import ./packages.nix {
     inherit pkgs lib;
     excludePackages = [ ];
@@ -100,7 +81,7 @@ in {
     home-manager.useGlobalPkgs = true;
     home-manager.useUserPackages = true;
     home-manager.extraSpecialArgs = {
-      inherit dotfiles username theme;
+      inherit dotfiles username;
       gitIdentity = gitIdentity;
     };
 

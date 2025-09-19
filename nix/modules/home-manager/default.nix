@@ -1,4 +1,4 @@
-{ lib, pkgs, dotfiles, username, theme, ... }@args:
+{ lib, pkgs, dotfiles, username, ... }@args:
 let
   hmLib = lib.hm;
   gitIdentity = { name = null; email = null; } // (args.gitIdentity or { });
