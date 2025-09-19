@@ -80,8 +80,15 @@ in {
           ids = ["*"];
           settings = {
             main = {
+              # Swap Caps Lock and Escape
               capslock = "esc";
               esc = "capslock";
+
+              # Swap Alt and Ctrl for Mac-like layout
+              leftalt = "leftcontrol";
+              leftcontrol = "leftalt";
+              rightalt = "rightcontrol";
+              rightcontrol = "rightalt";
             };
             "shift" = {
               "102nd" = "S-grave";  # Shift+< produces Shift+grave which is ~
