@@ -110,10 +110,10 @@
     "command": "-editor.action.showHover",
     "when": "editorTextFocus"
   },
-  {
-    "key": "shift+cmd+o",
-    "command": "search.action.openNewEditor"
-  },
+  // {
+  //   "key": "shift+cmd+o",
+  //   "command": "search.action.openNewEditor"
+  // },
   // {
   //   "key": "alt+q",
   //   "command": "workbench.action.debug.restart",
@@ -253,5 +253,15 @@
     "key": "shift+alt+enter",
     "command": "pgsql.runQuery",
     "when": "editorTextFocus && editorLangId == 'sql'"
+  },
+  {
+    "key": "cmd+/",
+    "command": "editor.action.commentLine",
+    "when": "editorTextFocus && !editorReadonly"
+  },
+  {
+    "key": "ctrl+/",
+    "command": "-editor.action.commentLine",
+    "when": "editorTextFocus && !editorReadonly"
   }
 ]

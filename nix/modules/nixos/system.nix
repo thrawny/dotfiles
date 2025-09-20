@@ -123,6 +123,11 @@ in
               capslock = "esc";
               esc = "capslock";
 
+              # Swap Meta (Super/Windows) and Alt keys
+              leftmeta = "leftalt";
+              leftalt = "leftmeta";
+              rightalt = "rightmeta";
+
               # Swap Alt and Ctrl for Mac-like layout
               # leftalt = "leftcontrol";
               # leftcontrol = "leftalt";

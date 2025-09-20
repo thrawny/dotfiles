@@ -77,7 +77,7 @@ in
   home.file.".config/Cursor/User/settings.json".source =
     config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/cursor/settings.json";
   home.file.".config/Cursor/User/keybindings.json".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/cursor/keybindings.linux.json";
+    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/cursor/keybindings.json";
 
   home.file.".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
     text =

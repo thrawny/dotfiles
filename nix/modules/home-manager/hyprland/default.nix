@@ -12,6 +12,6 @@
   wayland.windowManager.hyprland = {
     enable = true;
     package = pkgs.hyprland;
-    settings."$mod" = "SUPER";
+    settings."$mod" = "ALT";
   };
 }
