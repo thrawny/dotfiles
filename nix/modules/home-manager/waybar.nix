@@ -1,4 +1,4 @@
-{ config, dotfiles, ... }:
+{ ... }:
 {
   programs.waybar = {
     enable = true;
@@ -8,13 +8,14 @@
         position = "top";
         height = 26;
         "modules-left" = [ "hyprland/workspaces" ];
-        "modules-center" = [ "clock" ];
+        "modules-center" = [ ];
         "modules-right" = [
           "tray"
           "network"
           "bluetooth"
           "pulseaudio"
           "battery"
+          "clock"
         ];
 
         "hyprland/workspaces" = {
@@ -33,8 +34,8 @@
         };
 
         clock = {
-          format = "{:%A %H:%M}";
-          "format-alt" = "{:%Y-%m-%d}";
+          format = "{:%Y-%m-%d %H:%M}";
+          "format-alt" = "{:%A}";
           tooltip = false;
         };
 
@@ -124,8 +125,60 @@
         tray.spacing = 8;
       }
     ];
-  };
 
-  home.file.".config/waybar/style.css".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/waybar/style.css";
+    style = ''
+      @define-color waybar-bg rgba(28, 28, 28, 0.92);
+      @define-color waybar-border #3a3a3a;
+      @define-color waybar-fg #f0f0f0;
+      @define-color waybar-muted #808080;
+      @define-color waybar-accent #66d9ef;
+      @define-color waybar-warning #f92672;
+
+      * {
+        font-family: "CaskaydiaCove Nerd Font", "JetBrains Mono", sans-serif;
+        font-size: 13px;
+        color: @waybar-fg;
+      }
+
+      window#waybar {
+        background-color: @waybar-bg;
+        border-bottom: 1px solid @waybar-border;
+      }
+
+      #clock,
+      #battery,
+      #bluetooth,
+      #network,
+      #pulseaudio,
+      #tray,
+      #workspaces {
+        padding: 0 8px;
+      }
+
+      #workspaces button {
+        border: none;
+        padding: 0 4px;
+        background: transparent;
+        color: @waybar-muted;
+      }
+
+      #workspaces button.active {
+        color: @waybar-accent;
+      }
+
+      #battery.warning,
+      #battery.critical {
+        color: @waybar-warning;
+      }
+
+      #battery.critical {
+        font-weight: bold;
+      }
+
+      /* Add spacing after network icon */
+      #network {
+        padding-right: 12px;
+      }
+    '';
+  };
 }
