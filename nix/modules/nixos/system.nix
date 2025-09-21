@@ -9,7 +9,7 @@ let
   username = cfg.username;
   userHome = "/home/${username}";
   dotfiles = "${userHome}/dotfiles";
-  packages = import ./packages.nix {
+  packages = import ../shared/packages.nix {
     inherit pkgs lib;
     excludePackages = [ ];
   };
@@ -155,6 +155,6 @@ in
       gitIdentity = gitIdentity;
     };
 
-    home-manager.users.${username} = import ../home-manager/default.nix;
+    home-manager.users.${username} = import ../../home/shared/default.nix;
   };
 }

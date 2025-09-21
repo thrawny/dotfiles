@@ -31,14 +31,14 @@
       nixosConfigurations = {
         tester = mkHost {
           system = "x86_64-linux";
-          modules = [ ./hosts/tester/config.nix ];
+          modules = [ ./hosts/tester/default.nix ];
         };
 
         thinkpad = mkHost {
           system = "x86_64-linux";
           modules = [
             nixos-hardware.nixosModules.lenovo-thinkpad-t14
-            ./hosts/thinkpad/config.nix
+            ./hosts/thinkpad/default.nix
           ];
         };
       };

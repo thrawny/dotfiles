@@ -26,22 +26,25 @@ let
 in
 {
   imports = [
+    # Shared modules
     ./direnv.nix
     ./git.nix
     ./ghostty.nix
-    ./hyprland/default.nix
-    ./hypridle.nix
-    ./hyprlock.nix
-    ./hyprpaper.nix
     ./k9s.nix
-    ./mako.nix
-    ./nvim.nix
     ./npm.nix
+    ./nvim.nix
     ./starship.nix
     ./tmux.nix
-    ./walker.nix
-    ./waybar.nix
     ./zsh.nix
+
+    # NixOS-specific modules
+    ../nixos/hyprland/default.nix
+    ../nixos/hypridle.nix
+    ../nixos/hyprlock.nix
+    ../nixos/hyprpaper.nix
+    ../nixos/mako.nix
+    ../nixos/walker.nix
+    ../nixos/waybar.nix
   ];
 
   home.username = username;
