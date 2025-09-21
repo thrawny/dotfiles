@@ -12,7 +12,6 @@
         "modules-right" = [
           "tray"
           "network"
-          "bluetooth"
           "pulseaudio"
           "battery"
           "clock"
@@ -57,13 +56,6 @@
           "on-click" = "nm-connection-editor";
         };
 
-        bluetooth = {
-          format = "󰂯";
-          "format-disabled" = "󰂲";
-          "format-connected" = "󰂱";
-          "tooltip-format" = "Devices connected: {num_connections}";
-          "on-click" = "blueman-manager";
-        };
 
         pulseaudio = {
           format = "{icon}";
@@ -147,7 +139,6 @@
 
       #clock,
       #battery,
-      #bluetooth,
       #network,
       #pulseaudio,
       #tray,

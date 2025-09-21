@@ -9,7 +9,7 @@
       "tile, class:^(chromium)$"
 
       # Float common control panels.
-      "float, class:^(org.pulseaudio.pavucontrol|blueberry.py)$"
+      "float, class:^(org.pulseaudio.pavucontrol|blueberry.py|.blueman-manager-wrapped)$"
       "float, class:^(steam)$"
       "fullscreen, class:^(com.libretro.RetroArch)$"
 
