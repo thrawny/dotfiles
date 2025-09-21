@@ -54,6 +54,8 @@ in
     starship
     uv
     gh
+    jq
+    yq-go
   ];
 
   home.activation.seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";

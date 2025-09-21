@@ -32,6 +32,7 @@ let
     wget
     unzip
     chromium
+    vivaldi
     spotify
     btop
     powertop
