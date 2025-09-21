@@ -7,6 +7,10 @@ model = "gpt-5-codex"
 command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
 
+[mcp_servers.nixos]
+command = "uvx"
+args = ["mcp-nixos"]
+
 [tools]
 web_search = true
 
