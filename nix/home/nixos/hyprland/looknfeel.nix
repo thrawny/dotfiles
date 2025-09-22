@@ -7,8 +7,8 @@
 
       border_size = 2;
 
-      # Molokai colors: cyan accent, dark gray borders
-      "col.active_border" = "rgba(66d9efee)";
+      # Molokai colors: pink accent, dark gray borders
+      "col.active_border" = "rgba(f92672ee)";
       "col.inactive_border" = "rgba(3a3a3aaa)";
 
       resize_on_border = false;
