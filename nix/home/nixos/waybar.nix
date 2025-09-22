@@ -119,7 +119,7 @@
     ];
 
     style = ''
-      @define-color waybar-bg rgba(28, 28, 28, 0.92);
+      @define-color waybar-bg rgba(28, 28, 28, 0.3);
       @define-color waybar-border #3a3a3a;
       @define-color waybar-fg #f0f0f0;
       @define-color waybar-muted #808080;

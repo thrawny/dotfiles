@@ -1,17 +1,9 @@
 { lib, dotfiles, ... }:
 let
-  wallpaperPath = "${dotfiles}/config/hypr/wallpaper.png";
-  haveWallpaper = builtins.pathExists wallpaperPath;
+  wallpaperPath = "${dotfiles}/assets/spacy-bg.png";
 in
 {
-  home.file = lib.mkIf haveWallpaper {
-    "Pictures/Wallpapers/default.png" = {
-      source = wallpaperPath;
-      recursive = false;
-    };
-  };
-
-  services.hyprpaper = lib.mkIf haveWallpaper {
+  services.hyprpaper = {
     enable = true;
     settings = {
       preload = [ wallpaperPath ];
