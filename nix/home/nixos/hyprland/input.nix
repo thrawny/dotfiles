@@ -22,5 +22,12 @@
         clickfinger_behavior = true;
       };
     };
+
+    # Per-device configuration for trackpoint
+    device = {
+      name = "tpps/2-elan-trackpoint";
+      sensitivity = 0; # Default speed (range: -1.0 to 1.0)
+      accel_profile = "flat"; # Disable acceleration for more consistent movement
+    };
   };
 }
