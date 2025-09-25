@@ -115,24 +115,55 @@ in
     services.keyd = {
       enable = true;
       keyboards = {
-        default = {
-          ids = [ "*" ];
+        # Windows-layout keyboards - swap Alt/Win for Mac-like layout
+        windows-layout = {
+          ids = [
+            # Built-in laptop keyboards
+            "AT Translated Set 2 keyboard"
+            "ThinkPad Extra Buttons"
+
+            # Add other Windows-layout keyboards here
+            # Find IDs with: sudo keyd -m
+            # Examples:
+            # "Logitech MX Keys"
+            # "Dell KB216 Wired Keyboard"
+            # "Microsoft Wired Keyboard 600"
+          ];
           settings = {
             main = {
               # Swap Caps Lock and Escape
               capslock = "esc";
               esc = "capslock";
 
-              # Swap Meta (Super/Windows) and Alt keys
+              # Swap Meta (Super/Windows) and Alt keys for Mac-like layout
               leftmeta = "leftalt";
               leftalt = "leftmeta";
               rightalt = "rightmeta";
+            };
+            "shift" = {
+              "102nd" = "S-grave"; # Shift+< produces Shift+grave which is ~
+            };
+          };
+        };
 
-              # Swap Alt and Ctrl for Mac-like layout
-              # leftalt = "leftcontrol";
-              # leftcontrol = "leftalt";
-              # rightalt = "rightcontrol";
-              # rightcontrol = "rightalt";
+        # Mac-layout keyboards (Keychron, Apple, etc.) - no Alt/Win swap
+        mac-layout = {
+          ids = [
+            # Add your Mac-layout keyboard IDs here
+            # You can find IDs with: sudo keyd -m
+            # Example IDs:
+            # "Keychron Keychron K2"
+            # "Keychron K8 Pro"
+            # "Apple Inc. Magic Keyboard"
+
+            # Use "-*" to match all other keyboards not matched above
+            "-*"  # Minus prefix excludes already matched devices
+          ];
+          settings = {
+            main = {
+              # Only swap Caps Lock and Escape (no Alt/Win swap)
+              capslock = "esc";
+              esc = "capslock";
             };
             "shift" = {
               "102nd" = "S-grave"; # Shift+< produces Shift+grave which is ~
