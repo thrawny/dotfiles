@@ -53,7 +53,6 @@ Then wait for the user's input.
    These agents will:
 
    - Find relevant source files, configs, and tests
-   - Identify the specific directories to focus on
    - Trace data flow and key functions
    - Return detailed explanations with file:line references
 
@@ -99,14 +98,20 @@ After getting initial clarifications:
    - Read the specific files/directories they mention
    - Only proceed once you've verified the facts yourself
 
-2. **Create a research todo list** to track exploration tasks
+2. **Create a research todo list** using TodoWrite to track exploration tasks
 
 3. **Spawn parallel sub-tasks for comprehensive research**:
 
-   - Create multiple focused tasks to research different aspects concurrently (if supported)
-   - Use research agents you have (e.g., software-research-analyst) for deeper investigation
+   - Create multiple Task agents to research different aspects concurrently
+   - Use the right agent for each type of research:
 
-   Each task should:
+   **For deeper investigation:**
+
+   - **codebase-locator** - To find more specific files (e.g., "find all files that handle [specific component]")
+   - **codebase-analyzer** - To understand implementation details (e.g., "analyze how [system] works")
+   - **codebase-pattern-finder** - To find similar features we can model after
+
+   Each agent knows how to:
 
    - Find the right files and code patterns
    - Identify conventions and patterns to follow
