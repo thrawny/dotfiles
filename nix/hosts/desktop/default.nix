@@ -20,4 +20,7 @@
   boot.extraModulePackages = with config.boot.kernelPackages; [ rtl8852au ];
 
   hardware.graphics.enable = true;
+
+  # NVIDIA configuration
+  hardware.nvidia.open = false;  # Use proprietary drivers for better compatibility
 }
