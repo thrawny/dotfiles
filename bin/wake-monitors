@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Wake monitors that have trouble waking from sleep (especially LG monitors with NVIDIA)
+
+echo "Waking monitors..."
+
+# Cycle DPMS off and on to force monitors to wake
+hyprctl dispatch dpms off
+sleep 1
+hyprctl dispatch dpms on
+
+# If monitors still not awake, try a second cycle
+sleep 0.5
+if ! hyprctl monitors | grep -q "dpmsStatus: 1"; then
+    echo "Monitors still sleeping, trying again..."
+    hyprctl dispatch dpms off
+    sleep 0.5
+    hyprctl dispatch dpms on
+fi
+
+echo "Monitors should be awake now"
