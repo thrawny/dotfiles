@@ -43,7 +43,7 @@
           ];
         };
 
-        desktop = mkHost {
+        thrawny-desktop = mkHost {
           system = "x86_64-linux";
           modules = [
             nixos-hardware.nixosModules.common-cpu-amd
@@ -60,5 +60,6 @@
       };
 
       packages.x86_64-linux.desktop-iso = self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
+      packages.x86_64-linux.thrawny-desktop-iso = self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
     };
 }
