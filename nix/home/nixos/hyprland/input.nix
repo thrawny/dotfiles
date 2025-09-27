@@ -3,16 +3,13 @@
   wayland.windowManager.hyprland.settings = {
     input = lib.mkDefault {
       kb_layout = "au";
-      # kb_options removed - handled by keyd service for better compatibility
       follow_mouse = 1;
-      sensitivity = 0;
+      sensitivity = 0; # 1:1 mouse movement
+      accel_profile = "flat"; # No acceleration
 
       # Keyboard repeat configuration
       repeat_rate = 30; # Higher = faster repeat (default: 25)
       repeat_delay = 200; # Lower = quicker initial repeat (default: 600ms)
-
-      # Scroll configuration
-      scroll_factor = 0.8; # Mouse scroll multiplier (default: 1.0, increase for more distance)
 
       touchpad = {
         disable_while_typing = false;
@@ -21,13 +18,6 @@
         tap-to-click = true;
         clickfinger_behavior = true;
       };
-    };
-
-    # Per-device configuration for trackpoint
-    device = {
-      name = "tpps/2-elan-trackpoint";
-      sensitivity = 0; # Default speed (range: -1.0 to 1.0)
-      accel_profile = "flat"; # Disable acceleration for more consistent movement
     };
   };
 }
