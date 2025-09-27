@@ -1,8 +1,12 @@
-.PHONY: switch fmt iso
+.PHONY: switch dry fmt iso
 
 # Rebuild and switch NixOS configuration (auto-detects hostname)
 switch:
 	sudo nixos-rebuild switch --flake ./nix#$$(hostname)
+
+# Dry-run build for current host without switching
+dry:
+	sudo nixos-rebuild dry-run --flake ./nix#$$(hostname)
 
 # Format all nix files
 fmt:
