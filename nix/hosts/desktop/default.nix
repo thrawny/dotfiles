@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ config, lib, ... }:
 {
   imports = [
     ../../modules/nixos/default.nix
@@ -17,6 +17,7 @@
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
   boot.loader.grub.enable = lib.mkForce false;
+  boot.extraModulePackages = with config.boot.kernelPackages; [ rtl8852au ];
 
   hardware.graphics.enable = true;
 }

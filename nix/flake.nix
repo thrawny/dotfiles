@@ -50,6 +50,17 @@
             ./hosts/desktop/default.nix
           ];
         };
+
+        desktop-iso = mkHost {
+          system = "x86_64-linux";
+          modules = [
+            nixos-hardware.nixosModules.common-cpu-amd
+            nixos-hardware.nixosModules.common-gpu-nvidia
+            ./hosts/desktop-iso/default.nix
+          ];
+        };
       };
+
+      packages.x86_64-linux.desktop-iso = nixosConfigurations.desktop-iso.config.system.build.isoImage;
     };
 }
