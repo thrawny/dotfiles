@@ -21,6 +21,10 @@
 
   hardware.graphics.enable = true;
 
-  # NVIDIA configuration
-  hardware.nvidia.open = false;  # Use proprietary drivers for better compatibility
+  # NVIDIA configuration (no integrated GPU, so no Prime needed)
+  hardware.nvidia = {
+    open = false;  # Use proprietary drivers for better compatibility
+    modesetting.enable = true;
+    nvidiaSettings = true;
+  };
 }
