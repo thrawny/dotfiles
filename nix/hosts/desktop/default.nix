@@ -21,10 +21,11 @@
 
   hardware.graphics.enable = true;
 
-  # NVIDIA configuration (no integrated GPU, so no Prime needed)
+  # NVIDIA configuration for dedicated GPU only with Wayland
   hardware.nvidia = {
     open = false;  # Use proprietary drivers for better compatibility
-    modesetting.enable = true;
+    modesetting.enable = true;  # Required for Wayland
     nvidiaSettings = true;
+    powerManagement.enable = true;  # For suspend/hibernate support
   };
 }
