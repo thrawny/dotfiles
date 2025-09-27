@@ -47,7 +47,6 @@
           system = "x86_64-linux";
           modules = [
             nixos-hardware.nixosModules.common-cpu-amd
-            nixos-hardware.nixosModules.common-gpu-nvidia
             ./hosts/desktop/default.nix
           ];
         };
