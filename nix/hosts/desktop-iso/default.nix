@@ -1,22 +1,33 @@
 { config, lib, pkgs, modulesPath, ... }:
 {
   imports = [
-    ../desktop/default.nix
-    "${modulesPath}/installer/cd-dvd/iso-image.nix"
+    "${modulesPath}/installer/cd-dvd/installation-cd-graphical-gnome.nix"
+    "${modulesPath}/installer/cd-dvd/channel.nix"
   ];
 
+  # ISO settings
   isoImage.makeEfiBootable = true;
   isoImage.makeUsbBootable = true;
 
-  # Faster compression for development
+  # Faster compression for development (optional - remove for final build)
   isoImage.squashfsCompression = "gzip -Xcompression-level 1";
 
-  # Auto-login
-  services.getty.autologinUser = lib.mkForce "thrawny";
+  # Include the RTL8852AU WiFi driver
+  boot.extraModulePackages = with config.boot.kernelPackages; [ rtl8852au ];
 
-  # Include installer tools
+  # Include additional firmware
+  hardware.enableRedistributableFirmware = true;
+
+  # Ensure NetworkManager is available
+  networking.networkmanager.enable = true;
+
+  # Include some useful tools in the installer
   environment.systemPackages = with pkgs; [
-    gparted
-    nixos-install-tools
+    vim
+    git
+    wget
+    curl
+    pciutils
+    usbutils
   ];
 }

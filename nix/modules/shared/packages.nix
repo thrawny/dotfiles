@@ -39,6 +39,7 @@ let
     fastfetch
     docker-compose
     code-cursor-fhs
+    keyd
   ];
 
   selectedSystemPackages = lib.lists.subtractLists excludePackages systemPackages;

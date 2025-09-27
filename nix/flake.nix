@@ -10,6 +10,7 @@
 
   outputs =
     {
+      self,
       nixpkgs,
       home-manager,
       nixos-hardware,
@@ -54,13 +55,11 @@
         desktop-iso = mkHost {
           system = "x86_64-linux";
           modules = [
-            nixos-hardware.nixosModules.common-cpu-amd
-            nixos-hardware.nixosModules.common-gpu-nvidia
             ./hosts/desktop-iso/default.nix
           ];
         };
       };
 
-      packages.x86_64-linux.desktop-iso = nixosConfigurations.desktop-iso.config.system.build.isoImage;
+      packages.x86_64-linux.desktop-iso = self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
     };
 }

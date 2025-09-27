@@ -57,6 +57,7 @@ in
     starship
     uv
     gh
+    lazygit
     jq
     yq-go
   ];

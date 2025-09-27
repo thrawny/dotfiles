@@ -93,6 +93,12 @@ in
       ]);
     programs.direnv.enable = true;
 
+    # Enable AppImage support
+    programs.appimage = {
+      enable = true;
+      binfmt = true;
+    };
+
     services.resolved.enable = true;
     hardware.bluetooth.enable = true;
     services.blueman.enable = true;
@@ -115,20 +121,9 @@ in
     services.keyd = {
       enable = true;
       keyboards = {
-        # Windows-layout keyboards - swap Alt/Win for Mac-like layout
-        windows-layout = {
-          ids = [
-            # Built-in laptop keyboards
-            "AT Translated Set 2 keyboard"
-            "ThinkPad Extra Buttons"
-
-            # Add other Windows-layout keyboards here
-            # Find IDs with: sudo keyd -m
-            # Examples:
-            # "Logitech MX Keys"
-            # "Dell KB216 Wired Keyboard"
-            # "Microsoft Wired Keyboard 600"
-          ];
+        # ThinkPad built-in keyboard - needs Alt/Win swap
+        thinkpad = {
+          ids = [ "0001:0001:70533846" ]; # AT Translated Set 2 keyboard exact ID
           settings = {
             main = {
               # Swap Caps Lock and Escape
@@ -146,22 +141,12 @@ in
           };
         };
 
-        # Mac-layout keyboards (Keychron, Apple, etc.) - no Alt/Win swap
-        mac-layout = {
-          ids = [
-            # Add your Mac-layout keyboard IDs here
-            # You can find IDs with: sudo keyd -m
-            # Example IDs:
-            # "Keychron Keychron K2"
-            # "Keychron K8 Pro"
-            # "Apple Inc. Magic Keyboard"
-
-            # Use "-*" to match all other keyboards not matched above
-            "-*"  # Minus prefix excludes already matched devices
-          ];
+        # Default for all other keyboards (no Alt/Win swap)
+        default = {
+          ids = [ "*" ]; # Match all keyboards (keyd prioritizes specific matches first)
           settings = {
             main = {
-              # Only swap Caps Lock and Escape (no Alt/Win swap)
+              # Only swap Caps Lock and Escape
               capslock = "esc";
               esc = "capslock";
             };
