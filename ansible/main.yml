@@ -5,6 +5,8 @@
   tasks:
   - include_tasks: all_config.yml
   - include_tasks: all_software.yml
+  - include_tasks: linux_config.yml
+    when: ansible_system == 'Linux'
   - include_tasks: linux_software.yml
     when: ansible_system == 'Linux'
   - include_tasks: osx_config.yml

@@ -31,6 +31,7 @@ in
     ./git.nix
     ./ghostty.nix
     ./k9s.nix
+    ./lazygit.nix
     ./npm.nix
     ./nvim.nix
     ./starship.nix
