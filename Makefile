@@ -1,8 +1,12 @@
-.PHONY: switch dry fmt iso
+.PHONY: switch switch-darwin dry fmt iso
 
 # Rebuild and switch NixOS configuration (auto-detects hostname)
 switch:
 	sudo nixos-rebuild switch --flake ./nix#$$(hostname)
+
+# Switch Home Manager configuration for Darwin/macOS
+switch-darwin:
+	home-manager switch --flake ./nix#thrawny-darwin
 
 # Dry-run build for current host without switching
 dry:

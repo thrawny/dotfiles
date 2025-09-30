@@ -26,7 +26,8 @@ let
 in
 {
   imports = [
-    # Shared modules
+    # Shared cross-platform modules
+    ./packages.nix
     ./direnv.nix
     ./git.nix
     ./ghostty.nix
@@ -37,38 +38,9 @@ in
     ./starship.nix
     ./tmux.nix
     ./zsh.nix
-
-    # NixOS-specific modules
-    ../nixos/hyprland/default.nix
-    ../nixos/hypridle.nix
-    ../nixos/hyprlock.nix
-    ../nixos/hyprpaper.nix
-    ../nixos/mako.nix
-    ../nixos/walker.nix
-    ../nixos/waybar.nix
   ];
 
-  home.username = username;
-  home.homeDirectory = "/home/${username}";
   home.stateVersion = "24.05";
-
-  home.packages = with pkgs; [
-    nodejs_24
-    python313
-    starship
-    uv
-    gh
-    lazygit
-    jq
-    yq-go
-    fzf
-    delta
-    git-lfs
-    go
-    golangci-lint
-    tree
-    procps
-  ];
 
   home.activation.seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
   home.activation.seedClaudeSettings = seedExample "config/claude/settings.example.json" "config/claude/settings.json";
@@ -87,11 +59,8 @@ in
   home.file.".claude/CLAUDE.md".source =
     config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/CLAUDE-GLOBAL.md";
 
-  # Cursor configuration - for Linux it goes in ~/.config/Cursor/User/
-  home.file.".config/Cursor/User/settings.json".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/cursor/settings.json";
-  home.file.".config/Cursor/User/keybindings.json".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/cursor/keybindings.json";
+  # Ensure .claude directory exists
+  home.file.".claude/.keep".text = "";
 
   home.file.".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
     text =

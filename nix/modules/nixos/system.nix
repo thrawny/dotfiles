@@ -171,6 +171,6 @@ in
       gitIdentity = gitIdentity;
     };
 
-    home-manager.users.${username} = import ../../home/shared/default.nix;
+    home-manager.users.${username} = import ../../home/nixos/default.nix;
   };
 }

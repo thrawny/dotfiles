@@ -61,5 +61,18 @@
 
       packages.x86_64-linux.desktop-iso = self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
       packages.x86_64-linux.thrawny-desktop-iso = self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
+
+      homeConfigurations.thrawny-darwin = home-manager.lib.homeManagerConfiguration {
+        pkgs = nixpkgs.legacyPackages.aarch64-darwin;
+        modules = [ ./home/darwin/default.nix ];
+        extraSpecialArgs = {
+          username = "jonas";
+          dotfiles = "/Users/jonas/dotfiles";
+          gitIdentity = {
+            name = "Jonas Lergell";
+            email = "jonaslergell@gmail.com";
+          };
+        };
+      };
     };
 }

@@ -1,17 +1,27 @@
-# NixOS Configuration Guide
+# Nix Configuration Guide
 
-This flake-based NixOS configuration manages the system setup for the ThinkPad.
+This flake-based configuration manages both NixOS systems and Darwin (macOS) via Home Manager.
 
 ## Commands
 
-### Rebuild System
+### NixOS: Rebuild System
 ```bash
-make switch       # Rebuild and switch immediately
+make switch       # Rebuild and switch immediately (auto-detects hostname)
 ```
 
 Or directly:
 ```bash
 sudo nixos-rebuild switch --flake ./nix#thinkpad
+```
+
+### Darwin/macOS: Switch Home Manager
+```bash
+make switch-darwin       # Switch Home Manager configuration for macOS
+```
+
+Or directly:
+```bash
+home-manager switch --flake ./nix#thrawny-darwin
 ```
 
 ### Format Nix Files
@@ -21,39 +31,98 @@ make fmt         # Uses treefmt to format all Nix files
 
 ## Configuration Structure
 
-- `flake.nix` - Main flake configuration
+### General
+- `flake.nix` - Main flake configuration (defines both NixOS and Darwin configurations)
+- `home/shared/` - Shared Home Manager modules (work on both NixOS and Darwin)
+  - `default.nix` - Main shared home configuration
+  - `git.nix`, `zsh.nix`, `tmux.nix`, etc. - Cross-platform app configs
+
+### NixOS-Specific
 - `modules/nixos/` - System-wide NixOS configuration
   - `system.nix` - Core system settings (timezone, keyd, packages)
   - `packages.nix` - Package definitions
-- `modules/home-manager/` - User-specific configuration via Home Manager
-  - `default.nix` - Main home configuration
+- `home/nixos/` - NixOS-specific Home Manager modules
   - `hyprland/` - Window manager configuration
   - `waybar.nix` - Status bar configuration
-  - Other app-specific modules
+  - Other Linux-specific modules
+
+### Darwin/macOS-Specific
+- `home/darwin/` - Darwin-specific Home Manager modules
+  - `default.nix` - Main Darwin home configuration
+  - `cursor.nix` - Cursor editor configuration (Library/Application Support paths)
+  - `lazygit.nix` - Lazygit configuration (Library/Application Support paths)
+  - `aerospace.nix` - Aerospace window manager configuration
+  - `defaults.nix` - macOS system defaults (via `defaults write`)
 
 ## Key Features
 
-### Keyboard Remapping (keyd)
+### NixOS Features
+
+#### Keyboard Remapping (keyd)
 System-wide key remapping configured in `modules/nixos/system.nix`:
 - Caps Lock ↔ Escape swap
 - Left Alt ↔ Left Meta swap (Mac-like)
 - Right Alt → Right Meta
 - ISO keyboard fixes (Shift+< → ~)
 
-### Hyprland Window Manager
+#### Hyprland Window Manager
 - Mod key set to ALT (works with physical Windows key due to keyd swap)
 - Configuration in `modules/home-manager/hyprland/`
 
+### Darwin/macOS Features
+
+#### Home Manager Standalone
+- Uses Home Manager without nix-darwin for simpler setup
+- Manages dotfiles, packages, and configurations
+- macOS system defaults configured via `home.activation` scripts
+
+#### macOS Defaults
+Configured in `home/darwin/defaults.nix`:
+- Finder: Show hidden files, extensions, path bar
+- Keyboard: Fast key repeat, disable press-and-hold
+- Dock: Minimize to application, disable recents, auto-hide
+- Screenshots: PNG format, saved to ~/Screenshots
+- And more...
+
+#### Plugin Managers
+- **Zinit**: Zsh plugin manager (installed via activation script)
+- **TPM**: Tmux Plugin Manager (installed via activation script)
+- Both work with existing configuration files
+
 ## Important Notes
 
+### NixOS
 - Hostname: `thinkpad` (must match flake configuration)
 - Username: Set via `dotfiles.username` option
 - Git tree warnings during rebuild are normal for uncommitted changes
+
+### Darwin/macOS
+- Configuration: `thrawny-darwin` (hardcoded in flake.nix)
+- Username: `jonas` (configured in flake.nix extraSpecialArgs)
+- First run: Installs Zinit and TPM automatically via activation scripts
+- macOS defaults: Run `killall Finder Dock` after first switch to see changes
+
+### Both Platforms
 - All config files use out-of-store symlinks for easy editing
+- Shared modules work on both NixOS and Darwin
+- Edit files in `~/dotfiles/config/` and changes reflect immediately
 
 ## File Paths
 
-After rebuild, configuration files are symlinked:
-- Cursor keybindings: `~/.config/Cursor/User/keybindings.json` → `~/dotfiles/config/cursor/keybindings.json`
-- Walker launcher: `~/.config/walker/` → `~/dotfiles/config/walker/`
+### Shared (NixOS and Darwin)
 - Shell config: `~/.zshrc` → `~/dotfiles/config/zsh/zshrc`
+- Git config: `~/.gitconfig` → `~/dotfiles/config/git/gitconfig`
+- Tmux config: `~/.tmux.conf` → `~/dotfiles/config/tmux/tmux.conf`
+- Neovim config: `~/.config/nvim` → `~/dotfiles/config/nvim`
+- Codex config: `~/.codex` → `~/dotfiles/config/codex`
+- Claude config: `~/.claude/commands` → `~/dotfiles/config/claude/commands`
+
+### NixOS-Specific
+- Cursor settings: `~/.config/Cursor/User/settings.json` → `~/dotfiles/config/cursor/settings.json`
+- Walker launcher: `~/.config/walker/` → `~/dotfiles/config/walker/`
+- Lazygit config: `~/.config/lazygit` → `~/dotfiles/config/lazygit`
+
+### Darwin/macOS-Specific
+- Cursor settings: `~/Library/Application Support/Cursor/User/` → `~/dotfiles/config/cursor/`
+- Lazygit config: `~/Library/Application Support/lazygit` → `~/dotfiles/config/lazygit`
+- Aerospace config: `~/.aerospace.toml` → `~/dotfiles/config/aerospace/aerospace.toml`
