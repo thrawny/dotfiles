@@ -147,6 +147,10 @@ zvm_after_init() {
   if command -v fzf &> /dev/null; then
     eval "$(fzf --zsh)"
   fi
+
+  # Bind Ctrl+F to forward-word for partial autosuggestion accept
+  bindkey ^F forward-word
+  bindkey ^f forward-word
 }
 
 # History substring search
@@ -176,10 +180,6 @@ setopt PUSHDMINUS
 zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
 zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
 zstyle ':completion:*' menu select
-
-# ===== Key Bindings =====
-bindkey ^F forward-word
-bindkey ^f forward-word
 
 # ===== Aliases =====
 alias h='history'
