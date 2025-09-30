@@ -61,6 +61,13 @@ in
     lazygit
     jq
     yq-go
+    fzf
+    delta
+    git-lfs
+    go
+    golangci-lint
+    tree
+    procps
   ];
 
   home.activation.seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
