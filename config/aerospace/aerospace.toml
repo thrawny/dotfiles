@@ -148,22 +148,9 @@ alt-shift-semicolon = 'mode service'
 alt-s = 'layout tiles accordion'
 alt-f = 'layout floating tiling'
 alt-w = 'fullscreen'
-alt-n = '''exec-and-forget bash -c "
-window_id=$(aerospace list-windows --all --format '%{window-id} %{app-name}' | grep -E '^[0-9]+ Ghostty' | head -n1 | awk '{print $1}')
-if [ -n \"$window_id\" ]; then
-    aerospace focus --window-id $window_id
-else
-    open -a Ghostty
-fi
-"'''
-alt-b = '''exec-and-forget bash -c "
-window_id=$(aerospace list-windows --all --format '%{window-id} %{app-name}' | grep -E '^[0-9]+ Arc' | head -n1 | awk '{print $1}')
-if [ -n \"$window_id\" ]; then
-    aerospace focus --window-id $window_id
-else
-    open -a Arc
-fi
-"'''
+alt-n = 'exec-and-forget aerospace list-windows --monitor all --app-bundle-id com.mitchellh.ghostty --format "%{window-id}" | head -n1 | xargs -r aerospace focus --window-id || open -a Ghostty'
+alt-b = 'exec-and-forget aerospace list-windows --monitor all --app-bundle-id company.thebrowser.Browser --format "%{window-id}" | head -n1 | xargs -r aerospace focus --window-id || open -a Arc'
+alt-p = 'exec-and-forget aerospace list-windows --monitor all --app-bundle-id com.spotify.client --format "%{window-id}" | head -n1 | xargs -r aerospace focus --window-id || open -a Spotify'
 
 # 'service' binding mode declaration.
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
