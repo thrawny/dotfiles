@@ -1,5 +1,8 @@
 local notesPath = vim.fn.expand("~") .. "/work-notes"
 
+-- Detect light mode: disable heavy plugins in devpod or when explicitly requested
+local nvim_light = vim.env.DEVPOD or vim.env.NVIM_LIGHT
+
 require("lazy").setup({
 	"tpope/vim-surround",
 	{
@@ -64,10 +67,10 @@ require("lazy").setup({
 		-- 	tag = "0.1.6",
 		-- 	dependencies = { "nvim-lua/plenary.nvim" },
 		-- },
-		-- {
-		-- 	"nvim-treesitter/nvim-treesitter",
-		-- 	build = ":TSUpdate",
-		-- },
+		not nvim_light and {
+			"nvim-treesitter/nvim-treesitter",
+			build = ":TSUpdate",
+		} or nil,
 		{
 			"numToStr/Comment.nvim",
 			opts = {
@@ -228,15 +231,17 @@ require("lualine").setup({
 -- 	},
 -- }))
 
--- require("nvim-treesitter.configs").setup({
--- 	ensure_installed = "all",
+if not nvim_light then
+	require("nvim-treesitter.configs").setup({
+		ensure_installed = { "markdown", "markdown_inline", "python", "lua", "bash", "javascript", "typescript", "go", "yaml", "json" },
 
--- 	auto_install = true,
+		auto_install = true,
 
--- 	highlight = {
--- 		enable = true,
--- 	},
--- })
+		highlight = {
+			enable = true,
+		},
+	})
+end
 
 -- require("conform").formatters.injected = {
 -- 	-- Set the options field

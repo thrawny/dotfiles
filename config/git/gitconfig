@@ -22,6 +22,7 @@
   pager = less -F -X
   excludesfile = ~/.gitignoreglobal
   autocrlf = input
+  editor = nvim -c 'autocmd VimLeave * call system(\"printf \\\\033c\")'
 # [url "git@github.com:"]
 #   insteadOf = https://github.com/
 [init]
