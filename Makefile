@@ -6,7 +6,7 @@ switch:
 
 # Switch Home Manager configuration for Darwin/macOS
 switch-darwin:
-	home-manager switch --flake ./nix#thrawnym1
+	home-manager switch --flake ./nix#$$(hostname | sed 's/\.local$$//')
 
 # Dry-run build for current host without switching
 dry:

@@ -42,6 +42,9 @@ in
 
   home.stateVersion = "24.05";
 
+  # Let Home Manager manage itself
+  programs.home-manager.enable = true;
+
   home.activation.seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
   home.activation.seedClaudeSettings = seedExample "config/claude/settings.example.json" "config/claude/settings.json";
   home.activation.seedCursorSettings = seedExample "config/cursor/settings.example.json" "config/cursor/settings.json";
