@@ -13,6 +13,7 @@
 
     # Darwin-specific modules
     ./cursor.nix
+    ./ghostty.nix
     ./lazygit.nix
     ./aerospace.nix
     ./setup.nix

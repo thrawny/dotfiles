@@ -1,7 +1,9 @@
-{ ... }:
+{ pkgs, ... }:
 {
   programs.ghostty = {
     enable = true;
+    # Only install package on Linux (macOS users install via Homebrew or direct download)
+    package = if pkgs.stdenv.isLinux then pkgs.ghostty else null;
     settings = {
       theme = "Molokai";
       background = "#1c1c1c";
