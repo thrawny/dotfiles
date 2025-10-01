@@ -156,6 +156,14 @@ else
     open -a Ghostty
 fi
 "'''
+alt-b = '''exec-and-forget bash -c "
+window_id=$(aerospace list-windows --all --format '%{window-id} %{app-name}' | grep -E '^[0-9]+ Arc' | head -n1 | awk '{print $1}')
+if [ -n \"$window_id\" ]; then
+    aerospace focus --window-id $window_id
+else
+    open -a Arc
+fi
+"'''
 
 # 'service' binding mode declaration.
 # See: https://nikitabobko.github.io/AeroSpace/guide#binding-modes
