@@ -204,7 +204,7 @@
     "*.css": "tailwindcss"
   },
   "workbench.colorTheme": "Darcula",
-  "editor.fontFamily": "Source Code Pro For Powerline",
+  "editor.fontFamily": "CaskaydiaMono Nerd Font",
   "editor.fontSize": 13,
   "go.toolsManagement.autoUpdate": true,
   "editor.snippetSuggestions": "none",
@@ -217,6 +217,7 @@
   "workbench.sideBar.location": "left",
   "explorer.confirmDragAndDrop": false,
   "editor.acceptSuggestionOnCommitCharacter": false,
+  "editor.accessibilitySupport": "off",
   "hediet.vscode-drawio.resizeImages": null,
   "hediet.vscode-drawio.theme": "sketch",
   "editor.inlineSuggest.suppressSuggestions": true,
@@ -263,8 +264,17 @@
   "[csv]": {
     "editor.inlayHints.maximumLength": 0
   },
+  "[dockercompose]": {
+    "editor.autoIndent": "advanced",
+    "editor.defaultFormatter": "redhat.vscode-yaml",
+    "editor.insertSpaces": true,
+    "editor.tabSize": 2
+  },
   "[dynamic csv]": {
     "editor.inlayHints.maximumLength": 0
+  },
+  "[github-actions-workflow]": {
+    "editor.defaultFormatter": "redhat.vscode-yaml"
   },
   "jupyter.runStartupCommands": [],
   "cursor.general.globalCursorIgnoreList": [
@@ -289,6 +299,7 @@
   "git.autofetch": true,
   "diffEditor.hideUnchangedRegions.enabled": true,
   "diffEditor.renderSideBySide": true,
+  "githubPullRequests.pullBranch": "never",
   "gitlens.currentLine.enabled": false,
   "gitlens.codeLens.authors.enabled": false,
   "gitlens.codeLens.recentChange.enabled": false,

@@ -35,19 +35,19 @@ warn_diff() {
 }
 
 # Hard-coded ignored fields:
-# - Cursor: pgsql.serverGroups, pgsql.connections
-# - Claude: model
+# - Cursor: pgsql.serverGroups, pgsql.connections, diffEditor.renderSideBySide
+# - Claude: model, alwaysThinkingEnabled
 warn_diff \
   "Cursor settings" \
   "config/cursor/settings.json" \
   "config/cursor/settings.example.json" \
-  'del(.["pgsql.serverGroups"], .["pgsql.connections"])'
+  'del(.["pgsql.serverGroups"], .["pgsql.connections"], .["diffEditor.renderSideBySide"])'
 
 warn_diff \
   "Claude settings" \
   "config/claude/settings.json" \
   "config/claude/settings.example.json" \
-  'del(.model, .feedbackSurveyState)'
+  'del(.model, .feedbackSurveyState, .alwaysThinkingEnabled)'
 
 # Codex: compare shared keys using yq (ignore local-only sections).
 warn_diff_codex() {
