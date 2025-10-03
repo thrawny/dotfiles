@@ -124,7 +124,7 @@ alt-5 = 'workspace 5'
 alt-6 = 'workspace 6'
 alt-7 = 'workspace 7'
 alt-8 = 'workspace 8'
-alt-9 = 'workspace 9'
+alt-9 = 'workspace s'
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#move-node-to-workspace
 alt-shift-1 = 'move-node-to-workspace --focus-follows-window 1'
@@ -135,7 +135,7 @@ alt-shift-5 = 'move-node-to-workspace --focus-follows-window 5'
 alt-shift-6 = 'move-node-to-workspace --focus-follows-window 6'
 alt-shift-7 = 'move-node-to-workspace --focus-follows-window 7'
 alt-shift-8 = 'move-node-to-workspace --focus-follows-window 8'
-alt-shift-9 = 'move-node-to-workspace --focus-follows-window 9'
+alt-shift-9 = 'move-node-to-workspace --focus-follows-window s'
 
 # See: https://nikitabobko.github.io/AeroSpace/commands#workspace-back-and-forth
 alt-tab = 'workspace-back-and-forth'
@@ -149,7 +149,7 @@ alt-s = 'layout tiles accordion'
 alt-f = 'layout floating tiling'
 alt-w = 'fullscreen'
 alt-n = 'exec-and-forget (aerospace list-windows --monitor all --app-bundle-id com.mitchellh.ghostty --format "%{window-id}:%{window-title}" | grep -i tmux | head -n1 || aerospace list-windows --monitor all --app-bundle-id com.mitchellh.ghostty --format "%{window-id}:%{window-title}" | head -n1) | cut -d: -f1 | xargs -r aerospace focus --window-id || open -a Ghostty'
-alt-b = 'exec-and-forget aerospace list-windows --monitor all --app-bundle-id company.thebrowser.Browser --format "%{window-id}" | head -n1 | xargs -r aerospace focus --window-id || open -a Arc'
+alt-b = 'exec-and-forget ~/dotfiles/bin/aerospace-focus-browser.sh'
 alt-p = 'exec-and-forget aerospace list-windows --monitor all --app-bundle-id com.spotify.client --format "%{window-id}" | head -n1 | xargs -r aerospace focus --window-id || open -a Spotify'
 
 # 'service' binding mode declaration.
@@ -235,7 +235,7 @@ run = ['layout floating', 'move-node-to-workspace 1']
 # Media
 [[on-window-detected]]
 if.app-id = 'com.spotify.client'
-run = ['layout floating', 'move-node-to-workspace 1']
+run = 'move-node-to-workspace s'
 
 [[on-window-detected]]
 if.app-id = 'com.apple.Preview'
