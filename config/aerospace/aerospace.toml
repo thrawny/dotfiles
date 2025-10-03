@@ -148,7 +148,7 @@ alt-shift-semicolon = 'mode service'
 alt-s = 'layout tiles accordion'
 alt-f = 'layout floating tiling'
 alt-w = 'fullscreen'
-alt-n = 'exec-and-forget aerospace list-windows --monitor all --app-bundle-id com.mitchellh.ghostty --format "%{window-id}" | head -n1 | xargs -r aerospace focus --window-id || open -a Ghostty'
+alt-n = 'exec-and-forget (aerospace list-windows --monitor all --app-bundle-id com.mitchellh.ghostty --format "%{window-id}:%{window-title}" | grep -i tmux | head -n1 || aerospace list-windows --monitor all --app-bundle-id com.mitchellh.ghostty --format "%{window-id}:%{window-title}" | head -n1) | cut -d: -f1 | xargs -r aerospace focus --window-id || open -a Ghostty'
 alt-b = 'exec-and-forget aerospace list-windows --monitor all --app-bundle-id company.thebrowser.Browser --format "%{window-id}" | head -n1 | xargs -r aerospace focus --window-id || open -a Arc'
 alt-p = 'exec-and-forget aerospace list-windows --monitor all --app-bundle-id com.spotify.client --format "%{window-id}" | head -n1 | xargs -r aerospace focus --window-id || open -a Spotify'
 
