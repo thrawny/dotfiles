@@ -27,7 +27,8 @@
       "WebFetch",
       "WebSearch",
       "Bash(git log:*)",
-      "Bash(go doc:*)"
+      "Bash(go doc:*)",
+      "mcp__nixos"
     ],
     "deny": [],
     "ask": [
