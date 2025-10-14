@@ -19,5 +19,27 @@
     procps
     zoxide
     bat
+    direnv
+    pnpm
+    ripgrep
+    tmux
+    neovim
+    git
+    zsh
+    awscli2
+    bash
+    coreutils
+    curl
+    gnugrep
+    gnused
+    k9s
+    kind
+    cowsay
+    watch
+    postgresql_17
+    ruff
+    tree-sitter
+    vim
+    wget
   ];
 }
