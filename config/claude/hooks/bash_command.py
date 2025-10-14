@@ -152,7 +152,7 @@ def main():
         ]
 
         # Filter out bypassed rules
-        issues = []
+        issues: list[str] = []
         for pattern, message in _VALIDATION_RULES:
             if pattern not in bypass_patterns:
                 if re.search(pattern, command):

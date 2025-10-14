@@ -1,5 +1,70 @@
-[settings]
-# Silence deprecation warning by explicitly enabling idiomatic version files
-# for Python (this repo has a .python-version).
-idiomatic_version_file_enable_tools = ["python"]
+[env]
+_.python.venv = ".venv"
 
+[tasks."fmt:python"]
+description = "Format Python sources with Ruff"
+run = "uv run ruff format ."
+sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
+outputs = { auto = true }
+
+[tasks."lint:python"]
+description = "Lint Python sources with Ruff"
+run = "uv run ruff check ."
+sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
+
+[tasks."typecheck:python"]
+description = "Typecheck Python code with basedpyright"
+run = "uv run basedpyright"
+sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
+
+[tasks."test:python"]
+description = "Run Python tests with pytest"
+run = "uv run pytest"
+sources = ["claude_tools/**/*.py", "tests/**/*.py"]
+
+[tasks."fmt:lua"]
+description = "Format Neovim Lua config with Stylua"
+tools."github:JohnnyMorganz/StyLua" = "v0.20.0"
+run = "stylua config/nvim"
+sources = ["config/nvim/**/*.lua"]
+outputs = { auto = true }
+
+[tasks."fmt:nix"]
+description = "Format Nix files with nixfmt"
+run = "nix shell nixpkgs#treefmt nixpkgs#nixfmt -c treefmt"
+sources = ["**/*.nix"]
+outputs = { auto = true }
+
+[tasks."lint:nix"]
+description = "Lint Nix files with statix"
+run = "nix run nixpkgs#statix -- check ."
+sources = ["**/*.nix"]
+
+[tasks."test:nvim"]
+description = "Run Neovim config tests in headless mode"
+run = '''
+nvim --headless -u config/nvim/init.lua \
+  +"lua local ok,tests=pcall(require,'tests'); if ok and tests.run_all then tests.run_all() end" \
+  +qa
+'''
+sources = ["config/nvim/**/*.lua"]
+
+[tasks.fmt]
+description = "Run all formatters"
+depends = ["fmt:python", "fmt:lua", "fmt:nix"]
+
+[tasks.lint]
+description = "Run all linters"
+depends = ["lint:python", "lint:nix"]
+
+[tasks.typecheck]
+description = "Run all type checks"
+depends = ["typecheck:python"]
+
+[tasks.test]
+description = "Run all tests"
+depends = ["test:python", "test:nvim"]
+
+[tasks.ci]
+description = "Run lint, typecheck, format, and tests"
+depends = ["fmt", "lint", "typecheck", "test"]

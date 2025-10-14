@@ -13,4 +13,8 @@ config/codex/*
 !config/codex/config.example.toml
 !config/codex/prompts
 
+config/cursor/settings.json
+
 result
+
+.venv

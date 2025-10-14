@@ -1,4 +1,8 @@
-{ config, dotfiles, ... }:
+{
+  config,
+  dotfiles,
+  ...
+}:
 {
   home.file.".gitconfig".source =
     config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/git/gitconfig";

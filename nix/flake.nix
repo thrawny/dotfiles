@@ -19,7 +19,10 @@
     let
       lib = nixpkgs.lib;
       mkHost =
-        { system, modules }:
+        {
+          system,
+          modules,
+        }:
         lib.nixosSystem {
           inherit system;
           modules = [
@@ -59,8 +62,10 @@
         };
       };
 
-      packages.x86_64-linux.desktop-iso = self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
-      packages.x86_64-linux.thrawny-desktop-iso = self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
+      packages.x86_64-linux.desktop-iso =
+        self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
+      packages.x86_64-linux.thrawny-desktop-iso =
+        self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
 
       homeConfigurations.thrawnym1 = home-manager.lib.homeManagerConfiguration {
         pkgs = nixpkgs.legacyPackages.aarch64-darwin;

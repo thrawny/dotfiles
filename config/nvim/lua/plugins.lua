@@ -16,7 +16,16 @@ local function configure_heavy_lsp()
 		coq.lsp_ensure_capabilities({
 			cmd = { "lua-language-server" },
 			filetypes = { "lua" },
-			root_markers = { ".luarc.json", ".luarc.jsonc", ".luacheckrc", ".stylua.toml", "stylua.toml", "selene.toml", "selene.yml", ".git" },
+			root_markers = {
+				".luarc.json",
+				".luarc.jsonc",
+				".luacheckrc",
+				".stylua.toml",
+				"stylua.toml",
+				"selene.toml",
+				"selene.yml",
+				".git",
+			},
 			single_file_support = true,
 			settings = {
 				Lua = {
@@ -36,12 +45,15 @@ local function configure_heavy_lsp()
 	vim.lsp.enable("lua_ls")
 
 	-- Go LSP using new vim.lsp.config API
-	vim.lsp.config("gopls", coq.lsp_ensure_capabilities({
-		cmd = { "gopls" },
-		filetypes = { "go", "gomod", "gowork", "gotmpl" },
-		root_markers = { "go.work", "go.mod", ".git" },
-		single_file_support = true,
-	}))
+	vim.lsp.config(
+		"gopls",
+		coq.lsp_ensure_capabilities({
+			cmd = { "gopls" },
+			filetypes = { "go", "gomod", "gowork", "gotmpl" },
+			root_markers = { "go.work", "go.mod", ".git" },
+			single_file_support = true,
+		})
+	)
 	vim.lsp.enable("gopls")
 end
 
@@ -164,6 +176,11 @@ require("lazy").setup({
 				},
 				format_on_save = { timeout_ms = 500, lsp_fallback = true },
 				formatters = {
+					tombi = {
+						command = "uvx",
+						args = { "tombi", "format", "$FILENAME" },
+						stdin = false,
+					},
 					shfmt = {
 						prepend_args = { "-i", "2" },
 					},
@@ -178,31 +195,31 @@ require("lazy").setup({
 			tag = "0.1.8",
 			dependencies = { "nvim-lua/plenary.nvim" },
 		},
-	{
-		"nvim-treesitter/nvim-treesitter",
-		cond = not nvim_light,
-		build = ":TSUpdate",
-	},
+		{
+			"nvim-treesitter/nvim-treesitter",
+			cond = not nvim_light,
+			build = ":TSUpdate",
+		},
 		{
 			"numToStr/Comment.nvim",
 			opts = {},
 			lazy = false,
 		},
-	{
-		"williamboman/mason.nvim",
-		cond = not nvim_light,
-		opts = {},
-	},
-	{
-		"ms-jpq/coq_nvim",
-		cond = not nvim_light,
-		branch = "coq",
-	},
-	{
-		"ms-jpq/coq.artifacts",
-		cond = not nvim_light,
-		branch = "artifacts",
-	},
+		{
+			"williamboman/mason.nvim",
+			cond = not nvim_light,
+			opts = {},
+		},
+		{
+			"ms-jpq/coq_nvim",
+			cond = not nvim_light,
+			branch = "coq",
+		},
+		{
+			"ms-jpq/coq.artifacts",
+			cond = not nvim_light,
+			branch = "artifacts",
+		},
 		{
 			"nvim-lualine/lualine.nvim",
 			dependencies = { "nvim-tree/nvim-web-devicons" },
@@ -284,38 +301,37 @@ require("lazy").setup({
 				},
 			},
 		},
-	{
-		"folke/which-key.nvim",
-		event = "VeryLazy",
-		opts = {
-			preset = "classic",
-			delay = 200,
-			plugins = {
-				marks = true,
-				registers = true,
-				spelling = {
-					enabled = true,
-					suggestions = 20,
+		{
+			"folke/which-key.nvim",
+			event = "VeryLazy",
+			opts = {
+				preset = "classic",
+				delay = 200,
+				plugins = {
+					marks = true,
+					registers = true,
+					spelling = {
+						enabled = true,
+						suggestions = 20,
+					},
+					presets = {
+						operators = true,
+						motions = true,
+						text_objects = true,
+						windows = true,
+						nav = true,
+						z = true,
+						g = true,
+					},
 				},
-				presets = {
-					operators = true,
-					motions = true,
-					text_objects = true,
-					windows = true,
-					nav = true,
-					z = true,
-					g = true,
+				win = {
+					border = "rounded",
+					padding = { 1, 2 },
 				},
-			},
-			win = {
-				border = "rounded",
-				padding = { 1, 2 },
 			},
 		},
 	},
-	},
 })
-
 
 configure_heavy_lsp()
 

@@ -1,4 +1,8 @@
-{ lib, dotfiles, ... }:
+{
+  lib,
+  dotfiles,
+  ...
+}:
 let
   wallpaperPath = "${dotfiles}/config/hypr/wallpaper.png";
   haveWallpaper = builtins.pathExists wallpaperPath;

@@ -1,4 +1,8 @@
-{ config, dotfiles, ... }:
+{
+  config,
+  dotfiles,
+  ...
+}:
 {
   # Aerospace window manager configuration
   home.file.".aerospace.toml".source =

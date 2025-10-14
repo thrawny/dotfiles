@@ -1,4 +1,8 @@
-{ config, dotfiles, ... }:
+{
+  config,
+  dotfiles,
+  ...
+}:
 {
   # Starship prompt is loaded via zshrc; we only link the config file.
   xdg.configFile."starship.toml".source =

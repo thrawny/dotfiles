@@ -1,4 +1,8 @@
-{ config, lib, ... }:
+{
+  config,
+  lib,
+  ...
+}:
 {
   imports = [
     ../../modules/nixos/default.nix
@@ -23,9 +27,9 @@
 
   # NVIDIA configuration for dedicated GPU only with Wayland
   hardware.nvidia = {
-    open = false;  # Use proprietary drivers for better compatibility
-    modesetting.enable = true;  # Required for Wayland
+    open = false; # Use proprietary drivers for better compatibility
+    modesetting.enable = true; # Required for Wayland
     nvidiaSettings = true;
-    powerManagement.enable = true;  # For suspend/hibernate support
+    powerManagement.enable = true; # For suspend/hibernate support
   };
 }

@@ -1,4 +1,8 @@
-{ config, dotfiles, ... }:
+{
+  config,
+  dotfiles,
+  ...
+}:
 {
   # Lazygit configuration - Darwin uses ~/Library/Application Support/
   home.file."Library/Application Support/lazygit".source =

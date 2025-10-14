@@ -1,4 +1,8 @@
-{ config, dotfiles, ... }:
+{
+  config,
+  dotfiles,
+  ...
+}:
 {
   # Cursor configuration for Linux - goes in ~/.config/Cursor/User/
   home.file.".config/Cursor/User/settings.json".source =

@@ -56,7 +56,6 @@
           "on-click" = "nm-connection-editor";
         };
 
-
         pulseaudio = {
           format = "{icon}";
           "format-muted" = "󰝟";

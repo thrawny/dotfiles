@@ -38,6 +38,7 @@ in
     ./starship.nix
     ./tmux.nix
     ./zsh.nix
+    ./mise.nix
   ];
 
   home.stateVersion = "24.05";

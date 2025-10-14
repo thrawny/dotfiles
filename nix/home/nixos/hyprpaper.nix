@@ -1,4 +1,8 @@
-{ lib, dotfiles, ... }:
+{
+  lib,
+  dotfiles,
+  ...
+}:
 let
   wallpaperPath = "${dotfiles}/assets/spacy-bg.png";
 in

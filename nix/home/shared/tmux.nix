@@ -1,4 +1,9 @@
-{ config, dotfiles, lib, ... }:
+{
+  config,
+  dotfiles,
+  lib,
+  ...
+}:
 let
   hmLib = lib.hm;
 in
