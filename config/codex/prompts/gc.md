@@ -1,23 +1,18 @@
 ## Context
 
-- Current git status: `git status`
-- Current git diff (staged and unstaged changes): `git diff HEAD`
-- Current branch: `git branch --show-current`
-- Recent commits: `git log --oneline -10`
+- `git status`
+- `git diff HEAD`
+- `git branch --show-current`
+- `git log --oneline -10`
 
-## Your task
+## Task
 
-Based on the above git context, create a single well-crafted git commit. Follow these guidelines:
+Create one clean commit from the current workspace.
 
-1. Analyze the changes: Look at both staged and unstaged changes to understand what modifications have been made.
-2. Stage relevant files: Add any untracked or modified files that should be part of this commit.
-   - ALWAYS check for and stage new/untracked files using `git add` for files that should be included.
-   - NEVER commit `.envrc` files.
-3. Write a meaningful commit message that:
-   - Uses imperative mood (e.g., "Add feature" not "Added feature").
-   - Is concise but descriptive (max ~4 lines of text).
-   - Follows the existing commit message style shown in recent commits.
-   - Explains the "why" rather than just the "what".
+1. Review both staged and unstaged changes so you fully understand what will ship.
+2. Confirm which files belong in the commit.
+3. Before any `git add`, `git commit`, or other write action, Codex **must** request elevated permission; skipping the approval step triggers index-lock failures and the command will not succeed.
+4. After approval, stage the required files—never include `.envrc`.
+5. Craft a concise, imperative commit message that follows the existing style and explains the reasoning, not just the edits.
 
-If there are no changes to commit, say so. If the changes seem incomplete or you need clarification about what should be included, ask before proceeding.
-
+If there is nothing to commit, report that outcome. If the change set feels unclear or incomplete, pause and ask for direction instead of guessing.
