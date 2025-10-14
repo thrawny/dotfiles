@@ -12,7 +12,7 @@ vim.g.mapleader = ","
 
 require("plugins")
 
--- local builtin = require("telescope.builtin")
+local builtin = require("telescope.builtin")
 
 local set = vim.opt
 local cmd = vim.cmd
@@ -69,12 +69,12 @@ map("n", "<Leader>,", "<C-^>zz", { noremap = true })
 map("n", "<Leader>v", ":e $MYVIMRC<CR>", { noremap = true })
 map("n", "<Leader>z", ":e ~/.zshrc<CR>", { noremap = true })
 map("n", "<Leader>sv", ":source $MYVIMRC<CR>", { noremap = true })
-map("n", "<localleader>b", ":NERDTreeToggle<CR>", { noremap = true })
+map("n", "<localleader>b", ":Neotree toggle<CR>", { noremap = true })
 map("n", "<localleader>,", ",", { noremap = true })
--- vim.keymap.set("n", "<leader>ff", builtin.find_files, {})
--- vim.keymap.set("n", "<leader>fg", builtin.live_grep, {})
--- vim.keymap.set("n", "<leader>fb", builtin.buffers, {})
--- vim.keymap.set("n", "<leader>fh", builtin.help_tags, {})
+vim.keymap.set("n", "<leader>ff", builtin.find_files, { desc = "Find files" })
+vim.keymap.set("n", "<leader>fg", builtin.live_grep, { desc = "Live grep" })
+vim.keymap.set("n", "<leader>fb", builtin.buffers, { desc = "Find buffers" })
+vim.keymap.set("n", "<leader>fh", builtin.help_tags, { desc = "Help tags" })
 
 -- Visual mode remap for searching the selected text
 map("v", "//", "y/\\V<C-R>=escape(@\",'/\\')<CR><CR>", { noremap = true })

@@ -62,11 +62,11 @@ require("lazy").setup({
 				vim.o.formatexpr = "v:lua.require'conform'.formatexpr()"
 			end,
 		},
-		-- {
-		-- 	"nvim-telescope/telescope.nvim",
-		-- 	tag = "0.1.6",
-		-- 	dependencies = { "nvim-lua/plenary.nvim" },
-		-- },
+		{
+			"nvim-telescope/telescope.nvim",
+			tag = "0.1.8",
+			dependencies = { "nvim-lua/plenary.nvim" },
+		},
 		not nvim_light and {
 			"nvim-treesitter/nvim-treesitter",
 			build = ":TSUpdate",
@@ -108,6 +108,111 @@ require("lazy").setup({
 			dependencies = { "nvim-tree/nvim-web-devicons" },
 		},
 		"UtkarshVerma/molokai.nvim",
+		{
+			"nvim-neo-tree/neo-tree.nvim",
+			branch = "v3.x",
+			dependencies = {
+				"nvim-lua/plenary.nvim",
+				"nvim-tree/nvim-web-devicons",
+				"MunifTanjim/nui.nvim",
+			},
+			lazy = false,
+			opts = {
+				close_if_last_window = false,
+				popup_border_style = "rounded",
+				enable_git_status = true,
+				enable_diagnostics = true,
+				default_component_configs = {
+					indent = {
+						indent_size = 2,
+						padding = 1,
+						with_markers = true,
+						indent_marker = "│",
+						last_indent_marker = "└",
+					},
+					icon = {
+						folder_closed = "",
+						folder_open = "",
+						folder_empty = "󰜌",
+						default = "*",
+					},
+					git_status = {
+						symbols = {
+							added = "",
+							modified = "",
+							deleted = "✖",
+							renamed = "󰁕",
+							untracked = "",
+							ignored = "",
+							unstaged = "󰄱",
+							staged = "",
+							conflict = "",
+						},
+					},
+				},
+				window = {
+					position = "left",
+					width = 30,
+					mappings = {
+						["<space>"] = "toggle_node",
+						["<cr>"] = "open",
+						["l"] = "open",
+						["h"] = "close_node",
+						["v"] = "open_vsplit",
+						["s"] = "open_split",
+						["t"] = "open_tabnew",
+						["C"] = "close_node",
+						["z"] = "close_all_nodes",
+						["R"] = "refresh",
+						["a"] = "add",
+						["d"] = "delete",
+						["r"] = "rename",
+						["y"] = "copy_to_clipboard",
+						["x"] = "cut_to_clipboard",
+						["p"] = "paste_from_clipboard",
+						["q"] = "close_window",
+					},
+				},
+				filesystem = {
+					filtered_items = {
+						hide_dotfiles = false,
+						hide_gitignored = false,
+					},
+					follow_current_file = {
+						enabled = true,
+					},
+				},
+			},
+		},
+		{
+			"folke/which-key.nvim",
+			event = "VeryLazy",
+			opts = {
+				preset = "classic",
+				delay = 200,
+				plugins = {
+					marks = true,
+					registers = true,
+					spelling = {
+						enabled = true,
+						suggestions = 20,
+					},
+					presets = {
+						operators = true,
+						motions = true,
+						text_objects = true,
+						windows = true,
+						nav = true,
+						z = true,
+						g = true,
+					},
+				},
+				win = {
+					border = "rounded",
+					padding = { 1, 2 },
+				},
+			},
+		},
 		-- {
 		-- 	"epwalsh/obsidian.nvim",
 		-- 	version = "*", -- recommended, use latest release instead of latest commit
