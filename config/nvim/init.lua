@@ -77,6 +77,8 @@ map("n", "<localleader>b", ":Neotree toggle<CR>", { noremap = true })
 map("n", "<localleader>,", ",", { noremap = true })
 vim.keymap.set("n", "<leader>ff", builtin.find_files, { desc = "Find files" })
 vim.keymap.set("n", "<leader>fg", builtin.live_grep, { desc = "Live grep" })
+vim.keymap.set("n", "gd", builtin.lsp_definitions, { desc = "Telescope go to definition" })
+vim.keymap.set("n", "gf", builtin.lsp_references, { desc = "Telescope find references" })
 vim.keymap.set("n", "<leader>fb", builtin.buffers, { desc = "Find buffers" })
 vim.keymap.set("n", "<leader>fh", builtin.help_tags, { desc = "Help tags" })
 
