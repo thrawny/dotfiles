@@ -333,7 +333,8 @@ fi
 [ -f /opt/homebrew/opt/asdf/libexec/asdf.sh ] && . /opt/homebrew/opt/asdf/libexec/asdf.sh
 
 # Zoxide (smart directory navigation)
-if command -v zoxide &> /dev/null; then
+# Only initialize in interactive shells to avoid errors in non-interactive contexts
+if command -v zoxide &> /dev/null && [[ -o interactive ]]; then
   eval "$(zoxide init --cmd cd zsh)"
 fi
 
