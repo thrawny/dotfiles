@@ -1,7 +1,124 @@
-local notesPath = vim.fn.expand("~") .. "/work-notes"
-
 -- Detect light mode: disable heavy plugins in devpod or when explicitly requested
 local nvim_light = vim.env.DEVPOD or vim.env.NVIM_LIGHT
+
+local function configure_heavy_lsp()
+	if nvim_light then
+		return
+	end
+
+	local coq = require("coq")
+
+	require("mason").setup()
+
+	-- Lua LSP using new vim.lsp.config API
+	vim.lsp.config(
+		"lua_ls",
+		coq.lsp_ensure_capabilities({
+			cmd = { "lua-language-server" },
+			filetypes = { "lua" },
+			root_markers = { ".luarc.json", ".luarc.jsonc", ".luacheckrc", ".stylua.toml", "stylua.toml", "selene.toml", "selene.yml", ".git" },
+			single_file_support = true,
+			settings = {
+				Lua = {
+					runtime = {
+						version = "LuaJIT",
+					},
+					workspace = {
+						checkThirdParty = false,
+						library = {
+							vim.env.VIMRUNTIME,
+						},
+					},
+				},
+			},
+		})
+	)
+	vim.lsp.enable("lua_ls")
+
+	-- Go LSP using new vim.lsp.config API
+	vim.lsp.config("gopls", coq.lsp_ensure_capabilities({
+		cmd = { "gopls" },
+		filetypes = { "go", "gomod", "gowork", "gotmpl" },
+		root_markers = { "go.work", "go.mod", ".git" },
+		single_file_support = true,
+	}))
+	vim.lsp.enable("gopls")
+end
+
+local function configure_lualine()
+	if nvim_light then
+		return
+	end
+
+	require("lualine").setup({
+		options = {
+			theme = "auto",
+			section_separators = "",
+			component_separators = "",
+			globalstatus = true,
+			-- Molokai theme colors with transparent backgrounds
+			theme = {
+				normal = {
+					a = { bg = "NONE", fg = "#66d9ef", gui = "bold" }, -- cyan
+					b = { bg = "NONE", fg = "#f92672" }, -- pink
+					c = { bg = "NONE", fg = "#ef5939" }, -- orange
+				},
+				insert = {
+					a = { bg = "NONE", fg = "#a6e22e", gui = "bold" }, -- green
+					b = { bg = "NONE", fg = "#f92672" }, -- pink
+					c = { bg = "NONE", fg = "#ef5939" }, -- orange
+				},
+				visual = {
+					a = { bg = "NONE", fg = "#e6db74", gui = "bold" }, -- yellow
+					b = { bg = "NONE", fg = "#f92672" }, -- pink
+					c = { bg = "NONE", fg = "#ef5939" }, -- orange
+				},
+				replace = {
+					a = { bg = "NONE", fg = "#ff0000", gui = "bold" }, -- red
+					b = { bg = "NONE", fg = "#f92672" }, -- pink
+					c = { bg = "NONE", fg = "#ef5939" }, -- orange
+				},
+				command = {
+					a = { bg = "NONE", fg = "#66d9ef", gui = "bold" }, -- cyan
+					b = { bg = "NONE", fg = "#f92672" }, -- pink
+					c = { bg = "NONE", fg = "#ef5939" }, -- orange
+				},
+				inactive = {
+					a = { bg = "NONE", fg = "#f92672", gui = "bold" }, -- pink
+					b = { bg = "NONE", fg = "#f8f8f2" }, -- white
+					c = { bg = "NONE", fg = "#808080" }, -- gray
+				},
+			},
+		},
+	})
+end
+
+local function configure_treesitter()
+	if nvim_light then
+		return
+	end
+
+	require("nvim-treesitter.configs").setup({
+		ensure_installed = {
+			"markdown",
+			"markdown_inline",
+			"python",
+			"lua",
+			"bash",
+			"javascript",
+			"typescript",
+			"go",
+			"yaml",
+			"json",
+		},
+
+		auto_install = true,
+
+		highlight = {
+			enable = true,
+		},
+	})
+end
 
 require("lazy").setup({
 	"tpope/vim-surround",
@@ -27,7 +144,6 @@ require("lazy").setup({
 			cmd = { "ConformInfo" },
 			keys = {
 				{
-					-- Customize or remove this keymap to your liking
 					"<leader>f",
 					function()
 						require("conform").format({ async = true, lsp_fallback = true })
@@ -36,9 +152,7 @@ require("lazy").setup({
 					desc = "Format buffer",
 				},
 			},
-			-- Everything in opts will be passed to setup()
 			opts = {
-				-- Define your formatters
 				formatters_by_ft = {
 					lua = { "stylua" },
 					python = { "ruff_format", "ruff_organize_imports" },
@@ -48,9 +162,7 @@ require("lazy").setup({
 					markdown = { { "prettierd", "prettier" } },
 					xml = { "xmlformat" },
 				},
-				-- Set up format-on-save
 				format_on_save = { timeout_ms = 500, lsp_fallback = true },
-				-- Customize formatters
 				formatters = {
 					shfmt = {
 						prepend_args = { "-i", "2" },
@@ -58,7 +170,6 @@ require("lazy").setup({
 				},
 			},
 			init = function()
-				-- If you want the formatexpr, here is the place to set it
 				vim.o.formatexpr = "v:lua.require'conform'.formatexpr()"
 			end,
 		},
@@ -67,44 +178,31 @@ require("lazy").setup({
 			tag = "0.1.8",
 			dependencies = { "nvim-lua/plenary.nvim" },
 		},
-		not nvim_light and {
-			"nvim-treesitter/nvim-treesitter",
-			build = ":TSUpdate",
-		} or nil,
+	{
+		"nvim-treesitter/nvim-treesitter",
+		cond = not nvim_light,
+		build = ":TSUpdate",
+	},
 		{
 			"numToStr/Comment.nvim",
-			opts = {
-				-- add any options here
-			},
+			opts = {},
 			lazy = false,
 		},
-			-- "mfussenegger/nvim-ansible",
-			-- {
-			-- 	"stevearc/oil.nvim",
-			-- 	opts = {},
-			-- 	-- Optional dependencies
-			-- 	dependencies = { "nvim-tree/nvim-web-devicons" },
-			-- },
-		not nvim_light and {
-				"williamboman/mason.nvim",
-				opts = {},
-			} or nil,
-		not nvim_light and {
-			"ms-jpq/coq_nvim",
-			branch = "coq",
-		} or nil,
-		not nvim_light and {
-			"ms-jpq/coq.artifacts",
-			branch = "artifacts",
-		} or nil,
-		-- {
-		-- 	"jay-babu/mason-null-ls.nvim",
-		-- 	event = { "BufReadPre", "BufNewFile" },
-		-- 	dependencies = {
-		-- 		"williamboman/mason.nvim",
-		-- 		"nvimtools/none-ls.nvim",
-		-- 	},
-		-- },
+	{
+		"williamboman/mason.nvim",
+		cond = not nvim_light,
+		opts = {},
+	},
+	{
+		"ms-jpq/coq_nvim",
+		cond = not nvim_light,
+		branch = "coq",
+	},
+	{
+		"ms-jpq/coq.artifacts",
+		cond = not nvim_light,
+		branch = "artifacts",
+	},
 		{
 			"nvim-lualine/lualine.nvim",
 			dependencies = { "nvim-tree/nvim-web-devicons" },
@@ -186,224 +284,42 @@ require("lazy").setup({
 				},
 			},
 		},
-		{
-			"folke/which-key.nvim",
-			event = "VeryLazy",
-			opts = {
-				preset = "classic",
-				delay = 200,
-				plugins = {
-					marks = true,
-					registers = true,
-					spelling = {
-						enabled = true,
-						suggestions = 20,
-					},
-					presets = {
-						operators = true,
-						motions = true,
-						text_objects = true,
-						windows = true,
-						nav = true,
-						z = true,
-						g = true,
-					},
+	{
+		"folke/which-key.nvim",
+		event = "VeryLazy",
+		opts = {
+			preset = "classic",
+			delay = 200,
+			plugins = {
+				marks = true,
+				registers = true,
+				spelling = {
+					enabled = true,
+					suggestions = 20,
 				},
-				win = {
-					border = "rounded",
-					padding = { 1, 2 },
+				presets = {
+					operators = true,
+					motions = true,
+					text_objects = true,
+					windows = true,
+					nav = true,
+					z = true,
+					g = true,
 				},
 			},
+			win = {
+				border = "rounded",
+				padding = { 1, 2 },
+			},
 		},
-		-- {
-		-- 	"epwalsh/obsidian.nvim",
-		-- 	version = "*", -- recommended, use latest release instead of latest commit
-		-- 	lazy = true,
-		-- 	ft = "markdown",
-		-- 	-- Replace the above line with this if you only want to load obsidian.nvim for markdown files in your vault:
-		-- 	event = {
-		-- 		-- If you want to use the home shortcut '~' here you need to call 'vim.fn.expand'.
-		-- 		"BufReadPre "
-		-- 			.. notesPath
-		-- 			.. "/**.md",
-		-- 		"BufNewFile " .. notesPath .. "/**.md",
-		-- 	},
-		-- 	dependencies = {
-		-- 		-- Required.
-		-- 		"nvim-lua/plenary.nvim",
-
-		-- 		-- see below for full list of optional dependencies 👇
-		-- 	},
-		-- },
+	},
 	},
 })
 
-if not nvim_light then
-	local coq = require("coq")
 
-	require("mason").setup()
-
-	-- Lua LSP using new vim.lsp.config API
-	vim.lsp.config(
-		"lua_ls",
-		coq.lsp_ensure_capabilities({
-			cmd = { "lua-language-server" },
-			filetypes = { "lua" },
-			root_markers = { ".luarc.json", ".luarc.jsonc", ".luacheckrc", ".stylua.toml", "stylua.toml", "selene.toml", "selene.yml", ".git" },
-			single_file_support = true,
-			settings = {
-				Lua = {
-					runtime = {
-						version = "LuaJIT",
-					},
-					workspace = {
-						checkThirdParty = false,
-						library = {
-							vim.env.VIMRUNTIME,
-						},
-					},
-				},
-			},
-		})
-	)
-	vim.lsp.enable("lua_ls")
-
-	-- Go LSP using new vim.lsp.config API
-	vim.lsp.config("gopls", coq.lsp_ensure_capabilities({
-		cmd = { "gopls" },
-		filetypes = { "go", "gomod", "gowork", "gotmpl" },
-		root_markers = { "go.work", "go.mod", ".git" },
-		single_file_support = true,
-	}))
-	vim.lsp.enable("gopls")
-end
--- require("mason-null-ls").setup({
--- 	ensure_installed = { "stylua", "xmlformatter" },
--- 	automatic_installation = true,
--- })
+configure_heavy_lsp()
 
 -- Lualine statusline (skip in light mode to avoid icon dependency errors)
-if not nvim_light then
-	require("lualine").setup({
-		options = {
-			theme = "auto",
-			section_separators = "",
-			component_separators = "",
-			globalstatus = true,
-			-- Molokai theme colors with transparent backgrounds
-			theme = {
-				normal = {
-					a = { bg = "NONE", fg = "#66d9ef", gui = "bold" }, -- cyan
-					b = { bg = "NONE", fg = "#f92672" }, -- pink
-					c = { bg = "NONE", fg = "#ef5939" }, -- orange
-				},
-				insert = {
-					a = { bg = "NONE", fg = "#a6e22e", gui = "bold" }, -- green
-					b = { bg = "NONE", fg = "#f92672" }, -- pink
-					c = { bg = "NONE", fg = "#ef5939" }, -- orange
-				},
-				visual = {
-					a = { bg = "NONE", fg = "#e6db74", gui = "bold" }, -- yellow
-					b = { bg = "NONE", fg = "#f92672" }, -- pink
-					c = { bg = "NONE", fg = "#ef5939" }, -- orange
-				},
-				replace = {
-					a = { bg = "NONE", fg = "#ff0000", gui = "bold" }, -- red
-					b = { bg = "NONE", fg = "#f92672" }, -- pink
-					c = { bg = "NONE", fg = "#ef5939" }, -- orange
-				},
-				command = {
-					a = { bg = "NONE", fg = "#66d9ef", gui = "bold" }, -- cyan
-					b = { bg = "NONE", fg = "#f92672" }, -- pink
-					c = { bg = "NONE", fg = "#ef5939" }, -- orange
-				},
-				inactive = {
-					a = { bg = "NONE", fg = "#f92672", gui = "bold" }, -- pink
-					b = { bg = "NONE", fg = "#f8f8f2" }, -- white
-					c = { bg = "NONE", fg = "#808080" }, -- gray
-				},
-			},
-		},
-	})
-end
--- require("obsidian").setup({
---
--- 	workspaces = {
--- 		{
--- 			name = "work_notes",
--- 			path = notesPath,
--- 		},
--- 	},
---
--- 	ui = {
--- 		enable = false,
--- 	},
--- })
+configure_lualine()
 
--- lsp.lua_ls.setup(coq.lsp_ensure_capabilities({
--- 	on_init = function(client)
--- 		local path = client.workspace_folders[1].name
--- 		if vim.loop.fs_stat(path .. "/.luarc.json") or vim.loop.fs_stat(path .. "/.luarc.jsonc") then
--- 			return
--- 		end
-
--- 		client.config.settings.Lua = vim.tbl_deep_extend("force", client.config.settings.Lua, {
--- 			runtime = {
--- 				-- Tell the language server which version of Lua you're using
--- 				-- (most likely LuaJIT in the case of Neovim)
--- 				version = "LuaJIT",
--- 			},
--- 			-- Make the server aware of Neovim runtime files
--- 			workspace = {
--- 				checkThirdParty = false,
--- 				library = {
--- 					vim.env.VIMRUNTIME,
--- 					-- Depending on the usage, you might want to add additional paths here.
--- 					-- "${3rd}/luv/library"
--- 					-- "${3rd}/busted/library",
--- 				},
--- 				-- or pull in all of 'runtimepath'. NOTE: this is a lot slower
--- 				-- library = vim.api.nvim_get_runtime_file("", true)
--- 			},
--- 		})
--- 	end,
--- 	settings = {
--- 		Lua = {},
--- 	},
--- }))
-
-if not nvim_light then
-	require("nvim-treesitter.configs").setup({
-		ensure_installed = {
-
-			"markdown",
-			"markdown_inline",
-			"python",
-			"lua",
-			"bash",
-			"javascript",
-			"typescript",
-			"go",
-			"yaml",
-			"json",
-		},
-
-		auto_install = true,
-
-		highlight = {
-			enable = true,
-		},
-	})
-end
-
--- require("conform").formatters.injected = {
--- 	-- Set the options field
--- 	options = {
--- 		-- Set individual option values
--- 		ignore_errors = true,
--- 		lang_to_formatters = {
--- 			json = { { "prettierd", "prettier" } },
--- 			xml = { "xmlformat" },
--- 		},
--- 	},
--- }
+configure_treesitter()
