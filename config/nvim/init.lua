@@ -7,6 +7,11 @@ vim.g.coq_settings = {
 		recommended = true,
 		jump_to_mark = "<nop>",
 	},
+	clients = {
+		registers = {
+			enabled = false, -- Disabled due to Python 3.13+ SQLite parameter binding bug
+		},
+	},
 }
 
 require("plugins")

@@ -90,15 +90,6 @@ require("lazy").setup({
 				opts = {},
 			} or nil,
 		not nvim_light and {
-			"williamboman/mason-lspconfig.nvim",
-			dependencies = { "williamboman/mason.nvim" },
-			opts = {
-				ensure_installed = { "lua_ls", "gopls" },
-				automatic_installation = true,
-			},
-		} or nil,
-		not nvim_light and "neovim/nvim-lspconfig" or nil,
-		not nvim_light and {
 			"ms-jpq/coq_nvim",
 			branch = "coq",
 		} or nil,
@@ -106,7 +97,6 @@ require("lazy").setup({
 			"ms-jpq/coq.artifacts",
 			branch = "artifacts",
 		} or nil,
-		not nvim_light and { "folke/neodev.nvim", opts = {} } or nil,
 		-- {
 		-- 	"jay-babu/mason-null-ls.nvim",
 		-- 	event = { "BufReadPre", "BufNewFile" },
@@ -250,42 +240,42 @@ require("lazy").setup({
 
 if not nvim_light then
 	local coq = require("coq")
-	local lsp = require("lspconfig")
 
-	require("neodev").setup()
 	require("mason").setup()
-	require("mason-lspconfig").setup({
-		ensure_installed = { "lua_ls", "gopls" },
-		automatic_installation = true,
-	})
 
-	-- Lua LSP with neodev support
-	lsp.lua_ls.setup(coq.lsp_ensure_capabilities({
-		on_init = function(client)
-			local path = client.workspace_folders[1].name
-			if vim.loop.fs_stat(path .. "/.luarc.json") or vim.loop.fs_stat(path .. "/.luarc.jsonc") then
-				return
-			end
-
-			client.config.settings.Lua = vim.tbl_deep_extend("force", client.config.settings.Lua, {
-				runtime = {
-					version = "LuaJIT",
-				},
-				workspace = {
-					checkThirdParty = false,
-					library = {
-						vim.env.VIMRUNTIME,
+	-- Lua LSP using new vim.lsp.config API
+	vim.lsp.config(
+		"lua_ls",
+		coq.lsp_ensure_capabilities({
+			cmd = { "lua-language-server" },
+			filetypes = { "lua" },
+			root_markers = { ".luarc.json", ".luarc.jsonc", ".luacheckrc", ".stylua.toml", "stylua.toml", "selene.toml", "selene.yml", ".git" },
+			single_file_support = true,
+			settings = {
+				Lua = {
+					runtime = {
+						version = "LuaJIT",
+					},
+					workspace = {
+						checkThirdParty = false,
+						library = {
+							vim.env.VIMRUNTIME,
+						},
 					},
 				},
-			})
-		end,
-		settings = {
-			Lua = {},
-		},
-	}))
+			},
+		})
+	)
+	vim.lsp.enable("lua_ls")
 
-	-- Go LSP
-	lsp.gopls.setup(coq.lsp_ensure_capabilities({}))
+	-- Go LSP using new vim.lsp.config API
+	vim.lsp.config("gopls", coq.lsp_ensure_capabilities({
+		cmd = { "gopls" },
+		filetypes = { "go", "gomod", "gowork", "gotmpl" },
+		root_markers = { "go.work", "go.mod", ".git" },
+		single_file_support = true,
+	}))
+	vim.lsp.enable("gopls")
 end
 -- require("mason-null-ls").setup({
 -- 	ensure_installed = { "stylua", "xmlformatter" },
