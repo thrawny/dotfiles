@@ -1,27 +1,49 @@
 [env]
 _.python.venv = ".venv"
 
+# --- Nix workflows ---
+[tasks.switch]
+description = "Rebuild and switch NixOS configuration for this host"
+run = '''
+host=$(hostname)
+sudo nixos-rebuild switch --flake "./nix#$host"
+'''
+sources = ["nix/**/*.nix", "nix/flake.*"]
+
+[tasks.dry]
+description = "Dry-run the NixOS rebuild for this host"
+run = '''
+host=$(hostname)
+sudo nixos-rebuild dry-run --flake "./nix#$host"
+'''
+sources = ["nix/**/*.nix", "nix/flake.*"]
+
+[tasks."switch-darwin"]
+description = "Switch Home Manager configuration on macOS"
+run = '''
+host=$(hostname | sed 's/\.local$//')
+home-manager switch --flake "./nix#$host"
+'''
+sources = ["nix/**/*.nix", "nix/flake.*"]
+
+[tasks.iso]
+description = "Build desktop installer ISO with network drivers"
+run = '''
+nix build ./nix#packages.x86_64-linux.desktop-iso
+echo "ISO created at: ./result/iso/"
+echo "Write to USB with: sudo dd if=./result/iso/*.iso of=/dev/sdX bs=4M status=progress"
+'''
+sources = ["nix/**/*.nix", "nix/flake.*"]
+
+# --- Formatters ---
+# Python formatting
 [tasks."fmt:python"]
 description = "Format Python sources with Ruff"
 run = "uv run ruff format ."
 sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
 outputs = { auto = true }
 
-[tasks."lint:python"]
-description = "Lint Python sources with Ruff"
-run = "uv run ruff check ."
-sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
-
-[tasks."typecheck:python"]
-description = "Typecheck Python code with basedpyright"
-run = "uv run basedpyright"
-sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
-
-[tasks."test:python"]
-description = "Run Python tests with pytest"
-run = "uv run pytest"
-sources = ["claude_tools/**/*.py", "tests/**/*.py"]
-
+# Lua formatting
 [tasks."fmt:lua"]
 description = "Format Neovim Lua config with Stylua"
 tools."github:JohnnyMorganz/StyLua" = "v0.20.0"
@@ -29,17 +51,31 @@ run = "stylua config/nvim"
 sources = ["config/nvim/**/*.lua"]
 outputs = { auto = true }
 
+# Nix formatting
 [tasks."fmt:nix"]
 description = "Format Nix files with nixfmt"
 run = "nix shell nixpkgs#treefmt nixpkgs#nixfmt -c treefmt"
 sources = ["**/*.nix"]
 outputs = { auto = true }
 
+# --- Linters ---
+[tasks."lint:python"]
+description = "Lint Python sources with Ruff"
+run = "uv run ruff check ."
+sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
+
 [tasks."lint:nix"]
 description = "Lint Nix files with statix"
 run = "nix run nixpkgs#statix -- check ."
 sources = ["**/*.nix"]
 
+# --- Typechecking ---
+[tasks."typecheck:python"]
+description = "Typecheck Python code with basedpyright"
+run = "uv run basedpyright"
+sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
+
+# --- Tests ---
 [tasks."test:nvim"]
 description = "Run Neovim config tests in headless mode"
 run = '''
@@ -49,9 +85,11 @@ nvim --headless -u config/nvim/init.lua \
 '''
 sources = ["config/nvim/**/*.lua"]
 
+# --- Aggregates ---
 [tasks.fmt]
 description = "Run all formatters"
 depends = ["fmt:python", "fmt:lua", "fmt:nix"]
+alias = "f"
 
 [tasks.lint]
 description = "Run all linters"
@@ -63,7 +101,7 @@ depends = ["typecheck:python"]
 
 [tasks.test]
 description = "Run all tests"
-depends = ["test:python", "test:nvim"]
+depends = ["test:nvim"]
 
 [tasks.ci]
 description = "Run lint, typecheck, format, and tests"

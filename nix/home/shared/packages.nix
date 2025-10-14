@@ -41,5 +41,6 @@
     tree-sitter
     vim
     wget
+    usage
   ];
 }
