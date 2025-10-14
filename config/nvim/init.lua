@@ -1,14 +1,13 @@
 require("setup-lazy")
 
 vim.g.mapleader = ","
--- vim.g.coq_settings = {
--- 	auto_start = "shut-up",
--- 	keymap = {
--- 		recommended = false,
--- 		jump_to_mark = "<nop>",
--- 		pre_select = false,
--- 	},
--- }
+vim.g.coq_settings = {
+	auto_start = "shut-up",
+	keymap = {
+		recommended = true,
+		jump_to_mark = "<nop>",
+	},
+}
 
 require("plugins")
 
@@ -111,13 +110,16 @@ vim.cmd([[
   highlight LineNr guibg=NONE ctermbg=NONE guifg=#C0C0C0 ctermfg=250
   highlight SignColumn guibg=NONE ctermbg=NONE
   highlight EndOfBuffer guibg=NONE ctermbg=NONE guifg=#C0C0C0 ctermfg=250
-  
+
   " Statusline/Powerline transparency
   highlight StatusLine guibg=NONE ctermbg=NONE
   highlight StatusLineNC guibg=NONE ctermbg=NONE
   highlight TabLine guibg=NONE ctermbg=NONE
   highlight TabLineFill guibg=NONE ctermbg=NONE
   highlight TabLineSel guibg=NONE ctermbg=NONE
+
+  " Fix matching parentheses/brackets - use light gray background instead of black
+  highlight MatchParen guibg=#444444 guifg=#FD971F gui=bold ctermbg=238 ctermfg=208
 ]])
 
 vim.api.nvim_create_user_command("Format", function(args)

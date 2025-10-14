@@ -78,23 +78,35 @@ require("lazy").setup({
 			},
 			lazy = false,
 		},
-		-- "mfussenegger/nvim-ansible",
-		-- {
-		-- 	"stevearc/oil.nvim",
-		-- 	opts = {},
-		-- 	-- Optional dependencies
-		-- 	dependencies = { "nvim-tree/nvim-web-devicons" },
-		-- },
-		-- "neovim/nvim-lspconfig",
-		-- {
-		-- 	"ms-jpq/coq_nvim",
-		-- 	branch = "coq",
-		-- },
-		-- {
-		-- 	"ms-jpq/coq.artifacts",
-		-- 	branch = "artifacts",
-		-- },
-		-- { "folke/neodev.nvim", opts = {} },
+			-- "mfussenegger/nvim-ansible",
+			-- {
+			-- 	"stevearc/oil.nvim",
+			-- 	opts = {},
+			-- 	-- Optional dependencies
+			-- 	dependencies = { "nvim-tree/nvim-web-devicons" },
+			-- },
+		not nvim_light and {
+				"williamboman/mason.nvim",
+				opts = {},
+			} or nil,
+		not nvim_light and {
+			"williamboman/mason-lspconfig.nvim",
+			dependencies = { "williamboman/mason.nvim" },
+			opts = {
+				ensure_installed = { "lua_ls", "gopls" },
+				automatic_installation = true,
+			},
+		} or nil,
+		not nvim_light and "neovim/nvim-lspconfig" or nil,
+		not nvim_light and {
+			"ms-jpq/coq_nvim",
+			branch = "coq",
+		} or nil,
+		not nvim_light and {
+			"ms-jpq/coq.artifacts",
+			branch = "artifacts",
+		} or nil,
+		not nvim_light and { "folke/neodev.nvim", opts = {} } or nil,
 		-- {
 		-- 	"jay-babu/mason-null-ls.nvim",
 		-- 	event = { "BufReadPre", "BufNewFile" },
@@ -236,15 +248,45 @@ require("lazy").setup({
 	},
 })
 
--- local coq = require("coq")
--- local lsp = require("lspconfig")
+if not nvim_light then
+	local coq = require("coq")
+	local lsp = require("lspconfig")
 
--- require("neodev").setup()
--- require("mason").setup()
--- require("mason-lspconfig").setup({
--- 	ensure_installed = { "lua_ls" },
--- 	automatic_installation = true,
--- })
+	require("neodev").setup()
+	require("mason").setup()
+	require("mason-lspconfig").setup({
+		ensure_installed = { "lua_ls", "gopls" },
+		automatic_installation = true,
+	})
+
+	-- Lua LSP with neodev support
+	lsp.lua_ls.setup(coq.lsp_ensure_capabilities({
+		on_init = function(client)
+			local path = client.workspace_folders[1].name
+			if vim.loop.fs_stat(path .. "/.luarc.json") or vim.loop.fs_stat(path .. "/.luarc.jsonc") then
+				return
+			end
+
+			client.config.settings.Lua = vim.tbl_deep_extend("force", client.config.settings.Lua, {
+				runtime = {
+					version = "LuaJIT",
+				},
+				workspace = {
+					checkThirdParty = false,
+					library = {
+						vim.env.VIMRUNTIME,
+					},
+				},
+			})
+		end,
+		settings = {
+			Lua = {},
+		},
+	}))
+
+	-- Go LSP
+	lsp.gopls.setup(coq.lsp_ensure_capabilities({}))
+end
 -- require("mason-null-ls").setup({
 -- 	ensure_installed = { "stylua", "xmlformatter" },
 -- 	automatic_installation = true,
@@ -252,40 +294,40 @@ require("lazy").setup({
 require("lualine").setup({
 	options = {
 		theme = "auto",
-		section_separators = '',
-		component_separators = '',
+		section_separators = "",
+		component_separators = "",
 		globalstatus = true,
 		-- Molokai theme colors with transparent backgrounds
 		theme = {
 			normal = {
-				a = {bg = 'NONE', fg = '#66d9ef', gui = 'bold'},  -- cyan
-				b = {bg = 'NONE', fg = '#f92672'},                -- pink
-				c = {bg = 'NONE', fg = '#ef5939'},                -- orange
+				a = { bg = "NONE", fg = "#66d9ef", gui = "bold" }, -- cyan
+				b = { bg = "NONE", fg = "#f92672" }, -- pink
+				c = { bg = "NONE", fg = "#ef5939" }, -- orange
 			},
 			insert = {
-				a = {bg = 'NONE', fg = '#a6e22e', gui = 'bold'},  -- green
-				b = {bg = 'NONE', fg = '#f92672'},                -- pink
-				c = {bg = 'NONE', fg = '#ef5939'},                -- orange
+				a = { bg = "NONE", fg = "#a6e22e", gui = "bold" }, -- green
+				b = { bg = "NONE", fg = "#f92672" }, -- pink
+				c = { bg = "NONE", fg = "#ef5939" }, -- orange
 			},
 			visual = {
-				a = {bg = 'NONE', fg = '#e6db74', gui = 'bold'},  -- yellow
-				b = {bg = 'NONE', fg = '#f92672'},                -- pink
-				c = {bg = 'NONE', fg = '#ef5939'},                -- orange
+				a = { bg = "NONE", fg = "#e6db74", gui = "bold" }, -- yellow
+				b = { bg = "NONE", fg = "#f92672" }, -- pink
+				c = { bg = "NONE", fg = "#ef5939" }, -- orange
 			},
 			replace = {
-				a = {bg = 'NONE', fg = '#ff0000', gui = 'bold'},  -- red
-				b = {bg = 'NONE', fg = '#f92672'},                -- pink
-				c = {bg = 'NONE', fg = '#ef5939'},                -- orange
+				a = { bg = "NONE", fg = "#ff0000", gui = "bold" }, -- red
+				b = { bg = "NONE", fg = "#f92672" }, -- pink
+				c = { bg = "NONE", fg = "#ef5939" }, -- orange
 			},
 			command = {
-				a = {bg = 'NONE', fg = '#66d9ef', gui = 'bold'},  -- cyan
-				b = {bg = 'NONE', fg = '#f92672'},                -- pink
-				c = {bg = 'NONE', fg = '#ef5939'},                -- orange
+				a = { bg = "NONE", fg = "#66d9ef", gui = "bold" }, -- cyan
+				b = { bg = "NONE", fg = "#f92672" }, -- pink
+				c = { bg = "NONE", fg = "#ef5939" }, -- orange
 			},
 			inactive = {
-				a = {bg = 'NONE', fg = '#f92672', gui = 'bold'},  -- pink
-				b = {bg = 'NONE', fg = '#f8f8f2'},               -- white
-				c = {bg = 'NONE', fg = '#808080'},               -- gray
+				a = { bg = "NONE", fg = "#f92672", gui = "bold" }, -- pink
+				b = { bg = "NONE", fg = "#f8f8f2" }, -- white
+				c = { bg = "NONE", fg = "#808080" }, -- gray
 			},
 		},
 	},
@@ -338,7 +380,19 @@ require("lualine").setup({
 
 if not nvim_light then
 	require("nvim-treesitter.configs").setup({
-		ensure_installed = { "markdown", "markdown_inline", "python", "lua", "bash", "javascript", "typescript", "go", "yaml", "json" },
+		ensure_installed = {
+
+			"markdown",
+			"markdown_inline",
+			"python",
+			"lua",
+			"bash",
+			"javascript",
+			"typescript",
+			"go",
+			"yaml",
+			"json",
+		},
 
 		auto_install = true,
 
