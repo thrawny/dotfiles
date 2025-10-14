@@ -183,24 +183,10 @@ zstyle ':completion:*' menu select
 # ===== Aliases =====
 alias h='history'
 alias l='ls -lFh'
-alias pi="pip install -r requirements.txt"
-alias pc="pip-compile"
 alias fig="docker-compose"
 
-# NixOS rebuild aliases (only on NixOS)
-if [[ -f /etc/nixos/configuration.nix ]] || [[ -f /etc/NIXOS ]]; then
-  alias nrs='sudo nixos-rebuild switch --flake ~/dotfiles/nix#thinkpad'
-  alias nrb='sudo nixos-rebuild boot --flake ~/dotfiles/nix#thinkpad'
-  alias nrt='sudo nixos-rebuild test --flake ~/dotfiles/nix#thinkpad'
-  alias nru='(cd ~/dotfiles/nix && nix flake update)'
-  alias hms='home-manager switch --flake ~/dotfiles/nix#thrawny'
-fi
 alias vim=nvim
 alias svh="sudo nvim /etc/hosts"
-alias vbm="VBoxManage"
-alias pycheck='isort && flake8 && pytest'
-alias pyupdatecheck='pip-compile --upgrade --dry-run | diff -i requirements.txt -'
-alias vpn='sudo openvpn'
 alias k='kubectl'
 alias kt='stern'
 alias ka='kubectl apply -f'
@@ -214,8 +200,6 @@ alias ku='kubectl config use-context'
 alias hb='gh repo view --web'
 alias gotest='golangci-lint fmt && golangci-lint run --fix && go test $(go list ./... | grep -v /lab/)'
 alias b='bat -p --pager=never'
-alias kubectl-extract-context='kc config view --minify=true --flatten --context'
-alias kec='kubectl-extract-context'
 alias vkp='watch -n 1 kubectl get pods'
 alias kvp='watch -n 1 kubectl get pods'
 alias v='watch -n 1'
@@ -223,25 +207,21 @@ alias kd='kc drain --ignore-daemonsets --delete-local-data --force'
 alias gcam="git add -A && git commit -m"
 alias tfa='terraform apply'
 alias bu='brew upgrade'
-alias mp='microplane'
-alias gcr='git-cleanup-repo'
 alias c='claude'
 alias cy='claude --dangerously-skip-permissions'
 alias pr='gh pr create --web'
-alias kdp='kubectl describe pod'
 alias striplines='tr -d "\n"'
-alias knp='kubectl -n kube-system get pod'
 alias kd='kubectl delete'
 alias gcm='git commit -m'
-alias kdf='kubectl delete -f'
 alias gp='git push --force-with-lease --force-if-includes'
 alias tp='terraform plan'
 alias ta='terraform apply'
 alias taf='terraform apply -auto-approve'
-alias kz='kubectl kustomize'
+
 if bat --version &>/dev/null; then
   alias cat='bat --style=header,grid,snip --theme "Monokai Extended Origin"'
 fi
+
 if [[ "$(uname)" == "Darwin" ]]; then
   alias cct="security find-generic-password -s \"Claude Code-credentials\" -w | jq -c '{claudeAiOauth}'"
 fi
