@@ -334,7 +334,7 @@ fi
 
 # Zoxide (smart directory navigation)
 if command -v zoxide &> /dev/null; then
-  eval "$(zoxide init zsh)"
+  eval "$(zoxide init --cmd cd zsh)"
 fi
 
 # Direnv

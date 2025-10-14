@@ -1,9 +1,13 @@
 ## Your task
 
-Research the codebase to answer a user’s question and produce a self‑contained research document. Read any referenced files fully, search the codebase, and synthesize concrete, referenced findings.
+Research the codebase to answer a user's question and produce a self‑contained research document. Read any referenced files fully, search the codebase, and synthesize concrete, referenced findings.
+
+**Parameters**:
+- `$ARGUMENTS` - The research question or area of interest (if not provided, ask for it)
 
 1. Inputs
-   - Ask for the research question or area of interest.
+   - If `$ARGUMENTS` is provided, use it as the research question.
+   - Otherwise, ask for the research question or area of interest.
    - If files are mentioned, read them completely before proceeding.
 
 2. Decompose the question

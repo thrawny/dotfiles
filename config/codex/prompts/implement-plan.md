@@ -1,11 +1,17 @@
 ## Your task
 
-Implement an approved plan from `docs/plans/` phase‑by‑phase. Read the plan and referenced files fully, make the required changes, verify using the plan’s success criteria, and update checkboxes in the plan file.
+Implement an approved plan from `docs/plans/` phase‑by‑phase. Read the plan and referenced files fully, make the required changes, verify using the plan's success criteria, and update checkboxes in the plan file.
+
+**Parameters**:
+- `$1` - Plan file path (relative to docs/plans/ or absolute path)
+- `$2` - Optional phase number to implement (if omitted, implement all phases)
 
 1. Inputs
 
-   - If a plan path is provided, read it fully and note any existing checkmarks.
+   - If `$1` is provided, use it as the plan path (prepend `docs/plans/` if it's just a filename).
    - If not provided, ask for the plan path under `docs/plans/`.
+   - Read the plan fully and note any existing checkmarks.
+   - If `$2` is provided, focus only on that phase number.
    - Read the original ticket and all files mentioned in the plan completely.
 
 2. Execute by phases

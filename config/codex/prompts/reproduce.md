@@ -2,8 +2,16 @@
 
 Create a test case that reproduces the described bug. The user may specify the test type (unit, integration, e2e) or point to similar existing tests.
 
-1. Understand the bug: Identify what's broken, expected vs actual behavior, and any error messages.
+**Parameters**:
+- `$1` - Bug description (if not provided, ask for it)
+- `$2` - Test type: unit, integration, or e2e (optional)
+
+1. Understand the bug:
+   - If `$1` is provided, use it as the bug description.
+   - Otherwise, ask the user to describe the bug.
+   - Identify what's broken, expected vs actual behavior, and any error messages.
 2. Find test patterns:
+   - If `$2` is provided, use it as the preferred test type (unit, integration, or e2e).
    - Look for existing tests in the same area.
    - If user mentions test type or points to examples, follow those patterns.
    - Identify the test framework (Jest, pytest, etc.).

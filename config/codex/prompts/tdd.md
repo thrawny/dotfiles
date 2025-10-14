@@ -2,11 +2,15 @@
 
 Implement the requested feature/fix using Test-Driven Development (TDD) methodology. Follow the Red-Green-Refactor cycle:
 
+**Parameters**:
+- `$ARGUMENTS` - Task/feature/bug description (if not provided, ask for it)
+
 0. **Gather requirements**:
 
-   - Ask the user for the task/feature/bug description
-   - Ask about any specific test requirements or patterns to follow
-   - Ask about preferred test location if not obvious
+   - If `$ARGUMENTS` is provided, use it as the task/feature/bug description.
+   - Otherwise, ask the user for the task/feature/bug description.
+   - Ask about any specific test requirements or patterns to follow.
+   - Ask about preferred test location if not obvious.
 
 1. **Understand the requirement**:
 

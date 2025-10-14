@@ -2,9 +2,14 @@
 
 Create a detailed, actionable implementation plan through an interactive, iterative process. Read all referenced files fully, ground your plan in the actual codebase, and separate automated from manual success criteria.
 
+**Parameters**:
+- `$1` - Plan name/topic (used for filename: docs/plans/{name}.md)
+- `$2` - Optional ticket/spec file path to read
+
 1. Inputs
-   - If a file path argument is provided (ticket/spec), read it completely.
-   - If not provided, ask for: description or ticket path, constraints, requirements, and relevant links/research.
+   - If `$1` is provided, use it as the plan name for the output file.
+   - If `$2` is provided, read it completely as the ticket/spec.
+   - If arguments are missing, ask for: description or ticket path, constraints, requirements, and relevant links/research.
    - Fully read any files the user mentions before proceeding.
 
 2. Initial analysis
@@ -16,9 +21,9 @@ Create a detailed, actionable implementation plan through an interactive, iterat
    - Share a short outline of phases and goals; ask for confirmation or adjustments to order/granularity.
 
 4. Write the plan
-   - Create `docs/plans/{descriptive_name}.md` using the template below.
+   - Create `docs/plans/{descriptive_name}.md` using the template below (use `$1` if provided, otherwise derive from discussion).
    - Include concrete file paths and code references whenever possible.
-   - Keep scope clear by adding a “What We’re NOT Doing” section.
+   - Keep scope clear by adding a "What We're NOT Doing" section.
 
 5. Success criteria
    - Separate Automated vs Manual checks.
