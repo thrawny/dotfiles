@@ -11,50 +11,56 @@ local function configure_heavy_lsp()
 	require("mason").setup()
 
 	-- Lua LSP using new vim.lsp.config API
-	vim.lsp.config(
-		"lua_ls",
-		coq.lsp_ensure_capabilities({
-			cmd = { "lua-language-server" },
-			filetypes = { "lua" },
-			root_markers = {
-				".luarc.json",
-				".luarc.jsonc",
-				".luacheckrc",
-				".stylua.toml",
-				"stylua.toml",
-				"selene.toml",
-				"selene.yml",
-				".git",
-			},
-			single_file_support = true,
-			settings = {
-				Lua = {
-					runtime = {
-						version = "LuaJIT",
-					},
-					workspace = {
-						checkThirdParty = false,
-						library = {
-							vim.env.VIMRUNTIME,
-						},
+	vim.lsp.config("lua_ls", {
+		cmd = { "lua-language-server" },
+		filetypes = { "lua" },
+		root_markers = {
+			".luarc.json",
+			".luarc.jsonc",
+			".luacheckrc",
+			".stylua.toml",
+			"stylua.toml",
+			"selene.toml",
+			"selene.yml",
+			".git",
+		},
+		single_file_support = true,
+		capabilities = coq.lsp_ensure_capabilities(vim.lsp.protocol.make_client_capabilities()),
+		settings = {
+			Lua = {
+				runtime = {
+					version = "LuaJIT",
+				},
+				workspace = {
+					checkThirdParty = false,
+					library = {
+						vim.env.VIMRUNTIME,
 					},
 				},
 			},
-		})
-	)
+		},
+	})
 	vim.lsp.enable("lua_ls")
 
 	-- Go LSP using new vim.lsp.config API
-	vim.lsp.config(
-		"gopls",
-		coq.lsp_ensure_capabilities({
-			cmd = { "gopls" },
-			filetypes = { "go", "gomod", "gowork", "gotmpl" },
-			root_markers = { "go.work", "go.mod", ".git" },
-			single_file_support = true,
-		})
-	)
+	vim.lsp.config("gopls", {
+		cmd = { "gopls" },
+		filetypes = { "go", "gomod", "gowork", "gotmpl" },
+		root_markers = { "go.work", "go.mod", ".git" },
+		single_file_support = true,
+		capabilities = coq.lsp_ensure_capabilities(vim.lsp.protocol.make_client_capabilities()),
+	})
 	vim.lsp.enable("gopls")
+
+	-- Nix LSP using new vim.lsp.config API
+	vim.lsp.config("nixd", {
+		cmd = { "nixd" },
+		filetypes = { "nix" },
+		root_markers = { "flake.nix", "default.nix", "shell.nix", ".git" },
+		single_file_support = true,
+		capabilities = coq.lsp_ensure_capabilities(vim.lsp.protocol.make_client_capabilities()),
+	})
+	vim.lsp.enable("nixd")
 end
 
 local function configure_lualine()
@@ -172,10 +178,15 @@ require("lazy").setup({
 					yaml = { { "prettierd", "prettier" } },
 					json = { { "prettierd", "prettier" } },
 					markdown = { { "prettierd", "prettier" } },
+					nix = { "nixfmt" },
 					xml = { "xmlformat" },
 				},
 				format_on_save = { timeout_ms = 500, lsp_fallback = true },
 				formatters = {
+					nixfmt = {
+						command = "nixfmt",
+						stdin = true,
+					},
 					tombi = {
 						command = "uvx",
 						args = { "tombi", "format", "$FILENAME" },

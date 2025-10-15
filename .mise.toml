@@ -46,7 +46,6 @@ outputs = { auto = true }
 # Lua formatting
 [tasks."fmt:lua"]
 description = "Format Neovim Lua config with Stylua"
-tools."github:JohnnyMorganz/StyLua" = "v0.20.0"
 run = "stylua config/nvim"
 sources = ["config/nvim/**/*.lua"]
 outputs = { auto = true }
@@ -63,6 +62,11 @@ outputs = { auto = true }
 description = "Lint Python sources with Ruff"
 run = "uv run ruff check ."
 sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
+
+[tasks."lint:lua"]
+description = "Lint Neovim Lua config with Selene"
+run = "selene config/nvim"
+sources = ["config/nvim/**/*.lua"]
 
 [tasks."lint:nix"]
 description = "Lint Nix files with statix"
@@ -93,7 +97,7 @@ alias = "f"
 
 [tasks.lint]
 description = "Run all linters"
-depends = ["lint:python", "lint:nix"]
+depends = ["lint:python", "lint:lua", "lint:nix"]
 
 [tasks.typecheck]
 description = "Run all type checks"
@@ -106,3 +110,10 @@ depends = ["test:nvim"]
 [tasks.ci]
 description = "Run lint, typecheck, format, and tests"
 depends = ["fmt", "lint", "typecheck", "test"]
+
+# --- Tools ---
+[tools]
+"nix:nixd" = "latest"
+"nix:nixfmt" = "latest"
+"nix:selene" = "latest"
+"nix:stylua" = "latest"
