@@ -38,3 +38,6 @@ reportExplicitAny = false  # Allow explicit Any types for dynamic data
 reportAny = false  # Allow Any types in general (needed for JSON, kwargs, etc.)
 reportUnusedCallResult = false  # Don't require _ = for unused call results
 reportImplicitOverride = false  # Don't require @override decorator
+
+[tool.ruff.lint]
+select = ["I"]

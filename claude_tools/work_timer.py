@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Claude Code Work Timer CLI."""
 
-import anyio
-import asyncclick as click
 import logging
 from pathlib import Path
+
+import anyio
+import asyncclick as click
 
 from .core import run_work_session
 from .duration import DurationType

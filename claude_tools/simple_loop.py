@@ -5,12 +5,13 @@ import logging
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
+
 import asyncclick as click
 from claude_code_sdk import ClaudeCodeOptions, query
-from .prompts import PROGRESS_SNAPSHOT_SYSTEM_PROMPT
 
 from .core import print_claude_response
 from .duration import DurationType
+from .prompts import PROGRESS_SNAPSHOT_SYSTEM_PROMPT
 
 
 @click.command()

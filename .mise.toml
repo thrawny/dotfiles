@@ -39,7 +39,7 @@ sources = ["nix/**/*.nix", "nix/flake.*"]
 # Python formatting
 [tasks."fmt:python"]
 description = "Format Python sources with Ruff"
-run = "uv run ruff format ."
+run = "uv run ruff check --fix && uv run ruff format ."
 sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
 outputs = { auto = true }
 
