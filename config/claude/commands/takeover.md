@@ -1,3 +1,7 @@
+---
+model: claude-haiku-4-5-20251001
+---
+
 Another developer did some work outside of this conversation, you are picking up from where they left off.
 
 Read @progress.md to get the current state.

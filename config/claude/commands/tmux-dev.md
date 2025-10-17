@@ -2,6 +2,7 @@
 allowed-tools: Bash(tmux:*), Bash(pwd:*), Bash(ls:*), Read, Grep
 argument-hint: action and session name (e.g., "start my-app npm run dev", "logs my-app 50", "stop my-app")
 description: Manage development servers running in tmux sessions
+model: claude-haiku-4-5-20251001
 ---
 
 ## Context

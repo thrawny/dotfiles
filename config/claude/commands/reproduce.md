@@ -1,6 +1,7 @@
 ---
 argument-hint: bug description and optionally test type (e.g., "login fails when email is empty - unit test")
 description: Create a test case to reproduce a reported bug without modifying application code
+model: claude-haiku-4-5-20251001
 ---
 
 ## Your task

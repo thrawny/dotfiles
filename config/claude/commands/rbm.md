@@ -1,6 +1,7 @@
 ---
 allowed-tools: Bash(git status:*), Bash(git fetch:*), Bash(git rebase:*), Bash(git add:*), Bash(git commit:*), Bash(git branch:*), Bash(git log:*), Bash(git diff:*), Bash(git mergetool:*)
 description: Rebase current branch with main and handle any conflicts that arise
+model: claude-haiku-4-5-20251001
 ---
 
 ## Context

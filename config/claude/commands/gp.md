@@ -1,7 +1,7 @@
 ---
 allowed-tools: Bash(git add:*), Bash(git status:*), Bash(git commit:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(git push:*)
 description: Create a smart git commit and push to remote
-model: claude-3-5-haiku-20241022
+model: claude-haiku-4-5-20251001
 ---
 
 ## Context
