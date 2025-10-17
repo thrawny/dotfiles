@@ -142,3 +142,50 @@ vim.api.nvim_create_user_command("Format", function(args)
 	end
 	require("conform").format({ async = true, lsp_fallback = true, range = range })
 end, { range = true })
+
+vim.diagnostic.config({
+	virtual_text = { spacing = 2, source = "if_many" },
+	underline = true,
+	signs = { severity_sort = true },
+	update_in_insert = false,
+	float = { border = "rounded", source = "if_many" },
+})
+
+local go_lsp_group = vim.api.nvim_create_augroup("golang_lsp_enhancements", { clear = true })
+
+vim.api.nvim_create_autocmd("LspAttach", {
+	group = go_lsp_group,
+	callback = function(args)
+		local client = vim.lsp.get_client_by_id(args.data.client_id)
+		local bufnr = args.buf
+		if not client or vim.bo[bufnr].filetype ~= "go" then
+			return
+		end
+
+		if client:supports_method("textDocument/codeAction") then
+			vim.keymap.set("n", "<M-CR>", function()
+				vim.lsp.buf.code_action({
+					context = { only = { "source.organizeImports", "source.fixAll" } },
+					apply = true,
+				})
+			end, { buffer = bufnr, desc = "Go: organize imports/fix" })
+		end
+
+		if client:supports_method("textDocument/signatureHelp") then
+			vim.keymap.set("n", "gp", vim.lsp.buf.signature_help, {
+				buffer = bufnr,
+				desc = "Go: signature help",
+			})
+		end
+
+		if client:supports_method("textDocument/hover") then
+			vim.keymap.set("n", "gh", function()
+				vim.lsp.buf.hover({ focusable = false })
+			end, { buffer = bufnr, desc = "Go: hover details" })
+		end
+
+		if client:supports_method("textDocument/completion") then
+			vim.lsp.completion.enable(true, client.id, bufnr, { autotrigger = true })
+		end
+	end,
+})

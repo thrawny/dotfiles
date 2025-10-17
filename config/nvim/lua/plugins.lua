@@ -49,6 +49,15 @@ local function configure_heavy_lsp()
 		root_markers = { "go.work", "go.mod", ".git" },
 		single_file_support = true,
 		capabilities = coq.lsp_ensure_capabilities(vim.lsp.protocol.make_client_capabilities()),
+		settings = {
+			gopls = {
+				["ui.diagnostic.staticcheck"] = true,
+				analyses = {
+					unusedparams = true,
+					unusedwrite = true,
+				},
+			},
+		},
 	})
 	vim.lsp.enable("gopls")
 
@@ -172,12 +181,13 @@ require("lazy").setup({
 			},
 			opts = {
 				formatters_by_ft = {
+					go = { "golangci-lint" },
 					lua = { "stylua" },
 					python = { "ruff_format", "ruff_organize_imports" },
-					javascript = { { "prettierd", "prettier" } },
-					yaml = { { "prettierd", "prettier" } },
-					json = { { "prettierd", "prettier" } },
-					markdown = { { "prettierd", "prettier" } },
+					javascript = { "prettierd", "prettier", stop_after_first = true },
+					yaml = { "prettierd", "prettier", stop_after_first = true },
+					json = { "prettierd", "prettier", stop_after_first = true },
+					markdown = { "prettierd", "prettier", stop_after_first = true },
 					nix = { "nixfmt" },
 					xml = { "xmlformat" },
 				},
@@ -284,6 +294,7 @@ require("lazy").setup({
 					mappings = {
 						["<space>"] = "toggle_node",
 						["<cr>"] = "open",
+						["o"] = "open",
 						["l"] = "open",
 						["h"] = "close_node",
 						["v"] = "open_vsplit",
@@ -299,6 +310,13 @@ require("lazy").setup({
 						["x"] = "cut_to_clipboard",
 						["p"] = "paste_from_clipboard",
 						["q"] = "close_window",
+						["O"] = { "show_help", nowait = false, config = { title = "Order by", prefix_key = "O" } },
+						["Oc"] = "order_by_created",
+						["Od"] = "order_by_diagnostics",
+						["Om"] = "order_by_modified",
+						["On"] = "order_by_name",
+						["Os"] = "order_by_size",
+						["Ot"] = "order_by_type",
 					},
 				},
 				filesystem = {
