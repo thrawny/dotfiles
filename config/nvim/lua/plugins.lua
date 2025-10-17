@@ -213,7 +213,7 @@ require("lazy").setup({
 		},
 		{
 			"nvim-telescope/telescope.nvim",
-			tag = "master",
+			branch = "master",
 			dependencies = { "nvim-lua/plenary.nvim" },
 		},
 		{
@@ -358,6 +358,10 @@ require("lazy").setup({
 					padding = { 1, 2 },
 				},
 			},
+		},
+		{
+			"ray-x/lsp_signature.nvim",
+			event = "LspAttach",
 		},
 	},
 })

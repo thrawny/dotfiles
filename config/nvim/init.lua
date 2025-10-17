@@ -72,7 +72,7 @@ map("n", "N", "Nzzzv", { noremap = true })
 map("n", "<Leader>,", "<C-^>zz", { noremap = true })
 map("n", "<Leader>v", ":e $MYVIMRC<CR>", { noremap = true })
 map("n", "<Leader>z", ":e ~/.zshrc<CR>", { noremap = true })
-map("n", "<Leader>sv", ":source $MYVIMRC | Lazy sync<CR>", { noremap = true })
+map("n", "<Leader>sv", ":source $MYVIMRC<CR>", { noremap = true })
 map("n", "<Leader>su", ":Lazy update<CR>", { noremap = true })
 map("n", "<localleader>b", ":Neotree toggle<CR>", { noremap = true })
 map("n", "<localleader>,", ",", { noremap = true })
@@ -156,27 +156,42 @@ local go_lsp_group = vim.api.nvim_create_augroup("golang_lsp_enhancements", { cl
 vim.api.nvim_create_autocmd("LspAttach", {
 	group = go_lsp_group,
 	callback = function(args)
-		local client = vim.lsp.get_client_by_id(args.data.client_id)
-		local bufnr = args.buf
-		if not client or vim.bo[bufnr].filetype ~= "go" then
-			return
-		end
+	local client = vim.lsp.get_client_by_id(args.data.client_id)
+	local bufnr = args.buf
+	if not client or vim.bo[bufnr].filetype ~= "go" then
+		return
+	end
 
-		if client:supports_method("textDocument/codeAction") then
-			vim.keymap.set("n", "<M-CR>", function()
-				vim.lsp.buf.code_action({
+	local ok_sig, lsp_signature = pcall(require, "lsp_signature")
+	if ok_sig then
+		lsp_signature.on_attach({
+			bind = true,
+			floating_window = true,
+			floating_window_above_cur_line = true,
+			floating_window_off_x = 0,
+			floating_window_off_y = 0,
+			hint_enable = false,
+			transparency = 5,
+		}, bufnr)
+	end
+
+	if client:supports_method("textDocument/codeAction") then
+		vim.keymap.set("n", "<M-CR>", function()
+			vim.lsp.buf.code_action({
 					context = { only = { "source.organizeImports", "source.fixAll" } },
 					apply = true,
 				})
 			end, { buffer = bufnr, desc = "Go: organize imports/fix" })
 		end
 
-		if client:supports_method("textDocument/signatureHelp") then
-			vim.keymap.set("n", "gp", vim.lsp.buf.signature_help, {
-				buffer = bufnr,
-				desc = "Go: signature help",
-			})
-		end
+	if client:supports_method("textDocument/signatureHelp") then
+		vim.keymap.set("n", "gp", function()
+			vim.lsp.buf.signature_help({ focusable = false })
+		end, {
+			buffer = bufnr,
+			desc = "Go: signature help",
+		})
+	end
 
 		if client:supports_method("textDocument/hover") then
 			vim.keymap.set("n", "gh", function()
