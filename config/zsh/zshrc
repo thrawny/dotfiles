@@ -52,11 +52,6 @@ if type brew &>/dev/null; then
   FPATH=$(brew --prefix)/share/zsh/site-functions:$FPATH
 fi
 
-# Mise (task/runtime manager)
-if command -v mise &>/dev/null && [[ -o interactive ]]; then
-  eval "$(mise activate zsh)"
-fi
-
 # ===== Zinit Annexes =====
 zinit light-mode for \
     zdharma-continuum/zinit-annex-bin-gem-node \
@@ -113,6 +108,13 @@ zinit wait lucid for \
 if command -v kubectl &> /dev/null; then
     source <(kubectl completion zsh)
 fi
+
+# Mise (task/runtime manager)
+if command -v mise &>/dev/null && [[ -o interactive ]]; then
+  eval "$(mise activate zsh)"
+  source <(mise completion zsh)
+fi
+
 
 # ===== Performance Plugins ====
 
