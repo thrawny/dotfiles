@@ -220,8 +220,8 @@ alias tp='terraform plan'
 alias ta='terraform apply'
 alias taf='terraform apply -auto-approve'
 
-if bat --version &>/dev/null; then
-  alias cat='bat --style=header,grid,snip --theme "Monokai Extended Origin"'
+if bat --version &>/dev/null && [[ -o interactive ]]; then
+  alias cat='bat --style=grid,snip --theme "Monokai Extended Origin"'
 fi
 
 if [[ "$(uname)" == "Darwin" ]]; then
