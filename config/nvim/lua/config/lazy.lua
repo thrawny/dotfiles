@@ -25,6 +25,7 @@ require("lazy").setup({
     { import = "lazyvim.plugins.extras.lang.yaml" },
     { import = "lazyvim.plugins.extras.lang.markdown" },
     { import = "lazyvim.plugins.extras.ai.copilot" },
+    { import = "lazyvim.plugins.extras.lang.git" },
     -- import/override with your plugins
     { import = "plugins" },
   },
