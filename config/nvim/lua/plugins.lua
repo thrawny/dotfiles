@@ -6,8 +6,6 @@ local function configure_heavy_lsp()
 		return
 	end
 
-	local coq = require("coq")
-
 	require("mason").setup()
 
 	-- Lua LSP using new vim.lsp.config API
@@ -25,7 +23,7 @@ local function configure_heavy_lsp()
 			".git",
 		},
 		single_file_support = true,
-		capabilities = coq.lsp_ensure_capabilities(vim.lsp.protocol.make_client_capabilities()),
+		capabilities = require("blink.cmp").get_lsp_capabilities(),
 		settings = {
 			Lua = {
 				runtime = {
@@ -48,7 +46,7 @@ local function configure_heavy_lsp()
 		filetypes = { "go", "gomod", "gowork", "gotmpl" },
 		root_markers = { "go.work", "go.mod", ".git" },
 		single_file_support = true,
-		capabilities = coq.lsp_ensure_capabilities(vim.lsp.protocol.make_client_capabilities()),
+		capabilities = require("blink.cmp").get_lsp_capabilities(),
 		settings = {
 			gopls = {
 				["ui.diagnostic.staticcheck"] = true,
@@ -67,7 +65,7 @@ local function configure_heavy_lsp()
 		filetypes = { "nix" },
 		root_markers = { "flake.nix", "default.nix", "shell.nix", ".git" },
 		single_file_support = true,
-		capabilities = coq.lsp_ensure_capabilities(vim.lsp.protocol.make_client_capabilities()),
+		capabilities = require("blink.cmp").get_lsp_capabilities(),
 	})
 	vim.lsp.enable("nixd")
 end
@@ -232,14 +230,26 @@ require("lazy").setup({
 			opts = {},
 		},
 		{
-			"ms-jpq/coq_nvim",
+			"saghen/blink.cmp",
+			version = "*",
 			cond = not nvim_light,
-			branch = "coq",
-		},
-		{
-			"ms-jpq/coq.artifacts",
-			cond = not nvim_light,
-			branch = "artifacts",
+			opts = {
+				keymap = {
+					preset = "default",
+					["<Tab>"] = { "accept", "fallback" },
+					["<CR>"] = { "accept", "fallback" },
+				},
+				appearance = { nerd_font_variant = "mono" },
+				completion = {
+					selection = { preselect = false, auto_insert = false },
+					ghost_text = { enabled = false },
+				},
+				sources = {
+					default = { "lsp", "buffer" },
+				},
+				signature = { enabled = true },
+				fuzzy = { implementation = "rust" },
+			},
 		},
 		{
 			"nvim-lualine/lualine.nvim",
@@ -360,8 +370,8 @@ require("lazy").setup({
 			},
 		},
 		{
-			"ray-x/lsp_signature.nvim",
-			event = "LspAttach",
+			"github/copilot.vim",
+			event = "InsertEnter",
 		},
 	},
 })
