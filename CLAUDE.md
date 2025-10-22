@@ -38,6 +38,19 @@ Refer to `ansible/all_config.yml` for the authoritative symlink list.
 - Modify shell aliases/functions: edit `config/zsh/zshrc`.
 - Update Neovim/Vim configs: edit `config/nvim` or `config/vim`.
 
+### LazyVim Setup
+
+- Neovim has been migrated to **LazyVim**, a modern Neovim distribution.
+- Main entry: `config/nvim/init.lua`
+- Configuration files in `lua/config/`:
+  - `keymaps.lua`: Custom keybindings (leader key set to comma)
+  - `options.lua`: Editor options
+  - `autocmds.lua`: Autocommands
+  - `lazy.lua`: Lazy.nvim plugin manager setup
+- Plugin specs in `lua/plugins/`: `theme.lua` (monokai-nightasty), `ui.lua` (bufferline disabled, buffer navigation configured)
+- Settings file: `lazyvim.json`
+- When editing LazyVim config, restart Neovim to reload plugins.
+
 ## Verification (optional)
 
 - Python env: `uv sync` installs Ansible locally; `.envrc` activates it via direnv.
