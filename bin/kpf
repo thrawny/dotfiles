@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""Kubernetes port-forward manager with AWS SSO auth awareness.
+
+Manages multiple kubectl port-forwards with automatic reconnection.
+Gracefully handles AWS SSO session expiration and other transient errors.
+
+Config location: ~/.config/kpf/config.toml
+
+Example config:
+    [[port_forwards]]
+    name = "timescaledb-prod"
+    context = "kanel-production"
+    namespace = "kanel-backend"
+    service = "asset-timescaledb-rw"
+    local_port = 5434
+    remote_port = 5432
+
+    [[port_forwards]]
+    name = "river-ui-prod"
+    context = "kanel-production"
+    namespace = "kanel-backend"
+    service = "river-ui"
+    local_port = 8081
+    remote_port = 8080
+"""
+
+from __future__ import annotations
+
+import signal
+import subprocess
+import sys
+import threading
+import time
+import tomllib
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any, NoReturn
+
+
+@dataclass
+class PortForward:
+    """Configuration for a single port-forward."""
+
+    name: str
+    context: str
+    namespace: str
+    service: str
+    local_port: int
+    remote_port: int
+
+
+class PortForwardManager:
+    """Manages a single kubectl port-forward with automatic reconnection."""
+
+    RETRY_WAIT: int = 30  # seconds
+
+    def __init__(self, pf: PortForward) -> None:
+        self.pf: PortForward = pf
+        self.running: bool = True
+
+    def log(self, message: str) -> None:
+        """Log message with timestamp and port-forward name."""
+        timestamp = datetime.now().strftime("%H:%M:%S")
+        print(f"[{timestamp}] [{self.pf.name}] {message}", flush=True)
+
+    def run_kubectl(self) -> tuple[int, str, str]:
+        """Run kubectl port-forward and return exit code, stdout, stderr."""
+        cmd = [
+            "kubectl",
+            f"--context={self.pf.context}",
+            "-n",
+            self.pf.namespace,
+            "port-forward",
+            f"svc/{self.pf.service}",
+            f"{self.pf.local_port}:{self.pf.remote_port}",
+        ]
+
+        try:
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=None)
+            return result.returncode, result.stdout, result.stderr
+        except Exception as e:
+            return 1, "", str(e)
+
+    def start(self) -> None:
+        """Start managing the port-forward with continuous reconnection."""
+        while self.running:
+            self.log(
+                f"Starting port-forward (local:{self.pf.local_port} -> {self.pf.service})"
+            )
+
+            _, _, stderr = self.run_kubectl()
+
+            # Log any error output
+            if stderr:
+                for line in stderr.split("\n"):
+                    if line.strip():
+                        self.log(f"Error: {line}")
+
+            if self.running:
+                self.log(f"Retrying in {self.RETRY_WAIT}s...")
+                # Sleep in small chunks so we can be interrupted
+                end_time = time.time() + self.RETRY_WAIT
+                while time.time() < end_time and self.running:
+                    time.sleep(min(0.5, end_time - time.time()))
+
+    def stop(self) -> None:
+        """Stop the port-forward."""
+        self.running = False
+
+
+def load_config() -> list[PortForward]:
+    """Load port-forward configuration from ~/.config/kpf/config.toml."""
+    config_path = Path.home() / ".config" / "kpf" / "config.toml"
+
+    if not config_path.exists():
+        print(f"Error: Config not found at {config_path}", file=sys.stderr)
+        print(f"Create it with port-forward definitions", file=sys.stderr)
+        sys.exit(1)
+
+    with open(config_path, "rb") as f:
+        config: dict[str, Any] = tomllib.load(f)
+
+    port_forwards: list[PortForward] = []
+    for pf_config in config.get("port_forwards", []):
+        pf = PortForward(
+            name=pf_config["name"],  # type: ignore[index]
+            context=pf_config["context"],  # type: ignore[index]
+            namespace=pf_config["namespace"],  # type: ignore[index]
+            service=pf_config["service"],  # type: ignore[index]
+            local_port=pf_config["local_port"],  # type: ignore[index]
+            remote_port=pf_config["remote_port"],  # type: ignore[index]
+        )
+        port_forwards.append(pf)
+
+    return port_forwards
+
+
+def main() -> NoReturn:
+    """Main entry point."""
+    port_forwards = load_config()
+
+    if not port_forwards:
+        print("Error: No port-forwards configured", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"Starting {len(port_forwards)} port-forward(s)...")
+
+    managers = [PortForwardManager(pf) for pf in port_forwards]
+    threads: list[threading.Thread] = []
+
+    def signal_handler(_signum: int, _frame: object) -> None:
+        """Handle Ctrl+C gracefully."""
+        print("\nShutting down...", flush=True)
+        for manager in managers:
+            manager.stop()
+        # Wait for threads to finish
+        for thread in threads:
+            thread.join(timeout=5)
+        sys.exit(0)
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    # Start each port-forward in its own thread
+    for manager in managers:
+        thread = threading.Thread(target=manager.start, daemon=False)
+        thread.start()
+        threads.append(thread)
+
+    # Wait for all threads
+    try:
+        for thread in threads:
+            thread.join()
+    except KeyboardInterrupt:
+        signal_handler(signal.SIGINT, None)
+
+    sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()
