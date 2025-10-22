@@ -8,3 +8,6 @@ vim.g.maplocalleader = ","
 
 -- Use basedpyright as Python LSP
 vim.g.lazyvim_python_lsp = "basedpyright"
+
+-- Disable Copilot integration with completion menu to enable automatic ghost text
+vim.g.ai_cmp = false
