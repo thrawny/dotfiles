@@ -14,3 +14,10 @@ vim.keymap.set({ "n", "v", "o" }, "<space>y", '"*y', { desc = "Yank to system cl
 vim.keymap.set({ "n", "v", "o" }, "<space>Y", '"*Y', { desc = "Yank line to system clipboard" })
 vim.keymap.set({ "n", "v", "o" }, "<space>p", '"*p', { desc = "Paste from system clipboard" })
 vim.keymap.set({ "n", "v", "o" }, "<space>P", '"*P', { desc = "Paste before from system clipboard" })
+
+-- Keep cursor centered during search navigation
+vim.keymap.set("n", "n", "nzzzv", { desc = "Next search result (centered)" })
+vim.keymap.set("n", "N", "Nzzzv", { desc = "Previous search result (centered)" })
+
+-- Clear search highlighting
+vim.keymap.set("n", "<Leader>o", ":noh<CR>", { desc = "Clear search highlighting", silent = true })
