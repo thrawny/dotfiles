@@ -11,3 +11,6 @@ vim.g.lazyvim_python_lsp = "basedpyright"
 
 -- Disable Copilot integration with completion menu to enable automatic ghost text
 vim.g.ai_cmp = false
+
+-- Auto-reload files when changed externally
+vim.opt.autoread = true
