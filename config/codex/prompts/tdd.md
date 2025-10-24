@@ -25,9 +25,10 @@ Implement the requested feature/fix using Test-Driven Development (TDD) methodol
 
    - Create or locate the appropriate test file
    - Write a focused test that describes the desired behavior
+   - **Write minimal scaffolding code if needed** (empty functions, class stubs, etc.) so the test fails for the right reason (wrong behavior) rather than compilation/syntax errors
    - Ensure the test is runnable and currently fails
    - Use descriptive test names that explain the expected behavior
-   - Run the test suite to confirm it fails with the expected error
+   - Run the test suite to confirm it fails with the expected error (not syntax/compilation errors)
    - Summarize the test failure back to the user (what failed and why)
    - **STOP and wait for user feedback before proceeding**
 
@@ -65,6 +66,7 @@ Implement the requested feature/fix using Test-Driven Development (TDD) methodol
 ## Important guidelines
 
 - **Never write implementation code before the test**
+- **Scaffolding is allowed in RED phase**: Write minimal code stubs (empty functions, class definitions) to make tests fail for behavioral reasons, not syntax errors
 - **Always run tests and show output before moving to next step**
 - **Wait for explicit user approval before progressing through each phase**
 - Use the project's existing test framework and conventions
