@@ -39,3 +39,6 @@ vim.keymap.set("n", "<Leader>sG", function()
     exclude = { "node_modules", ".venv", ".git", ".DS_Store" },
   })
 end, { desc = "Grep (all)" })
+
+-- Code action with Alt+Enter (in addition to default <leader>ca)
+vim.keymap.set({ "n", "x" }, "<M-CR>", vim.lsp.buf.code_action, { desc = "Code Action" })
