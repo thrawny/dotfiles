@@ -23,11 +23,11 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["claude_tools"]
 
-[tool.uv]
-dev-dependencies = [
-    "ansible-lint>=25.6.1",
-    "basedpyright>=1.31.3",
-    "ruff>=0.12.9",
+[dependency-groups]
+dev = [
+    "ansible-lint>=25.9.2",
+    "basedpyright>=1.32.1",
+    "ruff>=0.14.2",
 ]
 
 [tool.basedpyright]
