@@ -39,6 +39,7 @@
     postgresql_17
     ruff
     tree-sitter
+    gcc
     vim
     wget
     usage
