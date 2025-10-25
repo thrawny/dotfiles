@@ -63,12 +63,15 @@ zinit light-mode for \
 zinit snippet OMZP::git
 
 # Vim mode for zsh (load early for proper integration)
-zinit ice depth=1
-zinit light jeffreytse/zsh-vi-mode
+# Disable vi mode when running inside Neovim terminal for clearer mental model
+if [ -z "$NVIM" ]; then
+  zinit ice depth=1
+  zinit light jeffreytse/zsh-vi-mode
 
-# Configure vi-mode settings
-ZVM_VI_INSERT_ESCAPE_BINDKEY=jk  # Use jk to escape to normal mode
-ZVM_LINE_INIT_MODE=$ZVM_MODE_INSERT  # Start in insert mode
+  # Configure vi-mode settings
+  ZVM_VI_INSERT_ESCAPE_BINDKEY=jk  # Use jk to escape to normal mode
+  ZVM_LINE_INIT_MODE=$ZVM_MODE_INSERT  # Start in insert mode
+fi
 
 # Unalias specific git aliases to use custom ones
 unalias -m "gpo" 2>/dev/null
@@ -140,11 +143,23 @@ zinit ice wait lucid atload"!_zsh_autosuggest_start"
 zinit light zsh-users/zsh-autosuggestions
 
 # Fix for zsh-vi-mode compatibility with autosuggestions and fzf
-zvm_after_init() {
-  [ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ] && \
-    source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
+# Only define this function when vi-mode is enabled (not in Neovim)
+if [ -z "$NVIM" ]; then
+  zvm_after_init() {
+    [ -f /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh ] && \
+      source /opt/homebrew/share/zsh-autosuggestions/zsh-autosuggestions.zsh
 
-  # Re-initialize fzf keybindings after vi-mode to prevent conflicts
+    # Re-initialize fzf keybindings after vi-mode to prevent conflicts
+    if command -v fzf &> /dev/null; then
+      eval "$(fzf --zsh)"
+    fi
+
+    # Bind Ctrl+F to forward-word for partial autosuggestion accept
+    bindkey ^F forward-word
+    bindkey ^f forward-word
+  }
+else
+  # When in Neovim terminal, initialize fzf and keybindings directly
   if command -v fzf &> /dev/null; then
     eval "$(fzf --zsh)"
   fi
@@ -152,7 +167,7 @@ zvm_after_init() {
   # Bind Ctrl+F to forward-word for partial autosuggestion accept
   bindkey ^F forward-word
   bindkey ^f forward-word
-}
+fi
 
 # History substring search
 zinit ice wait lucid
