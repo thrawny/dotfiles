@@ -10,10 +10,10 @@ vim.keymap.set("n", "[e", "<C-o>", { desc = "Previous jump location", silent = t
 vim.keymap.set("n", "]e", "<C-i>", { desc = "Next jump location", silent = true })
 
 -- Clipboard copy/paste (works in normal, visual, and operator-pending modes)
-vim.keymap.set({ "n", "v", "o" }, "<space>y", '"*y', { desc = "Yank to system clipboard" })
-vim.keymap.set({ "n", "v", "o" }, "<space>Y", '"*Y', { desc = "Yank line to system clipboard" })
-vim.keymap.set({ "n", "v", "o" }, "<space>p", '"*p', { desc = "Paste from system clipboard" })
-vim.keymap.set({ "n", "v", "o" }, "<space>P", '"*P', { desc = "Paste before from system clipboard" })
+vim.keymap.set({ "n", "v", "o" }, "<space>y", '"+y', { desc = "Yank to system clipboard" })
+vim.keymap.set({ "n", "v", "o" }, "<space>Y", '"+Y', { desc = "Yank line to system clipboard" })
+vim.keymap.set({ "n", "v", "o" }, "<space>p", '"+p', { desc = "Paste from system clipboard" })
+vim.keymap.set({ "n", "v", "o" }, "<space>P", '"+P', { desc = "Paste before from system clipboard" })
 
 -- Keep cursor centered during search navigation
 vim.keymap.set("n", "n", "nzzzv", { desc = "Next search result (centered)" })
