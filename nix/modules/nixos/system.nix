@@ -93,6 +93,14 @@ in
       ]);
     programs.direnv.enable = true;
 
+    # Enable nix-ld for running non-Nix binaries (e.g., uv run ruff)
+    programs.nix-ld.enable = true;
+    programs.nix-ld.libraries = with pkgs; [
+      stdenv.cc.cc.lib # Basic C/C++ libraries
+      zlib # Compression library
+      openssl # SSL/TLS
+    ];
+
     # Enable AppImage support
     programs.appimage = {
       enable = true;
