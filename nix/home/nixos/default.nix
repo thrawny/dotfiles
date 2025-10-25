@@ -20,6 +20,7 @@
     ./mako.nix
     ./walker.nix
     ./waybar.nix
+    ./zen-browser.nix
   ];
 
   home.username = username;

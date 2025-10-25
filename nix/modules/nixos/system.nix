@@ -2,6 +2,7 @@
   config,
   pkgs,
   lib,
+  zen-browser,
   ...
 }:
 let
@@ -175,7 +176,7 @@ in
     home-manager.useGlobalPkgs = true;
     home-manager.useUserPackages = true;
     home-manager.extraSpecialArgs = {
-      inherit dotfiles username;
+      inherit dotfiles username zen-browser;
       gitIdentity = gitIdentity;
     };
 
