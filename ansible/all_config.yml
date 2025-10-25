@@ -82,6 +82,12 @@
     dest: "{{ home_dir }}/.config/direnv"
     src: "{{ dotfiles_dir }}/config/direnv"
 
+- name: mise config folder is symlinked
+  file:
+    state: link
+    dest: "{{ home_dir }}/.config/mise"
+    src: "{{ dotfiles_dir }}/config/mise"
+
 - name: ghostty config folder is symlinked
   file:
     state: link

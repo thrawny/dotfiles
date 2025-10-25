@@ -1,0 +1,6 @@
+[settings]
+idiomatic_version_file_enable_tools = ["python", "node"]
+trusted_config_paths = ["/home/thrawny/dotfiles", "/home/thrawny/code"]
+python.uv_venv_auto = true
+experimental = true
+disable_tools = ["python"]
