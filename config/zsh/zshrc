@@ -154,9 +154,6 @@ if [ -z "$NVIM" ]; then
       eval "$(fzf --zsh)"
     fi
 
-    # Bind Ctrl+F to forward-word for partial autosuggestion accept
-    bindkey ^F forward-word
-    bindkey ^f forward-word
   }
 else
   # When in Neovim terminal, initialize fzf and keybindings directly
@@ -164,10 +161,12 @@ else
     eval "$(fzf --zsh)"
   fi
 
-  # Bind Ctrl+F to forward-word for partial autosuggestion accept
-  bindkey ^F forward-word
-  bindkey ^f forward-word
+  bindkey ^e end-of-line
 fi
+
+# Bind Ctrl+F to forward-word for partial autosuggestion accept
+bindkey ^F forward-word
+bindkey ^f forward-word
 
 # History substring search
 zinit ice wait lucid
