@@ -69,7 +69,9 @@ let
     "${mod}, SPACE, exec, walker"
     "${mod}, W, killactive"
     "${mod}, T, togglesplit" # Changed from J to avoid conflict with vim j
-    "${mod}, P, pseudo"
+    "${mod}, O, exec, 1password"
+    "${mod}, P, exec, spotify"
+    "${mod} SHIFT, P, pseudo"
     "${mod}, V, togglefloating"
     "${mod}, F, fullscreen" # Simplified fullscreen binding
     "${mod} SHIFT, Plus, fullscreen"
@@ -77,6 +79,8 @@ let
     "${mod}, S, togglespecialworkspace, magic"
     "${mod} SHIFT, S, movetoworkspace, special:magic"
     "${mod}, M, focuscurrentorlast" # Focus back-and-forth like aerospace
+    "${mod}, B, exec, hyprctl clients -j | jq -e '.[] | select(.class == \"zen-beta\")' > /dev/null && hyprctl dispatch focuswindow class:zen-beta || zen-browser"
+    "${mod}, N, workspace, 1"
   ];
 
   # Group (tabbed) layout bindings - similar to i3's tabbed mode

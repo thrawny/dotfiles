@@ -11,6 +11,8 @@
       # Float common control panels.
       "float, class:^(org.pulseaudio.pavucontrol|blueberry.py|.blueman-manager-wrapped)$"
       "float, class:^(steam)$"
+      "float, class:^(1Password)$"
+      "float, class:^(nm-connection-editor)$"
       "fullscreen, class:^(com.libretro.RetroArch)$"
 
       # Adjust opacity for a touch of depth without hampering focus.
@@ -28,6 +30,10 @@
       "float, class:(clipse)"
       "size 622 652, class:(clipse)"
       "stayfocused, class:(clipse)"
+    ];
+
+    windowrulev2 = [
+      "workspace name:p, class:^(Spotify)$"
     ];
 
     layerrule = [
