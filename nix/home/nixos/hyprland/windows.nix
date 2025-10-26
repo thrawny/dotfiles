@@ -34,6 +34,7 @@
 
     windowrulev2 = [
       "workspace name:p, class:^(Spotify)$"
+      "workspace name:b, class:^(zen-beta)$"
     ];
 
     layerrule = [

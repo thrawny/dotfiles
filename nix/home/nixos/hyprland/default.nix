@@ -10,6 +10,7 @@
     ./envs.nix
     ./input.nix
     ./looknfeel.nix
+    ./monitors.nix
     ./windows.nix
   ];
 

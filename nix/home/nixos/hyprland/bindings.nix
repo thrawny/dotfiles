@@ -79,7 +79,7 @@ let
     "${mod}, S, togglespecialworkspace, magic"
     "${mod} SHIFT, S, movetoworkspace, special:magic"
     "${mod}, M, focuscurrentorlast" # Focus back-and-forth like aerospace
-    "${mod}, B, exec, hyprctl clients -j | jq -e '.[] | select(.class == \"zen-beta\")' > /dev/null && hyprctl dispatch focuswindow class:zen-beta || zen-browser"
+    "${mod}, B, workspace, name:b"
     "${mod}, N, workspace, 1"
   ];
 
@@ -90,9 +90,11 @@ let
     "${mod}, bracketleft, changegroupactive, b" # Previous tab in group
     "${mod} CTRL, G, moveoutofgroup" # Remove window from group
     "${mod} SHIFT, G, lockactivegroup, toggle" # Lock/unlock group
-    # Alternative vim-style navigation in groups
-    "${mod} ALT, l, changegroupactive, f" # Next tab (vim-style)
-    "${mod} ALT, h, changegroupactive, b" # Previous tab (vim-style)
+    # Move window into group in direction
+    "${mod} CTRL SHIFT, h, moveintogroup, l" # Move into group left
+    "${mod} CTRL SHIFT, j, moveintogroup, d" # Move into group down
+    "${mod} CTRL SHIFT, k, moveintogroup, u" # Move into group up
+    "${mod} CTRL SHIFT, l, moveintogroup, r" # Move into group right
   ];
 
   scrollBinds = [
