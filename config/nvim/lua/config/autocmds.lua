@@ -29,3 +29,17 @@ vim.api.nvim_create_autocmd("FileChangedShellPost", {
   end,
   desc = "Notify when file changed on disk",
 })
+
+-- Auto-close terminal buffers when exiting to prevent "job is still running" warnings
+vim.api.nvim_create_autocmd("QuitPre", {
+  callback = function()
+    local wins = vim.api.nvim_list_wins()
+    for _, win in ipairs(wins) do
+      local buf = vim.api.nvim_win_get_buf(win)
+      if vim.bo[buf].buftype == "terminal" then
+        vim.api.nvim_buf_delete(buf, { force = true })
+      end
+    end
+  end,
+  desc = "Force close terminal buffers on quit",
+})
