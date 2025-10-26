@@ -4,9 +4,12 @@ This flake-based configuration manages both NixOS systems and Darwin (macOS) via
 
 ## Commands
 
+All commands are managed via [mise](https://mise.jdx.dev/), a modern task runner and tool manager.
+
 ### NixOS: Rebuild System
 ```bash
-make switch       # Rebuild and switch immediately (auto-detects hostname)
+mise switch       # Rebuild and switch immediately (auto-detects hostname)
+mise dry          # Dry-run rebuild without switching
 ```
 
 Or directly:
@@ -16,7 +19,7 @@ sudo nixos-rebuild switch --flake ./nix#thinkpad
 
 ### Darwin/macOS: Switch Home Manager
 ```bash
-make switch-darwin       # Switch Home Manager configuration for macOS
+mise switch-darwin       # Switch Home Manager configuration for macOS
 ```
 
 Or directly:
@@ -24,9 +27,49 @@ Or directly:
 home-manager switch --flake ./nix#thrawny-darwin
 ```
 
-### Format Nix Files
+### Development Tasks
+
+#### Format Code
 ```bash
-make fmt         # Uses treefmt to format all Nix files
+mise fmt              # Run all formatters (Python, Lua, Nix)
+mise fmt:python       # Format Python with Ruff
+mise fmt:lua          # Format Neovim Lua config with Stylua
+mise fmt:nix          # Format Nix files with nixfmt/treefmt
+```
+
+#### Lint Code
+```bash
+mise lint             # Run all linters
+mise lint:python      # Lint Python with Ruff
+mise lint:lua         # Lint Lua with Selene
+mise lint:nix         # Lint Nix with statix
+```
+
+#### Type Checking
+```bash
+mise typecheck        # Run all type checkers
+mise typecheck:python # Typecheck Python with basedpyright
+```
+
+#### Tests
+```bash
+mise test             # Run all tests
+mise test:nvim        # Run Neovim config tests
+```
+
+#### CI Pipeline
+```bash
+mise ci               # Run full CI pipeline (fmt, lint, typecheck, test)
+```
+
+#### Build ISO
+```bash
+mise iso              # Build desktop installer ISO with network drivers
+```
+
+View all available tasks:
+```bash
+mise tasks ls         # List all tasks with descriptions
 ```
 
 ## Configuration Structure
