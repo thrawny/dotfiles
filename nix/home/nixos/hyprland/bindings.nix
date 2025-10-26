@@ -101,6 +101,11 @@ let
     "${mod}, mouse:273, resizewindow"
   ];
 
+  monitorBinds = [
+    "${mod} SHIFT, comma, movecurrentworkspacetomonitor, -1"
+    "${mod} SHIFT, period, movecurrentworkspacetomonitor, +1"
+  ];
+
   volumeBinds = [
     ",XF86AudioRaiseVolume, exec, wpctl set-volume -l 1 @DEFAULT_AUDIO_SINK@ 5%+"
     ",XF86AudioLowerVolume, exec, wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-"
@@ -127,6 +132,7 @@ in
       resizeBinds
       sessionBinds
       scrollBinds
+      monitorBinds
     ];
 
     bindm = mouseBinds;
