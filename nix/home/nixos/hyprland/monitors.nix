@@ -12,14 +12,14 @@
     # Mirrors aerospace config pattern:
     # - Workspaces 1, 3, 4 on primary (left) monitor
     # - Workspace 2 on secondary (right) monitor
-    # - Named workspaces (b=browser, p=player) on right monitor
+    # - Named workspaces (b=browser on right, p=player on left)
     workspace = [
       "1, monitor:HDMI-A-1, default:true"
       "2, monitor:HDMI-A-1"
       "3, monitor:HDMI-A-1"
       "4, monitor:HDMI-A-1"
       "name:b, monitor:DP-1" # Browser workspace
-      "name:p, monitor:DP-1" # Spotify workspace
+      "name:p, monitor:HDMI-A-1" # Spotify workspace
     ];
   };
 }
