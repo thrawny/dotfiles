@@ -20,7 +20,7 @@
       ...
     }:
     let
-      lib = nixpkgs.lib;
+      inherit (nixpkgs) lib;
       mkHost =
         {
           system,
