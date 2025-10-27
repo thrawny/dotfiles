@@ -41,42 +41,44 @@ in
     ./mise.nix
   ];
 
-  home.stateVersion = "24.05";
-
   # Let Home Manager manage itself
   programs.home-manager.enable = true;
 
-  home.activation.seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
-  home.activation.seedClaudeSettings = seedExample "config/claude/settings.example.json" "config/claude/settings.json";
-  home.activation.seedCursorSettings = seedExample "config/cursor/settings.example.json" "config/cursor/settings.json";
+  home = {
+    stateVersion = "24.05";
 
-  # Codex configuration
-  home.file.".codex".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex";
+    activation = {
+      seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
+      seedClaudeSettings = seedExample "config/claude/settings.example.json" "config/claude/settings.json";
+      seedCursorSettings = seedExample "config/cursor/settings.example.json" "config/cursor/settings.json";
+    };
 
-  # Claude configuration
-  home.file.".claude/commands".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/commands";
-  home.file.".claude/settings.json".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/settings.json";
-  home.file.".claude/agents".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/agents";
-  home.file.".claude/CLAUDE.md".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/CLAUDE-GLOBAL.md";
+    file = {
+      # Codex configuration
+      ".codex".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex";
 
-  # Ensure .claude directory exists
-  home.file.".claude/.keep".text = "";
+      # Claude configuration
+      ".claude/commands".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/commands";
+      ".claude/settings.json".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/settings.json";
+      ".claude/agents".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/agents";
+      ".claude/CLAUDE.md".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/CLAUDE-GLOBAL.md";
 
-  # ccstatusline configuration
-  home.file.".config/ccstatusline/settings.json".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/ccstatusline-settings.json";
+      # ccstatusline configuration
+      ".config/ccstatusline/settings.json".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/ccstatusline-settings.json";
 
-  home.file.".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
-    text =
-      lib.concatStringsSep "\n" (
-        [ "[user]" ]
-        ++ lib.optionals (gitIdentity.name != null) [ "\tname = ${gitIdentity.name}" ]
-        ++ lib.optionals (gitIdentity.email != null) [ "\temail = ${gitIdentity.email}" ]
-      )
-      + "\n";
+      # Ensure .claude directory exists
+      ".claude/.keep".text = "";
+
+      ".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
+        text =
+          lib.concatStringsSep "\n" (
+            [ "[user]" ]
+            ++ lib.optionals (gitIdentity.name != null) [ "\tname = ${gitIdentity.name}" ]
+            ++ lib.optionals (gitIdentity.email != null) [ "\temail = ${gitIdentity.email}" ]
+          )
+          + "\n";
+      };
+    };
   };
 }

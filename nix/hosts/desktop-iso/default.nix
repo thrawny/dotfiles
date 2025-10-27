@@ -12,11 +12,12 @@
   ];
 
   # ISO settings
-  isoImage.makeEfiBootable = true;
-  isoImage.makeUsbBootable = true;
-
-  # Faster compression for development (optional - remove for final build)
-  isoImage.squashfsCompression = "gzip -Xcompression-level 1";
+  isoImage = {
+    makeEfiBootable = true;
+    makeUsbBootable = true;
+    # Faster compression for development (optional - remove for final build)
+    squashfsCompression = "gzip -Xcompression-level 1";
+  };
 
   # Include the RTL8852AU WiFi driver
   boot.extraModulePackages = with config.boot.kernelPackages; [ rtl8852au ];

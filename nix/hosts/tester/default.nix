@@ -14,7 +14,9 @@
   networking.hostName = "tester";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
-  boot.loader.grub.enable = false;
-  boot.loader.systemd-boot.enable = lib.mkForce false;
-  boot.loader.efi.canTouchEfiVariables = lib.mkForce false;
+  boot.loader = {
+    grub.enable = false;
+    systemd-boot.enable = lib.mkForce false;
+    efi.canTouchEfiVariables = lib.mkForce false;
+  };
 }

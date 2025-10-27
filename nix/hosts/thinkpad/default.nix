@@ -15,8 +15,12 @@
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
   # Bootloader: ThinkPad uses systemd-boot via the EFI partition; force-disable GRUB to avoid nix build errors.
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.systemd-boot.configurationLimit = 2;
-  boot.loader.efi.canTouchEfiVariables = true;
-  boot.loader.grub.enable = lib.mkForce false;
+  boot.loader = {
+    systemd-boot = {
+      enable = true;
+      configurationLimit = 2;
+    };
+    efi.canTouchEfiVariables = true;
+    grub.enable = lib.mkForce false;
+  };
 }

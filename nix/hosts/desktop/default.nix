@@ -19,11 +19,23 @@
   networking.hostName = "thrawny-desktop";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
-  boot.loader.systemd-boot.enable = true;
-  boot.loader.systemd-boot.configurationLimit = 3;
-  boot.loader.efi.canTouchEfiVariables = true;
-  boot.loader.grub.enable = lib.mkForce false;
-  boot.extraModulePackages = with config.boot.kernelPackages; [ rtl8852au ];
+  boot = {
+    loader = {
+      systemd-boot = {
+        enable = true;
+        configurationLimit = 3;
+      };
+      efi.canTouchEfiVariables = true;
+      grub.enable = lib.mkForce false;
+    };
+    extraModulePackages = with config.boot.kernelPackages; [ rtl8852au ];
+    kernelModules = [
+      "nvidia"
+      "nvidia_modeset"
+      "nvidia_uvm"
+      "nvidia_drm"
+    ];
+  };
 
   # Disable USB autosuspend for TP-Link Archer TX20U WiFi adapter
   # Fixes issue where dongle is dead on boot and requires Windows reboot to wake
@@ -46,14 +58,6 @@
     powerManagement.enable = true; # For suspend/hibernate support
     package = config.boot.kernelPackages.nvidiaPackages.stable; # Use stable driver
   };
-
-  # Load NVIDIA kernel modules
-  boot.kernelModules = [
-    "nvidia"
-    "nvidia_modeset"
-    "nvidia_uvm"
-    "nvidia_drm"
-  ];
 
   # Desktop-specific home-manager overrides
   home-manager.users.thrawny =

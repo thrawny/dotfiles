@@ -19,6 +19,8 @@
     ./setup.nix
   ];
 
-  home.username = username;
-  home.homeDirectory = "/Users/${username}";
+  home = {
+    inherit username;
+    homeDirectory = "/Users/${username}";
+  };
 }

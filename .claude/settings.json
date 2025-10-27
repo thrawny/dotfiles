@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "mcp__nixos"
+      "mcp__nixos",
+      "Bash(mise lint:*)",
+      "Bash(mise fmt:*)"
     ],
     "deny": []
   }

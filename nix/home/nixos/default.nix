@@ -23,7 +23,9 @@
     ./zen-browser.nix
   ];
 
-  home.username = username;
-  home.homeDirectory = "/home/${username}";
-  home.stateVersion = "24.05";
+  home = {
+    inherit username;
+    homeDirectory = "/home/${username}";
+    stateVersion = "24.05";
+  };
 }

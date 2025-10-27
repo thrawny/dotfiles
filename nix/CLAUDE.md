@@ -132,6 +132,20 @@ Configured in `home/darwin/defaults.nix`:
 - **TPM**: Tmux Plugin Manager (installed via activation script)
 - Both work with existing configuration files
 
+## Code Quality
+
+**IMPORTANT**: After making any changes to Nix files, always run:
+```bash
+mise fmt:nix    # Format Nix code with nixfmt
+mise lint:nix   # Lint Nix code with statix
+```
+
+This ensures code follows Nix best practices:
+- No repeated attribute keys (combine into single attribute sets)
+- Use `inherit` instead of assignments like `x = x;`
+- Replace empty patterns `{ ... }:` with `_:`
+- Consistent formatting and style
+
 ## Important Notes
 
 ### NixOS

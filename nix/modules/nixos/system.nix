@@ -7,17 +7,21 @@
 }:
 let
   cfg = config.dotfiles;
-  username = cfg.username;
+  inherit (cfg) username;
   userHome = "/home/${username}";
   dotfiles = "${userHome}/dotfiles";
   packages = import ../shared/packages.nix {
     inherit pkgs lib;
     excludePackages = [ ];
   };
-  gitIdentity = {
-    name = cfg.fullName;
-    email = cfg.email;
-  };
+  gitIdentity =
+    let
+      inherit (cfg) fullName email;
+    in
+    {
+      name = fullName;
+      inherit email;
+    };
 in
 {
   options.dotfiles = {
@@ -55,8 +59,6 @@ in
       "flakes"
     ];
 
-    services.xserver.enable = false;
-
     users.users.${username} = {
       isNormalUser = true;
       home = userHome;
@@ -69,22 +71,6 @@ in
       shell = pkgs.zsh;
     };
 
-    programs.zsh.enable = true;
-    services.openssh.enable = true;
-
-    services.pulseaudio.enable = false;
-    services.pipewire = {
-      enable = true;
-      alsa.enable = true;
-      pulse.enable = true;
-      jack.enable = true;
-    };
-
-    services.greetd = {
-      enable = true;
-      settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd Hyprland";
-    };
-
     environment.systemPackages =
       packages.systemPackages
       ++ (with pkgs; [
@@ -92,25 +78,29 @@ in
         nil # Nix Language Server
         nixfmt-tree # Treefmt pre-configured for Nix files
       ]);
-    programs.direnv.enable = true;
 
-    # Enable nix-ld for running non-Nix binaries (e.g., uv run ruff)
-    programs.nix-ld.enable = true;
-    programs.nix-ld.libraries = with pkgs; [
-      stdenv.cc.cc.lib # Basic C/C++ libraries
-      zlib # Compression library
-      openssl # SSL/TLS
-    ];
+    programs = {
+      zsh.enable = true;
+      direnv.enable = true;
 
-    # Enable AppImage support
-    programs.appimage = {
-      enable = true;
-      binfmt = true;
+      # Enable nix-ld for running non-Nix binaries (e.g., uv run ruff)
+      nix-ld = {
+        enable = true;
+        libraries = with pkgs; [
+          stdenv.cc.cc.lib # Basic C/C++ libraries
+          zlib # Compression library
+          openssl # SSL/TLS
+        ];
+      };
+
+      # Enable AppImage support
+      appimage = {
+        enable = true;
+        binfmt = true;
+      };
     };
 
-    services.resolved.enable = true;
     hardware.bluetooth.enable = true;
-    services.blueman.enable = true;
     networking.networkmanager.enable = true;
 
     # Allow passwordless nixos-rebuild and nix-collect-garbage for wheel group
@@ -130,41 +120,59 @@ in
       }
     ];
 
-    # Keyd for system-wide key remapping (works in all apps including Electron)
-    services.keyd = {
-      enable = true;
-      keyboards = {
-        # ThinkPad built-in keyboard - needs Alt/Win swap
-        thinkpad = {
-          ids = [ "0001:0001:70533846" ]; # AT Translated Set 2 keyboard exact ID
-          settings = {
-            main = {
-              # Swap Caps Lock and Escape
-              capslock = "esc";
-              esc = "capslock";
+    services = {
+      xserver.enable = false;
+      openssh.enable = true;
+      pulseaudio.enable = false;
+      pipewire = {
+        enable = true;
+        alsa.enable = true;
+        pulse.enable = true;
+        jack.enable = true;
+      };
+      greetd = {
+        enable = true;
+        settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd Hyprland";
+      };
+      resolved.enable = true;
+      blueman.enable = true;
 
-              # Swap Meta (Super/Windows) and Alt keys for Mac-like layout
-              leftmeta = "leftalt";
-              leftalt = "leftmeta";
-              rightalt = "rightmeta";
-            };
-            "shift" = {
-              "102nd" = "S-grave"; # Shift+< produces Shift+grave which is ~
+      # Keyd for system-wide key remapping (works in all apps including Electron)
+      keyd = {
+        enable = true;
+        keyboards = {
+          # ThinkPad built-in keyboard - needs Alt/Win swap
+          thinkpad = {
+            ids = [ "0001:0001:70533846" ]; # AT Translated Set 2 keyboard exact ID
+            settings = {
+              main = {
+                # Swap Caps Lock and Escape
+                capslock = "esc";
+                esc = "capslock";
+
+                # Swap Meta (Super/Windows) and Alt keys for Mac-like layout
+                leftmeta = "leftalt";
+                leftalt = "leftmeta";
+                rightalt = "rightmeta";
+              };
+              "shift" = {
+                "102nd" = "S-grave"; # Shift+< produces Shift+grave which is ~
+              };
             };
           };
-        };
 
-        # Default for all other keyboards (no Alt/Win swap)
-        default = {
-          ids = [ "*" ]; # Match all keyboards (keyd prioritizes specific matches first)
-          settings = {
-            main = {
-              # Only swap Caps Lock and Escape
-              capslock = "esc";
-              esc = "capslock";
-            };
-            "shift" = {
-              "102nd" = "S-grave"; # Shift+< produces Shift+grave which is ~
+          # Default for all other keyboards (no Alt/Win swap)
+          default = {
+            ids = [ "*" ]; # Match all keyboards (keyd prioritizes specific matches first)
+            settings = {
+              main = {
+                # Only swap Caps Lock and Escape
+                capslock = "esc";
+                esc = "capslock";
+              };
+              "shift" = {
+                "102nd" = "S-grave"; # Shift+< produces Shift+grave which is ~
+              };
             };
           };
         };
@@ -177,13 +185,13 @@ in
       nerd-fonts.caskaydia-mono
     ];
 
-    home-manager.useGlobalPkgs = true;
-    home-manager.useUserPackages = true;
-    home-manager.extraSpecialArgs = {
-      inherit dotfiles username zen-browser;
-      gitIdentity = gitIdentity;
+    home-manager = {
+      useGlobalPkgs = true;
+      useUserPackages = true;
+      extraSpecialArgs = {
+        inherit dotfiles username zen-browser gitIdentity;
+      };
+      users.${username} = import ../../home/nixos/default.nix;
     };
-
-    home-manager.users.${username} = import ../../home/nixos/default.nix;
   };
 }
