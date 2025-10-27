@@ -42,3 +42,6 @@ end, { desc = "Grep (all)" })
 
 -- Code action with Alt+Enter (in addition to default <leader>ca)
 vim.keymap.set({ "n", "x" }, "<M-CR>", vim.lsp.buf.code_action, { desc = "Code Action" })
+
+-- Terminal mode: Ctrl+A goes to start of line (shell behavior)
+vim.keymap.set("t", "<C-a>", "<Home>", { desc = "Go to start of line in terminal" })
