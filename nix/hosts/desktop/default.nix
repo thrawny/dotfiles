@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 {
@@ -24,7 +25,17 @@
   boot.loader.grub.enable = lib.mkForce false;
   boot.extraModulePackages = with config.boot.kernelPackages; [ rtl8852au ];
 
+  # Disable USB autosuspend for TP-Link Archer TX20U WiFi adapter
+  # Fixes issue where dongle is dead on boot and requires Windows reboot to wake
+  services.udev.extraRules = ''
+    # TP-Link Archer TX20U (2357:013f) - disable autosuspend
+    ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2357", ATTR{idProduct}=="013f", ATTR{power/control}="on"
+  '';
+
   hardware.graphics.enable = true;
+
+  # Add USB utilities for debugging
+  environment.systemPackages = [ pkgs.usbutils ];
 
   # NVIDIA configuration for dedicated GPU only with Wayland
   services.xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver

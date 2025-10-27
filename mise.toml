@@ -15,6 +15,14 @@ sudo nixos-rebuild dry-run --flake "./nix#$host"
 '''
 sources = ["nix/**/*.nix", "nix/flake.*"]
 
+[tasks.diff]
+description = "Build new config and show what changed (packages, versions, etc.)"
+run = '''
+host=$(hostname)
+sudo nixos-rebuild build --flake "./nix#$host" && nvd diff /run/current-system result
+'''
+sources = ["nix/**/*.nix", "nix/flake.*"]
+
 [tasks."switch-darwin"]
 description = "Switch Home Manager configuration on macOS"
 run = '''

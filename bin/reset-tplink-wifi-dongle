@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Check if running as root
+if [ "$EUID" -ne 0 ]; then
+  echo "This script must be run with sudo"
+  echo "Usage: sudo reset-tplink-wifi-dongle"
+  exit 1
+fi
+
+VENDOR="2357"
+PRODUCT="013f"
+
+echo "Looking for TP-Link Archer TX20U (${VENDOR}:${PRODUCT})..."
+
+# Find the USB device path
+DEVICE_PATH=""
+for dev in /sys/bus/usb/devices/*; do
+  if [ -f "$dev/idVendor" ] && [ -f "$dev/idProduct" ]; then
+    vendor=$(cat "$dev/idVendor")
+    product=$(cat "$dev/idProduct")
+    if [ "$vendor" = "$VENDOR" ] && [ "$product" = "$PRODUCT" ]; then
+      DEVICE_PATH="$dev"
+      break
+    fi
+  fi
+done
+
+if [ -z "$DEVICE_PATH" ]; then
+  echo "Error: TP-Link WiFi adapter not found!"
+  exit 1
+fi
+
+echo "Found device at: $DEVICE_PATH"
+
+# Get the driver name BEFORE unbinding (the symlink disappears after unbind)
+DRIVER_NAME=""
+if [ -L "$DEVICE_PATH/driver" ]; then
+  DRIVER_NAME=$(basename "$(readlink -f "$DEVICE_PATH/driver")")
+  echo "Current driver: $DRIVER_NAME"
+fi
+
+DEVICE_NAME=$(basename "$DEVICE_PATH")
+
+if [ -n "$DRIVER_NAME" ] && [ -f "/sys/bus/usb/drivers/$DRIVER_NAME/unbind" ]; then
+  # Method 1: Unbind and rebind using the driver's bind/unbind files
+  echo "Unbinding device from driver..."
+  echo "$DEVICE_NAME" > "/sys/bus/usb/drivers/$DRIVER_NAME/unbind"
+
+  echo "Waiting 2 seconds..."
+  sleep 2
+
+  echo "Rebinding device to driver..."
+  echo "$DEVICE_NAME" > "/sys/bus/usb/drivers/$DRIVER_NAME/bind"
+else
+  # Method 2: Use authorized file to toggle device (safer fallback)
+  echo "Using authorization method..."
+  echo "Deauthorizing device..."
+  echo 0 > "$DEVICE_PATH/authorized"
+
+  echo "Waiting 2 seconds..."
+  sleep 2
+
+  echo "Reauthorizing device..."
+  echo 1 > "$DEVICE_PATH/authorized"
+fi
+
+echo "WiFi adapter reset complete!"
+echo "Check 'ip link' to verify the interface is back up."
