@@ -120,5 +120,6 @@ depends = ["fmt", "lint", "typecheck", "test"]
 [tools]
 "nix:nixd" = "latest"
 "nix:nixfmt" = "latest"
+"nix:nvd" = "latest"
 "nix:selene" = "latest"
 "nix:stylua" = "latest"
