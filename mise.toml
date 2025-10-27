@@ -40,6 +40,29 @@ echo "Write to USB with: sudo dd if=./result/iso/*.iso of=/dev/sdX bs=4M status=
 '''
 sources = ["nix/**/*.nix", "nix/flake.*"]
 
+[tasks."nix:clean"]
+description = "Clean up old Nix generations and optimize store"
+run = '''
+echo "==> Checking /nix/store size before cleanup..."
+du -sh /nix/store
+
+echo ""
+echo "==> Removing old user profile generations..."
+nix-collect-garbage -d
+
+echo ""
+echo "==> Removing old system generations (NixOS only)..."
+sudo nix-collect-garbage -d || true
+
+echo ""
+echo "==> Optimizing Nix store (deduplicating files)..."
+nix store optimise
+
+echo ""
+echo "==> Cleanup complete! Final /nix/store size:"
+du -sh /nix/store
+'''
+
 # --- Formatters ---
 # Python formatting
 [tasks."fmt:python"]
@@ -75,7 +98,7 @@ sources = ["config/nvim/**/*.lua"]
 
 [tasks."lint:nix"]
 description = "Lint Nix files with statix"
-run = "nix run nixpkgs#statix -- check ."
+run = "statix check"
 sources = ["**/*.nix"]
 
 # --- Typechecking ---
@@ -118,8 +141,8 @@ depends = ["fmt", "lint", "typecheck", "test"]
 
 # --- Tools ---
 [tools]
-"nix:nixd" = "latest"
 "nix:nixfmt" = "latest"
 "nix:nvd" = "latest"
 "nix:selene" = "latest"
+"nix:statix" = "latest"
 "nix:stylua" = "latest"

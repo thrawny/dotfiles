@@ -15,6 +15,8 @@
     git-lfs
     go
     golangci-lint
+    rustc
+    cargo
     tree
     procps
     zoxide

@@ -113,13 +113,17 @@ in
     services.blueman.enable = true;
     networking.networkmanager.enable = true;
 
-    # Allow passwordless nixos-rebuild for wheel group
+    # Allow passwordless nixos-rebuild and nix-collect-garbage for wheel group
     security.sudo.extraRules = [
       {
         groups = [ "wheel" ];
         commands = [
           {
             command = "/run/current-system/sw/bin/nixos-rebuild";
+            options = [ "NOPASSWD" ];
+          }
+          {
+            command = "/run/current-system/sw/bin/nix-collect-garbage";
             options = [ "NOPASSWD" ];
           }
         ];
