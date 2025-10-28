@@ -147,6 +147,17 @@
     dest: "{{ home_dir }}/.claude/CLAUDE.md"
     src: "{{ dotfiles_dir }}/config/claude/CLAUDE-GLOBAL.md"
 
+- name: ~/.config/ccstatusline directory is present
+  file:
+    path: "{{ home_dir }}/.config/ccstatusline"
+    state: directory
+
+- name: ccstatusline settings.json is symlinked
+  file:
+    state: link
+    dest: "{{ home_dir }}/.config/ccstatusline/settings.json"
+    src: "{{ dotfiles_dir }}/config/claude/ccstatusline-settings.json"
+
 - name: k9s config folder is symlinked
   file:
     state: link

@@ -66,6 +66,10 @@ in
   # Ensure .claude directory exists
   home.file.".claude/.keep".text = "";
 
+  # ccstatusline configuration
+  home.file.".config/ccstatusline/settings.json".source =
+    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/ccstatusline-settings.json";
+
   home.file.".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
     text =
       lib.concatStringsSep "\n" (

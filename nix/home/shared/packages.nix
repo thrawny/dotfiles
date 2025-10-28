@@ -28,6 +28,7 @@
     zsh
     awscli2
     bash
+    bun
     coreutils
     curl
     gnugrep
