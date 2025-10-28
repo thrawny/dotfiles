@@ -35,3 +35,4 @@ Dockerfile.lab
 CLAUDE.local.md
 .playwright-mcp
 progress.md
+.lazy.lua
