@@ -17,3 +17,7 @@ vim.opt.autoread = true
 
 -- Enable 24-bit RGB color (required for terminal colors to work properly)
 vim.opt.termguicolors = true
+
+-- Disable automatic system clipboard sync
+-- Use <space>y and <space>p for explicit system clipboard operations instead
+vim.opt.clipboard = ""
