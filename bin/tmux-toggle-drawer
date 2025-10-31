@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Toggle tmux drawer terminal (bottom split with persistent session per window)
+# Detects nvim and passes through Ctrl+` to nvim's embedded terminal
+
+set -e
+
+# Check if current pane is running nvim
+current_command=$(tmux display-message -p '#{pane_current_command}')
+if [[ "$current_command" == "nvim" ]]; then
+    # Let nvim handle Ctrl+` for its embedded terminal
+    exit 0
+fi
+
+# Get current window ID
+window_id=$(tmux display-message -p '#{window_id}')
+
+# Check if drawer pane exists in current window by looking for the marked pane
+drawer_pane=$(tmux list-panes -F '#{pane_id} #{@is_drawer}' \
+    | grep " 1$" \
+    | awk '{print $1}' \
+    | head -n1)
+
+if [[ -n "$drawer_pane" ]]; then
+    # Drawer exists, kill it (toggle off)
+    tmux kill-pane -t "$drawer_pane"
+else
+    # Drawer doesn't exist, create it (toggle on)
+    current_path=$(tmux display-message -p '#{pane_current_path}')
+
+    # Create split with default shell
+    new_pane=$(tmux split-window -v -l 30% -c "$current_path" -P -F '#{pane_id}')
+
+    # Mark this pane as a drawer
+    tmux set-option -p -t "$new_pane" @is_drawer 1
+fi
