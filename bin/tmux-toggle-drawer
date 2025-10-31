@@ -26,9 +26,12 @@ if [[ -n "$drawer_pane" ]]; then
 else
     # Drawer doesn't exist, create it (toggle on)
     current_path=$(tmux display-message -p '#{pane_current_path}')
+    session_name="drawer-${window_id}"
 
-    # Create split with default shell
-    new_pane=$(tmux split-window -v -l 30% -c "$current_path" -P -F '#{pane_id}')
+    # Create split with persistent session (like scratch binding but per-window)
+    # Use -e to unset TMUX for nested session
+    new_pane=$(tmux split-window -v -l 30% -c "$current_path" -P -F '#{pane_id}' \
+        -e TMUX= "tmux new-session -A -s $session_name \; set-option status off")
 
     # Mark this pane as a drawer
     tmux set-option -p -t "$new_pane" @is_drawer 1
