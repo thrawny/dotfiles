@@ -22,24 +22,6 @@ vim.keymap.set("n", "N", "Nzzzv", { desc = "Previous search result (centered)" }
 -- Clear search highlighting
 vim.keymap.set("n", "<Leader>o", ":noh<CR>", { desc = "Clear search highlighting", silent = true })
 
--- Find files including gitignored (but exclude node_modules, .venv, .git)
-vim.keymap.set("n", "<Leader>fF", function()
-  require("snacks").picker.files({
-    hidden = true,
-    ignored = true,
-    exclude = { "node_modules", ".venv", ".git", ".DS_Store" },
-  })
-end, { desc = "Find Files (all)" })
-
--- Grep including gitignored (but exclude node_modules, .venv, .git)
-vim.keymap.set("n", "<Leader>sG", function()
-  require("snacks").picker.grep({
-    hidden = true,
-    ignored = true,
-    exclude = { "node_modules", ".venv", ".git", ".DS_Store" },
-  })
-end, { desc = "Grep (all)" })
-
 -- Code action with Alt+Enter (in addition to default <leader>ca)
 vim.keymap.set({ "n", "x" }, "<M-CR>", vim.lsp.buf.code_action, { desc = "Code Action" })
 
