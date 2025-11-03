@@ -1,10 +1,10 @@
 font-family = CaskaydiaMono Nerd Font
-font-size = 13
+font-size = 14
 theme = Molokai
 background = #1c1c1c
 foreground = #F0F0F0
 window-padding-x = 10
-window-padding-y = 5
+window-padding-y = 2
 cursor-style-blink = false
 
 # Fix for gray background on italic/emphasized text
