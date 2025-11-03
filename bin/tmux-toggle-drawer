@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Toggle tmux drawer terminal (bottom split with persistent session per window)
-# Detects nvim and passes through Ctrl+` to nvim's embedded terminal
+# Detects nvim and passes through Ctrl+. to nvim's embedded terminal
 
 set -e
 
 # Check if current pane is running nvim
 current_command=$(tmux display-message -p '#{pane_current_command}')
 if [[ "$current_command" == "nvim" ]]; then
-    # Let nvim handle Ctrl+` for its embedded terminal
+    # Let nvim handle Ctrl+. for its embedded terminal
     exit 0
 fi
 
