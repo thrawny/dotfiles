@@ -16,6 +16,7 @@ let
     walker
     waybar
     wl-clipboard
+    wtype
     networkmanagerapplet # Provides nm-connection-editor GUI
   ];
 
