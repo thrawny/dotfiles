@@ -1,5 +1,4 @@
-_:
-{
+_: {
   wayland.windowManager.hyprland.settings = {
     windowrule = [
       # Prevent sudden maximize events when spawning toolkits.

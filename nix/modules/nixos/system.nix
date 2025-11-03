@@ -189,7 +189,12 @@ in
       useGlobalPkgs = true;
       useUserPackages = true;
       extraSpecialArgs = {
-        inherit dotfiles username zen-browser gitIdentity;
+        inherit
+          dotfiles
+          username
+          zen-browser
+          gitIdentity
+          ;
       };
       users.${username} = import ../../home/nixos/default.nix;
     };

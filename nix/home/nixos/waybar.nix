@@ -1,5 +1,4 @@
-_:
-{
+_: {
   programs.waybar = {
     enable = true;
     settings = [

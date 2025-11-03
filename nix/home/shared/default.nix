@@ -58,10 +58,13 @@ in
       ".codex".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex";
 
       # Claude configuration
-      ".claude/commands".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/commands";
-      ".claude/settings.json".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/settings.json";
+      ".claude/commands".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/commands";
+      ".claude/settings.json".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/settings.json";
       ".claude/agents".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/agents";
-      ".claude/CLAUDE.md".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/CLAUDE-GLOBAL.md";
+      ".claude/CLAUDE.md".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/CLAUDE-GLOBAL.md";
 
       # ccstatusline configuration
       ".config/ccstatusline/settings.json".source =
