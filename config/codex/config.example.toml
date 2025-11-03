@@ -4,15 +4,15 @@ sandbox_mode = "workspace-write"
 model = "gpt-5-codex"
 
 [mcp_servers.context7]
-command = "npx"
 args = ["-y", "@upstash/context7-mcp"]
+command = "npx"
 
 [mcp_servers.nixos]
 command = "uvx"
 args = ["mcp-nixos"]
 
-[tools]
-web_search = true
+[features]
+web_search_request = true
 
 [sandbox_workspace_write]
 writable_roots = ["/Users/jonas/Library/Caches"]
