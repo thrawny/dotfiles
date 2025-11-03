@@ -21,7 +21,7 @@ _:
       "opacity 1 0.97, class:^(chromium|google-chrome|google-chrome-unstable)$"
       "opacity 0.97 0.9, initialClass:^(chrome-.*-Default)$"
       "opacity 1 1, initialClass:^(chrome-youtube.*-Default)$"
-      "opacity 1 1, class:^(zoom|vlc|org.kde.kdenlive|com.obsproject.Studio|steam)$"
+      "opacity 1 1, class:^(zoom|vlc|org.kde.kdenlive|com.obsproject.Studio|steam|cursor)$"
 
       # Smooth XWayland drag behaviour.
       "nofocus,class:^$,title:^$,xwayland:1,floating:1,fullscreen:0,pinned:0"
