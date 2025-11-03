@@ -15,6 +15,7 @@
     git-lfs
     go
     golangci-lint
+    gotestsum
     rustc
     cargo
     tree
