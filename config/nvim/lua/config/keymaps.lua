@@ -28,7 +28,7 @@ vim.keymap.set({ "n", "x" }, "<M-CR>", vim.lsp.buf.code_action, { desc = "Code A
 -- Terminal mode: Ctrl+A goes to start of line (shell behavior)
 vim.keymap.set("t", "<C-a>", "<Home>", { desc = "Go to start of line in terminal" })
 
--- Toggle embedded terminal with Ctrl+. (matches tmux drawer toggle)
-vim.keymap.set({ "n", "t" }, "<C-.>", function()
-  require("snacks").terminal.toggle()
-end, { desc = "Toggle terminal" })
+-- Toggle embedded terminal with Alt+; (matches tmux drawer toggle)
+vim.keymap.set({ "n", "t" }, "<M-;>", function()
+  Snacks.terminal(nil, { cwd = LazyVim.root() })
+end, { desc = "Terminal (Root Dir)" })
