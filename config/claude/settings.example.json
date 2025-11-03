@@ -23,7 +23,6 @@
       "mcp__linear__get_team",
       "mcp__linear__list_issue_statuses",
       "mcp__linear__list_issue_labels",
-      "Fetch",
       "WebFetch",
       "WebSearch",
       "Bash(git log:*)",
