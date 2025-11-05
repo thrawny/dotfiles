@@ -26,7 +26,6 @@ vim.keymap.set("n", "<Leader>o", ":noh<CR>", { desc = "Clear search highlighting
 vim.keymap.set("t", "<C-a>", "<Home>", { desc = "Go to start of line in terminal" })
 
 -- Toggle embedded terminal with Alt+; (matches tmux drawer toggle)
--- Don't specify cwd so it toggles the same terminal instance regardless of directory
 vim.keymap.set({ "n", "t" }, "<M-;>", function()
-  Snacks.terminal()
-end, { desc = "Toggle terminal" })
+  Snacks.terminal(nil, { cwd = LazyVim.root() })
+end, { desc = "Terminal (Root Dir)" })
