@@ -27,6 +27,8 @@
 #   insteadOf = https://github.com/
 [init]
   defaultBranch = main
+[merge]
+  conflictStyle = zdiff3
 [rerere]
 	enabled = 1
 [credential "https://github.com"]
