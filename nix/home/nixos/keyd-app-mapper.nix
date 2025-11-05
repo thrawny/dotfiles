@@ -5,20 +5,11 @@
 
   # Create the app.conf file for keyd-application-mapper
   xdg.configFile."keyd/app.conf".text = ''
-    # Global default - Mac-style shortcuts for all apps
-    [*]
+    [zen-beta]
     meta.a = C-a
     meta.c = C-c
     meta.v = C-v
     meta.x = C-x
-
-    # Ghostty terminal - override to pass through super keys unchanged
-    # so Ghostty's internal keybindings can handle them
-    [com.mitchellh.ghostty]
-    meta.a = M-a
-    meta.c = M-c
-    meta.v = M-v
-    meta.x = M-x
   '';
 
   # Enable keyd-application-mapper systemd user service
