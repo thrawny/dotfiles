@@ -39,23 +39,23 @@ FORMATTERS: dict[str, list[Checker]] = {
         {"name": "Type Checker", "command": ["basedpyright", "{file}"]},
     ],
     # Go
-    # ".go": [
-    #     {
-    #         "name": "Go Linter",
-    #         "command": ["golangci-lint", "run", "--fast-only", "--fix", "{file}"],
-    #     },
-    #     {
-    #         "name": "Go Formatter",
-    #         "command": [
-    #             "golangci-lint",
-    #             "fmt",
-    #             "--enable=gofmt",
-    #             "--enable=gofumpt",
-    #             "--enable=gci",
-    #             "{file}",
-    #         ],
-    #     },
-    # ],
+    ".go": [
+        {
+            "name": "Go Linter",
+            "command": ["golangci-lint", "run", "{file_path}"],
+        },
+        # {
+        #     "name": "Go Formatter",
+        #     "command": [
+        #         "golangci-lint",
+        #         "fmt",
+        #         "--enable=gofmt",
+        #         "--enable=gofumpt",
+        #         "--enable=gci",
+        #         "{file}",
+        #     ],
+        # },
+    ],
     # Add more languages here as needed:
     # ".rs": [["rustfmt", "{file}"]],
     # ".js": [["prettier", "--write", "{file}"]],
@@ -83,8 +83,21 @@ def run_formatter(checker: Checker, file_path: str) -> tuple[bool, str, str]:
     name = checker["name"]
     cmd_template = checker["command"]
 
-    # Replace {file} placeholder with actual file path
-    cmd = [part.replace("{file}", file_path) for part in cmd_template]
+    # Determine the target path for the command based on placeholder
+    # {file_path} -> directory path (for tools that operate on packages like golangci-lint)
+    # {file} -> file path (for tools that operate on individual files)
+    path = Path(file_path)
+    cmd_str = " ".join(cmd_template)
+
+    if "{file_path}" in cmd_str:
+        # Replace {file_path} with directory path
+        cmd = [part.replace("{file_path}", str(path.parent)) for part in cmd_template]
+    elif "{file}" in cmd_str:
+        # Replace {file} with file path
+        cmd = [part.replace("{file}", file_path) for part in cmd_template]
+    else:
+        # No placeholder, use template as-is
+        cmd = cmd_template
 
     # Check if command exists
     if not check_command_exists(cmd[0]):
@@ -134,14 +147,17 @@ def run_formatter(checker: Checker, file_path: str) -> tuple[bool, str, str]:
         return False, f"  ❌ {name} error: {e}", ""
 
 
-def format_file(file_path: str) -> None:
-    """Format a file based on its extension."""
+def format_file(file_path: str) -> bool:
+    """
+    Format a file based on its extension.
+    Returns True if there are unfixable issues that need attention.
+    """
     path = Path(file_path)
 
     # Check if file exists
     if not path.exists():
-        print(f"⚠️  File not found: {file_path}")
-        return
+        print(f"⚠️  File not found: {file_path}", file=sys.stderr)
+        return False
 
     # Get file extension
     ext = path.suffix.lower()
@@ -149,11 +165,15 @@ def format_file(file_path: str) -> None:
     # Check if we have formatters for this extension
     if ext not in FORMATTERS:
         # Silent skip for unsupported file types
-        return
+        return False
 
-    print(f"\n{'=' * 60}")
-    print(f"🎨 Auto-formatting: {path.name}")
-    print(f"{'=' * 60}")
+    # Determine output stream: stderr if issues, stdout otherwise
+    # We'll buffer output and decide where to send it at the end
+    output_lines: list[str] = []
+
+    output_lines.append(f"\n{'=' * 60}")
+    output_lines.append(f"🎨 Auto-formatting: {path.name}")
+    output_lines.append(f"{'=' * 60}")
 
     # Run all formatters for this file type
     all_success = True
@@ -162,7 +182,7 @@ def format_file(file_path: str) -> None:
 
     for checker in FORMATTERS[ext]:
         success, message, details = run_formatter(checker, file_path)
-        print(message)
+        output_lines.append(message)
 
         # Show details for issues
         if details and not success:
@@ -173,27 +193,36 @@ def format_file(file_path: str) -> None:
             lines = details.split("\n")
             for line in lines[:10]:  # Show first 10 lines of fixes
                 if line.strip():
-                    print(f"    {line}")
+                    output_lines.append(f"    {line}")
             if len(lines) > 10:
-                print(f"    ... and {len(lines) - 10} more fixes")
+                output_lines.append(f"    ... and {len(lines) - 10} more fixes")
 
         if not success:
             all_success = False
 
     # Final status
-    print(f"{'-' * 60}")
+    output_lines.append(f"{'-' * 60}")
     if has_unfixable_issues:
-        print(f"⚠️  {path.name} has issues that need manual fixing:")
+        output_lines.append(f"⚠️  {path.name} has issues that need manual fixing:")
         for details in unfixable_details:
             # Show the actual errors that need fixing
             for line in details.split("\n"):
                 if line.strip():
-                    print(f"    {line}")
+                    output_lines.append(f"    {line}")
     elif all_success:
-        print(f"✨ {path.name} formatted successfully!")
+        output_lines.append(f"✨ {path.name} formatted successfully!")
     else:
-        print(f"⚠️  {path.name} formatting completed with warnings")
-    print(f"{'=' * 60}\n")
+        output_lines.append(f"⚠️  {path.name} formatting completed with warnings")
+    output_lines.append(f"{'=' * 60}\n")
+
+    # Print to stderr if there are issues (for Claude), stdout otherwise (for user)
+    output = "\n".join(output_lines)
+    if has_unfixable_issues:
+        print(output, file=sys.stderr)
+    else:
+        print(output)
+
+    return has_unfixable_issues
 
 
 def main() -> None:
@@ -215,25 +244,23 @@ def main() -> None:
         sys.exit(0)
 
     # Check if this is a write/edit operation
-    if tool_name not in ["Write", "Edit", "MultiEdit"]:
+    if tool_name not in ["Write", "Edit"]:
         sys.exit(0)
 
     # Handle different tool types
+    has_issues = False
     if tool_name in ["Write", "Edit"]:
         # Single file operation
         file_path_input = tool_input.get("file_path", "")
         if file_path_input and isinstance(file_path_input, str):
-            format_file(file_path_input)
+            has_issues = format_file(file_path_input)
 
-    elif tool_name == "MultiEdit":
-        # Multiple files potentially affected
-        # MultiEdit typically operates on a single file but check for file_path
-        multi_file_path = tool_input.get("file_path", "")
-        if multi_file_path and isinstance(multi_file_path, str):
-            format_file(multi_file_path)
-
-    # Always exit 0 for PostToolUse (can't block operation)
-    sys.exit(0)
+    # Exit with code 2 if there are unfixable issues (feeds output to Claude)
+    # Exit with code 0 if everything is clean (output only shown to user)
+    if has_issues:
+        sys.exit(2)
+    else:
+        sys.exit(0)
 
 
 if __name__ == "__main__":

@@ -3,8 +3,10 @@
 Claude Code Hook: Bash Command Validator
 =========================================
 This hook runs as a PreToolUse hook for the Bash tool.
-It validates bash commands against a set of rules before execution.
-In this case it changes grep calls to using rg.
+It validates bash commands against project-specific conventions:
+- Prefer golangci-lint over goimports
+- Enforce proper go build output paths
+- Use uv instead of pip for Python dependencies
 
 Read more about hooks here: https://docs.anthropic.com/en/docs/claude-code/hooks
 
@@ -29,59 +31,14 @@ Make sure to change your path to your actual script.
 """
 
 import json
-import os
 import re
 import sys
 
-# Define validation rules as a list of (regex pattern, message) tuples
+# Define validation rules for project-specific conventions
 _VALIDATION_RULES = [
-    (
-        r"(?:^|&&\s*)grep\b",
-        "Use the 'Grep' tool instead of bash grep for better integration and features",
-    ),
-    (
-        r"^rg\b(?!.*\|)",
-        "Use the 'Grep' tool instead of raw rg commands for better integration",
-    ),
-    (
-        r"^find\s+.*-name\b",
-        "Use the 'Glob' tool with patterns like '**/*.ext' or '**/filename*' instead of find -name commands",
-    ),
-    (
-        r"^find\s+.*-type\s+f",
-        "Use the 'Glob' tool with patterns like '**/*' or '**/*.ext' instead of find -type f commands",
-    ),
-    (
-        r"^ls\s+",
-        "Use the 'LS' tool with path parameter instead of bash ls for structured output",
-    ),
-    (
-        r"^cat\s+",
-        "Use the 'Read' tool with file_path parameter instead of cat for syntax highlighting and line numbers",
-    ),
-    (
-        r"^head\s+",
-        "Use the 'Read' tool with limit parameter (e.g., limit=10) instead of head",
-    ),
-    (
-        r"^tail\s+",
-        "Use the 'Read' tool with negative offset parameter (e.g., offset=-10) to read from end instead of tail",
-    ),
     (
         r"^goimports\s+-w\b",
         "Use 'golangci-lint run --fix' instead of goimports -w for comprehensive Go formatting and linting",
-    ),
-    (
-        r"(?:^|&&\s*)grep\b.*\|.*\b(?:tail|head)\b",
-        "Use the 'Grep' tool with output_mode='content', -n=true, and head_limit parameter instead of piped grep commands",
-    ),
-    (
-        r"^sed\s+",
-        "Use the 'Edit' tool with old_string/new_string parameters or 'MultiEdit' for multiple replacements instead of sed",
-    ),
-    (
-        r"grep\s+-r\b",
-        "Use the 'Grep' tool with recursive search instead of grep -r for better integration and filtering",
     ),
     (
         r"^go\s+build\b(?!.*\s-o\s)",
@@ -96,15 +53,6 @@ _VALIDATION_RULES = [
         "Use 'uv add <package>' instead of pip install for better dependency management and faster installation",
     ),
 ]
-
-# Hook did not catch this:
-# grep -n "MaxDischargeCurrent\|MaxChargeCurrent" examples/*.json | head -20
-# grep -E "maxChargeCurrent|maxDischargeCurrent" examples/weco-hybo-test.json
-# cd /Users/jonas/code/pycontrol && grep -A5 "def get_pcs_inlet_outlet_temperature" devices/weco.py
-# grep -n "def get_remote_mode\|def get_load_priority_mode" /Users/jonas/code/pycontrol/devices/weco.py | head -10
-# grep -r "go test" /Users/jonas/code/kanel-backend-2 || echo "No go test commands found"
-# grep -n "func Test" /Users/jonas/code/kf1-go/internal/device/weco_hybo_test.go | tail -1
-# sed -i '' 's/from steps.openrouter_client/from services.openrouter_client/g' steps/structurer.py steps/structurer_test.py e2e_tests/test_structurer_e2e.py
 
 
 def _validate_command(command: str) -> list[str]:
@@ -133,32 +81,8 @@ def main():
     if not command:
         sys.exit(0)
 
-    # Check if bypass is enabled via environment variable
-    if os.environ.get("CLAUDE_CODE_ALLOW_ALL_FILE_OPS") == "1":
-        # Allow bypassing search and file operation validations
-        # but still validate other rules like go build and pip install
-        bypass_patterns = [
-            r"(?:^|&&\s*)grep\b",
-            r"^rg\b(?!.*\|)",
-            r"^find\s+.*-name\b",
-            r"^find\s+.*-type\s+f",
-            r"^ls\s+",
-            r"^cat\s+",
-            r"^head\s+",
-            r"^tail\s+",
-            r"(?:^|&&\s*)grep\b.*\|.*\b(?:tail|head)\b",
-            r"^sed\s+",
-            r"grep\s+-r\b",
-        ]
-
-        # Filter out bypassed rules
-        issues: list[str] = []
-        for pattern, message in _VALIDATION_RULES:
-            if pattern not in bypass_patterns:
-                if re.search(pattern, command):
-                    issues.append(message)
-    else:
-        issues = _validate_command(command)
+    # Validate command against project-specific rules
+    issues = _validate_command(command)
 
     if issues:
         for message in issues:

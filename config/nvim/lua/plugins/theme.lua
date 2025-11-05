@@ -41,6 +41,7 @@ return {
             ["@method"] = { fg = yellow },
             ["@method.call"] = { fg = yellow },
             ["@function.method.call"] = { fg = yellow },
+            ["@function.method"] = { fg = yellow },
 
             -- Types/structs in cyan (like Darcula)
             ["@type"] = { fg = cyan },
@@ -54,8 +55,8 @@ return {
             -- Keywords in pink/red
             ["@keyword"] = { fg = pink },
 
-            -- LSP semantic token overrides (higher priority than treesitter)
             -- Functions and methods
+            -- LSP semantic token overrides (higher priority than treesitter)
             ["@lsp.type.function"] = { fg = yellow },
             ["@lsp.type.method"] = { fg = yellow },
 
