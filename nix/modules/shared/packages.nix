@@ -29,11 +29,9 @@ let
     neovim
     ripgrep
     tmux
-    vim
     wget
     unzip
     chromium
-    vivaldi
     spotify
     btop
     powertop
