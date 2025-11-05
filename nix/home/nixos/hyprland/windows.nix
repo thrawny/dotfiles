@@ -30,6 +30,7 @@ _: {
     layerrule = [
       "blur,wofi"
       "blur,waybar"
+      "noanim,walker"
     ];
   };
 }

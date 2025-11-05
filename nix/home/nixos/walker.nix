@@ -21,10 +21,6 @@
           context_aware = false;
         };
 
-        runner = {
-          shell_config = "";
-        };
-
         calc = {
           name = "Calculator";
           prefix = "=";
