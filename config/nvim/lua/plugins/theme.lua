@@ -7,7 +7,17 @@ return {
     config = function()
       require("monokai-pro").setup({
         filter = "spectrum",
-        terminal_colors = true,
+        terminal_colors = false,
+        override = function(c)
+          local bg = "#222222"
+          return {
+            -- Set backgrounds for normal windows and terminals to match theme
+            Normal = { fg = c.base.white, bg = bg },
+            NormalFloat = { fg = c.base.white, bg = bg },
+            Terminal = { bg = bg },
+            TerminalNC = { bg = bg },
+          }
+        end,
       })
 
       -- Load the colorscheme first
@@ -95,6 +105,24 @@ return {
 
       -- Trigger the autocmd manually on first load
       vim.cmd("doautocmd ColorScheme monokai-pro")
+
+      -- Terminal ANSI colors using monokai-pro spectrum palette
+      vim.g.terminal_color_0 = "#121212" -- black
+      vim.g.terminal_color_1 = "#fc618d" -- red (pink from spectrum)
+      vim.g.terminal_color_2 = "#98e123" -- green
+      vim.g.terminal_color_3 = "#fce566" -- yellow (from spectrum)
+      vim.g.terminal_color_4 = "#5ad4e6" -- blue (cyan from spectrum)
+      vim.g.terminal_color_5 = "#948ae3" -- magenta (purple from spectrum)
+      vim.g.terminal_color_6 = "#5ad4e6" -- cyan (from spectrum)
+      vim.g.terminal_color_7 = "#bbbbbb" -- white/light gray
+      vim.g.terminal_color_8 = "#555555" -- bright black (gray)
+      vim.g.terminal_color_9 = "#ff87a8" -- bright red (lighter pink)
+      vim.g.terminal_color_10 = "#b1e05f" -- bright green
+      vim.g.terminal_color_11 = "#fef87e" -- bright yellow
+      vim.g.terminal_color_12 = "#7de4f0" -- bright blue (lighter cyan)
+      vim.g.terminal_color_13 = "#b5b0f0" -- bright magenta (lighter purple)
+      vim.g.terminal_color_14 = "#7de4f0" -- bright cyan
+      vim.g.terminal_color_15 = "#f7f1ff" -- bright white (from spectrum)
     end,
   },
 
