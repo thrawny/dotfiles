@@ -10,7 +10,7 @@ _: {
       # Float common control panels.
       "float, class:^(org.pulseaudio.pavucontrol|blueberry.py|.blueman-manager-wrapped)$"
       "float, class:^(steam)$"
-      "float, class:^(1Password)$"
+      "float, class:^(1password)$"
       "float, class:^(nm-connection-editor)$"
       "fullscreen, class:^(com.libretro.RetroArch)$"
 
