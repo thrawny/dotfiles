@@ -12,6 +12,7 @@
     yq-go
     fzf
     delta
+    difftastic
     git-lfs
     go
     golangci-lint
