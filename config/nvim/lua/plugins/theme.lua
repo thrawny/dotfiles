@@ -95,6 +95,26 @@ return {
             GitSignsAdd = { fg = cyan },
             GitSignsChange = { fg = yellow },
             GitSignsDelete = { fg = pink },
+
+            -- Snacks file explorer
+            SnacksPickerDirectory = { fg = purple, bold = true },
+            SnacksPickerFile = { fg = white },
+            SnacksPickerDir = { fg = "#8b888f" }, -- dimmed gray for path portions
+            SnacksPickerPathHidden = { fg = "#69676c" }, -- darker gray for hidden files
+            SnacksPickerPathIgnored = { fg = "#69676c" }, -- darker gray for ignored files
+            SnacksPickerTree = { fg = "#69676c" }, -- tree indent lines
+            SnacksPickerLink = { fg = purple }, -- symlinks in purple
+            SnacksPickerLinkBroken = { fg = pink }, -- broken links in pink
+
+            -- Snacks git status
+            SnacksPickerGitStatusAdded = { fg = "#7bd88f" }, -- green
+            SnacksPickerGitStatusModified = { fg = yellow },
+            SnacksPickerGitStatusDeleted = { fg = pink },
+            SnacksPickerGitStatusRenamed = { fg = yellow },
+            SnacksPickerGitStatusUntracked = { fg = purple },
+            SnacksPickerGitStatusIgnored = { fg = "#69676c" },
+            SnacksPickerGitStatusUnmerged = { fg = pink }, -- conflicts
+            SnacksPickerGitStatusStaged = { fg = cyan },
           }
 
           for group, colors in pairs(highlights) do
