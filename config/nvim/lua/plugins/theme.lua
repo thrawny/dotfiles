@@ -4,10 +4,96 @@ return {
     "loctvl842/monokai-pro.nvim",
     lazy = false,
     priority = 1000,
-    opts = {
-      filter = "spectrum",
-      terminal_colors = true,
-    },
+    config = function()
+      require("monokai-pro").setup({
+        filter = "spectrum",
+        terminal_colors = true,
+      })
+
+      -- Load the colorscheme first
+      vim.cmd.colorscheme("monokai-pro")
+
+      -- Apply custom colorblind-friendly highlights after colorscheme loads
+      vim.api.nvim_create_autocmd("ColorScheme", {
+        pattern = "monokai-pro",
+        callback = function()
+          -- Spectrum palette colors
+          local yellow = "#fce566"
+          local cyan = "#5ad4e6"
+          local purple = "#948ae3"
+          local pink = "#fc618d"
+          local white = "#f7f1ff"
+          local bg = "#222222"
+
+          local highlights = {
+            -- Variables stay neutral (white/text color)
+            ["@variable"] = { fg = white },
+            ["@variable.member"] = { fg = white },
+            ["@parameter"] = { fg = white },
+
+            -- Properties/fields in purple (like Darcula)
+            ["@property"] = { fg = purple },
+            ["@field"] = { fg = purple },
+
+            -- Functions in yellow/gold (like Darcula)
+            ["@function"] = { fg = yellow },
+            ["@function.call"] = { fg = yellow },
+            ["@method"] = { fg = yellow },
+            ["@method.call"] = { fg = yellow },
+
+            -- Types/structs in cyan (like Darcula)
+            ["@type"] = { fg = cyan },
+            ["@type.builtin"] = { fg = cyan },
+
+            -- Strings in yellow, numbers in purple
+            ["@string"] = { fg = yellow },
+            ["@constant"] = { fg = yellow },
+            ["@number"] = { fg = purple },
+
+            -- Keywords in pink/red
+            ["@keyword"] = { fg = pink },
+
+            -- LSP semantic token overrides (higher priority than treesitter)
+            -- Functions and methods
+            ["@lsp.type.function"] = { fg = yellow },
+            ["@lsp.type.method"] = { fg = yellow },
+
+            -- Variables (keep neutral/white)
+            ["@lsp.type.variable"] = { fg = white },
+            ["@lsp.type.parameter"] = { fg = white },
+            ["@lsp.type.namespace"] = { fg = white },
+            ["@lsp.type.module"] = { fg = white },
+
+            -- Properties/fields in purple
+            ["@lsp.type.property"] = { fg = purple },
+            ["@lsp.type.field"] = { fg = purple },
+
+            -- Types in cyan
+            ["@lsp.type.type"] = { fg = cyan },
+            ["@lsp.type.struct"] = { fg = cyan },
+            ["@lsp.type.class"] = { fg = cyan },
+            ["@lsp.type.interface"] = { fg = cyan },
+            ["@lsp.type.enum"] = { fg = cyan },
+            ["@lsp.type.typeParameter"] = { fg = cyan },
+
+            -- Colorblind-friendly diffs (avoid red/green contrast)
+            DiffAdd = { bg = bg, fg = cyan },
+            DiffDelete = { bg = bg, fg = pink },
+            DiffChange = { bg = bg, fg = yellow },
+            GitSignsAdd = { fg = cyan },
+            GitSignsChange = { fg = yellow },
+            GitSignsDelete = { fg = pink },
+          }
+
+          for group, colors in pairs(highlights) do
+            vim.api.nvim_set_hl(0, group, colors)
+          end
+        end,
+      })
+
+      -- Trigger the autocmd manually on first load
+      vim.cmd("doautocmd ColorScheme monokai-pro")
+    end,
   },
 
   -- Configure LazyVim to load monokai-pro
