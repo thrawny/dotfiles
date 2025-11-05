@@ -67,9 +67,13 @@ in
         "video"
         "audio"
         "input"
+        "keyd" # Access to keyd socket for application-mapper
       ];
       shell = pkgs.zsh;
     };
+
+    # Create keyd group for socket access
+    users.groups.keyd = { };
 
     environment.systemPackages =
       packages.systemPackages
@@ -177,6 +181,13 @@ in
           };
         };
       };
+    };
+
+    # Configure keyd socket permissions for application-mapper access
+    systemd.services.keyd.serviceConfig = {
+      RuntimeDirectoryMode = "0750";
+      UMask = lib.mkForce "0007";
+      Group = "keyd";
     };
 
     fonts.packages = with pkgs; [
