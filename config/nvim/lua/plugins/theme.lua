@@ -28,7 +28,7 @@ return {
           local highlights = {
             -- Variables stay neutral (white/text color)
             ["@variable"] = { fg = white },
-            ["@variable.member"] = { fg = white },
+            ["@variable.member"] = { fg = purple },
             ["@parameter"] = { fg = white },
 
             -- Properties/fields in purple (like Darcula)
@@ -40,6 +40,7 @@ return {
             ["@function.call"] = { fg = yellow },
             ["@method"] = { fg = yellow },
             ["@method.call"] = { fg = yellow },
+            ["@function.method.call"] = { fg = yellow },
 
             -- Types/structs in cyan (like Darcula)
             ["@type"] = { fg = cyan },

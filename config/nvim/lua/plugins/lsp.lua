@@ -1,24 +1,29 @@
 return {
   {
     "neovim/nvim-lspconfig",
-    opts = {
-      setup = {
-        -- Drop semantic tokens (use Tree-sitter only) = fewer colors
-        -- If you want to keep some, remove this block and see highlight links below.
-        ["*"] = function(server, opts)
-          local on_attach = opts.on_attach
-          opts.on_attach = function(client, bufnr)
-            if client.server_capabilities.semanticTokensProvider then
-              client.server_capabilities.semanticTokensProvider = nil
-            end
-            if on_attach then
-              on_attach(client, bufnr)
-            end
+    init = function()
+      -- Disable semantic token highlighting for all LSP servers
+      -- Instead of removing the capability (which breaks some LSP features),
+      -- we clear all semantic highlight groups so they have no visual effect
+      vim.api.nvim_create_autocmd("ColorScheme", {
+        callback = function()
+          -- Clear all @lsp.type.* and @lsp.mod.* highlight groups
+          for _, group in ipairs(vim.fn.getcompletion("@lsp", "highlight")) do
+            vim.api.nvim_set_hl(0, group, {})
           end
-          require("lspconfig")[server].setup(opts)
-          return true
         end,
-      },
-    },
+      })
+
+      -- Also disable on LspAttach to catch any dynamically created highlights
+      vim.api.nvim_create_autocmd("LspAttach", {
+        callback = function()
+          vim.schedule(function()
+            for _, group in ipairs(vim.fn.getcompletion("@lsp", "highlight")) do
+              vim.api.nvim_set_hl(0, group, {})
+            end
+          end)
+        end,
+      })
+    end,
   },
 }
