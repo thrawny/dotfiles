@@ -25,7 +25,4 @@ vim.keymap.set("n", "<Leader>o", ":noh<CR>", { desc = "Clear search highlighting
 -- Terminal mode: Ctrl+A goes to start of line (shell behavior)
 vim.keymap.set("t", "<C-a>", "<Home>", { desc = "Go to start of line in terminal" })
 
--- Toggle embedded terminal with Alt+; (matches tmux drawer toggle)
-vim.keymap.set({ "n", "t" }, "<M-;>", function()
-  Snacks.terminal(nil, { cwd = LazyVim.root() })
-end, { desc = "Terminal (Root Dir)" })
+-- Terminal toggle with Alt+; is defined in lua/plugins/ui.lua (snacks.nvim keys spec)
