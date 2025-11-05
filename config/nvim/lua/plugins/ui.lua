@@ -17,6 +17,13 @@ return {
         mode = { "n", "t" },
         desc = "Terminal (Root Dir)",
       },
+      {
+        "<leader>ge",
+        function()
+          Snacks.picker.git_status({ ignored = false })
+        end,
+        desc = "Git Status (Explorer)",
+      },
     },
     opts = {
       picker = {
