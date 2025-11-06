@@ -4,7 +4,6 @@ export GOPATH=$HOME/go
 export EDITOR=nvim
 export AWS_PAGER=''
 export K9S_CONFIG_DIR=$HOME/.config/k9s
-
 # Locale settings for UTF-8 support (including tmux)
 export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
@@ -110,6 +109,11 @@ zinit wait lucid for \
 # Load kubectl completions if kubectl is installed
 if command -v kubectl &> /dev/null; then
     source <(kubectl completion zsh)
+fi
+
+# Use difftastic for kubectl diff if available
+if command -v difft &> /dev/null; then
+    export KUBECTL_EXTERNAL_DIFF="difft --exit-code --skip-unchanged --display=inline"
 fi
 
 # Mise (task/runtime manager)
