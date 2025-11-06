@@ -113,7 +113,7 @@ fi
 
 # Use dyff for kubectl diff if available (YAML-aware diffing)
 if command -v dyff &> /dev/null; then
-    export KUBECTL_EXTERNAL_DIFF="dyff between --omit-header --set-exit-code"
+    export KUBECTL_EXTERNAL_DIFF="kubectl-dyff"
 fi
 
 # Mise (task/runtime manager)

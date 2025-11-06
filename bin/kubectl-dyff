@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Wrapper for kubectl diff to use dyff with metadata.generation excluded
+
+dyff between \
+  --omit-header \
+  --set-exit-code \
+  --exclude 'metadata.generation' \
+  "$@"
