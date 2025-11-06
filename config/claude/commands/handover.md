@@ -17,3 +17,5 @@ CRITICAL FILE WRITING RESTRICTIONS:
 - The file should contain only the current state, not a growing history
 - DO NOT edit, create, or modify any other files in the codebase
 - Document any needed code changes in progress.md for the next developer
+
+CRITICAL: After writing progress.md, stop immediately. DO NOT summarize the handover back to the user. The session is ending and any summary wastes tokens and time.
