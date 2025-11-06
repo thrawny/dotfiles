@@ -111,9 +111,9 @@ if command -v kubectl &> /dev/null; then
     source <(kubectl completion zsh)
 fi
 
-# Use difftastic for kubectl diff if available
-if command -v difft &> /dev/null; then
-    export KUBECTL_EXTERNAL_DIFF="difft --exit-code --skip-unchanged --display=inline"
+# Use dyff for kubectl diff if available (YAML-aware diffing)
+if command -v dyff &> /dev/null; then
+    export KUBECTL_EXTERNAL_DIFF="dyff between --omit-header --set-exit-code"
 fi
 
 # Mise (task/runtime manager)

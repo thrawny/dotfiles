@@ -13,6 +13,7 @@
     fzf
     delta
     difftastic
+    dyff
     git-lfs
     go
     golangci-lint
