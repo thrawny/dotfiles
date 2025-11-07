@@ -65,7 +65,8 @@ return {
             ["@number"] = { fg = purple },
 
             -- Keywords in pink/red
-            ["@keyword"] = { fg = pink },
+            ["@keyword"] = { fg = pink, italic = false },
+            ["@keyword.lua"] = { fg = pink, italic = false },
 
             -- Functions and methods
             -- LSP semantic token overrides (higher priority than treesitter)
