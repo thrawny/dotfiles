@@ -2,6 +2,8 @@
 {
   # Override ghostty settings for macOS
   programs.ghostty.settings.font-size = lib.mkForce 13;
+  programs.ghostty.settings.font-thicken = true;
+  programs.ghostty.settings.font-thicken-strength = 50;
 
   # macOS needs different escape sequence for shift+enter
   # Each \\ in Nix becomes \ in output, so \\\\\\ becomes \\\

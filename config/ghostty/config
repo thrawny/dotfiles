@@ -1,5 +1,7 @@
 font-family = CaskaydiaMono Nerd Font
 font-size = 14
+font-thicken = true
+font-thicken-strength = 50
 theme = Molokai
 background = #1c1c1c
 foreground = #F0F0F0
