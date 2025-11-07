@@ -32,6 +32,7 @@ return {
           local cyan = "#5ad4e6"
           local purple = "#948ae3"
           local pink = "#fc618d"
+          local orange = "#fc9867"
           local white = "#f7f1ff"
           local bg = "#222222"
 
@@ -39,6 +40,7 @@ return {
             -- Variables stay neutral (white/text color)
             ["@variable"] = { fg = white },
             ["@variable.member"] = { fg = purple },
+            ["@variable.parameter"] = { fg = orange, italic = false },
             ["@parameter"] = { fg = white },
 
             -- Properties/fields in purple (like Darcula)
