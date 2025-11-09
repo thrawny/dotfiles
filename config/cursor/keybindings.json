@@ -1,4 +1,5 @@
 [
+  // Top 10 JetBrains bindings to keep
   {
     "key": "cmd+;",
     "command": "workbench.action.terminal.toggleTerminal",
@@ -36,6 +37,11 @@
     "when": "inFilesPicker && inQuickOpen"
   },
   {
+    "key": "shift+cmd+p",
+    "command": "-workbench.action.quickOpenNavigatePreviousInFilePicker",
+    "when": "inFilesPicker && inQuickOpen"
+  },
+  {
     "key": "alt+enter",
     "command": "editor.action.quickFix",
     "when": "editorHasCodeActionsProvider && textInputFocus && !editorReadonly"
@@ -56,6 +62,10 @@
     "when": "editorHasDefinitionProvider && editorTextFocus && !isInEmbeddedEditor"
   },
   {
+    "key": "cmd+b",
+    "command": "-workbench.action.toggleSidebarVisibility"
+  },
+  {
     "key": "cmd+[",
     "command": "workbench.action.navigateBack",
     "when": "canNavigateBack"
@@ -64,6 +74,16 @@
     "key": "ctrl+-",
     "command": "-workbench.action.navigateBack",
     "when": "canNavigateBack"
+  },
+  {
+    "key": "cmd+[",
+    "command": "-editor.action.outdentLines",
+    "when": "editorTextFocus && !editorReadonly"
+  },
+  {
+    "key": "cmd+[",
+    "command": "-markdown.extension.onOutdentLines",
+    "when": "editorTextFocus && !suggestWidgetVisible && editorLangId =~ /^markdown$|^rmd$|^quarto$/"
   },
   {
     "key": "cmd+]",
@@ -76,19 +96,14 @@
     "when": "canNavigateForward"
   },
   {
-    "key": "cmd+[Semicolon]",
-    "command": "workbench.action.terminal.focus",
-    "when": "accessibilityModeEnabled && accessibleViewOnLastLine && terminalHasBeenCreated && accessibleViewCurrentProviderId == 'terminal' || accessibilityModeEnabled && accessibleViewOnLastLine && terminalProcessSupported && accessibleViewCurrentProviderId == 'terminal'"
+    "key": "cmd+]",
+    "command": "-editor.action.indentLines",
+    "when": "editorTextFocus && !editorReadonly"
   },
   {
-    "key": "cmd+down",
-    "command": "-workbench.action.terminal.focus",
-    "when": "accessibilityModeEnabled && accessibleViewOnLastLine && terminalHasBeenCreated && accessibleViewCurrentProviderId == 'terminal' || accessibilityModeEnabled && accessibleViewOnLastLine && terminalProcessSupported && accessibleViewCurrentProviderId == 'terminal'"
-  },
-  {
-    "key": "shift+cmd+p",
-    "command": "-workbench.action.quickOpenNavigatePreviousInFilePicker",
-    "when": "inFilesPicker && inQuickOpen"
+    "key": "cmd+]",
+    "command": "-markdown.extension.onIndentLines",
+    "when": "editorTextFocus && !suggestWidgetVisible && editorLangId =~ /^markdown$|^rmd$|^quarto$/"
   },
   {
     "key": "cmd+p",
@@ -101,24 +116,6 @@
     "when": "editorHasSignatureHelpProvider && editorTextFocus"
   },
   {
-    "key": "ctrl+shift+p",
-    "command": "editor.action.showHover",
-    "when": "editorTextFocus"
-  },
-  {
-    "key": "cmd+k cmd+i",
-    "command": "-editor.action.showHover",
-    "when": "editorTextFocus"
-  },
-  // {
-  //   "key": "shift+cmd+o",
-  //   "command": "search.action.openNewEditor"
-  // },
-  // {
-  //   "key": "alt+q",
-  //   "command": "workbench.action.debug.restart",
-  // },
-  {
     "key": "alt+w",
     "command": "workbench.action.debug.start"
   },
@@ -127,6 +124,17 @@
     "command": "editor.action.goToImplementation",
     "when": "editorHasImplementationProvider && editorTextFocus && !isInEmbeddedEditor"
   },
+  {
+    "key": "cmd+/",
+    "command": "editor.action.commentLine",
+    "when": "editorTextFocus && !editorReadonly"
+  },
+  {
+    "key": "ctrl+/",
+    "command": "-editor.action.commentLine",
+    "when": "editorTextFocus && !editorReadonly"
+  },
+  // Custom bindings (non-JetBrains)
   {
     "key": "alt+q",
     "command": "testing.runAtCursor",
@@ -140,16 +148,6 @@
   {
     "key": "cmd+n",
     "command": "-workbench.action.files.newUntitledFile"
-  },
-  {
-    "key": "u",
-    "command": "undo",
-    "when": "editorTextFocus && vim.active && vim.mode == 'Normal'"
-  },
-  {
-    "key": "ctrl+r",
-    "command": "redo",
-    "when": "editorTextFocus && vim.active && vim.mode == 'Normal'"
   },
   {
     "key": "cmd+n",
@@ -177,6 +175,11 @@
     "when": "editorTextFocus && vim.active && vim.mode == 'Normal'"
   },
   {
+    "key": "ctrl+r",
+    "command": "redo",
+    "when": "editorTextFocus && vim.active && vim.mode == 'Normal'"
+  },
+  {
     "key": "ctrl+z",
     "command": "redo",
     "when": "editorTextFocus && vim.active && vim.mode == 'Normal'"
@@ -198,6 +201,11 @@
     "when": "terminalFocus"
   },
   {
+    "key": "shift+enter",
+    "command": "-pgsql.runQuery",
+    "when": "editorTextFocus && editorLangId == 'sql'"
+  },
+  {
     "key": "shift+cmd+e",
     "command": "composer.showBackgroundAgentHistory",
     "when": "backgroundComposerEnabled || showBackgroundAgentHistoryAction"
@@ -213,23 +221,24 @@
     "when": "viewContainer.workbench.view.explorer.enabled"
   },
   {
-    "key": "ctrl+d",
-    "command": "-workbench.action.debug.run",
-    "when": "!inDebugMode && !terminalFocus"
-  },
-  {
     "key": "shift+cmd+e",
     "command": "-pgsql.runQuery",
     "when": "editorTextFocus && editorLangId == 'sql'"
   },
   {
-    "key": "shift+enter",
-    "command": "-pgsql.runQuery",
-    "when": "editorTextFocus && editorLangId == 'sql'"
+    "key": "shift+cmd+e",
+    "command": "cursor.toggleAgentWindowIDEUnification",
+    "when": "cursor.agentIdeUnification.featureGate && workbenchState != 'empty'"
   },
   {
-    "key": "cmd+b",
-    "command": "-workbench.action.toggleSidebarVisibility"
+    "key": "cmd+e",
+    "command": "-cursor.toggleAgentWindowIDEUnification",
+    "when": "cursor.agentIdeUnification.featureGate && workbenchState != 'empty'"
+  },
+  {
+    "key": "ctrl+d",
+    "command": "-workbench.action.debug.run",
+    "when": "!inDebugMode && !terminalFocus"
   },
   {
     "key": "shift+cmd+b",
@@ -253,35 +262,5 @@
     "key": "shift+alt+enter",
     "command": "pgsql.runQuery",
     "when": "editorTextFocus && editorLangId == 'sql'"
-  },
-  {
-    "key": "cmd+/",
-    "command": "editor.action.commentLine",
-    "when": "editorTextFocus && !editorReadonly"
-  },
-  {
-    "key": "ctrl+/",
-    "command": "-editor.action.commentLine",
-    "when": "editorTextFocus && !editorReadonly"
-  },
-  {
-    "key": "cmd+[",
-    "command": "-editor.action.outdentLines",
-    "when": "editorTextFocus && !editorReadonly"
-  },
-  {
-    "key": "cmd+[",
-    "command": "-markdown.extension.onOutdentLines",
-    "when": "editorTextFocus && !suggestWidgetVisible && editorLangId =~ /^markdown$|^rmd$|^quarto$/"
-  },
-  {
-    "key": "cmd+]",
-    "command": "-editor.action.indentLines",
-    "when": "editorTextFocus && !editorReadonly"
-  },
-  {
-    "key": "cmd+]",
-    "command": "-markdown.extension.onIndentLines",
-    "when": "editorTextFocus && !suggestWidgetVisible && editorLangId =~ /^markdown$|^rmd$|^quarto$/"
   }
 ]
