@@ -43,3 +43,12 @@ vim.api.nvim_create_autocmd("QuitPre", {
   end,
   desc = "Force close terminal buffers on quit",
 })
+
+-- Disable format-on-save for SQL files (manual formatting still available via ,cf)
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "sql" },
+  callback = function()
+    vim.b.autoformat = false
+  end,
+  desc = "Disable autoformat for SQL files",
+})
