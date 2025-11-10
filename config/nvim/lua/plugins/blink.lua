@@ -11,7 +11,7 @@ return {
             return cmp.select_and_accept()
           end
         end,
-        "snippet_forward",
+        LazyVim.cmp.map({ "snippet_forward", "ai_nes", "ai_accept" }),
         "fallback",
       },
       ["<S-Tab>"] = { "snippet_backward", "fallback" },
