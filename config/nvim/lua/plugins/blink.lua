@@ -15,6 +15,8 @@ return {
         "fallback",
       },
       ["<S-Tab>"] = { "snippet_backward", "fallback" },
+      ["<C-j>"] = { "select_next", "fallback" },
+      ["<C-k>"] = { "select_prev", "fallback" },
     },
   },
 }
