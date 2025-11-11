@@ -24,6 +24,13 @@ return {
         end,
         desc = "Git Status (Explorer)",
       },
+      {
+        "<leader>`",
+        function()
+          Snacks.scratch()
+        end,
+        desc = "Scratch Buffer",
+      },
     },
     opts = {
       picker = {
