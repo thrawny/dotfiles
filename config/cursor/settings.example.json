@@ -32,6 +32,16 @@
     },
     {
       "before": [
+        "<leader>",
+        "c",
+        "r"
+      ],
+      "commands": [
+        "editor.action.rename"
+      ]
+    },
+    {
+      "before": [
         "<space>",
         "p"
       ],
@@ -170,7 +180,7 @@
   "[markdown]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
-  "terminal.integrated.fontSize": 13,
+  "terminal.integrated.fontSize": 14,
   "workbench.editor.showTabs": "single",
   "files.restoreUndoStack": false,
   "workbench.colorCustomizations": {
@@ -205,7 +215,7 @@
   },
   "workbench.colorTheme": "Darcula",
   "editor.fontFamily": "CaskaydiaMono Nerd Font",
-  "editor.fontSize": 13,
+  "editor.fontSize": 14,
   "go.toolsManagement.autoUpdate": true,
   "editor.snippetSuggestions": "none",
   "typescript.suggest.objectLiteralMethodSnippets.enabled": false,
