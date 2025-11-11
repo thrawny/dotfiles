@@ -1,6 +1,15 @@
 return {
   {
     "ibhagwan/fzf-lua",
+    opts = {
+      actions = {
+        files = {
+          true, -- Inherit all default actions (enter, ctrl-s, ctrl-v, etc.)
+          ["alt-h"] = false, -- Disable default alt-h (conflicts with window manager)
+          ["alt-u"] = require("fzf-lua").actions.toggle_hidden,
+        },
+      },
+    },
     config = function(_, opts)
       require("fzf-lua").setup(opts)
 
