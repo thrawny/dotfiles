@@ -4,7 +4,7 @@ local find_all_files = function()
     no_ignore = true,
     hidden = true,
     file_ignore_patterns = {
-      "^%.git/",
+      "%.git/",
       "node_modules/",
       "%.venv/",
       "%.DS_Store$",
@@ -20,7 +20,7 @@ local grep_all_in_cwd = function()
     no_ignore = true,
     hidden = true,
     file_ignore_patterns = {
-      "^%.git/",
+      "%.git/",
       "node_modules/",
       "%.venv/",
       "%.DS_Store$",
