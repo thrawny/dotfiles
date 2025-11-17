@@ -4,6 +4,7 @@ return {
     keymap = {
       preset = "default",
       ["<Tab>"] = {
+        LazyVim.cmp.map({ "ai_nes", "ai_accept" }),
         function(cmp)
           if cmp.snippet_active() then
             return cmp.accept()
@@ -11,9 +12,9 @@ return {
             return cmp.select_and_accept()
           end
         end,
-        LazyVim.cmp.map({ "snippet_forward", "ai_nes", "ai_accept" }),
         "fallback",
       },
+      ["<CR>"] = { "accept", "fallback" },
       ["<S-Tab>"] = { "snippet_backward", "fallback" },
       ["<C-j>"] = { "select_next", "fallback" },
       ["<C-k>"] = { "select_prev", "fallback" },
