@@ -39,7 +39,7 @@ return {
     },
   },
   {
-    "williamboman/mason-lspconfig.nvim",
+    "mason-org/mason-lspconfig.nvim",
     opts = {
       -- Prevent mason-lspconfig from auto-enabling Python tools
       automatic_enable = {
