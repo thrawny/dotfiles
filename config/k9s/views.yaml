@@ -17,3 +17,33 @@ views:
       - "%MEM/L"
       - IP
       - NODE
+  v1/nodes:
+    sortColumn: NAME:asc
+    columns:
+      - NAME
+      - STATUS
+      - AGE
+      - VERSION
+      - CAPACITY_TYPE:.metadata.labels.karpenter\.sh/capacity-type
+      - INSTANCE_TYPE:.metadata.labels.node\.kubernetes\.io/instance-type
+      - TAINTS
+      - PODS
+      - CPU
+      - CPU/A
+      - "%CPU"
+      - MEM
+      - MEM/A
+      - "%MEM"
+      # Hide unwanted default columns
+      - ROLE|H
+      - ARCH|H
+      - OS-IMAGE|H
+      - KERNEL|H
+      - INTERNAL-IP|H
+      - EXTERNAL-IP|H
+      - "GPU/A|H"
+      - "GPU/C|H"
+      - "SH-GPU/A|H"
+      - "SH-GPU/C|H"
+      - LABELS|H
+      - VALID|H
