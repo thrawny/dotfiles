@@ -12,8 +12,11 @@ return {
       args = { "format", "--dialect=postgres", "-" },
     }
 
-    -- Enable sqlfluff for SQL files (manual formatting only)
+    -- Enable sqlfluff for all SQL filetypes (manual formatting only)
+    -- dadbod-ui sets different filetypes based on connection type
     opts.formatters_by_ft.sql = { "sqlfluff" }
+    opts.formatters_by_ft.mysql = { "sqlfluff" }
+    opts.formatters_by_ft.plsql = { "sqlfluff" }
 
     -- Disable formatting for YAML files (Prettier doesn't support custom sequence indentation)
     opts.formatters_by_ft.yaml = {}
