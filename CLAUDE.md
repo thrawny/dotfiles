@@ -20,7 +20,7 @@ This repository manages cross-platform dotfiles with Ansible. Source files live 
 - Git: `config/git/gitconfig` → `~/.gitconfig`, `config/git/gitignoreglobal` → `~/.gitignoreglobal`
 - Apps: `config/ghostty` → `~/.config/ghostty`, `config/direnv` → `~/.config/direnv`
 - Extras: `config/starship/starship.toml` → `~/.config/starship.toml`, `config/k9s` → `~/.config/k9s`, `config/npm/default-packages` → `~/.default-npm-packages`
-- Codex/Claude: `config/codex/config.toml` → `~/.codex/config.toml`, `config/codex/prompts` → `~/.codex/prompts`, `config/claude/commands` → `~/.claude/commands`, `config/claude/settings.json` → `~/.claude/settings.json`, `config/claude/agents` → `~/.claude/agents`, `config/claude/CLAUDE-GLOBAL.md` → `~/.claude/CLAUDE.md`
+- Codex/Claude: `config/codex/config.toml` → `~/.codex/config.toml`, `config/codex/prompts` → `~/.codex/prompts`, `config/claude/commands` → `~/.claude/commands`, `config/claude/settings.json` → `~/.claude/settings.json`, `config/claude/agents` → `~/.claude/agents`, `config/claude/skills` → `~/.claude/skills`, `config/claude/CLAUDE-GLOBAL.md` → `~/.claude/CLAUDE.md`
 
 Refer to `ansible/all_config.yml` for the authoritative symlink list.
 

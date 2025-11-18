@@ -173,6 +173,7 @@ This ensures code follows Nix best practices:
 - Neovim config: `~/.config/nvim` → `~/dotfiles/config/nvim`
 - Codex config: `~/.codex` → `~/dotfiles/config/codex`
 - Claude config: `~/.claude/commands` → `~/dotfiles/config/claude/commands`
+- Claude skills: `~/.claude/skills` → `~/dotfiles/config/claude/skills`
 
 ### NixOS-Specific
 - Cursor settings: `~/.config/Cursor/User/settings.json` → `~/dotfiles/config/cursor/settings.json`
