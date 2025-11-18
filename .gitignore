@@ -15,6 +15,8 @@ config/codex/*
 
 config/cursor/settings.json
 
+config/claude/settings.json
+
 result
 
 .venv

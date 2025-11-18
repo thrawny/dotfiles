@@ -4,12 +4,13 @@ version = "0.1.0"
 description = "Personal dotfiles repository with Ansible automation for macOS and Linux"
 requires-python = ">=3.12"
 dependencies = [
-    "ansible>=10.0.0",
-    "anyio>=4.10.0",
-    "asyncclick>=8.2.2.2",
-    "claude-code-sdk>=0.0.20",
-    "fastmcp>=2.11.1",
-    "requests>=2.32.4",
+  "ansible>=10.0.0",
+  "anyio>=4.10.0",
+  "asyncclick>=8.2.2.2",
+  "claude-code-sdk>=0.0.20",
+  "pyaml>=25.7.0",
+  "pyyaml>=6.0.2",
+  "requests>=2.32.4",
 ]
 
 [project.scripts]
@@ -24,20 +25,23 @@ build-backend = "hatchling.build"
 packages = ["claude_tools"]
 
 [dependency-groups]
-dev = [
-    "ansible-lint>=25.9.2",
-    "basedpyright>=1.32.1",
-    "ruff>=0.14.2",
-]
+dev = ["basedpyright>=1.32.1", "ruff>=0.14.2"]
 
 [tool.basedpyright]
-exclude = [".venv", "venv", "__pycache__", ".git"]
+exclude = [
+  ".venv",
+  "venv",
+  "__pycache__",
+  ".git",
+  "lab",
+  "config/claude/skills/skill-creator",
+]
 venvPath = "."
 venv = ".venv"
-reportExplicitAny = false  # Allow explicit Any types for dynamic data
-reportAny = false  # Allow Any types in general (needed for JSON, kwargs, etc.)
-reportUnusedCallResult = false  # Don't require _ = for unused call results
-reportImplicitOverride = false  # Don't require @override decorator
+reportExplicitAny = false # Allow explicit Any types for dynamic data
+reportAny = false # Allow Any types in general (needed for JSON, kwargs, etc.)
+reportUnusedCallResult = false # Don't require _ = for unused call results
+reportImplicitOverride = false # Don't require @override decorator
 
 [tool.ruff.lint]
 select = ["I"]
