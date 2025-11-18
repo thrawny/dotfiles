@@ -7,7 +7,8 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import asyncclick as click
-from claude_code_sdk import ClaudeCodeOptions, query
+from claude_agent_sdk import ClaudeAgentOptions, query
+from claude_agent_sdk.types import SystemPromptPreset
 
 from .core import print_claude_response
 from .duration import DurationType
@@ -92,16 +93,21 @@ async def cli(
         click.echo("🧠 Memory: disabled")
 
     # Prepare a lightweight system prompt to use progress.md as a bounded snapshot
-    memory_prompt = None
+    append: SystemPromptPreset | None = None
     if memory:
         mf = str(Path("./progress.md"))
         memory_prompt = PROGRESS_SNAPSHOT_SYSTEM_PROMPT.format(memory_file=mf)
+        append = {
+            "type": "preset",
+            "preset": "claude_code",
+            "append": memory_prompt,
+        }
 
-    options = ClaudeCodeOptions(
+    options = ClaudeAgentOptions(
         cwd=str(cwd) if cwd else None,
         permission_mode="bypassPermissions" if force else None,
         model=model if model else None,
-        append_system_prompt=memory_prompt,
+        system_prompt=append,
     )
 
     while datetime.now() < end_time:

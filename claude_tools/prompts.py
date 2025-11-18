@@ -23,21 +23,6 @@ Make sure:
 
 Do not start any new work, just finish and polish what you have."""
 
-WORKFLOW_PROMPTS = {
-    "code_review": """Use the code-reviewer agent to review all the code you've written so far in this session.
-The agent should check for bugs, security issues, and code quality problems.
-Wait for the agent to complete its review.""",
-    "fix_issues": """Fix ALL issues identified by the code-reviewer agent.
-Make sure to address every concern raised.
-After fixing, verify the code still works correctly.""",
-    "analyze_complexity": """Use the complexity-reducer agent to analyze the code for unnecessary complexity.
-The agent should identify opportunities to simplify and improve readability.
-Wait for the agent to complete its analysis.""",
-    "apply_simplifications": """Apply the simplification suggestions from the complexity-reducer agent.
-Focus on making the code cleaner and easier to understand.
-After simplifying, ensure everything still works.""",
-}
-
 # System prompt to enable bounded progress snapshot memory.
 PROGRESS_SNAPSHOT_SYSTEM_PROMPT = """Use a bounded progress snapshot for memory at '{memory_file}'.
 If it exists, read it silently and internalize a brief digest.
