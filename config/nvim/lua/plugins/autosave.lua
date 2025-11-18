@@ -7,7 +7,7 @@ return {
       immediate_save = { "BufLeave", "FocusLost" },
       defer_save = { "InsertLeave", "TextChanged" },
     },
-    debounce_delay = 1000, -- ms
+    debounce_delay = 10000, -- ms
     condition = function(buf)
       local fn = vim.fn
       local utils = require("auto-save.utils.data")
