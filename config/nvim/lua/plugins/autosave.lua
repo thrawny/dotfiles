@@ -3,10 +3,6 @@ return {
   event = { "InsertLeave", "TextChanged" },
   opts = {
     enabled = true,
-    trigger_events = {
-      immediate_save = { "BufLeave", "FocusLost" },
-      defer_save = { "InsertLeave", "TextChanged" },
-    },
     debounce_delay = 10000, -- ms
     condition = function(buf)
       local fn = vim.fn
