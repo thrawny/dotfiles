@@ -8,6 +8,8 @@
 Quick validation script for skills - minimal version
 """
 
+# pyright: basic
+
 import os
 import re
 import sys

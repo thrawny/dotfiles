@@ -31,8 +31,7 @@ exclude = [
   "venv",
   "__pycache__",
   ".git",
-  "lab",
-  "config/claude/skills/skill-creator",
+  "lab"
 ]
 venvPath = "."
 venv = ".venv"

@@ -14,6 +14,8 @@ Examples:
     init_skill.py custom-skill --path /custom/location
 """
 
+# pyright: basic
+
 import sys
 from pathlib import Path
 

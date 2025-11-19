@@ -15,6 +15,8 @@ Example:
     python utils/package_skill.py skills/public/my-skill ./dist
 """
 
+# pyright: basic
+
 import sys
 import zipfile
 from pathlib import Path
