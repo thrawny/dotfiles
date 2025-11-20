@@ -1,6 +1,16 @@
 [
   // Top 10 JetBrains bindings to keep
   {
+    "key": "alt+;",
+    "command": "workbench.action.closePanel",
+    "when": "panelVisible"
+  },
+  {
+    "key": "alt+;",
+    "command": "workbench.action.terminal.toggleTerminal",
+    "when": "!panelVisible"
+  },
+  {
     "key": "cmd+;",
     "command": "workbench.action.terminal.toggleTerminal",
     "when": "terminal.active"
