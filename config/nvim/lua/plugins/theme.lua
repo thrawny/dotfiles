@@ -91,6 +91,12 @@ return {
             ["@lsp.type.enum"] = { fg = cyan },
             ["@lsp.type.typeParameter"] = { fg = cyan },
 
+            -- Python
+            ["@constant.python"] = { fg = purple },
+            ["@keyword.type.python"] = { fg = orange, italic = false },
+            ["@type.python"] = { fg = white, italic = false },
+            ["@keyword.function.python"] = { fg = orange, italic = false },
+
             -- Colorblind-friendly diffs (avoid red/green contrast)
             DiffAdd = { bg = bg, fg = cyan },
             DiffDelete = { bg = bg, fg = pink },
