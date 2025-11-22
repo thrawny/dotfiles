@@ -1,0 +1,23 @@
+#!/bin/bash
+# Jump to Nth session (excluding scratch sessions) and specific window
+# Usage: tmux-session-window-jump <session_index> <window_index>
+# Example: tmux-session-window-jump 0 1  -> first non-scratch session, window 1
+
+session_index=$1
+window_index=$2
+
+# Get list of non-scratch sessions sorted by creation time
+session_name=$(tmux list-sessions -F '#{session_created} #{session_name}' \
+  | grep -v ' scratch$' \
+  | grep -v '^drawer-' \
+  | sort -n \
+  | sed -n "$((session_index + 1))p" \
+  | awk '{print $2}')
+
+if [ -z "$session_name" ]; then
+  tmux display-message "Session index $session_index not found"
+  exit 1
+fi
+
+# Switch to the session:window
+tmux switch-client -t "$session_name:$window_index"
