@@ -158,8 +158,8 @@ alt-p = 'exec-and-forget aerospace list-windows --monitor all --app-bundle-id co
 esc = ['reload-config', 'mode main']
 r = ['flatten-workspace-tree', 'mode main'] # reset layout
 f = [
-    'layout floating tiling',
-    'mode main',
+  'layout floating tiling',
+  'mode main',
 ] # Toggle between floating and tiling layout
 backspace = ['close-all-windows-but-current', 'mode main']
 
@@ -180,7 +180,7 @@ alt-shift-c = 'reload-config'
 #   otherwise fall back to 'main'. Optionally, do the same for workspace 5.
 1 = ['built-in', 'main']
 2 = ['secondary', 'main']
-3 = ['built-in', 'main']
+3 = ['secondary', 'main']
 4 = ['built-in', 'main']
 # 5 = ['secondary', 'main']
 
