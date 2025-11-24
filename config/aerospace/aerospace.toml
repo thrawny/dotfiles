@@ -146,6 +146,7 @@ alt-m = 'focus-back-and-forth'
 # See: https://nikitabobko.github.io/AeroSpace/commands#mode
 alt-shift-semicolon = 'mode service'
 alt-s = 'layout tiles accordion'
+alt-c = 'exec-and-forget open -a Slack'
 alt-f = 'layout floating tiling'
 alt-w = 'fullscreen'
 alt-n = 'exec-and-forget (aerospace list-windows --monitor all --app-bundle-id com.mitchellh.ghostty --format "%{window-id}:%{window-title}" | grep -i tmux | head -n1 || aerospace list-windows --monitor all --app-bundle-id com.mitchellh.ghostty --format "%{window-id}:%{window-title}" | head -n1) | cut -d: -f1 | xargs -r aerospace focus --window-id || open -a Ghostty'

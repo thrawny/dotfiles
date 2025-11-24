@@ -81,6 +81,7 @@ let
     "${mod}, M, focuscurrentorlast" # Focus back-and-forth like aerospace
     "${mod}, B, workspace, name:b"
     "${mod}, N, workspace, 1"
+    "${mod}, C, exec, slack"
   ];
 
   # Group (tabbed) layout bindings - similar to i3's tabbed mode
