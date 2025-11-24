@@ -218,7 +218,7 @@
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   },
   "terminal.integrated.fontSize": 14,
-  "workbench.editor.showTabs": "single",
+  "workbench.editor.showTabs": "none",
   "files.restoreUndoStack": false,
   "workbench.colorCustomizations": {
     "problemsErrorIcon.foreground": "#00000000"

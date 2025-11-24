@@ -9,10 +9,14 @@ have_jq=1
 command -v jq >/dev/null 2>&1 || have_jq=0
 
 warn_diff() {
-  local name="$1"; shift
-  local real="$1"; shift
-  local example="$1"; shift
-  local jq_filter="${1:-.}"; shift || true
+  local name="$1"
+  shift
+  local real="$1"
+  shift
+  local example="$1"
+  shift
+  local jq_filter="${1:-.}"
+  shift || true
 
   [ -f "$real" ] || return 0
   [ -f "$example" ] || return 0
@@ -55,12 +59,12 @@ warn_diff_codex() {
   local example="config/codex/config.example.toml"
   [ -f "$real" ] || return 0
   [ -f "$example" ] || return 0
-  local filter='del(.projects, .sandbox_workspace_write.writable_roots, .model, .model_reasoning_effort)'
+  local filter='del(.projects, .sandbox_workspace_write.writable_roots, .model, .model_reasoning_effort, .notice)'
   if ! diff -u <(yq -p=toml -o=json "$filter" "$example" | jq -S '.') \
-                 <(yq -p=toml -o=json "$filter" "$real" | jq -S '.') >/dev/null; then
-    echo "[dotfiles hook] Codex shared keys differ from example (ignoring projects.*, sandbox_workspace_write.writable_roots, model, model_reasoning_effort):" >&2
+    <(yq -p=toml -o=json "$filter" "$real" | jq -S '.') >/dev/null; then
+    echo "[dotfiles hook] Codex shared keys differ from example:" >&2
     diff -u <(yq -p=toml -o=json "$filter" "$example" | jq -S '.') \
-            <(yq -p=toml -o=json "$filter" "$real" | jq -S '.') || true
+      <(yq -p=toml -o=json "$filter" "$real" | jq -S '.') || true
     : # warn only; never block
   fi
 }
