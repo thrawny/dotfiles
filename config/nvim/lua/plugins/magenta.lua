@@ -1,5 +1,6 @@
 return {
-  dir = "~/stuff/magenta.nvim",
+  "dlants/magenta.nvim",
+  dev = true,
   lazy = false,
   build = "npm ci",
   opts = {
@@ -13,15 +14,19 @@ return {
       },
     },
     defaultProfile = "claude-max",
-    editPrediction = {
-      profile = {
-        provider = "anthropic",
-        model = "claude-haiku-4-5-20251001",
-        authType = "max",
-      },
-    },
   },
   keys = {
     { "<leader>aa", "<cmd>Magenta predict-edit<cr>", desc = "Magenta predict edit" },
+    {
+      "<Tab>",
+      function()
+        local magenta = require("magenta")
+        if magenta.has_prediction and magenta.has_prediction() then
+          vim.cmd("Magenta accept-prediction")
+        end
+      end,
+      desc = "Accept Magenta prediction",
+      mode = "n",
+    },
   },
 }
