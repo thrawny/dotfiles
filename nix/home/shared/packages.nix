@@ -49,5 +49,6 @@
     vim
     wget
     usage
+    fd
   ];
 }

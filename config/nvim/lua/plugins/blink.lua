@@ -4,7 +4,6 @@ return {
     keymap = {
       preset = "default",
       ["<Tab>"] = {
-        LazyVim.cmp.map({ "ai_nes", "ai_accept" }),
         function(cmp)
           if cmp.snippet_active() then
             return cmp.accept()
