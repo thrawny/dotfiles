@@ -1,21 +1,33 @@
 #!/bin/bash
-# Jump to Nth session (excluding scratch sessions) and specific window
-# Usage: tmux-session-window-jump <session_index> <window_index>
-# Example: tmux-session-window-jump 0 1  -> first non-scratch session, window 1
+# Jump to named session and specific window
+# Usage: tmux-session-window-jump <key> <window_index>
+# Example: tmux-session-window-jump q 3  -> session mapped to 'q', window 3
+#
+# Reads session mappings from ~/dotfiles/config/tmux/session-mappings.conf
+# Format: key=session_name (e.g., q=dotfiles)
 
-session_index=$1
+key=$1
 window_index=$2
+config_file="$HOME/dotfiles/config/tmux/session-mappings.conf"
 
-# Get list of non-scratch sessions sorted by creation time
-session_name=$(tmux list-sessions -F '#{session_created} #{session_name}' \
-  | grep -v ' scratch$' \
-  | grep -v '^drawer-' \
-  | sort -n \
-  | sed -n "$((session_index + 1))p" \
-  | awk '{print $2}')
+# Check if config file exists
+if [ ! -f "$config_file" ]; then
+  tmux display-message "Session mappings not configured. Copy session-mappings.conf.example to ~/dotfiles/config/tmux/session-mappings.conf"
+  exit 1
+fi
 
+# Read session name from config file
+session_name=$(grep "^${key}=" "$config_file" | cut -d= -f2)
+
+# Check if key is mapped
 if [ -z "$session_name" ]; then
-  tmux display-message "Session index $session_index not found"
+  tmux display-message "No session mapped to key '$key'"
+  exit 1
+fi
+
+# Check if session exists
+if ! tmux has-session -t "$session_name" 2>/dev/null; then
+  tmux display-message "Session '$session_name' not found"
   exit 1
 fi
 

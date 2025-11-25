@@ -17,6 +17,8 @@ config/cursor/settings.json
 
 config/claude/settings.json
 
+config/tmux/session-mappings.conf
+
 result
 
 .venv

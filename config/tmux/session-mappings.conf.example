@@ -1,0 +1,16 @@
+# Tmux Session Navigation Mappings
+# Copy this file to ~/dotfiles/config/tmux/session-mappings.conf and customize for your machine
+#
+# Format: key=session_name
+# - Keys: q, w, e, r, t (mapped to C-a q, C-a w, etc.)
+# - Leave value empty to disable a key
+# - Session must exist or you'll get an error
+#
+# Example usage:
+#   If q=dotfiles, then C-a q 3 jumps to the "dotfiles" session, window 3
+
+q=dotfiles
+w=myproject
+e=
+r=
+t=
