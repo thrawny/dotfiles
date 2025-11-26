@@ -26,6 +26,7 @@ return {
       })
     end,
     opts = {
+      inlay_hints = { enabled = false },
       servers = {
         -- Use system-installed basedpyright (via uv in dotfiles venv)
         basedpyright = {
