@@ -26,7 +26,8 @@
       "WebSearch",
       "Bash(git log:*)",
       "Bash(go doc:*)",
-      "mcp__nixos"
+      "mcp__nixos",
+      "Read(~/.claude/plans)"
     ],
     "deny": [],
     "ask": [
