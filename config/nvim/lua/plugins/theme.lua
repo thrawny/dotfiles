@@ -34,6 +34,7 @@ return {
           local pink = "#fc618d"
           local orange = "#fc9867"
           local white = "#f7f1ff"
+          local green = "#678256"
           local bg = "#222222"
 
           local highlights = {
@@ -90,6 +91,17 @@ return {
             ["@lsp.type.interface"] = { fg = cyan },
             ["@lsp.type.enum"] = { fg = cyan },
             ["@lsp.type.typeParameter"] = { fg = cyan },
+
+            -- Bash (Dracula-style)
+            ["@function.bash"] = { fg = yellow },
+            ["@function.call.bash"] = { fg = yellow },
+            ["@function.builtin.bash"] = { fg = yellow },
+            ["@keyword.bash"] = { fg = orange },
+            ["@keyword.conditional.bash"] = { fg = orange },
+            ["@keyword.repeat.bash"] = { fg = orange },
+            ["@constant.bash"] = { fg = white },
+            ["@variable.bash"] = { fg = white },
+            ["@string.bash"] = { fg = green },
 
             -- Python
             ["@constant.python"] = { fg = purple },
