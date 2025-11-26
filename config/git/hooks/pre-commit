@@ -26,7 +26,7 @@ warn_diff() {
       echo "[dotfiles hook] Detected local changes in $name (ignored fields filtered with jq):" >&2
       diff -u <(jq -S "$jq_filter" "$example") <(jq -S "$jq_filter" "$real") || true
       echo >&2
-      echo "Consider updating the example with non-secret defaults. Known-local fields are ignored in this check." >&2
+      echo "ACTION: Update '$example' to match your local settings (non-secret values only)." >&2
       : # warn only; never block
     fi
   else
