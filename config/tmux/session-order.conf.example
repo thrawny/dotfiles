@@ -1,0 +1,9 @@
+# Session order for tmux-fzf-switcher
+# Copy this file to ~/.config/tmux/session-order.conf and customize
+# Sessions listed first appear first in the switcher
+
+SESSION_ORDER=(
+  "dotfiles"
+  "main"
+  # Add your sessions here
+)
