@@ -73,7 +73,8 @@ Refer to `ansible/all_config.yml` for the authoritative symlink list.
   - `uv run claude-loop "fix type errors" -d 30m -w 30s`
   - Or module form: `uv run -m claude_tools.work_timer --help`
 - Notes:
-  - `bin/notify` is used by Codex notifications: plays a sound on macOS; no-op on Linux.
+  - `bin/notify-sound` is used by Codex notifications: plays a sound on macOS; no-op on Linux.
+  - `bin/notify` shows cross-platform visual notifications (macOS/Linux).
   - These tools expect Claude/Codex to be installed/configured; they orchestrate workflows but are optional for editing files.
 
 ## Notes

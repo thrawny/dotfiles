@@ -7,8 +7,16 @@
 -- Or remove existing autocmds by their group name (which is prefixed with `lazyvim_` for the defaults)
 -- e.g. vim.api.nvim_del_augroup_by_name("lazyvim_wrap_spell")
 
--- Disable LazyVim's default spell checking (can still toggle with ,su)
-vim.api.nvim_del_augroup_by_name("lazyvim_wrap_spell")
+-- Disable spell by default but keep LazyVim's wrap behavior (toggle spell with ,us)
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "text", "plaintex", "typst", "gitcommit", "markdown" },
+  callback = function()
+    vim.opt_local.spell = false
+    vim.opt_local.linebreak = true
+    vim.opt_local.breakindent = true
+  end,
+  desc = "Disable spell, add word-boundary wrapping for text filetypes",
+})
 
 -- Auto-reload files when changed externally
 vim.api.nvim_create_autocmd({ "FocusGained", "BufEnter", "CursorHold", "CursorHoldI" }, {
