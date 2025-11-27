@@ -52,3 +52,12 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
   desc = "Disable autoformat for SQL files",
 })
+
+-- Display tabs as 4 spaces in Go files (Go uses real tabs, this controls visual width)
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "go" },
+  callback = function()
+    vim.opt_local.tabstop = 4
+  end,
+  desc = "Set tab width to 4 for Go files",
+})
