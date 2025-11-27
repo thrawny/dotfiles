@@ -12,6 +12,15 @@
 
 **Avoid Redundant Comments**: Don't write comments that merely restate what the code already says. Comments like `// increment counter` above `counter++` add noise without value. Particularly avoid documenting parameters and return types in comments when they're already specified through type hints or annotations - this creates maintenance burden and potential for inconsistency. Comments should explain _why_ something is done when the business reason isn't obvious, not _what_ is being done. Good variable names and clear code structure eliminate the need for most comments. If you feel code needs extensive comments to be understood, consider refactoring it to be clearer instead.
 
+### Notifications
+
+Use `notify "message"` to alert the user when:
+- A long-running task completes (builds, tests, deployments)
+- You're waiting for user input after completing a task
+- An error requires their attention
+
+The title is automatically set to the current directory name.
+
 ### Development Server Management
 
 - Use `tmux-dev-server-control` CLI for managing development server sessions in tmux
