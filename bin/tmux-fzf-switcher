@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# Two-stage session/window switcher
+# Press h/j/k/l for session, then h/j/k/l for window
+# Press / for fuzzy search mode
+# Press q or Esc to cancel
+
+# Session order - loaded from config file
+SESSION_ORDER=()
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/session-order.conf"
+if [[ -f "$CONFIG_FILE" ]]; then
+  # shellcheck source=/dev/null
+  source "$CONFIG_FILE"
+fi
+
+KEYS=(h j k l u i o p)
+
+get_windows() {
+  tmux list-windows -a -F '#{session_name}:#{window_index} #{window_name}' |
+    grep -v '^drawer-'
+}
+
+get_sorted_sessions() {
+  local windows="$1"
+  local all_sessions=()
+
+  while IFS= read -r sess; do
+    all_sessions+=("$sess")
+  done < <(echo "$windows" | cut -d: -f1 | awk '!seen[$0]++')
+
+  # Sort by preference
+  local sorted=()
+  for preferred in "${SESSION_ORDER[@]}"; do
+    for sess in "${all_sessions[@]}"; do
+      if [[ "$sess" == "$preferred" ]]; then
+        sorted+=("$sess")
+        break
+      fi
+    done
+  done
+  # Add remaining
+  for sess in "${all_sessions[@]}"; do
+    local found=0
+    for s in "${sorted[@]}"; do
+      if [[ "$sess" == "$s" ]]; then
+        found=1
+        break
+      fi
+    done
+    if [[ $found -eq 0 ]]; then
+      sorted+=("$sess")
+    fi
+  done
+
+  printf '%s\n' "${sorted[@]}"
+}
+
+key_to_idx() {
+  case "$1" in
+  h) echo 0 ;;
+  j) echo 1 ;;
+  k) echo 2 ;;
+  l) echo 3 ;;
+  u) echo 4 ;;
+  i) echo 5 ;;
+  o) echo 6 ;;
+  p) echo 7 ;;
+  *) echo -1 ;;
+  esac
+}
+
+# Get windows and sessions
+WINDOWS=$(get_windows)
+SESSIONS=()
+while IFS= read -r sess; do
+  SESSIONS+=("$sess")
+done < <(get_sorted_sessions "$WINDOWS")
+
+# Build display
+build_full_display() {
+  local sidx=0
+  for sess in "${SESSIONS[@]}"; do
+    local skey="?"
+    if [[ $sidx -lt ${#KEYS[@]} ]]; then
+      skey="${KEYS[$sidx]}"
+    fi
+
+    local widx=0
+    while IFS= read -r line; do
+      local wkey="?"
+      if [[ $widx -lt ${#KEYS[@]} ]]; then
+        wkey="${KEYS[$widx]}"
+      fi
+      printf "\033[33m[%s%s]\033[0m %s\n" "$skey" "$wkey" "$line"
+      ((widx++))
+    done < <(echo "$WINDOWS" | grep "^${sess}:")
+    ((sidx++))
+  done
+}
+
+build_session_display() {
+  local filter_idx="$1"
+  local target_sess="${SESSIONS[$filter_idx]}"
+
+  echo ""
+  printf "\033[36mSession: %s\033[0m\n" "$target_sess"
+  echo ""
+
+  local widx=0
+  while IFS= read -r line; do
+    local wkey="?"
+    if [[ $widx -lt ${#KEYS[@]} ]]; then
+      wkey="${KEYS[$widx]}"
+    fi
+    printf "\033[33m[%s]\033[0m %s\n" "$wkey" "$line"
+    ((widx++))
+  done < <(echo "$WINDOWS" | grep "^${target_sess}:")
+}
+
+run_fzf_search() {
+  echo "$WINDOWS" | grep -v '^drawer-' |
+    fzf --no-border --height=100% --header="Type to search, Enter to select" |
+    cut -d' ' -f1 |
+    xargs -I {} tmux switch-client -t {}
+}
+
+# Clear screen and show initial list
+clear
+echo "h/j/k/l = select session | / = search | q/Esc = cancel"
+echo ""
+build_full_display
+
+# Read first key (session)
+read -rsn1 key1
+
+# Handle special keys
+if [[ "$key1" == "/" ]]; then
+  run_fzf_search
+  exit 0
+fi
+
+if [[ "$key1" == "q" || "$key1" == $'\e' ]]; then
+  exit 0
+fi
+
+session_idx=$(key_to_idx "$key1")
+if [[ $session_idx -lt 0 || $session_idx -ge ${#SESSIONS[@]} ]]; then
+  echo "Invalid session key: $key1"
+  exit 1
+fi
+
+# Show filtered view
+clear
+echo "h/j/k/l = select window | q/Esc = cancel"
+build_session_display "$session_idx"
+
+# Read second key (window)
+read -rsn1 key2
+
+if [[ "$key2" == "q" || "$key2" == $'\e' ]]; then
+  exit 0
+fi
+
+window_idx=$(key_to_idx "$key2")
+if [[ $window_idx -lt 0 ]]; then
+  echo "Invalid window key: $key2"
+  exit 1
+fi
+
+# Get target
+target_sess="${SESSIONS[$session_idx]}"
+target_window=$(echo "$WINDOWS" | grep "^${target_sess}:" | sed -n "$((window_idx + 1))p" | cut -d' ' -f1)
+
+if [[ -z "$target_window" ]]; then
+  echo "Window not found"
+  exit 1
+fi
+
+tmux switch-client -t "$target_window"
