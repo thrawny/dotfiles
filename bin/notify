@@ -71,6 +71,20 @@ def play_sound() -> None:
             )
         except Exception:
             pass
+    elif system == "Linux":
+        sound_file = os.environ.get(
+            "NOTIFY_SOUND_FILE", "/usr/share/sounds/freedesktop/stereo/complete.oga"
+        )
+        if shutil.which("paplay"):
+            try:
+                subprocess.run(
+                    ["paplay", sound_file],
+                    check=False,
+                    capture_output=True,
+                    timeout=5,
+                )
+            except Exception:
+                pass
 
 
 def main() -> int:
