@@ -69,3 +69,15 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
   desc = "Set tab width to 4 for Go files",
 })
+
+-- Detect bun shebang and set filetype to typescript
+vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+  pattern = "*",
+  callback = function()
+    local first_line = vim.fn.getline(1)
+    if first_line:match("^#!.*bun") then
+      vim.bo.filetype = "typescript"
+    end
+  end,
+  desc = "Set typescript filetype for files with bun shebang",
+})

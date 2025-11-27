@@ -1,0 +1,127 @@
+#!/usr/bin/env bun
+// @ts-nocheck
+
+import { LinearClient, LinearDocument } from "@linear/sdk";
+
+const apiKey = process.env.LINEAR_API_KEY;
+if (!apiKey) {
+  console.error("Error: LINEAR_API_KEY environment variable not set");
+  process.exit(1);
+}
+
+const client = new LinearClient({ apiKey });
+
+async function issues() {
+  const me = await client.viewer;
+
+  // Issues assigned to me OR unassigned in projects where I'm a member/lead
+  const result = await client.issues({
+    filter: {
+      completedAt: { null: true },
+      canceledAt: { null: true },
+      or: [
+        { assignee: { id: { eq: me.id } } },
+        {
+          assignee: { null: true },
+          project: {
+            or: [
+              { lead: { id: { eq: me.id } } },
+              { members: { id: { eq: me.id } } },
+            ],
+          },
+        },
+      ],
+    },
+    orderBy: LinearDocument.PaginationOrderBy.UpdatedAt,
+  });
+
+  if (!result.nodes.length) {
+    console.log("No issues found");
+    return;
+  }
+
+  for (const issue of result.nodes) {
+    const state = await issue.state;
+    const team = await issue.team;
+    const assignee = await issue.assignee;
+    const marker = assignee ? "" : "*";
+    console.log(
+      `${marker}${team?.key ?? "?"}-${issue.number} [${state?.name ?? "?"}] ${issue.title} (${issue.branchName})`
+    );
+  }
+}
+
+async function start(issueId: string) {
+  if (!issueId) {
+    console.error("Usage: linear start <issue-id>");
+    console.error("Example: linear start T-123");
+    process.exit(1);
+  }
+
+  const me = await client.viewer;
+
+  // Parse identifier (e.g., T-123 -> team key "T", number 123)
+  const match = issueId.match(/^([A-Za-z]+)-(\d+)$/);
+  if (!match) {
+    console.error(`Invalid issue ID format: ${issueId}`);
+    console.error("Expected format: TEAM-123 (e.g., T-123)");
+    process.exit(1);
+  }
+  const [, teamKey, numberStr] = match;
+
+  // Find the issue by team key and number
+  const issues = await client.issues({
+    filter: {
+      team: { key: { eqIgnoreCase: teamKey } },
+      number: { eq: parseInt(numberStr, 10) },
+    },
+    first: 1,
+  });
+  const issue = issues.nodes[0];
+  if (!issue) {
+    console.error(`Issue not found: ${issueId}`);
+    process.exit(1);
+  }
+
+  // Get the team's "started" workflow state (In Progress)
+  const team = await issue.team;
+  if (!team) {
+    console.error("Could not find team for issue");
+    process.exit(1);
+  }
+
+  const states = await team.states();
+  // Prefer "In Progress" by name, fall back to any started state
+  const startedState =
+    states.nodes.find((s) => s.type === "started" && s.name === "In Progress") ||
+    states.nodes.find((s) => s.type === "started");
+  if (!startedState) {
+    console.error("Could not find 'In Progress' state for team");
+    process.exit(1);
+  }
+
+  // Update issue: assign to me and set to In Progress
+  await issue.update({
+    assigneeId: me.id,
+    stateId: startedState.id,
+  });
+
+  console.log(`Started: ${team.key}-${issue.number} ${issue.title}`);
+  console.log(`Branch: ${issue.branchName}`);
+}
+
+const command = process.argv[2] ?? "issues";
+
+switch (command) {
+  case "issues":
+    await issues();
+    break;
+  case "start":
+    await start(process.argv[3]);
+    break;
+  default:
+    console.log("Usage: linear <command> [args]");
+    console.log("Commands:");
+    console.log("  issues       - List your issues and unassigned project issues");
+    console.log("  start <id>   - Self-assign issue and set to In Progress");
+}

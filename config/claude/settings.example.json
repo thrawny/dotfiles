@@ -28,7 +28,9 @@
       "Bash(go doc:*)",
       "mcp__nixos",
       "Read(~/.claude/plans)",
-      "Bash(notify:*)"
+      "Bash(notify:*)",
+      "Bash(linear issues:*)",
+      "Bash(linear start:*)"
     ],
     "deny": [],
     "ask": [
