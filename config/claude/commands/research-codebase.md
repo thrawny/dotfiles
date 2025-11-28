@@ -16,9 +16,9 @@ Then wait for the user's research query.
 
 1. **Read any directly mentioned files first:**
 
-   - If the user mentions specific files (tickets, docs, JSON), read them FULLY first
-   - **IMPORTANT**: Use the Read tool WITHOUT limit/offset parameters to read entire files
-   - **CRITICAL**: Read these files yourself in the main context before spawning any sub-tasks
+   - If the user mentions specific files (tickets, docs, JSON), read them fully first
+   - Use the Read tool without limit/offset parameters to read entire files
+   - Read these files yourself in the main context before spawning any sub-tasks
    - This ensures you have full context before decomposing the research
 
 2. **Analyze and decompose the research question:**
@@ -50,7 +50,7 @@ Then wait for the user's research query.
 
 4. **Wait for all sub-agents to complete and synthesize findings:**
 
-   - IMPORTANT: Wait for ALL sub-agent tasks to complete before proceeding
+   - Wait for all sub-agent tasks to complete before proceeding
    - Compile all sub-agent results (codebase findings and any docs/ or external notes)
    - Prioritize live codebase findings as primary source of truth
    - Use docs/ or external notes as supplementary historical context
@@ -166,12 +166,12 @@ Then wait for the user's research query.
 - Encourage sub-agents to find examples and usage patterns, not just definitions
 - Explore relevant docs/ directories, not just research
 - **File reading**: Always read mentioned files FULLY (no limit/offset) before spawning sub-tasks
-- **Critical ordering**: Follow the numbered steps exactly
+- **Ordering**: Follow the numbered steps in sequence
 
-  - ALWAYS read mentioned files first before spawning sub-tasks (step 1)
-  - ALWAYS wait for all sub-agents to complete before synthesizing (step 4)
-  - ALWAYS gather metadata before writing the document (step 5 before step 6)
-  - NEVER write the research document with placeholder values
+  - Read mentioned files first before spawning sub-tasks (step 1)
+  - Wait for all sub-agents to complete before synthesizing (step 4)
+  - Gather metadata before writing the document (step 5 before step 6)
+  - Don't write the research document with placeholder values
 
 - **Frontmatter consistency**:
   - Always include frontmatter at the beginning of research documents

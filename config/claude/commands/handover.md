@@ -10,12 +10,12 @@ Write everything we did so far to @progress.md, ensure to note the end goal, the
 
 Include a list of relevant files that should be read during takeover (e.g., modified files, configuration files, documentation).
 
-CRITICAL FILE WRITING RESTRICTIONS:
+File writing restrictions:
 
-- You are ONLY permitted to write to progress.md - NO OTHER FILES
-- When updating progress.md, RESET it completely - do not append to existing content
+- Only write to progress.md - no other files
+- Reset progress.md completely - don't append to existing content
 - The file should contain only the current state, not a growing history
-- DO NOT edit, create, or modify any other files in the codebase
+- Don't edit, create, or modify any other files in the codebase
 - Document any needed code changes in progress.md for the next developer
 
-CRITICAL: After writing progress.md, stop immediately. DO NOT summarize the handover back to the user. The session is ending and any summary wastes tokens and time.
+After writing progress.md, stop immediately. Don't summarize the handover back to the user - the session is ending and any summary wastes tokens and time.

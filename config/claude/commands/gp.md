@@ -17,8 +17,8 @@ Based on the above git context, create a single well-crafted git commit and push
 
 1. **Analyze the changes**: Look at both staged and unstaged changes to understand what modifications have been made
 2. **Stage relevant files**: Add any untracked or modified files that should be part of this commit
-   - **ALWAYS check for and stage new/untracked files** using `git add` for files that should be included
-   - **NEVER commit .envrc files** - These are local environment configurations that should not be shared
+   - Check for and stage new/untracked files using `git add` for files that should be included
+   - Don't commit .envrc files - these are local environment configurations that should not be shared
 3. **Write a meaningful commit message** that:
    - Uses imperative mood (e.g., "Add feature" not "Added feature")
    - Is concise but descriptive (max 4 lines of text)

@@ -34,15 +34,15 @@ Then wait for the user's input.
 
 ### Step 1: Context Gathering & Initial Analysis
 
-1. **Read all mentioned files immediately and FULLY**:
+1. **Read all mentioned files immediately and fully**:
 
    - Ticket files (e.g., `path/to/ticket.md`)
    - Research documents
    - Related implementation plans
    - Any JSON/data files mentioned
-   - **IMPORTANT**: Use the Read tool WITHOUT limit/offset parameters to read entire files
-   - **CRITICAL**: DO NOT spawn sub-tasks before reading these files yourself in the main context
-   - **NEVER** read files partially - if a file is mentioned, read it completely
+   - Use the Read tool without limit/offset parameters to read entire files
+   - Read these files yourself in the main context before spawning sub-tasks
+   - Don't read files partially - if a file is mentioned, read it completely
 
 2. **Spawn initial research tasks to gather context**:
    Before asking the user any questions, run targeted research in parallel when available:
