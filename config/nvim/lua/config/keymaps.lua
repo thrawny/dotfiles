@@ -26,3 +26,29 @@ vim.keymap.set("n", "<Leader>o", ":noh<CR>", { desc = "Clear search highlighting
 vim.keymap.set("t", "<C-a>", "<Home>", { desc = "Go to start of line in terminal" })
 
 -- Terminal toggle with Alt+; is defined in lua/plugins/ui.lua (snacks.nvim keys spec)
+
+-- Copy file reference to clipboard for Claude Code
+vim.keymap.set("n", "<Leader>at", function()
+  local file = vim.fn.expand("%:.")
+  local line = vim.fn.line(".")
+  local ref = "@" .. file .. " (line " .. line .. ")"
+  vim.fn.setreg("+", ref)
+  vim.notify("Copied: " .. ref)
+end, { desc = "Copy @file (line) to clipboard" })
+
+vim.keymap.set("v", "<Leader>at", function()
+  local file = vim.fn.expand("%:.")
+  local start_line = vim.fn.line("v")
+  local end_line = vim.fn.line(".")
+  if start_line > end_line then
+    start_line, end_line = end_line, start_line
+  end
+  local ref
+  if start_line == end_line then
+    ref = "@" .. file .. " (line " .. start_line .. ")"
+  else
+    ref = "@" .. file .. " (lines " .. start_line .. "-" .. end_line .. ")"
+  end
+  vim.fn.setreg("+", ref)
+  vim.notify("Copied: " .. ref)
+end, { desc = "Copy @file (lines) to clipboard" })
