@@ -78,5 +78,9 @@
     "command": "bunx -y ccstatusline@latest",
     "padding": 0
   },
+  "enabledPlugins": {
+    "claude-opus-4-5-migration@claude-code-plugins": true,
+    "code-review@claude-code-plugins": true
+  },
   "autoCompact": false
 }
