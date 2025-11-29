@@ -66,7 +66,7 @@ let
 
   tilingBinds = [
     "${mod}, RETURN, exec, ghostty"
-    "${mod}, SPACE, exec, walker"
+    "SUPER, SPACE, exec, walker"
     "${mod}, W, killactive"
     "${mod}, T, togglesplit" # Changed from J to avoid conflict with vim j
     "${mod}, O, exec, 1password"
@@ -126,6 +126,11 @@ let
     ", XF86AudioPlay, exec, playerctl play-pause"
     ", XF86AudioPrev, exec, playerctl previous"
   ];
+
+  hyprvoiceBinds = [
+    "${mod}, R, exec, /home/thrawny/.local/bin/hyprvoice toggle"
+    "${mod} SHIFT, R, exec, /home/thrawny/.local/bin/hyprvoice cancel"
+  ];
 in
 {
   wayland.windowManager.hyprland.settings = {
@@ -140,6 +145,7 @@ in
       sessionBinds
       scrollBinds
       monitorBinds
+      hyprvoiceBinds
     ];
 
     bindm = mouseBinds;
