@@ -1,12 +1,19 @@
 ---
 model: claude-haiku-4-5-20251001
-allowed-tools: Read, Write(progress.md), Glob, Grep, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Task
+allowed-tools: Read, Bash(archive-progress), Write(progress.md), Glob, Grep, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Task
 description: Prepare for a handover to another developer by documenting current progress and context.
 ---
 
 Another developer will take over.
 
-Write everything we did so far to @progress.md, ensure to note the end goal, the approach we're taking, the steps we've done so far, and the current failure we're working on.
+First, run `archive-progress` to save the existing progress.md (if it exists).
+
+Then write everything we did so far to @progress.md. Include:
+- Which model/tool created this handover (e.g., "Claude Code with claude-sonnet-4-20250514")
+- The end goal
+- The approach we're taking
+- The steps we've done so far
+- The current failure we're working on (if any)
 
 Include a list of relevant files that should be read during takeover (e.g., modified files, configuration files, documentation).
 
