@@ -6,10 +6,11 @@ description: Prepare for a handover to another developer by documenting current 
 
 Another developer will take over.
 
-First, run `archive-progress` to save the existing progress.md (if it exists).
+Steps:
+1. Run `archive-progress` to save any existing progress.md
+2. Write everything we did so far to @progress.md, including:
 
-Then write everything we did so far to @progress.md. Include:
-- Which model/tool created this handover (e.g., "Claude Code with claude-sonnet-4-20250514")
+- Which tool created this handover (e.g., "claude")
 - The end goal
 - The approach we're taking
 - The steps we've done so far

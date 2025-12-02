@@ -32,5 +32,5 @@ The title is automatically set to the current directory name.
 
 ### Searching for Documentation
 
-**Always start with context7 mcp**: It is a really good tool to retrieve the latest official documentation and code examples for all kinds of software.
+**Start with context7 mcp**: A good tool for retrieving the latest official documentation and code examples for software libraries.
 Fall back to web search and web fetch.
