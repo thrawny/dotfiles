@@ -2,20 +2,239 @@
 
 [[ "${TRACE}" ]] && set -x
 set -euo pipefail
-shopt -s nullglob
 
-# Default workspace roots - can be overridden by environment variable
-DEV_WORKSPACE_ROOTS="${DEV_WORKSPACE_ROOTS:-$HOME/code}"
+DEV_SESSION="dev"
 
-# Error reporting function
 error() {
   echo "Error: $*" >&2
   return 1
 }
 
-main() {
-  check_dependencies
+show_usage() {
+  echo "Usage: tmux-dev-server-control <action> [options]"
+  echo ""
+  echo "All processes run as windows in the '$DEV_SESSION' tmux session."
+  echo "Window names are auto-generated from directory + command."
+  echo ""
+  echo "Actions:"
+  echo "  start <command...>   - Start a dev server (name auto-generated)"
+  echo "  stop <name>          - Stop a dev server window"
+  echo "  logs <name> [lines]  - Show recent logs from window"
+  echo "  list                 - List all dev server windows"
+  echo ""
+  echo "Examples:"
+  echo "  cd ~/code/myapp && tmux-dev-server-control start npm run dev"
+  echo "    -> creates window 'myapp-npm-dev'"
+  echo ""
+  echo "  tmux-dev-server-control logs myapp-npm-dev 100"
+  echo "  tmux-dev-server-control stop myapp-npm-dev"
+  echo "  tmux-dev-server-control list"
+  echo ""
+  echo "Attach to session: tmux attach -t $DEV_SESSION"
+}
 
+validate_command() {
+  local command="$*"
+
+  local allowed_patterns=(
+    "^npm (run|start)"
+    "^yarn (dev|start|build)"
+    "^pnpm (dev|start|build)"
+    "^npx " "^node " "^bun "
+    "^go run" "^go build"
+    "^python" "^python3"
+    "^flask run" "^uvicorn " "^gunicorn " "^uv run "
+    "^docker-compose up" "^docker compose up" "^docker run"
+    "^make "
+    "^./scripts/" "^bin/"
+  )
+
+  for pattern in "${allowed_patterns[@]}"; do
+    if [[ "$command" =~ $pattern ]]; then
+      return 0
+    fi
+  done
+
+  error "Command not allowed: $command"
+}
+
+session_exists() {
+  tmux has-session -t "$DEV_SESSION" 2>/dev/null
+}
+
+window_exists() {
+  tmux list-windows -t "$DEV_SESSION" -F "#{window_name}" 2>/dev/null | grep -qx "$1"
+}
+
+ensure_session() {
+  if ! session_exists; then
+    tmux new-session -d -s "$DEV_SESSION" -n "_placeholder"
+  fi
+}
+
+generate_name() {
+  local command="$*"
+  local folder
+  folder=$(basename "$PWD")
+
+  local cmd_words=($command)
+  local main_cmd="${cmd_words[0]}"
+  local slug=""
+
+  case "$main_cmd" in
+    npm|yarn|pnpm|bun)
+      if [[ "${cmd_words[1]:-}" == "run" ]]; then
+        slug="${main_cmd}-${cmd_words[2]:-run}"
+      else
+        slug="${main_cmd}-${cmd_words[1]:-start}"
+      fi
+      ;;
+    go)
+      if [[ "${cmd_words[1]:-}" == "run" ]]; then
+        local path="${cmd_words[2]:-main}"
+        if [[ "$path" == *"/main.go" ]]; then
+          path="${path%/main.go}"
+          path="${path##*/}"
+        else
+          path="${path##*/}"
+          path="${path%.go}"
+        fi
+        slug="go-${path}"
+      else
+        slug="go-${cmd_words[1]:-build}"
+      fi
+      ;;
+    python|python3|uv)
+      local script="${cmd_words[1]:-main}"
+      [[ "$script" == "run" ]] && script="${cmd_words[2]:-main}"
+      script="${script##*/}"
+      script="${script%.py}"
+      slug="py-${script}"
+      ;;
+    make)
+      slug="${cmd_words[1]:-make}"
+      ;;
+    *)
+      slug="${main_cmd}${cmd_words[1]:+-${cmd_words[1]}}"
+      ;;
+  esac
+
+  slug="${slug,,}"
+  slug="${slug//[^a-z0-9-]/-}"
+  slug="${slug//--/-}"
+  slug="${slug#-}"
+  slug="${slug%-}"
+
+  echo "${folder}-${slug}"
+}
+
+handle_start() {
+  if [[ $# -lt 1 ]]; then
+    error "start requires command
+Usage: tmux-dev-server-control start <command...>"
+  fi
+
+  local command="$*"
+  local name
+  name=$(generate_name "$command")
+
+  validate_command "$command" || return 1
+
+  ensure_session
+
+  if window_exists "$name"; then
+    echo "Window '$name' already exists"
+    echo ""
+    echo "Recent logs:"
+    tmux capture-pane -t "$DEV_SESSION:$name" -p -S - | grep -v '^$' | tail -10
+    echo ""
+    echo "Use 'stop $name' first, or 'logs $name' for more output"
+    return 1
+  fi
+
+  local cwd="$PWD"
+  echo "Starting '$name': $command"
+  # Wrap command to keep window open on exit (success or failure)
+  tmux new-window -t "$DEV_SESSION" -n "$name" -c "$cwd" \
+    "bash -c '${command}; echo; echo \"=== Exited with code: \$?\"; read -p \"Press enter to close...\"'"
+
+  # Clean up placeholder window if it exists
+  if tmux list-windows -t "$DEV_SESSION" -F "#{window_name}" | grep -qx "_placeholder"; then
+    tmux kill-window -t "$DEV_SESSION:_placeholder" 2>/dev/null || true
+  fi
+
+  sleep 1
+  if window_exists "$name"; then
+    echo "✓ Window '$name' started in session '$DEV_SESSION'"
+  else
+    echo "✗ Window exited immediately"
+    echo "Try running manually: cd $cwd && $command"
+    return 1
+  fi
+}
+
+handle_stop() {
+  if [[ $# -lt 1 ]]; then
+    error "stop requires window name"
+  fi
+
+  local name="$1"
+
+  if ! session_exists; then
+    echo "No dev session exists"
+    return 1
+  fi
+
+  if ! window_exists "$name"; then
+    echo "Window '$name' does not exist"
+    return 1
+  fi
+
+  tmux kill-window -t "$DEV_SESSION:$name"
+  echo "✓ Window '$name' stopped"
+}
+
+handle_logs() {
+  if [[ $# -lt 1 ]]; then
+    error "logs requires window name"
+  fi
+
+  local name="$1"
+  local lines="${2:-50}"
+
+  if ! session_exists || ! window_exists "$name"; then
+    echo "Window '$name' does not exist"
+    handle_list
+    return 1
+  fi
+
+  echo "=== $name (last $lines lines) ==="
+  tmux capture-pane -t "$DEV_SESSION:$name" -p -S - | grep -v '^$' | tail -n "$lines"
+}
+
+handle_list() {
+  if ! session_exists; then
+    echo "No dev server session"
+    return 0
+  fi
+
+  local windows
+  windows=$(tmux list-windows -t "$DEV_SESSION" -F "#{window_name}" | grep -v "^_placeholder$" || true)
+
+  if [[ -z "$windows" ]]; then
+    echo "No dev server windows"
+    return 0
+  fi
+
+  echo "Dev server windows (session: $DEV_SESSION):"
+  while IFS= read -r name; do
+    echo "  $name"
+  done <<< "$windows"
+  echo ""
+  echo "Attach: tmux attach -t $DEV_SESSION"
+}
+
+main() {
   if [[ $# -lt 1 ]]; then
     show_usage
     return 1
@@ -25,610 +244,16 @@ main() {
   shift
 
   case "$action" in
-    start)
-      handle_start "$@"
-      ;;
-    stop)
-      handle_stop "$@"
-      ;;
-    restart)
-      handle_restart "$@"
-      ;;
-    logs)
-      handle_logs "$@"
-      ;;
-    status)
-      handle_status "$@"
-      ;;
-    monitor)
-      handle_monitor "$@"
-      ;;
-    list)
-      handle_list
-      ;;
+    start) handle_start "$@" ;;
+    stop) handle_stop "$@" ;;
+    logs) handle_logs "$@" ;;
+    list) handle_list ;;
     *)
-      echo "Error: Unknown action '$action'"
+      echo "Unknown action: $action"
       show_usage
       return 1
       ;;
   esac
-}
-
-check_dependencies() {
-  if ! command -v tmux >/dev/null 2>&1; then
-    echo "Error: tmux is not installed"
-    echo "Install with: brew install tmux (macOS) or apt-get install tmux (Ubuntu)"
-    exit 1
-  fi
-  
-  if ! command -v direnv >/dev/null 2>&1; then
-    echo "Warning: direnv is not installed - .envrc files will be ignored"
-    echo "Install with: brew install direnv (macOS) or apt-get install direnv (Ubuntu)"
-  fi
-}
-
-show_usage() {
-  echo "Usage: tmux-dev-server-control <action> [options]"
-  echo ""
-  echo "Actions:"
-  echo "  start [-d <directory>] <command...> - Start a dev server in tmux session"
-  echo "  stop <session-name>                - Stop a dev server session"
-  echo "  restart [-d <directory>] <command...> - Restart a dev server session"
-  echo "  logs <session-name> [lines]        - Show recent logs from session"
-  echo "  status [session-name]              - Show status of sessions"
-  echo "  monitor <session-name>             - Attach to session for monitoring"
-  echo "  list                               - List all dev server sessions"
-  echo ""
-  echo "Session Naming: Auto-generated as 'foldername-command-slug'"
-  echo "Workspace Roots: ${DEV_WORKSPACE_ROOTS}"
-  echo ""
-  echo "Examples:"
-  echo "  tmux-dev-server-control start npm run dev                    # -> myproject-npm-run-dev"
-  echo "  tmux-dev-server-control start -d ~/code/backend go run main  # -> backend-go-run-main"
-  echo "  tmux-dev-server-control restart npm run dev                  # Stop and restart existing session"
-  echo "  tmux-dev-server-control logs myproject-npm-run-dev 100"
-  echo "  tmux-dev-server-control status"
-}
-
-generate_session_name() {
-  local directory="$1"
-  shift
-  local command="$*"
-
-  # Remove trailing slash if present
-  directory="${directory%/}"
-  
-  # Get the directory name
-  local folder_name="${directory##*/}"
-
-  # Process command for readability
-  local cmd_words=($command)
-  local main_cmd="${cmd_words[0]##*/}"  # Get base command name (e.g., "python3" from "/usr/bin/python3")
-  
-  # Handle common patterns
-  case "$main_cmd" in
-    python|python3|py)
-      # For Python modules: "python -m http.server 8000" -> "py-http_server-8000"
-      if [[ "${cmd_words[1]}" == "-m" ]] && [[ -n "${cmd_words[2]}" ]]; then
-        local module="${cmd_words[2]}"
-        module="${module//./_}"  # Replace dots with underscores
-        command_slug="py-${module}"
-        
-        # Add port or other key args for common modules
-        if [[ "${module}" == "http_server" ]] && [[ -n "${cmd_words[3]}" ]]; then
-          command_slug="${command_slug}-${cmd_words[3]}"
-        fi
-      else
-        # Regular Python script: "python main.py --env prod" -> "py-main-prod"
-        local script="${cmd_words[1]##*/}"
-        script="${script%.py}"  # Remove .py extension
-        command_slug="py-${script}"
-        
-        # Look for key arguments
-        for ((i=2; i<${#cmd_words[@]}; i++)); do
-          case "${cmd_words[i]}" in
-            -c|--config|--env|-e)
-              if [[ $((i+1)) -lt ${#cmd_words[@]} ]]; then
-                local arg="${cmd_words[$((i+1))]}"
-                arg="${arg##*/}"  # Remove path
-                arg="${arg%.*}"   # Remove extension
-                command_slug="${command_slug}-${arg}"
-                break
-              fi
-              ;;
-            -p|--port)
-              if [[ $((i+1)) -lt ${#cmd_words[@]} ]]; then
-                command_slug="${command_slug}-p${cmd_words[$((i+1))]}"
-                break
-              fi
-              ;;
-          esac
-        done
-      fi
-      ;;
-    npm|yarn|pnpm|bun)
-      # Package manager: "npm run dev" -> "npm-dev"
-      if [[ "${cmd_words[1]}" == "run" ]] && [[ -n "${cmd_words[2]}" ]]; then
-        command_slug="${main_cmd}-${cmd_words[2]}"
-      else
-        command_slug="${main_cmd}-${cmd_words[1]}"
-      fi
-      ;;
-    go)
-      # Go commands: "go run main.go" -> "go-main"
-      # "go run ./cmd/solis-s6-simulator/main.go" -> "go-solis-s6-simulator"
-      if [[ "${cmd_words[1]}" == "run" ]]; then
-        local file_path="${cmd_words[2]}"
-        
-        # If it's a path to main.go, extract the parent directory name
-        if [[ "$file_path" == *"/main.go" ]]; then
-          # Get the parent directory name (e.g., solis-s6-simulator from ./cmd/solis-s6-simulator/main.go)
-          local parent_dir="${file_path%/main.go}"
-          parent_dir="${parent_dir##*/}"  # Get just the directory name
-          
-          # If we got a meaningful directory name, use it
-          if [[ -n "$parent_dir" ]] && [[ "$parent_dir" != "." ]] && [[ "$parent_dir" != ".." ]]; then
-            command_slug="go-${parent_dir}"
-          else
-            # Fallback to just "go-main"
-            command_slug="go-main"
-          fi
-        else
-          # Not main.go, extract the base filename
-          local file="${file_path##*/}"
-          file="${file%.go}"  # Remove .go extension
-          command_slug="go-${file}"
-        fi
-      else
-        command_slug="go-${cmd_words[1]}"
-      fi
-      ;;
-    uv)
-      # UV: "uv run main.py -c config" -> "uv-main-config"
-      if [[ "${cmd_words[1]}" == "run" ]]; then
-        local script="${cmd_words[2]##*/}"
-        script="${script%.py}"  # Remove .py extension
-        command_slug="uv-${script}"
-        
-        # Add key arguments if present
-        for ((i=3; i<${#cmd_words[@]}; i++)); do
-          case "${cmd_words[i]}" in
-            -c|--config)
-              # Add config name if it follows
-              if [[ $((i+1)) -lt ${#cmd_words[@]} ]]; then
-                local config="${cmd_words[$((i+1))]}"
-                # Shorten common patterns but keep uniqueness
-                config="${config##*/}"  # Remove path if present
-                config="${config%.yaml}"  # Remove extension
-                config="${config%.yml}"
-                config="${config%.json}"
-                command_slug="${command_slug}-${config}"
-                break  # Only take first key argument
-              fi
-              ;;
-            -p|--port)
-              # Add port if it follows
-              if [[ $((i+1)) -lt ${#cmd_words[@]} ]]; then
-                command_slug="${command_slug}-p${cmd_words[$((i+1))]}"
-                break
-              fi
-              ;;
-          esac
-        done
-      else
-        command_slug="uv-${cmd_words[1]}"
-      fi
-      ;;
-    docker|docker-compose)
-      # Docker: "docker compose up" -> "docker-up"
-      local short_cmd="${main_cmd/docker-compose/dc}"
-      short_cmd="${short_cmd/docker/dk}"
-      command_slug="${short_cmd}-${cmd_words[1]}"
-      ;;
-    *)
-      # Default: just use the main command and first arg
-      command_slug="${main_cmd}${cmd_words[1]:+-}${cmd_words[1]}"
-      ;;
-  esac
-  
-  # Clean up the slug
-  command_slug="${command_slug,,}"  # lowercase
-  command_slug="${command_slug//[^a-z0-9_-]/-}"  # replace special chars with hyphens
-  command_slug="${command_slug//+(-)/-}"  # collapse multiple hyphens
-  command_slug="${command_slug#-}"  # remove leading hyphen
-  command_slug="${command_slug%-}"  # remove trailing hyphen
-  
-  # Truncate if needed (keep it reasonable)
-  local max_cmd_length=30
-  command_slug="${command_slug:0:$max_cmd_length}"
-  
-  echo "${folder_name}-${command_slug}"
-}
-
-validate_session_name() {
-  local session_name="$1"
-
-  # Check format: foldername-command-slug (more flexible now)
-  if [[ ! "$session_name" =~ ^[a-zA-Z0-9_-]+$ ]]; then
-    error "Invalid session name format: '$session_name'"
-  fi
-
-  return 0
-}
-
-validate_workspace() {
-  local target_dir="${1:-$PWD}"
-  local workspace_roots
-  mapfile -td ',' workspace_roots <<< "$DEV_WORKSPACE_ROOTS,"
-
-  # Expand tilde in target_dir
-  target_dir="${target_dir/#\~/$HOME}"
-
-  # Convert to absolute path
-  target_dir=$(cd "$target_dir" 2>/dev/null && pwd) || {
-    error "Directory '$1' does not exist"
-  }
-
-  for root in "${workspace_roots[@]}"; do
-    # Expand tilde
-    root="${root/#\~/$HOME}"
-    if [[ "$target_dir" == "$root"* ]]; then
-      return 0
-    fi
-  done
-
-  error "Target directory is outside workspace boundaries
-Target: $target_dir
-Allowed workspace roots: ${DEV_WORKSPACE_ROOTS}
-Use a directory within your workspace or update DEV_WORKSPACE_ROOTS"
-}
-
-validate_git_repo() {
-  local target_dir="${1:-$PWD}"
-
-  # Check if target directory is in a git repo
-  if ! (cd "$target_dir" && git rev-parse --git-dir >/dev/null 2>&1); then
-    error "Target directory is not within a git repository
-Directory: $target_dir
-Dev server sessions must be run from within git repositories"
-  fi
-  return 0
-}
-
-
-validate_command() {
-  local target_dir="$1"
-  shift
-  local command="$*"
-
-  # Simple allowlist of allowed command patterns
-  local allowed_patterns=(
-    # Node.js / Frontend
-    "^npm (run|start)"
-    "^yarn (dev|start|build)"
-    "^pnpm (dev|start|build)"
-    "^npx "
-    "^node "
-
-    # Go
-    "^go run"
-    "^go build"
-
-    # Python
-    "^python manage.py runserver"
-    "^python -m "
-    "^python main.py.*"
-    "^python .*\.py"
-    "^python3 manage.py runserver"
-    "^python3 -m "
-    "^python3 main.py.*"
-    "^python3 .*\.py"
-    "^flask run"
-    "^uvicorn "
-    "^gunicorn "
-    "^uv run "
-
-    # Docker
-    "^docker-compose up"
-    "^compose up"
-    "^docker run"
-
-    # General dev tools
-    "^make (dev|run|start)"
-    "^./scripts/"
-    "^bin/"
-    
-    # Environment management
-    "^direnv exec "
-  )
-
-  for pattern in "${allowed_patterns[@]}"; do
-    if [[ "$command" =~ $pattern ]]; then
-      return 0
-    fi
-  done
-
-  error "Command not allowed
-Command: $command
-
-Allowed patterns: npm run, go run, python, make, docker-compose, etc."
-}
-
-session_exists() {
-  local session_name="$1"
-  tmux has-session -t "$session_name" 2>/dev/null
-}
-
-handle_start() {
-  local target_dir="$PWD"
-
-  # Parse -d option for directory
-  while [[ $# -gt 0 ]]; do
-    case $1 in
-      -d|--directory)
-        target_dir="$2"
-        shift 2
-        ;;
-      *)
-        break
-        ;;
-    esac
-  done
-
-  if [[ $# -lt 1 ]]; then
-    error "start requires command
-Usage: tmux-dev-server-control start [-d <directory>] <command...>"
-  fi
-
-  local command="$*"
-  local session_name
-  session_name=$(generate_session_name "$target_dir" "$command")
-
-  validate_session_name "$session_name" || return 1
-  validate_workspace "$target_dir" || return 1
-  validate_git_repo "$target_dir" || return 1
-  validate_command "$target_dir" "$command" || return 1
-
-  if session_exists "$session_name"; then
-    echo "Session '$session_name' already exists"
-    echo ""
-    echo "Recent logs (last 10 lines):"
-    echo "----------------------------------------"
-    tmux capture-pane -t "$session_name" -p | tail -n 10
-    echo "----------------------------------------"
-    echo ""
-    echo "Options:"
-    echo "  - Restart session: tmux-dev-server-control restart -d $target_dir $command"
-    echo "  - Stop and restart: tmux-dev-server-control stop $session_name && tmux-dev-server-control start ..."
-    echo "  - Monitor existing: tmux-dev-server-control monitor $session_name"
-    echo "  - View more logs: tmux-dev-server-control logs $session_name [lines]"
-    return 1
-  fi
-
-  # Check for .envrc in current or parent directories and wrap with direnv if present
-  if command -v direnv >/dev/null 2>&1; then
-    local check_dir="$target_dir"
-    local found_envrc=false
-    
-    # Walk up the directory tree looking for .envrc
-    while [[ "$check_dir" != "/" ]]; do
-      if [[ -f "$check_dir/.envrc" ]]; then
-        found_envrc=true
-        echo "Found .envrc in $check_dir - using direnv to load environment"
-        break
-      fi
-      check_dir=$(dirname "$check_dir")
-    done
-    
-    if [[ "$found_envrc" == "true" ]]; then
-      command="direnv exec \"$target_dir\" $command"
-    fi
-  fi
-
-  echo "Starting session '$session_name' in $target_dir"
-  echo "Command: $command"
-
-  # Wrap the command to capture failures and keep session alive for debugging
-  # Since we've already validated the command against allowlist, we can safely construct the wrapper
-  # Validate that command doesn't contain dangerous characters beyond what we expect
-  # Allow quotes for direnv exec commands
-  if [[ "$command" =~ [\;\&\|\`] ]] || [[ "$command" =~ \$\( ]] || [[ "$command" =~ \(\) ]]; then
-    error "Command contains potentially dangerous characters: $command"
-  fi
-  
-  local wrapped_cmd="($command) || { exit_code=\$?; echo ''; echo 'Command failed with exit code: '\$exit_code; echo 'Keeping session alive for debugging...'; sleep 30; }"
-  tmux new-session -d -s "$session_name" -c "$target_dir" bash -c "$wrapped_cmd"
-
-  # Wait a moment and check if session is still running
-  sleep 2
-  if session_exists "$session_name"; then
-    # Check if we can see error output indicating failure
-    local output
-    output=$(tmux capture-pane -t "$session_name" -p)
-    if [[ "$output" == *"Command failed with exit code"* ]]; then
-      echo "✗ Command failed immediately. Output:"
-      echo "----------------------------------------"
-      echo "$output"
-      tmux kill-session -t "$session_name"
-      return 1
-    else
-      echo "✓ Session '$session_name' started successfully"
-      echo "Monitor with: tmux-dev-server-control monitor $session_name"
-      echo "Logs with: tmux-dev-server-control logs $session_name"
-    fi
-  else
-    echo "✗ Session '$session_name' exited immediately"
-    return 1
-  fi
-}
-
-handle_stop() {
-  if [[ $# -lt 1 ]]; then
-    error "stop requires session name
-Usage: tmux-dev-server-control stop <session-name>"
-  fi
-
-  local session_name="$1"
-  validate_session_name "$session_name" || return 1
-
-  if ! session_exists "$session_name"; then
-    echo "Session '$session_name' does not exist"
-    return 1
-  fi
-
-  echo "Stopping session '$session_name'..."
-  tmux kill-session -t "$session_name"
-  echo "✓ Session '$session_name' stopped"
-}
-
-handle_restart() {
-  local target_dir="$PWD"
-
-  # Parse -d option for directory
-  while [[ $# -gt 0 ]]; do
-    case $1 in
-      -d|--directory)
-        target_dir="$2"
-        shift 2
-        ;;
-      *)
-        break
-        ;;
-    esac
-  done
-
-  if [[ $# -lt 1 ]]; then
-    error "restart requires command
-Usage: tmux-dev-server-control restart [-d <directory>] <command...>"
-  fi
-
-  local command="$*"
-  local session_name
-  session_name=$(generate_session_name "$target_dir" "$command")
-
-  validate_session_name "$session_name" || return 1
-
-  # Check if session exists and stop it
-  if session_exists "$session_name"; then
-    echo "Stopping existing session '$session_name'..."
-    tmux kill-session -t "$session_name"
-    echo "✓ Session stopped"
-    echo ""
-  else
-    echo "No existing session '$session_name' found - starting new session"
-    echo ""
-  fi
-
-  # Start the session (reuse the start logic)
-  handle_start -d "$target_dir" "$command"
-}
-
-handle_logs() {
-  if [[ $# -lt 1 ]]; then
-    error "logs requires session name
-Usage: tmux-dev-server-control logs <session-name> [lines]"
-  fi
-
-  local session_name="$1"
-  local lines="${2:-50}"
-
-  validate_session_name "$session_name" || return 1
-
-  if ! session_exists "$session_name"; then
-    echo "Session '$session_name' does not exist"
-    echo "Available sessions:"
-    handle_list
-    return 1
-  fi
-
-  echo "Last $lines lines from session '$session_name':"
-  echo "----------------------------------------"
-  # Capture full scrollback buffer (-S -), remove empty lines, then tail
-  # Also handle potential carriage returns from some programs
-  tmux capture-pane -t "$session_name" -p -S - | tr -d '\r' | grep -v '^$' | tail -n "$lines"
-}
-
-handle_status() {
-  local session_name="${1:-}"
-
-  if [[ -n "$session_name" ]]; then
-    validate_session_name "$session_name" || return 1
-
-    if session_exists "$session_name"; then
-      echo "Session '$session_name': RUNNING"
-      tmux display-message -t "$session_name" -p "Working directory: #{pane_current_path}"
-      tmux display-message -t "$session_name" -p "Command: #{pane_current_command}"
-    else
-      echo "Session '$session_name': NOT FOUND"
-    fi
-  else
-    echo "Development Server Sessions:"
-    echo "============================"
-
-    # Get all sessions and filter for dev server sessions
-    if tmux list-sessions >/dev/null 2>&1; then
-      local sessions
-      mapfile -t sessions < <(tmux list-sessions -F "#{session_name}")
-      for sess in "${sessions[@]}"; do
-        if [[ "$sess" =~ ^[a-zA-Z0-9_-]+-[a-zA-Z0-9_-]+$ ]]; then
-          local status
-          status=$(tmux display-message -t "$sess" -p "#{pane_current_path} | #{pane_current_command}")
-          echo "$sess: $status"
-        fi
-      done
-    else
-      echo "No active sessions"
-    fi
-  fi
-}
-
-handle_monitor() {
-  if [[ $# -lt 1 ]]; then
-    error "monitor requires session name
-Usage: tmux-dev-server-control monitor <session-name>"
-  fi
-
-  local session_name="$1"
-  validate_session_name "$session_name" || return 1
-
-  if ! session_exists "$session_name"; then
-    echo "Session '$session_name' does not exist"
-    return 1
-  fi
-
-  echo "Attaching to session '$session_name'..."
-  echo "Use Ctrl+A then D to detach"
-  tmux attach -t "$session_name"
-}
-
-handle_list() {
-  echo "Development Server Sessions:"
-  echo "============================"
-
-  if tmux list-sessions >/dev/null 2>&1; then
-    local found_workspace_sessions=false
-    local sessions_info
-    mapfile -t sessions_info < <(tmux list-sessions -F "#{session_name} #{session_created} #{session_attached}")
-    
-    for session_line in "${sessions_info[@]}"; do
-      read -r sess created attached <<< "$session_line"
-      if [[ "$sess" =~ ^[a-zA-Z0-9_-]+-[a-zA-Z0-9_-]+$ ]]; then
-        found_workspace_sessions=true
-        local status="detached"
-        [[ "$attached" == "1" ]] && status="attached"
-        echo "$sess [$status] (created: $(date -r "$created" '+%Y-%m-%d %H:%M'))"
-      fi
-    done
-
-    if [[ "$found_workspace_sessions" == "false" ]]; then
-      echo "No dev server sessions found"
-      echo ""
-      echo "Start a session with:"
-      echo "  tmux-dev-server-control start 'command'"
-    fi
-  else
-    echo "No active tmux sessions"
-  fi
 }
 
 main "$@"

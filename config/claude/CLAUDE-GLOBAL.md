@@ -23,12 +23,27 @@ The title is automatically set to the current directory name.
 
 ### Development Server Management
 
-- Use `tmux-dev-server-control` CLI for managing development server sessions in tmux
-- Auto-generates session names: `{foldername}-{command-slug}` (e.g., `asset-simulator-uv-run-main-py`)
-- Commands: `start [-d <directory>] <command>`, `stop <session>`, `logs <session>`, `list`, `status`, `monitor <session>`
-- Validates commands against allowlist (npm, go, python, docker, etc.)
-- Enforces workspace boundaries (default: ~/code) and requires git repositories
-- Shows actual error output when commands fail immediately
+Use `tmux-dev-server-control` for managing dev servers. All processes run as windows in a single `dev` tmux session. Window names are auto-generated from directory + command:
+
+```bash
+tmux-dev-server-control start <command>       # Start (name auto-generated from cwd + command)
+tmux-dev-server-control stop <name>           # Stop a window
+tmux-dev-server-control logs <name> [lines]   # View logs
+tmux-dev-server-control list                  # List all windows
+```
+
+Example:
+```bash
+# In ~/code/myapp: creates window 'myapp-npm-dev'
+tmux-dev-server-control start npm run dev
+
+# In ~/code/backend: creates window 'backend-go-api'
+tmux-dev-server-control start go run ./cmd/api/main.go
+
+tmux-dev-server-control logs myapp-npm-dev 100
+```
+
+User can `tmux attach -t dev` to tab between all processes. Commands are validated against an allowlist (npm, go, python, docker, etc.).
 
 ### Searching for Documentation
 
