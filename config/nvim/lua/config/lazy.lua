@@ -14,10 +14,13 @@ if not (vim.uv or vim.loop).fs_stat(lazypath) then
 end
 vim.opt.rtp:prepend(lazypath)
 
+-- Dev plugins path (must be set before lazy.setup for plugin specs to use it)
+vim.g.dev_path = vim.fn.expand("~/code")
+
 require("lazy").setup({
   ---@diagnostic disable-next-line: assign-type-mismatch
   dev = {
-    path = "~/code",
+    path = vim.g.dev_path,
   },
   spec = {
     -- add LazyVim and import its plugins

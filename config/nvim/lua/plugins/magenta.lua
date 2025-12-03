@@ -1,6 +1,6 @@
 return {
   "dlants/magenta.nvim",
-  dev = true,
+  dev = vim.fn.isdirectory(vim.g.dev_path .. "/magenta.nvim") == 1,
   lazy = false,
   build = "npm ci",
   opts = {
