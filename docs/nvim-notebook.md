@@ -1,6 +1,7 @@
 # Jupyter Notebook Support in Neovim/LazyVim
 
 Research findings for setting up Jupyter notebook functionality with specific requirements:
+
 1. Python scripts with cell markers (`# %%`)
 2. SQL cells with syntax highlighting
 3. Execute cells in Neovim environment
@@ -16,12 +17,12 @@ This is the most mature, feature-complete solution as of 2025.
 
 ### How It Addresses Requirements
 
-| Requirement | Support | Details |
-|-------------|---------|---------|
-| Python `# %%` cell markers | ✅ Excellent | Via NotebookNavigator.nvim |
-| SQL syntax highlighting | ⚠️ Partial | Requires treesitter injection + IPython magic |
-| Execute cells in Neovim | ✅ Excellent | Via Jupyter kernels with rich output |
-| Export to .ipynb | ✅ Native | Auto-conversion via Jupytext |
+| Requirement                | Support      | Details                                       |
+| -------------------------- | ------------ | --------------------------------------------- |
+| Python `# %%` cell markers | ✅ Excellent | Via NotebookNavigator.nvim                    |
+| SQL syntax highlighting    | ⚠️ Partial   | Requires treesitter injection + IPython magic |
+| Execute cells in Neovim    | ✅ Excellent | Via Jupyter kernels with rich output          |
+| Export to .ipynb           | ✅ Native    | Auto-conversion via Jupytext                  |
 
 ### Plugin Configuration
 
@@ -33,12 +34,10 @@ return {
   {
     "benlubas/molten-nvim",
     version = "^1.0.0",
-    dependencies = { "3rd/image.nvim" },
     build = ":UpdateRemotePlugins",
     ft = { "python", "markdown" },
     config = function()
       -- Molten configuration
-      vim.g.molten_image_provider = "image.nvim"
       vim.g.molten_output_win_max_height = 20
       vim.g.molten_auto_open_output = false
       vim.g.molten_wrap_output = true
@@ -53,28 +52,6 @@ return {
       vim.keymap.set("n", "<leader>mo", ":MoltenHideOutput<CR>", { desc = "Hide Output", silent = true })
       vim.keymap.set("n", "<leader>md", ":MoltenDelete<CR>", { desc = "Delete Cell", silent = true })
     end,
-  },
-
-  -- Image rendering
-  {
-    "3rd/image.nvim",
-    opts = {
-      backend = "kitty",
-      integrations = {
-        markdown = {
-          enabled = true,
-          clear_in_insert_mode = false,
-          download_remote_images = true,
-          only_render_image_at_cursor = false,
-        },
-      },
-      max_width = 100,
-      max_height = 12,
-      max_width_window_percentage = nil,
-      max_height_window_percentage = 50,
-      window_overlap_clear_enabled = true,
-      window_overlap_clear_ft_ignore = { "cmp_menu", "cmp_docs", "" },
-    },
   },
 
   -- Jupytext for ipynb conversion
@@ -126,11 +103,7 @@ return {
 
 ```bash
 # Python dependencies
-pip install pynvim jupyter_client jupytext ipython-sql sqlalchemy cairosvg pnglatex
-
-# Terminal with image support (required for inline plots)
-brew install kitty  # macOS
-# Or use WezTerm as alternative
+pip install pynvim jupyter_client jupytext ipython-sql sqlalchemy
 ```
 
 ### SQL Cell Support
@@ -138,6 +111,7 @@ brew install kitty  # macOS
 #### 1. IPython SQL Magic (for execution)
 
 In your first cell:
+
 ```python
 # %%
 %load_ext sql
@@ -187,31 +161,30 @@ Create `after/queries/python/injections.scm`:
 
 ### Keybindings
 
-| Key | Action |
-|-----|--------|
-| `<leader>mi` | Initialize Molten kernel |
-| `<leader>X` | Run current cell |
-| `<leader>x` | Run cell and move to next |
-| `<leader>xa` | Run all cells |
-| `[h` / `]h` | Move to previous/next cell |
-| `<leader>mr` | Re-evaluate cell |
-| `<leader>mo` | Hide output |
-| `<leader>md` | Delete cell |
+| Key          | Action                     |
+| ------------ | -------------------------- |
+| `<leader>mi` | Initialize Molten kernel   |
+| `<leader>X`  | Run current cell           |
+| `<leader>x`  | Run cell and move to next  |
+| `<leader>xa` | Run all cells              |
+| `[h` / `]h`  | Move to previous/next cell |
+| `<leader>mr` | Re-evaluate cell           |
+| `<leader>mo` | Hide output                |
+| `<leader>md` | Delete cell                |
 
 ### Pros
 
 - Most actively developed solution (2025)
-- Excellent image rendering with Kitty terminal
 - Full Jupyter kernel support (all magic commands work)
 - Can send keyboard interrupts to stop running code
 - Multiple kernels per buffer support
 - Import/export notebook outputs
 - Native Python files with `# %%` markers
+- Works with any terminal (no special requirements)
 
 ### Cons
 
 - Complex initial setup (multiple plugins required)
-- Image rendering requires specific terminals (Kitty or WezTerm)
 - SQL cell syntax highlighting requires manual treesitter configuration
 - Remote plugin architecture requires understanding
 - Learning curve for Jupyter kernel concepts
@@ -222,12 +195,12 @@ Create `after/queries/python/injections.scm`:
 
 ### How It Addresses Requirements
 
-| Requirement | Support | Details |
-|-------------|---------|---------|
-| Python cell markers | ⚠️ Different format | Uses `.qmd` files instead of `# %%` |
-| SQL syntax highlighting | ✅ Native | Built-in support |
-| Execute cells | ✅ Good | Via vim-slime or molten |
-| Export to .ipynb | ✅ Yes | Via `quarto convert` |
+| Requirement             | Support             | Details                             |
+| ----------------------- | ------------------- | ----------------------------------- |
+| Python cell markers     | ⚠️ Different format | Uses `.qmd` files instead of `# %%` |
+| SQL syntax highlighting | ✅ Native           | Built-in support                    |
+| Execute cells           | ✅ Good             | Via vim-slime or molten             |
+| Export to .ipynb        | ✅ Yes              | Via `quarto convert`                |
 
 ### Configuration
 
@@ -275,7 +248,7 @@ return {
 
 ### Quarto Document Format
 
-```qmd
+````qmd
 ---
 title: "My Analysis"
 format: ipynb
@@ -286,13 +259,15 @@ format: ipynb
 import pandas as pd
 df = pd.read_csv("data.csv")
 df.head()
-```
+````
 
 ## SQL Cell
+
 ```{sql}
 SELECT * FROM users WHERE active = true;
 ```
-```
+
+````
 
 ### Conversion
 
@@ -303,7 +278,7 @@ brew install quarto
 # Convert between formats
 quarto convert notebook.ipynb  # → notebook.qmd
 quarto convert notebook.qmd --to ipynb  # → notebook.ipynb
-```
+````
 
 ### Pros
 
@@ -338,7 +313,7 @@ Traditional Vim plugin with IPython/tmux splits.
 
 **Status:** Stable but less active development
 **Pros:** Simpler setup, works with Vim and Neovim
-**Cons:** No SQL support, limited image rendering
+**Cons:** No SQL support
 
 ### iron.nvim
 
@@ -350,32 +325,34 @@ Basic REPL interaction.
 
 ## Comparison Matrix
 
-| Feature | Molten + Jupytext | Quarto + Otter | Jupynium | vim-jukit | iron.nvim |
-|---------|------------------|----------------|----------|-----------|-----------|
-| Python `# %%` cells | ✅ Excellent | ⚠️ .qmd format | ✅ .ju.py files | ✅ Yes | ⚠️ Basic |
-| SQL syntax highlight | ⚠️ Manual setup | ✅ Native | ✅ Native | ❌ No | ❌ No |
-| Cell execution | ✅ Excellent | ✅ Good | ✅ Excellent | ✅ Good | ⚠️ Basic |
-| ipynb export | ✅ Native | ✅ Via CLI | ✅ Native | ✅ Via jupytext | ❌ No |
-| Image rendering | ✅ Excellent | ⚠️ External | ✅ Browser | ⚠️ Limited | ❌ No |
-| Setup complexity | High | Medium | High | Low | Very Low |
-| Maturity (2025) | ✅ Mature | ✅ Mature | ⚠️ Alpha | ✅ Stable | ✅ Stable |
-| Active development | ✅ Very active | ✅ Active | ⚠️ Limited | ⚠️ Slow | ⚠️ Minimal |
+| Feature              | Molten + Jupytext | Quarto + Otter | Jupynium        | vim-jukit       | iron.nvim  |
+| -------------------- | ----------------- | -------------- | --------------- | --------------- | ---------- |
+| Python `# %%` cells  | ✅ Excellent      | ⚠️ .qmd format | ✅ .ju.py files | ✅ Yes          | ⚠️ Basic   |
+| SQL syntax highlight | ⚠️ Manual setup   | ✅ Native      | ✅ Native       | ❌ No           | ❌ No      |
+| Cell execution       | ✅ Excellent      | ✅ Good        | ✅ Excellent    | ✅ Good         | ⚠️ Basic   |
+| ipynb export         | ✅ Native         | ✅ Via CLI     | ✅ Native       | ✅ Via jupytext | ❌ No      |
+| Image rendering      | ❌ Not needed     | ⚠️ External    | ✅ Browser      | ⚠️ Limited      | ❌ No      |
+| Setup complexity     | High              | Medium         | High            | Low             | Very Low   |
+| Maturity (2025)      | ✅ Mature         | ✅ Mature      | ⚠️ Alpha        | ✅ Stable       | ✅ Stable  |
+| Active development   | ✅ Very active    | ✅ Active      | ⚠️ Limited      | ⚠️ Slow         | ⚠️ Minimal |
 
 ## Decision Factors
 
 Choose **Molten.nvim** if:
+
 - You want native Python files with `# %%` markers
-- You need inline image rendering in terminal
 - You're comfortable with complex setup
-- You use Kitty or WezTerm terminal
+- You want full Jupyter kernel support
 
 Choose **Quarto** if:
+
 - You work with multiple languages (R, Julia, SQL)
 - You want better SQL support
 - You're creating publishable documents
 - You're okay with `.qmd` format
 
 Choose **Jupynium** if:
+
 - You need full Jupyter UI features
 - You're willing to use alpha software
 - You want interactive widgets in browser
@@ -383,6 +360,7 @@ Choose **Jupynium** if:
 ## Resources
 
 ### Documentation
+
 - [Molten.nvim](https://github.com/benlubas/molten-nvim)
 - [Jupytext.nvim](https://github.com/GCBallesteros/jupytext.nvim)
 - [NotebookNavigator.nvim](https://github.com/GCBallesteros/NotebookNavigator.nvim)
@@ -390,11 +368,13 @@ Choose **Jupynium** if:
 - [Otter.nvim](https://github.com/jmbuhr/otter.nvim)
 
 ### Guides
+
 - [Molten Notebook Setup](https://github.com/benlubas/molten-nvim/blob/main/docs/Notebook-Setup.md)
 - [Jupytext Format Docs](https://jupytext.readthedocs.io/en/latest/formats-scripts.html)
 - [IPython SQL Magic](https://github.com/catherinedevlin/ipython-sql)
 - [JupySQL](https://ploomber.io/blog/jupysql/)
 
 ### Community Examples
+
 - [KevsterAmp's LazyVim Config](https://github.com/KevsterAmp/Lazyvim-config.nvim)
 - [Quarto Neovim Kickstarter](https://github.com/jmbuhr/quarto-nvim-kickstarter)
