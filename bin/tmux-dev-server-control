@@ -164,7 +164,8 @@ Usage: tmux-dev-server-control start <command...>"
   local cwd="$PWD"
   echo "Starting '$name': $command"
   # Wrap command to keep window open on exit (success or failure)
-  tmux new-window -t "$DEV_SESSION" -n "$name" -c "$cwd" \
+  # Trailing colon forces tmux to auto-pick window index in the specified session
+  tmux new-window -t "${DEV_SESSION}:" -n "$name" -c "$cwd" \
     "bash -c '${command}; echo; echo \"=== Exited with code: \$?\"; read -p \"Press enter to close...\"'"
 
   # Clean up placeholder window if it exists
