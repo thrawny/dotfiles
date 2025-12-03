@@ -121,6 +121,15 @@ generate_name() {
 
   slug="${slug,,}"
   slug="${slug//[^a-z0-9-]/-}"
+
+  # Strip noise words (start, dev, run, make) from slug
+  local noise_words=("start" "dev" "run" "make")
+  for word in "${noise_words[@]}"; do
+    slug="${slug//-${word}-/-}"  # -word- -> -
+    slug="${slug/#${word}-/}"    # word- at start -> empty
+    slug="${slug/%-${word}/}"    # -word at end -> empty
+  done
+
   slug="${slug//--/-}"
   slug="${slug#-}"
   slug="${slug%-}"
