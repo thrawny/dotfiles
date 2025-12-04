@@ -1,6 +1,6 @@
 # Base input configuration shared across all hosts
 {
-  kb_layout = "au";
+  kb_layout = "au,se";
   follow_mouse = 1;
   sensitivity = 0; # Default 1:1 mouse movement
   accel_profile = "flat"; # No acceleration

@@ -10,6 +10,7 @@ _: {
         "modules-center" = [ ];
         "modules-right" = [
           "idle_inhibitor"
+          "hyprland/language"
           "tray"
           "network"
           "pulseaudio"
@@ -115,6 +116,13 @@ _: {
 
         tray.spacing = 8;
 
+        "hyprland/language" = {
+          format = "{}";
+          format-en = "AU";
+          format-sv = "SE";
+          on-click = "hyprctl switchxkblayout all next";
+        };
+
         "idle_inhibitor" = {
           format = "{icon}";
           "format-icons" = {
@@ -152,7 +160,8 @@ _: {
       #pulseaudio,
       #tray,
       #workspaces,
-      #idle_inhibitor {
+      #idle_inhibitor,
+      #language {
         padding: 0 8px;
       }
 

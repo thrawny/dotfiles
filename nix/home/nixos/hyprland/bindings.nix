@@ -136,6 +136,10 @@ let
     ''SUPER SHIFT, 4, exec, grimblast --notify copysave area ~/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png''
     ''SUPER SHIFT, 3, exec, grimblast --notify copysave output ~/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png''
   ];
+
+  keyboardBinds = [
+    "${mod} SUPER, SPACE, exec, hyprctl switchxkblayout all next"
+  ];
 in
 {
   wayland.windowManager.hyprland.settings = {
@@ -152,6 +156,7 @@ in
       monitorBinds
       hyprvoiceBinds
       screenshotBinds
+      keyboardBinds
     ];
 
     bindm = mouseBinds;
