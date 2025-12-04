@@ -28,7 +28,25 @@
       efi.canTouchEfiVariables = true;
       grub.enable = lib.mkForce false;
     };
+
+    # DRIVER LAYER: TP-Link Archer TX20U (rtl8852au) WiFi adapter
     extraModulePackages = with config.boot.kernelPackages; [ rtl8852au ];
+
+    # Blacklist conflicting kernel modules that may interfere with rtl8852au
+    blacklistedKernelModules = [
+      "rtw89_8852au"
+      "rtw89_8852a"
+      "rtw89_pci"
+    ];
+
+    # Force power management off for the 8852au driver
+    extraModprobeConfig = ''
+      options 8852au rtw_power_mgnt=0 rtw_enusbss=0
+    '';
+
+    # KERNEL LAYER: Prevent global USB autosuspend
+    kernelParams = [ "usbcore.autosuspend=-1" ];
+
     kernelModules = [
       "nvidia"
       "nvidia_modeset"
@@ -46,8 +64,21 @@
 
   hardware.graphics.enable = true;
 
-  # Add USB utilities for debugging
+  # USB utilities (includes usbreset for WiFi dongle reset service)
   environment.systemPackages = [ pkgs.usbutils ];
+
+  # SYSTEMD RESET LAYER: "Nuclear" fix for WiFi dongle
+  # Performs USB reset on boot to wake up dongle from firmware hang state
+  systemd.services.reset-wifi-dongle = {
+    description = "Reset TP-Link Archer TX20U WiFi dongle on boot";
+    after = [ "network-pre.target" ];
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Type = "oneshot";
+      ExecStart = "${pkgs.usbutils}/bin/usbreset 2357:013f";
+      RemainAfterExit = true;
+    };
+  };
 
   # NVIDIA configuration for dedicated GPU only with Wayland
   services.xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver
