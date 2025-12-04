@@ -16,6 +16,7 @@
         {
           timeout = 330;
           on-timeout = "hyprctl dispatch dpms off";
+          on-resume = "${dotfiles}/bin/wake-monitors";
         }
       ];
     };
