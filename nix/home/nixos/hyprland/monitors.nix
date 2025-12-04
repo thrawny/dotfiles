@@ -17,6 +17,8 @@ _: {
       "2, monitor:HDMI-A-1"
       "3, monitor:HDMI-A-1"
       "4, monitor:HDMI-A-1"
+      "9, monitor:DP-1" # Right monitor
+      "10, monitor:DP-1" # Right monitor
       "name:b, monitor:DP-1" # Browser workspace
       "name:p, monitor:HDMI-A-1" # Spotify workspace
     ];

@@ -131,6 +131,11 @@ let
     "${mod}, R, exec, /home/thrawny/.local/bin/hyprvoice toggle"
     "${mod} SHIFT, R, exec, /home/thrawny/.local/bin/hyprvoice cancel"
   ];
+
+  screenshotBinds = [
+    ''SUPER SHIFT, 4, exec, grimblast --notify copysave area ~/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png''
+    ''SUPER SHIFT, 3, exec, grimblast --notify copysave output ~/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png''
+  ];
 in
 {
   wayland.windowManager.hyprland.settings = {
@@ -146,6 +151,7 @@ in
       scrollBinds
       monitorBinds
       hyprvoiceBinds
+      screenshotBinds
     ];
 
     bindm = mouseBinds;

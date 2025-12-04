@@ -97,17 +97,27 @@ in
     ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2357", ATTR{idProduct}=="013f", ATTR{power/control}="on"
   '';
 
-  hardware.graphics.enable = true;
+  hardware.graphics = {
+    enable = true;
+    enable32Bit = true; # Required for Steam and most games
+  };
 
   # Games partition (~250GB on sdb4)
   fileSystems."/home/${username}/Games" = {
     device = "/dev/disk/by-label/games";
     fsType = "ext4";
-    options = [ "defaults" "nofail" ];
+    options = [
+      "defaults"
+      "nofail"
+    ];
   };
 
-  # USB utilities (includes usbreset for WiFi dongle reset service)
-  environment.systemPackages = [ pkgs.usbutils ];
+  # Desktop-specific packages
+  environment.systemPackages = with pkgs; [
+    usbutils # USB utilities (includes usbreset for WiFi dongle reset service)
+    mangohud # Gaming performance overlay (FPS, temps, etc.)
+    nvtopPackages.nvidia # GPU monitoring (htop for NVIDIA GPU)
+  ];
 
   # SYSTEMD RESET LAYER: "Nuclear" fix for WiFi dongle
   # Performs USB reset on boot to wake up dongle from firmware hang state
@@ -139,6 +149,42 @@ in
     nvidiaSettings = true;
     powerManagement.enable = true; # For suspend/hibernate support
     package = config.boot.kernelPackages.nvidiaPackages.stable; # Use stable driver
+  };
+
+  # Gaming configuration
+  programs = {
+    # Steam
+    steam = {
+      enable = true;
+      remotePlay.openFirewall = true;
+      dedicatedServer.openFirewall = true;
+      localNetworkGameTransfers.openFirewall = true;
+      extraCompatPackages = with pkgs; [
+        proton-ge-bin # Better game compatibility than default Proton
+      ];
+    };
+
+    # GameMode - automatic performance optimizations when gaming
+    gamemode = {
+      enable = true;
+      settings = {
+        general = {
+          renice = 10;
+          softrealtime = "auto";
+        };
+        gpu = {
+          apply_gpu_optimisations = "accept-responsibility";
+          gpu_device = 0;
+          nv_powermizer_mode = 1; # Max performance mode for NVIDIA
+        };
+      };
+    };
+
+    # Gamescope - compositor for resolution scaling and frame limiting
+    gamescope = {
+      enable = true;
+      capSysNice = true;
+    };
   };
 
   # Desktop-specific home-manager overrides
