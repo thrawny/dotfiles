@@ -17,6 +17,13 @@ vim.opt.rtp:prepend(lazypath)
 -- Dev plugins path (must be set before lazy.setup for plugin specs to use it)
 vim.g.dev_path = vim.fn.expand("~/code")
 
+-- Helper to check if a local dev plugin exists
+---@param name string Plugin directory name (e.g., "magenta.nvim")
+---@return boolean
+function _G.dev_plugin_exists(name)
+  return vim.fn.isdirectory(vim.g.dev_path .. "/" .. name) == 1
+end
+
 require("lazy").setup({
   ---@diagnostic disable-next-line: assign-type-mismatch
   dev = {
