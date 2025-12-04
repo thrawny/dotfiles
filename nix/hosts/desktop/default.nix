@@ -117,6 +117,7 @@ in
     usbutils # USB utilities (includes usbreset for WiFi dongle reset service)
     mangohud # Gaming performance overlay (FPS, temps, etc.)
     nvtopPackages.nvidia # GPU monitoring (htop for NVIDIA GPU)
+    pkgsi686Linux.gperftools # 32-bit tcmalloc for Source engine games (HL2, TF2, etc.)
   ];
 
   # SYSTEMD RESET LAYER: "Nuclear" fix for WiFi dongle
