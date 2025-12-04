@@ -13,6 +13,7 @@
 
     # NixOS-specific modules
     ./cursor.nix
+    ./gtk.nix
     ./ghostty.nix
     ./hyprland/default.nix
     ./hypridle.nix
