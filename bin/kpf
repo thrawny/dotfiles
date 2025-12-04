@@ -35,7 +35,7 @@ import tomllib
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any
 
 
 @dataclass
@@ -53,16 +53,36 @@ class PortForward:
 class PortForwardManager:
     """Manages a single kubectl port-forward with automatic reconnection."""
 
-    RETRY_WAIT: int = 30  # seconds
+    INITIAL_RETRY_WAIT: float = 1.0  # seconds
+    MAX_RETRY_WAIT: float = 60.0  # seconds
+    BACKOFF_MULTIPLIER: float = 2.0
+    STABLE_CONNECTION_THRESHOLD: float = 30.0  # reset backoff after this many seconds
+
+    # Errors that indicate transient issues (pod restart, network blip)
+    TRANSIENT_ERRORS: tuple[str, ...] = (
+        "lost connection to pod",
+        "failed to find sandbox",
+        "error forwarding port",
+        "connection refused",
+        "pod not found",
+        "unable to forward",
+        "error dialing backend",
+    )
 
     def __init__(self, pf: PortForward) -> None:
         self.pf: PortForward = pf
         self.running: bool = True
+        self.current_wait: float = self.INITIAL_RETRY_WAIT
 
     def log(self, message: str) -> None:
         """Log message with timestamp and port-forward name."""
         timestamp = datetime.now().strftime("%H:%M:%S")
         print(f"[{timestamp}] [{self.pf.name}] {message}", flush=True)
+
+    def is_transient_error(self, stderr: str) -> bool:
+        """Check if the error is transient and should trigger immediate retry."""
+        stderr_lower = stderr.lower()
+        return any(err in stderr_lower for err in self.TRANSIENT_ERRORS)
 
     def run_kubectl(self) -> tuple[int, str, str]:
         """Run kubectl port-forward and return exit code, stdout, stderr."""
@@ -89,7 +109,9 @@ class PortForwardManager:
                 f"Starting port-forward (local:{self.pf.local_port} -> {self.pf.service})"
             )
 
+            start_time = time.time()
             _, _, stderr = self.run_kubectl()
+            connection_duration = time.time() - start_time
 
             # Log any error output
             if stderr:
@@ -97,12 +119,32 @@ class PortForwardManager:
                     if line.strip():
                         self.log(f"Error: {line}")
 
-            if self.running:
-                self.log(f"Retrying in {self.RETRY_WAIT}s...")
-                # Sleep in small chunks so we can be interrupted
-                end_time = time.time() + self.RETRY_WAIT
-                while time.time() < end_time and self.running:
-                    time.sleep(min(0.5, end_time - time.time()))
+            if not self.running:
+                break
+
+            # Reset backoff if connection was stable
+            if connection_duration >= self.STABLE_CONNECTION_THRESHOLD:
+                self.current_wait = self.INITIAL_RETRY_WAIT
+
+            # Transient errors get immediate retry
+            if self.is_transient_error(stderr):
+                self.log("Transient error detected, retrying immediately...")
+                # Still increase backoff to prevent hammering if pod keeps failing
+                self.current_wait = min(
+                    self.current_wait * self.BACKOFF_MULTIPLIER, self.MAX_RETRY_WAIT
+                )
+                continue
+
+            self.log(f"Retrying in {self.current_wait:.0f}s...")
+            # Sleep in small chunks so we can be interrupted
+            end_time = time.time() + self.current_wait
+            while time.time() < end_time and self.running:
+                time.sleep(min(0.5, end_time - time.time()))
+
+            # Increase backoff for next failure
+            self.current_wait = min(
+                self.current_wait * self.BACKOFF_MULTIPLIER, self.MAX_RETRY_WAIT
+            )
 
     def stop(self) -> None:
         """Stop the port-forward."""
@@ -136,7 +178,7 @@ def load_config() -> list[PortForward]:
     return port_forwards
 
 
-def main() -> NoReturn:
+def main():
     """Main entry point."""
     port_forwards = load_config()
 
