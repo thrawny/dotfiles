@@ -99,6 +99,13 @@ in
 
   hardware.graphics.enable = true;
 
+  # Games partition (~250GB on sdb4)
+  fileSystems."/home/${username}/Games" = {
+    device = "/dev/disk/by-label/games";
+    fsType = "ext4";
+    options = [ "defaults" "nofail" ];
+  };
+
   # USB utilities (includes usbreset for WiFi dongle reset service)
   environment.systemPackages = [ pkgs.usbutils ];
 
