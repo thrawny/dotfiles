@@ -50,5 +50,6 @@
     wget
     usage
     fd
+    watchexec
   ];
 }
