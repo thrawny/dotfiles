@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Poll for display readiness after suspend, then wake LG monitors
+# Used by hypridle after_sleep_cmd for more robust wake than fixed sleep
+
+set -euo pipefail
+
+MAX_WAIT=30
+POLL_INTERVAL=0.5
+LOG_FILE="/tmp/wake-monitors.log"
+
+log() {
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+    echo "$msg"
+    echo "$msg" >> "$LOG_FILE"
+}
+
+# Wait for hyprctl to be responsive (Hyprland session restored)
+wait_for_hyprland() {
+    local elapsed=0
+    log "Waiting for Hyprland..."
+    while ! hyprctl monitors &>/dev/null; do
+        sleep "$POLL_INTERVAL"
+        elapsed=$(echo "$elapsed + $POLL_INTERVAL" | bc)
+        if (( $(echo "$elapsed >= $MAX_WAIT" | bc -l) )); then
+            log "Timeout waiting for Hyprland after ${MAX_WAIT}s"
+            return 1
+        fi
+    done
+    log "Hyprland responsive after ${elapsed}s"
+}
+
+# Wait for at least one monitor to be detected
+wait_for_monitors() {
+    local elapsed=0
+    log "Waiting for monitors..."
+    while ! hyprctl monitors | grep -q "^Monitor"; do
+        sleep "$POLL_INTERVAL"
+        elapsed=$(echo "$elapsed + $POLL_INTERVAL" | bc)
+        if (( $(echo "$elapsed >= $MAX_WAIT" | bc -l) )); then
+            log "Timeout waiting for monitors after ${MAX_WAIT}s"
+            return 1
+        fi
+    done
+    log "Monitors detected after ${elapsed}s"
+}
+
+# Toggle DPMS to wake stubborn monitors (LG issue)
+wake_monitors() {
+    log "Toggling DPMS to wake monitors..."
+    hyprctl dispatch dpms off
+    sleep 1
+    hyprctl dispatch dpms on
+
+    sleep 0.5
+    if ! hyprctl monitors | grep -q "dpmsStatus: 1"; then
+        log "Monitors still sleeping, retrying..."
+        hyprctl dispatch dpms off
+        sleep 0.5
+        hyprctl dispatch dpms on
+    fi
+    log "Done"
+}
+
+main() {
+    log "=== Wake monitors started ==="
+    wait_for_hyprland || exit 1
+    wait_for_monitors || exit 1
+    wake_monitors
+    log "=== Wake monitors finished ==="
+}
+
+main "$@"
