@@ -150,9 +150,9 @@ in
             ids = [ "0001:0001:70533846" ]; # AT Translated Set 2 keyboard exact ID
             settings = {
               main = {
-                # Swap Caps Lock and Escape
+                # Both Caps Lock and Escape produce Escape
                 capslock = "esc";
-                esc = "capslock";
+                esc = "esc";
 
                 # Swap Meta (Super/Windows) and Alt keys for Mac-like layout
                 leftmeta = "leftalt";
@@ -170,9 +170,9 @@ in
             ids = [ "*" ]; # Match all keyboards (keyd prioritizes specific matches first)
             settings = {
               main = {
-                # Only swap Caps Lock and Escape
+                # Both Caps Lock and Escape produce Escape
                 capslock = "esc";
-                esc = "capslock";
+                esc = "esc";
               };
               "shift" = {
                 "102nd" = "S-grave"; # Shift+< produces Shift+grave which is ~
