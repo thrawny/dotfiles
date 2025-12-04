@@ -1,6 +1,4 @@
-{ pkgs, ... }:
-{
-  home.packages = [ pkgs.wlinhibit ];
+_: {
   programs.waybar = {
     enable = true;
     settings = [
@@ -11,7 +9,7 @@
         "modules-left" = [ "hyprland/workspaces" ];
         "modules-center" = [ ];
         "modules-right" = [
-          "custom/caffeine"
+          "idle_inhibitor"
           "tray"
           "network"
           "pulseaudio"
@@ -117,19 +115,14 @@
 
         tray.spacing = 8;
 
-        "custom/caffeine" = {
-          format = "{}";
-          return-type = "json";
-          interval = "once";
-          signal = 8;
-          exec = ''
-            if pgrep -x wlinhibit > /dev/null; then
-              echo '{"text": "󰅶", "tooltip": "Caffeine: ON", "class": "active"}'
-            else
-              echo '{"text": "󰛊", "tooltip": "Caffeine: OFF", "class": "inactive"}'
-            fi
-          '';
-          on-click = "(pkill wlinhibit || wlinhibit &); pkill -RTMIN+8 waybar";
+        "idle_inhibitor" = {
+          format = "{icon}";
+          "format-icons" = {
+            activated = "󰅶";
+            deactivated = "󰛊";
+          };
+          tooltip-format-activated = "Caffeine: ON";
+          tooltip-format-deactivated = "Caffeine: OFF";
         };
       }
     ];
@@ -159,15 +152,15 @@
       #pulseaudio,
       #tray,
       #workspaces,
-      #custom-caffeine {
+      #idle_inhibitor {
         padding: 0 8px;
       }
 
-      #custom-caffeine.inactive {
+      #idle_inhibitor.deactivated {
         color: @waybar-muted;
       }
 
-      #custom-caffeine.active {
+      #idle_inhibitor.activated {
         color: @waybar-accent;
       }
 
