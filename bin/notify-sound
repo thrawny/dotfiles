@@ -36,7 +36,7 @@ def macos_notify() -> None:
         pass
 
 
-def main(argv: list[str]) -> int:
+def main(_argv: list[str]) -> int:
     system = platform.system()
     if system == "Darwin":
         macos_notify()

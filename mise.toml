@@ -68,7 +68,6 @@ du -sh /nix/store
 [tasks."fmt:python"]
 description = "Format Python sources with Ruff"
 run = "uv run ruff check --fix && uv run ruff format ."
-sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
 outputs = { auto = true }
 
 # Lua formatting
@@ -89,7 +88,6 @@ outputs = { auto = true }
 [tasks."lint:python"]
 description = "Lint Python sources with Ruff"
 run = "uv run ruff check ."
-sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
 
 [tasks."lint:lua"]
 description = "Lint Neovim Lua config with Selene"
@@ -105,7 +103,6 @@ sources = ["**/*.nix"]
 [tasks."typecheck:python"]
 description = "Typecheck Python code with basedpyright"
 run = "uv run basedpyright"
-sources = ["claude_tools/**/*.py", "config/**/*.py", "ansible/**/*.py"]
 
 # --- Tests ---
 [tasks."test:nvim"]
