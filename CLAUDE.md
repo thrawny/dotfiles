@@ -38,6 +38,18 @@ Refer to `ansible/all_config.yml` for the authoritative symlink list.
 - Modify shell aliases/functions: edit `config/zsh/zshrc`.
 - Update Neovim/Vim configs: edit `config/nvim` or `config/vim`.
 
+### Settings Files with Example/Live Pairs
+
+Some tools have both a tracked example file and a gitignored live file. When updating settings for these tools, always offer to update both:
+
+| Tool   | Example (tracked)                           | Live (gitignored)                    |
+|--------|---------------------------------------------|--------------------------------------|
+| Claude | `config/claude/settings.example.json`       | `config/claude/settings.json`        |
+| Codex  | `config/codex/config.example.toml`          | `config/codex/config.toml`           |
+| Cursor | `config/cursor/settings.example.json`       | `config/cursor/settings.json`        |
+
+When asked to modify settings, update the example file first, then ask if the user also wants the live file updated.
+
 ### LazyVim Setup
 
 - Neovim has been migrated to **LazyVim**, a modern Neovim distribution.

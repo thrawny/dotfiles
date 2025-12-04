@@ -30,7 +30,8 @@
       "Read(~/.claude/plans)",
       "Bash(notify:*)",
       "Bash(linear issues:*)",
-      "Bash(linear start:*)"
+      "Bash(linear start:*)",
+      "SlashCommand:/handover"
     ],
     "deny": [],
     "ask": [
