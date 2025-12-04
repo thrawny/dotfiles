@@ -3,7 +3,8 @@
     "allow": [
       "mcp__nixos",
       "Bash(mise lint:*)",
-      "Bash(mise fmt:*)"
+      "Bash(mise fmt:*)",
+      "Bash(mise check:*)"
     ],
     "deny": []
   }

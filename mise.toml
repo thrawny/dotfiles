@@ -40,6 +40,11 @@ echo "Write to USB with: sudo dd if=./result/iso/*.iso of=/dev/sdX bs=4M status=
 '''
 sources = ["nix/**/*.nix", "nix/flake.*"]
 
+[tasks.check]
+description = "Evaluate flake and check for errors (no build)"
+run = "nix flake check --no-build ./nix"
+sources = ["nix/**/*.nix", "nix/flake.*"]
+
 [tasks."nix:clean"]
 description = "Clean up old Nix generations and optimize store"
 run = '''

@@ -4,6 +4,41 @@
   pkgs,
   ...
 }:
+let
+  inherit (config.dotfiles) username;
+  userUid = toString config.users.users.${username}.uid;
+
+  # Script to wake LG monitor after suspend (runs as user via su)
+  wakeMonitorScript = pkgs.writeShellScript "wake-monitor" ''
+    export PATH="${
+      lib.makeBinPath [
+        pkgs.hyprland
+        pkgs.coreutils
+        pkgs.gnugrep
+      ]
+    }"
+    export XDG_RUNTIME_DIR="/run/user/${userUid}"
+
+    # Dynamically get Hyprland instance signature (exclude .lock files)
+    HYPRLAND_INSTANCE_SIGNATURE=$(ls /tmp/hypr/ 2>/dev/null | grep -v '\.lock$' | head -n1)
+    if [ -z "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
+      echo "No Hyprland instance found, skipping monitor wake"
+      exit 0
+    fi
+    export HYPRLAND_INSTANCE_SIGNATURE
+
+    echo "Waking monitors..."
+    hyprctl dispatch dpms off
+    sleep 1
+    hyprctl dispatch dpms on
+    sleep 0.5
+    if ! hyprctl monitors | grep -q "dpmsStatus: 1"; then
+      hyprctl dispatch dpms off
+      sleep 0.5
+      hyprctl dispatch dpms on
+    fi
+  '';
+in
 {
   imports = [
     ../../modules/nixos/default.nix
@@ -79,6 +114,15 @@
       RemainAfterExit = true;
     };
   };
+
+  # LG monitor wake fix after suspend
+  # The monitor fails to wake up properly, so we toggle DPMS after resume
+  powerManagement.resumeCommands = ''
+    # Wait for GPU to wake up electrically
+    sleep 5
+    # Run the wake script as the desktop user (hyprctl needs user session)
+    ${pkgs.su}/bin/su -c "${wakeMonitorScript}" -s /bin/sh ${username}
+  '';
 
   # NVIDIA configuration for dedicated GPU only with Wayland
   services.xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver

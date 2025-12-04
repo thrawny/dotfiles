@@ -8,9 +8,17 @@ All commands are managed via [mise](https://mise.jdx.dev/), a modern task runner
 
 ### NixOS: Rebuild System
 ```bash
-mise switch       # Rebuild and switch immediately (auto-detects hostname)
-mise dry          # Dry-run rebuild without switching
+mise check        # Fast evaluation check (syntax, types, schema) - no build
+mise dry          # Full build without switching - catches compile/fetch errors
+mise switch       # Build and activate immediately (auto-detects hostname)
+mise diff         # Build and show what packages/versions changed
 ```
+
+**When to use which:**
+- `mise check` - Quick validation after editing Nix files. Catches syntax errors, missing attributes, type mismatches. Does NOT build packages.
+- `mise dry` - Full build test before committing. Catches package compile failures, missing dependencies, invalid paths.
+- `mise switch` - Apply changes to the running system.
+- `mise diff` - Review what will change before switching (uses nvd).
 
 Or directly:
 ```bash
