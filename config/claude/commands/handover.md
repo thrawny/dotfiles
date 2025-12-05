@@ -7,7 +7,7 @@ description: Prepare for a handover to another developer by documenting current 
 Another developer will take over.
 
 Steps:
-1. Run `archive-progress` to save any existing progress.md
+1. CRITICAL: Run `archive-progress` in Bash. This script exists in PATH. Do NOT implement archiving manually - just execute the script.
 2. Write everything we did so far to @progress.md, including:
 
 - Which tool created this handover (e.g., "claude")
