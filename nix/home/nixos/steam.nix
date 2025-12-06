@@ -3,7 +3,7 @@
   xdg.desktopEntries.steam = {
     name = "Steam";
     comment = "Application for managing and playing games on Steam";
-    exec = "env GTK_THEME=Adwaita-dark steam %U";
+    exec = "steam %U";
     icon = "steam";
     terminal = false;
     type = "Application";
