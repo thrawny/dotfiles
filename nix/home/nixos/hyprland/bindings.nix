@@ -80,6 +80,7 @@ let
     "${mod} SHIFT, S, movetoworkspace, special:magic"
     "${mod}, M, focuscurrentorlast" # Focus back-and-forth like aerospace
     "${mod}, B, workspace, name:b"
+    "${mod}, Y, workspace, name:g"
     "${mod}, N, workspace, 1"
     "${mod}, C, exec, slack"
   ];

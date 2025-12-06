@@ -26,10 +26,13 @@ _: {
       "workspace name:p, class:^(Spotify)$"
       "workspace name:b, class:^(zen-beta)$"
 
-      # Games on workspace 2 (primary monitor)
-      "workspace 2, class:^(steam_app_.*)$" # Proton/Steam games
-      "workspace 2, class:^(hl2_linux)$" # Half-Life 2
-      "workspace 2, class:^(gamescope)$" # Gamescope compositor
+      # Steam client on workspace 0
+      "workspace 0, class:^(steam)$"
+
+      # Games on dedicated workspace (left monitor)
+      "workspace name:g, class:^(steam_app_.*)$" # Proton/Steam games
+      "workspace name:g, class:^(hl2_linux)$" # Half-Life 2
+      "workspace name:g, class:^(gamescope)$" # Gamescope compositor
       "fullscreen, class:^(steam_app_.*)$" # Games start fullscreen
     ];
 

@@ -21,6 +21,7 @@ _: {
       "10, monitor:DP-1" # Right monitor
       "name:b, monitor:DP-1" # Browser workspace
       "name:p, monitor:HDMI-A-1" # Spotify workspace
+      "name:g, monitor:HDMI-A-1" # Games workspace
     ];
   };
 }
