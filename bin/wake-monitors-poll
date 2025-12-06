@@ -6,10 +6,10 @@ set -euo pipefail
 
 MAX_WAIT=30
 POLL_INTERVAL=0.5
-LOG_FILE="/tmp/wake-monitors.log"
+LOG_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/wake-monitors.log"
 
 log() {
-    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] [wake-monitors-poll] $*"
     echo "$msg"
     echo "$msg" >> "$LOG_FILE"
 }
@@ -62,11 +62,11 @@ wake_monitors() {
 }
 
 main() {
-    log "=== Wake monitors started ==="
+    log "=== wake-monitors-poll started (after_sleep_cmd) ==="
     wait_for_hyprland || exit 1
     wait_for_monitors || exit 1
     wake_monitors
-    log "=== Wake monitors finished ==="
+    log "=== wake-monitors-poll finished ==="
 }
 
 main "$@"
