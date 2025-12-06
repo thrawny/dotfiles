@@ -33,6 +33,7 @@
 
     packages = with pkgs; [
       grimblast # Screenshot tool for Hyprland (grim + slurp wrapper)
+      telegram-desktop
     ];
   };
 }

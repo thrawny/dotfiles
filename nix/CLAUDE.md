@@ -166,6 +166,7 @@ This ensures code follows Nix best practices:
 - Username: `jonas` (configured in flake.nix extraSpecialArgs)
 - First run: Installs Zinit and TPM automatically via activation scripts
 - macOS defaults: Run `killall Finder Dock` after first switch to see changes
+- **Don't install GUI apps via Nix** - They won't appear in Spotlight/Launchpad. Use Homebrew Cask or direct downloads instead.
 
 ### Both Platforms
 - All config files use out-of-store symlinks for easy editing

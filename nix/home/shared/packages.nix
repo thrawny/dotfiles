@@ -51,6 +51,5 @@
     usage
     fd
     watchexec
-    telegram-desktop
   ];
 }
