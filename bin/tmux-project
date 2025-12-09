@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+error() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
+show_usage() {
+  echo "Usage: tmux-project [directory]"
+  echo ""
+  echo "Start a tmux session for a project with 'claude' and 'nvim' windows."
+  echo "Session name is derived from the directory basename."
+  echo ""
+  echo "Arguments:"
+  echo "  directory   Project directory (default: current directory)"
+  echo ""
+  echo "Examples:"
+  echo "  tmux-project              # Use current directory"
+  echo "  tmux-project ~/code/myapp # Use specified directory"
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    show_usage
+    exit 0
+  fi
+
+  local project_dir="${1:-$PWD}"
+  project_dir=$(cd "$project_dir" && pwd)
+
+  if [[ ! -d "$project_dir" ]]; then
+    error "Directory does not exist: $project_dir"
+  fi
+
+  local session_name
+  session_name=$(basename "$project_dir")
+
+  if tmux has-session -t "$session_name" 2>/dev/null; then
+    if [[ -n "${TMUX:-}" ]]; then
+      exec tmux switch-client -t "$session_name"
+    else
+      exec tmux attach -t "$session_name"
+    fi
+  fi
+
+  tmux new-session -d -s "$session_name" -n "claude" -c "$project_dir"
+  tmux new-window -t "$session_name" -n "nvim" -c "$project_dir"
+  tmux select-window -t "$session_name:claude"
+
+  if [[ -n "${TMUX:-}" ]]; then
+    exec tmux switch-client -t "$session_name"
+  else
+    exec tmux attach -t "$session_name"
+  fi
+}
+
+main "$@"
