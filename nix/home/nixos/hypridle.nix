@@ -6,7 +6,7 @@
       general = {
         lock_cmd = "pidof hyprlock || hyprlock";
         before_sleep_cmd = "loginctl lock-session";
-        after_sleep_cmd = "${dotfiles}/bin/wake-monitors-poll";
+        after_sleep_cmd = "${dotfiles}/bin/wake-monitors-poll after-sleep";
       };
       listener = [
         {
@@ -16,7 +16,7 @@
         {
           timeout = 330;
           on-timeout = "hyprctl dispatch dpms off";
-          on-resume = "${dotfiles}/bin/wake-monitors-poll";
+          on-resume = "${dotfiles}/bin/wake-monitors-poll on-resume";
         }
       ];
     };

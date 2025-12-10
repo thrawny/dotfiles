@@ -18,13 +18,4 @@ sleep 1
 log "Toggling DPMS on..."
 hyprctl dispatch dpms on
 
-# If monitors still not awake, try a second cycle
-sleep 0.5
-if ! hyprctl monitors | grep -q "dpmsStatus: 1"; then
-    log "Monitors still sleeping, trying again..."
-    hyprctl dispatch dpms off
-    sleep 0.5
-    hyprctl dispatch dpms on
-fi
-
 log "=== wake-monitors finished ==="

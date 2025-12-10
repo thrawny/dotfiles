@@ -1,72 +1,36 @@
 #!/usr/bin/env bash
-# Poll for display readiness after suspend, then wake LG monitors
-# Used by hypridle after_sleep_cmd for more robust wake than fixed sleep
+# Wake LG monitor after suspend/DPMS off
+# LG 27GL850 wakes with backlight on but black screen - needs DPMS cycle
+#
+# Usage: wake-monitors-poll <source>
+#   source: identifier for logging (e.g., "after-sleep", "on-resume")
 
 set -euo pipefail
 
-MAX_WAIT=30
-POLL_INTERVAL=0.5
+SOURCE="${1:-unknown}"
+LG_MONITOR="HDMI-A-1"
 LOG_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/wake-monitors.log"
 
 log() {
-    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] [wake-monitors-poll] $*"
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] [wake-lg:${SOURCE}] $*"
     echo "$msg"
-    echo "$msg" >> "$LOG_FILE"
-}
-
-# Wait for hyprctl to be responsive (Hyprland session restored)
-wait_for_hyprland() {
-    local elapsed=0
-    log "Waiting for Hyprland..."
-    while ! hyprctl monitors &>/dev/null; do
-        sleep "$POLL_INTERVAL"
-        elapsed=$(echo "$elapsed + $POLL_INTERVAL" | bc)
-        if (( $(echo "$elapsed >= $MAX_WAIT" | bc -l) )); then
-            log "Timeout waiting for Hyprland after ${MAX_WAIT}s"
-            return 1
-        fi
-    done
-    log "Hyprland responsive after ${elapsed}s"
-}
-
-# Wait for at least one monitor to be detected
-wait_for_monitors() {
-    local elapsed=0
-    log "Waiting for monitors..."
-    while ! hyprctl monitors | grep -q "^Monitor"; do
-        sleep "$POLL_INTERVAL"
-        elapsed=$(echo "$elapsed + $POLL_INTERVAL" | bc)
-        if (( $(echo "$elapsed >= $MAX_WAIT" | bc -l) )); then
-            log "Timeout waiting for monitors after ${MAX_WAIT}s"
-            return 1
-        fi
-    done
-    log "Monitors detected after ${elapsed}s"
-}
-
-# Toggle DPMS to wake stubborn monitors (LG issue)
-wake_monitors() {
-    log "Toggling DPMS to wake monitors..."
-    hyprctl dispatch dpms off
-    sleep 1
-    hyprctl dispatch dpms on
-
-    sleep 0.5
-    if ! hyprctl monitors | grep -q "dpmsStatus: 1"; then
-        log "Monitors still sleeping, retrying..."
-        hyprctl dispatch dpms off
-        sleep 0.5
-        hyprctl dispatch dpms on
-    fi
-    log "Done"
+    echo "$msg" >>"$LOG_FILE"
 }
 
 main() {
-    log "=== wake-monitors-poll started (after_sleep_cmd) ==="
-    wait_for_hyprland || exit 1
-    wait_for_monitors || exit 1
-    wake_monitors
-    log "=== wake-monitors-poll finished ==="
+    log "=== started ==="
+
+    hyprctl dispatch dpms on
+
+    # Wait for natural wake sequence (mouse/keyboard triggers monitor wake)
+    # LG wakes with backlight but black screen - cycle DPMS to fix
+    log "Waiting 5s for natural wake..."
+    sleep 5
+
+    log "Turning LG on again ($LG_MONITOR)..."
+    hyprctl dispatch dpms on
+
+    log "=== finished ==="
 }
 
 main "$@"
