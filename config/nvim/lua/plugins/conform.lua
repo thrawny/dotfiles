@@ -19,5 +19,10 @@ return {
 
     -- Disable formatting for YAML files (Prettier doesn't support custom sequence indentation)
     opts.formatters_by_ft.yaml = {}
+
+    -- Use shfmt with 4-space indentation for bash/shell files
+    opts.formatters.shfmt = {
+      append_args = { "-i", "4" },
+    }
   end,
 }
