@@ -173,6 +173,12 @@ in
                 # Both Caps Lock and Escape produce Escape
                 capslock = "esc";
                 esc = "esc";
+
+                # Keychron Max5 special buttons (circle, triangle, square, X) -> F9-F12
+                f13 = "f9"; # Circle
+                f14 = "f10"; # Triangle
+                f15 = "f11"; # Square
+                f16 = "f12"; # X
               };
               "shift" = {
                 "102nd" = "S-grave"; # Shift+< produces Shift+grave which is ~
