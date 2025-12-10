@@ -72,6 +72,18 @@ ensure_session() {
   fi
 }
 
+find_envrc_dir() {
+  local check_dir="$1"
+  while [[ "$check_dir" != "/" ]]; do
+    if [[ -f "$check_dir/.envrc" ]]; then
+      echo "$check_dir"
+      return 0
+    fi
+    check_dir=$(dirname "$check_dir")
+  done
+  return 1
+}
+
 generate_name() {
   local command="$*"
   local folder
@@ -162,6 +174,16 @@ Usage: tmux-dev-server-control start <command...>"
   fi
 
   local cwd="$PWD"
+
+  # Wrap with direnv if .envrc exists in directory tree
+  if command -v direnv >/dev/null 2>&1; then
+    local envrc_dir
+    if envrc_dir=$(find_envrc_dir "$cwd"); then
+      echo "Found .envrc in $envrc_dir - using direnv"
+      command="direnv exec \"$cwd\" $command"
+    fi
+  fi
+
   echo "Starting '$name': $command"
   # Wrap command to keep window open on exit (success or failure)
   # Trailing colon forces tmux to auto-pick window index in the specified session
