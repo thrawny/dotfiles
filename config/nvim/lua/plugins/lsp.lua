@@ -28,6 +28,21 @@ return {
     opts = {
       inlay_hints = { enabled = false },
       servers = {
+        -- Disable <leader>co (organize imports) in diffview buffers so it doesn't
+        -- conflict with diffview's conflict_choose("ours") binding
+        ["*"] = {
+          keys = {
+            {
+              "<leader>co",
+              LazyVim.lsp.action["source.organizeImports"],
+              desc = "Organize Imports",
+              has = "codeAction",
+              enabled = function()
+                return not vim.api.nvim_buf_get_name(0):match("^diffview://")
+              end,
+            },
+          },
+        },
         -- Use system-installed basedpyright (via uv in dotfiles venv)
         basedpyright = {
           mason = false,
