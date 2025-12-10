@@ -1,4 +1,9 @@
-{ lib, username, dotfiles, ... }:
+{
+  lib,
+  username,
+  dotfiles,
+  ...
+}:
 let
   mod = "$mod";
   home = "/home/${username}";
@@ -144,7 +149,7 @@ let
   ];
 
   extras = [
-    "${mod} SHIFT, m, exec, ${dotfiles}/bin/wake-monitors"
+    "${mod} SUPER, m, exec, ${dotfiles}/bin/wake-monitors"
   ];
 in
 {
