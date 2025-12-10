@@ -26,8 +26,8 @@ _: {
       "workspace name:p, class:^(Spotify)$"
       "workspace name:b, class:^(zen-beta)$"
 
-      # Steam client on workspace 0
-      "workspace 0, class:^(steam)$"
+      # Steam client on workspace 10 (right monitor)
+      "workspace 10, class:^(steam)$"
 
       # Games on dedicated workspace (left monitor)
       "workspace name:g, class:^(steam_app_.*)$" # Proton/Steam games
