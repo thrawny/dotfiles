@@ -131,6 +131,7 @@ in
       package = pkgs.steam.override {
         extraEnv = {
           GTK_THEME = "Adwaita:dark";
+          GTK2_RC_FILES = "${pkgs.gnome-themes-extra}/share/themes/Adwaita-dark/gtk-2.0/gtkrc";
         };
       };
     };
