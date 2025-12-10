@@ -1,6 +1,7 @@
-{ lib, ... }:
+{ lib, username, dotfiles, ... }:
 let
   mod = "$mod";
+  home = "/home/${username}";
 
   workspaceDigits = lib.range 1 9;
 
@@ -129,8 +130,8 @@ let
   ];
 
   hyprvoiceBinds = [
-    "${mod}, R, exec, /home/thrawny/.local/bin/hyprvoice toggle"
-    "${mod} SHIFT, R, exec, /home/thrawny/.local/bin/hyprvoice cancel"
+    "${mod}, R, exec, ${home}/.local/bin/hyprvoice toggle"
+    "${mod} SHIFT, R, exec, ${home}/.local/bin/hyprvoice cancel"
   ];
 
   screenshotBinds = [
@@ -140,6 +141,10 @@ let
 
   keyboardBinds = [
     "${mod} SUPER, SPACE, exec, hyprctl switchxkblayout all next"
+  ];
+
+  extras = [
+    "${mod} SHIFT, m, exec, ${dotfiles}/bin/wake-monitors"
   ];
 in
 {
@@ -158,6 +163,7 @@ in
       hyprvoiceBinds
       screenshotBinds
       keyboardBinds
+      extras
     ];
 
     bindm = mouseBinds;
