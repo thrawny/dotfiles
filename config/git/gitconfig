@@ -37,3 +37,14 @@
 [credential "https://gist.github.com"]
 	helper =
 	helper = !/opt/homebrew/bin/gh auth git-credential
+[gtr "copy"]
+	include = .env.local
+	include = .envrc
+	include = .claude/settings.local.json
+	includeDirs = .venv
+	includeDirs = node_modules
+[gtr "editor"]
+  default = nvim
+[gtr "ai"]
+	default = claude
+

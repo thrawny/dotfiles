@@ -100,6 +100,13 @@ fi
 
 zinit cdreplay -q
 
+# Source custom completions (after compinit)
+if [[ -d ~/.zsh/completions ]]; then
+  for f in ~/.zsh/completions/*; do
+    [[ -f "$f" ]] && source "$f"
+  done
+fi
+
 # ===== Deferred Plugins (Turbo Mode) =====
 # Load these plugins 0.5 seconds after prompt
 zinit wait lucid for \
@@ -234,6 +241,7 @@ alias striplines='tr -d "\n"'
 alias kd='kubectl delete'
 alias gcm='git commit -m'
 alias gp='git push --force-with-lease --force-if-includes'
+alias gw='git-gtr'
 alias tp='terraform plan'
 alias ta='terraform apply'
 alias taf='terraform apply -auto-approve'
@@ -254,6 +262,10 @@ function gtrm() {
 
 function gpo() {
   git push -u origin $(git rev-parse --abbrev-ref HEAD)
+}
+
+function gwg() {
+  cd "$(git gtr go "$1")"
 }
 
 function kcaev() {
