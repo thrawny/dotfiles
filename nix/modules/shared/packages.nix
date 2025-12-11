@@ -13,7 +13,6 @@ let
     playerctl
     gnome-themes-extra
     pavucontrol
-    walker
     waybar
     wl-clipboard
     wtype

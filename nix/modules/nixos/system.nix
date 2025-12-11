@@ -3,6 +3,7 @@
   pkgs,
   lib,
   zen-browser,
+  walker,
   ...
 }:
 let
@@ -210,6 +211,7 @@ in
           dotfiles
           username
           zen-browser
+          walker
           gitIdentity
           ;
       };

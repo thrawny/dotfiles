@@ -8,6 +8,9 @@
     nixos-hardware.url = "github:NixOS/nixos-hardware";
     zen-browser.url = "github:0xc000022070/zen-browser-flake";
     zen-browser.inputs.nixpkgs.follows = "nixpkgs";
+    elephant.url = "github:abenz1267/elephant";
+    walker.url = "github:abenz1267/walker";
+    walker.inputs.elephant.follows = "elephant";
   };
 
   outputs =
@@ -17,6 +20,7 @@
       home-manager,
       nixos-hardware,
       zen-browser,
+      walker,
       ...
     }:
     let
@@ -29,7 +33,7 @@
         lib.nixosSystem {
           inherit system;
           specialArgs = {
-            inherit zen-browser;
+            inherit zen-browser walker;
           };
           modules = [
             home-manager.nixosModules.home-manager
