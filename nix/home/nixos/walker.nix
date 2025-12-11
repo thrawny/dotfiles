@@ -5,7 +5,10 @@
   programs.walker = {
     enable = true;
     runAsService = true;
-    config.theme = "molokai";
+    config = {
+      theme = "molokai";
+      keybinds.quick_activate = [ ];
+    };
     themes.molokai.style = ''
       @define-color window_bg_color #1c1c1c;
       @define-color accent_bg_color #f92672;
