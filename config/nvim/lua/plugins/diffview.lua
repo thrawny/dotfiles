@@ -29,6 +29,32 @@ return {
         file_panel = {
           { "n", "<C-d>", actions.scroll_view(0.5), { desc = "Scroll view half-page down" } },
           { "n", "<C-u>", actions.scroll_view(-0.5), { desc = "Scroll view half-page up" } },
+          {
+            "n",
+            "]h",
+            function()
+              local cur = vim.api.nvim_get_current_win()
+              for _, dir in ipairs({ "l", "h" }) do
+                pcall(vim.cmd.wincmd, dir)
+                pcall(vim.cmd.normal, { "]c", bang = true })
+              end
+              vim.api.nvim_set_current_win(cur)
+            end,
+            { desc = "Next Hunk (in diff views)" },
+          },
+          {
+            "n",
+            "[h",
+            function()
+              local cur = vim.api.nvim_get_current_win()
+              for _, dir in ipairs({ "l", "h" }) do
+                pcall(vim.cmd.wincmd, dir)
+                pcall(vim.cmd.normal, { "[c", bang = true })
+              end
+              vim.api.nvim_set_current_win(cur)
+            end,
+            { desc = "Prev Hunk (in diff views)" },
+          },
         },
         file_history_panel = {
           { "n", "<C-d>", actions.scroll_view(0.5), { desc = "Scroll view half-page down" } },
