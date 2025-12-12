@@ -2,6 +2,19 @@ return {
   {
     "neovim/nvim-lspconfig",
     init = function()
+      -- Prevent LSP from attaching to non-file URI schemes (diffview://, fugitive://, etc.)
+      -- This avoids gopls "DocumentURI scheme is not 'file'" errors
+      vim.api.nvim_create_autocmd("LspAttach", {
+        callback = function(args)
+          local bufname = vim.api.nvim_buf_get_name(args.buf)
+          if bufname:match("^%a+://") then
+            vim.schedule(function()
+              vim.lsp.buf_detach_client(args.buf, args.data.client_id)
+            end)
+          end
+        end,
+      })
+
       -- Disable semantic token highlighting for all LSP servers
       -- Instead of removing the capability (which breaks some LSP features),
       -- we clear all semantic highlight groups so they have no visual effect
