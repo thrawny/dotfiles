@@ -6,7 +6,7 @@ _: {
 
       # Float common control panels.
       "float, class:^(org.pulseaudio.pavucontrol|blueberry.py|.blueman-manager-wrapped)$"
-      "float, class:^(1password)$"
+      "float, class:^(1password|1Password|1Password)$"
       "float, class:^(nm-connection-editor)$"
 
       # Adjust opacity for a touch of depth without hampering focus.
