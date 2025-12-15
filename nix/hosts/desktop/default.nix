@@ -91,12 +91,6 @@ in
       extraCompatPackages = with pkgs; [
         proton-ge-bin # Better game compatibility than default Proton
       ];
-      package = pkgs.steam.override {
-        extraEnv = {
-          GTK_THEME = "Adwaita:dark";
-          GTK2_RC_FILES = "${pkgs.gnome-themes-extra}/share/themes/Adwaita-dark/gtk-2.0/gtkrc";
-        };
-      };
     };
 
     # GameMode - automatic performance optimizations when gaming
