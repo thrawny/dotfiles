@@ -6,6 +6,7 @@
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
     nixos-hardware.url = "github:NixOS/nixos-hardware";
+    nur.url = "github:nix-community/NUR";
     zen-browser.url = "github:0xc000022070/zen-browser-flake";
     zen-browser.inputs.nixpkgs.follows = "nixpkgs";
     elephant.url = "github:abenz1267/elephant";
@@ -19,6 +20,7 @@
       nixpkgs,
       home-manager,
       nixos-hardware,
+      nur,
       zen-browser,
       walker,
       ...
@@ -30,10 +32,16 @@
           system,
           modules,
         }:
+        let
+          nurPkgs = import nur {
+            nurpkgs = nixpkgs.legacyPackages.${system};
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
+        in
         lib.nixosSystem {
           inherit system;
           specialArgs = {
-            inherit zen-browser walker;
+            inherit zen-browser walker nurPkgs;
           };
           modules = [
             home-manager.nixosModules.home-manager
