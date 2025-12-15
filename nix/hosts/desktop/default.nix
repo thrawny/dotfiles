@@ -23,9 +23,9 @@ in
   networking.hostName = "thrawny-desktop";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
-  # Auto-login on desktop (skip tuigreet)
-  services.greetd.settings.default_session = {
-    command = lib.mkForce "${pkgs.hyprland}/bin/Hyprland";
+  # Auto-login on desktop (first boot only, then falls back to tuigreet)
+  services.greetd.settings.initial_session = {
+    command = "${pkgs.hyprland}/bin/Hyprland";
     user = "thrawny";
   };
 
