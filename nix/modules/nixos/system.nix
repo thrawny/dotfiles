@@ -108,7 +108,7 @@ in
     hardware.bluetooth.enable = true;
     networking.networkmanager.enable = true;
 
-    # Allow passwordless nixos-rebuild and nix-collect-garbage for wheel group
+    # Allow passwordless nix commands for wheel group
     security.sudo.extraRules = [
       {
         groups = [ "wheel" ];
@@ -119,6 +119,10 @@ in
           }
           {
             command = "/run/current-system/sw/bin/nix-collect-garbage";
+            options = [ "NOPASSWD" ];
+          }
+          {
+            command = "/run/current-system/sw/bin/nix-env";
             options = [ "NOPASSWD" ];
           }
         ];

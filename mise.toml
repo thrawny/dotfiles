@@ -46,18 +46,22 @@ run = "nix flake check --no-build ./nix"
 sources = ["nix/**/*.nix", "nix/flake.*"]
 
 [tasks."nix:clean"]
-description = "Clean up old Nix generations and optimize store"
+description = "Clean up old Nix generations (keeps last 6) and optimize store"
 run = '''
 echo "==> Checking /nix/store size before cleanup..."
 du -sh /nix/store
 
 echo ""
-echo "==> Removing old user profile generations..."
-nix-collect-garbage -d
+echo "==> Removing old user profile generations (keeping last 6)..."
+nix-env --delete-generations +6
 
 echo ""
-echo "==> Removing old system generations (NixOS only)..."
-sudo nix-collect-garbage -d || true
+echo "==> Removing old system generations (keeping last 6)..."
+sudo nix-env -p /nix/var/nix/profiles/system --delete-generations +6 || true
+
+echo ""
+echo "==> Running garbage collection..."
+nix-collect-garbage
 
 echo ""
 echo "==> Optimizing Nix store (deduplicating files)..."
