@@ -38,23 +38,17 @@ FORMATTERS: dict[str, list[Checker]] = {
         {"name": "Ruff Formatter", "command": ["ruff", "format", "{file}"]},
         {"name": "Type Checker", "command": ["basedpyright", "{file}"]},
     ],
-    # Go
+    # Go - format first so linter doesn't complain about formatting
+    # Note: golines includes gofmt. Avoid goimports (removes unused imports)
     ".go": [
+        {
+            "name": "Go Formatter",
+            "command": ["golangci-lint", "fmt", "--enable=golines", "{file_path}"],
+        },
         {
             "name": "Go Linter",
             "command": ["golangci-lint", "run", "{file_path}"],
         },
-        # {
-        #     "name": "Go Formatter",
-        #     "command": [
-        #         "golangci-lint",
-        #         "fmt",
-        #         "--enable=gofmt",
-        #         "--enable=gofumpt",
-        #         "--enable=gci",
-        #         "{file}",
-        #     ],
-        # },
     ],
     # Add more languages here as needed:
     # ".rs": [["rustfmt", "{file}"]],
