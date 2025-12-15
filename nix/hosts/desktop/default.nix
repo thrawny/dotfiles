@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  nurPkgs,
   ...
 }:
 let
@@ -32,7 +33,7 @@ in
     loader = {
       systemd-boot = {
         enable = true;
-        configurationLimit = 3;
+        configurationLimit = 6;
       };
       efi.canTouchEfiVariables = true;
       grub.enable = lib.mkForce false;
@@ -66,6 +67,7 @@ in
     mangohud # Gaming performance overlay (FPS, temps, etc.)
     nvtopPackages.nvidia # GPU monitoring (htop for NVIDIA GPU)
     pkgsi686Linux.gperftools # 32-bit tcmalloc for Source engine games (HL2, TF2, etc.)
+    nurPkgs.repos.Ev357.helium # Helium browser
   ];
 
   # NVIDIA configuration for dedicated GPU only with Wayland

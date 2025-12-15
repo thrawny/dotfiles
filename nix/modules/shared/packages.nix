@@ -30,7 +30,6 @@ let
     tmux
     wget
     unzip
-    chromium
     spotify
     btop
     powertop
