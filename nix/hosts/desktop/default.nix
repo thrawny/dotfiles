@@ -38,24 +38,6 @@ in
       grub.enable = lib.mkForce false;
     };
 
-    # DRIVER LAYER: TP-Link Archer TX20U (rtl8852au) WiFi adapter
-    extraModulePackages = with config.boot.kernelPackages; [ rtl8852au ];
-
-    # Blacklist conflicting kernel modules that may interfere with rtl8852au
-    blacklistedKernelModules = [
-      "rtw89_8852au"
-      "rtw89_8852a"
-      "rtw89_pci"
-    ];
-
-    # Force power management off for the 8852au driver
-    extraModprobeConfig = ''
-      options 8852au rtw_power_mgnt=0 rtw_enusbss=0
-    '';
-
-    # KERNEL LAYER: Prevent global USB autosuspend
-    kernelParams = [ "usbcore.autosuspend=-1" ];
-
     kernelModules = [
       "nvidia"
       "nvidia_modeset"
@@ -63,13 +45,6 @@ in
       "nvidia_drm"
     ];
   };
-
-  # Disable USB autosuspend for TP-Link Archer TX20U WiFi adapter
-  # Fixes issue where dongle is dead on boot and requires Windows reboot to wake
-  services.udev.extraRules = ''
-    # TP-Link Archer TX20U (2357:013f) - disable autosuspend
-    ACTION=="add", SUBSYSTEM=="usb", ATTR{idVendor}=="2357", ATTR{idProduct}=="013f", ATTR{power/control}="on"
-  '';
 
   hardware.graphics = {
     enable = true;
@@ -88,24 +63,10 @@ in
 
   # Desktop-specific packages
   environment.systemPackages = with pkgs; [
-    usbutils # USB utilities (includes usbreset for WiFi dongle reset service)
     mangohud # Gaming performance overlay (FPS, temps, etc.)
     nvtopPackages.nvidia # GPU monitoring (htop for NVIDIA GPU)
     pkgsi686Linux.gperftools # 32-bit tcmalloc for Source engine games (HL2, TF2, etc.)
   ];
-
-  # SYSTEMD RESET LAYER: "Nuclear" fix for WiFi dongle
-  # Performs USB reset on boot to wake up dongle from firmware hang state
-  systemd.services.reset-wifi-dongle = {
-    description = "Reset TP-Link Archer TX20U WiFi dongle on boot";
-    after = [ "network-pre.target" ];
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Type = "oneshot";
-      ExecStart = "${pkgs.usbutils}/bin/usbreset 2357:013f";
-      RemainAfterExit = true;
-    };
-  };
 
   # NVIDIA configuration for dedicated GPU only with Wayland
   services.xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver
