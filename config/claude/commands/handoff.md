@@ -9,6 +9,8 @@ Hand off the current work to a new session. The argument (if provided) is the go
 
 If no goal argument provided: infer the logical next goal from the conversation context. If unclear, state your best guess.
 
+Ignore any existing `handoff.md` — it's from a previous session. Overwrite it completely based on THIS session.
+
 Write `handoff.md` with:
 
 1. **Next goal**: What the next session should accomplish (from argument or inferred)
