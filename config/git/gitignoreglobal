@@ -34,5 +34,6 @@ Dockerfile.lab
 .claude/settings.local.json
 CLAUDE.local.md
 .playwright-mcp
-progress.md
+/progress.md
+/handoff.md
 .lazy.lua
