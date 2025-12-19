@@ -51,5 +51,6 @@
     usage
     fd
     watchexec
+    ast-grep
   ];
 }
