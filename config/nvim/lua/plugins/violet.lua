@@ -3,6 +3,7 @@ return {
   enabled = dev_plugin_exists("violet.nvim"),
   dev = true,
   dependencies = {},
+  lazy = false,
   keys = {
     {
       "<leader>ai",
@@ -18,6 +19,13 @@ return {
       end,
       mode = "v",
       desc = "Inline Edit Selection",
+    },
+    {
+      "<leader>an",
+      function()
+        require("violet").edit_prediction()
+      end,
+      desc = "Edit Prediction",
     },
   },
   config = function()
