@@ -1,5 +1,4 @@
 editor = "cursor"
-notify = ["notify-sound"]
 sandbox_mode = "workspace-write"
 model = "gpt-5-codex"
 
