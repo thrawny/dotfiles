@@ -7,6 +7,7 @@
 
 main=$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')
 eternal_branches="$main\$|test\$|sandbox\$|develop\$|master\$|development\$|staging\$"
+main_worktree=$(git rev-parse --show-toplevel)
 
 git stash
 
@@ -18,6 +19,48 @@ git fetch
 # Prune obsolete remote tracking branches. These are branches that we
 # once tracked, but have since been deleted on the remote.
 git remote prune origin
+
+# Prune stale worktree references (directories that no longer exist)
+git worktree prune
+
+# Remove worktrees whose branches have been merged, squash-merged, or deleted on remote
+while IFS= read -r worktree_path; do
+  [[ -z "$worktree_path" ]] && continue
+  [[ "$worktree_path" == "$main_worktree" ]] && continue
+
+  branch=$(git -C "$worktree_path" rev-parse --abbrev-ref HEAD 2>/dev/null)
+  [[ -z "$branch" || "$branch" == "HEAD" ]] && continue
+  echo "$branch" | grep -qE "$eternal_branches" && continue
+
+  should_remove=false
+  reason=""
+
+  # Check if remote branch is gone
+  if ! git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
+    should_remove=true
+    reason="remote branch gone"
+  # Check if branch is merged into main
+  elif git branch --merged origin/$main | grep -q "^[* ]*${branch}$"; then
+    should_remove=true
+    reason="branch merged"
+  # Check if all commits are cherry-picked into main
+  elif [[ ! $(git cherry origin/$main $branch 2>/dev/null | grep "^+") ]]; then
+    should_remove=true
+    reason="all commits in main"
+  # Check if squash-merged
+  else
+    mergeBase=$(git merge-base $main $branch 2>/dev/null)
+    if [[ -n "$mergeBase" ]] && [[ $(git cherry $main $(git commit-tree $(git rev-parse "$branch^{tree}") -p $mergeBase -m _) 2>/dev/null) == "-"* ]]; then
+      should_remove=true
+      reason="squash-merged"
+    fi
+  fi
+
+  if [[ "$should_remove" == "true" ]]; then
+    echo "Removing worktree ($reason): $worktree_path ($branch)"
+    git worktree remove --force "$worktree_path" 2>/dev/null || git worktree remove "$worktree_path" 2>/dev/null
+  fi
+done < <(git worktree list --porcelain | grep "^worktree " | cut -d' ' -f2-)
 
 # List all the branches that have been merged fully into main, and
 # then delete them. We use the remote main here, just in case our
