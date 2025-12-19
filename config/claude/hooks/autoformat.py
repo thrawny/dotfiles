@@ -8,7 +8,7 @@ import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, Required, TypedDict
 
 
 class HookInput(TypedDict, total=False):
@@ -19,11 +19,13 @@ class HookInput(TypedDict, total=False):
     tool_input: dict[str, Any]
 
 
-class Checker(TypedDict):
+class Checker(TypedDict, total=False):
     """Type definition for a code checker/formatter."""
 
-    name: str  # Friendly display name
-    command: list[str]  # Command to run with {file} placeholder
+    name: Required[str]  # Friendly display name
+    command: Required[list[str]]  # Command to run with {file} placeholder
+    json_output: bool  # If True, parse JSON output and filter issues
+    exclude_patterns: list[str]  # Patterns to exclude from JSON output
 
 
 # Formatter configuration
@@ -35,19 +37,27 @@ FORMATTERS: dict[str, list[Checker]] = {
             "name": "Ruff Linter",
             "command": ["ruff", "check", "--fix", "--ignore", "F401", "{file}"],
         },
-        {"name": "Ruff Formatter", "command": ["ruff", "format", "{file}"]},
+        # {"name": "Ruff Formatter", "command": ["ruff", "format", "{file}"]},
         {"name": "Type Checker", "command": ["basedpyright", "{file}"]},
     ],
-    # Go - format first so linter doesn't complain about formatting
-    # Note: golines includes gofmt. Avoid goimports (removes unused imports)
+    # Go - linting only (no formatting to avoid disrupting agent workflow)
+    # Uses JSON output + filtering to exclude unused imports/variables
     ".go": [
         {
-            "name": "Go Formatter",
-            "command": ["golangci-lint", "fmt", "--enable=golines", "{file_path}"],
-        },
-        {
             "name": "Go Linter",
-            "command": ["golangci-lint", "run", "{file_path}"],
+            "command": [
+                "golangci-lint",
+                "run",
+                "--output.json.path=stdout",
+                "--disable=unused",
+                "{file}",
+            ],
+            "json_output": True,
+            "exclude_patterns": [
+                "imported and not used",
+                "declared and not used",
+                "declared but not used",
+            ],
         },
     ],
     # Add more languages here as needed:
@@ -69,6 +79,59 @@ def check_command_exists(cmd: str) -> bool:
     return result.returncode == 0
 
 
+class LintIssue(TypedDict, total=False):
+    """Type definition for a lint issue from JSON output."""
+
+    FromLinter: str
+    Text: str
+    Pos: dict[str, Any]
+
+
+def filter_json_issues(
+    stdout: str, exclude_patterns: list[str]
+) -> tuple[list[LintIssue], str]:
+    """
+    Parse JSON output and filter out issues matching exclude patterns.
+    Returns (filtered_issues, formatted_output).
+    """
+    try:
+        # Find the JSON object (skip any trailing text like "6 issues:")
+        json_end = stdout.rfind("}") + 1
+        if json_end == 0:
+            return [], stdout
+        json_str = stdout[:json_end]
+        data: dict[str, Any] = json.loads(json_str)
+    except json.JSONDecodeError:
+        return [], stdout
+
+    issues: list[LintIssue] = data.get("Issues", [])
+    if not issues:
+        return [], ""
+
+    # Filter out excluded patterns
+    filtered: list[LintIssue] = []
+    for issue in issues:
+        text = issue.get("Text", "")
+        if not any(pattern in text for pattern in exclude_patterns):
+            filtered.append(issue)
+
+    if not filtered:
+        return [], ""
+
+    # Format remaining issues for display
+    lines: list[str] = []
+    for issue in filtered:
+        pos = issue.get("Pos", {})
+        filename: str = pos.get("Filename", "?")
+        line: int = pos.get("Line", 0)
+        col: int = pos.get("Column", 0)
+        text = issue.get("Text", "")
+        linter = issue.get("FromLinter", "")
+        lines.append(f"    {filename}:{line}:{col}: {text} ({linter})")
+
+    return filtered, "\n".join(lines)
+
+
 def run_formatter(checker: Checker, file_path: str) -> tuple[bool, str, str]:
     """
     Run a single formatter command.
@@ -76,6 +139,8 @@ def run_formatter(checker: Checker, file_path: str) -> tuple[bool, str, str]:
     """
     name = checker["name"]
     cmd_template = checker["command"]
+    use_json = checker.get("json_output", False)
+    exclude_patterns = checker.get("exclude_patterns", [])
 
     # Determine the target path for the command based on placeholder
     # {file_path} -> directory path (for tools that operate on packages like golangci-lint)
@@ -91,7 +156,7 @@ def run_formatter(checker: Checker, file_path: str) -> tuple[bool, str, str]:
         cmd = [part.replace("{file}", file_path) for part in cmd_template]
     else:
         # No placeholder, use template as-is
-        cmd = cmd_template
+        cmd = list(cmd_template)
 
     # Check if command exists
     if not check_command_exists(cmd[0]):
@@ -104,6 +169,19 @@ def run_formatter(checker: Checker, file_path: str) -> tuple[bool, str, str]:
             text=True,
             timeout=30,  # 30 second timeout
         )
+
+        # Handle JSON output with filtering
+        if use_json and result.stdout:
+            filtered_issues, formatted_output = filter_json_issues(
+                result.stdout, exclude_patterns
+            )
+            if not filtered_issues:
+                return True, f"  ✅ {name}: No issues found", ""
+            return (
+                False,
+                f"  ⚠️  {name}: Found {len(filtered_issues)} issue(s)",
+                formatted_output,
+            )
 
         # Collect both stdout and stderr for diagnostics
         detailed_output = ""
