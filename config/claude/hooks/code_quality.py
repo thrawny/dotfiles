@@ -35,10 +35,13 @@ FORMATTERS: dict[str, list[Checker]] = {
     ".py": [
         {
             "name": "Ruff Linter",
-            "command": ["ruff", "check", "--fix", "--ignore", "F401,F841", "{file}"],
+            "command": ["ruff", "check", "--ignore", "F401,F841,I001", "{file}"],
         },
         # {"name": "Ruff Formatter", "command": ["ruff", "format", "{file}"]},
-        {"name": "Type Checker", "command": ["basedpyright", "--level", "error", "{file}"]},
+        {
+            "name": "Type Checker",
+            "command": ["basedpyright", "--level", "error", "{file}"],
+        },
     ],
     # Go - linting only (no formatting to avoid disrupting agent workflow)
     # Uses JSON output + filtering to exclude unused imports/variables
