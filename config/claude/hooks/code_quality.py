@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Multi-language autoformatter hook for Claude Code.
-Runs appropriate formatters based on file extension.
+Code quality hook for Claude Code.
+Runs linters and type checkers based on file extension.
 """
 
 import json
@@ -35,10 +35,10 @@ FORMATTERS: dict[str, list[Checker]] = {
     ".py": [
         {
             "name": "Ruff Linter",
-            "command": ["ruff", "check", "--fix", "--ignore", "F401", "{file}"],
+            "command": ["ruff", "check", "--fix", "--ignore", "F401,F841", "{file}"],
         },
         # {"name": "Ruff Formatter", "command": ["ruff", "format", "{file}"]},
-        {"name": "Type Checker", "command": ["basedpyright", "{file}"]},
+        {"name": "Type Checker", "command": ["basedpyright", "--level", "error", "{file}"]},
     ],
     # Go - linting only (no formatting to avoid disrupting agent workflow)
     # Uses JSON output + filtering to exclude unused imports/variables
@@ -239,60 +239,23 @@ def format_file(file_path: str) -> bool:
         # Silent skip for unsupported file types
         return False
 
-    # Determine output stream: stderr if issues, stdout otherwise
-    # We'll buffer output and decide where to send it at the end
-    output_lines: list[str] = []
-
-    output_lines.append(f"\n{'=' * 60}")
-    output_lines.append(f"🎨 Auto-formatting: {path.name}")
-    output_lines.append(f"{'=' * 60}")
-
     # Run all formatters for this file type
-    all_success = True
     has_unfixable_issues = False
     unfixable_details: list[str] = []
 
     for checker in FORMATTERS[ext]:
-        success, message, details = run_formatter(checker, file_path)
-        output_lines.append(message)
-
-        # Show details for issues
+        success, _, details = run_formatter(checker, file_path)
         if details and not success:
             has_unfixable_issues = True
             unfixable_details.append(details)
-        elif details and "Fixed" in message:
-            # Show what was fixed
-            lines = details.split("\n")
-            for line in lines[:10]:  # Show first 10 lines of fixes
-                if line.strip():
-                    output_lines.append(f"    {line}")
-            if len(lines) > 10:
-                output_lines.append(f"    ... and {len(lines) - 10} more fixes")
 
-        if not success:
-            all_success = False
-
-    # Final status
-    output_lines.append(f"{'-' * 60}")
+    # Only print if there are issues
     if has_unfixable_issues:
-        output_lines.append(f"⚠️  {path.name} has issues that need manual fixing:")
+        print(f"\n⚠️  {path.name} has issues:", file=sys.stderr)
         for details in unfixable_details:
-            # Show the actual errors that need fixing
             for line in details.split("\n"):
                 if line.strip():
-                    output_lines.append(f"    {line}")
-    elif all_success:
-        output_lines.append(f"✨ {path.name} formatted successfully!")
-    else:
-        output_lines.append(f"⚠️  {path.name} formatting completed with warnings")
-    output_lines.append(f"{'=' * 60}\n")
-
-    # Print to stderr if there are issues (for Claude), stdout otherwise (for user)
-    output = "\n".join(output_lines)
-    if has_unfixable_issues:
-        print(output, file=sys.stderr)
-    else:
-        print(output)
+                    print(f"  {line}", file=sys.stderr)
 
     return has_unfixable_issues
 

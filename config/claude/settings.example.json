@@ -61,7 +61,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/dotfiles/config/claude/hooks/autoformat.py"
+            "command": "python3 ~/dotfiles/config/claude/hooks/code_quality.py"
           }
         ]
       }
