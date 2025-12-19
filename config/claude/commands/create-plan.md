@@ -71,6 +71,7 @@ Then wait for the user's input.
 
 5. **Present informed understanding and focused questions**:
 
+   First, present your findings:
    ```
    Based on the ticket and my research of the codebase, I understand we need to [accurate summary].
 
@@ -78,11 +79,23 @@ Then wait for the user's input.
    - [Current implementation detail with file:line reference]
    - [Relevant pattern or constraint discovered]
    - [Potential complexity or edge case identified]
+   ```
 
-   Questions that my research couldn't answer:
-   - [Specific technical question that requires human judgment]
-   - [Business logic clarification]
-   - [Design preference that affects implementation]
+   Then use **AskUserQuestion** for any clarifications needed. This provides a structured multi-choice UI:
+   ```
+   AskUserQuestion(
+     questions=[
+       {
+         header: "Scope",
+         question: "Should we include backward compatibility with the old system?",
+         options: [
+           {label: "Yes, full compat", description: "More work but safer rollout"},
+           {label: "No, clean break", description: "Simpler code, requires migration"}
+         ],
+         multiSelect: false
+       }
+     ]
+   )
    ```
 
    Only ask questions that you genuinely cannot answer through code investigation.
@@ -123,23 +136,44 @@ After getting initial clarifications:
 
 5. **Present findings and design options**:
 
+   First, present your research findings:
    ```
    Based on my research, here's what I found:
 
    **Current State:**
    - [Key discovery about existing code]
    - [Pattern or convention to follow]
-
-   **Design Options:**
-   1. [Option A] - [pros/cons]
-   2. [Option B] - [pros/cons]
-
-   **Open Questions:**
-   - [Technical uncertainty]
-   - [Design decision needed]
-
-   Which approach aligns best with your vision?
    ```
+
+   Then use **AskUserQuestion** for design decisions and open questions:
+   ```
+   AskUserQuestion(
+     questions=[
+       {
+         header: "Approach",
+         question: "Which implementation approach should we use?",
+         options: [
+           {label: "Extend existing system", description: "Less risk, reuses patterns, but may hit limitations"},
+           {label: "New dedicated module", description: "More flexible and clean, but more upfront work"},
+           {label: "Hybrid approach", description: "New module with adapter to existing system"}
+         ],
+         multiSelect: false
+       },
+       {
+         header: "Testing",
+         question: "What level of test coverage do you want?",
+         options: [
+           {label: "Unit tests only", description: "Faster to implement, covers core logic"},
+           {label: "Unit + integration", description: "Better coverage, catches more edge cases"},
+           {label: "Full suite + e2e", description: "Comprehensive but more time to write"}
+         ],
+         multiSelect: false
+       }
+     ]
+   )
+   ```
+
+   You can ask up to 4 questions at once. Use `multiSelect: true` when options aren't mutually exclusive.
 
 ### Step 3: Plan Structure Development
 
@@ -302,36 +336,43 @@ Please review it and let me know:
 
 ## Important Guidelines
 
-1. **Be Skeptical**:
+1. **Use Structured Questions**:
+- Use `AskUserQuestion` for design decisions, scope clarifications, and trade-offs
+- Provide 2-4 concrete options with descriptions explaining implications
+- Use `multiSelect: true` when choices aren't mutually exclusive
+- Ask up to 4 questions at once to batch related decisions
+- Reserve free-form text for open-ended context gathering only
+
+2. **Be Skeptical**:
 - Question vague requirements
 - Identify potential issues early
 - Ask "why" and "what about"
 - Don't assume - verify with code
 
-2. **Be Interactive**:
+3. **Be Interactive**:
 - Don't write the full plan in one shot
 - Get buy-in at each major step
 - Allow course corrections
 - Work collaboratively
 
-3. **Be Thorough**:
+4. **Be Thorough**:
 - Read all context files COMPLETELY before planning
 - Research actual code patterns using parallel sub-tasks
 - Include specific file paths and line numbers
 - Write measurable success criteria with clear automated vs manual distinction
 
-4. **Be Practical**:
+5. **Be Practical**:
 - Focus on incremental, testable changes
 - Consider migration and rollback
 - Think about edge cases
 - Include "what we're NOT doing"
 
-5. **Track Progress**:
+6. **Track Progress**:
 - Track planning tasks in your todo list
 - Update todos as you complete research
 - Mark planning tasks complete when done
 
-6. **No Open Questions in Final Plan**:
+7. **No Open Questions in Final Plan**:
 - If you encounter open questions during planning, STOP
 - Research or ask for clarification immediately
 - Do NOT write the plan with unresolved questions
