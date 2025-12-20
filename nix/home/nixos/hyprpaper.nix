@@ -1,17 +1,19 @@
 {
-  lib,
   dotfiles,
   ...
 }:
 let
-  wallpaperPath = "${dotfiles}/assets/tokyo.jpg";
+  wallpapers = [
+    "${dotfiles}/assets/tokyo.jpg"
+    "${dotfiles}/assets/nasa.jpg"
+  ];
 in
 {
   services.hyprpaper = {
     enable = true;
     settings = {
-      preload = [ wallpaperPath ];
-      wallpaper = [ ",${wallpaperPath}" ];
+      preload = wallpapers;
+      wallpaper = [ ",${builtins.head wallpapers}" ];
     };
   };
 }

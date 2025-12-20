@@ -1,5 +1,6 @@
 {
   lib,
+  pkgs,
   username,
   dotfiles,
   ...
@@ -7,6 +8,24 @@
 let
   mod = "$mod";
   home = "/home/${username}";
+
+  wallpapers = [
+    "${dotfiles}/assets/tokyo.jpg"
+    "${dotfiles}/assets/nasa.jpg"
+  ];
+
+  cycleWallpaper = pkgs.writeShellScript "cycle-wallpaper" ''
+    STATE_FILE="/tmp/wallpaper-index"
+    WALLPAPERS=(${builtins.concatStringsSep " " (map (w: ''"${w}"'') wallpapers)})
+    COUNT=''${#WALLPAPERS[@]}
+
+    INDEX=$(cat "$STATE_FILE" 2>/dev/null || echo 0)
+    INDEX=$(( (INDEX + 1) % COUNT ))
+    echo "$INDEX" > "$STATE_FILE"
+
+    WALLPAPER="''${WALLPAPERS[$INDEX]}"
+    hyprctl hyprpaper wallpaper ",$WALLPAPER"
+  '';
 
   workspaceDigits = lib.range 1 9;
 
@@ -150,6 +169,7 @@ let
 
   extras = [
     "${mod} SUPER, m, exec, ${dotfiles}/bin/wake-monitors"
+    "${mod} SHIFT, W, exec, ${cycleWallpaper}"
   ];
 in
 {
