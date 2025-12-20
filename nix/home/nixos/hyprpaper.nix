@@ -4,7 +4,7 @@
   ...
 }:
 let
-  wallpaperPath = "${dotfiles}/assets/spacy-bg.png";
+  wallpaperPath = "${dotfiles}/assets/tokyo.jpg";
 in
 {
   services.hyprpaper = {
