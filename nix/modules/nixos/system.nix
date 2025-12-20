@@ -69,6 +69,7 @@ in
         "audio"
         "input"
         "keyd" # Access to keyd socket for application-mapper
+        "docker" # Run Docker without sudo
       ];
       shell = pkgs.zsh;
     };
