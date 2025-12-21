@@ -4,6 +4,7 @@
   lib,
   zen-browser,
   walker,
+  nurPkgs,
   ...
 }:
 let
@@ -12,7 +13,7 @@ let
   userHome = "/home/${username}";
   dotfiles = "${userHome}/dotfiles";
   packages = import ../shared/packages.nix {
-    inherit pkgs lib;
+    inherit pkgs lib nurPkgs;
     excludePackages = [ ];
   };
   gitIdentity =

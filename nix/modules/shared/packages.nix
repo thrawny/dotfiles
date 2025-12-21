@@ -1,6 +1,7 @@
 {
   pkgs,
   lib,
+  nurPkgs,
   excludePackages ? [ ],
 }:
 let
@@ -37,6 +38,7 @@ let
     docker-compose
     code-cursor-fhs
     keyd
+    nurPkgs.repos.Ev357.helium # Helium browser
   ];
 
   selectedSystemPackages = lib.lists.subtractLists excludePackages systemPackages;
