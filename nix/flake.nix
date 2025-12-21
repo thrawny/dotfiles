@@ -85,6 +85,92 @@
       packages.x86_64-linux.thrawny-desktop-iso =
         self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
 
+      # Full dev environment with DIND support
+      packages.x86_64-linux.devcontainer =
+        let
+          pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        in
+        pkgs.buildEnv {
+          name = "devcontainer";
+          paths = with pkgs; [
+            # Docker + DIND deps
+            docker
+            containerd
+            runc
+            iptables
+            iproute2
+
+            # Core system tools
+            bashInteractive
+            coreutils
+            findutils
+            gnugrep
+            gnused
+            procps
+            util-linux
+
+            # Shell and terminal
+            zsh
+            tmux
+            starship
+            zoxide
+            fzf
+            bat
+            direnv
+
+            # Editors
+            neovim
+            vim
+
+            # Git ecosystem
+            git
+            git-lfs
+            gh
+            lazygit
+            delta
+            difftastic
+
+            # Languages and runtimes
+            nodejs_24
+            python313
+            go
+            rustc
+            cargo
+            bun
+
+            # Language tools
+            uv
+            pnpm
+            golangci-lint
+            gotestsum
+            ruff
+            tree-sitter
+            gcc
+
+            # CLI utilities
+            jq
+            yq-go
+            dyff
+            tree
+            ripgrep
+            fd
+            curl
+            wget
+            watch
+            watchexec
+            ast-grep
+            usage
+            cowsay
+
+            # Cloud and infra
+            awscli2
+            k9s
+            kind
+            postgresql_17
+          ];
+          pathsToLink = [ "/bin" "/lib" "/share" ];
+        };
+
       homeConfigurations.thrawnym1 = home-manager.lib.homeManagerConfiguration {
         pkgs = nixpkgs.legacyPackages.aarch64-darwin;
         modules = [ ./home/darwin/default.nix ];
