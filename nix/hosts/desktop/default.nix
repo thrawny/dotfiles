@@ -52,6 +52,12 @@ in
     enable32Bit = true; # Required for Steam and most games
   };
 
+  # Logitech device management (battery status, configuration)
+  hardware.logitech.wireless = {
+    enable = true;
+    enableGraphical = true; # Solaar GUI
+  };
+
   # Games partition (~250GB on sdb4)
   fileSystems."/home/${username}/Games" = {
     device = "/dev/disk/by-label/games";
