@@ -37,9 +37,9 @@ output "eDP-1" {
 }
 
 // Uncomment if you get a black screen on TTY start
-// debug {
-//     render-drm-device "/dev/dri/renderD128"
-// }
+debug {
+    render-drm-device "/dev/dri/renderD128"
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // Layout and appearance
