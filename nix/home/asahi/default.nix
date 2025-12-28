@@ -1,0 +1,61 @@
+# Standalone Home Manager configuration for non-NixOS Linux systems using Niri.
+# Expects DankMaterialShell installed on the distro:
+#   curl -fsSL https://install.danklinux.com | sh
+#
+# DMS provides: panel, launcher, lock screen, notifications, wallpaper
+{
+  lib,
+  pkgs,
+  dotfiles,
+  ...
+}:
+{
+  imports = [
+    # Shared cross-platform modules (CLI tools, dotfiles)
+    ../shared
+  ];
+
+  # Niri config via symlink (not niri-flake) for DMS dynamic theming support
+  xdg.configFile."niri/config.kdl".source = "${dotfiles}/config/niri/config.kdl";
+
+  # Disable package installation - use distro packages instead
+  programs.ghostty.package = lib.mkForce null;
+  programs.ghostty.systemd.enable = lib.mkForce false;
+
+  # Linux keybindings (Super for copy/paste like macOS Cmd)
+  programs.ghostty.settings.keybind = [
+    "shift+enter=text:\\n"
+    "super+a=select_all"
+    "super+c=copy_to_clipboard"
+    "super+v=paste_from_clipboard"
+  ];
+
+  # XWayland satellite for X11 app support
+  # This runs as a systemd user service
+  systemd.user.services.xwayland-satellite = {
+    Unit = {
+      Description = "XWayland outside your Wayland";
+      BindsTo = [ "graphical-session.target" ];
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      Type = "notify";
+      NotifyAccess = "all";
+      ExecStart = "${pkgs.xwayland-satellite}/bin/xwayland-satellite";
+      StandardOutput = "journal";
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
+  };
+
+  home.packages = with pkgs; [
+    # XWayland satellite for running X11 apps
+    xwayland-satellite
+
+    # playerctl for media keys
+    playerctl
+
+    # For volume control
+    wireplumber
+  ];
+}

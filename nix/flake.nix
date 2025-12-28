@@ -1,5 +1,5 @@
 {
-  description = "NixOS + Hyprland + Home Manager (monorepo) using out-of-store symlinks into this repo";
+  description = "NixOS + Home Manager (monorepo) using out-of-store symlinks into this repo";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -12,6 +12,7 @@
     elephant.url = "github:abenz1267/elephant";
     walker.url = "github:abenz1267/walker";
     walker.inputs.elephant.follows = "elephant";
+    niri-flake.url = "github:sodiboo/niri-flake";
   };
 
   outputs =
@@ -23,6 +24,7 @@
       nur,
       zen-browser,
       walker,
+      niri-flake,
       ...
     }:
     let
@@ -89,6 +91,23 @@
         pkgs = nixpkgs.legacyPackages.aarch64-darwin;
         modules = [ ./home/darwin/default.nix ];
         extraSpecialArgs = import ./hosts/thrawnym1/default.nix;
+      };
+
+      # Asahi Air with Niri + DankMaterialShell
+      # Note: niri installed via DNF, config via raw KDL for DMS dynamic theming
+      homeConfigurations.asahi-air = home-manager.lib.homeManagerConfiguration {
+        pkgs = nixpkgs.legacyPackages.aarch64-linux;
+        modules = [
+          ./hosts/asahi-air/default.nix
+        ];
+        extraSpecialArgs = {
+          username = "thrawny";
+          dotfiles = "/home/thrawny/dotfiles";
+          gitIdentity = {
+            name = "Jonas Lergell";
+            email = "jonaslergell@gmail.com";
+          };
+        };
       };
     };
 }
