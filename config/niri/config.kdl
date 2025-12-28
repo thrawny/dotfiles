@@ -1,0 +1,283 @@
+// Niri configuration for Asahi Linux with DankMaterialShell
+// Uses DMS for: panel, launcher, lock screen, notifications, wallpaper
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Input
+// ══════════════════════════════════════════════════════════════════════════════
+
+input {
+    keyboard {
+        xkb {
+            layout "us"
+        }
+        repeat-delay 300
+        repeat-rate 50
+    }
+
+    touchpad {
+        tap
+        natural-scroll
+        accel-speed 0.3
+    }
+
+    mouse {
+        // natural-scroll
+    }
+
+    focus-follows-mouse
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Output (display) configuration
+// ══════════════════════════════════════════════════════════════════════════════
+
+output "eDP-1" {
+    scale 1.5
+    // position x=0 y=0  // Uncomment for multi-monitor
+}
+
+// Uncomment if you get a black screen on TTY start
+// debug {
+//     render-drm-device "/dev/dri/renderD128"
+// }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Layout and appearance
+// ══════════════════════════════════════════════════════════════════════════════
+
+layout {
+    gaps 5
+
+    center-focused-column "never"
+
+    // Transparent for DMS wallpaper
+    background-color "transparent"
+
+    border {
+        width 2
+        active-color "#f92672"    // Molokai pink
+        inactive-color "#3a3a3a"
+    }
+
+    // Using border instead of focus ring
+    focus-ring {
+        off
+    }
+
+    default-column-width { proportion 0.5; }
+
+    preset-column-widths {
+        proportion 0.33
+        proportion 0.5
+        proportion 0.67
+        proportion 1.0
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Cursor
+// ══════════════════════════════════════════════════════════════════════════════
+
+cursor {
+    hide-after-inactive-ms 3000
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Environment variables
+// ══════════════════════════════════════════════════════════════════════════════
+
+environment {
+    QT_QPA_PLATFORM "wayland"
+    NIXOS_OZONE_WL "1"
+    MOZ_ENABLE_WAYLAND "1"
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Layer rules for DMS (quickshell)
+// ══════════════════════════════════════════════════════════════════════════════
+
+layer-rule {
+    match namespace="^quickshell$"
+    place-within-backdrop true
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Window rules
+// ══════════════════════════════════════════════════════════════════════════════
+
+// Float 1Password
+window-rule {
+    match app-id="^1password$"
+    open-floating true
+}
+
+// Float file dialogs
+window-rule {
+    match title="^Open File.*"
+    match title="^Save.*"
+    open-floating true
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Screenshots
+// ══════════════════════════════════════════════════════════════════════════════
+
+screenshot-path "~/Screenshots/%Y-%m-%d_%H-%M-%S.png"
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Animations
+// ══════════════════════════════════════════════════════════════════════════════
+
+animations {
+    slowdown 1.0
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Startup applications
+// ══════════════════════════════════════════════════════════════════════════════
+
+spawn-at-startup "ghostty"
+spawn-at-startup "zen"
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Keybindings
+// ══════════════════════════════════════════════════════════════════════════════
+
+binds {
+    // ──────────────────────────────────────────────────────────────────────────
+    // Application launchers
+    // ──────────────────────────────────────────────────────────────────────────
+    Alt+Return { spawn "ghostty"; }
+    Super+Space { spawn "dms" "ipc" "call" "spotlight" "toggle"; }
+    Alt+O { spawn "1password"; }
+    Alt+C { spawn "slack"; }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Window management
+    // ──────────────────────────────────────────────────────────────────────────
+    Alt+W { close-window; }
+    Alt+V { toggle-window-floating; }
+    Alt+F { maximize-column; }
+    Alt+Shift+F { fullscreen-window; }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Column/window focus (vim-style)
+    // ──────────────────────────────────────────────────────────────────────────
+    Alt+H { focus-column-left; }
+    Alt+L { focus-column-right; }
+    Alt+J { focus-window-down; }
+    Alt+K { focus-window-up; }
+
+    // Arrow keys
+    Alt+Left { focus-column-left; }
+    Alt+Right { focus-column-right; }
+    Alt+Down { focus-window-down; }
+    Alt+Up { focus-window-up; }
+
+    // First/last column
+    Alt+Home { focus-column-first; }
+    Alt+End { focus-column-last; }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Move windows (vim-style)
+    // ──────────────────────────────────────────────────────────────────────────
+    Alt+Shift+H { move-column-left; }
+    Alt+Shift+L { move-column-right; }
+    Alt+Shift+J { move-window-down; }
+    Alt+Shift+K { move-window-up; }
+
+    // Arrow keys
+    Alt+Shift+Left { move-column-left; }
+    Alt+Shift+Right { move-column-right; }
+    Alt+Shift+Down { move-window-down; }
+    Alt+Shift+Up { move-window-up; }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Column width adjustment
+    // ──────────────────────────────────────────────────────────────────────────
+    Alt+Minus { set-column-width "-10%"; }
+    Alt+Equal { set-column-width "+10%"; }
+
+    // Cycle through preset widths
+    Alt+R { switch-preset-column-width; }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Consume/expel windows (niri's column stacking)
+    // ──────────────────────────────────────────────────────────────────────────
+    Alt+BracketLeft { consume-window-into-column; }
+    Alt+BracketRight { expel-window-from-column; }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Workspace navigation
+    // ──────────────────────────────────────────────────────────────────────────
+    Alt+1 { focus-workspace 1; }
+    Alt+2 { focus-workspace 2; }
+    Alt+3 { focus-workspace 3; }
+    Alt+4 { focus-workspace 4; }
+    Alt+5 { focus-workspace 5; }
+    Alt+6 { focus-workspace 6; }
+    Alt+7 { focus-workspace 7; }
+    Alt+8 { focus-workspace 8; }
+    Alt+9 { focus-workspace 9; }
+    Alt+0 { focus-workspace 10; }
+
+    // Move window to workspace
+    Alt+Shift+1 { move-column-to-workspace 1; }
+    Alt+Shift+2 { move-column-to-workspace 2; }
+    Alt+Shift+3 { move-column-to-workspace 3; }
+    Alt+Shift+4 { move-column-to-workspace 4; }
+    Alt+Shift+5 { move-column-to-workspace 5; }
+    Alt+Shift+6 { move-column-to-workspace 6; }
+    Alt+Shift+7 { move-column-to-workspace 7; }
+    Alt+Shift+8 { move-column-to-workspace 8; }
+    Alt+Shift+9 { move-column-to-workspace 9; }
+    Alt+Shift+0 { move-column-to-workspace 10; }
+
+    // Relative workspace navigation
+    Alt+Comma { focus-workspace-up; }
+    Alt+Period { focus-workspace-down; }
+    Alt+Tab { focus-workspace-previous; }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Monitor management
+    // ──────────────────────────────────────────────────────────────────────────
+    Alt+Shift+Comma { move-column-to-monitor-left; }
+    Alt+Shift+Period { move-column-to-monitor-right; }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Screenshots (niri built-in)
+    // ──────────────────────────────────────────────────────────────────────────
+    Super+Shift+3 { screenshot; }
+    Super+Shift+4 { screenshot-window; }
+    Print { screenshot; }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Session management
+    // ──────────────────────────────────────────────────────────────────────────
+    Alt+Escape { spawn "dms" "ipc" "call" "lock" "lock"; }
+    Alt+Shift+Escape { quit skip-confirmation=true; }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Volume/media (fn keys)
+    // ──────────────────────────────────────────────────────────────────────────
+    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "-l" "1" "@DEFAULT_AUDIO_SINK@" "5%+"; }
+    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
+    XF86AudioMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
+    XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
+
+    // Media playback
+    XF86AudioPlay allow-when-locked=true { spawn "playerctl" "play-pause"; }
+    XF86AudioPause allow-when-locked=true { spawn "playerctl" "play-pause"; }
+    XF86AudioNext allow-when-locked=true { spawn "playerctl" "next"; }
+    XF86AudioPrev allow-when-locked=true { spawn "playerctl" "previous"; }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// DMS includes (dynamic theming)
+// Create empty files first: mkdir -p ~/.config/niri/dms && touch ~/.config/niri/dms/{colors,layout,alttab,binds}.kdl
+// ══════════════════════════════════════════════════════════════════════════════
+
+include "dms/colors.kdl"
+include "dms/layout.kdl"
+include "dms/alttab.kdl"
+include "dms/binds.kdl"

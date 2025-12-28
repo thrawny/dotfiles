@@ -95,10 +95,10 @@
 
       # Asahi Air with Niri + DankMaterialShell
       # Note: niri installed via DNF, config via raw KDL for DMS dynamic theming
-      homeConfigurations.asahi-air = home-manager.lib.homeManagerConfiguration {
+      homeConfigurations.thrawny-asahi-air = home-manager.lib.homeManagerConfiguration {
         pkgs = nixpkgs.legacyPackages.aarch64-linux;
         modules = [
-          ./hosts/asahi-air/default.nix
+          ./hosts/thrawny-asahi-air/default.nix
         ];
         extraSpecialArgs = {
           username = "thrawny";

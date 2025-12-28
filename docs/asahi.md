@@ -60,12 +60,12 @@ To reload after editing the config: `sudo keyd reload`
 ## 5. Install Home Manager
 
 ```bash
-nix run home-manager/master -- init --switch --flake ~/dotfiles/nix#asahi-air
+nix run home-manager/master -- init --switch --flake ~/dotfiles/nix#thrawny-asahi-air
 ```
 
 For subsequent updates:
 ```bash
-home-manager switch --flake ~/dotfiles/nix#asahi-air
+home-manager switch --flake ~/dotfiles/nix#thrawny-asahi-air
 ```
 
 ## 6. Configure Display Manager (Optional)
