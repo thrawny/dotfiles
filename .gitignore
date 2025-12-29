@@ -17,9 +17,6 @@ config/cursor/settings.json
 
 config/claude/settings.json
 
-# DMS-generated niri theme files (dynamic)
-config/niri/dms/
-
 result
 
 .venv

@@ -1,3 +1,7 @@
+# ===== Flatpak Integration =====
+# Source flatpak.sh since zsh doesn't source /etc/profile.d/ by default
+[[ -f /etc/profile.d/flatpak.sh ]] && source /etc/profile.d/flatpak.sh
+
 # ===== Exports =====
 export PYTHONDONTWRITEBYTECODE=1
 export GOPATH=$HOME/go

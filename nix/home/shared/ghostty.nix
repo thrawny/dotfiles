@@ -12,6 +12,7 @@
       font-size = 12;
       window-padding-x = 10;
       window-padding-y = 5;
+      gtk-titlebar = false;
       cursor-style-blink = false;
       font-synthetic-style = false;
       minimum-contrast = 1.2;

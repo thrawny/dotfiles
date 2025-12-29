@@ -1,282 +1,236 @@
-// Niri configuration for Asahi Linux with DankMaterialShell
-// Uses DMS for: panel, launcher, lock screen, notifications, wallpaper
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Input
-// ══════════════════════════════════════════════════════════════════════════════
-
-input {
-    keyboard {
-        xkb {
-            layout "us"
-        }
-        repeat-delay 300
-        repeat-rate 50
-    }
-
-    touchpad {
-        tap
-        natural-scroll
-        accel-speed 0.3
-    }
-
-    mouse {
-        // natural-scroll
-    }
-
-    focus-follows-mouse
+// This config is in the KDL format: https://kdl.dev
+// "/-" comments out the following node.
+// Check the wiki for a full description of the configuration:
+// https://github.com/YaLTeR/niri/wiki/Configuration:-Introduction
+config-notification {
+    disable-failed
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Output (display) configuration
-// ══════════════════════════════════════════════════════════════════════════════
-
-output "eDP-1" {
-    scale 1.5
-    // position x=0 y=0  // Uncomment for multi-monitor
-}
-
-// Uncomment if you get a black screen on TTY start
-debug {
-    render-drm-device "/dev/dri/renderD128"
-}
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Layout and appearance
-// ══════════════════════════════════════════════════════════════════════════════
-
-layout {
-    gaps 5
-
-    center-focused-column "never"
-
-    // Transparent for DMS wallpaper
-    background-color "transparent"
-
-    border {
-        width 2
-        active-color "#f92672"    // Molokai pink
-        inactive-color "#3a3a3a"
-    }
-
-    // Using border instead of focus ring
-    focus-ring {
+gestures {
+    hot-corners {
         off
     }
+}
 
-    default-column-width { proportion 0.5; }
+// Input device configuration.
+// Find the full list of options on the wiki:
+// https://github.com/YaLTeR/niri/wiki/Configuration:-Input
+input {
+    // Use Alt as the Mod key (like Hyprland setup)
+    mod-key "Alt"
 
-    preset-column-widths {
-        proportion 0.33
-        proportion 0.5
-        proportion 0.67
-        proportion 1.0
+    keyboard {
+        xkb {
+            options "caps:escape"
+        }
+        numlock
+        repeat-delay 200
+        repeat-rate 30
+    }
+    touchpad {
+        natural-scroll
+        tap
+        scroll-factor 0.5
+    }
+    mouse {
+    }
+    trackpoint {
     }
 }
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Cursor
-// ══════════════════════════════════════════════════════════════════════════════
-
-cursor {
-    hide-after-inactive-ms 3000
+// You can configure outputs by their name, which you can find
+// by running `niri msg outputs` while inside a niri instance.
+// The built-in laptop monitor is usually called "eDP-1".
+// Find more information on the wiki:
+// https://github.com/YaLTeR/niri/wiki/Configuration:-Outputs
+// Remember to uncomment the node by removing "/-"!
+/-output "eDP-2" {
+    mode "2560x1600@239.998993"
+    position x=2560 y=0
+    variable-refresh-rate
 }
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Environment variables
-// ══════════════════════════════════════════════════════════════════════════════
-
-environment {
-    QT_QPA_PLATFORM "wayland"
-    NIXOS_OZONE_WL "1"
-    MOZ_ENABLE_WAYLAND "1"
+// Settings that influence how windows are positioned and sized.
+// Find more information on the wiki:
+// https://github.com/YaLTeR/niri/wiki/Configuration:-Layout
+layout {
+    // Set gaps around windows in logical pixels.
+    background-color "transparent"
+    // When to center a column when changing focus, options are:
+    // - "never", default behavior, focusing an off-screen column will keep at the left
+    //   or right edge of the screen.
+    // - "always", the focused column will always be centered.
+    // - "on-overflow", focusing a column will center it if it doesn't fit
+    //   together with the previously focused column.
+    center-focused-column "never"
+    // You can customize the widths that "switch-preset-column-width" (Mod+R) toggles between.
+    preset-column-widths {
+        // Proportion sets the width as a fraction of the output width, taking gaps into account.
+        // For example, you can perfectly fit four windows sized "proportion 0.25" on an output.
+        // The default preset widths are 1/3, 1/2 and 2/3 of the output.
+        proportion 0.33333
+        proportion 0.5
+        proportion 0.66667
+        // Fixed sets the width in logical pixels exactly.
+        // fixed 1920
+    }
+    // You can also customize the heights that "switch-preset-window-height" (Mod+Shift+R) toggles between.
+    // preset-window-heights { }
+    // You can change the default width of the new windows.
+    default-column-width { proportion 0.5; }
+    // If you leave the brackets empty, the windows themselves will decide their initial width.
+    // default-column-width {}
+    // By default focus ring and border are rendered as a solid background rectangle
+    // behind windows. That is, they will show up through semitransparent windows.
+    // This is because windows using client-side decorations can have an arbitrary shape.
+    //
+    // If you don't like that, you should uncomment `prefer-no-csd` below.
+    // Niri will draw focus ring and border *around* windows that agree to omit their
+    // client-side decorations.
+    //
+    // Alternatively, you can override it with a window rule called
+    // `draw-border-with-background`.
+    border {
+        off
+        width 4
+        active-color   "#707070"      // Neutral gray
+        inactive-color "#d0d0d0"      // Light gray
+        urgent-color   "#cc4444"      // Softer red
+    }
+    shadow {
+        softness 30
+        spread 5
+        offset x=0 y=5
+        color "#0007"
+    }
+    struts {
+    }
 }
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Layer rules for DMS (quickshell)
-// ══════════════════════════════════════════════════════════════════════════════
-
 layer-rule {
     match namespace="^quickshell$"
     place-within-backdrop true
 }
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Window rules
-// ══════════════════════════════════════════════════════════════════════════════
-
-// Float 1Password
-window-rule {
-    match app-id="^1password$"
-    open-floating true
+overview {
+    workspace-shadow {
+        off
+    }
 }
-
-// Float file dialogs
-window-rule {
-    match title="^Open File.*"
-    match title="^Save.*"
-    open-floating true
+// Add lines like this to spawn processes at startup.
+// Note that running niri as a session supports xdg-desktop-autostart,
+// which may be more convenient to use.
+// See the binds section below for more spawn examples.
+// This line starts waybar, a commonly used bar for Wayland compositors.
+spawn-at-startup "bash" "-c" "wl-paste --watch cliphist store &"
+environment {
+  XDG_CURRENT_DESKTOP "niri"
 }
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Screenshots
-// ══════════════════════════════════════════════════════════════════════════════
-
-screenshot-path "~/Screenshots/%Y-%m-%d_%H-%M-%S.png"
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Animations
-// ══════════════════════════════════════════════════════════════════════════════
-
+hotkey-overlay {
+    skip-at-startup
+}
+prefer-no-csd
+screenshot-path "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png"
 animations {
-    slowdown 1.0
+    workspace-switch {
+        spring damping-ratio=0.80 stiffness=523 epsilon=0.0001
+    }
+    window-open {
+        duration-ms 150
+        curve "ease-out-expo"
+    }
+    window-close {
+        duration-ms 150
+        curve "ease-out-quad"
+    }
+    horizontal-view-movement {
+        spring damping-ratio=0.85 stiffness=423 epsilon=0.0001
+    }
+    window-movement {
+        spring damping-ratio=0.75 stiffness=323 epsilon=0.0001
+    }
+    window-resize {
+        spring damping-ratio=0.85 stiffness=423 epsilon=0.0001
+    }
+    config-notification-open-close {
+        spring damping-ratio=0.65 stiffness=923 epsilon=0.001
+    }
+    screenshot-ui-open {
+        duration-ms 200
+        curve "ease-out-quad"
+    }
+    overview-open-close {
+        spring damping-ratio=0.85 stiffness=800 epsilon=0.0001
+    }
+}
+// Window rules let you adjust behavior for individual windows.
+// Find more information on the wiki:
+// https://github.com/YaLTeR/niri/wiki/Configuration:-Window-Rules
+// Work around WezTerm's initial configure bug
+// by setting an empty default-column-width.
+window-rule {
+    // This regular expression is intentionally made as specific as possible,
+    // since this is the default config, and we want no false positives.
+    // You can get away with just app-id="wezterm" if you want.
+    match app-id=r#"^org\.wezfurlong\.wezterm$"#
+    default-column-width {}
+}
+window-rule {
+    match app-id=r#"^org\.gnome\."#
+    draw-border-with-background false
+    geometry-corner-radius 12
+    clip-to-geometry true
+}
+window-rule {
+    match app-id=r#"^gnome-control-center$"#
+    match app-id=r#"^pavucontrol$"#
+    match app-id=r#"^nm-connection-editor$"#
+    default-column-width { proportion 0.5; }
+    open-floating false
+}
+window-rule {
+    match app-id=r#"^gnome-calculator$"#
+    match app-id=r#"^galculator$"#
+    match app-id=r#"^blueman-manager$"#
+    match app-id=r#"^org\.gnome\.Nautilus$"#
+    match app-id=r#"^steam$"#
+    match app-id=r#"^xdg-desktop-portal$"#
+    open-floating true
+}
+window-rule {
+    match app-id=r#"^org\.wezfurlong\.wezterm$"#
+    match app-id="Alacritty"
+    match app-id="zen"
+    match app-id="com.mitchellh.ghostty"
+    match app-id="kitty"
+    draw-border-with-background false
+}
+window-rule {
+    match is-active=false
+    opacity 0.9
+}
+window-rule {
+    match app-id=r#"firefox$"# title="^Picture-in-Picture$"
+    match app-id="zoom"
+    open-floating true
+}
+// Open dms windows as floating by default
+window-rule {
+    match app-id=r#"org.quickshell$"#
+    open-floating true
+}
+debug {
+    honor-xdg-activation-with-invalid-serial
+    // render-drm-device "dev/dri/renderD128"
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// Startup applications
-// ══════════════════════════════════════════════════════════════════════════════
-
-spawn-at-startup "ghostty"
-spawn-at-startup "zen"
-
-// ══════════════════════════════════════════════════════════════════════════════
-// Keybindings
-// ══════════════════════════════════════════════════════════════════════════════
-
-binds {
-    // ──────────────────────────────────────────────────────────────────────────
-    // Application launchers
-    // ──────────────────────────────────────────────────────────────────────────
-    Alt+Return { spawn "ghostty"; }
-    Super+Space { spawn "dms" "ipc" "call" "spotlight" "toggle"; }
-    Alt+O { spawn "1password"; }
-    Alt+C { spawn "slack"; }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Window management
-    // ──────────────────────────────────────────────────────────────────────────
-    Alt+W { close-window; }
-    Alt+V { toggle-window-floating; }
-    Alt+F { maximize-column; }
-    Alt+Shift+F { fullscreen-window; }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Column/window focus (vim-style)
-    // ──────────────────────────────────────────────────────────────────────────
-    Alt+H { focus-column-left; }
-    Alt+L { focus-column-right; }
-    Alt+J { focus-window-down; }
-    Alt+K { focus-window-up; }
-
-    // Arrow keys
-    Alt+Left { focus-column-left; }
-    Alt+Right { focus-column-right; }
-    Alt+Down { focus-window-down; }
-    Alt+Up { focus-window-up; }
-
-    // First/last column
-    Alt+Home { focus-column-first; }
-    Alt+End { focus-column-last; }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Move windows (vim-style)
-    // ──────────────────────────────────────────────────────────────────────────
-    Alt+Shift+H { move-column-left; }
-    Alt+Shift+L { move-column-right; }
-    Alt+Shift+J { move-window-down; }
-    Alt+Shift+K { move-window-up; }
-
-    // Arrow keys
-    Alt+Shift+Left { move-column-left; }
-    Alt+Shift+Right { move-column-right; }
-    Alt+Shift+Down { move-window-down; }
-    Alt+Shift+Up { move-window-up; }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Column width adjustment
-    // ──────────────────────────────────────────────────────────────────────────
-    Alt+Minus { set-column-width "-10%"; }
-    Alt+Equal { set-column-width "+10%"; }
-
-    // Cycle through preset widths
-    Alt+R { switch-preset-column-width; }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Consume/expel windows (niri's column stacking)
-    // ──────────────────────────────────────────────────────────────────────────
-    Alt+BracketLeft { consume-window-into-column; }
-    Alt+BracketRight { expel-window-from-column; }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Workspace navigation
-    // ──────────────────────────────────────────────────────────────────────────
-    Alt+1 { focus-workspace 1; }
-    Alt+2 { focus-workspace 2; }
-    Alt+3 { focus-workspace 3; }
-    Alt+4 { focus-workspace 4; }
-    Alt+5 { focus-workspace 5; }
-    Alt+6 { focus-workspace 6; }
-    Alt+7 { focus-workspace 7; }
-    Alt+8 { focus-workspace 8; }
-    Alt+9 { focus-workspace 9; }
-    Alt+0 { focus-workspace 10; }
-
-    // Move window to workspace
-    Alt+Shift+1 { move-column-to-workspace 1; }
-    Alt+Shift+2 { move-column-to-workspace 2; }
-    Alt+Shift+3 { move-column-to-workspace 3; }
-    Alt+Shift+4 { move-column-to-workspace 4; }
-    Alt+Shift+5 { move-column-to-workspace 5; }
-    Alt+Shift+6 { move-column-to-workspace 6; }
-    Alt+Shift+7 { move-column-to-workspace 7; }
-    Alt+Shift+8 { move-column-to-workspace 8; }
-    Alt+Shift+9 { move-column-to-workspace 9; }
-    Alt+Shift+0 { move-column-to-workspace 10; }
-
-    // Relative workspace navigation
-    Alt+Comma { focus-workspace-up; }
-    Alt+Period { focus-workspace-down; }
-    Alt+Tab { focus-workspace-previous; }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Monitor management
-    // ──────────────────────────────────────────────────────────────────────────
-    Alt+Shift+Comma { move-column-to-monitor-left; }
-    Alt+Shift+Period { move-column-to-monitor-right; }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Screenshots (niri built-in)
-    // ──────────────────────────────────────────────────────────────────────────
-    Super+Shift+3 { screenshot; }
-    Super+Shift+4 { screenshot-window; }
-    Print { screenshot; }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Session management
-    // ──────────────────────────────────────────────────────────────────────────
-    Alt+Escape { spawn "dms" "ipc" "call" "lock" "lock"; }
-    Alt+Shift+Escape { quit skip-confirmation=true; }
-
-    // ──────────────────────────────────────────────────────────────────────────
-    // Volume/media (fn keys)
-    // ──────────────────────────────────────────────────────────────────────────
-    XF86AudioRaiseVolume allow-when-locked=true { spawn "wpctl" "set-volume" "-l" "1" "@DEFAULT_AUDIO_SINK@" "5%+"; }
-    XF86AudioLowerVolume allow-when-locked=true { spawn "wpctl" "set-volume" "@DEFAULT_AUDIO_SINK@" "5%-"; }
-    XF86AudioMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SINK@" "toggle"; }
-    XF86AudioMicMute allow-when-locked=true { spawn "wpctl" "set-mute" "@DEFAULT_AUDIO_SOURCE@" "toggle"; }
-
-    // Media playback
-    XF86AudioPlay allow-when-locked=true { spawn "playerctl" "play-pause"; }
-    XF86AudioPause allow-when-locked=true { spawn "playerctl" "play-pause"; }
-    XF86AudioNext allow-when-locked=true { spawn "playerctl" "next"; }
-    XF86AudioPrev allow-when-locked=true { spawn "playerctl" "previous"; }
+// Override to disable super+tab
+recent-windows {
+    binds {
+        Alt+Tab         { next-window scope="output"; }
+        Alt+Shift+Tab   { previous-window scope="output"; }
+        Alt+grave       { next-window filter="app-id"; }
+        Alt+Shift+grave { previous-window filter="app-id"; }
+    }
 }
 
-// ══════════════════════════════════════════════════════════════════════════════
-// DMS includes (dynamic theming)
-// Create empty files first: mkdir -p ~/.config/niri/dms && touch ~/.config/niri/dms/{colors,layout,alttab,binds}.kdl
-// ══════════════════════════════════════════════════════════════════════════════
-
+// Include dms files
 include "dms/colors.kdl"
 include "dms/layout.kdl"
 include "dms/alttab.kdl"

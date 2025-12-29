@@ -23,8 +23,8 @@ sudo nixos-rebuild build --flake "./nix#$host" && nvd diff /run/current-system r
 '''
 sources = ["nix/**/*.nix", "nix/flake.*"]
 
-[tasks."switch-darwin"]
-description = "Switch Home Manager configuration on macOS"
+[tasks."switch-hm"]
+description = "Switch Home Manager configuration (standalone)"
 run = '''
 host=$(hostname | sed 's/\.local$//')
 home-manager switch --flake "./nix#$host"

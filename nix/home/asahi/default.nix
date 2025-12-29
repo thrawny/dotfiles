@@ -4,6 +4,7 @@
 #
 # DMS provides: panel, launcher, lock screen, notifications, wallpaper
 {
+  config,
   lib,
   pkgs,
   dotfiles,
@@ -16,11 +17,17 @@
   ];
 
   # Niri config via symlink (not niri-flake) for DMS dynamic theming support
-  xdg.configFile."niri/config.kdl".source = "${dotfiles}/config/niri/config.kdl";
+  xdg.configFile."niri/config.kdl".source =
+    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/niri/config.kdl";
+  xdg.configFile."niri/dms".source =
+    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/niri/dms";
 
   # Disable package installation - use distro packages instead
   programs.ghostty.package = lib.mkForce null;
   programs.ghostty.systemd.enable = lib.mkForce false;
+
+  # Override font size for this host's display
+  programs.ghostty.settings.font-size = 13;
 
   # Linux keybindings (Super for copy/paste like macOS Cmd)
   programs.ghostty.settings.keybind = [
@@ -29,6 +36,7 @@
     "super+c=copy_to_clipboard"
     "super+v=paste_from_clipboard"
   ];
+
 
   # XWayland satellite for X11 app support
   # This runs as a systemd user service
@@ -47,15 +55,4 @@
     };
     Install.WantedBy = [ "graphical-session.target" ];
   };
-
-  home.packages = with pkgs; [
-    # XWayland satellite for running X11 apps
-    xwayland-satellite
-
-    # playerctl for media keys
-    playerctl
-
-    # For volume control
-    wireplumber
-  ];
 }
