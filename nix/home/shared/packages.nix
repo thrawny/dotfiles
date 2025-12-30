@@ -46,7 +46,6 @@
     ruff
     tree-sitter
     gcc
-    vim
     wget
     usage
     fd
