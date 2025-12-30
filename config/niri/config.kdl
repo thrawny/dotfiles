@@ -2,6 +2,9 @@
 // "/-" comments out the following node.
 // Check the wiki for a full description of the configuration:
 // https://github.com/YaLTeR/niri/wiki/Configuration:-Introduction
+
+workspace "browser"  // Named workspace for Zen
+
 config-notification {
     disable-failed
 }
@@ -196,7 +199,7 @@ window-rule {
 window-rule {
     match app-id=r#"^org\.wezfurlong\.wezterm$"#
     match app-id="Alacritty"
-    match app-id="zen"
+    match app-id="app.zen_browser.zen"
     match app-id="com.mitchellh.ghostty"
     match app-id="kitty"
     draw-border-with-background false
@@ -235,3 +238,9 @@ include "dms/colors.kdl"
 include "dms/layout.kdl"
 include "dms/alttab.kdl"
 include "dms/binds.kdl"
+
+// Zen browser: open on browser workspace
+window-rule {
+    match app-id="app.zen_browser.zen"
+    open-on-workspace "browser"
+}

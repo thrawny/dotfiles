@@ -23,7 +23,7 @@ binds {
     }
     Mod+N hotkey-overlay-title="Notification Center" { spawn "dms" "ipc" "call" "notifications" "toggle"; }
     Mod+Shift+N hotkey-overlay-title="Notepad" { spawn "dms" "ipc" "call" "notepad" "toggle"; }
-    Mod+B { focus-workspace 10; }
+    Mod+B { focus-workspace "browser"; }
     Mod+O hotkey-overlay-title="1Password" { spawn "1password"; }
     Mod+P hotkey-overlay-title="Spotify" { spawn "spotify"; }
     Mod+Shift+S hotkey-overlay-title="Slack" { spawn "slack"; }
@@ -200,6 +200,8 @@ binds {
     Print { screenshot; }
     Ctrl+Print { screenshot-screen; }
     Alt+Print { screenshot-window; }
+    Super+Shift+3 { screenshot-screen; }
+    Super+Shift+4 { screenshot; }
     // === System Controls ===
     Mod+Ctrl+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
     Mod+Shift+P { power-off-monitors; }
