@@ -16,11 +16,11 @@
     ../shared
   ];
 
-  # Niri config via symlink (not niri-flake) for DMS dynamic theming support
-  xdg.configFile."niri/config.kdl".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/niri/config.kdl";
-  xdg.configFile."niri/dms".source =
-    config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/niri/dms";
+  # Niri with DMS (DankMaterialShell) integration
+  custom.niri = {
+    enable = true;
+    enableDms = true;
+  };
 
   # Disable package installation - use distro packages instead
   programs.ghostty.package = lib.mkForce null;

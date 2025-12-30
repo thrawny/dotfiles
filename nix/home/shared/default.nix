@@ -39,6 +39,7 @@ in
     ./tmux.nix
     ./zsh.nix
     ./mise.nix
+    ./niri.nix
   ];
 
   # Let Home Manager manage itself

@@ -1,0 +1,13 @@
+// Niri configuration with DMS (DankMaterialShell)
+// This wrapper includes the base config and adds DMS-specific overrides
+// Note: paths are relative to ~/.config/niri/ (where this gets symlinked)
+
+include "base.kdl"
+
+// DMS overrides for layout and colors
+include "dms/colors.kdl"
+include "dms/layout.kdl"
+include "dms/alttab.kdl"
+
+// DMS-specific keybindings (overrides base binds)
+include "dms/binds.kdl"
