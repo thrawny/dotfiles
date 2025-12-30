@@ -36,5 +36,15 @@ in
       "niri/dms".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/niri/dms";
     };
+
+    # Create empty colors.kdl if missing (DMS regenerates it from GUI)
+    home.activation.ensureDmsColors = lib.mkIf cfg.enableDms (
+      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        colorsFile="${dotfiles}/config/niri/dms/colors.kdl"
+        if [ ! -f "$colorsFile" ]; then
+          $DRY_RUN_CMD touch "$colorsFile"
+        fi
+      ''
+    );
   };
 }
