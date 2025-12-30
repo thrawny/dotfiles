@@ -47,16 +47,27 @@ in
     ];
   };
 
-  hardware.graphics = {
-    enable = true;
-    enable32Bit = true; # Required for Steam and most games
+  hardware = {
+    graphics = {
+      enable = true;
+      enable32Bit = true; # Required for Steam and most games
+    };
+    # Logitech device management (battery status, configuration)
+    logitech.wireless = {
+      enable = true;
+      enableGraphical = true; # Solaar GUI
+    };
+    # NVIDIA configuration for dedicated GPU only with Wayland
+    nvidia = {
+      open = false; # Use proprietary drivers for better compatibility
+      modesetting.enable = true; # Required for Wayland
+      nvidiaSettings = true;
+      powerManagement.enable = true; # For suspend/hibernate support
+      package = config.boot.kernelPackages.nvidiaPackages.stable; # Use stable driver
+    };
   };
 
-  # Logitech device management (battery status, configuration)
-  hardware.logitech.wireless = {
-    enable = true;
-    enableGraphical = true; # Solaar GUI
-  };
+  services.xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver
 
   # Games partition (~250GB on sdb4)
   fileSystems."/home/${username}/Games" = {
@@ -74,16 +85,6 @@ in
     nvtopPackages.nvidia # GPU monitoring (htop for NVIDIA GPU)
     pkgsi686Linux.gperftools # 32-bit tcmalloc for Source engine games (HL2, TF2, etc.)
   ];
-
-  # NVIDIA configuration for dedicated GPU only with Wayland
-  services.xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver
-  hardware.nvidia = {
-    open = false; # Use proprietary drivers for better compatibility
-    modesetting.enable = true; # Required for Wayland
-    nvidiaSettings = true;
-    powerManagement.enable = true; # For suspend/hibernate support
-    package = config.boot.kernelPackages.nvidiaPackages.stable; # Use stable driver
-  };
 
   # Gaming configuration
   programs = {

@@ -22,20 +22,23 @@
     enableDms = true;
   };
 
-  # Disable package installation - use distro packages instead
-  programs.ghostty.package = lib.mkForce null;
-  programs.ghostty.systemd.enable = lib.mkForce false;
-
-  # Override font size and padding for this host's display
-  programs.ghostty.settings.font-size = 11;
-
-  # Linux keybindings (Super for copy/paste like macOS Cmd)
-  programs.ghostty.settings.keybind = [
-    "shift+enter=text:\\n"
-    "super+a=select_all"
-    "super+c=copy_to_clipboard"
-    "super+v=paste_from_clipboard"
-  ];
+  # Ghostty overrides for this host
+  programs.ghostty = {
+    # Use distro packages instead of Nix
+    package = lib.mkForce null;
+    systemd.enable = lib.mkForce false;
+    settings = {
+      # Font size for this host's display
+      font-size = 11;
+      # Linux keybindings (Super for copy/paste like macOS Cmd)
+      keybind = [
+        "shift+enter=text:\\n"
+        "super+a=select_all"
+        "super+c=copy_to_clipboard"
+        "super+v=paste_from_clipboard"
+      ];
+    };
+  };
 
 
   # XWayland satellite for X11 app support
