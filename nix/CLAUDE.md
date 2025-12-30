@@ -8,10 +8,16 @@ All commands are managed via [mise](https://mise.jdx.dev/), a modern task runner
 
 ### NixOS: Rebuild System
 ```bash
-mise check        # Fast evaluation check (syntax, types, schema) - no build
+mise check        # Evaluate current host's NixOS config (no build)
 mise dry          # Full build without switching - catches compile/fetch errors
 mise switch       # Build and activate immediately (auto-detects hostname)
 mise diff         # Build and show what packages/versions changed
+```
+
+### Home Manager (standalone)
+```bash
+mise check-hm     # Evaluate current host's home-manager config (no build)
+mise switch-hm    # Switch home-manager configuration
 ```
 
 **When to use which:**

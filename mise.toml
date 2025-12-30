@@ -41,8 +41,21 @@ echo "Write to USB with: sudo dd if=./result/iso/*.iso of=/dev/sdX bs=4M status=
 sources = ["nix/**/*.nix", "nix/flake.*"]
 
 [tasks.check]
-description = "Evaluate flake and check for errors (no build)"
-run = "nix flake check --no-build ./nix"
+description = "Evaluate current host's NixOS config (no build)"
+run = '''
+host=$(hostname)
+echo "Evaluating NixOS config for $host..."
+nix eval "./nix#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null && echo "Config is valid"
+'''
+sources = ["nix/**/*.nix", "nix/flake.*"]
+
+[tasks.check-hm]
+description = "Evaluate current host's home-manager config (no build)"
+run = '''
+host=$(hostname)
+echo "Evaluating home-manager config for $host..."
+nix eval "./nix#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null && echo "Config is valid"
+'''
 sources = ["nix/**/*.nix", "nix/flake.*"]
 
 [tasks."nix:clean"]
