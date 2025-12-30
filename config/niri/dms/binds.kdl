@@ -12,16 +12,14 @@ binds {
     Mod+Shift+C hotkey-overlay-title="Clipboard Manager" {
         spawn "dms" "ipc" "call" "clipboard" "toggle";
     }
-    Mod+M hotkey-overlay-title="Task Manager" {
-        spawn "dms" "ipc" "call" "processlist" "focusOrToggle";
-    }
+    Mod+M hotkey-overlay-title="Focus Previous" { focus-workspace-previous; }
     Mod+Shift+Comma hotkey-overlay-title="Settings" {
         spawn "dms" "ipc" "call" "settings" "focusOrToggle";
     }
     Mod+Y hotkey-overlay-title="Browse Wallpapers" {
         spawn "dms" "ipc" "call" "dankdash" "wallpaper";
     }
-    Mod+N hotkey-overlay-title="Notification Center" { spawn "dms" "ipc" "call" "notifications" "toggle"; }
+    Mod+N hotkey-overlay-title="Workspace 1" { focus-workspace 1; }
     Mod+Shift+N hotkey-overlay-title="Notepad" { spawn "dms" "ipc" "call" "notepad" "toggle"; }
     Mod+B { focus-workspace "browser"; }
     Mod+O hotkey-overlay-title="1Password" { spawn "1password"; }
