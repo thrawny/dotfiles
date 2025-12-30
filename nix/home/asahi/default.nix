@@ -26,8 +26,8 @@
   programs.ghostty.package = lib.mkForce null;
   programs.ghostty.systemd.enable = lib.mkForce false;
 
-  # Override font size for this host's display
-  programs.ghostty.settings.font-size = 13;
+  # Override font size and padding for this host's display
+  programs.ghostty.settings.font-size = 11;
 
   # Linux keybindings (Super for copy/paste like macOS Cmd)
   programs.ghostty.settings.keybind = [
