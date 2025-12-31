@@ -203,4 +203,7 @@ binds {
     // === System Controls ===
     Mod+Ctrl+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
     Mod+Shift+P { power-off-monitors; }
+
+    // === Keyboard Layout ===
+    Mod+Super+Space hotkey-overlay-title="Switch Keyboard Layout" { switch-layout "next"; }
 }

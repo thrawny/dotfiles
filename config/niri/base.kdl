@@ -18,6 +18,7 @@ input {
 
     keyboard {
         xkb {
+            layout "au,se"
             options "caps:escape"
         }
         numlock
