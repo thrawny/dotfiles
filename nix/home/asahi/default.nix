@@ -40,7 +40,6 @@
     };
   };
 
-
   # XWayland satellite for X11 app support
   # This runs as a systemd user service
   systemd.user.services.xwayland-satellite = {

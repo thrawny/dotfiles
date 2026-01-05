@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ lib, config, ... }:
 {
   imports = [
     ../../modules/nixos/default.nix
@@ -22,5 +22,10 @@
     };
     efi.canTouchEfiVariables = true;
     grub.enable = lib.mkForce false;
+  };
+
+  # Host-specific home-manager overrides
+  home-manager.users.${config.dotfiles.username} = {
+    programs.ghostty.settings.font-size = 11;
   };
 }

@@ -471,8 +471,7 @@ let
   };
 
   # Merge binds based on DMS mode
-  allBinds =
-    baseBinds // (if cfg.enableDms then dmsBinds else nonDmsBinds) // cfg.extraBinds;
+  allBinds = baseBinds // (if cfg.enableDms then dmsBinds else nonDmsBinds) // cfg.extraBinds;
 
   # Base window rules (simplified for niri-flake compatibility)
   baseWindowRules = [
@@ -491,8 +490,9 @@ let
       matches = [
         { app-id = "^gnome-calculator$"; }
         { app-id = "^galculator$"; }
-        { app-id = "^blueman-manager$"; }
-        { app-id = "^steam$"; }
+        { app-id = "blueman-manager"; }
+        { app-id = "^nm-connection-editor$"; }
+        { app-id = "^org\\.pulseaudio\\.pavucontrol$"; }
         { app-id = "^xdg-desktop-portal$"; }
         { app-id = "zoom"; }
       ];
@@ -542,194 +542,205 @@ in
 
   config = lib.mkIf cfg.enable {
     # Packages for non-DMS setup (swaybg for wallpaper)
-    home.packages = lib.mkIf (!cfg.enableDms) (with pkgs; [
-      swaybg
-    ]);
+    home.packages = lib.mkIf (!cfg.enableDms) (
+      with pkgs;
+      [
+        swaybg
+      ]
+    );
 
     # Using niri-flake.homeModules.config - only manages config, not package
     # niri is installed via Fedora DNF
     programs.niri.settings = {
-        # Disable config notification on failure
-        config-notification.disable-failed = true;
+      # Disable config notification on failure
+      config-notification.disable-failed = true;
 
-        # Gestures
-        gestures.hot-corners.enable = false;
+      # Gestures
+      gestures.hot-corners.enable = false;
 
-        # Input
-        input = {
-          mod-key = "Alt";
-          keyboard = {
-            xkb = {
-              layout = "au,se";
-              options = "caps:escape";
-            };
-            numlock = true;
-            repeat-delay = 200;
-            repeat-rate = 30;
+      # Input
+      input = {
+        mod-key = "Alt";
+        warp-mouse-to-focus.enable = true;
+        keyboard = {
+          xkb = {
+            layout = "au,se";
+            options = "caps:escape";
           };
-          touchpad = {
-            natural-scroll = true;
-            tap = true;
-            scroll-factor = cfg.scrollFactor;
-          };
+          numlock = true;
+          repeat-delay = 200;
+          repeat-rate = 30;
         };
-
-        # Layout
-        layout = {
-          inherit (cfg) gaps;
-          background-color = "transparent";
-          center-focused-column = "never";
-
-          preset-column-widths = [
-            { proportion = 0.33333; }
-            { proportion = 0.5; }
-            { proportion = 0.66667; }
-          ];
-
-          default-column-width.proportion = 0.5;
-
-          border = {
-            width = 2;
-            active.color = colors.active;
-            inactive.color = colors.inactive;
-            urgent.color = colors.urgent;
-          };
-
-          focus-ring = {
-            width = 2;
-            active.color = colors.active;
-            inactive.color = colors.inactive;
-            urgent.color = colors.urgent;
-          };
-
-          shadow = {
-            softness = 30;
-            spread = 5;
-            offset = {
-              x = 0;
-              y = 5;
-            };
-            color = colors.shadow;
-          };
-
-          # NOTE: tab-indicator and insert-hint colors not in niri-flake schema yet
+        touchpad = {
+          natural-scroll = true;
+          tap = true;
+          scroll-factor = cfg.scrollFactor;
         };
+      };
 
-        # Layer rules
-        layer-rules = [
-          {
-            matches = [ { namespace = "^quickshell$"; } ];
-            place-within-backdrop = true;
-          }
+      # Layout
+      layout = {
+        inherit (cfg) gaps;
+        background-color = "transparent";
+        center-focused-column = "never";
+
+        preset-column-widths = [
+          { proportion = 0.33333; }
+          { proportion = 0.5; }
+          { proportion = 0.66667; }
         ];
 
-        # Overview
-        overview.workspace-shadow.enable = false;
+        default-column-width.proportion = 0.5;
 
-        # Spawn at startup
-        spawn-at-startup =
-          [
-            # Clipboard history
-            {
-              command = [
-                "bash"
-                "-c"
-                "wl-paste --watch cliphist store &"
-              ];
-            }
-            # Terminal
-            { command = [ "ghostty" ]; }
-            # Browser (sent to workspace 2 via window rule)
-            { command = [ "zen" ]; }
-          ]
-          ++ (
-            if cfg.enableDms then
-              [ ]
-            else
-              [
-                # Status bar
-                { command = [ "waybar" ]; }
-                # Notifications
-                { command = [ "mako" ]; }
-                # Wallpaper
-                {
-                  command = [
-                    "swaybg"
-                    "-i"
-                    "${config.home.homeDirectory}/dotfiles/assets/nasa.jpg"
-                    "-m"
-                    "fill"
-                  ];
-                }
-              ]
-          );
-
-        # NOTE: recent-windows (alt-tab) config not supported by niri-flake yet
-        # Alt+Tab bindings are defined in binds section instead
-
-        # Environment
-        environment.XDG_CURRENT_DESKTOP = "niri";
-
-        # Hotkey overlay
-        hotkey-overlay.skip-at-startup = true;
-
-        # Prefer no CSD
-        prefer-no-csd = true;
-
-        # Screenshot path
-        screenshot-path = "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png";
-
-        # Animations
-        animations = {
-          workspace-switch.kind.spring = {
-            damping-ratio = 0.80;
-            stiffness = 523;
-            epsilon = 0.0001;
-          };
-          window-open.kind.easing = {
-            duration-ms = 150;
-            curve = "ease-out-expo";
-          };
-          window-close.kind.easing = {
-            duration-ms = 150;
-            curve = "ease-out-quad";
-          };
-          horizontal-view-movement.kind.spring = {
-            damping-ratio = 0.85;
-            stiffness = 423;
-            epsilon = 0.0001;
-          };
-          window-movement.kind.spring = {
-            damping-ratio = 0.75;
-            stiffness = 323;
-            epsilon = 0.0001;
-          };
-          window-resize.kind.spring = {
-            damping-ratio = 0.85;
-            stiffness = 423;
-            epsilon = 0.0001;
-          };
-          config-notification-open-close.kind.spring = {
-            damping-ratio = 0.65;
-            stiffness = 923;
-            epsilon = 0.001;
-          };
-          screenshot-ui-open.kind.easing = {
-            duration-ms = 200;
-            curve = "ease-out-quad";
-          };
-          overview-open-close.kind.spring = {
-            damping-ratio = 0.85;
-            stiffness = 800;
-            epsilon = 0.0001;
-          };
+        border = {
+          width = 2;
+          active.color = colors.active;
+          inactive.color = colors.inactive;
+          urgent.color = colors.urgent;
         };
 
-        # Window rules
-        window-rules = baseWindowRules ++ (if cfg.enableDms then dmsWindowRules else [ ]);
+        focus-ring = {
+          width = 2;
+          active.color = colors.active;
+          inactive.color = colors.inactive;
+          urgent.color = colors.urgent;
+        };
 
-        # Binds
-        binds = allBinds;
+        shadow = {
+          softness = 30;
+          spread = 5;
+          offset = {
+            x = 0;
+            y = 5;
+          };
+          color = colors.shadow;
+        };
+
+        # NOTE: tab-indicator and insert-hint colors not in niri-flake schema yet
       };
+
+      # Layer rules
+      layer-rules = [
+        {
+          matches = [ { namespace = "^quickshell$"; } ];
+          place-within-backdrop = true;
+        }
+      ];
+
+      # Overview
+      overview.workspace-shadow.enable = false;
+
+      # Spawn at startup
+      spawn-at-startup = [
+        # Clipboard history
+        {
+          command = [
+            "bash"
+            "-c"
+            "wl-paste --watch cliphist store &"
+          ];
+        }
+        # Terminal
+        { command = [ "ghostty" ]; }
+        # Browser (sent to workspace 2 via window rule)
+        { command = [ "zen" ]; }
+      ]
+      ++ (
+        if cfg.enableDms then
+          [ ]
+        else
+          [
+            # Status bar (niri-specific config)
+            {
+              command = [
+                "waybar"
+                "-c"
+                "${config.home.homeDirectory}/.config/waybar/config-niri"
+                "-s"
+                "${config.home.homeDirectory}/.config/waybar/style-niri.css"
+              ];
+            }
+            # Notifications
+            { command = [ "mako" ]; }
+            # Wallpaper
+            {
+              command = [
+                "swaybg"
+                "-i"
+                "${config.home.homeDirectory}/dotfiles/assets/nasa.jpg"
+                "-m"
+                "fill"
+              ];
+            }
+          ]
+      );
+
+      # NOTE: recent-windows (alt-tab) config not supported by niri-flake yet
+      # Alt+Tab bindings are defined in binds section instead
+
+      # Environment
+      environment.XDG_CURRENT_DESKTOP = "niri";
+
+      # Hotkey overlay
+      hotkey-overlay.skip-at-startup = true;
+
+      # Prefer no CSD
+      prefer-no-csd = true;
+
+      # Screenshot path
+      screenshot-path = "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png";
+
+      # Animations
+      animations = {
+        workspace-switch.kind.spring = {
+          damping-ratio = 0.80;
+          stiffness = 523;
+          epsilon = 0.0001;
+        };
+        window-open.kind.easing = {
+          duration-ms = 150;
+          curve = "ease-out-expo";
+        };
+        window-close.kind.easing = {
+          duration-ms = 150;
+          curve = "ease-out-quad";
+        };
+        horizontal-view-movement.kind.spring = {
+          damping-ratio = 0.85;
+          stiffness = 423;
+          epsilon = 0.0001;
+        };
+        window-movement.kind.spring = {
+          damping-ratio = 0.75;
+          stiffness = 323;
+          epsilon = 0.0001;
+        };
+        window-resize.kind.spring = {
+          damping-ratio = 0.85;
+          stiffness = 423;
+          epsilon = 0.0001;
+        };
+        config-notification-open-close.kind.spring = {
+          damping-ratio = 0.65;
+          stiffness = 923;
+          epsilon = 0.001;
+        };
+        screenshot-ui-open.kind.easing = {
+          duration-ms = 200;
+          curve = "ease-out-quad";
+        };
+        overview-open-close.kind.spring = {
+          damping-ratio = 0.85;
+          stiffness = 800;
+          epsilon = 0.0001;
+        };
+      };
+
+      # Window rules
+      window-rules = baseWindowRules ++ (if cfg.enableDms then dmsWindowRules else [ ]);
+
+      # Binds
+      binds = allBinds;
+    };
   };
 }
