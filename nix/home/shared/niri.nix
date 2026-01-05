@@ -3,6 +3,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
@@ -540,6 +541,11 @@ in
   };
 
   config = lib.mkIf cfg.enable {
+    # Packages for non-DMS setup (swaybg for wallpaper)
+    home.packages = lib.mkIf (!cfg.enableDms) (with pkgs; [
+      swaybg
+    ]);
+
     # Using niri-flake.homeModules.config - only manages config, not package
     # niri is installed via Fedora DNF
     programs.niri.settings = {
@@ -624,15 +630,38 @@ in
         overview.workspace-shadow.enable = false;
 
         # Spawn at startup
-        spawn-at-startup = [
-          {
-            command = [
-              "bash"
-              "-c"
-              "wl-paste --watch cliphist store &"
-            ];
-          }
-        ];
+        spawn-at-startup =
+          [
+            # Clipboard history
+            {
+              command = [
+                "bash"
+                "-c"
+                "wl-paste --watch cliphist store &"
+              ];
+            }
+          ]
+          ++ (
+            if cfg.enableDms then
+              [ ]
+            else
+              [
+                # Status bar
+                { command = [ "waybar" ]; }
+                # Notifications
+                { command = [ "mako" ]; }
+                # Wallpaper
+                {
+                  command = [
+                    "swaybg"
+                    "-i"
+                    "${config.home.homeDirectory}/dotfiles/assets/nasa.jpg"
+                    "-m"
+                    "fill"
+                  ];
+                }
+              ]
+          );
 
         # NOTE: recent-windows (alt-tab) config not supported by niri-flake yet
         # Alt+Tab bindings are defined in binds section instead
