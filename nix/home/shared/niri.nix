@@ -55,6 +55,10 @@ let
       action.focus-workspace = 1;
       hotkey-overlay.title = "Workspace 1";
     };
+    "Mod+B" = {
+      action.focus-workspace = 2;
+      hotkey-overlay.title = "Browser (WS 2)";
+    };
     "Mod+O" = {
       action.spawn = [ "1password" ];
       hotkey-overlay.title = "1Password";
