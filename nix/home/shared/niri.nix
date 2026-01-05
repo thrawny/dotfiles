@@ -9,10 +9,10 @@
 let
   cfg = config.custom.niri;
 
-  # Base colors (non-DMS)
+  # Base colors (non-DMS) - matching Hyprland Molokai theme
   baseColors = {
-    active = "#707070";
-    inactive = "#d0d0d0";
+    active = "#f92672";
+    inactive = "#3a3a3a";
     urgent = "#cc4444";
     shadow = "#0007";
   };
@@ -593,18 +593,14 @@ in
         default-column-width.proportion = 0.5;
 
         border = {
+          enable = true;
           width = 2;
           active.color = colors.active;
           inactive.color = colors.inactive;
           urgent.color = colors.urgent;
         };
 
-        focus-ring = {
-          width = 2;
-          active.color = colors.active;
-          inactive.color = colors.inactive;
-          urgent.color = colors.urgent;
-        };
+        focus-ring.enable = false;
 
         shadow = {
           softness = 30;
