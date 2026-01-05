@@ -55,7 +55,6 @@ let
       action.focus-workspace = 1;
       hotkey-overlay.title = "Workspace 1";
     };
-    "Mod+B".action.focus-workspace = "browser";
     "Mod+O" = {
       action.spawn = [ "1password" ];
       hotkey-overlay.title = "1Password";
@@ -473,7 +472,7 @@ let
 
   # Base window rules (simplified for niri-flake compatibility)
   baseWindowRules = [
-    # Apply rounded corners to all windows
+    # Apply rounded corners and maximize all windows by default
     {
       geometry-corner-radius = {
         top-left = 12.0;
@@ -482,6 +481,7 @@ let
         bottom-right = 12.0;
       };
       clip-to-geometry = true;
+      open-maximized = true;
     }
     {
       matches = [
@@ -497,10 +497,6 @@ let
     {
       matches = [ { is-active = false; } ];
       opacity = 0.9;
-    }
-    {
-      matches = [ { app-id = "app.zen_browser.zen"; } ];
-      open-on-workspace = "browser";
     }
   ];
 
@@ -549,9 +545,6 @@ in
     # Using niri-flake.homeModules.config - only manages config, not package
     # niri is installed via Fedora DNF
     programs.niri.settings = {
-        # Named workspaces
-        workspaces."browser" = { };
-
         # Disable config notification on failure
         config-notification.disable-failed = true;
 
@@ -640,6 +633,10 @@ in
                 "wl-paste --watch cliphist store &"
               ];
             }
+            # Terminal
+            { command = [ "ghostty" ]; }
+            # Browser (sent to workspace 2 via window rule)
+            { command = [ "zen" ]; }
           ]
           ++ (
             if cfg.enableDms then
