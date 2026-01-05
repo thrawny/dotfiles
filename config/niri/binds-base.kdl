@@ -13,7 +13,7 @@ binds {
     Mod+B { focus-workspace "browser"; }
     Mod+O hotkey-overlay-title="1Password" { spawn "1password"; }
     Mod+P hotkey-overlay-title="Spotify" { spawn "spotify"; }
-    Mod+C hotkey-overlay-title="Slack" { spawn "slack"; }
+    Mod+Shift+S hotkey-overlay-title="Slack" { spawn "slack"; }
 
     // === Security ===
     Mod+Escape hotkey-overlay-title="Lock Screen" { spawn "hyprlock"; }
@@ -151,7 +151,7 @@ binds {
     Mod+Shift+R { switch-preset-window-height; }
     Mod+Ctrl+R { reset-window-height; }
     Mod+Ctrl+F { expand-column-to-available-width; }
-    Mod+Shift+C { center-column; }
+    Mod+C { center-column; }
     Mod+Ctrl+C { center-visible-columns; }
 
     // === Manual Sizing ===
@@ -170,4 +170,7 @@ binds {
     // === System Controls ===
     Mod+Ctrl+Escape allow-inhibiting=false { toggle-keyboard-shortcuts-inhibit; }
     Mod+Shift+P { power-off-monitors; }
+
+    // === Keyboard Layout ===
+    Mod+Super+Space hotkey-overlay-title="Switch Keyboard Layout" { switch-layout "next"; }
 }
