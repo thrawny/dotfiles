@@ -4,6 +4,7 @@
   config,
   lib,
   pkgs,
+  self,
   ...
 }:
 let
@@ -28,6 +29,10 @@ let
   };
 
   colors = if cfg.enableDms then dmsColors else baseColors;
+
+  # Niri project switcher (Rust GTK4 binary from flake, only evaluated when enabled)
+  niri-switcher =
+    if cfg.enableSwitcher then self.packages.${pkgs.stdenv.hostPlatform.system}.niri-switcher else null;
 
   # Base keybindings (shared between DMS and non-DMS)
   baseBinds = {
@@ -220,6 +225,12 @@ let
     "Mod+Equal".action.set-column-width = "+10%";
     "Mod+Shift+Minus".action.set-window-height = "-10%";
     "Mod+Shift+Equal".action.set-window-height = "+10%";
+
+    # Project Switcher
+    "Mod+S" = {
+      action.spawn = [ "niri-switcher" ];
+      hotkey-overlay.title = "Project Switcher";
+    };
 
     # Screenshots
     "Print".action.screenshot = [ ];
@@ -495,6 +506,7 @@ let
         { app-id = "^org\\.pulseaudio\\.pavucontrol$"; }
         { app-id = "^xdg-desktop-portal$"; }
         { app-id = "zoom"; }
+        { app-id = "^com\\.thrawny\\.niri-switcher$"; }
       ];
       open-floating = true;
     }
@@ -538,16 +550,19 @@ in
       default = if cfg.enableDms then 4 else 8;
       description = "Layout gaps between windows";
     };
+
+    enableSwitcher = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Build and install the Rust niri-switcher (slow compile)";
+    };
   };
 
   config = lib.mkIf cfg.enable {
-    # Packages for non-DMS setup (swaybg for wallpaper)
-    home.packages = lib.mkIf (!cfg.enableDms) (
-      with pkgs;
-      [
-        swaybg
-      ]
-    );
+    # Packages for niri
+    home.packages =
+      lib.optionals cfg.enableSwitcher [ niri-switcher ]
+      ++ lib.optionals (!cfg.enableDms) [ pkgs.swaybg ];
 
     # Using niri-flake.homeModules.config - only manages config, not package
     # niri is installed via Fedora DNF

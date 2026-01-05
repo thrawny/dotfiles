@@ -5,7 +5,7 @@ run = '''
 host=$(hostname)
 sudo nixos-rebuild switch --flake "./nix#$host"
 '''
-sources = ["nix/**/*.nix", "nix/flake.*"]
+sources = ["nix/**/*.nix", "nix/flake.*", "niri-switcher/**/*"]
 
 [tasks.dry]
 description = "Dry-run the NixOS rebuild for this host"

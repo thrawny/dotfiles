@@ -2,6 +2,7 @@
   config,
   pkgs,
   lib,
+  self,
   zen-browser,
   walker,
   nurPkgs,
@@ -216,6 +217,7 @@ in
       # niri-flake.nixosModules.niri already adds home-manager integration
       extraSpecialArgs = {
         inherit
+          self
           dotfiles
           username
           zen-browser

@@ -27,7 +27,10 @@
   ];
 
   # Enable niri compositor config (system-level niri from pkgs.niri)
-  custom.niri.enable = true;
+  custom.niri = {
+    enable = true;
+    enableSwitcher = true;
+  };
 
   home = {
     inherit username;

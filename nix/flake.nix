@@ -43,7 +43,12 @@
         lib.nixosSystem {
           inherit system;
           specialArgs = {
-            inherit zen-browser walker nurPkgs;
+            inherit
+              self
+              zen-browser
+              walker
+              nurPkgs
+              ;
           };
           modules = [
             home-manager.nixosModules.home-manager
@@ -88,6 +93,89 @@
       packages.x86_64-linux.thrawny-desktop-iso =
         self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
 
+      packages.x86_64-linux.niri-switcher =
+        let
+          pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        in
+        pkgs.rustPlatform.buildRustPackage {
+          pname = "niri-switcher";
+          version = "0.1.0";
+          src = ../niri-switcher;
+          cargoLock.lockFile = ../niri-switcher/Cargo.lock;
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+          buildInputs = with pkgs; [
+            gtk4
+            gtk4-layer-shell
+            glib
+            cairo
+            pango
+            gdk-pixbuf
+            graphene
+            harfbuzz
+          ];
+        };
+
+      packages.aarch64-linux.niri-switcher =
+        let
+          pkgs = nixpkgs.legacyPackages.aarch64-linux;
+        in
+        pkgs.rustPlatform.buildRustPackage {
+          pname = "niri-switcher";
+          version = "0.1.0";
+          src = ../niri-switcher;
+          cargoLock.lockFile = ../niri-switcher/Cargo.lock;
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+          buildInputs = with pkgs; [
+            gtk4
+            gtk4-layer-shell
+            glib
+            cairo
+            pango
+            gdk-pixbuf
+            graphene
+            harfbuzz
+          ];
+        };
+
+      devShells.x86_64-linux.gtk =
+        let
+          pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        in
+        pkgs.mkShell {
+          packages = with pkgs; [
+            python3
+            python3Packages.pygobject3
+            gtk4
+            gtk4-layer-shell
+            gobject-introspection
+          ];
+          shellHook = ''
+            export LD_PRELOAD=${pkgs.gtk4-layer-shell}/lib/libgtk4-layer-shell.so
+          '';
+        };
+
+      devShells.x86_64-linux.niri-switcher =
+        let
+          pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        in
+        pkgs.mkShell {
+          nativeBuildInputs = with pkgs; [
+            pkg-config
+            rustc
+            cargo
+          ];
+          buildInputs = with pkgs; [
+            gtk4
+            gtk4-layer-shell
+            glib
+            cairo
+            pango
+            gdk-pixbuf
+            graphene
+            harfbuzz
+          ];
+        };
+
       homeConfigurations.thrawnym1 = home-manager.lib.homeManagerConfiguration {
         pkgs = nixpkgs.legacyPackages.aarch64-darwin;
         modules = [ ./home/darwin/default.nix ];
@@ -103,6 +191,7 @@
           ./hosts/thrawny-asahi-air/default.nix
         ];
         extraSpecialArgs = {
+          inherit self;
           username = "thrawny";
           dotfiles = "/home/thrawny/dotfiles";
           gitIdentity = {
