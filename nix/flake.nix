@@ -43,10 +43,11 @@
         lib.nixosSystem {
           inherit system;
           specialArgs = {
-            inherit zen-browser walker nurPkgs niri-flake;
+            inherit zen-browser walker nurPkgs;
           };
           modules = [
             home-manager.nixosModules.home-manager
+            niri-flake.nixosModules.niri # cached niri package + system setup
           ]
           ++ modules;
         };

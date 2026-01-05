@@ -5,7 +5,6 @@
   zen-browser,
   walker,
   nurPkgs,
-  niri-flake,
   ...
 }:
 let
@@ -90,6 +89,7 @@ in
     programs = {
       zsh.enable = true;
       direnv.enable = true;
+      niri.enable = true; # uses niri-flake's cached package
 
       # Enable nix-ld for running non-Nix binaries (e.g., uv run ruff)
       nix-ld = {
@@ -213,9 +213,7 @@ in
     home-manager = {
       useGlobalPkgs = true;
       useUserPackages = true;
-      sharedModules = [
-        niri-flake.homeModules.config # niri config (uses system niri from pkgs.niri)
-      ];
+      # niri-flake.nixosModules.niri already adds home-manager integration
       extraSpecialArgs = {
         inherit
           dotfiles
