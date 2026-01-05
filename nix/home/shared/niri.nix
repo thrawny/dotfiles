@@ -562,6 +562,7 @@ in
       input = {
         mod-key = "Alt";
         warp-mouse-to-focus.enable = true;
+        focus-follows-mouse.enable = true;
         keyboard = {
           xkb = {
             layout = "au,se";
