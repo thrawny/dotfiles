@@ -43,7 +43,7 @@
         lib.nixosSystem {
           inherit system;
           specialArgs = {
-            inherit zen-browser walker nurPkgs;
+            inherit zen-browser walker nurPkgs niri-flake;
           };
           modules = [
             home-manager.nixosModules.home-manager
@@ -94,10 +94,11 @@
       };
 
       # Asahi Air with Niri + DankMaterialShell
-      # Note: niri installed via DNF, config via raw KDL for DMS dynamic theming
+      # Uses niri installed via DNF, config managed by nix
       homeConfigurations.thrawny-asahi-air = home-manager.lib.homeManagerConfiguration {
         pkgs = nixpkgs.legacyPackages.aarch64-linux;
         modules = [
+          niri-flake.homeModules.config # config only, no package (using Fedora's niri)
           ./hosts/thrawny-asahi-air/default.nix
         ];
         extraSpecialArgs = {

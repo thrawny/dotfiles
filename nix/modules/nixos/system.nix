@@ -5,6 +5,7 @@
   zen-browser,
   walker,
   nurPkgs,
+  niri-flake,
   ...
 }:
 let
@@ -212,6 +213,9 @@ in
     home-manager = {
       useGlobalPkgs = true;
       useUserPackages = true;
+      sharedModules = [
+        niri-flake.homeModules.config # niri config (uses system niri from pkgs.niri)
+      ];
       extraSpecialArgs = {
         inherit
           dotfiles

@@ -26,6 +26,9 @@
     ./zen-browser.nix
   ];
 
+  # Enable niri compositor config (system-level niri from pkgs.niri)
+  custom.niri.enable = true;
+
   home = {
     inherit username;
     homeDirectory = "/home/${username}";
