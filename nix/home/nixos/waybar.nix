@@ -228,7 +228,7 @@ in
       position = "top";
       height = 26;
       "modules-left" = [ "niri/workspaces" ];
-      "modules-center" = [ ];
+      "modules-center" = [ "niri/window" ];
       "modules-right" = [
         "idle_inhibitor"
         "niri/language"
@@ -239,7 +239,22 @@ in
         "clock"
       ];
 
-"niri/language" = {
+      "niri/window" = {
+        format = "{app_id} - {title}";
+        max-length = 80;
+        tooltip = false;
+        rewrite = {
+          "com.mitchellh.ghostty - (.*)" = "Ghostty - $1";
+          "zen - (.*)" = "Zen Browser - $1";
+          "org.gnome.(.*) - (.*)" = "$1 - $2";
+          "firefox - (.*)" = "Firefox - $1";
+          "Spotify - (.*)" = "Spotify - $1";
+          "slack - (.*)" = "Slack - $1";
+          "1password - (.*)" = "1Password - $1";
+        };
+      };
+
+      "niri/language" = {
         format = "{}";
         "format-en" = "AU";
         "format-sv" = "SE";
