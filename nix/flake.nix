@@ -59,11 +59,6 @@
     in
     {
       nixosConfigurations = {
-        tester = mkHost {
-          system = "x86_64-linux";
-          modules = [ ./hosts/tester/default.nix ];
-        };
-
         thinkpad = mkHost {
           system = "x86_64-linux";
           modules = [
@@ -79,19 +74,10 @@
             ./hosts/desktop/default.nix
           ];
         };
-
-        desktop-iso = mkHost {
-          system = "x86_64-linux";
-          modules = [
-            ./hosts/desktop-iso/default.nix
-          ];
-        };
       };
 
       packages = {
         x86_64-linux = {
-          desktop-iso = self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
-          thrawny-desktop-iso = self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
           niri-switcher =
             let
               pkgs = nixpkgs.legacyPackages.x86_64-linux;
