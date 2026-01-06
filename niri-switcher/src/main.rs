@@ -1,14 +1,34 @@
+use clap::Parser;
 use gtk4::prelude::*;
 use gtk4::{glib, Application, ApplicationWindow, Box as GtkBox, Label, Orientation};
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use serde::Deserialize;
 use std::cell::RefCell;
+use std::io::{Read, Write};
+use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
+use std::sync::mpsc;
+use std::thread;
 
 const APP_ID: &str = "com.thrawny.niri-switcher";
 const KEYS: [char; 8] = ['h', 'j', 'k', 'l', 'u', 'i', 'o', 'p'];
+
+#[derive(Parser)]
+#[command(name = "niri-switcher", about = "Project switcher for niri")]
+struct Cli {
+    /// Toggle visibility of the switcher (send command to running daemon)
+    #[arg(long)]
+    toggle: bool,
+}
+
+fn socket_path() -> PathBuf {
+    std::env::var("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/tmp"))
+        .join("niri-switcher.sock")
+}
 
 #[derive(Debug, Clone, Deserialize)]
 struct Project {
@@ -157,7 +177,49 @@ fn switch_to_project(project: &Project, column: u32) {
     focus_column(column);
 }
 
-fn build_ui(app: &Application) {
+fn send_toggle() -> Result<(), Box<dyn std::error::Error>> {
+    let path = socket_path();
+    let mut stream = UnixStream::connect(&path)?;
+    stream.write_all(b"toggle")?;
+    let mut response = String::new();
+    stream.read_to_string(&mut response)?;
+    Ok(())
+}
+
+fn start_socket_listener(tx: mpsc::Sender<String>) {
+    let path = socket_path();
+
+    // Remove existing socket
+    let _ = std::fs::remove_file(&path);
+
+    let listener = match UnixListener::bind(&path) {
+        Ok(l) => l,
+        Err(e) => {
+            eprintln!("Failed to bind socket: {}", e);
+            return;
+        }
+    };
+
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            match stream {
+                Ok(mut stream) => {
+                    let mut buf = [0u8; 64];
+                    if let Ok(n) = stream.read(&mut buf) {
+                        let cmd = String::from_utf8_lossy(&buf[..n]).to_string();
+                        let _ = tx.send(cmd);
+                        let _ = stream.write_all(b"ok");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Socket error: {}", e);
+                }
+            }
+        }
+    });
+}
+
+fn build_ui(app: &Application, rx: mpsc::Receiver<String>) {
     let window = ApplicationWindow::builder()
         .application(app)
         .default_width(400)
@@ -245,9 +307,15 @@ fn build_ui(app: &Application) {
             return glib::Propagation::Proceed;
         };
 
-        // Cancel
+        // Cancel - hide instead of close
         if key == "q" || key == "escape" {
-            window_clone.close();
+            window_clone.set_visible(false);
+            // Reset state for next show
+            let mut state = state_clone.borrow_mut();
+            state.stage = Stage::SelectProject;
+            state.selected_project = None;
+            drop(state);
+            build_project_list(&main_box_clone, &state_clone.borrow());
             return glib::Propagation::Stop;
         }
 
@@ -273,8 +341,12 @@ fn build_ui(app: &Application) {
                 if let Some(col) = column {
                     if let Some(ref project) = state.selected_project {
                         let project = project.clone();
+                        // Reset state and hide
+                        state.stage = Stage::SelectProject;
+                        state.selected_project = None;
                         drop(state);
-                        window_clone.close();
+                        window_clone.set_visible(false);
+                        build_project_list(&main_box_clone, &state_clone.borrow());
                         switch_to_project(&project, col);
                     }
                 }
@@ -285,7 +357,38 @@ fn build_ui(app: &Application) {
     });
 
     window.add_controller(key_controller);
+
+    // Start hidden - will be shown via socket toggle
+    window.set_visible(false);
+
+    // Present once to initialize, then hide
     window.present();
+    window.set_visible(false);
+
+    // Poll socket receiver
+    let window_for_poll = window.clone();
+    let state_for_poll = state.clone();
+    let main_box_for_poll = main_box.clone();
+    glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
+        if let Ok(_cmd) = rx.try_recv() {
+            let is_visible = window_for_poll.is_visible();
+            if is_visible {
+                // Hide and reset
+                window_for_poll.set_visible(false);
+                let mut state = state_for_poll.borrow_mut();
+                state.stage = Stage::SelectProject;
+                state.selected_project = None;
+                drop(state);
+                build_project_list(&main_box_for_poll, &state_for_poll.borrow());
+            } else {
+                // Refresh project list and show
+                build_project_list(&main_box_for_poll, &state_for_poll.borrow());
+                window_for_poll.set_visible(true);
+                window_for_poll.present();
+            }
+        }
+        glib::ControlFlow::Continue
+    });
 }
 
 fn build_project_list(container: &GtkBox, state: &AppState) {
@@ -356,11 +459,34 @@ fn build_column_select(container: &GtkBox, state: &AppState) {
 }
 
 fn main() -> glib::ExitCode {
+    let cli = Cli::parse();
+
+    if cli.toggle {
+        // Toggle mode: send command to daemon
+        if let Err(e) = send_toggle() {
+            eprintln!("Failed to toggle: {} (is daemon running?)", e);
+            std::process::exit(1);
+        }
+        std::process::exit(0);
+    }
+
+    // Daemon mode: start GTK app with socket listener
+    let (tx, rx) = mpsc::channel();
+    start_socket_listener(tx);
+
+    let rx = Rc::new(RefCell::new(Some(rx)));
+
     let app = Application::builder()
         .application_id(APP_ID)
         .flags(gtk4::gio::ApplicationFlags::NON_UNIQUE)
         .build();
 
-    app.connect_activate(build_ui);
+    let rx_clone = rx.clone();
+    app.connect_activate(move |app| {
+        if let Some(rx) = rx_clone.borrow_mut().take() {
+            build_ui(app, rx);
+        }
+    });
+
     app.run()
 }
