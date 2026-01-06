@@ -88,54 +88,54 @@
         };
       };
 
-      packages.x86_64-linux.desktop-iso =
-        self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
-      packages.x86_64-linux.thrawny-desktop-iso =
-        self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
-
-      packages.x86_64-linux.niri-switcher =
-        let
-          pkgs = nixpkgs.legacyPackages.x86_64-linux;
-        in
-        pkgs.rustPlatform.buildRustPackage {
-          pname = "niri-switcher";
-          version = "0.1.0";
-          src = ../niri-switcher;
-          cargoLock.lockFile = ../niri-switcher/Cargo.lock;
-          nativeBuildInputs = with pkgs; [ pkg-config ];
-          buildInputs = with pkgs; [
-            gtk4
-            gtk4-layer-shell
-            glib
-            cairo
-            pango
-            gdk-pixbuf
-            graphene
-            harfbuzz
-          ];
+      packages = {
+        x86_64-linux = {
+          desktop-iso = self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
+          thrawny-desktop-iso = self.nixosConfigurations.desktop-iso.config.system.build.isoImage;
+          niri-switcher =
+            let
+              pkgs = nixpkgs.legacyPackages.x86_64-linux;
+            in
+            pkgs.rustPlatform.buildRustPackage {
+              pname = "niri-switcher";
+              version = "0.1.0";
+              src = ../niri-switcher;
+              cargoLock.lockFile = ../niri-switcher/Cargo.lock;
+              nativeBuildInputs = with pkgs; [ pkg-config ];
+              buildInputs = with pkgs; [
+                gtk4
+                gtk4-layer-shell
+                glib
+                cairo
+                pango
+                gdk-pixbuf
+                graphene
+                harfbuzz
+              ];
+            };
         };
-
-      packages.aarch64-linux.niri-switcher =
-        let
-          pkgs = nixpkgs.legacyPackages.aarch64-linux;
-        in
-        pkgs.rustPlatform.buildRustPackage {
-          pname = "niri-switcher";
-          version = "0.1.0";
-          src = ../niri-switcher;
-          cargoLock.lockFile = ../niri-switcher/Cargo.lock;
-          nativeBuildInputs = with pkgs; [ pkg-config ];
-          buildInputs = with pkgs; [
-            gtk4
-            gtk4-layer-shell
-            glib
-            cairo
-            pango
-            gdk-pixbuf
-            graphene
-            harfbuzz
-          ];
-        };
+        aarch64-linux.niri-switcher =
+          let
+            pkgs = nixpkgs.legacyPackages.aarch64-linux;
+          in
+          pkgs.rustPlatform.buildRustPackage {
+            pname = "niri-switcher";
+            version = "0.1.0";
+            src = ../niri-switcher;
+            cargoLock.lockFile = ../niri-switcher/Cargo.lock;
+            nativeBuildInputs = with pkgs; [ pkg-config ];
+            buildInputs = with pkgs; [
+              gtk4
+              gtk4-layer-shell
+              glib
+              cairo
+              pango
+              gdk-pixbuf
+              graphene
+              harfbuzz
+            ];
+          };
+      };
 
       devShells.x86_64-linux.gtk =
         let

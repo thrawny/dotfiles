@@ -228,7 +228,10 @@ let
 
     # Project Switcher (toggle daemon visibility)
     "Mod+S" = {
-      action.spawn = [ "niri-switcher" "--toggle" ];
+      action.spawn = [
+        "niri-switcher"
+        "--toggle"
+      ];
       hotkey-overlay.title = "Project Switcher";
     };
 
@@ -690,7 +693,7 @@ in
       )
       ++ (
         # Project switcher daemon (instant show/hide via socket)
-        lib.optionals cfg.enableSwitcher [{ command = [ "niri-switcher" ]; }]
+        lib.optionals cfg.enableSwitcher [ { command = [ "niri-switcher" ]; } ]
       );
 
       # NOTE: recent-windows (alt-tab) config not supported by niri-flake yet
