@@ -31,15 +31,6 @@ home-manager switch --flake "./nix#$host"
 '''
 sources = ["nix/**/*.nix", "nix/flake.*"]
 
-[tasks.iso]
-description = "Build desktop installer ISO with network drivers"
-run = '''
-nix build ./nix#packages.x86_64-linux.desktop-iso
-echo "ISO created at: ./result/iso/"
-echo "Write to USB with: sudo dd if=./result/iso/*.iso of=/dev/sdX bs=4M status=progress"
-'''
-sources = ["nix/**/*.nix", "nix/flake.*"]
-
 [tasks.check]
 description = "Evaluate current host's NixOS config (no build)"
 run = '''
@@ -105,6 +96,11 @@ description = "Format Nix files with nixfmt"
 run = "nix shell nixpkgs#treefmt nixpkgs#nixfmt -c treefmt"
 sources = ["**/*.nix"]
 outputs = { auto = true }
+
+# Nix format + lint combined
+[tasks."nix:check"]
+description = "Format and lint Nix files"
+depends = ["fmt:nix", "lint:nix"]
 
 # --- Linters ---
 [tasks."lint:python"]
