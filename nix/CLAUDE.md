@@ -14,22 +14,11 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 
 ## Commands
 
-### NixOS
 ```bash
-mise check        # Evaluate config (no build)
-mise dry          # Full build without switching
-mise switch       # Build and activate
-mise diff         # Build and show changes
-```
-
-### Home Manager (standalone)
-```bash
-mise check-hm     # Evaluate config (no build)
-mise switch-hm    # Switch configuration
-```
-
-### Code Quality
-```bash
+mise check        # Evaluate config (auto-detects NixOS vs Home Manager)
+mise switch       # Apply changes (auto-detects NixOS vs Home Manager)
+mise dry          # Full build without switching (NixOS only)
+mise diff         # Build and show changes (NixOS only)
 mise nix:check    # Format and lint Nix files
 ```
 

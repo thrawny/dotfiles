@@ -1,14 +1,36 @@
 # --- Nix workflows ---
+# Auto-detect NixOS vs standalone Home Manager by checking /etc/NIXOS
+
 [tasks.switch]
-description = "Rebuild and switch NixOS configuration for this host"
+description = "Switch configuration (auto-detects NixOS vs Home Manager)"
 run = '''
-host=$(hostname)
-sudo nixos-rebuild switch --flake "./nix#$host"
+host=$(hostname | sed 's/\.local$//')
+if [ -f /etc/NIXOS ]; then
+  echo "NixOS detected, running nixos-rebuild switch..."
+  sudo nixos-rebuild switch --flake "./nix#$host"
+else
+  echo "Standalone Home Manager detected, running home-manager switch..."
+  home-manager switch --flake "./nix#$host"
+fi
 '''
 sources = ["nix/**/*.nix", "nix/flake.*", "niri-switcher/**/*"]
 
+[tasks.check]
+description = "Evaluate config without building (auto-detects NixOS vs Home Manager)"
+run = '''
+host=$(hostname | sed 's/\.local$//')
+if [ -f /etc/NIXOS ]; then
+  echo "Evaluating NixOS config for $host..."
+  nix eval "./nix#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null && echo "Config is valid"
+else
+  echo "Evaluating Home Manager config for $host..."
+  nix eval "./nix#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null && echo "Config is valid"
+fi
+'''
+sources = ["nix/**/*.nix", "nix/flake.*"]
+
 [tasks.dry]
-description = "Dry-run the NixOS rebuild for this host"
+description = "Dry-run NixOS rebuild (NixOS only)"
 run = '''
 host=$(hostname)
 sudo nixos-rebuild dry-run --flake "./nix#$host"
@@ -16,36 +38,10 @@ sudo nixos-rebuild dry-run --flake "./nix#$host"
 sources = ["nix/**/*.nix", "nix/flake.*"]
 
 [tasks.diff]
-description = "Build new config and show what changed (packages, versions, etc.)"
+description = "Build and show what changed (NixOS only)"
 run = '''
 host=$(hostname)
 sudo nixos-rebuild build --flake "./nix#$host" && nvd diff /run/current-system result
-'''
-sources = ["nix/**/*.nix", "nix/flake.*"]
-
-[tasks."switch-hm"]
-description = "Switch Home Manager configuration (standalone)"
-run = '''
-host=$(hostname | sed 's/\.local$//')
-home-manager switch --flake "./nix#$host"
-'''
-sources = ["nix/**/*.nix", "nix/flake.*"]
-
-[tasks.check]
-description = "Evaluate current host's NixOS config (no build)"
-run = '''
-host=$(hostname)
-echo "Evaluating NixOS config for $host..."
-nix eval "./nix#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null && echo "Config is valid"
-'''
-sources = ["nix/**/*.nix", "nix/flake.*"]
-
-[tasks.check-hm]
-description = "Evaluate current host's home-manager config (no build)"
-run = '''
-host=$(hostname)
-echo "Evaluating home-manager config for $host..."
-nix eval "./nix#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null && echo "Config is valid"
 '''
 sources = ["nix/**/*.nix", "nix/flake.*"]
 
