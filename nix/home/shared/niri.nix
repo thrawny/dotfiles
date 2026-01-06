@@ -507,6 +507,7 @@ let
         { app-id = "^xdg-desktop-portal$"; }
         { app-id = "zoom"; }
         { app-id = "^com\\.thrawny\\.niri-switcher$"; }
+        { app-id = "^spotify$"; }
       ];
       open-floating = true;
     }
@@ -695,7 +696,10 @@ in
       # Alt+Tab bindings are defined in binds section instead
 
       # Environment
-      environment.XDG_CURRENT_DESKTOP = "niri";
+      environment = {
+        XDG_CURRENT_DESKTOP = "niri";
+        NIXOS_OZONE_WL = "1";
+      };
 
       # Hotkey overlay
       hotkey-overlay.skip-at-startup = true;
