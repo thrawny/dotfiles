@@ -10,7 +10,7 @@ let
     @define-color waybar-warning #f92672;
 
     * {
-      font-family: "CaskaydiaCove Nerd Font", "JetBrains Mono", sans-serif;
+      font-family: "CaskaydiaMono Nerd Font", "JetBrains Mono", sans-serif;
       font-size: 13px;
       color: @waybar-fg;
     }
@@ -196,8 +196,8 @@ in
             on-click = "activate";
             format = "{icon}";
             "format-icons" = {
-              default = "";
-              active = "";
+              default = "○";
+              active = "●";
             };
             "persistent-workspaces" = {
               "1" = [ ];
