@@ -20,6 +20,7 @@
   custom.niri = {
     enable = true;
     enableDms = true;
+    enableSwitcher = true;
   };
 
   # Ghostty overrides for this host

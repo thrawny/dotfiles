@@ -9,6 +9,7 @@ local find_all_files = function()
       "%.venv/",
       "%.DS_Store$",
       "%.ruff_cache/",
+      "%target/",
     },
   })
 end
@@ -25,6 +26,7 @@ local grep_all_in_cwd = function()
       "%.venv/",
       "%.DS_Store$",
       "%.ruff_cache/",
+      "%target/",
     },
   })
 end
