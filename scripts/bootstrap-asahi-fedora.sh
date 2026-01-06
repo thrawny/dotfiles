@@ -49,7 +49,9 @@ sudo dnf install -y \
     cascadia-fonts-all \
     flatpak \
     greetd \
-    greetd-tuigreet
+    greetd-tuigreet \
+    xdg-desktop-portal \
+    xdg-desktop-portal-gtk
 
 # --- Nix ---
 if ! command -v nix &>/dev/null; then

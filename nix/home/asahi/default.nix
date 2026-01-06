@@ -16,6 +16,15 @@
     ../shared
   ];
 
+  # Portal configuration for niri on non-NixOS systems
+  # Without this, file dialogs (Save As, Open File) won't work because
+  # xdg-desktop-portal doesn't know which backend to use for niri
+  xdg.portal = {
+    enable = true;
+    extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+    config.niri.default = [ "gtk" ];
+  };
+
   # Niri with DMS (DankMaterialShell) integration
   custom.niri = {
     enable = true;

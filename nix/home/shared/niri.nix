@@ -504,12 +504,13 @@ let
         { app-id = "blueman-manager"; }
         { app-id = "^nm-connection-editor$"; }
         { app-id = "^org\\.pulseaudio\\.pavucontrol$"; }
-        { app-id = "^xdg-desktop-portal$"; }
+        { app-id = "^xdg-desktop-portal"; }
         { app-id = "zoom"; }
         { app-id = "^com\\.thrawny\\.niri-switcher$"; }
         { app-id = "^spotify$"; }
       ];
       open-floating = true;
+      open-maximized = false;
     }
     {
       matches = [ { is-active = false; } ];
