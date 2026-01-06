@@ -1,4 +1,4 @@
-{ lib, config, ... }:
+{ lib, config, pkgs, ... }:
 {
   imports = [
     ../../modules/nixos/default.nix
@@ -22,6 +22,12 @@
     };
     efi.canTouchEfiVariables = true;
     grub.enable = lib.mkForce false;
+  };
+
+  # Auto-login to niri on thinkpad
+  services.greetd.settings.initial_session = {
+    command = "${pkgs.niri}/bin/niri-session";
+    user = "thrawny";
   };
 
   # Host-specific home-manager overrides

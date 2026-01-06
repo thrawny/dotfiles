@@ -131,18 +131,47 @@ in
     {
       programs.ghostty.settings.font-size = lib.mkForce 12;
 
-      # Monitor configuration for desktop
-      wayland.windowManager.hyprland.settings.monitor = [
-        "HDMI-A-1, 2560x1440@99.95, 0x0, 1" # LG 27GL850 (left)
-        "DP-1, 2560x1440@59.95, 2560x0, 1" # AOC Q27G2WG4 (right)
-      ];
+      # Desktop-specific Hyprland configuration
+      wayland.windowManager.hyprland.settings = {
+        monitor = [
+          "HDMI-A-1, 2560x1440@99.95, 0x0, 1" # LG 27GL850 (left)
+          "DP-1, 2560x1440@59.95, 2560x0, 1" # AOC Q27G2WG4 (right)
+        ];
+        workspace = [
+          "1, monitor:HDMI-A-1, default:true"
+          "2, monitor:HDMI-A-1"
+          "3, monitor:HDMI-A-1"
+          "4, monitor:HDMI-A-1"
+          "9, monitor:DP-1" # Right monitor
+          "10, monitor:DP-1" # Right monitor
+          "name:b, monitor:DP-1" # Browser workspace
+          "name:p, monitor:HDMI-A-1" # Spotify workspace
+          "name:g, monitor:HDMI-A-1" # Games workspace
+        ];
+        input = lib.mkForce (
+          baseInputConfig
+          // {
+            sensitivity = -0.2; # Desktop-specific sensitivity
+          }
+        );
+      };
 
-      # Override input config with desktop-specific sensitivity
-      wayland.windowManager.hyprland.settings.input = lib.mkForce (
-        baseInputConfig
-        // {
-          sensitivity = -0.2; # Desktop-specific sensitivity
-        }
-      );
+      # Desktop-specific Niri configuration
+      programs.niri.settings.outputs = {
+        "HDMI-A-1" = {
+          scale = 1.0;
+          position = {
+            x = 0;
+            y = 0;
+          };
+        };
+        "DP-1" = {
+          scale = 1.0;
+          position = {
+            x = 2560;
+            y = 0;
+          };
+        };
+      };
     };
 }
