@@ -41,6 +41,7 @@
       grimblast # Screenshot tool for Hyprland (grim + slurp wrapper)
       telegram-desktop
       vesktop # Discord client with Wayland screen sharing support
+      zathura # PDF viewer with vim keybindings and auto-reload
     ];
   };
 
