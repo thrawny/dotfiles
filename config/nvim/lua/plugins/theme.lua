@@ -43,6 +43,9 @@ return {
             ["@comment"] = { italic = false },
             ["@lsp.type.comment"] = { italic = false },
 
+            -- Float window borders (LSP hover, etc.)
+            FloatBorder = { fg = "#69676c", bg = bg },
+
             -- Variables stay neutral (white/text color)
             ["@variable"] = { fg = white },
             ["@variable.member"] = { fg = purple },

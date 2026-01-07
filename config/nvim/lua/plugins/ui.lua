@@ -5,6 +5,16 @@ return {
     enabled = false,
   },
 
+  -- Configure noice for LSP hover borders
+  {
+    "folke/noice.nvim",
+    opts = {
+      presets = {
+        lsp_doc_border = true,
+      },
+    },
+  },
+
   -- Configure snacks explorer to show hidden and ignored files by default
   {
     "snacks.nvim",
