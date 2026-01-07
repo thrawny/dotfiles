@@ -98,6 +98,14 @@ outputs = { auto = true }
 description = "Format and lint Nix files"
 depends = ["fmt:nix", "lint:nix"]
 
+# Evaluate all flake outputs (works anywhere, doesn't need matching hostname)
+[tasks."check:flake"]
+description = "Evaluate all Nix flake outputs"
+run = '''
+cd nix && nix flake check --no-build --no-write-lock-file
+'''
+sources = ["nix/**/*.nix", "nix/flake.*"]
+
 # --- Linters ---
 [tasks."lint:python"]
 description = "Lint Python sources with Ruff"
@@ -149,11 +157,6 @@ depends = ["test:nvim"]
 [tasks.ci]
 description = "Run lint, typecheck, format, and tests"
 depends = ["fmt", "lint", "typecheck", "test"]
-
-[tasks.check-all]
-description = "Run all checks (fmt, lint, typecheck, test, nix eval)"
-depends = ["fmt", "lint", "typecheck", "test", "check"]
-alias = "ca"
 
 # --- Tools ---
 [tools]
