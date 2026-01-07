@@ -150,6 +150,11 @@ depends = ["test:nvim"]
 description = "Run lint, typecheck, format, and tests"
 depends = ["fmt", "lint", "typecheck", "test"]
 
+[tasks.check-all]
+description = "Run all checks (fmt, lint, typecheck, test, nix eval)"
+depends = ["fmt", "lint", "typecheck", "test", "check"]
+alias = "ca"
+
 # --- Tools ---
 [tools]
 "nix:nixfmt" = "latest"
