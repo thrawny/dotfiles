@@ -109,32 +109,36 @@ experimental-features = nix-command flakes
 sandbox = false
 EOF
 
-# Add to PATH in profile.d
+# Add to PATH in profile.d (for login shells)
 echo "==> Adding Nix to PATH..."
 mkdir -p /etc/profile.d
 cat > /etc/profile.d/nix.sh << 'EOF'
 # Nix environment setup
-if [ -e /root/.nix-profile/etc/profile.d/nix.sh ]; then
-    . /root/.nix-profile/etc/profile.d/nix.sh
-elif [ -d /root/.nix-profile/bin ]; then
-    export PATH="/root/.nix-profile/bin:$PATH"
+if [ -d /nix/var/nix/profiles/default/bin ]; then
+    export PATH="/nix/var/nix/profiles/default/bin:$PATH"
 fi
 EOF
 
+# Create symlinks in /usr/local/bin for non-login shells
+echo "==> Creating symlinks in /usr/local/bin..."
+mkdir -p /usr/local/bin
+for cmd in /nix/var/nix/profiles/default/bin/*; do
+    if [[ -x "$cmd" ]]; then
+        ln -sfn "$cmd" "/usr/local/bin/$(basename "$cmd")"
+    fi
+done
+
 # Also add for current session
-export PATH="/root/.nix-profile/bin:$PATH"
+export PATH="/nix/var/nix/profiles/default/bin:$PATH"
 
 # Verify installation
 echo ""
 echo "==> Verifying installation..."
-if /root/.nix-profile/bin/nix --version; then
+if nix --version; then
     echo ""
     echo "=== Nix installed successfully! ==="
     echo ""
-    echo "To use nix in this session, run:"
-    echo "  export PATH=\"\$HOME/.nix-profile/bin:\$PATH\""
-    echo ""
-    echo "Or start a new shell."
+    echo "Nix commands are now available in /usr/local/bin."
     echo ""
     echo "Test with:"
     echo "  nix eval --raw nixpkgs#hello.name"
