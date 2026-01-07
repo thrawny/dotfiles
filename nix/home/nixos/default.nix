@@ -43,23 +43,7 @@
       telegram-desktop
       vesktop # Discord client with Wayland screen sharing support
       zathura # PDF viewer with vim keybindings and auto-reload
-      self.packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice
     ];
-  };
-
-  # Voice-to-text daemon
-  systemd.user.services.hyprvoice = {
-    Unit = {
-      Description = "Voice-to-text for Wayland";
-      PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
-    };
-    Service = {
-      ExecStart = "${self.packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice}/bin/hyprvoice serve";
-      Restart = "on-failure";
-      RestartSec = 5;
-    };
-    Install.WantedBy = [ "graphical-session.target" ];
   };
 
   # Override Telegram desktop entry to remove "Quit Telegram" action from launcher

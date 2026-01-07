@@ -17,10 +17,6 @@
     ../shared
   ];
 
-  home.packages = [
-    self.packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice
-  ];
-
   # Portal configuration for niri on non-NixOS systems
   # Without this, file dialogs (Save As, Open File) won't work because
   # xdg-desktop-portal doesn't know which backend to use for niri
@@ -68,21 +64,6 @@
       NotifyAccess = "all";
       ExecStart = "${pkgs.xwayland-satellite}/bin/xwayland-satellite";
       StandardOutput = "journal";
-    };
-    Install.WantedBy = [ "graphical-session.target" ];
-  };
-
-  # Voice-to-text daemon
-  systemd.user.services.hyprvoice = {
-    Unit = {
-      Description = "Voice-to-text for Wayland";
-      PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
-    };
-    Service = {
-      ExecStart = "${self.packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice}/bin/hyprvoice serve";
-      Restart = "on-failure";
-      RestartSec = 5;
     };
     Install.WantedBy = [ "graphical-session.target" ];
   };
