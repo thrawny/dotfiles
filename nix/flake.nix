@@ -13,6 +13,10 @@
     walker.url = "github:abenz1267/walker";
     walker.inputs.elephant.follows = "elephant";
     niri-flake.url = "github:sodiboo/niri-flake";
+    hyprvoice-src = {
+      url = "github:LeonardoTrapani/hyprvoice";
+      flake = false;
+    };
   };
 
   outputs =
@@ -25,6 +29,7 @@
       zen-browser,
       walker,
       niri-flake,
+      hyprvoice-src,
       ...
     }:
     let
@@ -99,20 +104,15 @@
                 harfbuzz
               ];
             };
-          # Voice-to-text for Wayland - run `nix build .#hyprvoice` to get correct hashes
+          # Voice-to-text for Wayland - updates via `nix flake update hyprvoice-src`
           hyprvoice =
             let
               pkgs = nixpkgs.legacyPackages.x86_64-linux;
             in
             pkgs.buildGoModule {
               pname = "hyprvoice";
-              version = "unstable-2026-01-07";
-              src = pkgs.fetchFromGitHub {
-                owner = "LeonardoTrapani";
-                repo = "hyprvoice";
-                rev = "66f2a9ad2f151f5d0d4cbeb80f0054b1c663e9e7"; # main
-                hash = ""; # Run build to get correct hash
-              };
+              version = hyprvoice-src.shortRev or "unstable";
+              src = hyprvoice-src;
               vendorHash = ""; # Run build to get correct hash
               nativeBuildInputs = with pkgs; [ pkg-config ];
               buildInputs = with pkgs; [
