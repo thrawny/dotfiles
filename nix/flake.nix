@@ -151,45 +151,6 @@
         };
       };
 
-      devShells.x86_64-linux.gtk =
-        let
-          pkgs = nixpkgs.legacyPackages.x86_64-linux;
-        in
-        pkgs.mkShell {
-          packages = with pkgs; [
-            python3
-            python3Packages.pygobject3
-            gtk4
-            gtk4-layer-shell
-            gobject-introspection
-          ];
-          shellHook = ''
-            export LD_PRELOAD=${pkgs.gtk4-layer-shell}/lib/libgtk4-layer-shell.so
-          '';
-        };
-
-      devShells.x86_64-linux.niri-switcher =
-        let
-          pkgs = nixpkgs.legacyPackages.x86_64-linux;
-        in
-        pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [
-            pkg-config
-            rustc
-            cargo
-          ];
-          buildInputs = with pkgs; [
-            gtk4
-            gtk4-layer-shell
-            glib
-            cairo
-            pango
-            gdk-pixbuf
-            graphene
-            harfbuzz
-          ];
-        };
-
       homeConfigurations.thrawnym1 = home-manager.lib.homeManagerConfiguration {
         pkgs = nixpkgs.legacyPackages.aarch64-darwin;
         modules = [ ./home/darwin/default.nix ];
