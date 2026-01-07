@@ -134,15 +134,37 @@ export PATH="/nix/var/nix/profiles/default/bin:$PATH"
 # Verify installation
 echo ""
 echo "==> Verifying installation..."
-if nix --version; then
-    echo ""
-    echo "=== Nix installed successfully! ==="
-    echo ""
-    echo "Nix commands are now available in /usr/local/bin."
-    echo ""
-    echo "Test with:"
-    echo "  nix eval --raw nixpkgs#hello.name"
-else
+if ! nix --version; then
     echo "Error: Nix installation verification failed"
     exit 1
 fi
+
+# Install mise via nix
+echo ""
+echo "==> Installing mise..."
+if ! command -v mise &>/dev/null; then
+    nix profile install nixpkgs#mise
+    # Update symlinks to include mise
+    for cmd in /nix/var/nix/profiles/default/bin/*; do
+        if [[ -x "$cmd" ]]; then
+            ln -sfn "$cmd" "/usr/local/bin/$(basename "$cmd")"
+        fi
+    done
+fi
+
+# Install mise nix plugin
+echo "==> Setting up mise nix plugin..."
+if command -v mise &>/dev/null; then
+    mise plugins install nix https://github.com/jbadeau/mise-nix.git 2>/dev/null || true
+    mise settings experimental=true
+fi
+
+echo ""
+echo "=== Nix installed successfully! ==="
+echo ""
+echo "Nix commands are available in /usr/local/bin."
+echo "mise is installed with the nix plugin enabled."
+echo ""
+echo "Test with:"
+echo "  nix eval --raw nixpkgs#hello.name"
+echo "  mise install  # to install tools from mise.toml"
