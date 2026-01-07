@@ -38,6 +38,11 @@ return {
           local bg = "#222222"
 
           local highlights = {
+            -- Disable italics globally
+            Comment = { italic = false },
+            ["@comment"] = { italic = false },
+            ["@lsp.type.comment"] = { italic = false },
+
             -- Variables stay neutral (white/text color)
             ["@variable"] = { fg = white },
             ["@variable.member"] = { fg = purple },
@@ -108,6 +113,52 @@ return {
             ["@keyword.type.python"] = { fg = orange, italic = false },
             ["@type.python"] = { fg = white, italic = false },
             ["@keyword.function.python"] = { fg = orange, italic = false },
+
+            -- Rust (minimal colors like Python)
+            ["@variable.rust"] = { fg = white },
+            ["@variable.member.rust"] = { fg = white },
+            ["@variable.parameter.rust"] = { fg = white },
+            ["@field.rust"] = { fg = white },
+            ["@property.rust"] = { fg = white },
+            ["@constant.rust"] = { fg = purple },
+            ["@constant.builtin.rust"] = { fg = purple },
+            ["@function.rust"] = { fg = yellow },
+            ["@function.call.rust"] = { fg = yellow },
+            ["@function.method.rust"] = { fg = yellow },
+            ["@function.method.call.rust"] = { fg = yellow },
+            ["@function.macro.rust"] = { fg = yellow },
+            ["@type.rust"] = { fg = cyan },
+            ["@type.builtin.rust"] = { fg = cyan },
+            ["@keyword.rust"] = { fg = pink, italic = false },
+            ["@keyword.function.rust"] = { fg = pink, italic = false },
+            ["@keyword.return.rust"] = { fg = pink, italic = false },
+            ["@string.rust"] = { fg = yellow },
+            ["@punctuation.bracket.rust"] = { fg = white },
+            ["@punctuation.delimiter.rust"] = { fg = white },
+            ["@operator.rust"] = { fg = pink },
+            ["@module.rust"] = { fg = white },
+            ["@namespace.rust"] = { fg = white },
+
+            -- Rust LSP semantic tokens (override rust-analyzer's colorful defaults)
+            ["@lsp.type.variable.rust"] = { fg = white },
+            ["@lsp.type.parameter.rust"] = { fg = white },
+            ["@lsp.type.property.rust"] = { fg = white },
+            ["@lsp.type.enumMember.rust"] = { fg = purple },
+            ["@lsp.type.function.rust"] = { fg = yellow },
+            ["@lsp.type.method.rust"] = { fg = yellow },
+            ["@lsp.type.macro.rust"] = { fg = yellow },
+            ["@lsp.type.namespace.rust"] = { fg = white },
+            ["@lsp.type.struct.rust"] = { fg = cyan },
+            ["@lsp.type.enum.rust"] = { fg = cyan },
+            ["@lsp.type.interface.rust"] = { fg = cyan },
+            ["@lsp.type.typeAlias.rust"] = { fg = cyan },
+            ["@lsp.type.selfKeyword.rust"] = { fg = pink },
+            ["@lsp.type.selfTypeKeyword.rust"] = { fg = cyan },
+            ["@lsp.type.lifetime.rust"] = { fg = pink },
+            ["@lsp.type.formatSpecifier.rust"] = { fg = yellow },
+            ["@lsp.mod.mutable.rust"] = {},
+            ["@lsp.mod.reference.rust"] = {},
+            ["@lsp.mod.consuming.rust"] = {},
 
             -- Colorblind-friendly diffs (avoid red/green contrast)
             DiffAdd = { bg = bg, fg = cyan },
