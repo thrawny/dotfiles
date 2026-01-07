@@ -8,12 +8,17 @@
   lib,
   pkgs,
   dotfiles,
+  self,
   ...
 }:
 {
   imports = [
     # Shared cross-platform modules (CLI tools, dotfiles)
     ../shared
+  ];
+
+  home.packages = [
+    self.packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice
   ];
 
   # Portal configuration for niri on non-NixOS systems
@@ -51,7 +56,6 @@
   };
 
   # XWayland satellite for X11 app support
-  # This runs as a systemd user service
   systemd.user.services.xwayland-satellite = {
     Unit = {
       Description = "XWayland outside your Wayland";
@@ -64,6 +68,21 @@
       NotifyAccess = "all";
       ExecStart = "${pkgs.xwayland-satellite}/bin/xwayland-satellite";
       StandardOutput = "journal";
+    };
+    Install.WantedBy = [ "graphical-session.target" ];
+  };
+
+  # Voice-to-text daemon
+  systemd.user.services.hyprvoice = {
+    Unit = {
+      Description = "Voice-to-text for Wayland";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      ExecStart = "${self.packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice}/bin/hyprvoice serve";
+      Restart = "on-failure";
+      RestartSec = 5;
     };
     Install.WantedBy = [ "graphical-session.target" ];
   };

@@ -212,7 +212,7 @@ let
     "Mod+BracketRight".action.consume-or-expel-window-right = [ ];
     "Mod+Shift+Period".action.expel-window-from-column = [ ];
 
-    # Sizing & Layout (moved from Mod+R/Shift+R to make room for hyprvoice)
+    # Sizing & Layout
     "Mod+Backslash".action.switch-preset-column-width = [ ];
     "Mod+Shift+Backslash".action.switch-preset-window-height = [ ];
     "Mod+Ctrl+R".action.reset-window-height = [ ];
@@ -220,14 +220,14 @@ let
     # Hyprvoice (voice-to-text)
     "Mod+R" = {
       action.spawn = [
-        "hyprvoice"
+        "${self.packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice}/bin/hyprvoice"
         "toggle"
       ];
       hotkey-overlay.title = "Voice Input Toggle";
     };
     "Mod+Shift+R" = {
       action.spawn = [
-        "hyprvoice"
+        "${self.packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice}/bin/hyprvoice"
         "cancel"
       ];
       hotkey-overlay.title = "Voice Input Cancel";

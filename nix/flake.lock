@@ -81,6 +81,22 @@
         "type": "github"
       }
     },
+    "hyprvoice-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767776572,
+        "narHash": "sha256-sPmlh3eg1psLdHpsI5zhMlFV7iCQn2EXQHEaK6QlBEQ=",
+        "owner": "LeonardoTrapani",
+        "repo": "hyprvoice",
+        "rev": "66f2a9ad2f151f5d0d4cbeb80f0054b1c663e9e7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "LeonardoTrapani",
+        "repo": "hyprvoice",
+        "type": "github"
+      }
+    },
     "niri-flake": {
       "inputs": {
         "niri-stable": "niri-stable",
@@ -271,6 +287,7 @@
       "inputs": {
         "elephant": "elephant",
         "home-manager": "home-manager",
+        "hyprvoice-src": "hyprvoice-src",
         "niri-flake": "niri-flake",
         "nixos-hardware": "nixos-hardware",
         "nixpkgs": "nixpkgs_3",

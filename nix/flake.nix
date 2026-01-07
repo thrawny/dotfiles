@@ -113,12 +113,29 @@
               pname = "hyprvoice";
               version = hyprvoice-src.shortRev or "unstable";
               src = hyprvoice-src;
-              vendorHash = ""; # Run build to get correct hash
-              nativeBuildInputs = with pkgs; [ pkg-config ];
+              vendorHash = "sha256-qYZGccprn+pRbpVeO1qzSOb8yz/j/jdzPMxFyIB9BNA=";
+              doCheck = false; # Tests require wl-copy, wtype etc.
+              nativeBuildInputs = with pkgs; [
+                pkg-config
+                makeWrapper
+              ];
               buildInputs = with pkgs; [
                 pipewire
                 alsa-lib
               ];
+              postInstall = ''
+                wrapProgram $out/bin/hyprvoice \
+                  --prefix PATH : ${
+                    pkgs.lib.makeBinPath (
+                      with pkgs;
+                      [
+                        pipewire
+                        wl-clipboard
+                        wtype
+                      ]
+                    )
+                  }
+              '';
               meta = {
                 description = "Voice-to-text for Wayland/Hyprland";
                 homepage = "https://github.com/LeonardoTrapani/hyprvoice";
@@ -126,26 +143,61 @@
               };
             };
         };
-        aarch64-linux.niri-switcher =
+        aarch64-linux =
           let
             pkgs = nixpkgs.legacyPackages.aarch64-linux;
           in
-          pkgs.rustPlatform.buildRustPackage {
-            pname = "niri-switcher";
-            version = "0.1.0";
-            src = ../niri-switcher;
-            cargoLock.lockFile = ../niri-switcher/Cargo.lock;
-            nativeBuildInputs = with pkgs; [ pkg-config ];
-            buildInputs = with pkgs; [
-              gtk4
-              gtk4-layer-shell
-              glib
-              cairo
-              pango
-              gdk-pixbuf
-              graphene
-              harfbuzz
-            ];
+          {
+            niri-switcher = pkgs.rustPlatform.buildRustPackage {
+              pname = "niri-switcher";
+              version = "0.1.0";
+              src = ../niri-switcher;
+              cargoLock.lockFile = ../niri-switcher/Cargo.lock;
+              nativeBuildInputs = with pkgs; [ pkg-config ];
+              buildInputs = with pkgs; [
+                gtk4
+                gtk4-layer-shell
+                glib
+                cairo
+                pango
+                gdk-pixbuf
+                graphene
+                harfbuzz
+              ];
+            };
+            hyprvoice = pkgs.buildGoModule {
+              pname = "hyprvoice";
+              version = hyprvoice-src.shortRev or "unstable";
+              src = hyprvoice-src;
+              vendorHash = "sha256-qYZGccprn+pRbpVeO1qzSOb8yz/j/jdzPMxFyIB9BNA=";
+              doCheck = false; # Tests require wl-copy, wtype etc.
+              nativeBuildInputs = with pkgs; [
+                pkg-config
+                makeWrapper
+              ];
+              buildInputs = with pkgs; [
+                pipewire
+                alsa-lib
+              ];
+              postInstall = ''
+                wrapProgram $out/bin/hyprvoice \
+                  --prefix PATH : ${
+                    pkgs.lib.makeBinPath (
+                      with pkgs;
+                      [
+                        pipewire
+                        wl-clipboard
+                        wtype
+                      ]
+                    )
+                  }
+              '';
+              meta = {
+                description = "Voice-to-text for Wayland/Hyprland";
+                homepage = "https://github.com/LeonardoTrapani/hyprvoice";
+                mainProgram = "hyprvoice";
+              };
+            };
           };
       };
 
