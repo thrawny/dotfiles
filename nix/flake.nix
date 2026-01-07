@@ -106,11 +106,11 @@
             in
             pkgs.buildGoModule {
               pname = "hyprvoice";
-              version = "0.1.13";
+              version = "unstable-2026-01-07";
               src = pkgs.fetchFromGitHub {
                 owner = "LeonardoTrapani";
                 repo = "hyprvoice";
-                rev = "v0.1.13";
+                rev = "66f2a9ad2f151f5d0d4cbeb80f0054b1c663e9e7"; # main
                 hash = ""; # Run build to get correct hash
               };
               vendorHash = ""; # Run build to get correct hash
