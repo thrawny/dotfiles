@@ -53,7 +53,6 @@ FORMATTERS: dict[str, list[Checker]] = {
                 "run",
                 "--output.json.path=stdout",
                 "--disable=unused",
-                "{file}",
             ],
             "json_output": True,
             "exclude_patterns": [
