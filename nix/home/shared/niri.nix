@@ -212,10 +212,26 @@ let
     "Mod+BracketRight".action.consume-or-expel-window-right = [ ];
     "Mod+Shift+Period".action.expel-window-from-column = [ ];
 
-    # Sizing & Layout
-    "Mod+R".action.switch-preset-column-width = [ ];
-    "Mod+Shift+R".action.switch-preset-window-height = [ ];
+    # Sizing & Layout (moved from Mod+R/Shift+R to make room for hyprvoice)
+    "Mod+Backslash".action.switch-preset-column-width = [ ];
+    "Mod+Shift+Backslash".action.switch-preset-window-height = [ ];
     "Mod+Ctrl+R".action.reset-window-height = [ ];
+
+    # Hyprvoice (voice-to-text)
+    "Mod+R" = {
+      action.spawn = [
+        "hyprvoice"
+        "toggle"
+      ];
+      hotkey-overlay.title = "Voice Input Toggle";
+    };
+    "Mod+Shift+R" = {
+      action.spawn = [
+        "hyprvoice"
+        "cancel"
+      ];
+      hotkey-overlay.title = "Voice Input Cancel";
+    };
     "Mod+Ctrl+F".action.expand-column-to-available-width = [ ];
     "Mod+C".action.center-column = [ ];
     "Mod+Ctrl+C".action.center-visible-columns = [ ];

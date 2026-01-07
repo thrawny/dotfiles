@@ -4,6 +4,7 @@
   pkgs,
   dotfiles,
   username,
+  self,
   ...
 }:
 {
@@ -37,12 +38,17 @@
     homeDirectory = "/home/${username}";
     stateVersion = "24.05";
 
-    packages = with pkgs; [
-      grimblast # Screenshot tool for Hyprland (grim + slurp wrapper)
-      telegram-desktop
-      vesktop # Discord client with Wayland screen sharing support
-      zathura # PDF viewer with vim keybindings and auto-reload
-    ];
+    packages =
+      with pkgs;
+      [
+        grimblast # Screenshot tool for Hyprland (grim + slurp wrapper)
+        telegram-desktop
+        vesktop # Discord client with Wayland screen sharing support
+        zathura # PDF viewer with vim keybindings and auto-reload
+      ]
+      ++ lib.optionals (self ? packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice) [
+        self.packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice
+      ];
   };
 
   # Override Telegram desktop entry to remove "Quit Telegram" action from launcher

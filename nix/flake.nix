@@ -99,6 +99,32 @@
                 harfbuzz
               ];
             };
+          # Voice-to-text for Wayland - run `nix build .#hyprvoice` to get correct hashes
+          hyprvoice =
+            let
+              pkgs = nixpkgs.legacyPackages.x86_64-linux;
+            in
+            pkgs.buildGoModule {
+              pname = "hyprvoice";
+              version = "0.1.13";
+              src = pkgs.fetchFromGitHub {
+                owner = "LeonardoTrapani";
+                repo = "hyprvoice";
+                rev = "v0.1.13";
+                hash = ""; # Run build to get correct hash
+              };
+              vendorHash = ""; # Run build to get correct hash
+              nativeBuildInputs = with pkgs; [ pkg-config ];
+              buildInputs = with pkgs; [
+                pipewire
+                alsa-lib
+              ];
+              meta = {
+                description = "Voice-to-text for Wayland/Hyprland";
+                homepage = "https://github.com/LeonardoTrapani/hyprvoice";
+                mainProgram = "hyprvoice";
+              };
+            };
         };
         aarch64-linux.niri-switcher =
           let
