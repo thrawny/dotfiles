@@ -15,20 +15,6 @@ fi
 '''
 sources = ["nix/**/*.nix", "nix/flake.*", "niri-switcher/**/*"]
 
-[tasks.check]
-description = "Evaluate config without building (auto-detects NixOS vs Home Manager)"
-run = '''
-host=$(hostname | sed 's/\.local$//')
-if [ -f /etc/NIXOS ]; then
-  echo "Evaluating NixOS config for $host..."
-  nix eval "./nix#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null && echo "Config is valid"
-else
-  echo "Evaluating Home Manager config for $host..."
-  nix eval "./nix#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null && echo "Config is valid"
-fi
-'''
-sources = ["nix/**/*.nix", "nix/flake.*"]
-
 [tasks.dry]
 description = "Dry-run NixOS rebuild (NixOS only)"
 run = '''
@@ -93,10 +79,24 @@ run = "nix shell nixpkgs#treefmt nixpkgs#nixfmt -c treefmt"
 sources = ["**/*.nix"]
 outputs = { auto = true }
 
-# Nix format + lint combined
+# Nix format + lint + eval combined
 [tasks."nix:check"]
-description = "Format and lint Nix files"
-depends = ["fmt:nix", "lint:nix"]
+description = "Format, lint, and evaluate Nix config"
+depends = ["fmt:nix", "lint:nix", "nix:eval"]
+
+[tasks."nix:eval"]
+description = "Evaluate Nix config without building (auto-detects NixOS vs Home Manager)"
+run = '''
+host=$(hostname | sed 's/\.local$//')
+if [ -f /etc/NIXOS ]; then
+  echo "Evaluating NixOS config for $host..."
+  nix eval "./nix#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null && echo "Config is valid"
+else
+  echo "Evaluating Home Manager config for $host..."
+  nix eval "./nix#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null && echo "Config is valid"
+fi
+'''
+sources = ["nix/**/*.nix", "nix/flake.*"]
 
 # --- Linters ---
 [tasks."lint:python"]
