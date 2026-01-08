@@ -38,11 +38,6 @@ return {
           local bg = "#222222"
 
           local highlights = {
-            -- Disable italics globally
-            Comment = { italic = false },
-            ["@comment"] = { italic = false },
-            ["@lsp.type.comment"] = { italic = false },
-
             -- Float window borders (LSP hover, etc.)
             FloatBorder = { fg = "#69676c", bg = bg },
 
