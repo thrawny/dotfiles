@@ -45,23 +45,23 @@ FORMATTERS: dict[str, list[Checker]] = {
     ],
     # Go - linting only (no formatting to avoid disrupting agent workflow)
     # Uses JSON output + filtering to exclude unused imports/variables
-    ".go": [
-        {
-            "name": "Go Linter",
-            "command": [
-                "golangci-lint",
-                "run",
-                "--output.json.path=stdout",
-                "--disable=unused",
-            ],
-            "json_output": True,
-            "exclude_patterns": [
-                "imported and not used",
-                "declared and not used",
-                "declared but not used",
-            ],
-        },
-    ],
+    # ".go": [
+    #     {
+    #         "name": "Go Linter",
+    #         "command": [
+    #             "golangci-lint",
+    #             "run",
+    #             "--output.json.path=stdout",
+    #             "--disable=unused",
+    #         ],
+    #         "json_output": True,
+    #         "exclude_patterns": [
+    #             "imported and not used",
+    #             "declared and not used",
+    #             "declared but not used",
+    #         ],
+    #     },
+    # ],
     # Add more languages here as needed:
     # ".rs": [["rustfmt", "{file}"]],
     # ".js": [["prettier", "--write", "{file}"]],
