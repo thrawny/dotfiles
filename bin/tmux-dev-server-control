@@ -47,6 +47,7 @@ validate_command() {
     "^docker-compose up" "^docker compose up" "^docker run"
     "^make "
     "^./scripts/" "^bin/"
+    "^nix (run|develop|shell)"
   )
 
   for pattern in "${allowed_patterns[@]}"; do
@@ -125,6 +126,17 @@ generate_name() {
       ;;
     make)
       slug="${cmd_words[1]:-make}"
+      ;;
+    nix)
+      # Extract package name from flake reference (e.g., .#niri-switcher -> niri-switcher)
+      local flake_ref=""
+      for arg in "${cmd_words[@]:2}"; do
+        if [[ "$arg" == *"#"* ]]; then
+          flake_ref="${arg##*#}"
+          break
+        fi
+      done
+      slug="${flake_ref:-nix}"
       ;;
     *)
       slug="${main_cmd}${cmd_words[1]:+-${cmd_words[1]}}"
