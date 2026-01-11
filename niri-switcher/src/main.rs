@@ -35,6 +35,21 @@ struct Project {
     key: String,
     name: String,
     dir: String,
+    /// If true, this is a static named workspace defined in niri config.
+    /// It always exists and we just focus it (spawning terminals if empty).
+    #[serde(default)]
+    static_workspace: bool,
+}
+
+#[derive(Debug, Clone)]
+struct WorkspaceColumn {
+    workspace_name: String,
+    workspace_key: char,
+    column_index: u32,
+    column_key: char,
+    app_label: String,
+    dir: String,
+    static_workspace: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,16 +57,10 @@ struct Config {
     project: Vec<Project>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum Stage {
-    SelectProject,
-    SelectColumn,
-}
-
 struct AppState {
-    stage: Stage,
-    selected_project: Option<Project>,
     projects: Vec<Project>,
+    entries: Vec<WorkspaceColumn>,
+    pending_key: Option<char>,
 }
 
 fn load_projects() -> Vec<Project> {
@@ -66,18 +75,12 @@ fn load_projects() -> Vec<Project> {
     }
 
     // Default projects
-    vec![
-        Project {
-            key: "h".to_string(),
-            name: "dotfiles".to_string(),
-            dir: "~/dotfiles".to_string(),
-        },
-        Project {
-            key: "j".to_string(),
-            name: "work".to_string(),
-            dir: "~/work".to_string(),
-        },
-    ]
+    vec![Project {
+        key: "h".to_string(),
+        name: "dotfiles".to_string(),
+        dir: "~/dotfiles".to_string(),
+        static_workspace: true,
+    }]
 }
 
 fn niri_cmd(args: &[&str]) -> Option<String> {
@@ -127,6 +130,123 @@ fn workspace_has_windows(name: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn simplify_label(title: &str, app_id: &str) -> String {
+    // Prefer title for terminals since it shows what's running
+    if app_id.contains("ghostty") || app_id.contains("terminal") || app_id.contains("alacritty") {
+        // Detect Claude sessions by ✳ marker
+        if title.starts_with('✳') {
+            let desc = title.trim_start_matches('✳').trim();
+            return format!("claude: {}", desc);
+        }
+        // Clean up title - remove common markers
+        let cleaned = title
+            .trim_start_matches(['●', '○', ' '].as_ref())
+            .trim();
+        // If title is just a path, take the last component
+        if cleaned.starts_with('/') || cleaned.starts_with('~') {
+            cleaned.split('/').last().unwrap_or(cleaned).to_string()
+        } else {
+            // Take first word for things like "nvim foo.rs"
+            cleaned.split_whitespace().next().unwrap_or(cleaned).to_string()
+        }
+    } else {
+        // For non-terminals, use simplified app_id
+        app_id.split('.').last().unwrap_or(app_id).to_string()
+    }
+}
+
+fn get_workspace_columns(projects: &[Project]) -> Vec<WorkspaceColumn> {
+    let workspaces = niri_json(&["workspaces"]).unwrap_or_default();
+    let windows = niri_json(&["windows"]).unwrap_or_default();
+    let windows_arr = windows.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+
+    let mut entries = Vec::new();
+
+    for (proj_idx, project) in projects.iter().enumerate() {
+        if proj_idx >= KEYS.len() {
+            break;
+        }
+        let workspace_key = KEYS[proj_idx];
+
+        let ws = workspaces
+            .as_array()
+            .and_then(|arr| {
+                arr.iter()
+                    .find(|ws| ws.get("name").and_then(|n| n.as_str()) == Some(&project.name))
+            });
+
+        let ws_id = ws.and_then(|w| w.get("id").and_then(|id| id.as_i64()));
+
+        // Group windows by column index
+        let mut columns: std::collections::BTreeMap<i64, Vec<&serde_json::Value>> =
+            std::collections::BTreeMap::new();
+
+        if let Some(ws_id) = ws_id {
+            for window in windows_arr {
+                let window_ws_id = window.get("workspace_id").and_then(|id| id.as_i64());
+                if window_ws_id != Some(ws_id) {
+                    continue;
+                }
+                let col_idx = window
+                    .get("layout")
+                    .and_then(|l| l.get("pos_in_scrolling_layout"))
+                    .and_then(|p| p.get(0))
+                    .and_then(|c| c.as_i64())
+                    .unwrap_or(1);
+                columns.entry(col_idx).or_default().push(window);
+            }
+        }
+
+        // Skip column 1 (scratch), create entries for columns 2+
+        let has_columns = columns.keys().any(|&idx| idx >= 2);
+
+        if has_columns {
+            for (&col_idx, col_windows) in &columns {
+                if col_idx < 2 {
+                    continue;
+                }
+                let key_offset = (col_idx - 2) as usize;
+                if key_offset >= KEYS.len() {
+                    continue;
+                }
+                let column_key = KEYS[key_offset];
+
+                let first_window = col_windows.first();
+                let title = first_window
+                    .and_then(|w| w.get("title").and_then(|t| t.as_str()))
+                    .unwrap_or("?");
+                let app_id = first_window
+                    .and_then(|w| w.get("app_id").and_then(|a| a.as_str()))
+                    .unwrap_or("?");
+                let app_label = simplify_label(title, app_id);
+
+                entries.push(WorkspaceColumn {
+                    workspace_name: project.name.clone(),
+                    workspace_key,
+                    column_index: col_idx as u32,
+                    column_key,
+                    app_label,
+                    dir: project.dir.clone(),
+                    static_workspace: project.static_workspace,
+                });
+            }
+        } else {
+            // Empty workspace - add placeholder entry
+            entries.push(WorkspaceColumn {
+                workspace_name: project.name.clone(),
+                workspace_key,
+                column_index: 2,
+                column_key: KEYS[0],
+                app_label: "(empty)".to_string(),
+                dir: project.dir.clone(),
+                static_workspace: project.static_workspace,
+            });
+        }
+    }
+
+    entries
+}
+
 fn focus_workspace(name: &str) {
     niri_cmd(&["action", "focus-workspace", name]);
 }
@@ -135,9 +255,19 @@ fn focus_column(index: u32) {
     niri_cmd(&["action", "focus-column", &index.to_string()]);
 }
 
+fn spawn_terminals(dir: &str) {
+    let dir = shellexpand::tilde(dir).to_string();
+    for _ in 0..3 {
+        Command::new("ghostty")
+            .arg(format!("--working-directory={}", dir))
+            .spawn()
+            .ok();
+        std::thread::sleep(std::time::Duration::from_millis(300));
+    }
+}
+
 fn create_workspace(project: &Project) {
     let name = &project.name;
-    let dir = shellexpand::tilde(&project.dir).to_string();
 
     if get_workspace_by_name(name).is_some() {
         niri_cmd(&["action", "focus-workspace", name]);
@@ -157,24 +287,49 @@ fn create_workspace(project: &Project) {
     }
 
     std::thread::sleep(std::time::Duration::from_millis(100));
-
-    // Spawn three ghostty terminals
-    for _ in 0..3 {
-        Command::new("ghostty")
-            .arg(format!("--working-directory={}", dir))
-            .spawn()
-            .ok();
-        std::thread::sleep(std::time::Duration::from_millis(300));
-    }
+    spawn_terminals(&project.dir);
 }
 
 fn switch_to_project(project: &Project, column: u32) {
-    if !workspace_has_windows(&project.name) {
-        create_workspace(project);
+    if project.static_workspace {
+        // Static workspace: always exists in niri config, just focus it
+        focus_workspace(&project.name);
+        // If empty, spawn terminals
+        if !workspace_has_windows(&project.name) {
+            spawn_terminals(&project.dir);
+        }
+    } else {
+        // Dynamic workspace: create if doesn't exist
+        if !workspace_has_windows(&project.name) {
+            create_workspace(project);
+        }
+        focus_workspace(&project.name);
     }
-    focus_workspace(&project.name);
     std::thread::sleep(std::time::Duration::from_millis(100));
     focus_column(column);
+}
+
+fn switch_to_entry(entry: &WorkspaceColumn) {
+    if entry.static_workspace {
+        focus_workspace(&entry.workspace_name);
+        if entry.app_label == "(empty)" {
+            spawn_terminals(&entry.dir);
+        }
+    } else {
+        if entry.app_label == "(empty)" {
+            // Create a temporary Project to use create_workspace
+            let project = Project {
+                key: entry.workspace_key.to_string(),
+                name: entry.workspace_name.clone(),
+                dir: entry.dir.clone(),
+                static_workspace: false,
+            };
+            create_workspace(&project);
+        }
+        focus_workspace(&entry.workspace_name);
+    }
+    std::thread::sleep(std::time::Duration::from_millis(100));
+    focus_column(entry.column_index);
 }
 
 fn send_toggle() -> Result<(), Box<dyn std::error::Error>> {
@@ -234,10 +389,12 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<String>) {
     window.set_anchor(Edge::Left, false);
     window.set_anchor(Edge::Right, false);
 
+    let projects = load_projects();
+    let entries = get_workspace_columns(&projects);
     let state = Rc::new(RefCell::new(AppState {
-        stage: Stage::SelectProject,
-        selected_project: None,
-        projects: load_projects(),
+        projects,
+        entries,
+        pending_key: None,
     }));
 
     // Outer box for border (GTK4 windows don't render borders properly)
@@ -250,7 +407,7 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<String>) {
     main_box.set_margin_start(20);
     main_box.set_margin_end(20);
 
-    build_project_list(&main_box, &state.borrow());
+    build_entry_list(&main_box, &state.borrow().entries, state.borrow().pending_key);
     outer_box.append(&main_box);
 
     // CSS
@@ -307,48 +464,54 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<String>) {
             return glib::Propagation::Proceed;
         };
 
-        // Cancel - hide instead of close
+        // Cancel - hide or clear pending key
         if key == "q" || key == "escape" {
-            window_clone.set_visible(false);
-            // Reset state for next show
             let mut state = state_clone.borrow_mut();
-            state.stage = Stage::SelectProject;
-            state.selected_project = None;
-            drop(state);
-            build_project_list(&main_box_clone, &state_clone.borrow());
+            if state.pending_key.is_some() {
+                // Clear pending key and show full list
+                state.pending_key = None;
+                let entries = state.entries.clone();
+                drop(state);
+                build_entry_list(&main_box_clone, &entries, None);
+            } else {
+                // Hide window
+                drop(state);
+                window_clone.set_visible(false);
+            }
             return glib::Propagation::Stop;
         }
 
-        let mut state = state_clone.borrow_mut();
+        // Handle key input
+        if let Some(pos) = KEYS.iter().position(|&k| k.to_string() == key) {
+            let key_char = KEYS[pos];
+            let mut state = state_clone.borrow_mut();
 
-        match state.stage {
-            Stage::SelectProject => {
-                if let Some(pos) = KEYS.iter().position(|&k| k.to_string() == key) {
-                    if pos < state.projects.len() {
-                        state.selected_project = Some(state.projects[pos].clone());
-                        state.stage = Stage::SelectColumn;
-                        drop(state);
-                        build_column_select(&main_box_clone, &state_clone.borrow());
-                    }
+            if let Some(first_key) = state.pending_key {
+                // Second keystroke - find matching entry
+                if let Some(entry) = state
+                    .entries
+                    .iter()
+                    .find(|e| e.workspace_key == first_key && e.column_key == key_char)
+                {
+                    let entry = entry.clone();
+                    state.pending_key = None;
+                    drop(state);
+                    window_clone.set_visible(false);
+                    switch_to_entry(&entry);
+                } else {
+                    // Invalid combo - reset
+                    state.pending_key = None;
+                    let entries = state.entries.clone();
+                    drop(state);
+                    build_entry_list(&main_box_clone, &entries, None);
                 }
-            }
-            Stage::SelectColumn => {
-                let column = match key {
-                    "h" => Some(2), // Claude
-                    "j" => Some(3), // Nvim
-                    _ => None,
-                };
-                if let Some(col) = column {
-                    if let Some(ref project) = state.selected_project {
-                        let project = project.clone();
-                        // Reset state and hide
-                        state.stage = Stage::SelectProject;
-                        state.selected_project = None;
-                        drop(state);
-                        window_clone.set_visible(false);
-                        build_project_list(&main_box_clone, &state_clone.borrow());
-                        switch_to_project(&project, col);
-                    }
+            } else {
+                // First keystroke - check if valid workspace key
+                if state.entries.iter().any(|e| e.workspace_key == key_char) {
+                    state.pending_key = Some(key_char);
+                    let entries = state.entries.clone();
+                    drop(state);
+                    build_entry_list(&main_box_clone, &entries, Some(key_char));
                 }
             }
         }
@@ -376,13 +539,15 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<String>) {
                 // Hide and reset
                 window_for_poll.set_visible(false);
                 let mut state = state_for_poll.borrow_mut();
-                state.stage = Stage::SelectProject;
-                state.selected_project = None;
-                drop(state);
-                build_project_list(&main_box_for_poll, &state_for_poll.borrow());
+                state.pending_key = None;
             } else {
-                // Refresh project list and show
-                build_project_list(&main_box_for_poll, &state_for_poll.borrow());
+                // Refresh entries from niri and show
+                let mut state = state_for_poll.borrow_mut();
+                state.entries = get_workspace_columns(&state.projects);
+                state.pending_key = None;
+                let entries = state.entries.clone();
+                drop(state);
+                build_entry_list(&main_box_for_poll, &entries, None);
                 window_for_poll.set_visible(true);
                 window_for_poll.present();
             }
@@ -391,66 +556,38 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<String>) {
     });
 }
 
-fn build_project_list(container: &GtkBox, state: &AppState) {
+fn build_entry_list(container: &GtkBox, entries: &[WorkspaceColumn], pending_key: Option<char>) {
     // Clear
     while let Some(child) = container.first_child() {
         container.remove(&child);
     }
 
-    let header = Label::new(Some("Select project (q/Esc to cancel)"));
+    let header_text = if let Some(key) = pending_key {
+        format!("Select column for [{}] (q/Esc to cancel)", key)
+    } else {
+        "Select workspace+column (q/Esc to cancel)".to_string()
+    };
+    let header = Label::new(Some(&header_text));
     header.add_css_class("header");
     container.append(&header);
 
-    for (i, project) in state.projects.iter().enumerate() {
-        if i >= KEYS.len() {
-            break;
-        }
+    // Filter entries if pending_key is set
+    let filtered: Vec<_> = if let Some(key) = pending_key {
+        entries.iter().filter(|e| e.workspace_key == key).collect()
+    } else {
+        entries.iter().collect()
+    };
 
+    for entry in filtered {
         let row = GtkBox::new(Orientation::Horizontal, 10);
 
-        let key_label = Label::new(Some(&format!("[{}]", KEYS[i])));
+        let key_text = format!("[{}{}]", entry.workspace_key, entry.column_key);
+        let key_label = Label::new(Some(&key_text));
         key_label.add_css_class("key");
         row.append(&key_label);
 
-        let exists = workspace_has_windows(&project.name);
-        let name_text = if exists {
-            project.name.clone()
-        } else {
-            format!("{} (new)", project.name)
-        };
+        let name_text = format!("{} / {}", entry.workspace_name, entry.app_label);
         let name_label = Label::new(Some(&name_text));
-        name_label.add_css_class("project");
-        row.append(&name_label);
-
-        container.append(&row);
-    }
-}
-
-fn build_column_select(container: &GtkBox, state: &AppState) {
-    // Clear
-    while let Some(child) = container.first_child() {
-        container.remove(&child);
-    }
-
-    if let Some(ref project) = state.selected_project {
-        let header = Label::new(Some(&format!("Project: {}", project.name)));
-        header.add_css_class("selected");
-        container.append(&header);
-    }
-
-    let subheader = Label::new(Some("Select column (q/Esc to cancel)"));
-    subheader.add_css_class("header");
-    container.append(&subheader);
-
-    let columns = [("h", "claude"), ("j", "nvim")];
-    for (key, name) in columns {
-        let row = GtkBox::new(Orientation::Horizontal, 10);
-
-        let key_label = Label::new(Some(&format!("[{}]", key)));
-        key_label.add_css_class("key");
-        row.append(&key_label);
-
-        let name_label = Label::new(Some(name));
         name_label.add_css_class("project");
         row.append(&name_label);
 

@@ -159,8 +159,8 @@ let
   ];
 
   screenshotBinds = [
-    ''SUPER SHIFT, 4, exec, grimblast --notify copysave area ~/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png''
-    ''SUPER SHIFT, 3, exec, grimblast --notify copysave output ~/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png''
+    "SUPER SHIFT, 4, exec, grimblast --notify copysave area ~/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png"
+    "SUPER SHIFT, 3, exec, grimblast --notify copysave output ~/Screenshots/$(date +%Y-%m-%d_%H-%M-%S).png"
   ];
 
   keyboardBinds = [

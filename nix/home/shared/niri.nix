@@ -61,8 +61,8 @@ let
       hotkey-overlay.title = "Workspace 1";
     };
     "Mod+B" = {
-      action.focus-workspace = 2;
-      hotkey-overlay.title = "Browser (WS 2)";
+      action.focus-workspace = "web";
+      hotkey-overlay.title = "Web Workspace";
     };
     "Mod+O" = {
       action.spawn = [ "1password" ];
@@ -588,6 +588,12 @@ in
     # Using niri-flake.homeModules.config - only manages config, not package
     # niri is installed via Fedora DNF
     programs.niri.settings = {
+      # Named workspaces
+      workspaces = {
+        "web" = { };
+        "dotfiles" = { };
+      };
+
       # Disable config notification on failure
       config-notification.disable-failed = true;
 
@@ -675,7 +681,7 @@ in
         }
         # Terminal
         { command = [ "ghostty" ]; }
-        # Browser (sent to workspace 2 via window rule)
+        # Browser
         { command = [ "zen" ]; }
       ]
       ++ (
