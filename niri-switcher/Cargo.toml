@@ -1,14 +1,15 @@
 [package]
 name = "niri-switcher"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
-gtk4 = "0.9"
-gtk4-layer-shell = "0.4"
+gtk4 = "0.10"
+gtk4-layer-shell = "0.7"
 serde = { version = "1", features = ["derive"] }
-toml = "0.8"
+toml = "0.9"
 dirs = "6"
 serde_json = "1"
 shellexpand = "3"
 clap = { version = "4", features = ["derive"] }
+notify = "8"

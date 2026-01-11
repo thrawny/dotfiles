@@ -2,6 +2,7 @@ use clap::Parser;
 use gtk4::prelude::*;
 use gtk4::{glib, Application, ApplicationWindow, Box as GtkBox, Label, Orientation};
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
+use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::io::{Read, Write};
@@ -14,6 +15,18 @@ use std::thread;
 
 const APP_ID: &str = "com.thrawny.niri-switcher";
 const KEYS: [char; 8] = ['h', 'j', 'k', 'l', 'u', 'i', 'o', 'p'];
+
+#[derive(Debug)]
+enum Message {
+    Toggle,
+    ReloadConfig,
+}
+
+fn config_path() -> PathBuf {
+    dirs::config_dir()
+        .unwrap_or_else(|| PathBuf::from("~/.config"))
+        .join("projects.toml")
+}
 
 #[derive(Parser)]
 #[command(name = "niri-switcher", about = "Project switcher for niri")]
@@ -64,11 +77,7 @@ struct AppState {
 }
 
 fn load_projects() -> Vec<Project> {
-    let config_path = dirs::config_dir()
-        .unwrap_or_else(|| PathBuf::from("~/.config"))
-        .join("projects.toml");
-
-    if let Ok(content) = std::fs::read_to_string(&config_path) {
+    if let Ok(content) = std::fs::read_to_string(config_path()) {
         if let Ok(config) = toml::from_str::<Config>(&content) {
             return config.project;
         }
@@ -341,7 +350,7 @@ fn send_toggle() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn start_socket_listener(tx: mpsc::Sender<String>) {
+fn start_socket_listener(tx: mpsc::Sender<Message>) {
     let path = socket_path();
 
     // Remove existing socket
@@ -360,9 +369,8 @@ fn start_socket_listener(tx: mpsc::Sender<String>) {
             match stream {
                 Ok(mut stream) => {
                     let mut buf = [0u8; 64];
-                    if let Ok(n) = stream.read(&mut buf) {
-                        let cmd = String::from_utf8_lossy(&buf[..n]).to_string();
-                        let _ = tx.send(cmd);
+                    if let Ok(_n) = stream.read(&mut buf) {
+                        let _ = tx.send(Message::Toggle);
                         let _ = stream.write_all(b"ok");
                     }
                 }
@@ -374,7 +382,54 @@ fn start_socket_listener(tx: mpsc::Sender<String>) {
     });
 }
 
-fn build_ui(app: &Application, rx: mpsc::Receiver<String>) {
+fn start_config_watcher(tx: mpsc::Sender<Message>) {
+    let config = config_path();
+    let config_dir = config.parent().map(|p| p.to_path_buf());
+
+    thread::spawn(move || {
+        let tx_clone = tx.clone();
+        let config_filename = config.file_name().map(|s| s.to_os_string());
+
+        let mut watcher = match RecommendedWatcher::new(
+            move |res: Result<notify::Event, notify::Error>| {
+                if let Ok(event) = res {
+                    // Only reload on modify/create events for our config file
+                    let dominated_by_config = event.paths.iter().any(|p| {
+                        p.file_name() == config_filename.as_deref()
+                    });
+                    if dominated_by_config {
+                        match event.kind {
+                            notify::EventKind::Modify(_) | notify::EventKind::Create(_) => {
+                                let _ = tx_clone.send(Message::ReloadConfig);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            },
+            notify::Config::default(),
+        ) {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("Failed to create config watcher: {}", e);
+                return;
+            }
+        };
+
+        if let Some(dir) = config_dir {
+            if let Err(e) = watcher.watch(&dir, RecursiveMode::NonRecursive) {
+                eprintln!("Failed to watch config directory: {}", e);
+                return;
+            }
+            // Keep watcher alive
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(3600));
+            }
+        }
+    });
+}
+
+fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
     let window = ApplicationWindow::builder()
         .application(app)
         .default_width(400)
@@ -528,28 +583,45 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<String>) {
     window.present();
     window.set_visible(false);
 
-    // Poll socket receiver
+    // Poll message receiver
     let window_for_poll = window.clone();
     let state_for_poll = state.clone();
     let main_box_for_poll = main_box.clone();
     glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
-        if let Ok(_cmd) = rx.try_recv() {
-            let is_visible = window_for_poll.is_visible();
-            if is_visible {
-                // Hide and reset
-                window_for_poll.set_visible(false);
-                let mut state = state_for_poll.borrow_mut();
-                state.pending_key = None;
-            } else {
-                // Refresh entries from niri and show
-                let mut state = state_for_poll.borrow_mut();
-                state.entries = get_workspace_columns(&state.projects);
-                state.pending_key = None;
-                let entries = state.entries.clone();
-                drop(state);
-                build_entry_list(&main_box_for_poll, &entries, None);
-                window_for_poll.set_visible(true);
-                window_for_poll.present();
+        while let Ok(msg) = rx.try_recv() {
+            match msg {
+                Message::Toggle => {
+                    let is_visible = window_for_poll.is_visible();
+                    if is_visible {
+                        // Hide and reset
+                        window_for_poll.set_visible(false);
+                        let mut state = state_for_poll.borrow_mut();
+                        state.pending_key = None;
+                    } else {
+                        // Refresh entries from niri and show
+                        let mut state = state_for_poll.borrow_mut();
+                        state.entries = get_workspace_columns(&state.projects);
+                        state.pending_key = None;
+                        let entries = state.entries.clone();
+                        drop(state);
+                        build_entry_list(&main_box_for_poll, &entries, None);
+                        window_for_poll.set_visible(true);
+                        window_for_poll.present();
+                    }
+                }
+                Message::ReloadConfig => {
+                    // Reload projects from config file
+                    let mut state = state_for_poll.borrow_mut();
+                    state.projects = load_projects();
+                    state.entries = get_workspace_columns(&state.projects);
+                    // If visible, refresh the display
+                    if window_for_poll.is_visible() {
+                        let entries = state.entries.clone();
+                        let pending = state.pending_key;
+                        drop(state);
+                        build_entry_list(&main_box_for_poll, &entries, pending);
+                    }
+                }
             }
         }
         glib::ControlFlow::Continue
@@ -607,9 +679,10 @@ fn main() -> glib::ExitCode {
         std::process::exit(0);
     }
 
-    // Daemon mode: start GTK app with socket listener
+    // Daemon mode: start GTK app with socket listener and config watcher
     let (tx, rx) = mpsc::channel();
-    start_socket_listener(tx);
+    start_socket_listener(tx.clone());
+    start_config_watcher(tx);
 
     let rx = Rc::new(RefCell::new(Some(rx)));
 
