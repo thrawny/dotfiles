@@ -2,6 +2,11 @@ editor = "cursor"
 sandbox_mode = "workspace-write"
 model = "gpt-5-codex"
 
+# Mirror Claude Code's approval behavior:
+# - File edits auto-approved (like Claude's acceptEdits mode)
+# - Commands need approval unless in rules/claude-mirror.rules
+ask_for_approval = "on-failure"
+
 [mcp_servers.context7]
 args = ["-y", "@upstash/context7-mcp"]
 command = "npx"

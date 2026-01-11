@@ -17,6 +17,7 @@
       url = "github:LeonardoTrapani/hyprvoice";
       flake = false;
     };
+    xremap-flake.url = "github:xremap/nix-flake";
   };
 
   outputs =
@@ -30,6 +31,7 @@
       walker,
       niri-flake,
       hyprvoice-src,
+      xremap-flake,
       ...
     }:
     let
@@ -111,6 +113,7 @@
               zen-browser
               walker
               nurPkgs
+              xremap-flake
               ;
           };
           modules = [
@@ -163,10 +166,11 @@
         pkgs = nixpkgs.legacyPackages.aarch64-linux;
         modules = [
           niri-flake.homeModules.config # config only, no package (using Fedora's niri)
+          xremap-flake.homeManagerModules.default
           ./hosts/thrawny-asahi-air/default.nix
         ];
         extraSpecialArgs = {
-          inherit self;
+          inherit self xremap-flake;
           username = "thrawny";
           dotfiles = "/home/thrawny/dotfiles";
           gitIdentity = {

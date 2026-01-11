@@ -5,12 +5,19 @@
   dotfiles,
   username,
   self,
+  xremap-flake,
   ...
 }:
 {
   imports = [
     # Import all shared cross-platform modules
     ../shared
+
+    # xremap home-manager module (from flake)
+    xremap-flake.homeManagerModules.default
+
+    # Linux-specific modules
+    ../linux/xremap.nix
 
     # NixOS-specific modules
     ./cursor.nix
@@ -20,7 +27,7 @@
     ./hypridle.nix
     ./hyprlock.nix
     ./hyprpaper.nix
-    ./keyd-app-mapper.nix
+    # ./keyd-app-mapper.nix  # DISABLED: Using xremap instead
     ./mako.nix
     ./walker.nix
     ./waybar.nix

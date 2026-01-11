@@ -6,6 +6,7 @@
   zen-browser,
   walker,
   nurPkgs,
+  xremap-flake,
   ...
 }:
 let
@@ -151,8 +152,9 @@ in
       blueman.enable = true;
 
       # Keyd for system-wide key remapping (works in all apps including Electron)
+      # DISABLED: Using xremap instead to avoid double-grab keyboard conflicts
       keyd = {
-        enable = true;
+        enable = false;
         keyboards = {
           # ThinkPad built-in keyboard - needs Alt/Win swap
           thinkpad = {
@@ -223,6 +225,7 @@ in
           zen-browser
           walker
           gitIdentity
+          xremap-flake
           ;
       };
       users.${username} = import ../../home/nixos/default.nix;

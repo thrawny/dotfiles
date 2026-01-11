@@ -15,6 +15,9 @@
   imports = [
     # Shared cross-platform modules (CLI tools, dotfiles)
     ../shared
+
+    # Linux-specific modules
+    ../linux/xremap.nix
   ];
 
   # Portal configuration for niri on non-NixOS systems
