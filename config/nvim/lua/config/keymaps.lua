@@ -52,5 +52,3 @@ vim.keymap.set("v", "<Leader>at", function()
   vim.fn.setreg("+", ref)
   vim.notify("Copied: " .. ref)
 end, { desc = "Copy @file (lines) to clipboard" })
-
--- vim.keymap.set("n", "<Tab>", require("violet").accept_prediction_expr, { expr = true, silent = true })

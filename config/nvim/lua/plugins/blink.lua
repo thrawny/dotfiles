@@ -1,8 +1,5 @@
 return {
   "saghen/blink.cmp",
-  dependencies = {
-    { "thrawny/violet.nvim", lazy = false },
-  },
   opts = {
     keymap = {
       preset = "default",
