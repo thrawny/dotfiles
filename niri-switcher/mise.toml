@@ -1,6 +1,9 @@
+[env]
+_.source = { script = "nix print-dev-env path:../nix#niri-switcher-dev 2>/dev/null" }
+
 [tasks.build]
 description = "Build with cargo (incremental)"
-run = "nix develop path:../nix#niri-switcher-dev -c cargo build --release"
+run = "cargo build --release"
 
 [tasks.run]
 description = "Build and run"

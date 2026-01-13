@@ -150,11 +150,3 @@ depends = ["test:nvim"]
 [tasks.ci]
 description = "Run lint, typecheck, format, and tests"
 depends = ["fmt", "lint", "typecheck", "test"]
-
-# --- Tools ---
-[tools]
-"nix:nixfmt" = "latest"
-"nix:nvd" = "latest"
-"nix:selene" = "latest"
-"nix:statix" = "latest"
-"nix:stylua" = "latest"

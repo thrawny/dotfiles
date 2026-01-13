@@ -4,6 +4,3 @@ trusted_config_paths = ["~/dotfiles", "~/code"]
 python.uv_venv_auto = true
 experimental = true
 disable_tools = ["python"]
-
-[plugins]
-nix = "https://github.com/jbadeau/mise-nix.git"
