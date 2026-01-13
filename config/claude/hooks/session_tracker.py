@@ -1,9 +1,16 @@
 #!/usr/bin/env python3
-"""Track active Claude sessions with their niri and tmux window IDs."""
+"""Track active Claude sessions with state, niri and tmux window IDs.
+
+States:
+- idle: Claude finished responding
+- waiting: Claude needs user input (permission prompt, question)
+- responding: Claude is generating a response
+"""
 import json
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 SESSIONS_FILE = Path.home() / ".claude" / "active-sessions.json"
@@ -52,7 +59,21 @@ def load_sessions():
 
 def save_sessions(sessions):
     """Save sessions to file."""
+    SESSIONS_FILE.parent.mkdir(parents=True, exist_ok=True)
     SESSIONS_FILE.write_text(json.dumps(sessions, indent=2))
+
+
+def get_window_id():
+    """Get window ID, preferring niri over tmux."""
+    return get_niri_window_id() or get_tmux_window_id()
+
+
+def find_session_by_id(sessions, session_id):
+    """Find window_id for a given session_id."""
+    for window_id, data in sessions.items():
+        if data.get("session_id") == session_id:
+            return window_id
+    return None
 
 
 def main():
@@ -62,29 +83,55 @@ def main():
         sys.exit(1)
 
     event = input_data.get("hook_event_name", "")
+    session_id = input_data.get("session_id")
     sessions = load_sessions()
 
     if event == "SessionStart":
         niri_id = get_niri_window_id()
         tmux_id = get_tmux_window_id()
-        # Use niri ID as primary key, fall back to tmux ID
         window_id = niri_id or tmux_id
         if window_id:
             sessions[window_id] = {
-                "session_id": input_data.get("session_id"),
+                "session_id": session_id,
                 "transcript_path": input_data.get("transcript_path"),
                 "cwd": input_data.get("cwd"),
                 "niri_window_id": niri_id,
                 "tmux_window_id": tmux_id,
+                "state": "waiting",
+                "state_updated": time.time(),
             }
             save_sessions(sessions)
 
     elif event == "SessionEnd":
-        niri_id = get_niri_window_id()
-        tmux_id = get_tmux_window_id()
-        window_id = niri_id or tmux_id
+        window_id = get_window_id() or find_session_by_id(sessions, session_id)
         if window_id and window_id in sessions:
             del sessions[window_id]
+            save_sessions(sessions)
+
+    elif event == "Stop":
+        # Claude finished responding
+        window_id = find_session_by_id(sessions, session_id)
+        if window_id and window_id in sessions:
+            sessions[window_id]["state"] = "idle"
+            sessions[window_id]["state_updated"] = time.time()
+            save_sessions(sessions)
+
+    elif event == "Notification":
+        # Permission prompt needs user attention
+        notification_type = input_data.get("notification_type", "")
+        if notification_type == "permission_prompt":
+            window_id = find_session_by_id(sessions, session_id)
+            if window_id and window_id in sessions:
+                sessions[window_id]["state"] = "waiting"
+                sessions[window_id]["state_updated"] = time.time()
+                save_sessions(sessions)
+
+    elif event == "UserPromptSubmit":
+        # User submitted a prompt, Claude will start responding
+        window_id = find_session_by_id(sessions, session_id)
+        if window_id and window_id in sessions:
+            sessions[window_id]["state"] = "responding"
+            sessions[window_id]["state_updated"] = time.time()
             save_sessions(sessions)
 
 

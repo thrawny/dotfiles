@@ -16,45 +16,21 @@ KEYS=(h j k l u i o p)
 
 # Claude session tracking
 CLAUDE_SESSIONS_FILE="$HOME/.claude/active-sessions.json"
-CLAUDE_IDLE_THRESHOLD=3
 
-# Build map of tmux window IDs to Claude session info
-declare -A CLAUDE_WINDOW_MAP
+# Build map of tmux window IDs to Claude state
+declare -A CLAUDE_STATUS_MAP
 load_claude_sessions() {
-  CLAUDE_WINDOW_MAP=()
+  CLAUDE_STATUS_MAP=()
   [[ -f "$CLAUDE_SESSIONS_FILE" ]] || return
 
-  # Parse JSON and build map: tmux_window_id -> transcript_path
+  # Parse JSON and build map: tmux_window_id -> state
+  # States: waiting (needs attention), responding, tool_running
   while IFS= read -r line; do
-    local tmux_id transcript_path
+    local tmux_id state
     tmux_id=$(echo "$line" | cut -d'|' -f1)
-    transcript_path=$(echo "$line" | cut -d'|' -f2)
-    [[ -n "$tmux_id" && "$tmux_id" != "null" ]] && CLAUDE_WINDOW_MAP["$tmux_id"]="$transcript_path"
-  done < <(jq -r 'to_entries[] | "\(.value.tmux_window_id)|\(.value.transcript_path)"' "$CLAUDE_SESSIONS_FILE" 2>/dev/null)
-}
-
-# Pre-compute Claude status for all tracked windows
-declare -A CLAUDE_STATUS_MAP
-compute_claude_statuses() {
-  CLAUDE_STATUS_MAP=()
-  local now
-  now=$(date +%s)
-
-  for tmux_id in "${!CLAUDE_WINDOW_MAP[@]}"; do
-    local transcript_path="${CLAUDE_WINDOW_MAP[$tmux_id]}"
-    if [[ -f "$transcript_path" ]]; then
-      local mtime age
-      mtime=$(stat -f %m "$transcript_path" 2>/dev/null || stat -c %Y "$transcript_path" 2>/dev/null)
-      age=$((now - mtime))
-      if [[ $age -lt $CLAUDE_IDLE_THRESHOLD ]]; then
-        CLAUDE_STATUS_MAP["$tmux_id"]="working"
-      else
-        CLAUDE_STATUS_MAP["$tmux_id"]="idle"
-      fi
-    else
-      CLAUDE_STATUS_MAP["$tmux_id"]="idle"
-    fi
-  done
+    state=$(echo "$line" | cut -d'|' -f2)
+    [[ -n "$tmux_id" && "$tmux_id" != "null" ]] && CLAUDE_STATUS_MAP["$tmux_id"]="$state"
+  done < <(jq -r 'to_entries[] | "\(.value.tmux_window_id)|\(.value.state // "unknown")"' "$CLAUDE_SESSIONS_FILE" 2>/dev/null)
 }
 
 get_windows() {
@@ -112,9 +88,8 @@ key_to_idx() {
   esac
 }
 
-# Load Claude sessions, compute statuses, and get windows
+# Load Claude sessions and get windows
 load_claude_sessions
-compute_claude_statuses
 WINDOWS=$(get_windows)
 SESSIONS=()
 while IFS= read -r sess; do
@@ -130,11 +105,24 @@ format_window_line() {
 
   local status="${CLAUDE_STATUS_MAP[$window_id]}"
   if [[ -n "$status" ]]; then
-    if [[ "$status" == "working" ]]; then
-      FORMATTED_LINE="${sess_idx} \033[32m[${status}]\033[0m ${window_name}"
-    else
-      FORMATTED_LINE="${sess_idx} \033[90m[${status}]\033[0m ${window_name}"
-    fi
+    case "$status" in
+      waiting)
+        # Yellow + bold - needs user attention
+        FORMATTED_LINE="${sess_idx} \033[1;33m[waiting]\033[0m ${window_name}"
+        ;;
+      responding)
+        # Blue - Claude is actively working
+        FORMATTED_LINE="${sess_idx} \033[34m[working]\033[0m ${window_name}"
+        ;;
+      idle)
+        # Gray - finished, no action needed
+        FORMATTED_LINE="${sess_idx} \033[90m[idle]\033[0m ${window_name}"
+        ;;
+      *)
+        # Gray - unknown state
+        FORMATTED_LINE="${sess_idx} \033[90m[${status}]\033[0m ${window_name}"
+        ;;
+    esac
   else
     FORMATTED_LINE="${sess_idx} ${window_name}"
   fi

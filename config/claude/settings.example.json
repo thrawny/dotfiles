@@ -66,12 +66,41 @@
         ]
       }
     ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/dotfiles/config/claude/hooks/session_tracker.py"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/dotfiles/config/claude/hooks/session_tracker.py"
+          }
+        ]
+      }
+    ],
     "Notification": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "python3 ~/dotfiles/config/claude/hooks/task_notification.py"
+          }
+        ]
+      },
+      {
+        "matcher": "permission_prompt",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/dotfiles/config/claude/hooks/session_tracker.py"
           }
         ]
       }

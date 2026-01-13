@@ -14,16 +14,42 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::Instant;
 
 const APP_ID: &str = "com.thrawny.niri-switcher";
 const KEYS: [char; 8] = ['h', 'j', 'k', 'l', 'u', 'i', 'o', 'p'];
-const CLAUDE_IDLE_THRESHOLD_SECS: u64 = 3;
+
+#[derive(Debug, Clone, PartialEq)]
+enum ClaudeState {
+    Waiting,    // Needs user attention (permission prompt)
+    Responding, // Actively working
+    Idle,       // Finished, no action needed
+    Unknown,
+}
+
+impl ClaudeState {
+    fn from_str(s: &str) -> Self {
+        match s {
+            "waiting" => Self::Waiting,
+            "responding" => Self::Responding,
+            "idle" => Self::Idle,
+            _ => Self::Unknown,
+        }
+    }
+
+    fn label(&self) -> &'static str {
+        match self {
+            Self::Waiting => "waiting",
+            Self::Responding => "working",
+            Self::Idle => "idle",
+            Self::Unknown => "?",
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 struct ClaudeSession {
     transcript_path: PathBuf,
-    last_activity: Instant,
+    state: ClaudeState,
 }
 
 #[derive(Debug)]
@@ -454,7 +480,7 @@ fn claude_sessions_path() -> PathBuf {
         .join("active-sessions.json")
 }
 
-fn load_claude_sessions_file() -> HashMap<u64, PathBuf> {
+fn load_claude_sessions_file() -> HashMap<u64, ClaudeSession> {
     let path = claude_sessions_path();
     if !path.exists() {
         return HashMap::new();
@@ -478,7 +504,15 @@ fn load_claude_sessions_file() -> HashMap<u64, PathBuf> {
                     .get("transcript_path")
                     .and_then(|p| p.as_str())
                 {
-                    sessions.insert(window_id, PathBuf::from(transcript_path));
+                    let state = session_data
+                        .get("state")
+                        .and_then(|s| s.as_str())
+                        .map(ClaudeState::from_str)
+                        .unwrap_or(ClaudeState::Unknown);
+                    sessions.insert(window_id, ClaudeSession {
+                        transcript_path: PathBuf::from(transcript_path),
+                        state,
+                    });
                 }
             }
         }
@@ -516,8 +550,8 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
                                 let sessions = load_claude_sessions_file();
                                 let mut map = transcript_map_for_sessions.lock().unwrap();
                                 map.clear();
-                                for (window_id, transcript_path) in sessions {
-                                    map.insert(transcript_path, window_id);
+                                for (window_id, session) in sessions {
+                                    map.insert(session.transcript_path, window_id);
                                 }
                                 let _ = tx_sessions.send(Message::ClaudeSessionsChanged);
                             }
@@ -581,8 +615,8 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
         let sessions = load_claude_sessions_file();
         {
             let mut map = transcript_map.lock().unwrap();
-            for (window_id, transcript_path) in sessions {
-                map.insert(transcript_path, window_id);
+            for (window_id, session) in sessions {
+                map.insert(session.transcript_path, window_id);
             }
         }
         let _ = tx.send(Message::ClaudeSessionsChanged);
@@ -613,19 +647,7 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
     let entries = get_workspace_columns(&projects);
 
     // Initialize Claude sessions from file
-    let claude_sessions_file = load_claude_sessions_file();
-    let claude_sessions: HashMap<u64, ClaudeSession> = claude_sessions_file
-        .into_iter()
-        .map(|(window_id, transcript_path)| {
-            (
-                window_id,
-                ClaudeSession {
-                    transcript_path,
-                    last_activity: Instant::now(),
-                },
-            )
-        })
-        .collect();
+    let claude_sessions = load_claude_sessions_file();
 
     let state = Rc::new(RefCell::new(AppState {
         projects,
@@ -820,36 +842,21 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                 Message::ClaudeSessionsChanged => {
                     // Reload Claude sessions from file
                     let mut state = state_for_poll.borrow_mut();
-                    let sessions_file = load_claude_sessions_file();
-                    // Update existing sessions or add new ones
-                    let mut new_sessions = HashMap::new();
-                    for (window_id, transcript_path) in sessions_file {
-                        if let Some(existing) = state.claude_sessions.get(&window_id) {
-                            new_sessions.insert(
-                                window_id,
-                                ClaudeSession {
-                                    transcript_path,
-                                    last_activity: existing.last_activity,
-                                },
-                            );
-                        } else {
-                            new_sessions.insert(
-                                window_id,
-                                ClaudeSession {
-                                    transcript_path,
-                                    last_activity: Instant::now(),
-                                },
-                            );
-                        }
+                    state.claude_sessions = load_claude_sessions_file();
+                    // If visible, refresh the display to show updated status
+                    if window_for_poll.is_visible() {
+                        let entries = state.entries.clone();
+                        let pending = state.pending_key;
+                        let claude_sessions = state.claude_sessions.clone();
+                        drop(state);
+                        build_entry_list(&main_box_for_poll, &entries, pending, &claude_sessions);
                     }
-                    state.claude_sessions = new_sessions;
                 }
-                Message::ClaudeActivity { window_id } => {
-                    // Update last activity time for this window
+                Message::ClaudeActivity { window_id: _ } => {
+                    // Transcript file changed - reload sessions to get updated state
+                    // The state is maintained by the hooks in active-sessions.json
                     let mut state = state_for_poll.borrow_mut();
-                    if let Some(session) = state.claude_sessions.get_mut(&window_id) {
-                        session.last_activity = Instant::now();
-                    }
+                    state.claude_sessions = load_claude_sessions_file();
                     // If visible, refresh the display to show updated status
                     if window_for_poll.is_visible() {
                         let entries = state.entries.clone();
@@ -900,15 +907,12 @@ fn build_entry_list(
         key_label.add_css_class("key");
         row.append(&key_label);
 
-        // Check if this is a Claude window and determine working/idle state
+        // Check if this is a Claude window and show state
         let app_label = if entry.app_label.starts_with("claude:") {
             if let Some(window_id) = entry.window_id {
                 if let Some(session) = claude_sessions.get(&window_id) {
-                    let is_working = session.last_activity.elapsed().as_secs()
-                        < CLAUDE_IDLE_THRESHOLD_SECS;
-                    let status = if is_working { "working" } else { "idle" };
                     let desc = entry.app_label.trim_start_matches("claude:").trim();
-                    format!("claude [{}]: {}", status, desc)
+                    format!("claude [{}]: {}", session.state.label(), desc)
                 } else {
                     entry.app_label.clone()
                 }
