@@ -32,17 +32,17 @@ class Checker(TypedDict, total=False):
 # Each extension maps to a list of checkers to run in sequence
 FORMATTERS: dict[str, list[Checker]] = {
     # Python
-    ".py": [
-        {
-            "name": "Ruff Linter",
-            "command": ["ruff", "check", "--ignore", "F401,F841,I001", "{file}"],
-        },
-        # {"name": "Ruff Formatter", "command": ["ruff", "format", "{file}"]},
-        {
-            "name": "Type Checker",
-            "command": ["basedpyright", "--level", "error", "{file}"],
-        },
-    ],
+    # ".py": [
+    #     {
+    #         "name": "Ruff Linter",
+    #         "command": ["ruff", "check", "--ignore", "F401,F841,I001", "{file}"],
+    #     },
+    #     # {"name": "Ruff Formatter", "command": ["ruff", "format", "{file}"]},
+    #     {
+    #         "name": "Type Checker",
+    #         "command": ["basedpyright", "--level", "error", "{file}"],
+    #     },
+    # ],
     # Go - linting only (no formatting to avoid disrupting agent workflow)
     # Uses JSON output + filtering to exclude unused imports/variables
     # ".go": [

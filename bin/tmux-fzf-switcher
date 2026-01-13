@@ -14,8 +14,52 @@ fi
 
 KEYS=(h j k l u i o p)
 
+# Claude session tracking
+CLAUDE_SESSIONS_FILE="$HOME/.claude/active-sessions.json"
+CLAUDE_IDLE_THRESHOLD=3
+
+# Build map of tmux window IDs to Claude session info
+declare -A CLAUDE_WINDOW_MAP
+load_claude_sessions() {
+  CLAUDE_WINDOW_MAP=()
+  [[ -f "$CLAUDE_SESSIONS_FILE" ]] || return
+
+  # Parse JSON and build map: tmux_window_id -> transcript_path
+  while IFS= read -r line; do
+    local tmux_id transcript_path
+    tmux_id=$(echo "$line" | cut -d'|' -f1)
+    transcript_path=$(echo "$line" | cut -d'|' -f2)
+    [[ -n "$tmux_id" && "$tmux_id" != "null" ]] && CLAUDE_WINDOW_MAP["$tmux_id"]="$transcript_path"
+  done < <(jq -r 'to_entries[] | "\(.value.tmux_window_id)|\(.value.transcript_path)"' "$CLAUDE_SESSIONS_FILE" 2>/dev/null)
+}
+
+# Pre-compute Claude status for all tracked windows
+declare -A CLAUDE_STATUS_MAP
+compute_claude_statuses() {
+  CLAUDE_STATUS_MAP=()
+  local now
+  now=$(date +%s)
+
+  for tmux_id in "${!CLAUDE_WINDOW_MAP[@]}"; do
+    local transcript_path="${CLAUDE_WINDOW_MAP[$tmux_id]}"
+    if [[ -f "$transcript_path" ]]; then
+      local mtime age
+      mtime=$(stat -f %m "$transcript_path" 2>/dev/null || stat -c %Y "$transcript_path" 2>/dev/null)
+      age=$((now - mtime))
+      if [[ $age -lt $CLAUDE_IDLE_THRESHOLD ]]; then
+        CLAUDE_STATUS_MAP["$tmux_id"]="working"
+      else
+        CLAUDE_STATUS_MAP["$tmux_id"]="idle"
+      fi
+    else
+      CLAUDE_STATUS_MAP["$tmux_id"]="idle"
+    fi
+  done
+}
+
 get_windows() {
-  tmux list-windows -a -F '#{session_name}:#{window_index} #{window_name}' |
+  # Format: session:index window_id window_name
+  tmux list-windows -a -F '#{session_name}:#{window_index} #{window_id} #{window_name}' |
     grep -v '^drawer-'
 }
 
@@ -68,12 +112,33 @@ key_to_idx() {
   esac
 }
 
-# Get windows and sessions
+# Load Claude sessions, compute statuses, and get windows
+load_claude_sessions
+compute_claude_statuses
 WINDOWS=$(get_windows)
 SESSIONS=()
 while IFS= read -r sess; do
   SESSIONS+=("$sess")
 done < <(get_sorted_sessions "$WINDOWS")
+
+# Format window line with Claude status (no subshell - uses global FORMATTED_LINE)
+FORMATTED_LINE=""
+format_window_line() {
+  local sess_idx="$1"   # session:index
+  local window_id="$2"  # @N
+  local window_name="$3"
+
+  local status="${CLAUDE_STATUS_MAP[$window_id]}"
+  if [[ -n "$status" ]]; then
+    if [[ "$status" == "working" ]]; then
+      FORMATTED_LINE="${sess_idx} \033[32m[${status}]\033[0m ${window_name}"
+    else
+      FORMATTED_LINE="${sess_idx} \033[90m[${status}]\033[0m ${window_name}"
+    fi
+  else
+    FORMATTED_LINE="${sess_idx} ${window_name}"
+  fi
+}
 
 # Build display
 build_full_display() {
@@ -85,12 +150,13 @@ build_full_display() {
     fi
 
     local widx=0
-    while IFS= read -r line; do
+    while IFS=' ' read -r sess_idx window_id window_name; do
       local wkey="?"
       if [[ $widx -lt ${#KEYS[@]} ]]; then
         wkey="${KEYS[$widx]}"
       fi
-      printf "\033[33m[%s%s]\033[0m %s\n" "$skey" "$wkey" "$line"
+      format_window_line "$sess_idx" "$window_id" "$window_name"
+      printf "\033[33m[%s%s]\033[0m %b\n" "$skey" "$wkey" "$FORMATTED_LINE"
       ((widx++))
     done < <(echo "$WINDOWS" | grep "^${sess}:")
     ((sidx++))
@@ -106,12 +172,13 @@ build_session_display() {
   echo ""
 
   local widx=0
-  while IFS= read -r line; do
+  while IFS=' ' read -r sess_idx window_id window_name; do
     local wkey="?"
     if [[ $widx -lt ${#KEYS[@]} ]]; then
       wkey="${KEYS[$widx]}"
     fi
-    printf "\033[33m[%s]\033[0m %s\n" "$wkey" "$line"
+    format_window_line "$sess_idx" "$window_id" "$window_name"
+    printf "\033[33m[%s]\033[0m %b\n" "$wkey" "$FORMATTED_LINE"
     ((widx++))
   done < <(echo "$WINDOWS" | grep "^${target_sess}:")
 }
