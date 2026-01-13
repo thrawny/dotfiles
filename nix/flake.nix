@@ -154,6 +154,29 @@
         };
       };
 
+      # Dev shells for cargo-based development
+      devShells =
+        let
+          mkNiriSwitcherDev =
+            pkgs:
+            pkgs.mkShell {
+              nativeBuildInputs = with pkgs; [
+                pkg-config
+                cargo
+                rustc
+              ];
+              buildInputs = with pkgs; [
+                gtk4
+                gtk4-layer-shell
+                glib
+              ];
+            };
+        in
+        {
+          x86_64-linux.niri-switcher-dev = mkNiriSwitcherDev nixpkgs.legacyPackages.x86_64-linux;
+          aarch64-linux.niri-switcher-dev = mkNiriSwitcherDev nixpkgs.legacyPackages.aarch64-linux;
+        };
+
       homeConfigurations.thrawnym1 = home-manager.lib.homeManagerConfiguration {
         pkgs = nixpkgs.legacyPackages.aarch64-darwin;
         modules = [ ./home/darwin/default.nix ];

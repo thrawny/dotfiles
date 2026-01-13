@@ -14,6 +14,10 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
+fn _debug_log(_msg: &str) {
+    // Uncomment for debugging:
+    // println!("{}", _msg);
+}
 
 const APP_ID: &str = "com.thrawny.niri-switcher";
 const KEYS: [char; 8] = ['h', 'j', 'k', 'l', 'u', 'i', 'o', 'p'];
@@ -57,7 +61,7 @@ enum Message {
     Toggle,
     ReloadConfig,
     ClaudeSessionsChanged,
-    ClaudeActivity { window_id: u64 },
+    ClaudeActivity,
 }
 
 fn config_path() -> PathBuf {
@@ -83,6 +87,7 @@ fn socket_path() -> PathBuf {
 
 #[derive(Debug, Clone, Deserialize)]
 struct Project {
+    #[allow(dead_code)]
     key: String,
     name: String,
     dir: String,
@@ -160,43 +165,16 @@ fn get_workspace_by_name(name: &str) -> Option<serde_json::Value> {
         .cloned()
 }
 
-fn workspace_has_windows(name: &str) -> bool {
-    let Some(ws) = get_workspace_by_name(name) else {
-        return false;
-    };
-    let Some(ws_id) = ws.get("id").and_then(|id| id.as_i64()) else {
-        return false;
-    };
-    let Some(windows) = niri_json(&["windows"]) else {
-        return false;
-    };
-    windows
-        .as_array()
-        .map(|arr| {
-            arr.iter()
-                .any(|w| w.get("workspace_id").and_then(|id| id.as_i64()) == Some(ws_id))
-        })
-        .unwrap_or(false)
-}
-
 fn simplify_label(title: &str, app_id: &str) -> String {
     // Prefer title for terminals since it shows what's running
     if app_id.contains("ghostty") || app_id.contains("terminal") || app_id.contains("alacritty") {
-        // Detect Claude sessions by ✳ marker
-        if title.starts_with('✳') {
-            let desc = title.trim_start_matches('✳').trim();
-            return format!("claude: {}", desc);
-        }
-        // Clean up title - remove common markers
-        let cleaned = title
-            .trim_start_matches(['●', '○', ' '].as_ref())
-            .trim();
+        // Strip leading non-alphanumeric chars (stars, dots, etc) and whitespace
+        let cleaned = title.trim_start_matches(|c: char| !c.is_alphanumeric()).trim();
         // If title is just a path, take the last component
         if cleaned.starts_with('/') || cleaned.starts_with('~') {
             cleaned.split('/').last().unwrap_or(cleaned).to_string()
         } else {
-            // Take first word for things like "nvim foo.rs"
-            cleaned.split_whitespace().next().unwrap_or(cleaned).to_string()
+            cleaned.to_string()
         }
     } else {
         // For non-terminals, use simplified app_id
@@ -341,25 +319,6 @@ fn create_workspace(project: &Project) {
 
     std::thread::sleep(std::time::Duration::from_millis(100));
     spawn_terminals(&project.dir);
-}
-
-fn switch_to_project(project: &Project, column: u32) {
-    if project.static_workspace {
-        // Static workspace: always exists in niri config, just focus it
-        focus_workspace(&project.name);
-        // If empty, spawn terminals
-        if !workspace_has_windows(&project.name) {
-            spawn_terminals(&project.dir);
-        }
-    } else {
-        // Dynamic workspace: create if doesn't exist
-        if !workspace_has_windows(&project.name) {
-            create_workspace(project);
-        }
-        focus_workspace(&project.name);
-    }
-    std::thread::sleep(std::time::Duration::from_millis(100));
-    focus_column(column);
 }
 
 fn switch_to_entry(entry: &WorkspaceColumn) {
@@ -544,10 +503,15 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
                             .unwrap_or(false)
                     });
                     if is_sessions_file {
+                        _debug_log(&format!("[DEBUG] active-sessions.json event: {:?}", event.kind));
                         match event.kind {
                             notify::EventKind::Modify(_) | notify::EventKind::Create(_) => {
                                 // Update transcript map
                                 let sessions = load_claude_sessions_file();
+                                _debug_log(&format!("[DEBUG] Loaded {} sessions: {:?}",
+                                    sessions.len(),
+                                    sessions.iter().map(|(id, s)| (id, &s.state)).collect::<Vec<_>>()
+                                ));
                                 let mut map = transcript_map_for_sessions.lock().unwrap();
                                 map.clear();
                                 for (window_id, session) in sessions {
@@ -577,8 +541,8 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
                         notify::EventKind::Modify(_) => {
                             let map = transcript_map_for_activity.lock().unwrap();
                             for path in &event.paths {
-                                if let Some(&window_id) = map.get(path) {
-                                    let _ = tx_activity.send(Message::ClaudeActivity { window_id });
+                                if map.contains_key(path) {
+                                    let _ = tx_activity.send(Message::ClaudeActivity);
                                 }
                             }
                         }
@@ -613,6 +577,10 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
 
         // Initial load of sessions
         let sessions = load_claude_sessions_file();
+        _debug_log(&format!("[DEBUG] Initial load: {} sessions: {:?}",
+            sessions.len(),
+            sessions.iter().map(|(id, s)| (id, &s.state)).collect::<Vec<_>>()
+        ));
         {
             let mut map = transcript_map.lock().unwrap();
             for (window_id, session) in sessions {
@@ -620,6 +588,7 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
             }
         }
         let _ = tx.send(Message::ClaudeSessionsChanged);
+        _debug_log(&format!("[DEBUG] Watching {:?} for active-sessions.json", claude_dir));
 
         // Keep watchers alive
         loop {
@@ -631,7 +600,7 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
 fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
     let window = ApplicationWindow::builder()
         .application(app)
-        .default_width(400)
+        .default_width(500)
         .build();
 
     // Layer shell setup
@@ -703,7 +672,7 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
             font-weight: bold;
         }
         label.project {
-            color: #81a2be;
+            color: #888888;
         }
         label.selected {
             color: #b5bd68;
@@ -813,9 +782,10 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                         let mut state = state_for_poll.borrow_mut();
                         state.pending_key = None;
                     } else {
-                        // Refresh entries from niri and show
+                        // Refresh entries and claude sessions, then show
                         let mut state = state_for_poll.borrow_mut();
                         state.entries = get_workspace_columns(&state.projects);
+                        state.claude_sessions = load_claude_sessions_file();
                         state.pending_key = None;
                         let entries = state.entries.clone();
                         let claude_sessions = state.claude_sessions.clone();
@@ -843,6 +813,7 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                     // Reload Claude sessions from file
                     let mut state = state_for_poll.borrow_mut();
                     state.claude_sessions = load_claude_sessions_file();
+                    _debug_log(&format!("[DEBUG] ClaudeSessionsChanged: {} sessions", state.claude_sessions.len()));
                     // If visible, refresh the display to show updated status
                     if window_for_poll.is_visible() {
                         let entries = state.entries.clone();
@@ -852,7 +823,7 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                         build_entry_list(&main_box_for_poll, &entries, pending, &claude_sessions);
                     }
                 }
-                Message::ClaudeActivity { window_id: _ } => {
+                Message::ClaudeActivity => {
                     // Transcript file changed - reload sessions to get updated state
                     // The state is maintained by the hooks in active-sessions.json
                     let mut state = state_for_poll.borrow_mut();
@@ -907,24 +878,36 @@ fn build_entry_list(
         key_label.add_css_class("key");
         row.append(&key_label);
 
-        // Check if this is a Claude window and show state
-        let app_label = if entry.app_label.starts_with("claude:") {
-            if let Some(window_id) = entry.window_id {
-                if let Some(session) = claude_sessions.get(&window_id) {
-                    let desc = entry.app_label.trim_start_matches("claude:").trim();
-                    format!("claude [{}]: {}", session.state.label(), desc)
+        // Check if this window has a Claude session (by window_id) and show state
+        let name_text = if let Some(window_id) = entry.window_id {
+            if let Some(session) = claude_sessions.get(&window_id) {
+                // This is a Claude window - show state, skip description if it's just symbols
+                let desc = entry.app_label.trim_start_matches("claude:").trim();
+                let has_real_desc = desc.chars().any(|c| c.is_alphabetic());
+
+                let color = match session.state {
+                    ClaudeState::Waiting => "#f92672",
+                    ClaudeState::Responding => "#a6e22e",
+                    ClaudeState::Idle => "#888888",
+                    ClaudeState::Unknown => "#888888",
+                };
+
+                if has_real_desc {
+                    format!("{} / claude <span color=\"{}\" weight=\"bold\">[{}]</span>: {}",
+                        entry.workspace_name, color, session.state.label(), desc)
                 } else {
-                    entry.app_label.clone()
+                    format!("{} / claude <span color=\"{}\" weight=\"bold\">[{}]</span>",
+                        entry.workspace_name, color, session.state.label())
                 }
             } else {
-                entry.app_label.clone()
+                format!("{} / {}", entry.workspace_name, entry.app_label)
             }
         } else {
-            entry.app_label.clone()
+            format!("{} / {}", entry.workspace_name, entry.app_label)
         };
 
-        let name_text = format!("{} / {}", entry.workspace_name, app_label);
-        let name_label = Label::new(Some(&name_text));
+        let name_label = Label::new(None);
+        name_label.set_markup(&name_text);
         name_label.add_css_class("project");
         row.append(&name_label);
 

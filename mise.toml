@@ -1,5 +1,6 @@
 # --- Nix workflows ---
 # Auto-detect NixOS vs standalone Home Manager by checking /etc/NIXOS
+experimental_monorepo_root = true
 
 [tasks.switch]
 description = "Switch configuration (auto-detects NixOS vs Home Manager)"

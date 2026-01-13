@@ -16,18 +16,28 @@ from pathlib import Path
 SESSIONS_FILE = Path.home() / ".claude" / "active-sessions.json"
 
 
-def get_niri_window_id():
-    """Get focused window ID from niri."""
+def get_niri_focused_window():
+    """Get focused window info from niri."""
     try:
         result = subprocess.run(
             ["niri", "msg", "-j", "focused-window"],
             capture_output=True, text=True, timeout=2
         )
         if result.returncode == 0:
-            data = json.loads(result.stdout)
-            return str(data.get("id", ""))
+            return json.loads(result.stdout)
     except (FileNotFoundError, subprocess.TimeoutExpired, json.JSONDecodeError):
         pass
+    return None
+
+
+def get_niri_window_id():
+    """Get focused window ID from niri, only if it looks like a Claude window."""
+    window = get_niri_focused_window()
+    if window:
+        title = window.get("title", "")
+        # Only register if title starts with Claude's marker (✳ or ✶)
+        if title.startswith("✳") or title.startswith("✶"):
+            return str(window.get("id", ""))
     return None
 
 
@@ -133,6 +143,22 @@ def main():
             sessions[window_id]["state"] = "responding"
             sessions[window_id]["state_updated"] = time.time()
             save_sessions(sessions)
+        else:
+            # Session not registered yet (e.g., resumed session) - register it now
+            niri_id = get_niri_window_id()
+            tmux_id = get_tmux_window_id()
+            window_id = niri_id or tmux_id
+            if window_id:
+                sessions[window_id] = {
+                    "session_id": session_id,
+                    "transcript_path": input_data.get("transcript_path"),
+                    "cwd": input_data.get("cwd"),
+                    "niri_window_id": niri_id,
+                    "tmux_window_id": tmux_id,
+                    "state": "responding",
+                    "state_updated": time.time(),
+                }
+                save_sessions(sessions)
 
 
 if __name__ == "__main__":
