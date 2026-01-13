@@ -12,18 +12,6 @@ ensure_uv() {
   fi
 }
 
-ensure_mise() {
-  if ! command -v mise &>/dev/null; then
-    echo "Installing mise..."
-    curl -fsSL https://mise.jdx.dev/install.sh | sh
-    export PATH="$HOME/.local/bin:$PATH"
-  fi
-  # Trust repo config to suppress interactive prompts
-  if command -v mise &>/dev/null; then
-    "$HOME/.local/bin/mise" trust "$HOME/dotfiles/.mise.toml" 2>/dev/null || true
-  fi
-}
-
 ensure_python() {
   # Install a managed Python if none is present
   if ! command -v python3 &>/dev/null; then
@@ -33,16 +21,27 @@ ensure_python() {
   fi
 }
 
+ensure_fnm() {
+  # Install fnm (Fast Node Manager) if not present
+  if ! command -v fnm &>/dev/null; then
+    echo "Installing fnm..."
+    curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
+    export PATH="$HOME/.local/share/fnm:$PATH"
+  fi
+}
+
 ensure_node() {
-  # Install Node (rootless) via mise if none is present
-  # Always ensure mise shims are on PATH
-  export PATH="$HOME/.local/share/mise/shims:$HOME/.local/bin:$PATH"
+  # Install Node via fnm if none is present
+  export PATH="$HOME/.local/share/fnm:$PATH"
+  if command -v fnm &>/dev/null; then
+    eval "$(fnm env --shell bash)"
+  fi
   if ! command -v node &>/dev/null; then
     local ver="${DOTFILES_NODE_VERSION:-24}"
-    echo "Installing Node ${ver} with mise..."
-    # Activate mise shims for this script
-    eval "$("$HOME/.local/bin/mise" activate bash)"
-    "$HOME/.local/bin/mise" use -g "node@${ver}"
+    echo "Installing Node ${ver} with fnm..."
+    fnm install "${ver}"
+    fnm default "${ver}"
+    eval "$(fnm env --shell bash)"
     corepack enable || true
   fi
 }
@@ -114,8 +113,8 @@ prime_zinit() {
 
 main() {
   ensure_uv
-  ensure_mise
   ensure_python
+  ensure_fnm
   ensure_node
 
   # Backup conflicting dotfiles before linking

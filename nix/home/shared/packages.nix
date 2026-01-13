@@ -51,5 +51,14 @@
     fd
     watchexec
     ast-grep
+
+    # Task runner and dev tools (replaces mise)
+    just
+    treefmt
+    nixfmt-rfc-style
+    nvd
+    selene
+    statix
+    stylua
   ];
 }

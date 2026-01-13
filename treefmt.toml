@@ -1,0 +1,6 @@
+# treefmt configuration for formatting Nix files
+# Used by `just fmt-nix`
+
+[formatter.nix]
+command = "nixfmt"
+includes = ["*.nix"]

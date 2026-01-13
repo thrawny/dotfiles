@@ -123,11 +123,6 @@ if command -v dyff &> /dev/null; then
     export KUBECTL_EXTERNAL_DIFF="kubectl-dyff"
 fi
 
-# Mise (task/runtime manager)
-if command -v mise &>/dev/null && [[ -o interactive ]]; then
-  eval "$(mise activate zsh)"
-  source <(mise completion zsh)
-fi
 
 
 # ===== Performance Plugins ====

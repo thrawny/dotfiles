@@ -5,8 +5,8 @@ paths: nix/**/*.nix
 # Nix Configuration Rules
 
 ## After every change
-- Run `mise nix:check` - formats, lints, and evaluates config
+- Run `just nix-check` - formats, lints, and evaluates config
 
 ## Only when requested
-- `mise dry` - full build test (NixOS only)
-- `mise switch` - apply changes
+- `just dry` - full build test (NixOS only)
+- `just switch` - apply changes

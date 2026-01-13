@@ -38,7 +38,6 @@ in
     ./starship.nix
     ./tmux.nix
     ./zsh.nix
-    ./mise.nix
     ./niri.nix
     ./hyprvoice.nix
   ];

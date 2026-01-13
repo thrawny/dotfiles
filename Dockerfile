@@ -9,10 +9,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Etc/UTC \
     USER=vscode \
     HOME=/home/vscode \
-    PATH=/home/vscode/.local/bin:/home/vscode/.cargo/bin:/home/vscode/.local/share/mise/shims:/usr/local/bin:/usr/bin:/bin
+    PATH=/home/vscode/.local/bin:/home/vscode/.cargo/bin:/home/vscode/.local/share/fnm:/usr/local/bin:/usr/bin:/bin
 
 # System packages useful for the install script and common tooling.
-# Keep this list lean; the script installs uv/mise/node as needed.
+# Keep this list lean; the script installs uv/fnm/node as needed.
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && \
@@ -51,7 +51,7 @@ ARG CODEX_CREDENTIALS
 
 # Run the devcontainer installer during build to catch failures early.
 # This will:
-# - install uv and mise
+# - install uv and fnm (node manager)
 # - provision Python via uv if needed
 # - uv sync + install project CLIs
 # - run ansible to link dotfiles
@@ -63,7 +63,7 @@ RUN --mount=type=cache,target=${HOME}/.cache,uid=1000,gid=1000 \
     CLAUDE_CODE_CREDENTIALS="${CLAUDE_CODE_CREDENTIALS}" \
     CLAUDE_CODE_CONFIG="${CLAUDE_CODE_CONFIG}" \
     CODEX_CREDENTIALS="${CODEX_CREDENTIALS}" \
-    bash -lc 'mise --version || true; echo PATH=$PATH; mise trust || true; bash devcontainer/install.sh'
+    bash -lc 'bash devcontainer/install.sh'
 
 # Default to zsh if available; override with `docker run ... bash` if desired.
 SHELL ["/bin/bash", "-lc"]
