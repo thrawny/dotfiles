@@ -75,6 +75,26 @@
           }
         ]
       }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/dotfiles/config/claude/hooks/session_tracker.py"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/dotfiles/config/claude/hooks/session_tracker.py"
+          }
+        ]
+      }
     ]
   },
   "statusLine": {

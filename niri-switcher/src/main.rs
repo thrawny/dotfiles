@@ -5,21 +5,33 @@ use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Deserialize;
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::Instant;
 
 const APP_ID: &str = "com.thrawny.niri-switcher";
 const KEYS: [char; 8] = ['h', 'j', 'k', 'l', 'u', 'i', 'o', 'p'];
+const CLAUDE_IDLE_THRESHOLD_SECS: u64 = 3;
+
+#[derive(Debug, Clone)]
+struct ClaudeSession {
+    transcript_path: PathBuf,
+    last_activity: Instant,
+}
 
 #[derive(Debug)]
 enum Message {
     Toggle,
     ReloadConfig,
+    ClaudeSessionsChanged,
+    ClaudeActivity { window_id: u64 },
 }
 
 fn config_path() -> PathBuf {
@@ -63,6 +75,7 @@ struct WorkspaceColumn {
     app_label: String,
     dir: String,
     static_workspace: bool,
+    window_id: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,6 +87,7 @@ struct AppState {
     projects: Vec<Project>,
     entries: Vec<WorkspaceColumn>,
     pending_key: Option<char>,
+    claude_sessions: HashMap<u64, ClaudeSession>,
 }
 
 fn load_projects() -> Vec<Project> {
@@ -227,6 +241,8 @@ fn get_workspace_columns(projects: &[Project]) -> Vec<WorkspaceColumn> {
                 let app_id = first_window
                     .and_then(|w| w.get("app_id").and_then(|a| a.as_str()))
                     .unwrap_or("?");
+                let window_id = first_window
+                    .and_then(|w| w.get("id").and_then(|id| id.as_u64()));
                 let app_label = simplify_label(title, app_id);
 
                 entries.push(WorkspaceColumn {
@@ -237,6 +253,7 @@ fn get_workspace_columns(projects: &[Project]) -> Vec<WorkspaceColumn> {
                     app_label,
                     dir: project.dir.clone(),
                     static_workspace: project.static_workspace,
+                    window_id,
                 });
             }
         } else {
@@ -249,6 +266,7 @@ fn get_workspace_columns(projects: &[Project]) -> Vec<WorkspaceColumn> {
                 app_label: "(empty)".to_string(),
                 dir: project.dir.clone(),
                 static_workspace: project.static_workspace,
+                window_id: None,
             });
         }
     }
@@ -429,6 +447,153 @@ fn start_config_watcher(tx: mpsc::Sender<Message>) {
     });
 }
 
+fn claude_sessions_path() -> PathBuf {
+    dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("~"))
+        .join(".claude")
+        .join("active-sessions.json")
+}
+
+fn load_claude_sessions_file() -> HashMap<u64, PathBuf> {
+    let path = claude_sessions_path();
+    if !path.exists() {
+        return HashMap::new();
+    }
+
+    let content = match std::fs::read_to_string(&path) {
+        Ok(c) => c,
+        Err(_) => return HashMap::new(),
+    };
+
+    let json: serde_json::Value = match serde_json::from_str(&content) {
+        Ok(v) => v,
+        Err(_) => return HashMap::new(),
+    };
+
+    let mut sessions = HashMap::new();
+    if let Some(obj) = json.as_object() {
+        for (window_id_str, session_data) in obj {
+            if let Ok(window_id) = window_id_str.parse::<u64>() {
+                if let Some(transcript_path) = session_data
+                    .get("transcript_path")
+                    .and_then(|p| p.as_str())
+                {
+                    sessions.insert(window_id, PathBuf::from(transcript_path));
+                }
+            }
+        }
+    }
+    sessions
+}
+
+fn start_claude_watcher(tx: mpsc::Sender<Message>) {
+    let claude_dir = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("~"))
+        .join(".claude");
+
+    // Shared state: transcript path -> window_id mapping
+    let transcript_map: Arc<Mutex<HashMap<PathBuf, u64>>> = Arc::new(Mutex::new(HashMap::new()));
+
+    thread::spawn(move || {
+        let tx_sessions = tx.clone();
+        let tx_activity = tx.clone();
+        let transcript_map_for_sessions = transcript_map.clone();
+        let transcript_map_for_activity = transcript_map.clone();
+
+        // Watcher for active-sessions.json changes
+        let mut sessions_watcher = match RecommendedWatcher::new(
+            move |res: Result<notify::Event, notify::Error>| {
+                if let Ok(event) = res {
+                    let is_sessions_file = event.paths.iter().any(|p| {
+                        p.file_name()
+                            .map(|f| f == "active-sessions.json")
+                            .unwrap_or(false)
+                    });
+                    if is_sessions_file {
+                        match event.kind {
+                            notify::EventKind::Modify(_) | notify::EventKind::Create(_) => {
+                                // Update transcript map
+                                let sessions = load_claude_sessions_file();
+                                let mut map = transcript_map_for_sessions.lock().unwrap();
+                                map.clear();
+                                for (window_id, transcript_path) in sessions {
+                                    map.insert(transcript_path, window_id);
+                                }
+                                let _ = tx_sessions.send(Message::ClaudeSessionsChanged);
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            },
+            notify::Config::default(),
+        ) {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("Failed to create claude sessions watcher: {}", e);
+                return;
+            }
+        };
+
+        // Watcher for transcript file modifications
+        let mut transcript_watcher = match RecommendedWatcher::new(
+            move |res: Result<notify::Event, notify::Error>| {
+                if let Ok(event) = res {
+                    match event.kind {
+                        notify::EventKind::Modify(_) => {
+                            let map = transcript_map_for_activity.lock().unwrap();
+                            for path in &event.paths {
+                                if let Some(&window_id) = map.get(path) {
+                                    let _ = tx_activity.send(Message::ClaudeActivity { window_id });
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+            },
+            notify::Config::default(),
+        ) {
+            Ok(w) => w,
+            Err(e) => {
+                eprintln!("Failed to create transcript watcher: {}", e);
+                return;
+            }
+        };
+
+        // Watch ~/.claude directory for active-sessions.json
+        if claude_dir.exists() {
+            if let Err(e) = sessions_watcher.watch(&claude_dir, RecursiveMode::NonRecursive) {
+                eprintln!("Failed to watch claude directory: {}", e);
+                return;
+            }
+        }
+
+        // Watch ~/.claude/projects recursively for transcript files
+        let projects_dir = claude_dir.join("projects");
+        if projects_dir.exists() {
+            if let Err(e) = transcript_watcher.watch(&projects_dir, RecursiveMode::Recursive) {
+                eprintln!("Failed to watch claude projects directory: {}", e);
+            }
+        }
+
+        // Initial load of sessions
+        let sessions = load_claude_sessions_file();
+        {
+            let mut map = transcript_map.lock().unwrap();
+            for (window_id, transcript_path) in sessions {
+                map.insert(transcript_path, window_id);
+            }
+        }
+        let _ = tx.send(Message::ClaudeSessionsChanged);
+
+        // Keep watchers alive
+        loop {
+            std::thread::sleep(std::time::Duration::from_secs(3600));
+        }
+    });
+}
+
 fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
     let window = ApplicationWindow::builder()
         .application(app)
@@ -446,10 +611,27 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
 
     let projects = load_projects();
     let entries = get_workspace_columns(&projects);
+
+    // Initialize Claude sessions from file
+    let claude_sessions_file = load_claude_sessions_file();
+    let claude_sessions: HashMap<u64, ClaudeSession> = claude_sessions_file
+        .into_iter()
+        .map(|(window_id, transcript_path)| {
+            (
+                window_id,
+                ClaudeSession {
+                    transcript_path,
+                    last_activity: Instant::now(),
+                },
+            )
+        })
+        .collect();
+
     let state = Rc::new(RefCell::new(AppState {
         projects,
         entries,
         pending_key: None,
+        claude_sessions,
     }));
 
     // Outer box for border (GTK4 windows don't render borders properly)
@@ -462,7 +644,15 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
     main_box.set_margin_start(20);
     main_box.set_margin_end(20);
 
-    build_entry_list(&main_box, &state.borrow().entries, state.borrow().pending_key);
+    {
+        let state_ref = state.borrow();
+        build_entry_list(
+            &main_box,
+            &state_ref.entries,
+            state_ref.pending_key,
+            &state_ref.claude_sessions,
+        );
+    }
     outer_box.append(&main_box);
 
     // CSS
@@ -526,8 +716,9 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                 // Clear pending key and show full list
                 state.pending_key = None;
                 let entries = state.entries.clone();
+                let claude_sessions = state.claude_sessions.clone();
                 drop(state);
-                build_entry_list(&main_box_clone, &entries, None);
+                build_entry_list(&main_box_clone, &entries, None, &claude_sessions);
             } else {
                 // Hide window
                 drop(state);
@@ -557,16 +748,18 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                     // Invalid combo - reset
                     state.pending_key = None;
                     let entries = state.entries.clone();
+                    let claude_sessions = state.claude_sessions.clone();
                     drop(state);
-                    build_entry_list(&main_box_clone, &entries, None);
+                    build_entry_list(&main_box_clone, &entries, None, &claude_sessions);
                 }
             } else {
                 // First keystroke - check if valid workspace key
                 if state.entries.iter().any(|e| e.workspace_key == key_char) {
                     state.pending_key = Some(key_char);
                     let entries = state.entries.clone();
+                    let claude_sessions = state.claude_sessions.clone();
                     drop(state);
-                    build_entry_list(&main_box_clone, &entries, Some(key_char));
+                    build_entry_list(&main_box_clone, &entries, Some(key_char), &claude_sessions);
                 }
             }
         }
@@ -603,8 +796,9 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                         state.entries = get_workspace_columns(&state.projects);
                         state.pending_key = None;
                         let entries = state.entries.clone();
+                        let claude_sessions = state.claude_sessions.clone();
                         drop(state);
-                        build_entry_list(&main_box_for_poll, &entries, None);
+                        build_entry_list(&main_box_for_poll, &entries, None, &claude_sessions);
                         window_for_poll.set_visible(true);
                         window_for_poll.present();
                     }
@@ -618,8 +812,51 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                     if window_for_poll.is_visible() {
                         let entries = state.entries.clone();
                         let pending = state.pending_key;
+                        let claude_sessions = state.claude_sessions.clone();
                         drop(state);
-                        build_entry_list(&main_box_for_poll, &entries, pending);
+                        build_entry_list(&main_box_for_poll, &entries, pending, &claude_sessions);
+                    }
+                }
+                Message::ClaudeSessionsChanged => {
+                    // Reload Claude sessions from file
+                    let mut state = state_for_poll.borrow_mut();
+                    let sessions_file = load_claude_sessions_file();
+                    // Update existing sessions or add new ones
+                    let mut new_sessions = HashMap::new();
+                    for (window_id, transcript_path) in sessions_file {
+                        if let Some(existing) = state.claude_sessions.get(&window_id) {
+                            new_sessions.insert(
+                                window_id,
+                                ClaudeSession {
+                                    transcript_path,
+                                    last_activity: existing.last_activity,
+                                },
+                            );
+                        } else {
+                            new_sessions.insert(
+                                window_id,
+                                ClaudeSession {
+                                    transcript_path,
+                                    last_activity: Instant::now(),
+                                },
+                            );
+                        }
+                    }
+                    state.claude_sessions = new_sessions;
+                }
+                Message::ClaudeActivity { window_id } => {
+                    // Update last activity time for this window
+                    let mut state = state_for_poll.borrow_mut();
+                    if let Some(session) = state.claude_sessions.get_mut(&window_id) {
+                        session.last_activity = Instant::now();
+                    }
+                    // If visible, refresh the display to show updated status
+                    if window_for_poll.is_visible() {
+                        let entries = state.entries.clone();
+                        let pending = state.pending_key;
+                        let claude_sessions = state.claude_sessions.clone();
+                        drop(state);
+                        build_entry_list(&main_box_for_poll, &entries, pending, &claude_sessions);
                     }
                 }
             }
@@ -628,7 +865,12 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
     });
 }
 
-fn build_entry_list(container: &GtkBox, entries: &[WorkspaceColumn], pending_key: Option<char>) {
+fn build_entry_list(
+    container: &GtkBox,
+    entries: &[WorkspaceColumn],
+    pending_key: Option<char>,
+    claude_sessions: &HashMap<u64, ClaudeSession>,
+) {
     // Clear
     while let Some(child) = container.first_child() {
         container.remove(&child);
@@ -658,7 +900,26 @@ fn build_entry_list(container: &GtkBox, entries: &[WorkspaceColumn], pending_key
         key_label.add_css_class("key");
         row.append(&key_label);
 
-        let name_text = format!("{} / {}", entry.workspace_name, entry.app_label);
+        // Check if this is a Claude window and determine working/idle state
+        let app_label = if entry.app_label.starts_with("claude:") {
+            if let Some(window_id) = entry.window_id {
+                if let Some(session) = claude_sessions.get(&window_id) {
+                    let is_working = session.last_activity.elapsed().as_secs()
+                        < CLAUDE_IDLE_THRESHOLD_SECS;
+                    let status = if is_working { "working" } else { "idle" };
+                    let desc = entry.app_label.trim_start_matches("claude:").trim();
+                    format!("claude [{}]: {}", status, desc)
+                } else {
+                    entry.app_label.clone()
+                }
+            } else {
+                entry.app_label.clone()
+            }
+        } else {
+            entry.app_label.clone()
+        };
+
+        let name_text = format!("{} / {}", entry.workspace_name, app_label);
         let name_label = Label::new(Some(&name_text));
         name_label.add_css_class("project");
         row.append(&name_label);
@@ -679,10 +940,11 @@ fn main() -> glib::ExitCode {
         std::process::exit(0);
     }
 
-    // Daemon mode: start GTK app with socket listener and config watcher
+    // Daemon mode: start GTK app with socket listener, config watcher, and claude watcher
     let (tx, rx) = mpsc::channel();
     start_socket_listener(tx.clone());
-    start_config_watcher(tx);
+    start_config_watcher(tx.clone());
+    start_claude_watcher(tx);
 
     let rx = Rc::new(RefCell::new(Some(rx)));
 
