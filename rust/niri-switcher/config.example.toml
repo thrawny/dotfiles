@@ -1,8 +1,10 @@
+# ~/.config/projects.toml
+
 [[project]]
 key = "h"
 name = "dotfiles"
 dir = "~/dotfiles"
-static_workspace = true  # workspace defined in niri config, always exists
+static_workspace = true # workspace defined in niri config, always exists
 
 [[project]]
 key = "j"

@@ -1,10 +1,10 @@
 [tasks.build]
 description = "Build with cargo (incremental)"
-run = "nix develop path:../nix#niri-switcher-dev -c cargo build --release"
+run = "nix develop path:../../nix#niri-switcher-dev -c cargo build --release"
 
 [tasks.run]
 description = "Build and run"
-run = "./target/release/niri-switcher"
+run = "../target/release/niri-switcher"
 depends = ["build"]
 
 [tasks.nix]

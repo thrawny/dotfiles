@@ -168,10 +168,15 @@ fn get_workspace_by_name(name: &str) -> Option<serde_json::Value> {
 fn simplify_label(title: &str, app_id: &str) -> String {
     // Prefer title for terminals since it shows what's running
     if app_id.contains("ghostty") || app_id.contains("terminal") || app_id.contains("alacritty") {
-        // Strip leading non-alphanumeric chars (stars, dots, etc) and whitespace
-        let cleaned = title.trim_start_matches(|c: char| !c.is_alphanumeric()).trim();
-        // If title is just a path, take the last component
-        if cleaned.starts_with('/') || cleaned.starts_with('~') {
+        // Strip leading non-alphanumeric chars (stars, dots, etc) but keep ~ and /
+        let cleaned = title
+            .trim_start_matches(|c: char| !c.is_alphanumeric() && c != '~' && c != '/')
+            .trim();
+        // If title is just a path, take the last component but keep ~ prefix
+        if cleaned.starts_with('~') {
+            let last = cleaned.split('/').last().unwrap_or(cleaned);
+            format!("~/{}", last)
+        } else if cleaned.starts_with('/') {
             cleaned.split('/').last().unwrap_or(cleaned).to_string()
         } else {
             cleaned.to_string()
