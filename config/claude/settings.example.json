@@ -46,6 +46,14 @@
   "hooks": {
     "PreToolUse": [
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {
@@ -71,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/dotfiles/config/claude/hooks/session_tracker.py"
+            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
           }
         ]
       }
@@ -81,7 +89,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/dotfiles/config/claude/hooks/session_tracker.py"
+            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
           }
         ]
       }
@@ -100,7 +108,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/dotfiles/config/claude/hooks/session_tracker.py"
+            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
           }
         ]
       }
@@ -110,7 +118,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/dotfiles/config/claude/hooks/session_tracker.py"
+            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
           }
         ]
       }
@@ -120,7 +128,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/dotfiles/config/claude/hooks/session_tracker.py"
+            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
           }
         ]
       }
@@ -133,10 +141,10 @@
   },
   "enabledPlugins": {
     "ast-grep@ast-grep-marketplace": true,
-    "claude-opus-4-5-migration@claude-code-plugins": false,
-    "code-review@claude-code-plugins": false,
     "gopls-lsp@claude-plugins-official": true,
-    "pr-review-toolkit@claude-code-plugins": false
+    "pyright-lsp@claude-plugins-official": true,
+    "typescript-lsp@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true
   },
   "autoCompact": false
 }
