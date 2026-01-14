@@ -7,13 +7,13 @@ model = "gpt-5-codex"
 # - Commands need approval unless in rules/claude-mirror.rules
 ask_for_approval = "on-failure"
 
-[mcp_servers.context7]
-args = ["-y", "@upstash/context7-mcp"]
-command = "npx"
-
-[mcp_servers.nixos]
-command = "uvx"
-args = ["mcp-nixos"]
+# [mcp_servers.context7]
+# args = ["-y", "@upstash/context7-mcp"]
+# command = "npx"
+#
+# [mcp_servers.nixos]
+# command = "uvx"
+# args = ["mcp-nixos"]
 
 [features]
 web_search_request = true
