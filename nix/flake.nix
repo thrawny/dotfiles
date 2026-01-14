@@ -79,8 +79,9 @@
         pkgs.rustPlatform.buildRustPackage {
           pname = "niri-switcher";
           version = "0.1.0";
-          src = ../niri-switcher;
-          cargoLock.lockFile = ../niri-switcher/Cargo.lock;
+          src = ../rust;
+          cargoLock.lockFile = ../rust/Cargo.lock;
+          cargoBuildFlags = [ "-p" "niri-switcher" ];
           nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = with pkgs; [
             gtk4

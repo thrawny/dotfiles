@@ -49,7 +49,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
+            "command": "~/dotfiles/rust/target/release/session-tracker"
           }
         ]
       },
@@ -79,7 +79,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
+            "command": "~/dotfiles/rust/target/release/session-tracker"
           }
         ]
       }
@@ -89,7 +89,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
+            "command": "~/dotfiles/rust/target/release/session-tracker"
           }
         ]
       }
@@ -108,7 +108,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
+            "command": "~/dotfiles/rust/target/release/session-tracker"
           }
         ]
       }
@@ -118,7 +118,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
+            "command": "~/dotfiles/rust/target/release/session-tracker"
           }
         ]
       }
@@ -128,7 +128,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/dotfiles/session-tracker/target/release/session-tracker"
+            "command": "~/dotfiles/rust/target/release/session-tracker"
           }
         ]
       }

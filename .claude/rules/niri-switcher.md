@@ -1,5 +1,5 @@
 ---
-paths: niri-switcher/**
+paths: rust/niri-switcher/**
 ---
 
 # Niri Switcher Rules
