@@ -53,8 +53,8 @@ let
       hotkey-overlay.title = "Open Terminal";
     };
     "Mod+M" = {
-      action.focus-workspace-previous = [ ];
-      hotkey-overlay.title = "Focus Previous";
+      action.focus-window-previous = [ ];
+      hotkey-overlay.title = "Previous Window";
     };
     "Mod+N" = {
       action.focus-workspace = 1;
@@ -605,6 +605,7 @@ in
         mod-key = "Alt";
         warp-mouse-to-focus.enable = true;
         focus-follows-mouse.enable = true;
+        mouse.accel-profile = "flat";
         keyboard = {
           xkb = {
             layout = "au,se";
@@ -619,6 +620,10 @@ in
           tap = true;
           scroll-factor = cfg.scrollFactor;
         };
+      };
+
+      cursor = {
+        size = 16;
       };
 
       # Layout

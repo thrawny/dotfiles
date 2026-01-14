@@ -157,20 +157,26 @@ in
       };
 
       # Desktop-specific Niri configuration
-      programs.niri.settings.outputs = {
-        "HDMI-A-1" = {
-          scale = 1.0;
-          position = {
-            x = 0;
-            y = 0;
+      programs.niri.settings = {
+        outputs = {
+          "HDMI-A-1" = {
+            scale = 1.0;
+            position = {
+              x = 0;
+              y = 0;
+            };
+          };
+          "DP-1" = {
+            scale = 1.0;
+            position = {
+              x = 2560;
+              y = 0;
+            };
           };
         };
-        "DP-1" = {
-          scale = 1.0;
-          position = {
-            x = 2560;
-            y = 0;
-          };
+        # Bind named workspaces to monitors
+        workspaces = {
+          "web".open-on-output = "DP-1"; # Browser on right monitor
         };
       };
     };
