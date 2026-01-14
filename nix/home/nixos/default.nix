@@ -32,6 +32,7 @@
     ./walker.nix
     ./waybar.nix
     ./zen-browser.nix
+    ./gtk.nix
   ];
 
   # Enable niri compositor config (system-level niri from pkgs.niri)
