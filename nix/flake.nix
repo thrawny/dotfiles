@@ -81,7 +81,10 @@
           version = "0.1.0";
           src = ../rust;
           cargoLock.lockFile = ../rust/Cargo.lock;
-          cargoBuildFlags = [ "-p" "niri-switcher" ];
+          cargoBuildFlags = [
+            "-p"
+            "niri-switcher"
+          ];
           nativeBuildInputs = with pkgs; [ pkg-config ];
           buildInputs = with pkgs; [
             gtk4

@@ -58,10 +58,17 @@ in
     nixpkgs.config.allowUnfree = true;
 
     # Enable flakes and nix command
-    nix.settings.experimental-features = [
-      "nix-command"
-      "flakes"
-    ];
+    nix.settings = {
+      experimental-features = [
+        "nix-command"
+        "flakes"
+      ];
+      # Pre-trust niri cache so it works on first build (before niri-flake module applies)
+      trusted-substituters = [ "https://niri.cachix.org" ];
+      trusted-public-keys = [
+        "niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964="
+      ];
+    };
 
     users.users.${username} = {
       isNormalUser = true;
@@ -71,14 +78,10 @@ in
         "video"
         "audio"
         "input"
-        "keyd" # Access to keyd socket for application-mapper
         "docker" # Run Docker without sudo
       ];
       shell = pkgs.zsh;
     };
-
-    # Create keyd group for socket access
-    users.groups.keyd = { };
 
     environment.systemPackages =
       packages.systemPackages
@@ -151,60 +154,9 @@ in
       resolved.enable = true;
       blueman.enable = true;
 
-      # Keyd for system-wide key remapping (works in all apps including Electron)
-      # DISABLED: Using xremap instead to avoid double-grab keyboard conflicts
-      keyd = {
-        enable = false;
-        keyboards = {
-          # ThinkPad built-in keyboard - needs Alt/Win swap
-          thinkpad = {
-            ids = [ "0001:0001:70533846" ]; # AT Translated Set 2 keyboard exact ID
-            settings = {
-              main = {
-                # Both Caps Lock and Escape produce Escape
-                capslock = "esc";
-                esc = "esc";
-
-                # Swap Meta (Super/Windows) and Alt keys for Mac-like layout
-                leftmeta = "leftalt";
-                leftalt = "leftmeta";
-                rightalt = "rightmeta";
-              };
-              "shift" = {
-                "102nd" = "S-grave"; # Shift+< produces Shift+grave which is ~
-              };
-            };
-          };
-
-          # Default for all other keyboards (no Alt/Win swap)
-          default = {
-            ids = [ "*" ]; # Match all keyboards (keyd prioritizes specific matches first)
-            settings = {
-              main = {
-                # Both Caps Lock and Escape produce Escape
-                capslock = "esc";
-                esc = "esc";
-
-                # Keychron Max5 special buttons (circle, triangle, square, X) -> F9-F12
-                f13 = "f9"; # Circle
-                f14 = "f10"; # Triangle
-                f15 = "f11"; # Square
-                f16 = "f12"; # X
-              };
-              "shift" = {
-                "102nd" = "S-grave"; # Shift+< produces Shift+grave which is ~
-              };
-            };
-          };
-        };
-      };
-    };
-
-    # Configure keyd socket permissions for application-mapper access
-    systemd.services.keyd.serviceConfig = {
-      RuntimeDirectoryMode = "0750";
-      UMask = lib.mkForce "0007";
-      Group = "keyd";
+      # Keyd disabled - using xremap instead to avoid double-grab keyboard conflicts
+      # Config preserved in git history if needed later
+      keyd.enable = false;
     };
 
     fonts.packages = with pkgs; [
