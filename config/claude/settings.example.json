@@ -58,7 +58,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 ~/dotfiles/config/claude/hooks/bash_command.py"
+            "command": "~/dotfiles/rust/target/release/bash-validator"
           }
         ]
       }

@@ -51,5 +51,6 @@
     fd
     watchexec
     ast-grep
+    hyperfine
   ];
 }
