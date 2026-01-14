@@ -85,6 +85,7 @@ in
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/settings.json";
       ".claude/agents".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/agents";
       ".claude/skills".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/skills";
+      ".claude/rules".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/rules";
       ".claude/CLAUDE.md".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/CLAUDE-GLOBAL.md";
 

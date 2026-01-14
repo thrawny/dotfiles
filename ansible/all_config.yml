@@ -153,6 +153,12 @@
     dest: "{{ home_dir }}/.claude/skills"
     src: "{{ dotfiles_dir }}/config/claude/skills"
 
+- name: claude rules directory is symlinked
+  file:
+    state: link
+    dest: "{{ home_dir }}/.claude/rules"
+    src: "{{ dotfiles_dir }}/config/claude/rules"
+
 - name: ~/.config/ccstatusline directory is present
   file:
     path: "{{ home_dir }}/.config/ccstatusline"

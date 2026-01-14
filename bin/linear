@@ -46,7 +46,7 @@ async function issues() {
     const assignee = await issue.assignee;
     const marker = assignee ? "" : "*";
     console.log(
-      `${marker}${team?.key ?? "?"}-${issue.number} [${state?.name ?? "?"}] ${issue.title} (${issue.branchName})`
+      `${marker}${team?.key ?? "?"}-${issue.number} [${state?.name ?? "?"}] ${issue.title} (${issue.branchName})`,
     );
   }
 }
@@ -93,8 +93,9 @@ async function start(issueId: string) {
   const states = await team.states();
   // Prefer "In Progress" by name, fall back to any started state
   const startedState =
-    states.nodes.find((s) => s.type === "started" && s.name === "In Progress") ||
-    states.nodes.find((s) => s.type === "started");
+    states.nodes.find(
+      (s) => s.type === "started" && s.name === "In Progress",
+    ) || states.nodes.find((s) => s.type === "started");
   if (!startedState) {
     console.error("Could not find 'In Progress' state for team");
     process.exit(1);
@@ -122,6 +123,8 @@ switch (command) {
   default:
     console.log("Usage: linear <command> [args]");
     console.log("Commands:");
-    console.log("  issues       - List your issues and unassigned project issues");
+    console.log(
+      "  issues       - List your issues and unassigned project issues",
+    );
     console.log("  start <id>   - Self-assign issue and set to In Progress");
 }
