@@ -505,7 +505,7 @@ let
 
   # Base window rules (simplified for niri-flake compatibility)
   baseWindowRules = [
-    # Apply rounded corners and maximize all windows by default
+    # Apply rounded corners to all windows
     {
       geometry-corner-radius = {
         top-left = 12.0;
@@ -514,7 +514,6 @@ let
         bottom-right = 12.0;
       };
       clip-to-geometry = true;
-      open-maximized = true;
     }
     {
       matches = [

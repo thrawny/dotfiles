@@ -38,5 +38,10 @@
   # Host-specific home-manager overrides
   home-manager.users.${config.dotfiles.username} = {
     programs.ghostty.settings.font-size = 11;
+
+    # Laptop: open windows maximized (small screen)
+    programs.niri.settings.window-rules = [
+      { open-maximized = true; }
+    ];
   };
 }

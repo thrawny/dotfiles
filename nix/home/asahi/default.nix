@@ -36,6 +36,11 @@
     enableSwitcher = true;
   };
 
+  # Laptop: open windows maximized (small screen)
+  programs.niri.settings.window-rules = [
+    { open-maximized = true; }
+  ];
+
   # Ghostty overrides for this host
   programs.ghostty = {
     # Use distro packages instead of Nix
