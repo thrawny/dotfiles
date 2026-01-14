@@ -12,7 +12,7 @@ if [[ -f "$CONFIG_FILE" ]]; then
   source "$CONFIG_FILE"
 fi
 
-KEYS=(h j k l u i o p)
+KEYS=(h j k l u i o p n m , .)
 
 # Claude session tracking
 CLAUDE_SESSIONS_FILE="$HOME/.claude/active-sessions.json"
@@ -84,13 +84,18 @@ key_to_idx() {
   i) echo 5 ;;
   o) echo 6 ;;
   p) echo 7 ;;
+  n) echo 8 ;;
+  m) echo 9 ;;
+  ,) echo 10 ;;
+  .) echo 11 ;;
   *) echo -1 ;;
   esac
 }
 
 # Load Claude sessions and get windows
 load_claude_sessions
-WINDOWS=$(get_windows)
+ALL_WINDOWS=$(get_windows)
+WINDOWS=$(echo "$ALL_WINDOWS" | grep -v -E '^(dev|scratch):')
 SESSIONS=()
 while IFS= read -r sess; do
   SESSIONS+=("$sess")
@@ -172,8 +177,8 @@ build_session_display() {
 }
 
 run_fzf_search() {
-  echo "$WINDOWS" | grep -v '^drawer-' |
-    fzf --no-border --height=100% --header="Type to search, Enter to select" |
+  echo "$ALL_WINDOWS" |
+    fzf --no-border --height=100% --with-nth=1,3.. --header="Type to search, Enter to select" |
     cut -d' ' -f1 |
     xargs -I {} tmux switch-client -t {}
 }
@@ -182,7 +187,7 @@ run_fzf_search() {
 clear
 echo "h/j/k/l = select session | / = search | q/Esc = cancel"
 echo ""
-build_full_display
+build_full_display | head -n $(($(tput lines) - 3))
 
 # Read first key (session)
 read -rsn1 key1
@@ -206,7 +211,7 @@ fi
 # Show filtered view
 clear
 echo "h/j/k/l = select window | q/Esc = cancel"
-build_session_display "$session_idx"
+build_session_display "$session_idx" | head -n $(($(tput lines) - 2))
 
 # Read second key (window)
 read -rsn1 key2
