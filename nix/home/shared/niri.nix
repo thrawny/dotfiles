@@ -744,9 +744,15 @@ in
 
       # Animations
       animations = {
+        # Near-instant workspace/view switching for Alt+M
         workspace-switch.kind.spring = {
-          damping-ratio = 0.80;
-          stiffness = 523;
+          damping-ratio = 1.0;
+          stiffness = 10000;
+          epsilon = 0.01;
+        };
+        horizontal-view-movement.kind.spring = {
+          damping-ratio = 0.9;
+          stiffness = 800;
           epsilon = 0.0001;
         };
         window-open.kind.easing = {
@@ -756,11 +762,6 @@ in
         window-close.kind.easing = {
           duration-ms = 150;
           curve = "ease-out-quad";
-        };
-        horizontal-view-movement.kind.spring = {
-          damping-ratio = 0.85;
-          stiffness = 423;
-          epsilon = 0.0001;
         };
         window-movement.kind.spring = {
           damping-ratio = 0.75;
