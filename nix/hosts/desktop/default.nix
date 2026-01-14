@@ -178,6 +178,12 @@ in
         workspaces = {
           "web".open-on-output = "DP-1"; # Browser on right monitor
         };
+        # Desktop has large monitors - open at half width instead of maximized
+        window-rules = [
+          {
+            open-maximized = false;
+          }
+        ];
       };
     };
 }
