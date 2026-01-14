@@ -63,17 +63,6 @@
         ]
       }
     ],
-    "PostToolUse": [
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "python3 ~/dotfiles/config/claude/hooks/code_quality.py"
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [
