@@ -86,6 +86,43 @@ def find_session_by_id(sessions, session_id):
     return None
 
 
+def ends_with_question(transcript_path):
+    """Check if the last assistant message ends with a question mark."""
+    if not transcript_path:
+        return False
+    path = Path(transcript_path)
+    if not path.exists():
+        return False
+    try:
+        # Read last 20 lines to find the last assistant text message
+        result = subprocess.run(
+            ["tail", "-n", "20", str(path)],
+            capture_output=True, text=True, timeout=2
+        )
+        if result.returncode != 0:
+            return False
+
+        last_text = None
+        for line in result.stdout.strip().split("\n"):
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+                if entry.get("type") == "assistant":
+                    content = entry.get("message", {}).get("content", [])
+                    for item in content:
+                        if item.get("type") == "text":
+                            last_text = item.get("text", "")
+            except json.JSONDecodeError:
+                continue
+
+        if last_text:
+            return last_text.rstrip().endswith("?")
+    except (subprocess.TimeoutExpired, OSError):
+        pass
+    return False
+
+
 def main():
     try:
         input_data = json.load(sys.stdin)
@@ -122,7 +159,12 @@ def main():
         # Claude finished responding
         window_id = find_session_by_id(sessions, session_id)
         if window_id and window_id in sessions:
-            sessions[window_id]["state"] = "idle"
+            # Check if Claude ended with a question - if so, it's waiting for user input
+            transcript_path = sessions[window_id].get("transcript_path")
+            if ends_with_question(transcript_path):
+                sessions[window_id]["state"] = "waiting"
+            else:
+                sessions[window_id]["state"] = "idle"
             sessions[window_id]["state_updated"] = time.time()
             save_sessions(sessions)
 
