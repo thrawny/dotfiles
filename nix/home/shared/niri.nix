@@ -677,6 +677,8 @@ in
 
       # Spawn at startup
       spawn-at-startup = [
+        # X11 compatibility for legacy apps (Steam, etc.)
+        { command = [ "xwayland-satellite" ]; }
         # Clipboard history
         {
           command = [
@@ -731,6 +733,7 @@ in
       environment = {
         XDG_CURRENT_DESKTOP = "niri";
         NIXOS_OZONE_WL = "1";
+        DISPLAY = ":0"; # For xwayland-satellite (X11 compat)
       };
 
       # Hotkey overlay

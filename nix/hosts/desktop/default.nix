@@ -84,6 +84,7 @@ in
     mangohud # Gaming performance overlay (FPS, temps, etc.)
     nvtopPackages.nvidia # GPU monitoring (htop for NVIDIA GPU)
     pkgsi686Linux.gperftools # 32-bit tcmalloc for Source engine games (HL2, TF2, etc.)
+    xwayland-satellite # X11 compatibility for Niri
   ];
 
   # Gaming configuration

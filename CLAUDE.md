@@ -31,6 +31,10 @@ Refer to `ansible/all_config.yml` for the authoritative symlink list.
 - Linux-wide: `ansible/linux_software.yml` (when `ansible_system == 'Linux'`).
 - macOS-only: `ansible/osx_software.yml`, `ansible/osx_config.yml` (when `ansible_distribution == 'MacOSX'`).
 
+## Nix Configuration
+
+Flake-based NixOS and Home Manager config in `nix/`. See `nix/CLAUDE.md` for details.
+
 ## Common Agent Tasks
 
 - Update an existing dotfile: edit its source file in this repo (see Paths section). No immediate action is needed unless you want to re-run symlinks on a machine.
@@ -91,5 +95,5 @@ When asked to modify settings, update the example file first, then ask if the us
 
 ## Notes
 
-- Repo directories of interest: `config/` (nvim, vim, ghostty, direnv, themes, codex, claude, k9s, npm, starship, zsh, tmux, git), `ansible/`, `osx/`, `claude_tools/`, `bin/`.
+- Repo directories of interest: `config/`, `ansible/`, `nix/`, `osx/`, `claude_tools/`, `bin/`.
 - Shell convenience commands, package managers, and desktop apps are not required for typical agent edits, so are intentionally omitted here.
