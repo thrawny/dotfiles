@@ -1,6 +1,10 @@
+[env]
+# Source nix-direnv's cached environment (created by direnv allow)
+_.source = ".direnv/flake-profile-*.rc"
+
 [tasks.build]
 description = "Build with cargo (incremental)"
-run = "nix develop path:../../nix#niri-switcher-dev -c cargo build --release"
+run = "cargo build --release"
 
 [tasks.run]
 description = "Build and run"
@@ -9,8 +13,8 @@ depends = ["build"]
 
 [tasks.nix]
 description = "Build with nix (clean build)"
-run = "nix build path:../nix#niri-switcher"
+run = "nix build path:../../nix#niri-switcher"
 
 [tasks.install]
 description = "Build with nix and copy to result"
-run = "nix build path:../nix#niri-switcher -o result"
+run = "nix build path:../../nix#niri-switcher -o result"

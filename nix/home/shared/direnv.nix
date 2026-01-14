@@ -1,8 +1,33 @@
 {
   config,
   dotfiles,
+  lib,
   ...
 }:
 {
-  xdg.configFile."direnv".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/direnv";
+  programs.direnv = {
+    enable = true;
+    nix-direnv.enable = true;
+    stdlib = ''
+      dotenv_if_exists .env
+      dotenv_if_exists .env.local
+
+      layout_uv() {
+          if [[ -d ".venv" ]]; then
+              VIRTUAL_ENV="$(pwd)/.venv"
+          fi
+
+          if [[ -z $VIRTUAL_ENV || ! -d $VIRTUAL_ENV ]]; then
+              log_status "No uv project exists. Executing \`uv init\` to create one."
+              uv init
+              uv venv
+              VIRTUAL_ENV="$(pwd)/.venv"
+          fi
+
+          PATH_add "$VIRTUAL_ENV/bin"
+          export UV_ACTIVE=1
+          export VIRTUAL_ENV
+      }
+    '';
+  };
 }

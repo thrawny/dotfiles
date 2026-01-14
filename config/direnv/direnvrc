@@ -1,3 +1,9 @@
+# Source nix-direnv if available (for non-NixOS systems)
+# On NixOS, Home Manager's programs.direnv handles this
+if [ -f "${XDG_DATA_HOME:-$HOME/.local/share}/nix-direnv/direnvrc" ]; then
+    source "${XDG_DATA_HOME:-$HOME/.local/share}/nix-direnv/direnvrc"
+fi
+
 dotenv_if_exists .env
 dotenv_if_exists .env.local
 
@@ -14,6 +20,6 @@ layout_uv() {
     fi
 
     PATH_add "$VIRTUAL_ENV/bin"
-    export UV_ACTIVE=1  # or VENV_ACTIVE=1
+    export UV_ACTIVE=1
     export VIRTUAL_ENV
 }

@@ -24,7 +24,6 @@
     procps
     zoxide
     bat
-    direnv
     pnpm
     ripgrep
     tmux
