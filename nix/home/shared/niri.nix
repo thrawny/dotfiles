@@ -527,6 +527,7 @@ let
         { app-id = "zoom"; }
         { app-id = "^com\\.thrawny\\.niri-switcher$"; }
         { app-id = "^spotify$"; }
+        { app-id = "^1password$"; }
       ];
       open-floating = true;
       open-maximized = false;
