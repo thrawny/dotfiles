@@ -24,6 +24,7 @@
     procps
     zoxide
     bat
+    biome
     direnv
     pnpm
     ripgrep
