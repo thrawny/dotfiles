@@ -1,5 +1,6 @@
 # ===== Exports =====
 export PYTHONDONTWRITEBYTECODE=1
+export PYTHONUNBUFFERED=1
 export GOPATH=$HOME/go
 export EDITOR=nvim
 export AWS_PAGER=''
