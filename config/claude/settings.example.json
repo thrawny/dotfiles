@@ -39,7 +39,8 @@
       "Bash(linear issues:*)",
       "Bash(linear start:*)",
       "SlashCommand:/handover",
-      "Bash(remove-handoff)"
+      "Bash(remove-handoff)",
+      "Skill(ast-grep)"
     ],
     "deny": [],
     "ask": [
