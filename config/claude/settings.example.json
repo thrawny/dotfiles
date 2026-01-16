@@ -38,7 +38,8 @@
       "Bash(notify:*)",
       "Bash(linear issues:*)",
       "Bash(linear start:*)",
-      "SlashCommand:/handover"
+      "SlashCommand:/handover",
+      "Bash(remove-handoff)"
     ],
     "deny": [],
     "ask": [

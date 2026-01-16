@@ -1,5 +1,5 @@
 ---
-allowed-tools: Read, Write(handoff.md), Glob, Grep, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*)
+allowed-tools: Read, Write(handoff.md), Glob, Grep, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(remove-handoff)
 description: Hand off work to another session with goal-directed context extraction
 ---
 
@@ -9,7 +9,7 @@ Hand off the current work to a new session. The argument (if provided) is the go
 
 If no goal argument provided: infer the logical next goal from the conversation context. If unclear, state your best guess.
 
-If `handoff.md` exists, ignore it — it's from a previous session. Overwrite completely.
+First, run `remove-handoff` to delete any existing handoff.md from a previous session.
 
 Write `handoff.md` with:
 
