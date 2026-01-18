@@ -30,3 +30,8 @@ mise diff         # Build and show changes (NixOS only)
 - `home/nixos/` - NixOS-specific Home Manager modules
 - `home/darwin/` - macOS-specific Home Manager modules
 - `home/asahi/` - Asahi Linux Home Manager modules
+
+## Notes
+
+- Niri configuration lives under `home/linux/niri/` and is imported explicitly where needed.
+- Niri is the daily driver; Hyprland remains available and can be selected in tuigreet when desired.

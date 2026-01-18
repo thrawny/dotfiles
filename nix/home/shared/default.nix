@@ -65,6 +65,7 @@ in
 
   home = {
     stateVersion = "24.05";
+    backupFileExtension = "bak";
 
     activation = {
       seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";

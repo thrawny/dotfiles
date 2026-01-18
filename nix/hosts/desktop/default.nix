@@ -23,9 +23,9 @@ in
   networking.hostName = "thrawny-desktop";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
-  # Auto-login on desktop (first boot only, then falls back to tuigreet)
+  # Auto-login to niri on desktop
   services.greetd.settings.initial_session = {
-    command = "${pkgs.hyprland}/bin/Hyprland";
+    command = "${pkgs.niri}/bin/niri-session";
     user = "thrawny";
   };
 

@@ -26,7 +26,6 @@
     # NixOS-specific modules
     ./cursor.nix
     ./ghostty.nix
-    ./steam.nix
     ./hyprland/default.nix
     ./hypridle.nix
     ./hyprlock.nix
