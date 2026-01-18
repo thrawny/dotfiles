@@ -11,32 +11,42 @@ let
     shadow = "#00000070";
   };
 
+  # Binds that override base niri config need lib.mkForce
   dmsBinds = {
     # Override launcher to use DMS spotlight
-    "Super+Space" = {
-      action.spawn = [
+    "Super+Space".action = lib.mkForce {
+      spawn = [
         "dms"
         "ipc"
         "call"
         "spotlight"
         "toggle"
       ];
-      hotkey-overlay.title = "Application Launcher";
     };
 
     # Override lock screen to use DMS
-    "Mod+Escape" = {
-      action.spawn = [
+    "Mod+Escape".action = lib.mkForce {
+      spawn = [
         "dms"
         "ipc"
         "call"
         "lock"
         "lock"
       ];
-      hotkey-overlay.title = "Lock Screen";
     };
 
-    # DMS-specific features
+    # Override Ctrl+Alt+Delete (reboot -> task manager)
+    "Ctrl+Alt+Delete".action = lib.mkForce {
+      spawn = [
+        "dms"
+        "ipc"
+        "call"
+        "processlist"
+        "focusOrToggle"
+      ];
+    };
+
+    # DMS-specific features (new binds, no override needed)
     "Mod+Shift+C" = {
       action.spawn = [
         "dms"
@@ -85,88 +95,90 @@ let
       ];
       hotkey-overlay.title = "Lock and Sleep";
     };
-    "Ctrl+Alt+Delete" = {
-      action.spawn = [
-        "dms"
-        "ipc"
-        "call"
-        "processlist"
-        "focusOrToggle"
-      ];
-      hotkey-overlay.title = "Task Manager";
-    };
 
-    # Audio Controls (DMS OSD)
+    # Audio Controls (DMS OSD) - override base wpctl binds
     "XF86AudioRaiseVolume" = {
-      action.spawn = [
-        "dms"
-        "ipc"
-        "call"
-        "audio"
-        "increment"
-        "3"
-      ];
+      action = lib.mkForce {
+        spawn = [
+          "dms"
+          "ipc"
+          "call"
+          "audio"
+          "increment"
+          "3"
+        ];
+      };
       allow-when-locked = true;
     };
     "XF86AudioLowerVolume" = {
-      action.spawn = [
-        "dms"
-        "ipc"
-        "call"
-        "audio"
-        "decrement"
-        "3"
-      ];
+      action = lib.mkForce {
+        spawn = [
+          "dms"
+          "ipc"
+          "call"
+          "audio"
+          "decrement"
+          "3"
+        ];
+      };
       allow-when-locked = true;
     };
     "XF86AudioMute" = {
-      action.spawn = [
-        "dms"
-        "ipc"
-        "call"
-        "audio"
-        "mute"
-      ];
+      action = lib.mkForce {
+        spawn = [
+          "dms"
+          "ipc"
+          "call"
+          "audio"
+          "mute"
+        ];
+      };
       allow-when-locked = true;
     };
     "XF86AudioMicMute" = {
-      action.spawn = [
-        "dms"
-        "ipc"
-        "call"
-        "audio"
-        "micmute"
-      ];
+      action = lib.mkForce {
+        spawn = [
+          "dms"
+          "ipc"
+          "call"
+          "audio"
+          "micmute"
+        ];
+      };
       allow-when-locked = true;
     };
 
-    # Brightness Controls (DMS OSD)
+    # Brightness Controls (DMS OSD) - override base brightnessctl binds
     "XF86MonBrightnessUp" = {
-      action.spawn = [
-        "dms"
-        "ipc"
-        "call"
-        "brightness"
-        "increment"
-        "5"
-        ""
-      ];
+      action = lib.mkForce {
+        spawn = [
+          "dms"
+          "ipc"
+          "call"
+          "brightness"
+          "increment"
+          "5"
+          ""
+        ];
+      };
       allow-when-locked = true;
     };
     "XF86MonBrightnessDown" = {
-      action.spawn = [
-        "dms"
-        "ipc"
-        "call"
-        "brightness"
-        "decrement"
-        "5"
-        ""
-      ];
+      action = lib.mkForce {
+        spawn = [
+          "dms"
+          "ipc"
+          "call"
+          "brightness"
+          "decrement"
+          "5"
+          ""
+        ];
+      };
       allow-when-locked = true;
     };
 
-    # Extra screenshot keys
+    # Extra screenshot keys (new binds)
     "XF86Launch1".action.screenshot = [ ];
     "Ctrl+XF86Launch1".action.screenshot-screen = [ ];
     "Alt+XF86Launch1".action.screenshot-window = [ ];
