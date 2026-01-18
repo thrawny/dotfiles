@@ -1,6 +1,6 @@
 use clap::Parser;
 use gtk4::prelude::*;
-use gtk4::{glib, Application, ApplicationWindow, Box as GtkBox, Label, Orientation};
+use gtk4::{Application, ApplicationWindow, Box as GtkBox, Label, Orientation, glib};
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Deserialize;
@@ -115,6 +115,8 @@ struct Config {
     project: Vec<Project>,
     #[serde(default)]
     ignore: Vec<String>, // Workspace names to exclude from switcher
+    #[serde(default)]
+    ignore_unnamed: bool, // If true, hide numbered/unnamed workspaces
 }
 
 struct AppState {
@@ -140,15 +142,12 @@ fn load_config() -> Config {
             static_workspace: true,
         }],
         ignore: vec![],
+        ignore_unnamed: false,
     }
 }
 
 fn niri_cmd(args: &[&str]) -> Option<String> {
-    let output = Command::new("niri")
-        .arg("msg")
-        .args(args)
-        .output()
-        .ok()?;
+    let output = Command::new("niri").arg("msg").args(args).output().ok()?;
     Some(String::from_utf8_lossy(&output.stdout).to_string())
 }
 
@@ -206,23 +205,19 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
     let mut key_idx = 0;
 
     // Helper to add entries for a workspace
-    let add_workspace_entries = |entries: &mut Vec<WorkspaceColumn>,
-                                  ws_name: &str,
-                                  workspace_key: char,
-                                  dir: Option<String>,
-                                  static_workspace: bool,
-                                  ws_arr: &[serde_json::Value],
-                                  windows_arr: &[&serde_json::Value]| {
-        let ws = ws_arr
-            .iter()
-            .find(|ws| ws.get("name").and_then(|n| n.as_str()) == Some(ws_name));
+    // ws_id is the niri workspace ID (always present)
+    // ws_name is the display name (either the actual name or the index as string)
+    let add_workspace_entries =
+        |entries: &mut Vec<WorkspaceColumn>,
+         ws_id: i64,
+         ws_name: &str,
+         workspace_key: char,
+         dir: Option<String>,
+         static_workspace: bool,
+         windows_arr: &[&serde_json::Value]| {
+            // Group windows by column index
+            let mut columns: BTreeMap<i64, Vec<&serde_json::Value>> = BTreeMap::new();
 
-        let ws_id = ws.and_then(|w| w.get("id").and_then(|id| id.as_i64()));
-
-        // Group windows by column index
-        let mut columns: BTreeMap<i64, Vec<&serde_json::Value>> = BTreeMap::new();
-
-        if let Some(ws_id) = ws_id {
             for window in windows_arr.iter() {
                 let window_ws_id = window.get("workspace_id").and_then(|id| id.as_i64());
                 if window_ws_id != Some(ws_id) {
@@ -236,57 +231,57 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
                     .unwrap_or(1);
                 columns.entry(col_idx).or_default().push(*window);
             }
-        }
 
-        // Skip column 1 (scratch), create entries for columns 2+
-        let has_columns = columns.keys().any(|&idx| idx >= 2);
+            // Skip column 1 (scratch), create entries for columns 2+
+            let has_columns = columns.keys().any(|&idx| idx >= 2);
 
-        if has_columns {
-            for (&col_idx, col_windows) in &columns {
-                if col_idx < 2 {
-                    continue;
+            if has_columns {
+                for (&col_idx, col_windows) in &columns {
+                    if col_idx < 2 {
+                        continue;
+                    }
+                    let key_offset = (col_idx - 2) as usize;
+                    if key_offset >= KEYS.len() {
+                        continue;
+                    }
+                    let column_key = KEYS[key_offset];
+
+                    let first_window = col_windows.first();
+                    let title = first_window
+                        .and_then(|w| w.get("title").and_then(|t| t.as_str()))
+                        .unwrap_or("?");
+                    let app_id = first_window
+                        .and_then(|w| w.get("app_id").and_then(|a| a.as_str()))
+                        .unwrap_or("?");
+                    let window_id =
+                        first_window.and_then(|w| w.get("id").and_then(|id| id.as_u64()));
+                    let app_label = simplify_label(title, app_id);
+
+                    entries.push(WorkspaceColumn {
+                        workspace_name: ws_name.to_string(),
+                        workspace_key,
+                        column_index: col_idx as u32,
+                        column_key,
+                        app_label,
+                        dir: dir.clone(),
+                        static_workspace,
+                        window_id,
+                    });
                 }
-                let key_offset = (col_idx - 2) as usize;
-                if key_offset >= KEYS.len() {
-                    continue;
-                }
-                let column_key = KEYS[key_offset];
-
-                let first_window = col_windows.first();
-                let title = first_window
-                    .and_then(|w| w.get("title").and_then(|t| t.as_str()))
-                    .unwrap_or("?");
-                let app_id = first_window
-                    .and_then(|w| w.get("app_id").and_then(|a| a.as_str()))
-                    .unwrap_or("?");
-                let window_id = first_window.and_then(|w| w.get("id").and_then(|id| id.as_u64()));
-                let app_label = simplify_label(title, app_id);
-
+            } else {
+                // Empty workspace - add placeholder entry
                 entries.push(WorkspaceColumn {
                     workspace_name: ws_name.to_string(),
                     workspace_key,
-                    column_index: col_idx as u32,
-                    column_key,
-                    app_label,
+                    column_index: 2,
+                    column_key: KEYS[0],
+                    app_label: "(empty)".to_string(),
                     dir: dir.clone(),
                     static_workspace,
-                    window_id,
+                    window_id: None,
                 });
             }
-        } else {
-            // Empty workspace - add placeholder entry
-            entries.push(WorkspaceColumn {
-                workspace_name: ws_name.to_string(),
-                workspace_key,
-                column_index: 2,
-                column_key: KEYS[0],
-                app_label: "(empty)".to_string(),
-                dir: dir.clone(),
-                static_workspace,
-                window_id: None,
-            });
-        }
-    };
+        };
 
     // Collect window references for the helper
     let windows_refs: Vec<&serde_json::Value> = windows_arr.iter().collect();
@@ -299,46 +294,84 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
         seen_workspaces.insert(project.name.clone());
         let workspace_key = KEYS[key_idx];
 
-        add_workspace_entries(
-            &mut entries,
-            &project.name,
-            workspace_key,
-            Some(project.dir.clone()),
-            project.static_workspace,
-            ws_arr,
-            &windows_refs,
-        );
+        // Find workspace ID by name
+        let ws_id = ws_arr
+            .iter()
+            .find(|ws| ws.get("name").and_then(|n| n.as_str()) == Some(&project.name))
+            .and_then(|ws| ws.get("id").and_then(|id| id.as_i64()));
+
+        if let Some(ws_id) = ws_id {
+            add_workspace_entries(
+                &mut entries,
+                ws_id,
+                &project.name,
+                workspace_key,
+                Some(project.dir.clone()),
+                project.static_workspace,
+                &windows_refs,
+            );
+        } else {
+            // Workspace doesn't exist yet - add empty placeholder
+            entries.push(WorkspaceColumn {
+                workspace_name: project.name.clone(),
+                workspace_key,
+                column_index: 2,
+                column_key: KEYS[0],
+                app_label: "(empty)".to_string(),
+                dir: Some(project.dir.clone()),
+                static_workspace: project.static_workspace,
+                window_id: None,
+            });
+        }
 
         key_idx += 1;
     }
 
-    // 2. Add remaining workspaces (not configured, not ignored)
-    for ws in ws_arr {
+    // 2. Add remaining workspaces (not configured, not ignored), sorted by index
+    let mut remaining: Vec<_> = ws_arr
+        .iter()
+        .filter_map(|ws| {
+            let ws_id = ws.get("id").and_then(|id| id.as_i64())?;
+            let name_opt = ws.get("name").and_then(|n| n.as_str());
+            let idx = ws.get("idx").and_then(|i| i.as_i64())?;
+
+            // Skip unnamed workspaces if configured
+            if name_opt.is_none() && config.ignore_unnamed {
+                return None;
+            }
+
+            let display_name: String = match name_opt {
+                Some(n) => n.to_string(),
+                None => idx.to_string(),
+            };
+
+            if seen_workspaces.contains(&display_name) {
+                return None;
+            }
+            if config.ignore.iter().any(|i| i == &display_name) {
+                return None;
+            }
+
+            Some((idx, ws_id, display_name))
+        })
+        .collect();
+
+    remaining.sort_by_key(|(idx, _, _)| *idx);
+
+    for (_, ws_id, display_name) in remaining {
         if key_idx >= KEYS.len() {
             break;
-        }
-
-        let name = match ws.get("name").and_then(|n| n.as_str()) {
-            Some(n) if !n.is_empty() => n,
-            _ => continue, // Skip unnamed workspaces
-        };
-
-        if seen_workspaces.contains(name) {
-            continue;
-        }
-        if config.ignore.iter().any(|i| i == name) {
-            continue;
         }
 
         let workspace_key = KEYS[key_idx];
 
         add_workspace_entries(
             &mut entries,
-            name,
+            ws_id,
+            &display_name,
             workspace_key,
             None, // No dir for unconfigured workspaces
             true, // Treat as static (it exists in niri)
-            ws_arr,
             &windows_refs,
         );
 
@@ -464,9 +497,10 @@ fn start_config_watcher(tx: mpsc::Sender<Message>) {
             move |res: Result<notify::Event, notify::Error>| {
                 if let Ok(event) = res {
                     // Only reload on modify/create events for our config file
-                    let dominated_by_config = event.paths.iter().any(|p| {
-                        p.file_name() == config_filename.as_deref()
-                    });
+                    let dominated_by_config = event
+                        .paths
+                        .iter()
+                        .any(|p| p.file_name() == config_filename.as_deref());
                     if dominated_by_config {
                         match event.kind {
                             notify::EventKind::Modify(_) | notify::EventKind::Create(_) => {
@@ -526,19 +560,21 @@ fn load_claude_sessions_file() -> HashMap<u64, ClaudeSession> {
     if let Some(obj) = json.as_object() {
         for (window_id_str, session_data) in obj {
             if let Ok(window_id) = window_id_str.parse::<u64>() {
-                if let Some(transcript_path) = session_data
-                    .get("transcript_path")
-                    .and_then(|p| p.as_str())
+                if let Some(transcript_path) =
+                    session_data.get("transcript_path").and_then(|p| p.as_str())
                 {
                     let state = session_data
                         .get("state")
                         .and_then(|s| s.as_str())
                         .map(ClaudeState::from_str)
                         .unwrap_or(ClaudeState::Unknown);
-                    sessions.insert(window_id, ClaudeSession {
-                        transcript_path: PathBuf::from(transcript_path),
-                        state,
-                    });
+                    sessions.insert(
+                        window_id,
+                        ClaudeSession {
+                            transcript_path: PathBuf::from(transcript_path),
+                            state,
+                        },
+                    );
                 }
             }
         }
@@ -570,14 +606,21 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
                             .unwrap_or(false)
                     });
                     if is_sessions_file {
-                        _debug_log(&format!("[DEBUG] active-sessions.json event: {:?}", event.kind));
+                        _debug_log(&format!(
+                            "[DEBUG] active-sessions.json event: {:?}",
+                            event.kind
+                        ));
                         match event.kind {
                             notify::EventKind::Modify(_) | notify::EventKind::Create(_) => {
                                 // Update transcript map
                                 let sessions = load_claude_sessions_file();
-                                _debug_log(&format!("[DEBUG] Loaded {} sessions: {:?}",
+                                _debug_log(&format!(
+                                    "[DEBUG] Loaded {} sessions: {:?}",
                                     sessions.len(),
-                                    sessions.iter().map(|(id, s)| (id, &s.state)).collect::<Vec<_>>()
+                                    sessions
+                                        .iter()
+                                        .map(|(id, s)| (id, &s.state))
+                                        .collect::<Vec<_>>()
                                 ));
                                 let mut map = transcript_map_for_sessions.lock().unwrap();
                                 map.clear();
@@ -644,9 +687,13 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
 
         // Initial load of sessions
         let sessions = load_claude_sessions_file();
-        _debug_log(&format!("[DEBUG] Initial load: {} sessions: {:?}",
+        _debug_log(&format!(
+            "[DEBUG] Initial load: {} sessions: {:?}",
             sessions.len(),
-            sessions.iter().map(|(id, s)| (id, &s.state)).collect::<Vec<_>>()
+            sessions
+                .iter()
+                .map(|(id, s)| (id, &s.state))
+                .collect::<Vec<_>>()
         ));
         {
             let mut map = transcript_map.lock().unwrap();
@@ -655,7 +702,10 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
             }
         }
         let _ = tx.send(Message::ClaudeSessionsChanged);
-        _debug_log(&format!("[DEBUG] Watching {:?} for active-sessions.json", claude_dir));
+        _debug_log(&format!(
+            "[DEBUG] Watching {:?} for active-sessions.json",
+            claude_dir
+        ));
 
         // Keep watchers alive
         loop {
@@ -880,7 +930,10 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                     // Reload Claude sessions from file
                     let mut state = state_for_poll.borrow_mut();
                     state.claude_sessions = load_claude_sessions_file();
-                    _debug_log(&format!("[DEBUG] ClaudeSessionsChanged: {} sessions", state.claude_sessions.len()));
+                    _debug_log(&format!(
+                        "[DEBUG] ClaudeSessionsChanged: {} sessions",
+                        state.claude_sessions.len()
+                    ));
                     // If visible, refresh the display to show updated status
                     if window_for_poll.is_visible() {
                         let entries = state.entries.clone();
@@ -960,11 +1013,20 @@ fn build_entry_list(
                 };
 
                 if has_real_desc {
-                    format!("{} / claude <span color=\"{}\" weight=\"bold\">[{}]</span>: {}",
-                        entry.workspace_name, color, session.state.label(), desc)
+                    format!(
+                        "{} / claude <span color=\"{}\" weight=\"bold\">[{}]</span>: {}",
+                        entry.workspace_name,
+                        color,
+                        session.state.label(),
+                        desc
+                    )
                 } else {
-                    format!("{} / claude <span color=\"{}\" weight=\"bold\">[{}]</span>",
-                        entry.workspace_name, color, session.state.label())
+                    format!(
+                        "{} / claude <span color=\"{}\" weight=\"bold\">[{}]</span>",
+                        entry.workspace_name,
+                        color,
+                        session.state.label()
+                    )
                 }
             } else {
                 format!("{} / {}", entry.workspace_name, entry.app_label)
