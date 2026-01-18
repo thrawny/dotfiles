@@ -17,7 +17,11 @@
     xremap-flake.homeManagerModules.default
 
     # Linux-specific modules
-    ../linux/xremap.nix
+    ../linux
+
+    # Niri window manager (base + switcher, no DMS)
+    ../linux/niri
+    ../linux/niri/switcher.nix
 
     # NixOS-specific modules
     ./cursor.nix
@@ -34,12 +38,6 @@
     ./zen-browser.nix
     ./gtk.nix
   ];
-
-  # Enable niri compositor config (system-level niri from pkgs.niri)
-  custom.niri = {
-    enable = true;
-    enableSwitcher = true;
-  };
 
   home = {
     inherit username;
