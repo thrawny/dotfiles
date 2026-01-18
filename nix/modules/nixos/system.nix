@@ -14,7 +14,7 @@ let
   inherit (cfg) username;
   userHome = "/home/${username}";
   dotfiles = "${userHome}/dotfiles";
-  packages = import ../shared/packages.nix {
+  packages = import ./packages.nix {
     inherit pkgs lib nurPkgs;
     excludePackages = [ ];
   };
