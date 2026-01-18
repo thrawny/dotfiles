@@ -11,7 +11,7 @@ if [ -f /etc/NIXOS ]; then
   sudo nixos-rebuild switch --flake "./nix#$host"
 else
   echo "Standalone Home Manager detected, running home-manager switch..."
-  home-manager switch --flake "./nix#$host"
+  home-manager switch -b bak --flake "./nix#$host"
 fi
 '''
 sources = ["nix/**/*.nix", "nix/flake.*", "niri-switcher/**/*"]

@@ -29,7 +29,7 @@ mise diff         # Build and show changes (NixOS only)
 - `home/shared/` - Cross-platform Home Manager modules
 - `home/nixos/` - NixOS-specific Home Manager modules
 - `home/darwin/` - macOS-specific Home Manager modules
-- `home/asahi/` - Asahi Linux Home Manager modules
+- `home/linux/` - Linux/Wayland Home Manager modules (including Asahi)
 
 ## Notes
 

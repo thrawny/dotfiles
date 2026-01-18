@@ -168,6 +168,7 @@ in
     home-manager = {
       useGlobalPkgs = true;
       useUserPackages = true;
+      backupFileExtension = "bak";
       # niri-flake.nixosModules.niri already adds home-manager integration
       extraSpecialArgs = {
         inherit

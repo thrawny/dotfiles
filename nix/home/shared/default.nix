@@ -65,8 +65,6 @@ in
 
   home = {
     stateVersion = "24.05";
-    backupFileExtension = "bak";
-
     activation = {
       seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
       seedClaudeSettings = seedExample "config/claude/settings.example.json" "config/claude/settings.json";
