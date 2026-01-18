@@ -210,7 +210,7 @@ zstyle ':completion:*' menu select
 
 # ===== Aliases =====
 alias h='history'
-alias l='ls -lFh'
+alias l='ls -lh'
 alias fig="docker-compose"
 
 alias vim=nvim
@@ -249,6 +249,10 @@ alias taf='terraform apply -auto-approve'
 
 if bat --version &>/dev/null && [[ -o interactive ]]; then
   alias cat='bat --style=grid,snip --theme "Monokai Extended Origin"'
+fi
+
+if command -v eza &>/dev/null && [[ -o interactive ]]; then
+  alias ls='eza --icons --group-directories-first'
 fi
 
 if [[ "$(uname)" == "Darwin" ]]; then

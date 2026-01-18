@@ -53,5 +53,6 @@
     watchexec
     ast-grep
     hyperfine
+    eza
   ];
 }
