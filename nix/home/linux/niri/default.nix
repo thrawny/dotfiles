@@ -247,6 +247,14 @@ let
       allow-inhibiting = false;
     };
     "Mod+Shift+P".action.power-off-monitors = [ ];
+    "Mod+Super+M" = {
+      action.spawn = [
+        "bash"
+        "-c"
+        "niri msg output HDMI-A-1 off && sleep 1 && niri msg output HDMI-A-1 on"
+      ];
+      hotkey-overlay.title = "Wake LG Monitor";
+    };
 
     # Keyboard Layout
     "Mod+Super+Space" = {

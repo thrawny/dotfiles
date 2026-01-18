@@ -14,7 +14,7 @@ else
   home-manager switch -b bak --flake "./nix#$host"
 fi
 '''
-sources = ["nix/**/*.nix", "nix/flake.*", "niri-switcher/**/*"]
+# sources = ["nix/**/*.nix", "nix/flake.*", "niri-switcher/**/*"]
 
 [tasks.dry]
 description = "Dry-run NixOS rebuild (NixOS only)"
