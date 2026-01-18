@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Turn off monitors - works with both Hyprland and niri
+
+if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
+    hyprctl dispatch dpms off
+elif [ -n "$NIRI_SOCKET" ]; then
+    niri msg action power-off-monitors
+fi

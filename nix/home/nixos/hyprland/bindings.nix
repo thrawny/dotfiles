@@ -168,7 +168,7 @@ let
   ];
 
   extras = [
-    "${mod} SUPER, m, exec, ${dotfiles}/bin/wake-monitors"
+    "${mod} SUPER, M, exec, hyprctl dispatch dpms on"
     "${mod} SHIFT, W, exec, ${cycleWallpaper}"
   ];
 in

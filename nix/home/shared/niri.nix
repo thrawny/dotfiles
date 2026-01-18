@@ -5,7 +5,6 @@
   lib,
   pkgs,
   self,
-  dotfiles,
   ...
 }:
 let
@@ -265,7 +264,7 @@ let
       allow-inhibiting = false;
     };
     "Mod+Shift+P".action.power-off-monitors = [ ];
-    "Mod+Super+M".action.spawn = [ "${dotfiles}/bin/wake-monitors" ];
+    "Mod+Super+M".action.power-on-monitors = [ ];
 
     # Keyboard Layout
     "Mod+Super+Space" = {
