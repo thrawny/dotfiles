@@ -186,6 +186,7 @@ in
         # Bind named workspaces to monitors
         workspaces = {
           "web".open-on-output = "DP-1"; # Browser on right monitor
+          "games".open-on-output = "HDMI-A-1"; # Games on left monitor
         };
       };
     };

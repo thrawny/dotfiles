@@ -4,8 +4,11 @@ run = "nix develop path:../../nix#niri-switcher-dev -c cargo build --release"
 
 [tasks.run]
 description = "Build and run"
-run = "../target/release/niri-switcher"
-depends = ["build"]
+run = "nix develop path:../../nix#niri-switcher-dev -c cargo run --release"
+
+[tasks.watch]
+description = "Watch for changes and rebuild/run (debug mode)"
+run = "nix develop path:../../nix#niri-switcher-dev --command watchexec -w src -e rs --restart -- cargo run"
 
 [tasks.nix]
 description = "Build with nix (clean build)"

@@ -104,37 +104,43 @@ struct WorkspaceColumn {
     column_index: u32,
     column_key: char,
     app_label: String,
-    dir: String,
+    dir: Option<String>, // None for unconfigured workspaces (no terminal spawn)
     static_workspace: bool,
     window_id: Option<u64>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 struct Config {
+    #[serde(default)]
     project: Vec<Project>,
+    #[serde(default)]
+    ignore: Vec<String>, // Workspace names to exclude from switcher
 }
 
 struct AppState {
-    projects: Vec<Project>,
+    config: Config,
     entries: Vec<WorkspaceColumn>,
     pending_key: Option<char>,
     claude_sessions: HashMap<u64, ClaudeSession>,
 }
 
-fn load_projects() -> Vec<Project> {
+fn load_config() -> Config {
     if let Ok(content) = std::fs::read_to_string(config_path()) {
         if let Ok(config) = toml::from_str::<Config>(&content) {
-            return config.project;
+            return config;
         }
     }
 
-    // Default projects
-    vec![Project {
-        key: "h".to_string(),
-        name: "dotfiles".to_string(),
-        dir: "~/dotfiles".to_string(),
-        static_workspace: true,
-    }]
+    // Default config with one project
+    Config {
+        project: vec![Project {
+            key: "h".to_string(),
+            name: "dotfiles".to_string(),
+            dir: "~/dotfiles".to_string(),
+            static_workspace: true,
+        }],
+        ignore: vec![],
+    }
 }
 
 fn niri_cmd(args: &[&str]) -> Option<String> {
@@ -187,34 +193,37 @@ fn simplify_label(title: &str, app_id: &str) -> String {
     }
 }
 
-fn get_workspace_columns(projects: &[Project]) -> Vec<WorkspaceColumn> {
+fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
+    use std::collections::{BTreeMap, HashSet};
+
     let workspaces = niri_json(&["workspaces"]).unwrap_or_default();
+    let ws_arr = workspaces.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
     let windows = niri_json(&["windows"]).unwrap_or_default();
     let windows_arr = windows.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
 
     let mut entries = Vec::new();
+    let mut seen_workspaces: HashSet<String> = HashSet::new();
+    let mut key_idx = 0;
 
-    for (proj_idx, project) in projects.iter().enumerate() {
-        if proj_idx >= KEYS.len() {
-            break;
-        }
-        let workspace_key = KEYS[proj_idx];
-
-        let ws = workspaces
-            .as_array()
-            .and_then(|arr| {
-                arr.iter()
-                    .find(|ws| ws.get("name").and_then(|n| n.as_str()) == Some(&project.name))
-            });
+    // Helper to add entries for a workspace
+    let add_workspace_entries = |entries: &mut Vec<WorkspaceColumn>,
+                                  ws_name: &str,
+                                  workspace_key: char,
+                                  dir: Option<String>,
+                                  static_workspace: bool,
+                                  ws_arr: &[serde_json::Value],
+                                  windows_arr: &[&serde_json::Value]| {
+        let ws = ws_arr
+            .iter()
+            .find(|ws| ws.get("name").and_then(|n| n.as_str()) == Some(ws_name));
 
         let ws_id = ws.and_then(|w| w.get("id").and_then(|id| id.as_i64()));
 
         // Group windows by column index
-        let mut columns: std::collections::BTreeMap<i64, Vec<&serde_json::Value>> =
-            std::collections::BTreeMap::new();
+        let mut columns: BTreeMap<i64, Vec<&serde_json::Value>> = BTreeMap::new();
 
         if let Some(ws_id) = ws_id {
-            for window in windows_arr {
+            for window in windows_arr.iter() {
                 let window_ws_id = window.get("workspace_id").and_then(|id| id.as_i64());
                 if window_ws_id != Some(ws_id) {
                     continue;
@@ -225,7 +234,7 @@ fn get_workspace_columns(projects: &[Project]) -> Vec<WorkspaceColumn> {
                     .and_then(|p| p.get(0))
                     .and_then(|c| c.as_i64())
                     .unwrap_or(1);
-                columns.entry(col_idx).or_default().push(window);
+                columns.entry(col_idx).or_default().push(*window);
             }
         }
 
@@ -250,34 +259,90 @@ fn get_workspace_columns(projects: &[Project]) -> Vec<WorkspaceColumn> {
                 let app_id = first_window
                     .and_then(|w| w.get("app_id").and_then(|a| a.as_str()))
                     .unwrap_or("?");
-                let window_id = first_window
-                    .and_then(|w| w.get("id").and_then(|id| id.as_u64()));
+                let window_id = first_window.and_then(|w| w.get("id").and_then(|id| id.as_u64()));
                 let app_label = simplify_label(title, app_id);
 
                 entries.push(WorkspaceColumn {
-                    workspace_name: project.name.clone(),
+                    workspace_name: ws_name.to_string(),
                     workspace_key,
                     column_index: col_idx as u32,
                     column_key,
                     app_label,
-                    dir: project.dir.clone(),
-                    static_workspace: project.static_workspace,
+                    dir: dir.clone(),
+                    static_workspace,
                     window_id,
                 });
             }
         } else {
             // Empty workspace - add placeholder entry
             entries.push(WorkspaceColumn {
-                workspace_name: project.name.clone(),
+                workspace_name: ws_name.to_string(),
                 workspace_key,
                 column_index: 2,
                 column_key: KEYS[0],
                 app_label: "(empty)".to_string(),
-                dir: project.dir.clone(),
-                static_workspace: project.static_workspace,
+                dir: dir.clone(),
+                static_workspace,
                 window_id: None,
             });
         }
+    };
+
+    // Collect window references for the helper
+    let windows_refs: Vec<&serde_json::Value> = windows_arr.iter().collect();
+
+    // 1. Process configured projects first (preserves ordering from config)
+    for project in &config.project {
+        if key_idx >= KEYS.len() {
+            break;
+        }
+        seen_workspaces.insert(project.name.clone());
+        let workspace_key = KEYS[key_idx];
+
+        add_workspace_entries(
+            &mut entries,
+            &project.name,
+            workspace_key,
+            Some(project.dir.clone()),
+            project.static_workspace,
+            ws_arr,
+            &windows_refs,
+        );
+
+        key_idx += 1;
+    }
+
+    // 2. Add remaining workspaces (not configured, not ignored)
+    for ws in ws_arr {
+        if key_idx >= KEYS.len() {
+            break;
+        }
+
+        let name = match ws.get("name").and_then(|n| n.as_str()) {
+            Some(n) if !n.is_empty() => n,
+            _ => continue, // Skip unnamed workspaces
+        };
+
+        if seen_workspaces.contains(name) {
+            continue;
+        }
+        if config.ignore.iter().any(|i| i == name) {
+            continue;
+        }
+
+        let workspace_key = KEYS[key_idx];
+
+        add_workspace_entries(
+            &mut entries,
+            name,
+            workspace_key,
+            None, // No dir for unconfigured workspaces
+            true, // Treat as static (it exists in niri)
+            ws_arr,
+            &windows_refs,
+        );
+
+        key_idx += 1;
     }
 
     entries
@@ -302,9 +367,7 @@ fn spawn_terminals(dir: &str) {
     }
 }
 
-fn create_workspace(project: &Project) {
-    let name = &project.name;
-
+fn create_workspace(name: &str, dir: Option<&str>) {
     if get_workspace_by_name(name).is_some() {
         niri_cmd(&["action", "focus-workspace", name]);
     } else {
@@ -322,26 +385,25 @@ fn create_workspace(project: &Project) {
         niri_cmd(&["action", "set-workspace-name", name]);
     }
 
-    std::thread::sleep(std::time::Duration::from_millis(100));
-    spawn_terminals(&project.dir);
+    // Only spawn terminals if we have a configured directory
+    if let Some(d) = dir {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        spawn_terminals(d);
+    }
 }
 
 fn switch_to_entry(entry: &WorkspaceColumn) {
     if entry.static_workspace {
         focus_workspace(&entry.workspace_name);
+        // Only spawn terminals for empty workspaces with a configured dir
         if entry.app_label == "(empty)" {
-            spawn_terminals(&entry.dir);
+            if let Some(ref dir) = entry.dir {
+                spawn_terminals(dir);
+            }
         }
     } else {
         if entry.app_label == "(empty)" {
-            // Create a temporary Project to use create_workspace
-            let project = Project {
-                key: entry.workspace_key.to_string(),
-                name: entry.workspace_name.clone(),
-                dir: entry.dir.clone(),
-                static_workspace: false,
-            };
-            create_workspace(&project);
+            create_workspace(&entry.workspace_name, entry.dir.as_deref());
         }
         focus_workspace(&entry.workspace_name);
     }
@@ -617,14 +679,14 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
     window.set_anchor(Edge::Left, false);
     window.set_anchor(Edge::Right, false);
 
-    let projects = load_projects();
-    let entries = get_workspace_columns(&projects);
+    let config = load_config();
+    let entries = get_workspace_columns(&config);
 
     // Initialize Claude sessions from file
     let claude_sessions = load_claude_sessions_file();
 
     let state = Rc::new(RefCell::new(AppState {
-        projects,
+        config,
         entries,
         pending_key: None,
         claude_sessions,
@@ -789,7 +851,7 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                     } else {
                         // Refresh entries and claude sessions, then show
                         let mut state = state_for_poll.borrow_mut();
-                        state.entries = get_workspace_columns(&state.projects);
+                        state.entries = get_workspace_columns(&state.config);
                         state.claude_sessions = load_claude_sessions_file();
                         state.pending_key = None;
                         let entries = state.entries.clone();
@@ -801,10 +863,10 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                     }
                 }
                 Message::ReloadConfig => {
-                    // Reload projects from config file
+                    // Reload config from file
                     let mut state = state_for_poll.borrow_mut();
-                    state.projects = load_projects();
-                    state.entries = get_workspace_columns(&state.projects);
+                    state.config = load_config();
+                    state.entries = get_workspace_columns(&state.config);
                     // If visible, refresh the display
                     if window_for_poll.is_visible() {
                         let entries = state.entries.clone();

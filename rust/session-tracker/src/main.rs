@@ -65,7 +65,7 @@ fn now() -> f64 {
         .unwrap_or(0.0)
 }
 
-fn get_niri_window_id() -> Option<String> {
+fn get_niri_window_id(sessions: &Sessions) -> Option<String> {
     let output = Command::new("niri")
         .args(["msg", "-j", "focused-window"])
         .output()
@@ -76,13 +76,21 @@ fn get_niri_window_id() -> Option<String> {
     }
 
     let data: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
-    let title = data.get("title")?.as_str()?;
+    let window_id = data
+        .get("id")
+        .and_then(|id| id.as_u64())
+        .map(|id| id.to_string())?;
 
-    // Only register if title starts with Claude's marker
-    if title.starts_with('✳') || title.starts_with('✶') {
-        data.get("id")
-            .and_then(|id| id.as_u64())
-            .map(|id| id.to_string())
+    // If window is already in active sessions, it's a Claude window
+    if sessions.contains_key(&window_id) {
+        return Some(window_id);
+    }
+
+    // Otherwise check title starts with non-alphanumeric (star, dot, spinner, etc.)
+    let title = data.get("title").and_then(|t| t.as_str()).unwrap_or("");
+    let first_char = title.chars().next()?;
+    if !first_char.is_alphanumeric() {
+        Some(window_id)
     } else {
         None
     }
@@ -107,8 +115,8 @@ fn get_tmux_window_id() -> Option<String> {
     None
 }
 
-fn get_window_id() -> Option<String> {
-    get_niri_window_id().or_else(get_tmux_window_id)
+fn get_window_id(sessions: &Sessions) -> Option<String> {
+    get_niri_window_id(sessions).or_else(get_tmux_window_id)
 }
 
 fn find_session_by_id<'a>(sessions: &'a Sessions, session_id: &str) -> Option<&'a String> {
@@ -179,7 +187,7 @@ fn main() {
 
     match event {
         "SessionStart" => {
-            let niri_id = get_niri_window_id();
+            let niri_id = get_niri_window_id(&sessions);
             let tmux_id = get_tmux_window_id();
             let window_id = niri_id.clone().or_else(|| tmux_id.clone());
 
@@ -201,7 +209,7 @@ fn main() {
         }
 
         "SessionEnd" => {
-            let window_id = get_window_id()
+            let window_id = get_window_id(&sessions)
                 .or_else(|| find_session_by_id(&sessions, &session_id).cloned());
 
             if let Some(wid) = window_id {
@@ -254,7 +262,7 @@ fn main() {
                 }
             } else {
                 // Session not registered yet (e.g., resumed session)
-                let niri_id = get_niri_window_id();
+                let niri_id = get_niri_window_id(&sessions);
                 let tmux_id = get_tmux_window_id();
                 let window_id = niri_id.clone().or_else(|| tmux_id.clone());
 
