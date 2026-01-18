@@ -99,6 +99,48 @@ fi
 '''
 sources = ["nix/**/*.nix", "nix/flake.*"]
 
+[tasks."nix:eval-all"]
+description = "Evaluate all Nix host configurations"
+run = '''
+failed=0
+
+echo "==> Evaluating NixOS configurations..."
+for host in thinkpad thrawny-desktop; do
+  echo -n "  $host: "
+  if nix eval "./nix#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null 2>&1; then
+    echo "ok"
+  else
+    echo "FAILED"
+    failed=1
+  fi
+done
+
+echo ""
+echo "==> Evaluating Home Manager configurations..."
+for host in thrawnym1 thrawny-asahi-air; do
+  echo -n "  $host: "
+  if nix eval "./nix#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null 2>&1; then
+    echo "ok"
+  else
+    echo "FAILED"
+    failed=1
+  fi
+done
+
+echo ""
+if [ $failed -eq 0 ]; then
+  echo "All configurations valid!"
+else
+  echo "Some configurations failed!"
+  exit 1
+fi
+'''
+sources = ["nix/**/*.nix", "nix/flake.*"]
+
+[tasks."nix:check-all"]
+description = "Format, lint, and evaluate all Nix host configurations"
+depends = ["fmt:nix", "lint:nix", "nix:eval-all"]
+
 # --- Linters ---
 [tasks."lint:python"]
 description = "Lint Python sources with Ruff"

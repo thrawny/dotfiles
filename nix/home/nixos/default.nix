@@ -31,7 +31,6 @@
     ./hypridle.nix
     ./hyprlock.nix
     ./hyprpaper.nix
-    # ./keyd-app-mapper.nix  # DISABLED: Using xremap instead
     ./mako.nix
     ./walker.nix
     ./waybar.nix
