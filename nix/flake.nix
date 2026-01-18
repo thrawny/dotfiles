@@ -3,6 +3,8 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    # Pinned for xwayland 24.1.0 (newer versions crash Steam under xwayland-satellite)
+    nixpkgs-xwayland.url = "github:NixOS/nixpkgs/b60793b86201040d9dee019a05089a9150d08b5b";
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
     nixos-hardware.url = "github:NixOS/nixos-hardware";
@@ -32,6 +34,7 @@
       niri-flake,
       hyprvoice-src,
       xremap-flake,
+      nixpkgs-xwayland,
       ...
     }:
     let
@@ -118,6 +121,7 @@
               walker
               nurPkgs
               xremap-flake
+              nixpkgs-xwayland
               ;
           };
           modules = [

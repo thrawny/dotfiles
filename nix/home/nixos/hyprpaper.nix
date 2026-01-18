@@ -1,4 +1,5 @@
 {
+  lib,
   dotfiles,
   ...
 }:
@@ -16,4 +17,8 @@ in
       wallpaper = [ ",${builtins.head wallpapers}" ];
     };
   };
+
+  # Don't auto-start as systemd service - Hyprland's exec-once handles it
+  # This prevents crashes when running niri or other compositors
+  systemd.user.services.hyprpaper.Install.WantedBy = lib.mkForce [ ];
 }

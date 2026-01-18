@@ -3,12 +3,20 @@
   lib,
   pkgs,
   nurPkgs,
+  nixpkgs-xwayland,
   ...
 }:
 let
   inherit (config.dotfiles) username;
+  # Pinned xwayland 24.1.0 - newer versions crash Steam under xwayland-satellite
+  pkgs-xwayland = import nixpkgs-xwayland { system = "x86_64-linux"; };
 in
 {
+  nixpkgs.overlays = [
+    (final: prev: {
+      inherit (pkgs-xwayland) xwayland;
+    })
+  ];
   imports = [
     ../../modules/nixos/default.nix
     ./hardware-configuration.nix

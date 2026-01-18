@@ -399,9 +399,8 @@ in
     # Overview
     overview.workspace-shadow.enable = false;
 
-    # Spawn at startup
+    # Spawn at startup (xwayland-satellite spawned on-demand by niri)
     spawn-at-startup = [
-      { command = [ "xwayland-satellite" ]; }
       {
         command = [
           "bash"

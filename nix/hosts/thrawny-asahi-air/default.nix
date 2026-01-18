@@ -59,21 +59,4 @@
       ];
     };
   };
-
-  # XWayland satellite for X11 app support
-  systemd.user.services.xwayland-satellite = {
-    Unit = {
-      Description = "XWayland outside your Wayland";
-      BindsTo = [ "graphical-session.target" ];
-      PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
-    };
-    Service = {
-      Type = "notify";
-      NotifyAccess = "all";
-      ExecStart = "${pkgs.xwayland-satellite}/bin/xwayland-satellite";
-      StandardOutput = "journal";
-    };
-    Install.WantedBy = [ "graphical-session.target" ];
-  };
 }
