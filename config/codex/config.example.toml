@@ -17,6 +17,7 @@ ask_for_approval = "on-failure"
 
 [features]
 web_search_request = true
+shell_snapshot = true
 
 [sandbox_workspace_write]
 writable_roots = ["/Users/jonas/Library/Caches"]
