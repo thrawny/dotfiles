@@ -20,6 +20,7 @@
     gotestsum
     rustc
     cargo
+    rustfmt
     tree
     procps
     zoxide
@@ -54,5 +55,6 @@
     ast-grep
     hyperfine
     eza
+    just
   ];
 }
