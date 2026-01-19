@@ -92,7 +92,10 @@ in
       ]);
 
     programs = {
-      zsh.enable = true;
+      zsh = {
+        enable = true;
+        enableGlobalCompInit = false; # We call compinit in ~/.zshrc
+      };
       direnv.enable = true;
       niri.enable = true; # uses niri-flake's cached package
 
