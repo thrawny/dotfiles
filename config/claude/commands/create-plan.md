@@ -2,6 +2,31 @@
 
 You are tasked with creating detailed implementation plans through an interactive, iterative process. You should be skeptical, thorough, and work collaboratively with the user to produce high-quality technical specifications.
 
+## Plan Length & Abstraction Level
+
+**Target: 150-300 lines maximum.** If your plan exceeds this, you're too detailed.
+
+Plans should be resilient to high-level changes. If swapping a library invalidates half your plan, you wrote implementation code, not a plan.
+
+**Code blocks are appropriate for:**
+
+- Data schemas / type definitions
+- Configuration snippets
+- API contracts / interfaces
+- Complex algorithms that need precision
+
+**Code blocks are NOT appropriate for:**
+
+- Boilerplate (imports, standard CRUD, wiring)
+- Code that follows an existing pattern ("do it like X")
+- Implementation details obvious from the description
+
+**Instead of code, use references:**
+
+- "Add endpoint following pattern in `src/api/users.ts:45`"
+- "Extend `BaseHandler` class with new method for X"
+- "Schema mirrors existing `OrderItem` with additional `status` field"
+
 ## Initial Response
 
 When this command is invoked:
@@ -199,6 +224,15 @@ Once aligned on approach:
 
 ### Step 4: Detailed Plan Writing
 
+**Self-check before writing:**
+
+1. Could someone change a library choice without invalidating this plan?
+2. Is each phase describable in 30-50 lines?
+3. Am I showing code, or referencing patterns?
+4. Will this plan fit in 150-300 lines total?
+
+If a phase needs 100+ lines of code examples, you're planning at the wrong level.
+
 After structure approval:
 
 1. **Write the plan** to `docs/plans/{descriptive_name}.md`
@@ -244,11 +278,10 @@ After structure approval:
 #### 1. [Component/File Group]
 
 **File**: `path/to/file.ext`
-**Changes**: [Summary of changes]
+**Changes**: [What changes and why, reference existing patterns]
+**Pattern**: Follow `src/similar/example.ts:42`
 
-```[language]
-// Specific code to add/modify
-```
+<!-- Only include code blocks for schemas, interfaces, or complex algorithms -->
 ````
 
 ### Success Criteria:
@@ -332,47 +365,61 @@ Please review it and let me know:
 - Clarify success criteria (both automated and manual)
 - Add/remove scope items
 
-3. **Continue refining** until the user is satisfied
+3. **Keep plan size stable during iteration**:
+- Edits should refine, not balloon the document
+- If adding detail in one place, remove elsewhere
+- Replace vague sections with precise ones (same length)
+- The goal is to converge on clarity, not accumulate text
+- If the plan grows past 300 lines during iteration, actively trim
+
+4. **Continue refining** until the user is satisfied
 
 ## Important Guidelines
 
-1. **Use Structured Questions**:
+1. **Keep Plans Concise (150-300 lines)**:
+- Reference patterns instead of writing code
+- Each phase should be 30-50 lines max
+- If you're writing implementation code, stop and abstract up
+- Plans should survive high-level decision changes
+- During iteration: refine and replace, don't accumulate
+
+2. **Use Structured Questions**:
 - Use `AskUserQuestion` for design decisions, scope clarifications, and trade-offs
 - Provide 2-4 concrete options with descriptions explaining implications
 - Use `multiSelect: true` when choices aren't mutually exclusive
 - Ask up to 4 questions at once to batch related decisions
 - Reserve free-form text for open-ended context gathering only
 
-2. **Be Skeptical**:
+3. **Be Skeptical**:
 - Question vague requirements
 - Identify potential issues early
 - Ask "why" and "what about"
 - Don't assume - verify with code
 
-3. **Be Interactive**:
+4. **Be Interactive**:
 - Don't write the full plan in one shot
 - Get buy-in at each major step
 - Allow course corrections
 - Work collaboratively
 
-4. **Be Thorough**:
+5. **Be Thorough**:
 - Read all context files COMPLETELY before planning
 - Research actual code patterns using parallel sub-tasks
 - Include specific file paths and line numbers
 - Write measurable success criteria with clear automated vs manual distinction
 
-5. **Be Practical**:
+6. **Be Practical**:
 - Focus on incremental, testable changes
 - Consider migration and rollback
 - Think about edge cases
 - Include "what we're NOT doing"
 
-6. **Track Progress**:
+7. **Track Progress**:
 - Track planning tasks in your todo list
 - Update todos as you complete research
 - Mark planning tasks complete when done
 
-7. **No Open Questions in Final Plan**:
+8. **No Open Questions in Final Plan**:
 - If you encounter open questions during planning, STOP
 - Research or ask for clarification immediately
 - Do NOT write the plan with unresolved questions
