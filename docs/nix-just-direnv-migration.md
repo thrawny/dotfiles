@@ -139,9 +139,12 @@ check: fmt lint eval
 
 ### Phase 3: Migrate niri-switcher
 
-1. Create `.envrc`:
+1. Create `.envrc` (with graceful fallback for non-nix systems):
 ```bash
-use flake ../../nix#niri-switcher-dev
+# Only activate flake devshell if nix-direnv is available
+if has use_flake; then
+  use flake ../../nix#niri-switcher-dev
+fi
 ```
 
 2. Create `Justfile`:
@@ -237,6 +240,19 @@ Or keep them in devshells where appropriate.
 
 Keep the `direnv-nix-devshell` branch as intermediate state.
 The `claude/replace-mise-with-nix-5sFtP` branch has a working implementation to reference.
+
+## Cross-Platform Considerations
+
+`.envrc` files committed to the repo must not break on non-nix systems:
+
+```bash
+# Pattern for .envrc files
+if has use_flake; then
+  use flake path/to/flake#devshell
+fi
+```
+
+The `has use_flake` check returns false when nix-direnv isn't installed, so the file silently does nothing on macOS/ansible-managed systems.
 
 ## Open Questions
 
