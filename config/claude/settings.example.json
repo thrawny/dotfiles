@@ -131,7 +131,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "bunx -y ccstatusline@latest",
+    "command": "python3 ~/dotfiles/config/claude/status_line.py",
     "padding": 0
   },
   "enabledPlugins": {
