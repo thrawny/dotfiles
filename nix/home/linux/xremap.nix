@@ -10,6 +10,7 @@
   services.xremap = {
     enable = true;
     withNiri = true;
+    watch = true; # auto-detect newly connected devices (Bluetooth, USB hotplug)
     config = {
       # Key-to-key remapping (like xmodmap)
       modmap = [

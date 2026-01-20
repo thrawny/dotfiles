@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# Fix Zen browser profile after Nix updates change the binary path
+# This happens because Firefox/Zen generates Install IDs based on the binary path hash
+# When Nix updates, the store path changes, creating a new Install ID
+
+set -euo pipefail
+
+ZEN_DIR="${HOME}/.zen"
+PROFILES_INI="${ZEN_DIR}/profiles.ini"
+INSTALLS_INI="${ZEN_DIR}/installs.ini"
+
+if [[ ! -d "$ZEN_DIR" ]]; then
+    echo "Zen directory not found: $ZEN_DIR"
+    exit 1
+fi
+
+# Find the default profile path from profiles.ini
+# Look for the profile section with Default=1
+find_default_profile() {
+    local in_profile=0
+    local current_path=""
+    local found_default=""
+
+    while IFS= read -r line; do
+        # Check if entering a Profile section
+        if [[ "$line" =~ ^\[Profile[0-9]+\]$ ]]; then
+            in_profile=1
+            current_path=""
+            continue
+        fi
+
+        # Check if leaving Profile section
+        if [[ "$line" =~ ^\[.+\]$ ]]; then
+            in_profile=0
+            current_path=""
+            continue
+        fi
+
+        if [[ $in_profile -eq 1 ]]; then
+            if [[ "$line" =~ ^Path=(.+)$ ]]; then
+                current_path="${BASH_REMATCH[1]}"
+            fi
+            if [[ "$line" == "Default=1" && -n "$current_path" ]]; then
+                found_default="$current_path"
+                break
+            fi
+        fi
+    done < "$PROFILES_INI"
+
+    echo "$found_default"
+}
+
+DEFAULT_PROFILE=$(find_default_profile)
+
+if [[ -z "$DEFAULT_PROFILE" ]]; then
+    echo "Could not find default profile in $PROFILES_INI"
+    exit 1
+fi
+
+echo "Found default profile: $DEFAULT_PROFILE"
+
+# Update profiles.ini: change all Install sections to use the default profile
+update_profiles_ini() {
+    local temp_file
+    temp_file=$(mktemp)
+    local in_install=0
+    local changed=0
+
+    while IFS= read -r line; do
+        # Check if entering an Install section
+        if [[ "$line" =~ ^\[Install[A-F0-9]+\]$ ]]; then
+            in_install=1
+            echo "$line" >> "$temp_file"
+            continue
+        fi
+
+        # Check if leaving Install section
+        if [[ "$line" =~ ^\[.+\]$ ]]; then
+            in_install=0
+        fi
+
+        # Update Default= line in Install sections
+        if [[ $in_install -eq 1 && "$line" =~ ^Default= ]]; then
+            local current_default="${line#Default=}"
+            if [[ "$current_default" != "$DEFAULT_PROFILE" ]]; then
+                echo "Default=$DEFAULT_PROFILE" >> "$temp_file"
+                echo "  Updated Install section: $current_default -> $DEFAULT_PROFILE"
+                ((changed++)) || true
+                continue
+            fi
+        fi
+
+        echo "$line" >> "$temp_file"
+    done < "$PROFILES_INI"
+
+    mv "$temp_file" "$PROFILES_INI"
+    echo "profiles.ini: $changed section(s) updated"
+}
+
+# Update installs.ini: change all sections to use the default profile
+update_installs_ini() {
+    if [[ ! -f "$INSTALLS_INI" ]]; then
+        echo "installs.ini not found, skipping"
+        return
+    fi
+
+    local temp_file
+    temp_file=$(mktemp)
+    local changed=0
+
+    while IFS= read -r line; do
+        # Update Default= lines
+        if [[ "$line" =~ ^Default= ]]; then
+            local current_default="${line#Default=}"
+            if [[ "$current_default" != "$DEFAULT_PROFILE" ]]; then
+                echo "Default=$DEFAULT_PROFILE" >> "$temp_file"
+                echo "  Updated: $current_default -> $DEFAULT_PROFILE"
+                ((changed++)) || true
+                continue
+            fi
+        fi
+
+        echo "$line" >> "$temp_file"
+    done < "$INSTALLS_INI"
+
+    mv "$temp_file" "$INSTALLS_INI"
+    echo "installs.ini: $changed entry(s) updated"
+}
+
+echo ""
+echo "Updating profile configurations..."
+update_profiles_ini
+update_installs_ini
+echo ""
+echo "Done! Restart Zen browser for changes to take effect."
