@@ -191,6 +191,26 @@
         extraSpecialArgs = import ./hosts/thrawnym1/default.nix;
       };
 
+      # Container test configuration (x86_64)
+      homeConfigurations.container-x86_64 = home-manager.lib.homeManagerConfiguration {
+        pkgs = nixpkgs.legacyPackages.x86_64-linux;
+        modules = [ ./home/container.nix ];
+        extraSpecialArgs = {
+          username = "root";
+          dotfiles = "/root/dotfiles";
+        };
+      };
+
+      # Container test configuration (aarch64 - for Docker on Mac)
+      homeConfigurations.container = home-manager.lib.homeManagerConfiguration {
+        pkgs = nixpkgs.legacyPackages.aarch64-linux;
+        modules = [ ./home/container.nix ];
+        extraSpecialArgs = {
+          username = "root";
+          dotfiles = "/root/dotfiles";
+        };
+      };
+
       # Asahi Air with Niri + DankMaterialShell
       # Uses niri installed via DNF, config managed by nix
       homeConfigurations.thrawny-asahi-air = home-manager.lib.homeManagerConfiguration {

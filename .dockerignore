@@ -1,7 +1,9 @@
 .git
 .gitmodules
 .venv
+**/.venv
 venv
+**/venv
 __pycache__
 *.pyc
 *.pyo
@@ -35,3 +37,10 @@ config/k9s/aliases.yaml
 config/codex/*
 !config/codex/config.example.toml
 !config/codex/prompts
+
+# Rust build artifacts
+rust/target
+
+# Nix build results
+result
+result-*
