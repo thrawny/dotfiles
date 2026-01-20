@@ -185,48 +185,50 @@
           aarch64-linux.niri-switcher-dev = mkNiriSwitcherDev nixpkgs.legacyPackages.aarch64-linux;
         };
 
-      homeConfigurations.thrawnym1 = home-manager.lib.homeManagerConfiguration {
-        pkgs = nixpkgs.legacyPackages.aarch64-darwin;
-        modules = [ ./home/darwin/default.nix ];
-        extraSpecialArgs = import ./hosts/thrawnym1/default.nix;
-      };
-
-      # Container test configuration (x86_64)
-      homeConfigurations.container-x86_64 = home-manager.lib.homeManagerConfiguration {
-        pkgs = nixpkgs.legacyPackages.x86_64-linux;
-        modules = [ ./home/container.nix ];
-        extraSpecialArgs = {
-          username = "root";
-          dotfiles = "/root/dotfiles";
+      homeConfigurations = {
+        thrawnym1 = home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.aarch64-darwin;
+          modules = [ ./home/darwin/default.nix ];
+          extraSpecialArgs = import ./hosts/thrawnym1/default.nix;
         };
-      };
 
-      # Container test configuration (aarch64 - for Docker on Mac)
-      homeConfigurations.container = home-manager.lib.homeManagerConfiguration {
-        pkgs = nixpkgs.legacyPackages.aarch64-linux;
-        modules = [ ./home/container.nix ];
-        extraSpecialArgs = {
-          username = "root";
-          dotfiles = "/root/dotfiles";
+        # Container test configuration (x86_64)
+        container-x86_64 = home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          modules = [ ./home/container.nix ];
+          extraSpecialArgs = {
+            username = "root";
+            dotfiles = "/root/dotfiles";
+          };
         };
-      };
 
-      # Asahi Air with Niri + DankMaterialShell
-      # Uses niri installed via DNF, config managed by nix
-      homeConfigurations.thrawny-asahi-air = home-manager.lib.homeManagerConfiguration {
-        pkgs = nixpkgs.legacyPackages.aarch64-linux;
-        modules = [
-          niri-flake.homeModules.config # config only, no package (using Fedora's niri)
-          xremap-flake.homeManagerModules.default
-          ./hosts/thrawny-asahi-air/default.nix
-        ];
-        extraSpecialArgs = {
-          inherit self xremap-flake;
-          username = "thrawny";
-          dotfiles = "/home/thrawny/dotfiles";
-          gitIdentity = {
-            name = "Jonas Lergell";
-            email = "jonaslergell@gmail.com";
+        # Container test configuration (aarch64 - for Docker on Mac)
+        container = home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.aarch64-linux;
+          modules = [ ./home/container.nix ];
+          extraSpecialArgs = {
+            username = "root";
+            dotfiles = "/root/dotfiles";
+          };
+        };
+
+        # Asahi Air with Niri + DankMaterialShell
+        # Uses niri installed via DNF, config managed by nix
+        thrawny-asahi-air = home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.aarch64-linux;
+          modules = [
+            niri-flake.homeModules.config # config only, no package (using Fedora's niri)
+            xremap-flake.homeManagerModules.default
+            ./hosts/thrawny-asahi-air/default.nix
+          ];
+          extraSpecialArgs = {
+            inherit self xremap-flake;
+            username = "thrawny";
+            dotfiles = "/home/thrawny/dotfiles";
+            gitIdentity = {
+              name = "Jonas Lergell";
+              email = "jonaslergell@gmail.com";
+            };
           };
         };
       };

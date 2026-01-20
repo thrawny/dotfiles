@@ -4,7 +4,7 @@
   imports = [ ./shared/default.nix ];
 
   home = {
-    username = username;
+    inherit username;
     homeDirectory = if username == "root" then "/root" else "/home/${username}";
 
     # Extra packages needed in containers (normally provided by NixOS system)
