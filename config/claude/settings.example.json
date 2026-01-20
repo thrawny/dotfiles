@@ -141,5 +141,5 @@
     "typescript-lsp@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true
   },
-  "autoCompact": false
+  "plansDirectory": ".claude/plans"
 }
