@@ -1,15 +1,253 @@
 - hosts: localhost
   vars:
-    home_dir: "{{ lookup('env', 'HOME')}}"
+    home_dir: "{{ lookup('env', 'HOME') }}"
     dotfiles_dir: "{{ home_dir }}/dotfiles"
+
   tasks:
-  - include_tasks: all_config.yml
-  - include_tasks: all_software.yml
-  - include_tasks: linux_config.yml
-    when: ansible_system == 'Linux'
-  - include_tasks: linux_software.yml
-    when: ansible_system == 'Linux'
-  - include_tasks: osx_config.yml
-    when: ansible_distribution == 'MacOSX'
-  - include_tasks: osx_software.yml
-    when: ansible_distribution == 'MacOSX'
+    # =============================================================================
+    # All Platforms - Symlinks
+    # =============================================================================
+
+    - name: symlinks for all platforms
+      file:
+        state: link
+        dest: "{{ home_dir }}/.{{ item.name }}"
+        src: "{{ dotfiles_dir }}/{{ item.dir }}{{ item.name }}"
+      with_items:
+        - { name: "vim", dir: "config/" }
+        - { name: "zshrc", dir: "config/zsh/" }
+        - { name: "ideavimrc", dir: "config/jetbrains/" }
+        - { name: "gitconfig", dir: "config/git/" }
+        - { name: "gitignoreglobal", dir: "config/git/" }
+        - { name: "tmux.conf", dir: "config/tmux/" }
+
+    - name: ~/.local/bin directory is present
+      file:
+        path: "{{ home_dir }}/.local/bin"
+        state: directory
+
+    - name: ~/.config directories are present
+      file:
+        path: "{{ home_dir }}/.config/{{ item }}"
+        state: directory
+      with_items:
+        - ccstatusline
+
+    - name: config folders are symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.config/{{ item }}"
+        src: "{{ dotfiles_dir }}/config/{{ item }}"
+      with_items:
+        - direnv
+        - mise
+        - ghostty
+        - nvim
+        - k9s
+
+    - name: starship config is symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.config/starship.toml"
+        src: "{{ dotfiles_dir }}/config/starship/starship.toml"
+
+    - name: ccstatusline settings is symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.config/ccstatusline/settings.json"
+        src: "{{ dotfiles_dir }}/config/claude/ccstatusline-settings.json"
+
+    - name: default npm packages is symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.default-npm-packages"
+        src: "{{ dotfiles_dir }}/config/npm/default-packages"
+
+    - name: codex folder is symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.codex"
+        src: "{{ dotfiles_dir }}/config/codex"
+
+    # =============================================================================
+    # All Platforms - Claude Config
+    # =============================================================================
+
+    - name: ~/.claude directory is present
+      file:
+        path: "{{ home_dir }}/.claude"
+        state: directory
+
+    - name: claude directories are symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.claude/{{ item }}"
+        src: "{{ dotfiles_dir }}/config/claude/{{ item }}"
+      with_items:
+        - commands
+        - agents
+        - skills
+        - rules
+
+    - name: claude settings.json is symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.claude/settings.json"
+        src: "{{ dotfiles_dir }}/config/claude/settings.json"
+
+    - name: claude CLAUDE.md is symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.claude/CLAUDE.md"
+        src: "{{ dotfiles_dir }}/config/claude/CLAUDE-GLOBAL.md"
+
+    # =============================================================================
+    # All Platforms - Seed Example Configs
+    # =============================================================================
+
+    - name: seed Codex config from example if missing
+      block:
+        - stat:
+            path: "{{ dotfiles_dir }}/config/codex/config.toml"
+          register: codex_cfg
+        - copy:
+            src: "{{ dotfiles_dir }}/config/codex/config.example.toml"
+            dest: "{{ dotfiles_dir }}/config/codex/config.toml"
+            remote_src: true
+            mode: "0644"
+          when: not codex_cfg.stat.exists or codex_cfg.stat.size == 0
+
+    - name: seed Claude settings from example if missing
+      block:
+        - stat:
+            path: "{{ dotfiles_dir }}/config/claude/settings.json"
+          register: claude_cfg
+        - copy:
+            src: "{{ dotfiles_dir }}/config/claude/settings.example.json"
+            dest: "{{ dotfiles_dir }}/config/claude/settings.json"
+            remote_src: true
+            mode: "0644"
+          when: not claude_cfg.stat.exists or claude_cfg.stat.size == 0
+
+    - name: seed Cursor settings from example if missing
+      block:
+        - stat:
+            path: "{{ dotfiles_dir }}/config/cursor/settings.json"
+          register: cursor_cfg
+        - copy:
+            src: "{{ dotfiles_dir }}/config/cursor/settings.example.json"
+            dest: "{{ dotfiles_dir }}/config/cursor/settings.json"
+            remote_src: true
+            mode: "0644"
+          when: not cursor_cfg.stat.exists or cursor_cfg.stat.size == 0
+
+    # =============================================================================
+    # All Platforms - Software
+    # =============================================================================
+
+    - name: Zinit parent directory exists
+      file:
+        path: "{{ home_dir }}/.local/share/zinit"
+        state: directory
+
+    - name: Zinit is installed
+      git:
+        repo: "https://github.com/zdharma-continuum/zinit.git"
+        dest: "{{ home_dir }}/.local/share/zinit/zinit.git"
+        force: yes
+
+    - name: tmux plugins directory exists
+      file:
+        path: "{{ home_dir }}/.tmux/plugins"
+        state: directory
+
+    - name: TPM is installed
+      git:
+        repo: "https://github.com/tmux-plugins/tpm"
+        dest: "{{ home_dir }}/.tmux/plugins/tpm"
+
+    - name: tmux plugins are installed
+      command: "{{ home_dir }}/.tmux/plugins/tpm/bin/install_plugins"
+      args:
+        creates: "{{ home_dir }}/.tmux/plugins/tmux-yank"
+
+    # =============================================================================
+    # Linux Only
+    # =============================================================================
+
+    - name: lazygit config is symlinked (Linux)
+      file:
+        state: link
+        dest: "{{ home_dir }}/.config/lazygit"
+        src: "{{ dotfiles_dir }}/config/lazygit"
+      when: ansible_system == 'Linux'
+
+    - name: check if starship is installed
+      command: which starship
+      register: starship_check
+      ignore_errors: yes
+      changed_when: false
+      when: ansible_system == 'Linux'
+
+    - name: install Starship
+      shell: curl -sS https://starship.rs/install.sh | sh -s -- -y
+      environment:
+        BIN_DIR: "{{ home_dir }}/.local/bin"
+      when: ansible_system == 'Linux' and starship_check.rc != 0
+
+    - name: check if direnv is installed
+      command: which direnv
+      register: direnv_check
+      ignore_errors: yes
+      changed_when: false
+      when: ansible_system == 'Linux'
+
+    - name: install direnv
+      shell: curl -sfL https://direnv.net/install.sh | bash
+      environment:
+        bin_path: "{{ home_dir }}/.local/bin"
+      when: ansible_system == 'Linux' and direnv_check.rc != 0
+
+    # =============================================================================
+    # macOS Only
+    # =============================================================================
+
+    - name: check if Cursor is installed
+      stat:
+        path: "{{ home_dir }}/Library/Application Support/Cursor"
+      register: cursor
+      when: ansible_distribution == 'MacOSX'
+
+    - name: Cursor settings are symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/Library/Application Support/Cursor/User/{{ item }}"
+        src: "{{ dotfiles_dir }}/config/cursor/{{ item }}"
+      with_items:
+        - settings.json
+        - keybindings.json
+      when: ansible_distribution == 'MacOSX' and cursor.stat.isdir is defined and cursor.stat.isdir
+
+    - name: macOS setup script has been run
+      script: "{{ dotfiles_dir }}/osx/setup.sh"
+      when: ansible_distribution == 'MacOSX'
+
+    - name: ~/Screenshots folder is present
+      file:
+        path: "{{ home_dir }}/Screenshots"
+        state: directory
+      when: ansible_distribution == 'MacOSX'
+
+    - name: aerospace.toml is symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.aerospace.toml"
+        src: "{{ dotfiles_dir }}/config/aerospace/aerospace.toml"
+      when: ansible_distribution == 'MacOSX'
+
+    - name: lazygit config is symlinked (macOS)
+      file:
+        state: link
+        dest: "{{ home_dir }}/Library/Application Support/lazygit"
+        src: "{{ dotfiles_dir }}/config/lazygit"
+      when: ansible_distribution == 'MacOSX'

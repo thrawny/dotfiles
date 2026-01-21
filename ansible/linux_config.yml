@@ -1,7 +1,0 @@
-# vim:ft=yaml.ansible:
-
-- name: "lazygit config folder is symlinked"
-  file:
-    state: link
-    dest: "{{ home_dir }}/.config/lazygit"
-    src: "{{ dotfiles_dir }}/config/lazygit"
