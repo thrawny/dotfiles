@@ -162,7 +162,7 @@
         };
       };
 
-      # Dev shell for the entire repo
+      # Dev shell - only includes tools not in home.packages
       devShells =
         let
           mkDevShell =
@@ -171,20 +171,15 @@
               packages =
                 with pkgs;
                 [
-                  # Task runner
-                  just
-
-                  # Rust toolchain
-                  cargo
-                  rustc
+                  # Native build dependencies
                   pkg-config
 
-                  # Nix tools
+                  # Nix tools (not in packages.nix)
                   nixfmt-rfc-style
                   statix
                   nvd
 
-                  # Lua tools
+                  # Lua tools (not in packages.nix)
                   stylua
                   selene
                 ]
