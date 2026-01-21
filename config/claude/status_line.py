@@ -222,14 +222,24 @@ def main() -> None:
     # Build segments
     segments = []
 
-    # Determine what segments we have to set next_bg correctly
-    has_tokens = context_info is not None
+    # Determine what segments we have and calculate context colors
     has_branch = branch is not None
     has_changes = changes is not None
 
+    # Calculate context colors based on usage percentage
+    ctx_colors: tuple[str, str] | None = None
+    if context_info:
+        _, percentage = context_info
+        if percentage >= 90:
+            ctx_colors = COLORS["percentage_crit"]
+        elif percentage >= 75:
+            ctx_colors = COLORS["percentage_warn"]
+        else:
+            ctx_colors = COLORS["percentage"]
+
     # Model segment
-    if has_tokens:
-        next_bg = COLORS["tokens"][1]
+    if ctx_colors:
+        next_bg = ctx_colors[1]
     elif has_branch:
         next_bg = COLORS["branch"][1]
     elif has_changes:
@@ -238,31 +248,22 @@ def main() -> None:
         next_bg = None
     segments.append(segment(model, *COLORS["model"], next_bg))
 
-    # Token count and percentage segments
-    if context_info:
+    # Context segment (tokens + percentage)
+    if context_info and ctx_colors:
         tokens, percentage = context_info
         token_str = format_tokens(tokens)
 
-        # Percentage color based on usage
-        if percentage >= 90:
-            pct_colors = COLORS["percentage_crit"]
-        elif percentage >= 75:
-            pct_colors = COLORS["percentage_warn"]
-        else:
-            pct_colors = COLORS["percentage"]
-
-        # Next bg for tokens
-        next_bg = pct_colors[1]
-        segments.append(segment(token_str, *COLORS["tokens"], next_bg))
-
-        # Next bg for percentage
         if has_branch:
             next_bg = COLORS["branch"][1]
         elif has_changes:
             next_bg = COLORS["changes"][1]
         else:
             next_bg = None
-        segments.append(segment(f"{percentage:.1f}%", *pct_colors, next_bg))
+        segments.append(
+            segment(
+                f"{token_str} {percentage:.1f}%", ctx_colors[0], ctx_colors[1], next_bg
+            )
+        )
 
     # Git branch segment
     if branch:
