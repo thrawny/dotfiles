@@ -83,18 +83,12 @@ in
       shell = pkgs.zsh;
     };
 
-    environment.systemPackages =
-      packages.systemPackages
-      ++ (with pkgs; [
-        nixfmt-rfc-style # Nix formatter (provides nixfmt command)
-        nil # Nix Language Server
-        nixfmt-tree # Treefmt pre-configured for Nix files
-      ]);
+    environment.systemPackages = packages.systemPackages;
 
     programs = {
       zsh = {
         enable = true;
-        enableGlobalCompInit = false; # We call compinit in ~/.zshrc
+        enableGlobalCompInit = false; # Home Manager handles compinit
       };
       direnv.enable = true;
       niri.enable = true; # uses niri-flake's cached package
