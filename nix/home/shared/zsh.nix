@@ -30,6 +30,12 @@
           src = pkgs.zsh-nix-shell;
           file = "share/zsh-nix-shell/nix-shell.plugin.zsh";
         }
+        {
+          # OMZ git aliases only (gco, gst, gcan!, etc.)
+          name = "omz-git";
+          src = pkgs.oh-my-zsh;
+          file = "share/oh-my-zsh/plugins/git/git.plugin.zsh";
+        }
       ];
 
       history = {
