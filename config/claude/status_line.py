@@ -11,6 +11,9 @@ SEP = "\ue0b4"  # Rounded right arrow separator
 START_CAP = "\ue0b6"  # Rounded left cap
 END_CAP = "\ue0b4"  # Rounded right cap
 
+# Context compaction happens around 150k, so use that as the "full" threshold
+COMPACTION_THRESHOLD = 150_000
+
 
 def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Convert hex color to RGB tuple."""
@@ -161,12 +164,14 @@ def get_context_from_input(data: dict) -> tuple[int, float] | None:
     """Extract context info from Claude Code input (new API)."""
     if "context_window" in data:
         cw = data["context_window"]
-        percentage = cw.get("used_percentage")
+        api_percentage = cw.get("used_percentage")
         window_size = cw.get("context_window_size", 200000)
-        if percentage is not None:
-            # Calculate actual current context from percentage
-            tokens = int(window_size * percentage / 100)
-            return (tokens, float(percentage))
+        if api_percentage is not None:
+            # Calculate tokens from API percentage (based on full window)
+            tokens = int(window_size * api_percentage / 100)
+            # Recalculate percentage based on compaction threshold
+            percentage = min(100, (tokens / COMPACTION_THRESHOLD) * 100)
+            return (tokens, percentage)
     return None
 
 
@@ -194,7 +199,7 @@ def get_context_from_transcript(transcript_path: str) -> tuple[int, float] | Non
                         + usage.get("cache_creation_input_tokens", 0)
                         + usage.get("cache_read_input_tokens", 0)
                     )
-                    percentage = min(100, (tokens / 200_000) * 100)
+                    percentage = min(100, (tokens / COMPACTION_THRESHOLD) * 100)
                     return (tokens, percentage)
             except (json.JSONDecodeError, KeyError):
                 continue
@@ -226,14 +231,17 @@ def main() -> None:
     has_branch = branch is not None
     has_changes = changes is not None
 
-    # Calculate context colors based on usage percentage
+    # Calculate context colors and warning state based on usage percentage
     ctx_colors: tuple[str, str] | None = None
+    ctx_warn_symbol = ""
     if context_info:
         _, percentage = context_info
         if percentage >= 90:
             ctx_colors = COLORS["percentage_crit"]
-        elif percentage >= 75:
+            ctx_warn_symbol = "\uf0e7 "  # nf-fa-bolt
+        elif percentage >= 67:  # ~100k tokens
             ctx_colors = COLORS["percentage_warn"]
+            ctx_warn_symbol = "\uf071 "  # nf-fa-warning
         else:
             ctx_colors = COLORS["percentage"]
 
@@ -261,7 +269,10 @@ def main() -> None:
             next_bg = None
         segments.append(
             segment(
-                f"{token_str} {percentage:.1f}%", ctx_colors[0], ctx_colors[1], next_bg
+                f"{ctx_warn_symbol}{token_str} {percentage:.1f}%",
+                ctx_colors[0],
+                ctx_colors[1],
+                next_bg,
             )
         )
 
