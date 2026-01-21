@@ -22,6 +22,7 @@
     cargo
     rustfmt
     clippy
+    rust-analyzer
     tree
     procps
     zoxide

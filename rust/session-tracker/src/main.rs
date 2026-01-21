@@ -115,10 +115,6 @@ fn get_tmux_window_id() -> Option<String> {
     None
 }
 
-fn get_window_id(sessions: &Sessions) -> Option<String> {
-    get_niri_window_id(sessions).or_else(get_tmux_window_id)
-}
-
 fn find_session_by_id<'a>(sessions: &'a Sessions, session_id: &str) -> Option<&'a String> {
     sessions
         .iter()
@@ -207,10 +203,9 @@ fn main() {
         }
 
         "SessionEnd" => {
-            let window_id = get_window_id(&sessions)
-                .or_else(|| find_session_by_id(&sessions, &session_id).cloned());
-
-            if let Some(wid) = window_id {
+            // Only look up by session_id - don't query focused window
+            // (user may have switched to another window)
+            if let Some(wid) = find_session_by_id(&sessions, &session_id).cloned() {
                 sessions.remove(&wid);
                 save_sessions(&sessions);
             }
