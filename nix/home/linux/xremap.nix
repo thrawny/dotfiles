@@ -23,10 +23,11 @@
       ];
 
       keymap = [
-        # ISO keyboard tilde fix: Shift+102nd produces ~ instead of |
+        # ISO keyboard: make < key behave like Mac (` and ~)
         {
-          name = "ISO keyboard tilde fix";
+          name = "ISO keyboard grave/tilde (Mac-style)";
           remap = {
+            "KEY_102ND" = "Grave";
             "Shift-KEY_102ND" = "Shift-Grave";
           };
         }

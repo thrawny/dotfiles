@@ -260,6 +260,7 @@ let
         "niri msg output HDMI-A-1 off && sleep 1 && niri msg output HDMI-A-1 on"
       ];
       hotkey-overlay.title = "Wake LG Monitor";
+      allow-when-locked = true;
     };
 
     # Keyboard Layout
@@ -322,6 +323,36 @@ let
         "brightnessctl"
         "set"
         "5%-"
+      ];
+      allow-when-locked = true;
+    };
+
+    # Media Controls (playerctl)
+    "XF86AudioPlay" = {
+      action.spawn = [
+        "playerctl"
+        "play-pause"
+      ];
+      allow-when-locked = true;
+    };
+    "XF86AudioPause" = {
+      action.spawn = [
+        "playerctl"
+        "play-pause"
+      ];
+      allow-when-locked = true;
+    };
+    "XF86AudioNext" = {
+      action.spawn = [
+        "playerctl"
+        "next"
+      ];
+      allow-when-locked = true;
+    };
+    "XF86AudioPrev" = {
+      action.spawn = [
+        "playerctl"
+        "previous"
       ];
       allow-when-locked = true;
     };
