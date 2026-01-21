@@ -27,14 +27,14 @@ just rust::build  # Build all rust packages (or specific: just rust::build niri-
 ## Agent Essentials
 
 - Source of truth: edit files in-repo only; Ansible handles symlinks on install.
-- Primary areas to edit: `shell/`, `git/`, `config/`, `ansible/`, `osx/`.
-- When adding a new config, create it under `config/` (or relevant dir) and add a symlink task in `ansible/all_config.yml` if it should appear in `$HOME`.
+- Primary areas to edit: `nix/`, `config/`, `bin/`, `rust/`.
+- When adding a new config for non-Nix systems, create it under `config/` and add a symlink task in `ansible/main.yml`.
 - You generally do not need to run package managers (Homebrew/APT) or OS setup scripts to modify repo content.
 
 ## Paths: Source → Target
 
 - Shell: `config/zsh/zshrc` → `~/.zshrc`, `config/tmux/tmux.conf` → `~/.tmux.conf`
-- Editors: `config/vim` → `~/.vim`, `config/nvim` → `~/.config/nvim`
+- Editors: `config/nvim` → `~/.config/nvim`
 - Git: `config/git/gitconfig` → `~/.gitconfig`, `config/git/gitignoreglobal` → `~/.gitignoreglobal`
 - Apps: `config/ghostty` → `~/.config/ghostty`, `config/direnv` → `~/.config/direnv`
 - Extras: `config/starship/starship.toml` → `~/.config/starship.toml`, `config/k9s` → `~/.config/k9s`, `config/npm/default-packages` → `~/.default-npm-packages`
@@ -53,14 +53,12 @@ When adding Claude commands, agents, skills, or settings:
 - Put in `config/claude/` if it should be available globally across all projects
 - Put in `.claude/` if it's specific to working on this dotfiles repo
 
-Refer to `ansible/all_config.yml` for the authoritative symlink list.
+Refer to `ansible/main.yml` for the authoritative symlink list.
 
 ## Ansible Structure
 
-- `ansible/main.yml` orchestrates all tasks.
-- Cross-platform: `ansible/all_config.yml`, `ansible/all_software.yml`.
-- Linux-wide: `ansible/linux_software.yml` (when `ansible_system == 'Linux'`).
-- macOS-only: `ansible/osx_software.yml`, `ansible/osx_config.yml` (when `ansible_distribution == 'MacOSX'`).
+- `ansible/main.yml` - Single consolidated playbook with all tasks.
+- OS-specific tasks use `when:` conditions based on Ansible facts (`ansible_system`, `ansible_distribution`).
 
 ## Nix Configuration
 
@@ -69,9 +67,9 @@ Flake-based NixOS and Home Manager config in `nix/`. See `nix/CLAUDE.md` for det
 ## Common Agent Tasks
 
 - Update an existing dotfile: edit its source file in this repo (see Paths section). No immediate action is needed unless you want to re-run symlinks on a machine.
-- Add a new config file: place it under `config/` (or relevant dir) and add a corresponding `file` task in `ansible/all_config.yml` to create the symlink.
-- Modify shell aliases/functions: edit `config/zsh/zshrc`.
-- Update Neovim/Vim configs: edit `config/nvim` or `config/vim`.
+- Add a new config file: place it under `config/` (or relevant dir) and add a corresponding `file` task in `ansible/main.yml` to create the symlink.
+- Modify shell aliases/functions: edit `nix/home/shared/zsh.nix` (Nix) or `config/zsh/zshrc` (legacy).
+- Update Neovim config: edit files in `config/nvim`.
 
 ### Settings Files with Example/Live Pairs
 
@@ -126,5 +124,5 @@ When asked to modify settings, update the example file first, then ask if the us
 
 ## Notes
 
-- Repo directories of interest: `config/`, `ansible/`, `nix/`, `osx/`, `claude_tools/`, `bin/`.
+- Repo directories of interest: `nix/`, `config/`, `bin/`, `rust/`, `claude_tools/`.
 - Shell convenience commands, package managers, and desktop apps are not required for typical agent edits, so are intentionally omitted here.
