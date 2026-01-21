@@ -204,6 +204,13 @@
           x86_64-darwin.default = mkDevShell nixpkgs.legacyPackages.x86_64-darwin;
         };
 
+      formatter = {
+        x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.nixfmt-tree;
+        aarch64-linux = nixpkgs.legacyPackages.aarch64-linux.nixfmt-tree;
+        aarch64-darwin = nixpkgs.legacyPackages.aarch64-darwin.nixfmt-tree;
+        x86_64-darwin = nixpkgs.legacyPackages.x86_64-darwin.nixfmt-tree;
+      };
+
       homeConfigurations = {
         thrawnym1 = home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.aarch64-darwin;

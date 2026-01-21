@@ -121,7 +121,7 @@ let
     "Mod+Ctrl+K".action.focus-monitor-up = [ ];
     "Mod+Ctrl+L".action.focus-monitor-right = [ ];
 
-    # Move to Monitor
+    # Move Column to Monitor
     "Mod+Shift+Ctrl+Left".action.move-column-to-monitor-left = [ ];
     "Mod+Shift+Ctrl+Down".action.move-column-to-monitor-down = [ ];
     "Mod+Shift+Ctrl+Up".action.move-column-to-monitor-up = [ ];
@@ -130,6 +130,12 @@ let
     "Mod+Shift+Ctrl+J".action.move-column-to-monitor-down = [ ];
     "Mod+Shift+Ctrl+K".action.move-column-to-monitor-up = [ ];
     "Mod+Shift+Ctrl+L".action.move-column-to-monitor-right = [ ];
+
+    # Move Workspace to Monitor
+    "Mod+Super+H".action.move-workspace-to-monitor-left = [ ];
+    "Mod+Super+J".action.move-workspace-to-monitor-down = [ ];
+    "Mod+Super+K".action.move-workspace-to-monitor-up = [ ];
+    "Mod+Super+L".action.move-workspace-to-monitor-right = [ ];
 
     # Workspace Navigation
     "Mod+Page_Down".action.focus-workspace-down = [ ];

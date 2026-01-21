@@ -112,7 +112,7 @@ fmt:
 
 # Lint Nix files
 lint:
-    statix check ..
+    statix check .
 
 # Format, lint, and evaluate current host
 check: fmt lint eval
