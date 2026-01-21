@@ -27,7 +27,10 @@ import sys
 
 def notify_macos(title: str, message: str) -> bool:
     if not shutil.which("terminal-notifier"):
-        print("terminal-notifier not found. Install with: brew install terminal-notifier", file=sys.stderr)
+        print(
+            "terminal-notifier not found. Install with: brew install terminal-notifier",
+            file=sys.stderr,
+        )
         return False
     try:
         subprocess.run(
@@ -60,7 +63,9 @@ def notify_linux(title: str, message: str) -> bool:
 def play_sound() -> None:
     system = platform.system()
     if system == "Darwin":
-        sound_file = os.environ.get("NOTIFY_SOUND_FILE", "/System/Library/Sounds/Glass.aiff")
+        sound_file = os.environ.get(
+            "NOTIFY_SOUND_FILE", "/System/Library/Sounds/Glass.aiff"
+        )
         volume = os.environ.get("NOTIFY_VOLUME", "1.5")
         try:
             subprocess.run(

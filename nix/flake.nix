@@ -162,27 +162,50 @@
         };
       };
 
-      # Dev shells for cargo-based development
+      # Dev shell for the entire repo
       devShells =
         let
-          mkNiriSwitcherDev =
+          mkDevShell =
             pkgs:
             pkgs.mkShell {
-              nativeBuildInputs = with pkgs; [
-                pkg-config
-                cargo
-                rustc
-              ];
-              buildInputs = with pkgs; [
-                gtk4
-                gtk4-layer-shell
-                glib
-              ];
+              packages =
+                with pkgs;
+                [
+                  # Task runner
+                  just
+
+                  # Rust toolchain
+                  cargo
+                  rustc
+                  pkg-config
+
+                  # Nix tools
+                  nixfmt-rfc-style
+                  statix
+                  nvd
+
+                  # Lua tools
+                  stylua
+                  selene
+                ]
+                ++ lib.optionals stdenv.isLinux [
+                  # GTK for niri-switcher (Linux only)
+                  gtk4
+                  gtk4-layer-shell
+                  glib
+                  cairo
+                  pango
+                  gdk-pixbuf
+                  graphene
+                  harfbuzz
+                ];
             };
         in
         {
-          x86_64-linux.niri-switcher-dev = mkNiriSwitcherDev nixpkgs.legacyPackages.x86_64-linux;
-          aarch64-linux.niri-switcher-dev = mkNiriSwitcherDev nixpkgs.legacyPackages.aarch64-linux;
+          x86_64-linux.default = mkDevShell nixpkgs.legacyPackages.x86_64-linux;
+          aarch64-linux.default = mkDevShell nixpkgs.legacyPackages.aarch64-linux;
+          aarch64-darwin.default = mkDevShell nixpkgs.legacyPackages.aarch64-darwin;
+          x86_64-darwin.default = mkDevShell nixpkgs.legacyPackages.x86_64-darwin;
         };
 
       homeConfigurations = {

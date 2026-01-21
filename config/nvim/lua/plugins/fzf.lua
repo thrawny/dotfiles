@@ -1,16 +1,21 @@
 -- Find all files including gitignored (but exclude common noise)
+
+local ignored_patterns = {
+  "%.git/",
+  "node_modules/",
+  "%.venv/",
+  "%.DS_Store$",
+  "%.ruff_cache/",
+  "%target/",
+  "config/codex/log",
+  "config/codex/sessions",
+}
+
 local find_all_files = function()
   require("fzf-lua").files({
     no_ignore = true,
     hidden = true,
-    file_ignore_patterns = {
-      "%.git/",
-      "node_modules/",
-      "%.venv/",
-      "%.DS_Store$",
-      "%.ruff_cache/",
-      "%target/",
-    },
+    file_ignore_patterns = ignored_patterns,
   })
 end
 
@@ -20,14 +25,7 @@ local grep_all_in_cwd = function()
     cwd = vim.loop.cwd(), ---@diagnostic disable-line: undefined-field
     no_ignore = true,
     hidden = true,
-    file_ignore_patterns = {
-      "%.git/",
-      "node_modules/",
-      "%.venv/",
-      "%.DS_Store$",
-      "%.ruff_cache/",
-      "%target/",
-    },
+    file_ignore_patterns = ignored_patterns,
   })
 end
 

@@ -1,0 +1,41 @@
+# Rust workspace task runner
+# Packages: niri-switcher, session-tracker, bash-validator
+
+# On macOS, exclude niri-switcher (requires GTK)
+workspace_args := if os() == "macos" { "--workspace --exclude niri-switcher" } else { "--workspace" }
+
+# Default recipe
+default:
+    @just --list
+
+# Build a package (or all)
+build *PKG:
+    cargo build --release {{ if PKG != "" { "-p " + PKG } else { workspace_args } }}
+
+# Run a package
+run PKG:
+    cargo run --release -p {{ PKG }}
+
+# Watch and rebuild a package on changes
+watch PKG:
+    watchexec -w {{ PKG }}/src -e rs --restart -- cargo run -p {{ PKG }}
+
+# Build with nix (clean build)
+nix PKG:
+    nix build path:../nix#{{ PKG }}
+
+# Build with nix and symlink to result
+install PKG:
+    nix build path:../nix#{{ PKG }} -o result-{{ PKG }}
+
+# Run clippy
+clippy:
+    cargo clippy --release {{ workspace_args }}
+
+# Run tests
+test:
+    cargo test --release {{ workspace_args }}
+
+# Format code
+fmt:
+    cargo fmt --all

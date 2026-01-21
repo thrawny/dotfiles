@@ -6,6 +6,7 @@ States:
 - waiting: Claude needs user input (permission prompt, question)
 - responding: Claude is generating a response
 """
+
 import json
 import os
 import subprocess
@@ -21,7 +22,9 @@ def get_niri_focused_window():
     try:
         result = subprocess.run(
             ["niri", "msg", "-j", "focused-window"],
-            capture_output=True, text=True, timeout=2
+            capture_output=True,
+            text=True,
+            timeout=2,
         )
         if result.returncode == 0:
             return json.loads(result.stdout)
@@ -48,7 +51,9 @@ def get_tmux_window_id():
     try:
         result = subprocess.run(
             ["tmux", "display-message", "-p", "#{window_id}"],
-            capture_output=True, text=True, timeout=2
+            capture_output=True,
+            text=True,
+            timeout=2,
         )
         if result.returncode == 0:
             return result.stdout.strip()
@@ -96,8 +101,7 @@ def ends_with_question(transcript_path):
     try:
         # Read last 20 lines to find the last assistant text message
         result = subprocess.run(
-            ["tail", "-n", "20", str(path)],
-            capture_output=True, text=True, timeout=2
+            ["tail", "-n", "20", str(path)], capture_output=True, text=True, timeout=2
         )
         if result.returncode != 0:
             return False

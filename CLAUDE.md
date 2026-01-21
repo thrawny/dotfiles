@@ -4,7 +4,25 @@ This guide distills what an agent needs to know to make safe, precise code chang
 
 ## Overview
 
-This repository manages cross-platform dotfiles with Ansible. Source files live inside this repo; Ansible symlinks them into the home directory on target machines.
+This repository manages cross-platform dotfiles using **two systems**:
+
+1. **Nix Home Manager** (primary) - Declarative configuration in `nix/`. See `nix/CLAUDE.md` for details.
+2. **Ansible** (legacy) - Symlinks files from `config/` to home directory. Kept for machines without Nix.
+
+**Nix-first development:** When editing shell, terminal, or system configs, prefer editing the Nix files. See `.claude/rules/nix.md` for guidance on which files to edit.
+
+## Task Runner
+
+Uses `just` for common tasks. Run `just` to see all available recipes:
+
+```bash
+just              # List all recipes
+just switch       # Apply Nix config (auto-detects NixOS vs Home Manager)
+just check        # Format, lint, and evaluate config
+just fmt          # Format all (nix, lua, python)
+just lint         # Lint all
+just rust::build  # Build all rust packages (or specific: just rust::build niri-switcher)
+```
 
 ## Agent Essentials
 

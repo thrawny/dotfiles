@@ -36,7 +36,9 @@ fn validate_command(command: &str) -> Vec<&'static str> {
         if let Some(caps) = re.captures(command) {
             if let Some(output_path) = caps.get(1) {
                 let path = output_path.as_str();
-                let valid_prefixes = ["build/", "bin/", "dist/", "out/", "target/", ".build/", "tmp/", "/"];
+                let valid_prefixes = [
+                    "build/", "bin/", "dist/", "out/", "target/", ".build/", "tmp/", "/",
+                ];
                 if !valid_prefixes.iter().any(|p| path.starts_with(p)) {
                     issues.push("Use 'go build -o build/binary_name' with a proper path (e.g., build/, bin/, dist/) to avoid cluttering the project root with binaries");
                 }
@@ -78,7 +80,7 @@ fn main() -> ExitCode {
 
     if !issues.is_empty() {
         for message in &issues {
-            eprintln!("• {}", message);
+            eprintln!("• {message}");
         }
         return ExitCode::from(2);
     }
