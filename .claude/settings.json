@@ -4,7 +4,8 @@
       "mcp__nixos",
       "Bash(mise lint:*)",
       "Bash(mise fmt:*)",
-      "Bash(mise check:*)"
+      "Bash(mise check:*)",
+      "Bash(config/git/hooks/pre-commit)"
     ],
     "deny": []
   }
