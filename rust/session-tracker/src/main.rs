@@ -142,20 +142,18 @@ fn ends_with_question(transcript_path: &str) -> bool {
         if line.is_empty() {
             continue;
         }
-        if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
-            if entry.get("type").and_then(|t| t.as_str()) == Some("assistant") {
-                if let Some(content_arr) = entry
-                    .get("message")
-                    .and_then(|m| m.get("content"))
-                    .and_then(|c| c.as_array())
+        if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line)
+            && entry.get("type").and_then(|t| t.as_str()) == Some("assistant")
+            && let Some(content_arr) = entry
+                .get("message")
+                .and_then(|m| m.get("content"))
+                .and_then(|c| c.as_array())
+        {
+            for item in content_arr {
+                if item.get("type").and_then(|t| t.as_str()) == Some("text")
+                    && let Some(text) = item.get("text").and_then(|t| t.as_str())
                 {
-                    for item in content_arr {
-                        if item.get("type").and_then(|t| t.as_str()) == Some("text") {
-                            if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                                last_text = Some(text.to_string());
-                            }
-                        }
-                    }
+                    last_text = Some(text.to_string());
                 }
             }
         }
@@ -220,34 +218,34 @@ fn main() {
 
         "Stop" => {
             let window_id = find_session_by_id(&sessions, &session_id).cloned();
-            if let Some(wid) = window_id {
-                if let Some(session) = sessions.get_mut(&wid) {
-                    let is_question = session
-                        .transcript_path
-                        .as_ref()
-                        .map(|p| ends_with_question(p))
-                        .unwrap_or(false);
+            if let Some(wid) = window_id
+                && let Some(session) = sessions.get_mut(&wid)
+            {
+                let is_question = session
+                    .transcript_path
+                    .as_ref()
+                    .map(|p| ends_with_question(p))
+                    .unwrap_or(false);
 
-                    session.state = if is_question {
-                        "waiting".to_string()
-                    } else {
-                        "idle".to_string()
-                    };
-                    session.state_updated = now();
-                    save_sessions(&sessions);
-                }
+                session.state = if is_question {
+                    "waiting".to_string()
+                } else {
+                    "idle".to_string()
+                };
+                session.state_updated = now();
+                save_sessions(&sessions);
             }
         }
 
         "Notification" => {
             if hook_input.notification_type.as_deref() == Some("permission_prompt") {
                 let window_id = find_session_by_id(&sessions, &session_id).cloned();
-                if let Some(wid) = window_id {
-                    if let Some(session) = sessions.get_mut(&wid) {
-                        session.state = "waiting".to_string();
-                        session.state_updated = now();
-                        save_sessions(&sessions);
-                    }
+                if let Some(wid) = window_id
+                    && let Some(session) = sessions.get_mut(&wid)
+                {
+                    session.state = "waiting".to_string();
+                    session.state_updated = now();
+                    save_sessions(&sessions);
                 }
             }
         }
@@ -287,14 +285,14 @@ fn main() {
         "PreToolUse" => {
             // Tool is about to run - Claude is working
             let window_id = find_session_by_id(&sessions, &session_id).cloned();
-            if let Some(wid) = window_id {
-                if let Some(session) = sessions.get_mut(&wid) {
-                    // Only update if currently waiting (avoid unnecessary writes)
-                    if session.state == "waiting" {
-                        session.state = "responding".to_string();
-                        session.state_updated = now();
-                        save_sessions(&sessions);
-                    }
+            if let Some(wid) = window_id
+                && let Some(session) = sessions.get_mut(&wid)
+            {
+                // Only update if currently waiting (avoid unnecessary writes)
+                if session.state == "waiting" {
+                    session.state = "responding".to_string();
+                    session.state_updated = now();
+                    save_sessions(&sessions);
                 }
             }
         }

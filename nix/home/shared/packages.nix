@@ -21,6 +21,7 @@
     rustc
     cargo
     rustfmt
+    clippy
     tree
     procps
     zoxide

@@ -28,9 +28,9 @@ nix PKG:
 install PKG:
     nix build path:../nix#{{ PKG }} -o result-{{ PKG }}
 
-# Run clippy
+# Run clippy with auto-fix
 clippy:
-    cargo clippy --release {{ workspace_args }}
+    cargo clippy --fix --allow-dirty --allow-staged --release {{ workspace_args }}
 
 # Run tests
 test:

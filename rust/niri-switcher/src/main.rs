@@ -127,10 +127,10 @@ struct AppState {
 }
 
 fn load_config() -> Config {
-    if let Ok(content) = std::fs::read_to_string(config_path()) {
-        if let Ok(config) = toml::from_str::<Config>(&content) {
-            return config;
-        }
+    if let Ok(content) = std::fs::read_to_string(config_path())
+        && let Ok(config) = toml::from_str::<Config>(&content)
+    {
+        return config;
     }
 
     // Default config with one project
@@ -179,16 +179,20 @@ fn simplify_label(title: &str, app_id: &str) -> String {
             .trim();
         // If title is just a path, take the last component but keep ~ prefix
         if cleaned.starts_with('~') {
-            let last = cleaned.split('/').last().unwrap_or(cleaned);
+            let last = cleaned.split('/').next_back().unwrap_or(cleaned);
             format!("~/{}", last)
         } else if cleaned.starts_with('/') {
-            cleaned.split('/').last().unwrap_or(cleaned).to_string()
+            cleaned
+                .split('/')
+                .next_back()
+                .unwrap_or(cleaned)
+                .to_string()
         } else {
             cleaned.to_string()
         }
     } else {
         // For non-terminals, use simplified app_id
-        app_id.split('.').last().unwrap_or(app_id).to_string()
+        app_id.split('.').next_back().unwrap_or(app_id).to_string()
     }
 }
 
@@ -405,15 +409,15 @@ fn create_workspace(name: &str, dir: Option<&str>) {
         niri_cmd(&["action", "focus-workspace", name]);
     } else {
         // Create new workspace
-        if let Some(workspaces) = niri_json(&["workspaces"]) {
-            if let Some(arr) = workspaces.as_array() {
-                let max_idx = arr
-                    .iter()
-                    .filter_map(|ws| ws.get("idx").and_then(|i| i.as_i64()))
-                    .max()
-                    .unwrap_or(0);
-                niri_cmd(&["action", "focus-workspace", &(max_idx + 1).to_string()]);
-            }
+        if let Some(workspaces) = niri_json(&["workspaces"])
+            && let Some(arr) = workspaces.as_array()
+        {
+            let max_idx = arr
+                .iter()
+                .filter_map(|ws| ws.get("idx").and_then(|i| i.as_i64()))
+                .max()
+                .unwrap_or(0);
+            niri_cmd(&["action", "focus-workspace", &(max_idx + 1).to_string()]);
         }
         niri_cmd(&["action", "set-workspace-name", name]);
     }
@@ -429,10 +433,10 @@ fn switch_to_entry(entry: &WorkspaceColumn) {
     if entry.static_workspace {
         focus_workspace(&entry.workspace_name);
         // Only spawn terminals for empty workspaces with a configured dir
-        if entry.app_label == "(empty)" {
-            if let Some(ref dir) = entry.dir {
-                spawn_terminals(dir);
-            }
+        if entry.app_label == "(empty)"
+            && let Some(ref dir) = entry.dir
+        {
+            spawn_terminals(dir);
         }
     } else {
         if entry.app_label == "(empty)" {
@@ -559,23 +563,22 @@ fn load_claude_sessions_file() -> HashMap<u64, ClaudeSession> {
     let mut sessions = HashMap::new();
     if let Some(obj) = json.as_object() {
         for (window_id_str, session_data) in obj {
-            if let Ok(window_id) = window_id_str.parse::<u64>() {
-                if let Some(transcript_path) =
+            if let Ok(window_id) = window_id_str.parse::<u64>()
+                && let Some(transcript_path) =
                     session_data.get("transcript_path").and_then(|p| p.as_str())
-                {
-                    let state = session_data
-                        .get("state")
-                        .and_then(|s| s.as_str())
-                        .map(ClaudeState::from_str)
-                        .unwrap_or(ClaudeState::Unknown);
-                    sessions.insert(
-                        window_id,
-                        ClaudeSession {
-                            transcript_path: PathBuf::from(transcript_path),
-                            state,
-                        },
-                    );
-                }
+            {
+                let state = session_data
+                    .get("state")
+                    .and_then(|s| s.as_str())
+                    .map(ClaudeState::from_str)
+                    .unwrap_or(ClaudeState::Unknown);
+                sessions.insert(
+                    window_id,
+                    ClaudeSession {
+                        transcript_path: PathBuf::from(transcript_path),
+                        state,
+                    },
+                );
             }
         }
     }
@@ -646,17 +649,14 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
         // Watcher for transcript file modifications
         let mut transcript_watcher = match RecommendedWatcher::new(
             move |res: Result<notify::Event, notify::Error>| {
-                if let Ok(event) = res {
-                    match event.kind {
-                        notify::EventKind::Modify(_) => {
-                            let map = transcript_map_for_activity.lock().unwrap();
-                            for path in &event.paths {
-                                if map.contains_key(path) {
-                                    let _ = tx_activity.send(Message::ClaudeActivity);
-                                }
-                            }
+                if let Ok(event) = res
+                    && let notify::EventKind::Modify(_) = event.kind
+                {
+                    let map = transcript_map_for_activity.lock().unwrap();
+                    for path in &event.paths {
+                        if map.contains_key(path) {
+                            let _ = tx_activity.send(Message::ClaudeActivity);
                         }
-                        _ => {}
                     }
                 }
             },
@@ -670,19 +670,19 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
         };
 
         // Watch ~/.claude directory for active-sessions.json
-        if claude_dir.exists() {
-            if let Err(e) = sessions_watcher.watch(&claude_dir, RecursiveMode::NonRecursive) {
-                eprintln!("Failed to watch claude directory: {}", e);
-                return;
-            }
+        if claude_dir.exists()
+            && let Err(e) = sessions_watcher.watch(&claude_dir, RecursiveMode::NonRecursive)
+        {
+            eprintln!("Failed to watch claude directory: {}", e);
+            return;
         }
 
         // Watch ~/.claude/projects recursively for transcript files
         let projects_dir = claude_dir.join("projects");
-        if projects_dir.exists() {
-            if let Err(e) = transcript_watcher.watch(&projects_dir, RecursiveMode::Recursive) {
-                eprintln!("Failed to watch claude projects directory: {}", e);
-            }
+        if projects_dir.exists()
+            && let Err(e) = transcript_watcher.watch(&projects_dir, RecursiveMode::Recursive)
+        {
+            eprintln!("Failed to watch claude projects directory: {}", e);
         }
 
         // Initial load of sessions
