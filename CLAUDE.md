@@ -22,6 +22,19 @@ This repository manages cross-platform dotfiles with Ansible. Source files live 
 - Extras: `config/starship/starship.toml` → `~/.config/starship.toml`, `config/k9s` → `~/.config/k9s`, `config/npm/default-packages` → `~/.default-npm-packages`
 - Codex/Claude: `config/codex/config.toml` → `~/.codex/config.toml`, `config/codex/prompts` → `~/.codex/prompts`, `config/claude/commands` → `~/.claude/commands`, `config/claude/settings.json` → `~/.claude/settings.json`, `config/claude/agents` → `~/.claude/agents`, `config/claude/skills` → `~/.claude/skills`, `config/claude/CLAUDE-GLOBAL.md` → `~/.claude/CLAUDE.md`
 
+### Claude Config Locations
+
+Two different locations exist for Claude configuration in this repo:
+
+| Location | Scope | Symlinked to |
+|----------|-------|--------------|
+| `config/claude/` | **Global** - applies to all projects | `~/.claude/` |
+| `.claude/` | **Project-specific** - only for this dotfiles repo | (not symlinked) |
+
+When adding Claude commands, agents, skills, or settings:
+- Put in `config/claude/` if it should be available globally across all projects
+- Put in `.claude/` if it's specific to working on this dotfiles repo
+
 Refer to `ansible/all_config.yml` for the authoritative symlink list.
 
 ## Ansible Structure
