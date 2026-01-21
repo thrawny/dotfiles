@@ -19,6 +19,7 @@ tilt.profile
 .terraform
 *.tfstate*
 .envrc
+.direnv
 telepresence.log
 .run
 tabort*

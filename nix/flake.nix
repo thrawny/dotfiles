@@ -175,7 +175,8 @@
                   pkg-config
 
                   # Nix tools (not in packages.nix)
-                  nixfmt-rfc-style
+                  nixd
+                  nixfmt
                   statix
                   nvd
 
