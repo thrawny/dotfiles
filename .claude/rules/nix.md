@@ -16,7 +16,7 @@ When making changes to shell, editor, or tool configuration:
 | --------------------------------- | --------------------------------------------------- | --------------------------- |
 | Zsh (aliases, functions, exports) | `nix/home/shared/zsh.nix`                           | `config/zsh/zshrc`          |
 | Git config                        | `config/git/gitconfig` (symlinked by both)          | -                           |
-| Tmux                              | `config/tmux/tmux.conf` (symlinked by both)         | -                           |
+| Tmux                              | `nix/home/shared/tmux.nix`                          | `config/tmux/`              |
 | Starship                          | `config/starship/starship.toml` (symlinked by both) | -                           |
 | Neovim                            | `config/nvim/` (symlinked by both)                  | -                           |
 | Ghostty                           | `nix/home/shared/ghostty.nix`                       | `config/ghostty/`           |
