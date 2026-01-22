@@ -1,12 +1,14 @@
-Hand off the current work to a new session. If an argument is provided, it's the goal for the next session.
+Hand off the current work to a new session.
 
-If no goal argument provided: infer the logical next goal from the conversation context. If unclear, state your best guess.
+**Goal for next session:** $ARGUMENTS
+
+If no argument provided: infer the logical next goal from the conversation context. If unclear, state your best guess.
 
 If `handoff.md` exists, ignore it — it's from a previous session. Overwrite completely.
 
 Write `handoff.md` with:
 
-1. **Next goal**: What the next session should accomplish (from argument or inferred)
+1. **Next goal**: From the argument above (or inferred if none)
 2. **Context**: Only information relevant to achieving that goal — decisions made, approaches tried, current state
 3. **Files**: List of files to read, with specific line ranges if relevant
 4. **Immediate action**: The first concrete step to take
