@@ -4,6 +4,7 @@ use std::env;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{self, BufRead, BufReader, Read, Write};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::mpsc;
@@ -972,6 +973,16 @@ fn main() {
         return;
     }
 
+    if env::args().any(|arg| arg == "--fzf") {
+        let all_windows = list_windows();
+        if all_windows.is_empty() {
+            eprintln!("No tmux windows found");
+            return;
+        }
+        run_fzf_search(&all_windows);
+        return;
+    }
+
     let mut tty_out = Tty::open();
 
     let all_windows = list_windows();
@@ -1109,6 +1120,10 @@ fn main() {
             ScreenState::Sessions => {
                 if key == '/' {
                     drop(_raw);
+                    if let Ok(exe) = env::current_exe() {
+                        let err = Command::new(exe).arg("--fzf").exec();
+                        eprintln!("Failed to exec fzf mode: {err}");
+                    }
                     run_fzf_search(&all_windows);
                     return;
                 }
