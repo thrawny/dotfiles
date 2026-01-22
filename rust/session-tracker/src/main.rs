@@ -104,25 +104,25 @@ fn load_sessions() -> SessionStore {
     let path = sessions_file();
     if path.exists()
         && let Ok(content) = fs::read_to_string(&path)
-            && let Ok(store) = serde_json::from_str::<SessionStore>(&content)
-        {
-            return store;
-        }
+        && let Ok(store) = serde_json::from_str::<SessionStore>(&content)
+    {
+        return store;
+    }
 
     let legacy_path = legacy_sessions_file();
     if legacy_path.exists()
         && let Ok(content) = fs::read_to_string(&legacy_path)
-            && let Ok(legacy) = serde_json::from_str::<HashMap<String, LegacySession>>(&content)
-        {
-            let sessions = legacy
-                .into_iter()
-                .map(|(window_id, entry)| entry.into_session(window_id))
-                .collect();
-            return SessionStore {
-                version: 1,
-                sessions,
-            };
-        }
+        && let Ok(legacy) = serde_json::from_str::<HashMap<String, LegacySession>>(&content)
+    {
+        let sessions = legacy
+            .into_iter()
+            .map(|(window_id, entry)| entry.into_session(window_id))
+            .collect();
+        return SessionStore {
+            version: 1,
+            sessions,
+        };
+    }
 
     SessionStore::default()
 }
@@ -429,7 +429,8 @@ fn process_codex_file(
                 }
                 if let Ok(record) = serde_json::from_str::<CodexRecord>(trimmed) {
                     if record.record_type == "session_meta" {
-                        if let Some(session_id) = record.payload.get("id").and_then(|v| v.as_str()) {
+                        if let Some(session_id) = record.payload.get("id").and_then(|v| v.as_str())
+                        {
                             state.session_id = Some(session_id.to_string());
                         }
                         if let Some(cwd) = record.payload.get("cwd").and_then(|v| v.as_str()) {

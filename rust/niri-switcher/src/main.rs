@@ -3,8 +3,7 @@ use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, Box as GtkBox, Label, Orientation, glib};
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use niri_ipc::{
-    Action, Event, Request, Response, Window, Workspace, WorkspaceReferenceArg,
-    socket::Socket,
+    Action, Event, Request, Response, Window, Workspace, WorkspaceReferenceArg, socket::Socket,
 };
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
@@ -349,82 +348,79 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
     // Helper to add entries for a workspace
     // ws_id is the niri workspace ID (always present)
     // ws_name is the display name (either the actual name or the index as string)
-    let add_workspace_entries =
-        |entries: &mut Vec<WorkspaceColumn>,
-         ws_id: u64,
-         ws_name: &str,
-         workspace_ref: WorkspaceReferenceArg,
-         workspace_key: char,
-         dir: Option<String>,
-         static_workspace: bool,
-         windows_arr: &[&Window]| {
-            // Group windows by column index
-            let mut columns: BTreeMap<usize, Vec<&Window>> = BTreeMap::new();
+    let add_workspace_entries = |entries: &mut Vec<WorkspaceColumn>,
+                                 ws_id: u64,
+                                 ws_name: &str,
+                                 workspace_ref: WorkspaceReferenceArg,
+                                 workspace_key: char,
+                                 dir: Option<String>,
+                                 static_workspace: bool,
+                                 windows_arr: &[&Window]| {
+        // Group windows by column index
+        let mut columns: BTreeMap<usize, Vec<&Window>> = BTreeMap::new();
 
-            for window in windows_arr.iter() {
-                if window.workspace_id != Some(ws_id) {
+        for window in windows_arr.iter() {
+            if window.workspace_id != Some(ws_id) {
+                continue;
+            }
+            let col_idx = window
+                .layout
+                .as_ref()
+                .and_then(|layout| layout.pos_in_scrolling_layout)
+                .map(|pos| pos.0)
+                .unwrap_or(1);
+            columns.entry(col_idx).or_default().push(*window);
+        }
+
+        // Skip column 1 (scratch), create entries for columns 2+
+        let has_columns = columns.keys().any(|&idx| idx >= 2);
+
+        if has_columns {
+            for (&col_idx, col_windows) in &columns {
+                if col_idx < 2 {
                     continue;
                 }
-                let col_idx = window
-                    .layout
-                    .as_ref()
-                    .and_then(|layout| layout.pos_in_scrolling_layout)
-                    .map(|pos| pos.0)
-                    .unwrap_or(1);
-                columns.entry(col_idx).or_default().push(*window);
-            }
-
-            // Skip column 1 (scratch), create entries for columns 2+
-            let has_columns = columns.keys().any(|&idx| idx >= 2);
-
-            if has_columns {
-                for (&col_idx, col_windows) in &columns {
-                    if col_idx < 2 {
-                        continue;
-                    }
-                    let key_offset = (col_idx - 2) as usize;
-                    if key_offset >= KEYS.len() {
-                        continue;
-                    }
-                    let column_key = KEYS[key_offset];
-
-                    let first_window = col_windows.first();
-                    let title = first_window
-                        .and_then(|w| w.title.as_deref())
-                        .unwrap_or("?");
-                    let app_id = first_window
-                        .and_then(|w| w.app_id.as_deref())
-                        .unwrap_or("?");
-                    let window_id = first_window.map(|w| w.id);
-                    let app_label = simplify_label(title, app_id);
-
-                    entries.push(WorkspaceColumn {
-                        workspace_name: ws_name.to_string(),
-                        workspace_ref: workspace_ref.clone(),
-                        workspace_key,
-                        column_index: col_idx as u32,
-                        column_key,
-                        app_label,
-                        dir: dir.clone(),
-                        static_workspace,
-                        window_id,
-                    });
+                let key_offset = (col_idx - 2) as usize;
+                if key_offset >= KEYS.len() {
+                    continue;
                 }
-            } else {
-                // Empty workspace - add placeholder entry
+                let column_key = KEYS[key_offset];
+
+                let first_window = col_windows.first();
+                let title = first_window.and_then(|w| w.title.as_deref()).unwrap_or("?");
+                let app_id = first_window
+                    .and_then(|w| w.app_id.as_deref())
+                    .unwrap_or("?");
+                let window_id = first_window.map(|w| w.id);
+                let app_label = simplify_label(title, app_id);
+
                 entries.push(WorkspaceColumn {
                     workspace_name: ws_name.to_string(),
                     workspace_ref: workspace_ref.clone(),
                     workspace_key,
-                    column_index: 2,
-                    column_key: KEYS[0],
-                    app_label: "(empty)".to_string(),
+                    column_index: col_idx as u32,
+                    column_key,
+                    app_label,
                     dir: dir.clone(),
                     static_workspace,
-                    window_id: None,
+                    window_id,
                 });
             }
-        };
+        } else {
+            // Empty workspace - add placeholder entry
+            entries.push(WorkspaceColumn {
+                workspace_name: ws_name.to_string(),
+                workspace_ref: workspace_ref.clone(),
+                workspace_key,
+                column_index: 2,
+                column_key: KEYS[0],
+                app_label: "(empty)".to_string(),
+                dir: dir.clone(),
+                static_workspace,
+                window_id: None,
+            });
+        }
+    };
 
     // Collect window references for the helper
     let windows_refs: Vec<&Window> = windows.iter().collect();
@@ -537,7 +533,9 @@ fn focus_workspace(reference: WorkspaceReferenceArg) {
 }
 
 fn focus_column(index: u32) {
-    niri_action(Action::FocusColumn { index: index as usize });
+    niri_action(Action::FocusColumn {
+        index: index as usize,
+    });
 }
 
 fn spawn_terminals(dir: &str) {
@@ -555,11 +553,7 @@ fn create_workspace(name: &str, dir: Option<&str>) {
     if get_workspace_by_name(name).is_some() {
         focus_workspace(WorkspaceReferenceArg::Name(name.to_string()));
     } else {
-        let max_idx = niri_workspaces()
-            .iter()
-            .map(|ws| ws.idx)
-            .max()
-            .unwrap_or(0);
+        let max_idx = niri_workspaces().iter().map(|ws| ws.idx).max().unwrap_or(0);
         let new_idx = max_idx.saturating_add(1);
         focus_workspace(WorkspaceReferenceArg::Index(new_idx));
         niri_action(Action::SetWorkspaceName {
@@ -604,62 +598,64 @@ fn send_toggle() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn start_focus_tracker(focus_state: Arc<Mutex<FocusState>>) {
-    thread::spawn(move || loop {
-        let mut socket = match Socket::connect() {
-            Ok(socket) => socket,
-            Err(err) => {
-                eprintln!("Failed to connect to niri IPC: {}", err);
-                thread::sleep(std::time::Duration::from_secs(1));
-                continue;
-            }
-        };
+    thread::spawn(move || {
+        loop {
+            let mut socket = match Socket::connect() {
+                Ok(socket) => socket,
+                Err(err) => {
+                    eprintln!("Failed to connect to niri IPC: {}", err);
+                    thread::sleep(std::time::Duration::from_secs(1));
+                    continue;
+                }
+            };
 
-        match socket.send(Request::EventStream) {
-            Ok(Ok(Response::Handled)) => {}
-            Ok(Ok(_)) => {}
-            Ok(Err(err)) => {
-                eprintln!("niri IPC refused event stream: {}", err);
-                thread::sleep(std::time::Duration::from_secs(1));
-                continue;
+            match socket.send(Request::EventStream) {
+                Ok(Ok(Response::Handled)) => {}
+                Ok(Ok(_)) => {}
+                Ok(Err(err)) => {
+                    eprintln!("niri IPC refused event stream: {}", err);
+                    thread::sleep(std::time::Duration::from_secs(1));
+                    continue;
+                }
+                Err(err) => {
+                    eprintln!("Failed to request niri event stream: {}", err);
+                    thread::sleep(std::time::Duration::from_secs(1));
+                    continue;
+                }
             }
-            Err(err) => {
-                eprintln!("Failed to request niri event stream: {}", err);
-                thread::sleep(std::time::Duration::from_secs(1));
-                continue;
-            }
-        }
 
-        let mut read_event = socket.read_events();
-        while let Ok(event) = read_event() {
-            let mut state = focus_state.lock().unwrap();
-            match event {
-                Event::WindowsChanged { windows } => {
-                    state.windows.clear();
-                    let mut focused = None;
-                    for window in windows {
+            let mut read_event = socket.read_events();
+            while let Ok(event) = read_event() {
+                let mut state = focus_state.lock().unwrap();
+                match event {
+                    Event::WindowsChanged { windows } => {
+                        state.windows.clear();
+                        let mut focused = None;
+                        for window in windows {
+                            state.update_window(&window);
+                            if window.is_focused {
+                                focused = Some(window.id);
+                            }
+                        }
+                        state.record_focus(focused);
+                    }
+                    Event::WindowOpenedOrChanged { window } => {
                         state.update_window(&window);
                         if window.is_focused {
-                            focused = Some(window.id);
+                            state.record_focus(Some(window.id));
                         }
                     }
-                    state.record_focus(focused);
-                }
-                Event::WindowOpenedOrChanged { window } => {
-                    state.update_window(&window);
-                    if window.is_focused {
-                        state.record_focus(Some(window.id));
+                    Event::WindowClosed { id } => {
+                        state.windows.remove(&id);
+                        if state.current.window_id == Some(id) {
+                            state.record_focus(None);
+                        }
                     }
-                }
-                Event::WindowClosed { id } => {
-                    state.windows.remove(&id);
-                    if state.current.window_id == Some(id) {
-                        state.record_focus(None);
+                    Event::WindowFocusChanged { id } => {
+                        state.record_focus(id);
                     }
+                    _ => {}
                 }
-                Event::WindowFocusChanged { id } => {
-                    state.record_focus(id);
-                }
-                _ => {}
             }
         }
     });
@@ -826,7 +822,11 @@ fn load_claude_sessions_file() -> HashMap<u64, ClaudeSession> {
 fn start_claude_watcher(tx: mpsc::Sender<Message>) {
     let claude_dir = std::env::var("XDG_CACHE_HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("~")).join(".cache"));
+        .unwrap_or_else(|| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("~"))
+                .join(".cache")
+        });
 
     // Shared state: transcript path -> window_id mapping
     let transcript_map: Arc<Mutex<HashMap<PathBuf, u64>>> = Arc::new(Mutex::new(HashMap::new()));
