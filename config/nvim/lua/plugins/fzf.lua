@@ -35,12 +35,21 @@ return {
       { "<leader>/", grep_all_in_cwd, desc = "Grep (cwd)" },
     },
     opts = {
-      actions = {
-        files = {
-          true, -- inherit defaults
-          -- Add ctrl bindings for toggles (alt conflicts with window managers)
-          ["ctrl-y"] = require("fzf-lua").actions.toggle_hidden,
-          ["ctrl-o"] = require("fzf-lua").actions.toggle_ignore,
+      -- Override LazyVim's alt bindings (conflict with window managers)
+      files = {
+        actions = {
+          ["alt-h"] = false,
+          ["alt-i"] = false,
+          ["ctrl-y"] = { require("fzf-lua").actions.toggle_hidden },
+          ["ctrl-o"] = { require("fzf-lua").actions.toggle_ignore },
+        },
+      },
+      grep = {
+        actions = {
+          ["alt-h"] = false,
+          ["alt-i"] = false,
+          ["ctrl-y"] = { require("fzf-lua").actions.toggle_hidden },
+          ["ctrl-o"] = { require("fzf-lua").actions.toggle_ignore },
         },
       },
     },
