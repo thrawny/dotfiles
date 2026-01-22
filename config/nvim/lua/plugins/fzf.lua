@@ -7,8 +7,6 @@ local ignored_patterns = {
   "%.DS_Store$",
   "%.ruff_cache/",
   "%target/",
-  "config/codex/log",
-  "config/codex/sessions",
 }
 
 local find_all_files = function()
@@ -39,9 +37,10 @@ return {
     opts = {
       actions = {
         files = {
-          true, -- Inherit all default actions (enter, ctrl-s, ctrl-v, etc.)
-          ["alt-h"] = false, -- Disable default alt-h (conflicts with window manager)
-          ["alt-u"] = require("fzf-lua").actions.toggle_hidden,
+          true, -- inherit defaults
+          -- Add ctrl bindings for toggles (alt conflicts with window managers)
+          ["ctrl-y"] = require("fzf-lua").actions.toggle_hidden,
+          ["ctrl-o"] = require("fzf-lua").actions.toggle_ignore,
         },
       },
     },
