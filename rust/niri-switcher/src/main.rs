@@ -2,10 +2,14 @@ use clap::Parser;
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, Box as GtkBox, Label, Orientation, glib};
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
+use niri_ipc::{
+    Action, Event, Request, Response, Window, Workspace, WorkspaceReferenceArg,
+    socket::Socket,
+};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::io::{Read, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::PathBuf;
@@ -14,6 +18,7 @@ use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::{SystemTime, UNIX_EPOCH};
 fn _debug_log(_msg: &str) {
     // Uncomment for debugging:
     // println!("{}", _msg);
@@ -21,6 +26,13 @@ fn _debug_log(_msg: &str) {
 
 const APP_ID: &str = "com.thrawny.niri-switcher";
 const KEYS: [char; 8] = ['h', 'j', 'k', 'l', 'u', 'i', 'o', 'p'];
+
+fn now() -> f64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
+}
 
 #[derive(Debug, Clone, PartialEq)]
 enum ClaudeState {
@@ -54,6 +66,100 @@ impl ClaudeState {
 struct ClaudeSession {
     transcript_path: PathBuf,
     state: ClaudeState,
+}
+
+#[derive(Debug, Clone)]
+struct WindowInfo {
+    title: Option<String>,
+    app_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct FocusSnapshot {
+    window_id: Option<u64>,
+    title: Option<String>,
+    app_id: Option<String>,
+    timestamp: f64,
+}
+
+struct FocusState {
+    current: FocusSnapshot,
+    history: VecDeque<FocusSnapshot>,
+    windows: HashMap<u64, WindowInfo>,
+}
+
+impl FocusState {
+    fn new() -> Self {
+        let snapshot = FocusSnapshot {
+            window_id: None,
+            title: None,
+            app_id: None,
+            timestamp: now(),
+        };
+        Self {
+            current: snapshot.clone(),
+            history: VecDeque::from([snapshot]),
+            windows: HashMap::new(),
+        }
+    }
+
+    fn update_window(&mut self, window: &Window) {
+        self.windows.insert(
+            window.id,
+            WindowInfo {
+                title: window.title.clone(),
+                app_id: window.app_id.clone(),
+            },
+        );
+    }
+
+    fn record_focus(&mut self, window_id: Option<u64>) {
+        let (title, app_id) = window_id
+            .and_then(|id| self.windows.get(&id))
+            .map(|info| (info.title.clone(), info.app_id.clone()))
+            .unwrap_or((None, None));
+        let snapshot = FocusSnapshot {
+            window_id,
+            title,
+            app_id,
+            timestamp: now(),
+        };
+        self.current = snapshot.clone();
+        self.history.push_back(snapshot);
+        self.prune_history();
+    }
+
+    fn prune_history(&mut self) {
+        let cutoff = now() - 5.0;
+        while let Some(front) = self.history.front() {
+            if front.timestamp < cutoff {
+                self.history.pop_front();
+            } else {
+                break;
+            }
+        }
+        while self.history.len() > 256 {
+            self.history.pop_front();
+        }
+    }
+
+    fn focus_at(&self, ts: f64) -> FocusSnapshot {
+        let mut candidate = self.current.clone();
+        for snapshot in self.history.iter().rev() {
+            if snapshot.timestamp <= ts {
+                candidate = snapshot.clone();
+                break;
+            }
+        }
+        candidate
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "cmd", rename_all = "snake_case")]
+enum IpcRequest {
+    Toggle,
+    Focus { ts: Option<f64> },
 }
 
 #[derive(Debug)]
@@ -100,6 +206,7 @@ struct Project {
 #[derive(Debug, Clone)]
 struct WorkspaceColumn {
     workspace_name: String,
+    workspace_ref: WorkspaceReferenceArg,
     workspace_key: char,
     column_index: u32,
     column_key: char,
@@ -146,28 +253,43 @@ fn load_config() -> Config {
     }
 }
 
-fn niri_cmd(args: &[&str]) -> Option<String> {
-    let output = Command::new("niri").arg("msg").args(args).output().ok()?;
-    Some(String::from_utf8_lossy(&output.stdout).to_string())
+fn niri_request(request: Request) -> Option<Response> {
+    let mut socket = Socket::connect().ok()?;
+    match socket.send(request) {
+        Ok(Ok(response)) => Some(response),
+        Ok(Err(err)) => {
+            eprintln!("niri IPC error: {}", err);
+            None
+        }
+        Err(err) => {
+            eprintln!("niri IPC transport error: {}", err);
+            None
+        }
+    }
 }
 
-fn niri_json(args: &[&str]) -> Option<serde_json::Value> {
-    let output = Command::new("niri")
-        .arg("msg")
-        .arg("--json")
-        .args(args)
-        .output()
-        .ok()?;
-    serde_json::from_slice(&output.stdout).ok()
+fn niri_action(action: Action) {
+    let _ = niri_request(Request::Action(action));
 }
 
-fn get_workspace_by_name(name: &str) -> Option<serde_json::Value> {
-    let workspaces = niri_json(&["workspaces"])?;
-    workspaces
-        .as_array()?
-        .iter()
-        .find(|ws| ws.get("name").and_then(|n| n.as_str()) == Some(name))
-        .cloned()
+fn niri_workspaces() -> Vec<Workspace> {
+    match niri_request(Request::Workspaces) {
+        Some(Response::Workspaces(workspaces)) => workspaces,
+        _ => Vec::new(),
+    }
+}
+
+fn niri_windows() -> Vec<Window> {
+    match niri_request(Request::Windows) {
+        Some(Response::Windows(windows)) => windows,
+        _ => Vec::new(),
+    }
+}
+
+fn get_workspace_by_name(name: &str) -> Option<Workspace> {
+    niri_workspaces()
+        .into_iter()
+        .find(|ws| ws.name.as_deref() == Some(name))
 }
 
 fn simplify_label(title: &str, app_id: &str) -> String {
@@ -199,10 +321,8 @@ fn simplify_label(title: &str, app_id: &str) -> String {
 fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
     use std::collections::{BTreeMap, HashSet};
 
-    let workspaces = niri_json(&["workspaces"]).unwrap_or_default();
-    let ws_arr = workspaces.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
-    let windows = niri_json(&["windows"]).unwrap_or_default();
-    let windows_arr = windows.as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+    let workspaces = niri_workspaces();
+    let windows = niri_windows();
 
     let mut entries = Vec::new();
     let mut seen_workspaces: HashSet<String> = HashSet::new();
@@ -213,25 +333,25 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
     // ws_name is the display name (either the actual name or the index as string)
     let add_workspace_entries =
         |entries: &mut Vec<WorkspaceColumn>,
-         ws_id: i64,
+         ws_id: u64,
          ws_name: &str,
+         workspace_ref: WorkspaceReferenceArg,
          workspace_key: char,
          dir: Option<String>,
          static_workspace: bool,
-         windows_arr: &[&serde_json::Value]| {
+         windows_arr: &[&Window]| {
             // Group windows by column index
-            let mut columns: BTreeMap<i64, Vec<&serde_json::Value>> = BTreeMap::new();
+            let mut columns: BTreeMap<usize, Vec<&Window>> = BTreeMap::new();
 
             for window in windows_arr.iter() {
-                let window_ws_id = window.get("workspace_id").and_then(|id| id.as_i64());
-                if window_ws_id != Some(ws_id) {
+                if window.workspace_id != Some(ws_id) {
                     continue;
                 }
                 let col_idx = window
-                    .get("layout")
-                    .and_then(|l| l.get("pos_in_scrolling_layout"))
-                    .and_then(|p| p.get(0))
-                    .and_then(|c| c.as_i64())
+                    .layout
+                    .as_ref()
+                    .and_then(|layout| layout.pos_in_scrolling_layout)
+                    .map(|pos| pos.0)
                     .unwrap_or(1);
                 columns.entry(col_idx).or_default().push(*window);
             }
@@ -252,17 +372,17 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
 
                     let first_window = col_windows.first();
                     let title = first_window
-                        .and_then(|w| w.get("title").and_then(|t| t.as_str()))
+                        .and_then(|w| w.title.as_deref())
                         .unwrap_or("?");
                     let app_id = first_window
-                        .and_then(|w| w.get("app_id").and_then(|a| a.as_str()))
+                        .and_then(|w| w.app_id.as_deref())
                         .unwrap_or("?");
-                    let window_id =
-                        first_window.and_then(|w| w.get("id").and_then(|id| id.as_u64()));
+                    let window_id = first_window.map(|w| w.id);
                     let app_label = simplify_label(title, app_id);
 
                     entries.push(WorkspaceColumn {
                         workspace_name: ws_name.to_string(),
+                        workspace_ref: workspace_ref.clone(),
                         workspace_key,
                         column_index: col_idx as u32,
                         column_key,
@@ -276,6 +396,7 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
                 // Empty workspace - add placeholder entry
                 entries.push(WorkspaceColumn {
                     workspace_name: ws_name.to_string(),
+                    workspace_ref: workspace_ref.clone(),
                     workspace_key,
                     column_index: 2,
                     column_key: KEYS[0],
@@ -288,7 +409,7 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
         };
 
     // Collect window references for the helper
-    let windows_refs: Vec<&serde_json::Value> = windows_arr.iter().collect();
+    let windows_refs: Vec<&Window> = windows.iter().collect();
 
     // 1. Process configured projects first (preserves ordering from config)
     for project in &config.project {
@@ -299,16 +420,17 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
         let workspace_key = KEYS[key_idx];
 
         // Find workspace ID by name
-        let ws_id = ws_arr
+        let ws_id = workspaces
             .iter()
-            .find(|ws| ws.get("name").and_then(|n| n.as_str()) == Some(&project.name))
-            .and_then(|ws| ws.get("id").and_then(|id| id.as_i64()));
+            .find(|ws| ws.name.as_deref() == Some(&project.name))
+            .map(|ws| ws.id);
 
         if let Some(ws_id) = ws_id {
             add_workspace_entries(
                 &mut entries,
                 ws_id,
                 &project.name,
+                WorkspaceReferenceArg::Name(project.name.clone()),
                 workspace_key,
                 Some(project.dir.clone()),
                 project.static_workspace,
@@ -318,6 +440,7 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
             // Workspace doesn't exist yet - add empty placeholder
             entries.push(WorkspaceColumn {
                 workspace_name: project.name.clone(),
+                workspace_ref: WorkspaceReferenceArg::Name(project.name.clone()),
                 workspace_key,
                 column_index: 2,
                 column_key: KEYS[0],
@@ -332,12 +455,12 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
     }
 
     // 2. Add remaining workspaces (not configured, not ignored), sorted by index
-    let mut remaining: Vec<_> = ws_arr
+    let mut remaining: Vec<_> = workspaces
         .iter()
         .filter_map(|ws| {
-            let ws_id = ws.get("id").and_then(|id| id.as_i64())?;
-            let name_opt = ws.get("name").and_then(|n| n.as_str());
-            let idx = ws.get("idx").and_then(|i| i.as_i64())?;
+            let ws_id = ws.id;
+            let name_opt = ws.name.as_deref();
+            let idx = ws.idx;
 
             // Skip unnamed workspaces if configured
             if name_opt.is_none() && config.ignore_unnamed {
@@ -356,13 +479,18 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
                 return None;
             }
 
-            Some((idx, ws_id, display_name))
+            let workspace_ref = match name_opt {
+                Some(n) => WorkspaceReferenceArg::Name(n.to_string()),
+                None => WorkspaceReferenceArg::Index(idx),
+            };
+
+            Some((idx, ws_id, display_name, workspace_ref))
         })
         .collect();
 
-    remaining.sort_by_key(|(idx, _, _)| *idx);
+    remaining.sort_by_key(|(idx, _, _, _)| *idx);
 
-    for (_, ws_id, display_name) in remaining {
+    for (_, ws_id, display_name, workspace_ref) in remaining {
         if key_idx >= KEYS.len() {
             break;
         }
@@ -373,6 +501,7 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
             &mut entries,
             ws_id,
             &display_name,
+            workspace_ref,
             workspace_key,
             None, // No dir for unconfigured workspaces
             true, // Treat as static (it exists in niri)
@@ -385,12 +514,12 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
     entries
 }
 
-fn focus_workspace(name: &str) {
-    niri_cmd(&["action", "focus-workspace", name]);
+fn focus_workspace(reference: WorkspaceReferenceArg) {
+    niri_action(Action::FocusWorkspace { reference });
 }
 
 fn focus_column(index: u32) {
-    niri_cmd(&["action", "focus-column", &index.to_string()]);
+    niri_action(Action::FocusColumn { index: index as usize });
 }
 
 fn spawn_terminals(dir: &str) {
@@ -406,20 +535,19 @@ fn spawn_terminals(dir: &str) {
 
 fn create_workspace(name: &str, dir: Option<&str>) {
     if get_workspace_by_name(name).is_some() {
-        niri_cmd(&["action", "focus-workspace", name]);
+        focus_workspace(WorkspaceReferenceArg::Name(name.to_string()));
     } else {
-        // Create new workspace
-        if let Some(workspaces) = niri_json(&["workspaces"])
-            && let Some(arr) = workspaces.as_array()
-        {
-            let max_idx = arr
-                .iter()
-                .filter_map(|ws| ws.get("idx").and_then(|i| i.as_i64()))
-                .max()
-                .unwrap_or(0);
-            niri_cmd(&["action", "focus-workspace", &(max_idx + 1).to_string()]);
-        }
-        niri_cmd(&["action", "set-workspace-name", name]);
+        let max_idx = niri_workspaces()
+            .iter()
+            .map(|ws| ws.idx)
+            .max()
+            .unwrap_or(0);
+        let new_idx = max_idx.saturating_add(1);
+        focus_workspace(WorkspaceReferenceArg::Index(new_idx));
+        niri_action(Action::SetWorkspaceName {
+            name: name.to_string(),
+            workspace: None,
+        });
     }
 
     // Only spawn terminals if we have a configured directory
@@ -431,7 +559,7 @@ fn create_workspace(name: &str, dir: Option<&str>) {
 
 fn switch_to_entry(entry: &WorkspaceColumn) {
     if entry.static_workspace {
-        focus_workspace(&entry.workspace_name);
+        focus_workspace(entry.workspace_ref.clone());
         // Only spawn terminals for empty workspaces with a configured dir
         if entry.app_label == "(empty)"
             && let Some(ref dir) = entry.dir
@@ -442,7 +570,7 @@ fn switch_to_entry(entry: &WorkspaceColumn) {
         if entry.app_label == "(empty)" {
             create_workspace(&entry.workspace_name, entry.dir.as_deref());
         }
-        focus_workspace(&entry.workspace_name);
+        focus_workspace(entry.workspace_ref.clone());
     }
     std::thread::sleep(std::time::Duration::from_millis(100));
     focus_column(entry.column_index);
@@ -457,7 +585,69 @@ fn send_toggle() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn start_socket_listener(tx: mpsc::Sender<Message>) {
+fn start_focus_tracker(focus_state: Arc<Mutex<FocusState>>) {
+    thread::spawn(move || loop {
+        let mut socket = match Socket::connect() {
+            Ok(socket) => socket,
+            Err(err) => {
+                eprintln!("Failed to connect to niri IPC: {}", err);
+                thread::sleep(std::time::Duration::from_secs(1));
+                continue;
+            }
+        };
+
+        match socket.send(Request::EventStream) {
+            Ok(Ok(Response::Handled)) => {}
+            Ok(Ok(_)) => {}
+            Ok(Err(err)) => {
+                eprintln!("niri IPC refused event stream: {}", err);
+                thread::sleep(std::time::Duration::from_secs(1));
+                continue;
+            }
+            Err(err) => {
+                eprintln!("Failed to request niri event stream: {}", err);
+                thread::sleep(std::time::Duration::from_secs(1));
+                continue;
+            }
+        }
+
+        let mut read_event = socket.read_events();
+        while let Ok(event) = read_event() {
+            let mut state = focus_state.lock().unwrap();
+            match event {
+                Event::WindowsChanged { windows } => {
+                    state.windows.clear();
+                    let mut focused = None;
+                    for window in windows {
+                        state.update_window(&window);
+                        if window.is_focused {
+                            focused = Some(window.id);
+                        }
+                    }
+                    state.record_focus(focused);
+                }
+                Event::WindowOpenedOrChanged { window } => {
+                    state.update_window(&window);
+                    if window.is_focused {
+                        state.record_focus(Some(window.id));
+                    }
+                }
+                Event::WindowClosed { id } => {
+                    state.windows.remove(&id);
+                    if state.current.window_id == Some(id) {
+                        state.record_focus(None);
+                    }
+                }
+                Event::WindowFocusChanged { id } => {
+                    state.record_focus(id);
+                }
+                _ => {}
+            }
+        }
+    });
+}
+
+fn start_socket_listener(tx: mpsc::Sender<Message>, focus_state: Arc<Mutex<FocusState>>) {
     let path = socket_path();
 
     // Remove existing socket
@@ -475,10 +665,35 @@ fn start_socket_listener(tx: mpsc::Sender<Message>) {
         for stream in listener.incoming() {
             match stream {
                 Ok(mut stream) => {
-                    let mut buf = [0u8; 64];
-                    if let Ok(_n) = stream.read(&mut buf) {
-                        let _ = tx.send(Message::Toggle);
-                        let _ = stream.write_all(b"ok");
+                    let mut buf = [0u8; 2048];
+                    if let Ok(count) = stream.read(&mut buf) {
+                        if count == 0 {
+                            continue;
+                        }
+                        let trimmed = String::from_utf8_lossy(&buf[..count]).trim().to_string();
+                        let request = if trimmed == "toggle" {
+                            Some(IpcRequest::Toggle)
+                        } else if trimmed.is_empty() {
+                            None
+                        } else {
+                            serde_json::from_str::<IpcRequest>(&trimmed).ok()
+                        };
+
+                        match request {
+                            Some(IpcRequest::Toggle) | None => {
+                                let _ = tx.send(Message::Toggle);
+                                let _ = stream.write_all(b"ok");
+                            }
+                            Some(IpcRequest::Focus { ts }) => {
+                                let snapshot = {
+                                    let state = focus_state.lock().unwrap();
+                                    state.focus_at(ts.unwrap_or_else(now))
+                                };
+                                if let Ok(payload) = serde_json::to_vec(&snapshot) {
+                                    let _ = stream.write_all(&payload);
+                                }
+                            }
+                        }
                     }
                 }
                 Err(e) => {
@@ -1058,7 +1273,9 @@ fn main() -> glib::ExitCode {
 
     // Daemon mode: start GTK app with socket listener, config watcher, and claude watcher
     let (tx, rx) = mpsc::channel();
-    start_socket_listener(tx.clone());
+    let focus_state = Arc::new(Mutex::new(FocusState::new()));
+    start_focus_tracker(focus_state.clone());
+    start_socket_listener(tx.clone(), focus_state);
     start_config_watcher(tx.clone());
     start_claude_watcher(tx);
 

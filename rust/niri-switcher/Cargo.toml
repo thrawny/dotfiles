@@ -13,3 +13,4 @@ toml = "0.9"
 shellexpand = "3"
 clap = { version = "4", features = ["derive"] }
 notify = "8"
+niri-ipc = "=25.11.0"

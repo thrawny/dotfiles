@@ -2,7 +2,9 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
-use std::io::{self, Read};
+use std::io::{self, Read, Write};
+use std::net::Shutdown;
+use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -28,6 +30,27 @@ struct SessionData {
 }
 
 type Sessions = HashMap<String, SessionData>;
+
+#[derive(Debug, Serialize)]
+struct FocusRequest {
+    cmd: &'static str,
+    ts: f64,
+}
+
+#[derive(Debug, Deserialize)]
+struct FocusResponse {
+    window_id: Option<u64>,
+    title: Option<String>,
+    app_id: Option<String>,
+    timestamp: Option<f64>,
+}
+
+fn niri_switcher_socket_path() -> PathBuf {
+    env::var("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/tmp"))
+        .join("niri-switcher.sock")
+}
 
 fn sessions_file() -> PathBuf {
     dirs::home_dir()
@@ -65,35 +88,35 @@ fn now() -> f64 {
         .unwrap_or(0.0)
 }
 
+fn query_niri_switcher_focus(ts: f64) -> Option<FocusResponse> {
+    let path = niri_switcher_socket_path();
+    let mut stream = UnixStream::connect(&path).ok()?;
+    let request = FocusRequest { cmd: "focus", ts };
+    let payload = serde_json::to_vec(&request).ok()?;
+    stream.write_all(&payload).ok()?;
+    let _ = stream.shutdown(Shutdown::Write);
+    let mut response = String::new();
+    stream.read_to_string(&mut response).ok()?;
+    serde_json::from_str(&response).ok()
+}
+
 fn get_niri_window_id(sessions: &Sessions) -> Option<String> {
-    let output = Command::new("niri")
-        .args(["msg", "-j", "focused-window"])
-        .output()
-        .ok()?;
-
-    if !output.status.success() {
-        return None;
+    let snapshot = query_niri_switcher_focus(now());
+    if let Some(snapshot) = snapshot {
+        if let Some(window_id) = snapshot.window_id {
+            let window_id = window_id.to_string();
+            if sessions.contains_key(&window_id) {
+                return Some(window_id);
+            }
+            let title = snapshot.title.unwrap_or_default();
+            if let Some(first_char) = title.chars().next()
+                && !first_char.is_alphanumeric()
+            {
+                return Some(window_id);
+            }
+        }
     }
-
-    let data: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
-    let window_id = data
-        .get("id")
-        .and_then(|id| id.as_u64())
-        .map(|id| id.to_string())?;
-
-    // If window is already in active sessions, it's a Claude window
-    if sessions.contains_key(&window_id) {
-        return Some(window_id);
-    }
-
-    // Otherwise check title starts with non-alphanumeric (star, dot, spinner, etc.)
-    let title = data.get("title").and_then(|t| t.as_str()).unwrap_or("");
-    let first_char = title.chars().next()?;
-    if !first_char.is_alphanumeric() {
-        Some(window_id)
-    } else {
-        None
-    }
+    None
 }
 
 fn get_tmux_window_id() -> Option<String> {
@@ -246,32 +269,35 @@ fn main() {
         }
 
         "UserPromptSubmit" => {
-            let window_id = find_session_by_id(&sessions, &session_id).cloned();
-            if let Some(wid) = window_id {
-                if let Some(session) = sessions.get_mut(&wid) {
+            let niri_id = get_niri_window_id(&sessions);
+            let tmux_id = get_tmux_window_id();
+            let focused_id = niri_id.clone().or_else(|| tmux_id.clone());
+            let existing_id = find_session_by_id(&sessions, &session_id).cloned();
+
+            if let Some(focused) = focused_id {
+                if let Some(existing) = existing_id.as_ref()
+                    && existing != &focused
+                {
+                    sessions.remove(existing);
+                }
+
+                sessions.insert(
+                    focused,
+                    SessionData {
+                        session_id,
+                        transcript_path: hook_input.transcript_path,
+                        cwd: hook_input.cwd,
+                        niri_window_id: niri_id,
+                        tmux_window_id: tmux_id,
+                        state: "responding".to_string(),
+                        state_updated: now(),
+                    },
+                );
+                save_sessions(&sessions);
+            } else if let Some(existing) = existing_id {
+                if let Some(session) = sessions.get_mut(&existing) {
                     session.state = "responding".to_string();
                     session.state_updated = now();
-                    save_sessions(&sessions);
-                }
-            } else {
-                // Session not registered yet (e.g., resumed session)
-                let niri_id = get_niri_window_id(&sessions);
-                let tmux_id = get_tmux_window_id();
-                let window_id = niri_id.clone().or_else(|| tmux_id.clone());
-
-                if let Some(wid) = window_id {
-                    sessions.insert(
-                        wid,
-                        SessionData {
-                            session_id,
-                            transcript_path: hook_input.transcript_path,
-                            cwd: hook_input.cwd,
-                            niri_window_id: niri_id,
-                            tmux_window_id: tmux_id,
-                            state: "responding".to_string(),
-                            state_updated: now(),
-                        },
-                    );
                     save_sessions(&sessions);
                 }
             }
