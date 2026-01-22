@@ -1,5 +1,5 @@
 # Rust workspace task runner
-# Packages: niri-switcher, session-tracker, bash-validator
+# Packages: niri-switcher, session-tracker, bash-validator, tmux-fzf-switcher
 
 # On macOS, exclude niri-switcher (requires GTK)
 workspace_args := if os() == "macos" { "--workspace --exclude niri-switcher" } else { "--workspace" }

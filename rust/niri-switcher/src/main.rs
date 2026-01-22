@@ -68,6 +68,24 @@ struct ClaudeSession {
     state: ClaudeState,
 }
 
+#[derive(Debug, Deserialize)]
+struct SessionStore {
+    version: u32,
+    sessions: Vec<SessionEntry>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SessionEntry {
+    session_id: String,
+    source: String,
+    transcript_path: Option<String>,
+    cwd: Option<String>,
+    niri_window_id: Option<String>,
+    tmux_window_id: Option<String>,
+    state: String,
+    state_updated: f64,
+}
+
 #[derive(Debug, Clone)]
 struct WindowInfo {
     title: Option<String>,
@@ -753,9 +771,12 @@ fn start_config_watcher(tx: mpsc::Sender<Message>) {
 }
 
 fn claude_sessions_path() -> PathBuf {
+    if let Ok(cache_home) = std::env::var("XDG_CACHE_HOME") {
+        return PathBuf::from(cache_home).join("active-sessions.json");
+    }
     dirs::home_dir()
         .unwrap_or_else(|| PathBuf::from("~"))
-        .join(".claude")
+        .join(".cache")
         .join("active-sessions.json")
 }
 
@@ -770,40 +791,42 @@ fn load_claude_sessions_file() -> HashMap<u64, ClaudeSession> {
         Err(_) => return HashMap::new(),
     };
 
-    let json: serde_json::Value = match serde_json::from_str(&content) {
-        Ok(v) => v,
+    let store: SessionStore = match serde_json::from_str(&content) {
+        Ok(store) => store,
         Err(_) => return HashMap::new(),
     };
 
     let mut sessions = HashMap::new();
-    if let Some(obj) = json.as_object() {
-        for (window_id_str, session_data) in obj {
-            if let Ok(window_id) = window_id_str.parse::<u64>()
-                && let Some(transcript_path) =
-                    session_data.get("transcript_path").and_then(|p| p.as_str())
-            {
-                let state = session_data
-                    .get("state")
-                    .and_then(|s| s.as_str())
-                    .map(ClaudeState::from_str)
-                    .unwrap_or(ClaudeState::Unknown);
-                sessions.insert(
-                    window_id,
-                    ClaudeSession {
-                        transcript_path: PathBuf::from(transcript_path),
-                        state,
-                    },
-                );
-            }
+    for session in store.sessions.into_iter() {
+        if session.source != "claude" {
+            continue;
         }
+        let window_id = match session.niri_window_id.as_deref() {
+            Some(id) => id.parse::<u64>().ok(),
+            None => None,
+        };
+        let Some(window_id) = window_id else {
+            continue;
+        };
+        let Some(transcript_path) = session.transcript_path.as_ref() else {
+            continue;
+        };
+        let state = ClaudeState::from_str(&session.state);
+        sessions.insert(
+            window_id,
+            ClaudeSession {
+                transcript_path: PathBuf::from(transcript_path),
+                state,
+            },
+        );
     }
     sessions
 }
 
 fn start_claude_watcher(tx: mpsc::Sender<Message>) {
-    let claude_dir = dirs::home_dir()
-        .unwrap_or_else(|| PathBuf::from("~"))
-        .join(".claude");
+    let claude_dir = std::env::var("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from("~")).join(".cache"));
 
     // Shared state: transcript path -> window_id mapping
     let transcript_map: Arc<Mutex<HashMap<PathBuf, u64>>> = Arc::new(Mutex::new(HashMap::new()));
@@ -884,7 +907,7 @@ fn start_claude_watcher(tx: mpsc::Sender<Message>) {
             }
         };
 
-        // Watch ~/.claude directory for active-sessions.json
+        // Watch cache directory for active-sessions.json
         if claude_dir.exists()
             && let Err(e) = sessions_watcher.watch(&claude_dir, RecursiveMode::NonRecursive)
         {
