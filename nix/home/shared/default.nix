@@ -72,8 +72,11 @@ in
     };
 
     file = {
-      # Codex configuration
-      ".codex".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex";
+      # Codex configuration (individual symlinks - Codex 0.88.0+ preserves symlinks)
+      ".codex/config.toml".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/config.toml";
+      ".codex/prompts".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/prompts";
 
       # Claude configuration
       ".claude/commands".source =

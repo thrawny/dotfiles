@@ -9,9 +9,7 @@ config/k9s/aliases.yaml
 
 config/lazygit/state.yml
 
-config/codex/*
-!config/codex/config.example.toml
-!config/codex/prompts
+config/codex/config.toml
 
 config/cursor/settings.json
 

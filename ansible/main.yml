@@ -14,7 +14,6 @@
         dest: "{{ home_dir }}/.{{ item.name }}"
         src: "{{ dotfiles_dir }}/{{ item.dir }}{{ item.name }}"
       with_items:
-        - { name: "vim", dir: "config/" }
         - { name: "zshrc", dir: "config/zsh/" }
         - { name: "ideavimrc", dir: "config/jetbrains/" }
         - { name: "gitconfig", dir: "config/git/" }
@@ -63,11 +62,23 @@
         dest: "{{ home_dir }}/.default-npm-packages"
         src: "{{ dotfiles_dir }}/config/npm/default-packages"
 
-    - name: codex folder is symlinked
+    - name: ~/.codex directory is present
+      file:
+        state: directory
+        path: "{{ home_dir }}/.codex"
+        mode: '0755'
+
+    - name: codex config.toml is symlinked
       file:
         state: link
-        dest: "{{ home_dir }}/.codex"
-        src: "{{ dotfiles_dir }}/config/codex"
+        dest: "{{ home_dir }}/.codex/config.toml"
+        src: "{{ dotfiles_dir }}/config/codex/config.toml"
+
+    - name: codex prompts are symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.codex/prompts"
+        src: "{{ dotfiles_dir }}/config/codex/prompts"
 
     # =============================================================================
     # All Platforms - Claude Config
