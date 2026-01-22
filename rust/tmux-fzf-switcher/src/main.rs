@@ -2,10 +2,13 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
+use std::fs::OpenOptions;
 use std::io::{self, BufRead, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
-use std::fs::OpenOptions;
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
+use std::thread;
+use std::time::Duration;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 const KEYS: [char; 12] = ['h', 'j', 'k', 'l', 'u', 'i', 'o', 'p', 'n', 'm', ',', '.'];
@@ -81,7 +84,11 @@ struct Tty {
 
 impl Tty {
     fn open() -> Option<Self> {
-        let file = OpenOptions::new().read(true).write(true).open("/dev/tty").ok()?;
+        let file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .open("/dev/tty")
+            .ok()?;
         Some(Self { file })
     }
 
@@ -142,7 +149,6 @@ fn load_sessions() -> Vec<SessionEntry> {
     Vec::new()
 }
 
-
 fn session_order_path() -> PathBuf {
     if let Ok(config_home) = env::var("XDG_CONFIG_HOME") {
         return PathBuf::from(config_home)
@@ -158,10 +164,7 @@ fn session_order_path() -> PathBuf {
 
 fn load_session_order() -> Vec<String> {
     let path = session_order_path();
-    debug_log(&format!(
-        "session order file: {}",
-        path.to_string_lossy()
-    ));
+    debug_log(&format!("session order file: {}", path.to_string_lossy()));
     let content = match fs::read_to_string(&path) {
         Ok(content) => content,
         Err(_) => return Vec::new(),
@@ -264,9 +267,16 @@ fn update_codex_session(
     entry.state_updated = updated;
 }
 
+#[derive(Clone)]
+struct LastMessage {
+    role: String,
+    text: String,
+    timestamp: f64,
+}
+
 fn handle_codex_record(
     codex: &mut HashMap<String, SessionEntry>,
-    last_assistant: &mut HashMap<String, String>,
+    last_message: &mut HashMap<String, LastMessage>,
     record: CodexRecord,
     fallback_session_id: Option<&str>,
     fallback_cwd: Option<&str>,
@@ -304,12 +314,17 @@ fn handle_codex_record(
             if session_id.is_empty() {
                 return;
             }
+            let Some(ts) = record_ts else {
+                return;
+            };
             match event_type {
                 "user_message" => {
                     update_codex_session(codex, session_id, fallback_cwd, "responding", record_ts);
+                    update_last_message(last_message, session_id, "user", "", ts);
                 }
                 "agent_message" => {
                     update_codex_session(codex, session_id, fallback_cwd, "idle", record_ts);
+                    update_last_message(last_message, session_id, "assistant", "", ts);
                 }
                 _ => {}
             }
@@ -331,19 +346,44 @@ fn handle_codex_record(
             }
             if role == "assistant" {
                 update_codex_session(codex, session_id, fallback_cwd, "responding", record_ts);
-                if let Some(text) = extract_assistant_text(&record.payload) {
-                    last_assistant.insert(session_id.to_string(), text);
-                }
+                let Some(ts) = record_ts else {
+                    return;
+                };
+                let text = extract_assistant_text(&record.payload).unwrap_or_default();
+                update_last_message(last_message, session_id, "assistant", &text, ts);
             }
         }
         _ => {}
     }
 }
 
+fn update_last_message(
+    last_message: &mut HashMap<String, LastMessage>,
+    session_id: &str,
+    role: &str,
+    text: &str,
+    timestamp: f64,
+) {
+    let replace = match last_message.get(session_id) {
+        Some(existing) => timestamp >= existing.timestamp,
+        None => true,
+    };
+    if replace {
+        last_message.insert(
+            session_id.to_string(),
+            LastMessage {
+                role: role.to_string(),
+                text: text.to_string(),
+                timestamp,
+            },
+        );
+    }
+}
+
 fn process_codex_file(
     path: &Path,
     codex: &mut HashMap<String, SessionEntry>,
-    last_assistant: &mut HashMap<String, String>,
+    last_message: &mut HashMap<String, LastMessage>,
 ) {
     let file = match fs::File::open(path) {
         Ok(file) => file,
@@ -369,7 +409,7 @@ fn process_codex_file(
             }
             handle_codex_record(
                 codex,
-                last_assistant,
+                last_message,
                 record,
                 session_id.as_deref(),
                 cwd.as_deref(),
@@ -378,21 +418,76 @@ fn process_codex_file(
     }
 }
 
+fn read_codex_file_meta(path: &Path) -> Option<(String, String)> {
+    let file = fs::File::open(path).ok()?;
+    let reader = BufReader::new(file);
+    for line in reader.lines().map_while(Result::ok) {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let record = serde_json::from_str::<CodexRecord>(trimmed).ok()?;
+        if record.record_type != "session_meta" {
+            continue;
+        }
+        let session_id = record
+            .payload
+            .get("id")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let cwd = record
+            .payload
+            .get("cwd")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        if session_id.is_empty() || cwd.is_empty() {
+            return None;
+        }
+        return Some((session_id, cwd));
+    }
+    None
+}
+
 fn load_codex_sessions() -> HashMap<String, SessionEntry> {
     let mut codex = HashMap::new();
-    let mut last_assistant: HashMap<String, String> = HashMap::new();
+    let mut last_message: HashMap<String, LastMessage> = HashMap::new();
     let root = codex_sessions_root();
     if root.exists() {
         let mut files = Vec::new();
         walk_codex_files(root.as_path(), &mut files);
         debug_log(&format!("codex files: {}", files.len()));
+
+        let mut by_cwd: HashMap<String, (std::time::SystemTime, PathBuf)> = HashMap::new();
         for file in files {
-            process_codex_file(file.as_path(), &mut codex, &mut last_assistant);
+            let meta = match fs::metadata(&file).and_then(|m| m.modified()) {
+                Ok(modified) => modified,
+                Err(_) => continue,
+            };
+            let (_, cwd) = match read_codex_file_meta(file.as_path()) {
+                Some(info) => info,
+                None => continue,
+            };
+            let replace = match by_cwd.get(&cwd) {
+                Some((existing, _)) => meta > *existing,
+                None => true,
+            };
+            if replace {
+                by_cwd.insert(cwd, (meta, file));
+            }
+        }
+
+        debug_log(&format!("codex files (latest per cwd): {}", by_cwd.len()));
+        let mut selected: Vec<(std::time::SystemTime, PathBuf)> = by_cwd.into_values().collect();
+        selected.sort_by_key(|(meta, _)| *meta);
+        for (_, file) in selected {
+            process_codex_file(file.as_path(), &mut codex, &mut last_message);
         }
     }
     debug_log(&format!("codex sessions: {}", codex.len()));
     apply_codex_idle_timeout(&mut codex);
-    apply_codex_waiting(&mut codex, &last_assistant);
+    apply_codex_waiting(&mut codex, &last_message);
     codex
 }
 
@@ -433,13 +528,16 @@ fn apply_codex_idle_timeout(codex: &mut HashMap<String, SessionEntry>) {
     }
 }
 
-fn apply_codex_waiting(codex: &mut HashMap<String, SessionEntry>, last_assistant: &HashMap<String, String>) {
+fn apply_codex_waiting(
+    codex: &mut HashMap<String, SessionEntry>,
+    last_message: &HashMap<String, LastMessage>,
+) {
     for entry in codex.values_mut() {
         if entry.state != "idle" {
             continue;
         }
-        if let Some(text) = last_assistant.get(&entry.session_id) {
-            if text.trim_end().ends_with('?') {
+        if let Some(message) = last_message.get(&entry.session_id) {
+            if message.role == "assistant" && message.text.trim_end().ends_with('?') {
                 entry.state = "waiting".to_string();
             }
         }
@@ -497,11 +595,7 @@ fn list_windows() -> Vec<WindowRow> {
             continue;
         }
         let session_index = parts[0].to_string();
-        let session_name = parts[0]
-            .split(':')
-            .next()
-            .unwrap_or("")
-            .to_string();
+        let session_name = parts[0].split(':').next().unwrap_or("").to_string();
         if session_name.starts_with("drawer-") {
             continue;
         }
@@ -518,8 +612,7 @@ fn list_windows() -> Vec<WindowRow> {
 }
 
 fn filter_windows(rows: &[WindowRow]) -> Vec<WindowRow> {
-    rows
-        .iter()
+    rows.iter()
         .filter(|row| row.session_name != "dev" && row.session_name != "scratch")
         .cloned()
         .collect()
@@ -549,7 +642,10 @@ fn sorted_sessions(rows: &[WindowRow], order: &[String]) -> Vec<String> {
 }
 
 fn key_to_index(key: char) -> i32 {
-    KEYS.iter().position(|&k| k == key).map(|v| v as i32).unwrap_or(-1)
+    KEYS.iter()
+        .position(|&k| k == key)
+        .map(|v| v as i32)
+        .unwrap_or(-1)
 }
 
 fn status_for_window(
@@ -750,7 +846,12 @@ fn build_claude_map(sessions: &[SessionEntry]) -> HashMap<String, SessionEntry> 
     sessions
         .iter()
         .filter(|entry| entry.source == "claude")
-        .filter_map(|entry| entry.tmux_window_id.as_ref().map(|id| (id.clone(), entry.clone())))
+        .filter_map(|entry| {
+            entry
+                .tmux_window_id
+                .as_ref()
+                .map(|id| (id.clone(), entry.clone()))
+        })
         .collect()
 }
 
@@ -762,80 +863,22 @@ fn build_codex_map(sessions: &[SessionEntry]) -> HashMap<String, SessionEntry> {
         .collect()
 }
 
-fn main() {
-    if !debug_enabled() && env::var("TMUX").is_err() {
-        eprintln!("tmux-fzf-switcher must run inside tmux");
-        return;
-    }
+enum ScreenState {
+    Sessions,
+    Windows {
+        target_session: String,
+        session_windows: Vec<WindowRow>,
+    },
+}
 
-    let mut tty = Tty::open();
-
-    let all_windows = list_windows();
-    let windows = filter_windows(&all_windows);
-    if windows.is_empty() {
-        eprintln!("No tmux windows found");
-        return;
-    }
-
-    let session_order = load_session_order();
-    let sessions = sorted_sessions(&windows, &session_order);
-
-    let active_sessions = load_sessions();
-    let codex_sessions = load_codex_sessions();
-    let codex_vec: Vec<SessionEntry> = codex_sessions.values().cloned().collect();
-    let claude_by_tmux = build_claude_map(&active_sessions);
-    let codex_by_cwd = build_codex_map(&codex_vec);
-    if debug_enabled() {
-        debug_log(&format!("active sessions: {}", active_sessions.len()));
-        if !session_order.is_empty() {
-            debug_log(&format!("session order: {}", session_order.join(",")));
-        }
-        debug_log(&format!("sorted sessions: {}", sessions.join(",")));
-        let mut source_counts: HashMap<String, usize> = HashMap::new();
-        for entry in &active_sessions {
-            *source_counts.entry(entry.source.clone()).or_insert(0) += 1;
-        }
-        for (source, count) in source_counts {
-            debug_log(&format!("source count: {source}={count}"));
-        }
-        debug_log(&format!("claude tmux count: {}", claude_by_tmux.len()));
-        for key in claude_by_tmux.keys() {
-            debug_log(&format!("claude tmux id: {key}"));
-        }
-        for (cwd, entry) in &codex_by_cwd {
-            debug_log(&format!(
-                "codex: session={} state={} cwd={}",
-                entry.session_id,
-                entry.state,
-                cwd
-            ));
-        }
-        for row in &windows {
-            debug_log(&format!(
-                "window: {}:{} id={} path={} cmd={} name={}",
-                row.session_name,
-                row.session_index,
-                row.window_id,
-                row.pane_path,
-                row.pane_command,
-                row.window_name
-            ));
-        }
-    }
-
-    if debug_only() {
-        return;
-    }
-
-    let _raw = match enable_raw_mode() {
-        Some(guard) => guard,
-        None => {
-            eprintln!("Failed to enable raw mode");
-            return;
-        }
-    };
-
-    print_clear(&mut tty);
+fn render_sessions_screen(
+    tty: &mut Option<Tty>,
+    sessions: &[String],
+    windows: &[WindowRow],
+    claude_by_tmux: &HashMap<String, SessionEntry>,
+    codex_by_cwd: &HashMap<String, SessionEntry>,
+) {
+    print_clear(tty);
     let header = "h/j/k/l = select session | / = search | q/Esc = cancel\n\n";
     if let Some(tty) = tty.as_mut() {
         tty.write_all(header);
@@ -863,7 +906,7 @@ fn main() {
                     row.session_name, row.session_index, row.window_id, row.pane_path
                 ));
             }
-            let status = status_for_window(row, &claude_by_tmux, &codex_by_cwd);
+            let status = status_for_window(row, claude_by_tmux, codex_by_cwd);
             let line = format_window_line(row, status);
             if let Some(tty) = tty.as_mut() {
                 tty.write_all(&format!("\x1b[33m[{skey}{wkey}]\x1b[0m {line}\n"));
@@ -878,30 +921,16 @@ fn main() {
     } else {
         let _ = io::stdout().flush();
     }
+}
 
-    let key1 = match read_key(true, &mut tty) {
-        Some(key) => key,
-        None => return,
-    };
-
-    if key1 == '/' {
-        drop(_raw);
-        run_fzf_search(&all_windows);
-        return;
-    }
-
-    if key1 == 'q' || key1 == 27 as char {
-        return;
-    }
-
-    let session_idx = key_to_index(key1);
-    if session_idx < 0 || session_idx as usize >= sessions.len() {
-        eprintln!("Invalid session key: {key1}");
-        return;
-    }
-
-    let target_session = &sessions[session_idx as usize];
-    print_clear(&mut tty);
+fn render_windows_screen(
+    tty: &mut Option<Tty>,
+    target_session: &str,
+    windows: &[WindowRow],
+    claude_by_tmux: &HashMap<String, SessionEntry>,
+    codex_by_cwd: &HashMap<String, SessionEntry>,
+) -> Vec<WindowRow> {
+    print_clear(tty);
     if let Some(tty) = tty.as_mut() {
         tty.write_all("h/j/k/l = select window | q/Esc = cancel\n\n");
         tty.write_all(&format!("\x1b[36mSession: {target_session}\x1b[0m\n\n"));
@@ -915,12 +944,12 @@ fn main() {
     let mut session_windows = Vec::new();
     for (widx, row) in windows
         .iter()
-        .filter(|row| &row.session_name == target_session)
+        .filter(|row| row.session_name == target_session)
         .enumerate()
     {
         session_windows.push(row.clone());
         let wkey = if widx < KEYS.len() { KEYS[widx] } else { '?' };
-        let status = status_for_window(row, &claude_by_tmux, &codex_by_cwd);
+        let status = status_for_window(row, claude_by_tmux, codex_by_cwd);
         let line = format_window_line(row, status);
         if let Some(tty) = tty.as_mut() {
             tty.write_all(&format!("\x1b[33m[{wkey}]\x1b[0m {line}\n"));
@@ -934,32 +963,207 @@ fn main() {
         let _ = io::stdout().flush();
     }
 
-    let key2 = match read_key(true, &mut tty) {
-        Some(key) => key,
-        None => return,
+    session_windows
+}
+
+fn main() {
+    if !debug_enabled() && env::var("TMUX").is_err() {
+        eprintln!("tmux-fzf-switcher must run inside tmux");
+        return;
+    }
+
+    let mut tty_out = Tty::open();
+
+    let all_windows = list_windows();
+    let windows = filter_windows(&all_windows);
+    if windows.is_empty() {
+        eprintln!("No tmux windows found");
+        return;
+    }
+
+    let session_order = load_session_order();
+    let sessions = sorted_sessions(&windows, &session_order);
+
+    let active_sessions = load_sessions();
+    let claude_by_tmux = build_claude_map(&active_sessions);
+    let mut codex_by_cwd: HashMap<String, SessionEntry> = HashMap::new();
+    if debug_enabled() {
+        debug_log(&format!("active sessions: {}", active_sessions.len()));
+        if !session_order.is_empty() {
+            debug_log(&format!("session order: {}", session_order.join(",")));
+        }
+        debug_log(&format!("sorted sessions: {}", sessions.join(",")));
+        let mut source_counts: HashMap<String, usize> = HashMap::new();
+        for entry in &active_sessions {
+            *source_counts.entry(entry.source.clone()).or_insert(0) += 1;
+        }
+        for (source, count) in source_counts {
+            debug_log(&format!("source count: {source}={count}"));
+        }
+        debug_log(&format!("claude tmux count: {}", claude_by_tmux.len()));
+        for key in claude_by_tmux.keys() {
+            debug_log(&format!("claude tmux id: {key}"));
+        }
+        for row in &windows {
+            debug_log(&format!(
+                "window: {}:{} id={} path={} cmd={} name={}",
+                row.session_name,
+                row.session_index,
+                row.window_id,
+                row.pane_path,
+                row.pane_command,
+                row.window_name
+            ));
+        }
+    }
+
+    if debug_only() {
+        return;
+    }
+
+    let _raw = match enable_raw_mode() {
+        Some(guard) => guard,
+        None => {
+            eprintln!("Failed to enable raw mode");
+            return;
+        }
     };
 
-    if key2 == 'q' || key2 == 27 as char {
-        return;
-    }
+    let (key_tx, key_rx) = mpsc::channel::<char>();
+    thread::spawn(move || {
+        let mut tty_in = Tty::open();
+        while let Some(key) = read_key(true, &mut tty_in) {
+            if key_tx.send(key).is_err() {
+                break;
+            }
+        }
+    });
 
-    let window_idx = key_to_index(key2);
-    if window_idx < 0 {
-        eprintln!("Invalid window key: {key2}");
-        return;
-    }
+    let (codex_tx, codex_rx) = mpsc::channel::<HashMap<String, SessionEntry>>();
+    thread::spawn(move || {
+        let codex_sessions = load_codex_sessions();
+        let _ = codex_tx.send(codex_sessions);
+    });
 
-    let window_idx = window_idx as usize;
-    let target = session_windows
-        .get(window_idx)
-        .map(|row| row.session_index.clone())
-        .unwrap_or_default();
-    if target.is_empty() {
-        eprintln!("Window not found");
-        return;
-    }
+    let mut codex_loaded = false;
+    let mut screen = ScreenState::Sessions;
+    render_sessions_screen(
+        &mut tty_out,
+        &sessions,
+        &windows,
+        &claude_by_tmux,
+        &codex_by_cwd,
+    );
 
-    let _ = Command::new("tmux")
-        .args(["switch-client", "-t", &target])
-        .status();
+    loop {
+        if !codex_loaded {
+            if let Ok(codex_sessions) = codex_rx.try_recv() {
+                let codex_vec: Vec<SessionEntry> = codex_sessions.values().cloned().collect();
+                codex_by_cwd = build_codex_map(&codex_vec);
+                codex_loaded = true;
+                if debug_enabled() {
+                    debug_log(&format!("codex sessions: {}", codex_sessions.len()));
+                    for (cwd, entry) in &codex_by_cwd {
+                        debug_log(&format!(
+                            "codex: session={} state={} cwd={}",
+                            entry.session_id, entry.state, cwd
+                        ));
+                    }
+                }
+                let target_session = match &screen {
+                    ScreenState::Sessions => {
+                        render_sessions_screen(
+                            &mut tty_out,
+                            &sessions,
+                            &windows,
+                            &claude_by_tmux,
+                            &codex_by_cwd,
+                        );
+                        None
+                    }
+                    ScreenState::Windows { target_session, .. } => Some(target_session.clone()),
+                };
+                if let Some(target_session) = target_session {
+                    let session_windows = render_windows_screen(
+                        &mut tty_out,
+                        &target_session,
+                        &windows,
+                        &claude_by_tmux,
+                        &codex_by_cwd,
+                    );
+                    screen = ScreenState::Windows {
+                        target_session,
+                        session_windows,
+                    };
+                }
+            }
+        }
+
+        let key = match key_rx.recv_timeout(Duration::from_millis(50)) {
+            Ok(key) => key,
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => return,
+        };
+
+        match &mut screen {
+            ScreenState::Sessions => {
+                if key == '/' {
+                    drop(_raw);
+                    run_fzf_search(&all_windows);
+                    return;
+                }
+
+                if key == 'q' || key == 27 as char {
+                    return;
+                }
+
+                let session_idx = key_to_index(key);
+                if session_idx < 0 || session_idx as usize >= sessions.len() {
+                    eprintln!("Invalid session key: {key}");
+                    return;
+                }
+
+                let target_session = sessions[session_idx as usize].clone();
+                let session_windows = render_windows_screen(
+                    &mut tty_out,
+                    &target_session,
+                    &windows,
+                    &claude_by_tmux,
+                    &codex_by_cwd,
+                );
+                screen = ScreenState::Windows {
+                    target_session,
+                    session_windows,
+                };
+            }
+            ScreenState::Windows {
+                session_windows, ..
+            } => {
+                if key == 'q' || key == 27 as char {
+                    return;
+                }
+
+                let window_idx = key_to_index(key);
+                if window_idx < 0 {
+                    eprintln!("Invalid window key: {key}");
+                    return;
+                }
+
+                let window_idx = window_idx as usize;
+                let target = session_windows
+                    .get(window_idx)
+                    .map(|row| row.session_index.clone())
+                    .unwrap_or_default();
+                if target.is_empty() {
+                    eprintln!("Window not found");
+                    return;
+                }
+
+                let _ = Command::new("tmux")
+                    .args(["switch-client", "-t", &target])
+                    .status();
+                return;
+            }
+        }
+    }
 }
