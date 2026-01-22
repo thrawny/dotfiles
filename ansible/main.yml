@@ -80,6 +80,24 @@
         dest: "{{ home_dir }}/.codex/prompts"
         src: "{{ dotfiles_dir }}/config/codex/prompts"
 
+    - name: codex AGENTS.md is symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.codex/AGENTS.md"
+        src: "{{ dotfiles_dir }}/config/codex/AGENTS.md"
+
+    - name: ~/.codex/rules directory is present
+      file:
+        state: directory
+        path: "{{ home_dir }}/.codex/rules"
+        mode: '0755'
+
+    - name: codex code-quality rules are symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.codex/rules/code-quality.rules"
+        src: "{{ dotfiles_dir }}/config/codex/rules/code-quality.rules"
+
     # =============================================================================
     # All Platforms - Claude Config
     # =============================================================================

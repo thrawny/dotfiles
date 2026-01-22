@@ -77,6 +77,10 @@ in
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/config.toml";
       ".codex/prompts".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/prompts";
+      ".codex/AGENTS.md".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/AGENTS.md";
+      ".codex/rules/code-quality.rules".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/rules/code-quality.rules";
 
       # Claude configuration
       ".claude/commands".source =
