@@ -40,6 +40,7 @@ def bg_true(hex_color: str) -> str:
 WHITE = "ffffff"
 BLACK = "000000"
 RED = "ae605e"
+DARK_RED = "8b4a48"
 YELLOW = "ffd602"
 BLUE = "5f87d7"
 GREEN = "87af87"
@@ -49,7 +50,7 @@ COLORS = {
     "tokens": (BLACK, YELLOW),
     "percentage": (BLACK, YELLOW),
     "percentage_warn": (BLACK, YELLOW),
-    "percentage_crit": (WHITE, RED),
+    "percentage_crit": (WHITE, DARK_RED),
     "branch": (WHITE, BLUE),
     "changes": (BLACK, GREEN),
 }
