@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["session-tracker", "niri-switcher", "bash-validator", "tmux-fzf-switcher"]
+members = ["session-tracker", "niri-switcher", "bash-validator", "tmux-fzf-switcher", "voice"]
 
 [workspace.package]
 edition = "2024"
