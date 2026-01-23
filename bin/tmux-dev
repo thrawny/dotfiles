@@ -11,52 +11,27 @@ error() {
 }
 
 show_usage() {
-  echo "Usage: tmux-dev-server-control <action> [options]"
+  echo "Usage: tmux-dev <action> [options]"
   echo ""
   echo "All processes run as windows in the '$DEV_SESSION' tmux session."
   echo "Window names are auto-generated from directory + command."
   echo ""
   echo "Actions:"
-  echo "  start <command...>   - Start a dev server (name auto-generated)"
+  echo "  start <command...>   - Start (or restart) a dev server"
   echo "  stop <name>          - Stop a dev server window"
+  echo "  status <name>        - Check if window is running or exited"
   echo "  logs <name> [lines]  - Show recent logs from window"
   echo "  list                 - List all dev server windows"
   echo ""
   echo "Examples:"
-  echo "  cd ~/code/myapp && tmux-dev-server-control start npm run dev"
+  echo "  cd ~/code/myapp && tmux-dev start npm run dev"
   echo "    -> creates window 'myapp-npm-dev'"
   echo ""
-  echo "  tmux-dev-server-control logs myapp-npm-dev 100"
-  echo "  tmux-dev-server-control stop myapp-npm-dev"
-  echo "  tmux-dev-server-control list"
+  echo "  tmux-dev logs myapp-npm-dev 100"
+  echo "  tmux-dev stop myapp-npm-dev"
+  echo "  tmux-dev list"
   echo ""
   echo "Attach to session: tmux attach -t $DEV_SESSION"
-}
-
-validate_command() {
-  local command="$*"
-
-  local allowed_patterns=(
-    "^npm (run|start)"
-    "^yarn (dev|start|build)"
-    "^pnpm (dev|start|build)"
-    "^npx " "^node " "^bun "
-    "^go run" "^go build"
-    "^python" "^python3"
-    "^flask run" "^uvicorn " "^gunicorn " "^uv run "
-    "^docker-compose up" "^docker compose up" "^docker run"
-    "^make "
-    "^./scripts/" "^bin/"
-    "^nix (run|develop|shell)"
-  )
-
-  for pattern in "${allowed_patterns[@]}"; do
-    if [[ "$command" =~ $pattern ]]; then
-      return 0
-    fi
-  done
-
-  error "Command not allowed: $command"
 }
 
 session_exists() {
@@ -65,6 +40,23 @@ session_exists() {
 
 window_exists() {
   tmux list-windows -t "$DEV_SESSION" -F "#{window_name}" 2>/dev/null | grep -qx "$1"
+}
+
+window_status() {
+  local name="$1"
+  if ! window_exists "$name"; then
+    echo "not_found"
+    return
+  fi
+  local output
+  output=$(tmux capture-pane -t "$DEV_SESSION:$name" -p -S - 2>/dev/null || true)
+  if echo "$output" | grep -q "=== Exited with code:"; then
+    local code
+    code=$(echo "$output" | grep "=== Exited with code:" | tail -1 | sed 's/.*code: //')
+    echo "exited:$code"
+  else
+    echo "running"
+  fi
 }
 
 ensure_session() {
@@ -127,6 +119,12 @@ generate_name() {
     make)
       slug="${cmd_words[1]:-make}"
       ;;
+    just)
+      # Use the last argument as the target name (e.g., just rust::watch session-tracker -> session-tracker)
+      slug="${cmd_words[-1]}"
+      # If only `just <recipe>`, use the recipe name
+      [[ "$slug" == "just" ]] && slug="${cmd_words[1]:-just}"
+      ;;
     nix)
       # Extract package name from flake reference (e.g., .#niri-switcher -> niri-switcher)
       local flake_ref=""
@@ -164,25 +162,18 @@ generate_name() {
 handle_start() {
   if [[ $# -lt 1 ]]; then
     error "start requires command
-Usage: tmux-dev-server-control start <command...>"
+Usage: tmux-dev start <command...>"
   fi
 
   local command="$*"
   local name
   name=$(generate_name "$command")
 
-  validate_command "$command" || return 1
-
   ensure_session
 
   if window_exists "$name"; then
-    echo "Window '$name' already exists"
-    echo ""
-    echo "Recent logs:"
-    tmux capture-pane -t "$DEV_SESSION:$name" -p -S - | grep -v '^$' | tail -10
-    echo ""
-    echo "Use 'stop $name' first, or 'logs $name' for more output"
-    return 1
+    echo "Restarting '$name'..."
+    tmux kill-window -t "$DEV_SESSION:$name"
   fi
 
   local cwd="$PWD"
@@ -202,19 +193,53 @@ Usage: tmux-dev-server-control start <command...>"
   tmux new-window -t "${DEV_SESSION}:" -n "$name" -c "$cwd" \
     "bash -c '${command}; echo; echo \"=== Exited with code: \$?\"; read -p \"Press enter to close...\"'"
 
+  # Store command and cwd for reference
+  tmux set-option -t "$DEV_SESSION:$name" @cmd "$command"
+  tmux set-option -t "$DEV_SESSION:$name" @cwd "$cwd"
+
   # Clean up placeholder window if it exists
   if tmux list-windows -t "$DEV_SESSION" -F "#{window_name}" | grep -qx "_placeholder"; then
     tmux kill-window -t "$DEV_SESSION:_placeholder" 2>/dev/null || true
   fi
 
   sleep 1
-  if window_exists "$name"; then
-    echo "✓ Window '$name' started in session '$DEV_SESSION'"
-  else
+  if ! window_exists "$name"; then
     echo "✗ Window exited immediately"
     echo "Try running manually: cd $cwd && $command"
     return 1
   fi
+
+  echo "✓ Window '$name' started in session '$DEV_SESSION'"
+  echo "WINDOW_NAME: $name"
+  echo ""
+  echo "=== $name (streaming for 10s) ==="
+
+  local last_output=""
+  for _ in {1..10}; do
+    if ! window_exists "$name"; then
+      echo ""
+      echo "✗ Process exited"
+      return 1
+    fi
+    local current_output
+    current_output=$(tmux capture-pane -t "$DEV_SESSION:$name" -p -S - | grep -v '^$')
+    if [[ "$current_output" != "$last_output" ]]; then
+      # Print only new lines
+      if [[ -n "$last_output" ]]; then
+        local last_lines new_lines
+        last_lines=$(echo "$last_output" | wc -l)
+        new_lines=$(echo "$current_output" | tail -n "+$((last_lines + 1))")
+        [[ -n "$new_lines" ]] && echo "$new_lines"
+      else
+        echo "$current_output"
+      fi
+      last_output="$current_output"
+    fi
+    sleep 1
+  done
+
+  echo ""
+  echo "=== Detached (use 'tmux-dev logs $name' for more) ==="
 }
 
 handle_stop() {
@@ -256,6 +281,37 @@ handle_logs() {
   tmux capture-pane -t "$DEV_SESSION:$name" -p -S - | grep -v '^$' | tail -n "$lines"
 }
 
+handle_status() {
+  if [[ $# -lt 1 ]]; then
+    error "status requires window name"
+  fi
+
+  local name="$1"
+
+  if ! session_exists; then
+    echo "$name: not_found"
+    return 1
+  fi
+
+  local status
+  status=$(window_status "$name")
+
+  case "$status" in
+    running)
+      echo "$name: running"
+      ;;
+    exited:*)
+      local code="${status#exited:}"
+      echo "$name: exited (code $code)"
+      return 1
+      ;;
+    not_found)
+      echo "$name: not_found"
+      return 1
+      ;;
+  esac
+}
+
 handle_list() {
   if ! session_exists; then
     echo "No dev server session"
@@ -272,7 +328,17 @@ handle_list() {
 
   echo "Dev server windows (session: $DEV_SESSION):"
   while IFS= read -r name; do
-    echo "  $name"
+    local status
+    status=$(window_status "$name")
+    case "$status" in
+      running)
+        printf "  %-30s running\n" "$name"
+        ;;
+      exited:*)
+        local code="${status#exited:}"
+        printf "  %-30s exited (code %s)\n" "$name" "$code"
+        ;;
+    esac
   done <<< "$windows"
   echo ""
   echo "Attach: tmux attach -t $DEV_SESSION"
@@ -290,6 +356,7 @@ main() {
   case "$action" in
     start) handle_start "$@" ;;
     stop) handle_stop "$@" ;;
+    status) handle_status "$@" ;;
     logs) handle_logs "$@" ;;
     list) handle_list ;;
     *)
