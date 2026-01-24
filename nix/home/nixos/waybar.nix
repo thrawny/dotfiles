@@ -1,5 +1,6 @@
-_:
+{ config, ... }:
 let
+  homeDir = config.home.homeDirectory;
   # Shared style for both configs
   sharedStyle = ''
     @define-color waybar-bg rgba(28, 28, 28, 0.3);
@@ -69,6 +70,18 @@ let
 
     #network {
       padding-right: 12px;
+    }
+
+    #custom-quotabar {
+      padding: 0 8px;
+    }
+
+    #custom-quotabar.warning {
+      color: #e6db74;
+    }
+
+    #custom-quotabar.critical {
+      color: @waybar-warning;
     }
   '';
 
@@ -157,6 +170,13 @@ let
 
     tray.spacing = 8;
 
+    "custom/quotabar" = {
+      exec = "${homeDir}/.cargo/bin/quotabar waybar";
+      return-type = "json";
+      interval = 60;
+      on-click = "${homeDir}/.cargo/bin/quotabar popup";
+    };
+
     "idle_inhibitor" = {
       format = "{icon}";
       "format-icons" = {
@@ -183,6 +203,7 @@ in
           "modules-left" = [ "hyprland/workspaces" ];
           "modules-center" = [ ];
           "modules-right" = [
+            "custom/quotabar"
             "idle_inhibitor"
             "hyprland/language"
             "tray"
@@ -230,6 +251,7 @@ in
       "modules-left" = [ "niri/workspaces" ];
       "modules-center" = [ "niri/window" ];
       "modules-right" = [
+        "custom/quotabar"
         "idle_inhibitor"
         "niri/language"
         "tray"

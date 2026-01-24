@@ -87,6 +87,8 @@
           src = craneLib.cleanCargoSource ../rust;
           commonArgs = {
             inherit src;
+            pname = "rust-workspace";
+            version = "0.1.0";
             strictDeps = true;
             nativeBuildInputs = with pkgs; [ pkg-config ];
             buildInputs =
