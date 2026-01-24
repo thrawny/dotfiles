@@ -537,10 +537,11 @@ fn apply_codex_waiting(
         if entry.state != "idle" {
             continue;
         }
-        if let Some(message) = last_message.get(&entry.session_id) {
-            if message.role == "assistant" && message.text.trim_end().ends_with('?') {
-                entry.state = "waiting".to_string();
-            }
+        if let Some(message) = last_message.get(&entry.session_id)
+            && message.role == "assistant"
+            && message.text.trim_end().ends_with('?')
+        {
+            entry.state = "waiting".to_string();
         }
     }
 }
@@ -550,10 +551,10 @@ fn extract_assistant_text(payload: &serde_json::Value) -> Option<String> {
     let mut last_text: Option<String> = None;
     for item in content {
         let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
-        if item_type == "text" || item_type == "output_text" || item_type == "input_text" {
-            if let Some(text) = item.get("text").and_then(|v| v.as_str()) {
-                last_text = Some(text.to_string());
-            }
+        if (item_type == "text" || item_type == "output_text" || item_type == "input_text")
+            && let Some(text) = item.get("text").and_then(|v| v.as_str())
+        {
+            last_text = Some(text.to_string());
         }
     }
     last_text
@@ -738,10 +739,10 @@ fn should_match_cwd(pane_path: &str, cwd: &str) -> bool {
     if cwd.is_empty() || cwd == "/" {
         return false;
     }
-    if let Some(home) = dirs::home_dir() {
-        if cwd == home.to_string_lossy() {
-            return false;
-        }
+    if let Some(home) = dirs::home_dir()
+        && cwd == home.to_string_lossy()
+    {
+        return false;
     }
     let pane = Path::new(pane_path);
     let cwd_path = Path::new(cwd);
@@ -760,27 +761,22 @@ fn format_window_line(row: &WindowRow, status: Option<String>) -> String {
 }
 
 fn terminal_lines() -> usize {
-    if env::var("TMUX").is_ok() {
-        if let Ok(output) = Command::new("tmux")
+    if env::var("TMUX").is_ok()
+        && let Ok(output) = Command::new("tmux")
             .args(["display-message", "-p", "#{pane_height}"])
             .output()
-        {
-            if output.status.success() {
-                if let Ok(value) = String::from_utf8(output.stdout) {
-                    if let Ok(lines) = value.trim().parse::<usize>() {
-                        return lines;
-                    }
-                }
-            }
-        }
+        && output.status.success()
+        && let Ok(value) = String::from_utf8(output.stdout)
+        && let Ok(lines) = value.trim().parse::<usize>()
+    {
+        return lines;
     }
 
-    if let Ok(output) = Command::new("tput").arg("lines").output() {
-        if output.status.success() {
-            if let Ok(value) = String::from_utf8(output.stdout) {
-                return value.trim().parse::<usize>().unwrap_or(24);
-            }
-        }
+    if let Ok(output) = Command::new("tput").arg("lines").output()
+        && output.status.success()
+        && let Ok(value) = String::from_utf8(output.stdout)
+    {
+        return value.trim().parse::<usize>().unwrap_or(24);
     }
     24
 }
@@ -1067,46 +1063,44 @@ fn main() {
     );
 
     loop {
-        if !codex_loaded {
-            if let Ok(codex_sessions) = codex_rx.try_recv() {
-                let codex_vec: Vec<SessionEntry> = codex_sessions.values().cloned().collect();
-                codex_by_cwd = build_codex_map(&codex_vec);
-                codex_loaded = true;
-                if debug_enabled() {
-                    debug_log(&format!("codex sessions: {}", codex_sessions.len()));
-                    for (cwd, entry) in &codex_by_cwd {
-                        debug_log(&format!(
-                            "codex: session={} state={} cwd={}",
-                            entry.session_id, entry.state, cwd
-                        ));
-                    }
+        if !codex_loaded && let Ok(codex_sessions) = codex_rx.try_recv() {
+            let codex_vec: Vec<SessionEntry> = codex_sessions.values().cloned().collect();
+            codex_by_cwd = build_codex_map(&codex_vec);
+            codex_loaded = true;
+            if debug_enabled() {
+                debug_log(&format!("codex sessions: {}", codex_sessions.len()));
+                for (cwd, entry) in &codex_by_cwd {
+                    debug_log(&format!(
+                        "codex: session={} state={} cwd={}",
+                        entry.session_id, entry.state, cwd
+                    ));
                 }
-                let target_session = match &screen {
-                    ScreenState::Sessions => {
-                        render_sessions_screen(
-                            &mut tty_out,
-                            &sessions,
-                            &windows,
-                            &claude_by_tmux,
-                            &codex_by_cwd,
-                        );
-                        None
-                    }
-                    ScreenState::Windows { target_session, .. } => Some(target_session.clone()),
-                };
-                if let Some(target_session) = target_session {
-                    let session_windows = render_windows_screen(
+            }
+            let target_session = match &screen {
+                ScreenState::Sessions => {
+                    render_sessions_screen(
                         &mut tty_out,
-                        &target_session,
+                        &sessions,
                         &windows,
                         &claude_by_tmux,
                         &codex_by_cwd,
                     );
-                    screen = ScreenState::Windows {
-                        target_session,
-                        session_windows,
-                    };
+                    None
                 }
+                ScreenState::Windows { target_session, .. } => Some(target_session.clone()),
+            };
+            if let Some(target_session) = target_session {
+                let session_windows = render_windows_screen(
+                    &mut tty_out,
+                    &target_session,
+                    &windows,
+                    &claude_by_tmux,
+                    &codex_by_cwd,
+                );
+                screen = ScreenState::Windows {
+                    target_session,
+                    session_windows,
+                };
             }
         }
 

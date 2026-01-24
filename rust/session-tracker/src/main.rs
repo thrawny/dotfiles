@@ -93,13 +93,6 @@ fn sessions_file() -> PathBuf {
         .join("active-sessions.json")
 }
 
-fn legacy_sessions_file() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_default()
-        .join(".claude")
-        .join("active-sessions.json")
-}
-
 fn load_sessions() -> SessionStore {
     let path = sessions_file();
     if path.exists()
@@ -107,21 +100,6 @@ fn load_sessions() -> SessionStore {
         && let Ok(store) = serde_json::from_str::<SessionStore>(&content)
     {
         return store;
-    }
-
-    let legacy_path = legacy_sessions_file();
-    if legacy_path.exists()
-        && let Ok(content) = fs::read_to_string(&legacy_path)
-        && let Ok(legacy) = serde_json::from_str::<HashMap<String, LegacySession>>(&content)
-    {
-        let sessions = legacy
-            .into_iter()
-            .map(|(window_id, entry)| entry.into_session(window_id))
-            .collect();
-        return SessionStore {
-            version: 1,
-            sessions,
-        };
     }
 
     SessionStore::default()
@@ -165,18 +143,18 @@ fn is_known_niri_window(store: &SessionStore, window_id: &str) -> bool {
 
 fn get_niri_window_id(store: &SessionStore) -> Option<String> {
     let snapshot = query_niri_switcher_focus(now());
-    if let Some(snapshot) = snapshot {
-        if let Some(window_id) = snapshot.window_id {
-            let window_id = window_id.to_string();
-            if is_known_niri_window(store, &window_id) {
-                return Some(window_id);
-            }
-            let title = snapshot.title.unwrap_or_default();
-            if let Some(first_char) = title.chars().next()
-                && !first_char.is_alphanumeric()
-            {
-                return Some(window_id);
-            }
+    if let Some(snapshot) = snapshot
+        && let Some(window_id) = snapshot.window_id
+    {
+        let window_id = window_id.to_string();
+        if is_known_niri_window(store, &window_id) {
+            return Some(window_id);
+        }
+        let title = snapshot.title.unwrap_or_default();
+        if let Some(first_char) = title.chars().next()
+            && !first_char.is_alphanumeric()
+        {
+            return Some(window_id);
         }
     }
     None
@@ -628,52 +606,15 @@ fn main() {
         }
 
         "PreToolUse" => {
-            if let Some(index) = find_session_index(&store, "claude", &session_id) {
-                if store.sessions[index].state == "waiting" {
-                    store.sessions[index].state = "responding".to_string();
-                    store.sessions[index].state_updated = now();
-                    save_sessions(&store);
-                }
+            if let Some(index) = find_session_index(&store, "claude", &session_id)
+                && store.sessions[index].state == "waiting"
+            {
+                store.sessions[index].state = "responding".to_string();
+                store.sessions[index].state_updated = now();
+                save_sessions(&store);
             }
         }
 
         _ => {}
-    }
-}
-
-#[derive(Debug, Serialize, Deserialize, Clone)]
-struct LegacySession {
-    session_id: String,
-    transcript_path: Option<String>,
-    cwd: Option<String>,
-    niri_window_id: Option<String>,
-    tmux_window_id: Option<String>,
-    state: String,
-    state_updated: f64,
-}
-
-impl LegacySession {
-    fn into_session(self, window_id: String) -> SessionEntry {
-        let mut niri_window_id = self.niri_window_id;
-        let mut tmux_window_id = self.tmux_window_id;
-
-        if niri_window_id.is_none() && tmux_window_id.is_none() {
-            if window_id.starts_with('@') {
-                tmux_window_id = Some(window_id);
-            } else {
-                niri_window_id = Some(window_id);
-            }
-        }
-
-        SessionEntry {
-            session_id: self.session_id,
-            source: "claude".to_string(),
-            transcript_path: self.transcript_path,
-            cwd: self.cwd,
-            niri_window_id,
-            tmux_window_id,
-            state: self.state,
-            state_updated: self.state_updated,
-        }
     }
 }

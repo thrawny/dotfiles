@@ -68,12 +68,14 @@ struct ClaudeSession {
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct SessionStore {
     version: u32,
     sessions: Vec<SessionEntry>,
 }
 
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct SessionEntry {
     session_id: String,
     source: String,
@@ -365,8 +367,7 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
             }
             let col_idx = window
                 .layout
-                .as_ref()
-                .and_then(|layout| layout.pos_in_scrolling_layout)
+                .pos_in_scrolling_layout
                 .map(|pos| pos.0)
                 .unwrap_or(1);
             columns.entry(col_idx).or_default().push(*window);
@@ -380,7 +381,7 @@ fn get_workspace_columns(config: &Config) -> Vec<WorkspaceColumn> {
                 if col_idx < 2 {
                     continue;
                 }
-                let key_offset = (col_idx - 2) as usize;
+                let key_offset = col_idx - 2;
                 if key_offset >= KEYS.len() {
                     continue;
                 }
@@ -822,7 +823,7 @@ fn load_claude_sessions_file() -> HashMap<u64, ClaudeSession> {
 fn start_claude_watcher(tx: mpsc::Sender<Message>) {
     let claude_dir = std::env::var("XDG_CACHE_HOME")
         .map(PathBuf::from)
-        .unwrap_or_else(|| {
+        .unwrap_or_else(|_| {
             dirs::home_dir()
                 .unwrap_or_else(|| PathBuf::from("~"))
                 .join(".cache")
