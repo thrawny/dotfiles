@@ -77,6 +77,12 @@ in
 
   services.xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver
 
+  # Compressed RAM swap - prevents freezes during memory-intensive operations
+  zramSwap = {
+    enable = true;
+    memoryPercent = 50; # Use up to 50% of RAM (compresses to ~8GB effective swap)
+  };
+
   # Games partition (~250GB on sdb4)
   fileSystems."/home/${username}/Games" = {
     device = "/dev/disk/by-label/games";
