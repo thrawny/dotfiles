@@ -221,9 +221,10 @@ fn ends_with_question(transcript_path: &str) -> bool {
             {
                 for item in content_arr {
                     if item.get("type").and_then(|t| t.as_str()) == Some("text")
-                        && let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                            last_text = Some(text.to_string());
-                        }
+                        && let Some(text) = item.get("text").and_then(|t| t.as_str())
+                    {
+                        last_text = Some(text.to_string());
+                    }
                 }
             }
         }

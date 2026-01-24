@@ -5,7 +5,7 @@ edition.workspace = true
 
 [features]
 default = []
-niri = ["gtk4", "gtk4-layer-shell", "niri-ipc", "notify", "toml", "shellexpand"]
+niri = ["gtk4", "gtk4-layer-shell", "niri-ipc", "notify", "toml", "shellexpand", "time"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
@@ -15,6 +15,7 @@ dirs.workspace = true
 notify = { version = "8", optional = true }
 toml = { version = "0.9", optional = true }
 shellexpand = { version = "3", optional = true }
+time = { version = "0.3", features = ["parsing"], optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk4 = { version = "0.10", optional = true }

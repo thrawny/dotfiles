@@ -47,9 +47,10 @@ pub fn state_file() -> PathBuf {
 pub fn load() -> SessionStore {
     let path = state_file();
     if let Ok(content) = fs::read_to_string(&path)
-        && let Ok(store) = serde_json::from_str(&content) {
-            return store;
-        }
+        && let Ok(store) = serde_json::from_str(&content)
+    {
+        return store;
+    }
     SessionStore::default()
 }
 
@@ -182,14 +183,15 @@ fn get_valid_tmux_windows() -> std::collections::HashSet<String> {
     if let Ok(output) = Command::new("tmux")
         .args(["list-windows", "-a", "-F", "#{window_id}"])
         .output()
-        && output.status.success() {
-            for line in String::from_utf8_lossy(&output.stdout).lines() {
-                let id = line.trim();
-                if !id.is_empty() {
-                    valid.insert(id.to_string());
-                }
+        && output.status.success()
+    {
+        for line in String::from_utf8_lossy(&output.stdout).lines() {
+            let id = line.trim();
+            if !id.is_empty() {
+                valid.insert(id.to_string());
             }
         }
+    }
     valid
 }
 
@@ -197,12 +199,13 @@ fn get_valid_niri_windows() -> std::collections::HashSet<String> {
     let mut valid = std::collections::HashSet::new();
     if let Ok(output) = Command::new("niri").args(["msg", "-j", "windows"]).output()
         && output.status.success()
-            && let Ok(windows) = serde_json::from_slice::<Vec<serde_json::Value>>(&output.stdout) {
-                for window in windows {
-                    if let Some(id) = window.get("id").and_then(|v| v.as_u64()) {
-                        valid.insert(id.to_string());
-                    }
-                }
+        && let Ok(windows) = serde_json::from_slice::<Vec<serde_json::Value>>(&output.stdout)
+    {
+        for window in windows {
+            if let Some(id) = window.get("id").and_then(|v| v.as_u64()) {
+                valid.insert(id.to_string());
             }
+        }
+    }
     valid
 }
