@@ -21,7 +21,7 @@ just switch       # Apply Nix config (auto-detects NixOS vs Home Manager)
 just check        # Format, lint, and evaluate config
 just fmt          # Format all (nix, lua, python)
 just lint         # Lint all
-just rust::build  # Build all rust packages (or specific: just rust::build niri-switcher)
+just rust::build  # Build all rust packages (or specific: just rust::build agent-switch)
 ```
 
 ## Agent Essentials

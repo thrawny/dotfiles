@@ -1,7 +1,7 @@
 # Base Niri window manager configuration
 # Import this for any Linux system using niri
 # Add ./dms.nix for DankMaterialShell integration
-# Add ./switcher.nix for niri-switcher
+# Add ./switcher.nix for agent-switch
 {
   config,
   lib,
@@ -554,7 +554,6 @@ in
           { app-id = "^org\\.pulseaudio\\.pavucontrol$"; }
           { app-id = "^xdg-desktop-portal"; }
           { app-id = "zoom"; }
-          { app-id = "^com\\.thrawny\\.niri-switcher$"; }
           { app-id = "^com\\.thrawny\\.agent-switch$"; }
           { app-id = "^spotify$"; }
           { app-id = "^1password$"; }

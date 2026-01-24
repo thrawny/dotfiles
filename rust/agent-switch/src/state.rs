@@ -198,10 +198,7 @@ fn get_valid_tmux_windows() -> std::collections::HashSet<String> {
 
 fn get_valid_niri_windows() -> std::collections::HashSet<String> {
     let mut valid = std::collections::HashSet::new();
-    if let Ok(output) = Command::new("niri")
-        .args(["msg", "-j", "windows"])
-        .output()
-    {
+    if let Ok(output) = Command::new("niri").args(["msg", "-j", "windows"]).output() {
         if output.status.success() {
             if let Ok(windows) = serde_json::from_slice::<Vec<serde_json::Value>>(&output.stdout) {
                 for window in windows {

@@ -1104,22 +1104,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "niri-switcher"
-version = "0.1.0"
-dependencies = [
- "clap",
- "dirs",
- "gtk4",
- "gtk4-layer-shell",
- "niri-ipc",
- "notify",
- "serde",
- "serde_json",
- "shellexpand",
- "toml 0.9.11+spec-1.1.0",
-]
-
-[[package]]
 name = "notify"
 version = "8.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1598,16 +1582,6 @@ dependencies = [
  "itoa",
  "ryu",
  "serde",
-]
-
-[[package]]
-name = "session-tracker"
-version = "0.1.0"
-dependencies = [
- "dirs",
- "notify",
- "serde",
- "serde_json",
 ]
 
 [[package]]

@@ -195,13 +195,6 @@ rust/agent-switch/
     └── niri.rs         # GTK daemon + UI
 ```
 
-## Migration
-
-1. Build `agent-switch` with feature flags for niri (GTK deps)
-2. Update Claude hooks to call `agent-switch track`
-3. Deprecate `session-tracker` and `niri-switcher`
-4. Update nix packages
-
 ## Non-Goals
 
 - Real-time sync between machines

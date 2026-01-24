@@ -1,8 +1,8 @@
 # Rust workspace task runner
-# Packages: niri-switcher, session-tracker, bash-validator, tmux-fzf-switcher
+# Packages: bash-validator, tmux-fzf-switcher, voice, agent-switch
 
-# On macOS, exclude niri-switcher (requires GTK)
-workspace_args := if os() == "macos" { "--workspace --exclude niri-switcher" } else { "--workspace" }
+# On macOS, exclude agent-switch (requires GTK)
+workspace_args := if os() == "macos" { "--workspace --exclude agent-switch" } else { "--workspace" }
 
 # Default recipe
 default:

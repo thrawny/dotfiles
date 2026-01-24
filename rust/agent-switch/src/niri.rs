@@ -3,7 +3,7 @@ use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, Box as GtkBox, Label, Orientation, glib};
 use gtk4_layer_shell::{Edge, KeyboardMode, Layer, LayerShell};
 use niri_ipc::{
-    Action, Request, Response, Window, Workspace, WorkspaceReferenceArg, socket::Socket,
+    Action, Event, Request, Response, Window, Workspace, WorkspaceReferenceArg, socket::Socket,
 };
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Deserialize;
@@ -15,6 +15,7 @@ use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 use std::thread;
 
 const APP_ID: &str = "com.thrawny.agent-switch";
@@ -68,8 +69,23 @@ struct AgentSession {
 #[derive(Debug)]
 enum Message {
     Toggle,
+    Track(TrackEvent),
     ReloadConfig,
     SessionsChanged,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+struct TrackEvent {
+    event: String,
+    #[serde(default)]
+    agent: Option<String>,
+    session_id: String,
+    #[serde(default)]
+    cwd: Option<String>,
+    #[serde(default)]
+    transcript_path: Option<String>,
+    #[serde(default)]
+    notification_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -474,11 +490,28 @@ fn start_socket_listener(tx: mpsc::Sender<Message>) {
         for stream in listener.incoming() {
             match stream {
                 Ok(mut stream) => {
-                    let mut buf = [0u8; 256];
+                    let mut buf = [0u8; 4096];
                     if let Ok(count) = stream.read(&mut buf) {
                         if count > 0 {
-                            let _ = tx.send(Message::Toggle);
-                            let _ = stream.write_all(b"ok");
+                            let cmd = String::from_utf8_lossy(&buf[..count]);
+                            let cmd = cmd.trim();
+                            if cmd == "toggle" {
+                                let _ = tx.send(Message::Toggle);
+                                let _ = stream.write_all(b"ok");
+                            } else if let Some(json) = cmd.strip_prefix("track ") {
+                                match serde_json::from_str::<TrackEvent>(json) {
+                                    Ok(event) => {
+                                        let _ = tx.send(Message::Track(event));
+                                        let _ = stream.write_all(b"ok");
+                                    }
+                                    Err(e) => {
+                                        let _ =
+                                            stream.write_all(format!("error: {}", e).as_bytes());
+                                    }
+                                }
+                            } else {
+                                let _ = stream.write_all(b"unknown command");
+                            }
                         }
                     }
                 }
@@ -583,7 +616,61 @@ fn start_sessions_watcher(tx: mpsc::Sender<Message>) {
     });
 }
 
-fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
+fn start_focus_tracker(focused_window: Arc<Mutex<Option<u64>>>) {
+    thread::spawn(move || {
+        loop {
+            let mut socket = match Socket::connect() {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Failed to connect to niri: {}", e);
+                    thread::sleep(std::time::Duration::from_secs(1));
+                    continue;
+                }
+            };
+
+            match socket.send(Request::EventStream) {
+                Ok(Ok(Response::Handled)) => {}
+                Ok(Ok(_)) => {}
+                result => {
+                    eprintln!("Failed to request event stream: {:?}", result);
+                    thread::sleep(std::time::Duration::from_secs(1));
+                    continue;
+                }
+            }
+
+            let mut read_event = socket.read_events();
+            while let Ok(event) = read_event() {
+                match event {
+                    Event::WindowsChanged { windows } => {
+                        let focused = windows.iter().find(|w| w.is_focused).map(|w| w.id);
+                        *focused_window.lock().unwrap() = focused;
+                    }
+                    Event::WindowOpenedOrChanged { window } => {
+                        if window.is_focused {
+                            *focused_window.lock().unwrap() = Some(window.id);
+                        }
+                    }
+                    Event::WindowFocusChanged { id } => {
+                        *focused_window.lock().unwrap() = id;
+                    }
+                    Event::WindowClosed { id } => {
+                        let mut guard = focused_window.lock().unwrap();
+                        if *guard == Some(id) {
+                            *guard = None;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+    });
+}
+
+fn build_ui(
+    app: &Application,
+    rx: mpsc::Receiver<Message>,
+    focused_window: Arc<Mutex<Option<u64>>>,
+) {
     let window = ApplicationWindow::builder()
         .application(app)
         .default_width(500)
@@ -739,6 +826,7 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
     let window_for_poll = window.clone();
     let state_for_poll = state.clone();
     let main_box_for_poll = main_box.clone();
+    let focused_window_for_poll = focused_window.clone();
     glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
         while let Ok(msg) = rx.try_recv() {
             match msg {
@@ -789,10 +877,135 @@ fn build_ui(app: &Application, rx: mpsc::Receiver<Message>) {
                         build_entry_list(&main_box_for_poll, &entries, pending, &agent_sessions);
                     }
                 }
+                Message::Track(event) => {
+                    let focused_id = *focused_window_for_poll.lock().unwrap();
+                    handle_track_event(&event, focused_id);
+                }
             }
         }
         glib::ControlFlow::Continue
     });
+}
+
+fn handle_track_event(event: &TrackEvent, focused_window_id: Option<u64>) {
+    let agent = event.agent.as_deref().unwrap_or("claude");
+    let session_id = &event.session_id;
+    let mut store = state::load();
+
+    match event.event.as_str() {
+        "session-start" => {
+            let Some(window_id) = focused_window_id else {
+                return;
+            };
+            let session = state::Session {
+                agent: agent.to_string(),
+                session_id: session_id.to_string(),
+                cwd: event.cwd.clone(),
+                state: "waiting".to_string(),
+                state_updated: state::now(),
+                window: state::WindowId {
+                    niri_id: Some(window_id.to_string()),
+                    tmux_id: None,
+                },
+            };
+            store.sessions.insert(window_id.to_string(), session);
+        }
+        "session-end" => {
+            let key = store
+                .sessions
+                .iter()
+                .find(|(_, s)| s.agent == agent && s.session_id == *session_id)
+                .map(|(k, _)| k.clone());
+            if let Some(key) = key {
+                store.sessions.remove(&key);
+            }
+        }
+        "prompt-submit" => {
+            if let Some(session) = state::find_by_session_id_mut(&mut store, agent, session_id) {
+                session.state = "responding".to_string();
+                session.state_updated = state::now();
+            } else if let Some(window_id) = focused_window_id {
+                let session = state::Session {
+                    agent: agent.to_string(),
+                    session_id: session_id.to_string(),
+                    cwd: event.cwd.clone(),
+                    state: "responding".to_string(),
+                    state_updated: state::now(),
+                    window: state::WindowId {
+                        niri_id: Some(window_id.to_string()),
+                        tmux_id: None,
+                    },
+                };
+                store.sessions.insert(window_id.to_string(), session);
+            }
+        }
+        "stop" => {
+            if let Some(session) = state::find_by_session_id_mut(&mut store, agent, session_id) {
+                let is_question = event
+                    .transcript_path
+                    .as_ref()
+                    .map(|p| ends_with_question(p))
+                    .unwrap_or(false);
+                session.state = if is_question { "waiting" } else { "idle" }.to_string();
+                session.state_updated = state::now();
+            }
+        }
+        "notification" => {
+            if event.notification_type.as_deref() == Some("permission_prompt") {
+                if let Some(session) = state::find_by_session_id_mut(&mut store, agent, session_id)
+                {
+                    session.state = "waiting".to_string();
+                    session.state_updated = state::now();
+                }
+            }
+        }
+        _ => {}
+    }
+
+    state::save(&store);
+}
+
+fn ends_with_question(transcript_path: &str) -> bool {
+    use std::process::Command as StdCommand;
+
+    let output = match StdCommand::new("tail")
+        .args(["-n", "20", transcript_path])
+        .output()
+    {
+        Ok(o) if o.status.success() => o,
+        _ => return false,
+    };
+
+    let content = String::from_utf8_lossy(&output.stdout);
+    let mut last_text: Option<String> = None;
+
+    for line in content.lines() {
+        if line.is_empty() {
+            continue;
+        }
+        if let Ok(entry) = serde_json::from_str::<serde_json::Value>(line) {
+            if entry.get("type").and_then(|t| t.as_str()) != Some("assistant") {
+                continue;
+            }
+            if let Some(content_arr) = entry
+                .get("message")
+                .and_then(|m| m.get("content"))
+                .and_then(|c| c.as_array())
+            {
+                for item in content_arr {
+                    if item.get("type").and_then(|t| t.as_str()) == Some("text") {
+                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                            last_text = Some(text.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    last_text
+        .map(|t| t.trim_end().ends_with('?'))
+        .unwrap_or(false)
 }
 
 fn build_entry_list(
@@ -863,11 +1076,15 @@ pub fn run(toggle: bool) -> glib::ExitCode {
     }
 
     let (tx, rx) = mpsc::channel();
+    let focused_window: Arc<Mutex<Option<u64>>> = Arc::new(Mutex::new(None));
+
     start_socket_listener(tx.clone());
     start_config_watcher(tx.clone());
     start_sessions_watcher(tx);
+    start_focus_tracker(focused_window.clone());
 
     let rx = Rc::new(RefCell::new(Some(rx)));
+    let focused_window = Rc::new(RefCell::new(Some(focused_window)));
 
     let app = Application::builder()
         .application_id(APP_ID)
@@ -875,9 +1092,13 @@ pub fn run(toggle: bool) -> glib::ExitCode {
         .build();
 
     let rx_clone = rx.clone();
+    let focused_clone = focused_window.clone();
     app.connect_activate(move |app| {
-        if let Some(rx) = rx_clone.borrow_mut().take() {
-            build_ui(app, rx);
+        if let (Some(rx), Some(focused)) = (
+            rx_clone.borrow_mut().take(),
+            focused_clone.borrow_mut().take(),
+        ) {
+            build_ui(app, rx, focused);
         }
     });
 

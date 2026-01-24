@@ -1,6 +1,8 @@
 use crate::state::{self, Session, SessionStore};
-use serde::Deserialize;
-use std::io::{self, Read};
+use serde::{Deserialize, Serialize};
+use std::io::{self, Read, Write};
+use std::os::unix::net::UnixStream;
+use std::path::PathBuf;
 
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
@@ -10,8 +12,59 @@ struct HookInput {
     cwd: Option<String>,
     transcript_path: Option<String>,
     notification_type: Option<String>,
-    // Claude-specific fields from hook JSON
     hook_event_name: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct TrackMessage {
+    event: String,
+    agent: Option<String>,
+    session_id: String,
+    cwd: Option<String>,
+    transcript_path: Option<String>,
+    notification_type: Option<String>,
+}
+
+fn socket_path() -> PathBuf {
+    std::env::var("XDG_RUNTIME_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/tmp"))
+        .join("agent-switch.sock")
+}
+
+fn send_to_daemon(event: &str, hook: &HookInput, session_id: &str) -> bool {
+    let msg = TrackMessage {
+        event: event.to_string(),
+        agent: hook.agent.clone(),
+        session_id: session_id.to_string(),
+        cwd: hook.cwd.clone(),
+        transcript_path: hook.transcript_path.clone(),
+        notification_type: hook.notification_type.clone(),
+    };
+
+    let json = match serde_json::to_string(&msg) {
+        Ok(j) => j,
+        Err(_) => return false,
+    };
+
+    let mut stream = match UnixStream::connect(socket_path()) {
+        Ok(s) => s,
+        Err(_) => return false,
+    };
+
+    let cmd = format!("track {}", json);
+    if stream.write_all(cmd.as_bytes()).is_err() {
+        return false;
+    }
+
+    let mut response = [0u8; 64];
+    match stream.read(&mut response) {
+        Ok(n) if n > 0 => {
+            let resp = String::from_utf8_lossy(&response[..n]);
+            resp.trim() == "ok"
+        }
+        _ => false,
+    }
 }
 
 pub fn handle_event(event: &str) {
@@ -25,20 +78,30 @@ pub fn handle_event(event: &str) {
         Err(_) => return,
     };
 
-    let agent = hook.agent.as_deref().unwrap_or("claude");
     let session_id = match &hook.session_id {
         Some(id) => id.clone(),
         None => return,
     };
 
+    // Try sending to daemon first (niri desktop with focus tracking)
+    if send_to_daemon(event, &hook, &session_id) {
+        return;
+    }
+
+    // Fallback: direct state manipulation (tmux-only or daemon not running)
+    handle_event_direct(event, &hook, &session_id);
+}
+
+fn handle_event_direct(event: &str, hook: &HookInput, session_id: &str) {
+    let agent = hook.agent.as_deref().unwrap_or("claude");
     let mut store = state::load();
 
     match event {
-        "session-start" => handle_session_start(&mut store, agent, &session_id, &hook),
-        "session-end" => handle_session_end(&mut store, agent, &session_id),
-        "prompt-submit" => handle_prompt_submit(&mut store, agent, &session_id, &hook),
-        "stop" => handle_stop(&mut store, agent, &session_id, &hook),
-        "notification" => handle_notification(&mut store, agent, &session_id, &hook),
+        "session-start" => handle_session_start(&mut store, agent, session_id, hook),
+        "session-end" => handle_session_end(&mut store, agent, session_id),
+        "prompt-submit" => handle_prompt_submit(&mut store, agent, session_id, hook),
+        "stop" => handle_stop(&mut store, agent, session_id, hook),
+        "notification" => handle_notification(&mut store, agent, session_id, hook),
         _ => {}
     }
 
@@ -63,7 +126,6 @@ fn handle_session_start(store: &mut SessionStore, agent: &str, session_id: &str,
 }
 
 fn handle_session_end(store: &mut SessionStore, agent: &str, session_id: &str) {
-    // Find and remove by session_id
     let key_to_remove = store
         .sessions
         .iter()
@@ -76,14 +138,12 @@ fn handle_session_end(store: &mut SessionStore, agent: &str, session_id: &str) {
 }
 
 fn handle_prompt_submit(store: &mut SessionStore, agent: &str, session_id: &str, hook: &HookInput) {
-    // First, try to find existing session by session_id
     if let Some(session) = state::find_by_session_id_mut(store, agent, session_id) {
         session.state = "responding".to_string();
         session.state_updated = state::now();
         return;
     }
 
-    // Session not found - this is a resumed session, capture window
     let Some((window_key, window_id)) = state::get_current_window_id() else {
         return;
     };
@@ -105,7 +165,6 @@ fn handle_stop(store: &mut SessionStore, agent: &str, session_id: &str, hook: &H
         return;
     };
 
-    // Check if transcript ends with a question
     let is_question = hook
         .transcript_path
         .as_ref()

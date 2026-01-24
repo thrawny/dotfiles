@@ -2,6 +2,21 @@
   "nodes": {
     "crane": {
       "locked": {
+        "lastModified": 1768873933,
+        "narHash": "sha256-CfyzdaeLNGkyAHp3kT5vjvXhA1pVVK7nyDziYxCPsNk=",
+        "owner": "ipetkov",
+        "repo": "crane",
+        "rev": "0bda7e7d005ccb5522a76d11ccfbf562b71953ca",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ipetkov",
+        "repo": "crane",
+        "type": "github"
+      }
+    },
+    "crane_2": {
+      "locked": {
         "lastModified": 1766774972,
         "narHash": "sha256-8qxEFpj4dVmIuPn9j9z6NTbU+hrcGjBOvaxTzre5HmM=",
         "owner": "ipetkov",
@@ -365,6 +380,7 @@
     },
     "root": {
       "inputs": {
+        "crane": "crane",
         "elephant": "elephant",
         "home-manager": "home-manager",
         "hyprvoice-src": "hyprvoice-src",
@@ -449,7 +465,7 @@
     },
     "xremap-flake": {
       "inputs": {
-        "crane": "crane",
+        "crane": "crane_2",
         "flake-parts": "flake-parts_2",
         "nixpkgs": "nixpkgs_6",
         "xremap": "xremap"

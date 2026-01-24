@@ -20,6 +20,7 @@
       flake = false;
     };
     xremap-flake.url = "github:xremap/nix-flake";
+    crane.url = "github:ipetkov/crane";
   };
 
   outputs =
@@ -35,6 +36,7 @@
       hyprvoice-src,
       xremap-flake,
       nixpkgs-xwayland,
+      crane,
       ...
     }:
     let
@@ -77,55 +79,52 @@
           };
         };
 
-      mkNiriSwitcher =
+      # Crane-based Rust builds with dependency caching
+      mkRustWorkspace =
         pkgs:
-        pkgs.rustPlatform.buildRustPackage {
-          pname = "niri-switcher";
-          version = "0.1.0";
-          src = ../rust;
-          cargoLock.lockFile = ../rust/Cargo.lock;
-          cargoBuildFlags = [
-            "-p"
-            "niri-switcher"
-          ];
-          nativeBuildInputs = with pkgs; [ pkg-config ];
-          buildInputs = with pkgs; [
-            gtk4
-            gtk4-layer-shell
-            glib
-            cairo
-            pango
-            gdk-pixbuf
-            graphene
-            harfbuzz
-          ];
+        let
+          craneLib = crane.mkLib pkgs;
+          src = craneLib.cleanCargoSource ../rust;
+          commonArgs = {
+            inherit src;
+            strictDeps = true;
+            nativeBuildInputs = with pkgs; [ pkg-config ];
+            buildInputs =
+              with pkgs;
+              lib.optionals stdenv.isLinux [
+                gtk4
+                gtk4-layer-shell
+                glib
+                cairo
+                pango
+                gdk-pixbuf
+                graphene
+                harfbuzz
+              ];
+          };
+          # Build only dependencies (cached)
+          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+        in
+        {
+          inherit craneLib commonArgs cargoArtifacts;
         };
 
       mkAgentSwitch =
         pkgs:
-        pkgs.rustPlatform.buildRustPackage {
-          pname = "agent-switch";
-          version = "0.1.0";
-          src = ../rust;
-          cargoLock.lockFile = ../rust/Cargo.lock;
-          cargoBuildFlags = [
-            "-p"
-            "agent-switch"
-            "--features"
-            "niri"
-          ];
-          nativeBuildInputs = with pkgs; [ pkg-config ];
-          buildInputs = with pkgs; [
-            gtk4
-            gtk4-layer-shell
-            glib
-            cairo
-            pango
-            gdk-pixbuf
-            graphene
-            harfbuzz
-          ];
-        };
+        let
+          ws = mkRustWorkspace pkgs;
+          featureArgs =
+            if pkgs.stdenv.isLinux then "-p agent-switch --features niri" else "-p agent-switch";
+        in
+        ws.craneLib.buildPackage (
+          ws.commonArgs
+          // {
+            inherit (ws) cargoArtifacts;
+            pname = "agent-switch";
+            version = "0.1.0";
+            cargoExtraArgs = featureArgs;
+          }
+        );
 
       mkHost =
         {
@@ -179,14 +178,18 @@
       # Voice-to-text for Wayland - updates via `nix flake update hyprvoice-src`
       packages = {
         x86_64-linux = {
-          niri-switcher = mkNiriSwitcher nixpkgs.legacyPackages.x86_64-linux;
           agent-switch = mkAgentSwitch nixpkgs.legacyPackages.x86_64-linux;
           hyprvoice = mkHyprvoice nixpkgs.legacyPackages.x86_64-linux;
         };
         aarch64-linux = {
-          niri-switcher = mkNiriSwitcher nixpkgs.legacyPackages.aarch64-linux;
           agent-switch = mkAgentSwitch nixpkgs.legacyPackages.aarch64-linux;
           hyprvoice = mkHyprvoice nixpkgs.legacyPackages.aarch64-linux;
+        };
+        aarch64-darwin = {
+          agent-switch = mkAgentSwitch nixpkgs.legacyPackages.aarch64-darwin;
+        };
+        x86_64-darwin = {
+          agent-switch = mkAgentSwitch nixpkgs.legacyPackages.x86_64-darwin;
         };
       };
 
@@ -213,7 +216,7 @@
                   selene
                 ]
                 ++ lib.optionals stdenv.isLinux [
-                  # GTK for niri-switcher (Linux only)
+                  # GTK for agent-switch (Linux only)
                   gtk4
                   gtk4-layer-shell
                   glib
