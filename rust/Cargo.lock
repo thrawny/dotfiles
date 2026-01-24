@@ -3,6 +3,22 @@
 version = 4
 
 [[package]]
+name = "agent-switch"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "dirs",
+ "gtk4",
+ "gtk4-layer-shell",
+ "niri-ipc",
+ "notify",
+ "serde",
+ "serde_json",
+ "shellexpand",
+ "toml 0.9.11+spec-1.1.0",
+]
+
+[[package]]
 name = "aho-corasick"
 version = "1.1.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
