@@ -1,6 +1,6 @@
 editor = "cursor"
 sandbox_mode = "workspace-write"
-model = "gpt-5-codex"
+model = "gpt-5.2-codex"
 
 # Mirror Claude Code's approval behavior:
 # - File edits auto-approved (like Claude's acceptEdits mode)
