@@ -89,9 +89,35 @@ pub fn get_tmux_window_id() -> Option<String> {
     None
 }
 
-/// Get the current window ID (prefers tmux, falls back to niri in future)
+/// Get the focused niri window ID
+pub fn get_niri_window_id() -> Option<String> {
+    let output = Command::new("niri")
+        .args(["msg", "-j", "focused-window"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
+    json.get("id")
+        .and_then(|v| v.as_u64())
+        .map(|id| id.to_string())
+}
+
+/// Get the current window ID (prefers niri, falls back to tmux)
 pub fn get_current_window_id() -> Option<(String, WindowId)> {
-    // Try tmux first
+    // Try niri first (more common in this setup)
+    if let Some(niri_id) = get_niri_window_id() {
+        return Some((
+            niri_id.clone(),
+            WindowId {
+                niri_id: Some(niri_id),
+                tmux_id: None,
+            },
+        ));
+    }
+
+    // Fall back to tmux
     if let Some(tmux_id) = get_tmux_window_id() {
         return Some((
             tmux_id.clone(),
@@ -102,7 +128,6 @@ pub fn get_current_window_id() -> Option<(String, WindowId)> {
         ));
     }
 
-    // TODO: niri support via socket query
     None
 }
 
@@ -134,13 +159,15 @@ pub fn find_by_session_id_mut<'a>(
 /// Remove stale sessions (windows that no longer exist)
 pub fn cleanup_stale(store: &mut SessionStore) {
     let valid_tmux = get_valid_tmux_windows();
+    let valid_niri = get_valid_niri_windows();
 
     store.sessions.retain(|window_id, session| {
-        // Check tmux windows
+        if session.window.niri_id.is_some() {
+            return valid_niri.contains(window_id);
+        }
         if session.window.tmux_id.is_some() {
             return valid_tmux.contains(window_id);
         }
-        // TODO: Check niri windows
         true
     });
 
@@ -162,6 +189,25 @@ fn get_valid_tmux_windows() -> std::collections::HashSet<String> {
                 let id = line.trim();
                 if !id.is_empty() {
                     valid.insert(id.to_string());
+                }
+            }
+        }
+    }
+    valid
+}
+
+fn get_valid_niri_windows() -> std::collections::HashSet<String> {
+    let mut valid = std::collections::HashSet::new();
+    if let Ok(output) = Command::new("niri")
+        .args(["msg", "-j", "windows"])
+        .output()
+    {
+        if output.status.success() {
+            if let Ok(windows) = serde_json::from_slice::<Vec<serde_json::Value>>(&output.stdout) {
+                for window in windows {
+                    if let Some(id) = window.get("id").and_then(|v| v.as_u64()) {
+                        valid.insert(id.to_string());
+                    }
                 }
             }
         }

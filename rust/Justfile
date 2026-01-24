@@ -17,8 +17,12 @@ run PKG:
     cargo run --release -p {{ PKG }}
 
 # Watch and rebuild a package on changes
-watch PKG:
-    watchexec -w {{ PKG }}/src -e rs --restart -- cargo run -p {{ PKG }}
+watch PKG *ARGS:
+    watchexec -w {{ PKG }}/src -e rs --restart -- cargo run -p {{ PKG }} {{ ARGS }}
+
+# Watch agent-switch niri daemon
+watch-niri:
+    watchexec -w agent-switch/src -e rs --restart -- cargo run -p agent-switch --features niri -- niri
 
 # Build with nix (clean build)
 nix PKG:

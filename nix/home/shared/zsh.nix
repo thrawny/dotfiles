@@ -115,6 +115,7 @@
           [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && PATH="$HOME/.local/bin:''${PATH}"
           [[ ":$PATH:" != *":$HOME/.claude/local:"* ]] && PATH="$HOME/.claude/local:''${PATH}"
           [[ ":$PATH:" != *":$HOME/.npm-global/bin:"* ]] && PATH="$HOME/.npm-global/bin:''${PATH}"
+          [[ ":$PATH:" != *":$HOME/.cargo/bin:"* ]] && PATH="$HOME/.cargo/bin:''${PATH}"
           export PATH
 
           # ===== zsh-vi-mode configuration (before plugin loads) =====

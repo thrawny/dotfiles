@@ -1,24 +1,30 @@
-# Niri project switcher (Rust GTK4 app)
-# Adds niri-switcher package and startup daemon
+# Agent switcher (Rust GTK4 app)
+# Adds agent-switch package and startup daemon
 { pkgs, self, ... }:
 let
-  inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) niri-switcher;
+  inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) agent-switch;
 in
 {
-  home.packages = [ niri-switcher ];
+  home.packages = [ agent-switch ];
 
   programs.niri.settings = {
     spawn-at-startup = [
-      { command = [ "niri-switcher" ]; }
+      {
+        command = [
+          "${agent-switch}/bin/agent-switch"
+          "niri"
+        ];
+      }
     ];
 
     binds = {
       "Mod+S" = {
         action.spawn = [
-          "niri-switcher"
+          "${agent-switch}/bin/agent-switch"
+          "niri"
           "--toggle"
         ];
-        hotkey-overlay.title = "Project Switcher";
+        hotkey-overlay.title = "Agent Switcher";
       };
     };
   };

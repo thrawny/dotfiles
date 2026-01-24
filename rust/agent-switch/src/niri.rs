@@ -881,5 +881,5 @@ pub fn run(toggle: bool) -> glib::ExitCode {
         }
     });
 
-    app.run()
+    app.run_with_args::<&str>(&[])
 }

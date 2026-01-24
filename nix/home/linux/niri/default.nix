@@ -555,6 +555,7 @@ in
           { app-id = "^xdg-desktop-portal"; }
           { app-id = "zoom"; }
           { app-id = "^com\\.thrawny\\.niri-switcher$"; }
+          { app-id = "^com\\.thrawny\\.agent-switch$"; }
           { app-id = "^spotify$"; }
           { app-id = "^1password$"; }
         ];

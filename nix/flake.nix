@@ -101,6 +101,32 @@
           ];
         };
 
+      mkAgentSwitch =
+        pkgs:
+        pkgs.rustPlatform.buildRustPackage {
+          pname = "agent-switch";
+          version = "0.1.0";
+          src = ../rust;
+          cargoLock.lockFile = ../rust/Cargo.lock;
+          cargoBuildFlags = [
+            "-p"
+            "agent-switch"
+            "--features"
+            "niri"
+          ];
+          nativeBuildInputs = with pkgs; [ pkg-config ];
+          buildInputs = with pkgs; [
+            gtk4
+            gtk4-layer-shell
+            glib
+            cairo
+            pango
+            gdk-pixbuf
+            graphene
+            harfbuzz
+          ];
+        };
+
       mkHost =
         {
           system,
@@ -154,10 +180,12 @@
       packages = {
         x86_64-linux = {
           niri-switcher = mkNiriSwitcher nixpkgs.legacyPackages.x86_64-linux;
+          agent-switch = mkAgentSwitch nixpkgs.legacyPackages.x86_64-linux;
           hyprvoice = mkHyprvoice nixpkgs.legacyPackages.x86_64-linux;
         };
         aarch64-linux = {
           niri-switcher = mkNiriSwitcher nixpkgs.legacyPackages.aarch64-linux;
+          agent-switch = mkAgentSwitch nixpkgs.legacyPackages.aarch64-linux;
           hyprvoice = mkHyprvoice nixpkgs.legacyPackages.aarch64-linux;
         };
       };
