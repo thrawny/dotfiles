@@ -218,17 +218,17 @@ let
     "Mod+C".action.center-column = [ ];
     "Mod+Ctrl+C".action.center-visible-columns = [ ];
 
-    # Hyprvoice (voice-to-text)
+    # Voice (voice-to-text)
     "Mod+R" = {
       action.spawn = [
-        "${self.packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice}/bin/hyprvoice"
+        "/home/thrawny/dotfiles/rust/target/release/voice"
         "toggle"
       ];
       hotkey-overlay.title = "Voice Input Toggle";
     };
     "Mod+Shift+R" = {
       action.spawn = [
-        "${self.packages.${pkgs.stdenv.hostPlatform.system}.hyprvoice}/bin/hyprvoice"
+        "/home/thrawny/dotfiles/rust/target/release/voice"
         "cancel"
       ];
       hotkey-overlay.title = "Voice Input Cancel";

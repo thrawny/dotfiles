@@ -202,7 +202,9 @@ impl Daemon {
                 self.state = State::Idle;
                 return;
             }
-            Ok(_) => {}
+            Ok(meta) => {
+                debug_log(&format!("DEBUG audio bytes: {}", meta.len()));
+            }
         }
 
         self.state = State::Transcribing;
@@ -210,7 +212,9 @@ impl Daemon {
 
         match self.transcribe().await {
             Ok(text) => {
+                debug_log(&format!("DEBUG raw: {text}"));
                 let text = self.apply_replacements(&text);
+                debug_log(&format!("DEBUG replaced: {text}"));
                 if !text.is_empty() {
                     inject_text(&text).await;
                 }
@@ -293,7 +297,59 @@ impl Daemon {
 // ============================================================================
 
 async fn inject_text(text: &str) {
-    let status = Command::new("wtype").arg("--").arg(text).status().await;
+    let mode = injection_mode();
+    if mode == "clipboard" {
+        inject_via_clipboard(text).await;
+        return;
+    }
+
+    let delay_ms = wtype_delay_ms(&mode);
+    let key_delay_ms = wtype_key_delay_ms();
+    debug_log(&format!(
+        "DEBUG wtype delay_ms={delay_ms} key_delay_ms={key_delay_ms} text_len={}",
+        text.len()
+    ));
+
+    let mut cmd = Command::new("wtype");
+    if delay_ms > 0 {
+        cmd.args(["-s", &delay_ms.to_string()]);
+    }
+    if key_delay_ms > 0 {
+        cmd.args(["-d", &key_delay_ms.to_string()]);
+    }
+    cmd.arg("--").arg(text);
+    let status = cmd.status().await;
+    if let Err(e) = status {
+        eprintln!("wtype failed: {e}");
+        notify("Injection failed").await;
+    }
+}
+
+async fn inject_via_clipboard(text: &str) {
+    let delay_ms = wtype_delay_ms("clipboard");
+    debug_log(&format!(
+        "DEBUG injector=clipboard delay_ms={delay_ms} text_len={}",
+        text.len()
+    ));
+
+    let mut copy = Command::new("wl-copy");
+    copy.arg("--").arg(text);
+    if let Err(e) = copy.status().await {
+        eprintln!("wl-copy failed: {e}");
+        notify("Injection failed").await;
+        return;
+    }
+
+    if delay_ms > 0 {
+        tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
+    }
+
+    let paste_mod = paste_modifier();
+    let paste_key = paste_key();
+    let status = Command::new("wtype")
+        .args(["-M", &paste_mod, "-k", &paste_key, "-m", &paste_mod])
+        .status()
+        .await;
 
     if let Err(e) = status {
         eprintln!("wtype failed: {e}");
@@ -306,6 +362,38 @@ async fn notify(message: &str) {
         .args(["--app-name=voice", "--expire-time=2000", "Voice", message])
         .status()
         .await;
+}
+
+fn wtype_delay_ms(mode: &str) -> u64 {
+    std::env::var("VOICE_WTYPE_DELAY_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or_else(|| if mode == "clipboard" { 50 } else { 100 })
+}
+
+fn wtype_key_delay_ms() -> u64 {
+    std::env::var("VOICE_WTYPE_KEY_DELAY_MS")
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .unwrap_or(5)
+}
+
+fn injection_mode() -> String {
+    std::env::var("VOICE_INJECT_MODE")
+        .ok()
+        .unwrap_or_else(|| "direct".to_string())
+}
+
+fn paste_modifier() -> String {
+    std::env::var("VOICE_PASTE_MOD")
+        .ok()
+        .unwrap_or_else(|| "logo".to_string())
+}
+
+fn paste_key() -> String {
+    std::env::var("VOICE_PASTE_KEY")
+        .ok()
+        .unwrap_or_else(|| "v".to_string())
 }
 
 // ============================================================================
@@ -451,7 +539,9 @@ async fn run_once() {
             eprintln!("No audio file created: {e}");
             std::process::exit(1);
         }
-        Ok(_) => {}
+        Ok(meta) => {
+            debug_log(&format!("DEBUG audio bytes: {}", meta.len()));
+        }
     }
 
     eprintln!("Transcribing...");
@@ -466,7 +556,9 @@ async fn run_once() {
     };
 
     // Apply replacements and print
+    debug_log(&format!("DEBUG raw: {text}"));
     let text = apply_replacements_static(&text, &config.replacements);
+    debug_log(&format!("DEBUG replaced: {text}"));
     println!("{text}");
 }
 
@@ -533,6 +625,13 @@ fn apply_replacements_static(text: &str, replacements: &HashMap<String, String>)
         }
     }
     result
+}
+
+fn debug_log(message: &str) {
+    if std::env::var("VOICE_DEBUG").ok().as_deref() != Some("1") {
+        return;
+    }
+    println!("{message}");
 }
 
 // ============================================================================

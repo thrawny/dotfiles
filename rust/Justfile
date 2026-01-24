@@ -24,6 +24,11 @@ watch PKG *ARGS:
 watch-niri:
     watchexec -w agent-switch/src -e rs --restart -- cargo run -p agent-switch --features niri -- niri
 
+# Watch voice daemon
+watch-voice:
+    watchexec -w voice/src -e rs --restart -- cargo run -p voice -- serve
+
+
 # Build with nix (clean build)
 nix PKG:
     nix build path:../nix#{{ PKG }}
