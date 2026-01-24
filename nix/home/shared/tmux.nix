@@ -77,9 +77,9 @@ let
     bind ` display-popup -E -w 80% -h 80% "tmux new-session -A -s scratch -c ~"
     bind '~' display-popup -E -w 80% -h 80% "tmux new-session -A -s scratch"
 
-    # Two-stage session/window switcher (Ctrl+` on Mac, Ctrl+< on Linux)
-    bind-key -n C-` display-popup -E -w 60% -h 60% "${dotfiles}/bin/tmux-fzf-switcher"
-    bind-key -n 'C-<' display-popup -E -w 60% -h 60% "${dotfiles}/bin/tmux-fzf-switcher"
+    # Agent session switcher (Ctrl+` on Mac, Ctrl+< on Linux)
+    bind-key -n C-` display-popup -E -w 60% -h 60% "agent-switch tmux"
+    bind-key -n 'C-<' display-popup -E -w 60% -h 60% "agent-switch tmux"
   '';
 
   # Copy mode bindings (tmux-yank handles clipboard, these add vim-style selection)

@@ -1,4 +1,5 @@
 mod state;
+mod tmux;
 mod track;
 
 #[cfg(feature = "niri")]
@@ -59,7 +60,7 @@ fn main() {
             state::cleanup_stale(&mut store);
             state::save(&store);
         }
-        Command::Tmux => todo!("tmux command"),
+        Command::Tmux => tmux::run(),
         #[cfg(feature = "niri")]
         Command::Niri { toggle } => {
             let exit_code = niri::run(toggle);

@@ -115,8 +115,7 @@
         pkgs:
         let
           ws = mkRustWorkspace pkgs;
-          featureArgs =
-            if pkgs.stdenv.isLinux then "-p agent-switch --features niri" else "-p agent-switch";
+          featureArgs = if pkgs.stdenv.isLinux then "-p agent-switch --features niri" else "-p agent-switch";
         in
         ws.craneLib.buildPackage (
           ws.commonArgs
