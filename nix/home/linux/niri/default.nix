@@ -468,6 +468,12 @@ in
       { command = [ "mako" ]; }
       {
         command = [
+          "/home/thrawny/dotfiles/rust/target/release/voice"
+          "daemon"
+        ];
+      }
+      {
+        command = [
           "swaybg"
           "-i"
           "${config.home.homeDirectory}/dotfiles/assets/nasa.jpg"

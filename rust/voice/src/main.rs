@@ -381,7 +381,7 @@ fn wtype_key_delay_ms() -> u64 {
 fn injection_mode() -> String {
     std::env::var("VOICE_INJECT_MODE")
         .ok()
-        .unwrap_or_else(|| "direct".to_string())
+        .unwrap_or_else(|| "clipboard".to_string())
 }
 
 fn paste_modifier() -> String {
