@@ -104,31 +104,15 @@ pub fn get_niri_window_id() -> Option<String> {
         .map(|id| id.to_string())
 }
 
-/// Get the current window ID (prefers niri, falls back to tmux)
+/// Get the current window ID (captures both niri and tmux when available)
 pub fn get_current_window_id() -> Option<(String, WindowId)> {
-    // Try niri first (more common in this setup)
-    if let Some(niri_id) = get_niri_window_id() {
-        return Some((
-            niri_id.clone(),
-            WindowId {
-                niri_id: Some(niri_id),
-                tmux_id: None,
-            },
-        ));
-    }
+    let niri_id = get_niri_window_id();
+    let tmux_id = get_tmux_window_id();
 
-    // Fall back to tmux
-    if let Some(tmux_id) = get_tmux_window_id() {
-        return Some((
-            tmux_id.clone(),
-            WindowId {
-                niri_id: None,
-                tmux_id: Some(tmux_id),
-            },
-        ));
-    }
+    // Use niri_id as key if available, otherwise tmux_id
+    let key = niri_id.clone().or_else(|| tmux_id.clone())?;
 
-    None
+    Some((key, WindowId { niri_id, tmux_id }))
 }
 
 /// Find a session by session_id (for events that don't capture window)

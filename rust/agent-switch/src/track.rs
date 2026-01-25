@@ -83,12 +83,15 @@ pub fn handle_event(event: &str) {
         None => return,
     };
 
-    // Try sending to daemon first (niri desktop with focus tracking)
-    if send_to_daemon(event, &hook, &session_id) {
+    // Inside tmux: use direct handling to capture tmux window ID
+    // Outside tmux: try daemon first for niri focus tracking
+    let in_tmux = std::env::var("TMUX").is_ok();
+
+    if !in_tmux && send_to_daemon(event, &hook, &session_id) {
         return;
     }
 
-    // Fallback: direct state manipulation (tmux-only or daemon not running)
+    // Direct state manipulation (tmux or daemon not running)
     handle_event_direct(event, &hook, &session_id);
 }
 
@@ -138,13 +141,20 @@ fn handle_session_end(store: &mut SessionStore, agent: &str, session_id: &str) {
 }
 
 fn handle_prompt_submit(store: &mut SessionStore, agent: &str, session_id: &str, hook: &HookInput) {
+    // Update window IDs on every prompt (they may have changed or been missing)
+    let window_update = state::get_current_window_id();
+
     if let Some(session) = state::find_by_session_id_mut(store, agent, session_id) {
         session.state = "responding".to_string();
         session.state_updated = state::now();
+        // Update window IDs if we got them (preserves existing if not)
+        if let Some((_, window_id)) = window_update {
+            session.window = window_id;
+        }
         return;
     }
 
-    let Some((window_key, window_id)) = state::get_current_window_id() else {
+    let Some((window_key, window_id)) = window_update else {
         return;
     };
 

@@ -31,7 +31,11 @@ enum Command {
     /// Remove stale sessions
     Cleanup,
     /// Tmux picker (daemonless)
-    Tmux,
+    Tmux {
+        /// Skip keyboard UI, go straight to fzf search
+        #[arg(long)]
+        fzf: bool,
+    },
     /// Niri GTK daemon
     #[cfg(feature = "niri")]
     Niri {
@@ -60,7 +64,13 @@ fn main() {
             state::cleanup_stale(&mut store);
             state::save(&store);
         }
-        Command::Tmux => tmux::run(),
+        Command::Tmux { fzf } => {
+            if fzf {
+                tmux::run_fzf_only();
+            } else {
+                tmux::run();
+            }
+        }
         #[cfg(feature = "niri")]
         Command::Niri { toggle } => {
             let exit_code = niri::run(toggle);
