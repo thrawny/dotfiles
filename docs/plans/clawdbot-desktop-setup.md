@@ -1,29 +1,30 @@
-# Clawdbot Desktop Setup - Implementation Plan
+# Clawdbot Cloud Gateway + Desktop Clients - Implementation Plan
 
 ## Overview
 
-Set up Clawdbot on the NixOS desktop (`thrawny-desktop`) using OpenAI Codex for AI and Telegram for messaging. This enables controlling the desktop via Telegram messages, with browser automation capabilities.
+Run Clawdbot as a **Gateway** on an always-on NixOS cloud box (Hetzner), and connect desktop/laptop as **remote clients**. Optional: run a **node host** on the desktop for local command/browser execution (Helium).
 
 ## Current State
 
-- **Desktop**: NixOS with Home Manager integrated via `modules/nixos/system.nix`
-- **Codex auth**: Already configured at `~/.codex/auth.json` (OAuth)
-- **Secrets**: File-based in `~/.secrets/` (gitignored pattern)
-- **Helium browser**: Installed via NUR (`nurPkgs.repos.Ev357.helium`)
-- **No Clawdbot**: Not yet integrated
+- **Desktop**: NixOS with Home Manager (managed via `modules/nixos/system.nix`)
+- **Codex auth**: configured on desktop at `~/.codex/auth.json`
+- **Secrets**: file-based at `~/.secrets/` (gitignored)
+- **Helium browser**: installed via NUR
+- **No Clawdbot**: not yet integrated
+- **No cloud gateway**: not yet provisioned
 
 ## Desired End State
 
-- Clawdbot running as a systemd user service on desktop
-- Responds to Telegram messages from your chat ID
-- Uses Codex subscription (no separate API key needed)
-- Browser control via Helium (ungoogled-chromium)
-- Tailscale: WebChat/dashboard accessible from any device on tailnet
+- **Gateway** running on a Hetzner NixOS host (`clawdbot-gateway`) as a **systemd user service**
+- **Telegram provider** configured on the gateway
+- **Clients** (desktop/laptop) connect via **gateway remote mode**
+- **Tailscale Serve** exposes the Gateway on tailnet
+- **Optional node host** on desktop for local command + Helium browser control
 
 ### Verification
 
 ```bash
-# Service running
+# Gateway is running
 systemctl --user status clawdbot-gateway
 
 # Send "hello" via Telegram bot, expect response
@@ -33,8 +34,16 @@ systemctl --user status clawdbot-gateway
 
 - No Spotify integration (no Linux-native plugin)
 - No oracle/bird/sag plugins (keeping it minimal)
-- No sops-nix/agenix (using simple file secrets)
-- Not setting up on other hosts (thinkpad, asahi) yet
+- No sops-nix/agenix (using file secrets)
+- Not setting up on other hosts beyond gateway + desktop/laptop
+
+---
+
+## Phase 0: Decide Topology
+
+- **Gateway host**: new Hetzner NixOS box (always-on)
+- **Clients**: desktop + laptop (remote mode)
+- **Optional node host**: desktop runs a node service for local execution
 
 ---
 
@@ -42,27 +51,23 @@ systemctl --user status clawdbot-gateway
 
 ### 1.0 Tailscale Account
 
-1. Go to https://tailscale.com and sign up (free tier works)
-2. Sign in with GitHub, Google, or email
-3. Note your tailnet name (e.g., `tailnet-abc123.ts.net`)
+1. Create/sign in to Tailscale
+2. Note your tailnet name (e.g., `tailnet-abc123.ts.net`)
 
 ### 1.1 Create Telegram Bot
 
-1. Open Telegram, search for `@BotFather`
+1. Open Telegram, search `@BotFather`
 2. Send `/newbot`
-3. Choose a name (e.g., "Jonas Clawdbot")
-4. Choose a username (must end in `bot`, e.g., `jonas_clawdbot_bot`)
-5. Copy the HTTP API token (format: `123456789:ABCdefGHI...`)
+3. Choose a name and username (must end in `bot`)
+4. Copy the HTTP API token
 
 ### 1.2 Get Your Chat ID
 
-1. Start a chat with your new bot (send any message)
+1. Start a chat with your new bot
 2. Open: `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates`
 3. Find `"chat":{"id":123456789}` - that number is your chat ID
 
-### 1.3 Store the Token
-
-On the desktop machine:
+### 1.3 Store the Token (on gateway)
 
 ```bash
 mkdir -p ~/.secrets
@@ -72,98 +77,228 @@ chmod 600 ~/.secrets/telegram-token
 
 ### Success Criteria
 
-#### Manual Verification:
-- [ ] Bot created and token saved to `~/.secrets/telegram-token`
-- [ ] Chat ID noted for configuration
+- [ ] Bot token saved to `~/.secrets/telegram-token` on the gateway
+- [ ] Chat ID recorded
 - [ ] File permissions are 600
 
 ---
 
-## Phase 2: Tailscale NixOS Setup
+## Phase 2: Home Manager Refactor (Headless-Friendly)
 
-### 2.1 Add Tailscale to System Config
+### 2.1 Split Desktop vs Headless HM (Gateway-safe)
 
-**File**: `nix/modules/nixos/system.nix`
+The current HM default imports desktop UI modules (Hyprland/Niri/Waybar/etc). For a headless gateway, create a minimal HM module and override it on the gateway host.
 
-Add to the `services` block (around line 137):
+**New file**: `nix/home/nixos/headless.nix`
+
+- Import only `../shared` and any CLI-safe modules (no Wayland/UI).
+
+**Update**: `nix/home/nixos/default.nix`
+
+- Convert to a thin wrapper that imports `base` + `desktop` (or keep current desktop imports there).
+
+**Update**: `nix/modules/nixos/system.nix`
+
+- Change HM user definition to use `imports = [ ../../home/nixos/default.nix ];`
+- This allows host-level overrides.
+
+**Gateway override**: `nix/hosts/clawdbot-gateway/default.nix`
+
+- Override the default imports (preferred with `mkDefault` in `system.nix`):
 
 ```nix
-services = {
-  # ... existing services ...
-
-  # Tailscale VPN for remote Clawdbot access
-  tailscale.enable = true;
-};
+home-manager.users.${config.dotfiles.username}.imports = [
+  ../../home/nixos/headless.nix
+];
 ```
 
-### 2.2 Deploy Tailscale First
+### 2.2 Auto-clone dotfiles repo (default)
 
-**Important**: Deploy Tailscale before adding Clawdbot to verify it works.
+Out-of-store symlinks assume `/home/<user>/dotfiles` exists. Add a Home Manager activation hook to clone the repo if missing, so fresh installs (gateway/laptop) work without manual steps.
+
+**Update**: `nix/home/shared/default.nix` (or new `base.nix` if you split it)
+
+- Add an activation entry that runs **before** `seedCodexConfig` and `linkGeneration`:
+
+```nix
+home.activation.ensureDotfiles = lib.hm.dag.entryBefore [
+  "seedCodexConfig"
+  "seedClaudeSettings"
+  "seedCursorSettings"
+  "linkGeneration"
+] ''
+  repo=${lib.escapeShellArg dotfiles}
+  if [ ! -d "$repo/.git" ]; then
+    ${pkgs.git}/bin/git clone --depth 1 https://github.com/jonas/dotfiles.git "$repo"
+  fi
+'';
+```
+
+---
+
+## Phase 3: Provision the Cloud NixOS Gateway
+
+### 3.1 Add a New Host Entry
+
+**New file**: `nix/hosts/clawdbot-gateway/default.nix`
+
+- Set hostname and basic packages
+- Enable SSH and Tailscale
+- Minimal example:
+
+```nix
+{ config, pkgs, ... }:
+{
+  networking.hostName = "clawdbot-gateway";
+  services.openssh.enable = true;
+  services.tailscale.enable = true;
+
+  # add any base packages you want
+  environment.systemPackages = with pkgs; [ git ];
+
+  system.stateVersion = "24.05"; # adjust to target version
+}
+```
+
+### 3.2 Add Disk Layout (disko)
+
+Add `disko` to the flake inputs and wire it into the gateway host so `nixos-anywhere` can partition the disk.
+
+**File**: `nix/flake.nix`
+
+Add to inputs:
+
+```nix
+disko.url = "github:nix-community/disko";
+disko.inputs.nixpkgs.follows = "nixpkgs";
+```
+
+Add `disko` to outputs function parameters.
+
+Then add `disko.nixosModules.disko` to the gateway host modules list.
+
+**New file**: `nix/hosts/clawdbot-gateway/disko.nix`
+
+Use the `single-disk-ext4` template (GPT + EFI + ext4 root). Update `device` to match the Hetzner disk (prefer `/dev/disk/by-id/...` if possible):
+
+```nix
+{
+  disko.devices = {
+    disk = {
+      main = {
+        type = "disk";
+        device = "/dev/sda"; # replace with /dev/disk/by-id/... if available
+        content = {
+          type = "gpt";
+          partitions = {
+            boot = {
+              size = "1M";
+              type = "EF02"; # BIOS boot partition for grub
+            };
+            ESP = {
+              size = "1G";
+              type = "EF00";
+              content = {
+                type = "filesystem";
+                format = "vfat";
+                mountpoint = "/boot";
+                mountOptions = [ "umask=0077" ];
+              };
+            };
+            root = {
+              size = "100%";
+              content = {
+                type = "filesystem";
+                format = "ext4";
+                mountpoint = "/";
+              };
+            };
+          };
+        };
+      };
+    };
+  };
+}
+```
+
+### 3.3 Wire Host into Flake
+
+**File**: `nix/flake.nix`
+
+- Add a new `nixosConfigurations.clawdbot-gateway`
+- Follow the pattern of existing hosts (desktop/thinkpad)
+
+Ensure the gateway host modules include:
+
+- `disko.nixosModules.disko`
+- `./hosts/clawdbot-gateway/disko.nix`
+- `./hosts/clawdbot-gateway/hardware-configuration.nix` (generated by nixos-anywhere)
+
+### 3.4 Provision via nixos-anywhere (preferred)
+
+Use `nixos-anywhere` for a hands-off install. This lets you install directly from your laptop over SSH.
+
+1. Create a Hetzner Cloud VM (any base image is fine, as long as SSH works).
+2. Ensure you can SSH as `root` with your key.
+3. Make sure the `disko` layout is present (above).
+4. Run the installer from your laptop:
+
+```bash
+cd ~/dotfiles
+nix run github:nix-community/nixos-anywhere -- \
+  --flake ./nix#clawdbot-gateway \
+  --generate-hardware-config nixos-generate-config ./nix/hosts/clawdbot-gateway/hardware-configuration.nix \
+  --target-host root@<gateway-ip>
+```
+
+After the install completes, the box will reboot into NixOS.
+
+### 3.5 Manual install fallback (ISO)
+
+If you prefer not to use `nixos-anywhere`, attach the NixOS ISO in the Hetzner console and install manually, then deploy the flake on the box:
 
 ```bash
 cd ~/dotfiles/nix
-sudo nixos-rebuild switch --flake .#thrawny-desktop
+sudo nixos-rebuild switch --flake .#clawdbot-gateway
 ```
 
-### 2.3 Authenticate Tailscale
+### 3.6 Authenticate Tailscale (Gateway)
 
 ```bash
 sudo tailscale up
 ```
 
-This opens a browser to authenticate with your Tailscale account. Your desktop will appear in the Tailscale admin console.
-
-### 2.4 Verify Tailscale
-
-```bash
-tailscale status
-# Should show your device connected to tailnet
-```
-
 ### Success Criteria
 
-#### Automated Verification:
-- [ ] Tailscale service running: `systemctl status tailscaled`
-- [ ] Device on tailnet: `tailscale status`
-
-#### Manual Verification:
-- [ ] Device visible in Tailscale admin console at https://login.tailscale.com/admin/machines
+- [ ] `tailscale status` shows gateway on tailnet
+- [ ] SSH into gateway works
 
 ---
 
-## Phase 3: Flake Integration
+## Phase 4: Add nix-clawdbot to the Flake
 
-### 3.1 Add Flake Input
+### 4.1 Add Flake Input
 
 **File**: `nix/flake.nix`
-
-Add to inputs (after `xremap-flake`):
 
 ```nix
 nix-clawdbot.url = "github:clawdbot/nix-clawdbot";
 nix-clawdbot.inputs.nixpkgs.follows = "nixpkgs";
 ```
 
-### 3.2 Pass Through Outputs
+### 4.2 Pass Through Outputs
 
-**File**: `nix/flake.nix`
-
-Add `nix-clawdbot` to the outputs function parameters (line ~28):
+Add `nix-clawdbot` to the outputs function parameters:
 
 ```nix
 outputs = {
   ...
-  xremap-flake,
-  nix-clawdbot,  # Add this
+  nix-clawdbot,
   ...
 }:
 ```
 
-### 3.3 Add to mkHost specialArgs
-
-**File**: `nix/flake.nix`
-
-In the `mkHost` function's `specialArgs` (around line 144), add:
+### 4.3 Add to mkHost specialArgs
 
 ```nix
 specialArgs = {
@@ -173,7 +308,7 @@ specialArgs = {
     walker
     nurPkgs
     xremap-flake
-    nix-clawdbot  # Add this
+    nix-clawdbot
     nixpkgs-xwayland
     ;
 };
@@ -181,47 +316,24 @@ specialArgs = {
 
 ### Success Criteria
 
-#### Automated Verification:
-- [ ] Flake evaluates: `nix flake check nix/`
-- [ ] Input resolves: `nix flake metadata nix/ | grep clawdbot`
+- [ ] `nix flake metadata nix/ | rg clawdbot`
+- [ ] `nix flake check nix/` evaluates
 
 ---
 
-## Phase 4: Home Manager Configuration
+## Phase 5: Home Manager Configuration
 
-### 4.1 Forward to Home Manager extraSpecialArgs
+### 5.1 Forward to Home Manager extraSpecialArgs
 
 **File**: `nix/modules/nixos/system.nix`
 
-Add `nix-clawdbot` to function parameters (line ~7):
+- Add `nix-clawdbot` to function args
+- Add `nix-clawdbot` to `home-manager.extraSpecialArgs`
 
-```nix
-{
-  config,
-  pkgs,
-  lib,
-  ...
-  xremap-flake,
-  nix-clawdbot,  # Add this
-  ...
-}:
-```
 
-Add to `home-manager.extraSpecialArgs` (around line 171):
+### 4.2 Create Gateway Module
 
-```nix
-extraSpecialArgs = {
-  inherit
-    ...
-    xremap-flake
-    nix-clawdbot  # Add this
-    ;
-};
-```
-
-### 4.2 Create Clawdbot Module
-
-**File**: `nix/home/nixos/clawdbot.nix` (new file)
+**New file**: `nix/home/nixos/clawdbot-gateway.nix`
 
 ```nix
 { nix-clawdbot, ... }:
@@ -239,175 +351,160 @@ extraSpecialArgs = {
         provider = "openai-codex";
         mode = "oauth";
       };
-      # Use Helium browser (ungoogled-chromium based, in PATH via system packages)
-      browser.executablePath = "helium";
-      # Workspace access - dotfiles and code directories
-      agents.defaults.workspace = "~/code";  # Default workspace
-      agents.defaults.allowedPaths = [
-        "~/dotfiles"
-        "~/code"
-      ];
-      # Tailscale: expose gateway on tailnet for remote access
+
+      gateway.mode = "local";
+
+      # Tailscale: expose gateway on tailnet
       tailscale.mode = "serve";
       gateway.auth.allowTailscale = true;
     };
 
-    # coding-agent skill: run/resume Codex CLI, Claude Code, OpenCode, or Pi
-    plugins = [
-      { source = "github:clawdbot/skills?dir=skills/steipete/coding-agent"; }
-    ];
-
     providers.telegram = {
       enable = true;
       botTokenFile = "~/.secrets/telegram-token";
-      allowFrom = [ YOUR_CHAT_ID ];  # Replace with actual chat ID
+      allowFrom = [ YOUR_CHAT_ID ];
     };
 
-    # systemd user service (Linux)
     systemd.enable = true;
   };
 }
 ```
 
-### 4.3 Import Module (Desktop Only)
+### 4.3 Create Client Module
 
-**File**: `nix/hosts/desktop/default.nix`
-
-Add to the `home-manager.users.thrawny` block (around line 141):
+**New file**: `nix/home/nixos/clawdbot-client.nix`
 
 ```nix
-home-manager.users.thrawny =
-  { lib, nix-clawdbot, ... }:  # Add nix-clawdbot to args
-  {
-    imports = [ ../../home/nixos/clawdbot.nix ];  # Add this import
+{ nix-clawdbot, ... }:
+{
+  imports = [ nix-clawdbot.homeManagerModules.default ];
 
-    # ... existing config
+  programs.clawdbot = {
+    enable = true;
+
+    configOverrides = {
+      gateway.mode = "remote";
+      gateway.remote.url = "wss://clawdbot-gateway.<tailnet>.ts.net";
+    };
   };
+}
 ```
+
+### 4.4 Optional: Desktop Node Host
+
+If you want commands and browser automation to run **locally on the desktop**, add a node service on the desktop host:
+
+- Ensure Helium is installed and in `PATH`
+- Add `browser.executablePath = "helium";` in the desktop node config
+- Run the node as a systemd user service (if `nix-clawdbot` exposes it) or add a custom `systemd.user.services` entry
+
+### 4.5 Import Modules
+
+- Gateway host: import `clawdbot-gateway.nix`
+- Desktop/laptop: import `clawdbot-client.nix`
 
 ### Success Criteria
 
-#### Automated Verification:
-- [ ] Config builds: `nixos-rebuild build --flake .#thrawny-desktop`
-- [ ] No evaluation errors
+- [ ] `nixos-rebuild build --flake .#clawdbot-gateway` succeeds
+- [ ] `nixos-rebuild build --flake .#thrawny-desktop` succeeds
 
 ---
 
 ## Phase 5: Deploy and Verify
 
-### 5.1 Apply Configuration
+### 5.1 Apply Configuration (Gateway)
 
-On desktop:
+```bash
+cd ~/dotfiles/nix
+sudo nixos-rebuild switch --flake .#clawdbot-gateway
+```
+
+### 5.2 Authenticate Tailscale (Gateway)
+
+```bash
+sudo tailscale up
+```
+
+### 5.3 Apply Configuration (Desktop/Laptop)
 
 ```bash
 cd ~/dotfiles/nix
 sudo nixos-rebuild switch --flake .#thrawny-desktop
 ```
 
-### 5.2 Authenticate Tailscale
+### 5.4 Verify Services
 
 ```bash
-sudo tailscale up
-```
-
-Opens browser to authenticate. Your desktop joins the tailnet.
-
-### 5.3 Verify Services
-
-```bash
-# Tailscale status
-tailscale status
-
-# Clawdbot service status
+# Gateway status
 systemctl --user status clawdbot-gateway
 
-# View logs
+# Gateway logs
 journalctl --user -u clawdbot-gateway -f
 ```
 
-### 5.4 Test via Telegram
+### 5.5 Test via Telegram
 
 1. Send "hello" to your bot
-2. Should receive a response from Clawdbot
-3. Try: "open browser and go to github.com"
+2. Expect a response from Clawdbot
+3. If desktop node is enabled: "open browser and go to github.com"
 
 ### Success Criteria
 
-#### Automated Verification:
-- [ ] Tailscale connected: `tailscale status | grep -q thrawny-desktop`
-- [ ] Clawdbot active: `systemctl --user is-active clawdbot-gateway`
-
-#### Manual Verification:
+- [ ] Tailscale connected on gateway
+- [ ] Clawdbot gateway active
 - [ ] Telegram "hello" receives response
-- [ ] Browser command opens browser
-- [ ] WebChat accessible from another device on tailnet
-- [ ] Logs show successful message processing
+- [ ] Optional: desktop node can execute commands
 
 ---
 
-## Phase 6: Rollback (If Needed)
+## Phase 6: Migration / Rebuild
 
-### 6.1 Quick Disable
+To move the gateway to a bigger box:
 
-Stop the service without removing config:
+1. Backup:
+   - `~/.clawdbot/` (sessions/config)
+   - `~/.secrets/telegram-token`
+   - `~/.codex/auth.json`
+2. Provision new box + apply flake
+3. Restore backups
+4. Re-auth Tailscale and confirm tailnet DNS
+
+---
+
+## Phase 7: Rollback (If Needed)
+
+### 7.1 Quick Disable
 
 ```bash
 systemctl --user stop clawdbot-gateway
 systemctl --user disable clawdbot-gateway
 ```
 
-### 6.2 Full Removal
+### 7.2 Full Removal
 
-1. **Remove import** from `nix/hosts/desktop/default.nix`:
-   - Remove `imports = [ ../../home/nixos/clawdbot.nix ];`
-   - Remove `nix-clawdbot` from function args
-
-2. **Delete module**: `rm nix/home/nixos/clawdbot.nix`
-
-3. **Optionally remove flake input** (can leave for future use):
-   - Remove from `flake.nix` inputs
-   - Remove from outputs parameters
-   - Remove from `mkHost` specialArgs
-   - Remove from `system.nix` extraSpecialArgs
-
-4. **Optionally remove Tailscale** (useful to keep for other purposes):
-   - Remove `services.tailscale.enable = true;` from `system.nix`
-
-5. **Rebuild**:
-   ```bash
-   sudo nixos-rebuild switch --flake .#thrawny-desktop
-   ```
-
-6. **Clean up secrets** (optional):
-   ```bash
-   rm ~/.secrets/telegram-token
-   ```
-
-### Success Criteria
-
-#### Automated Verification:
-- [ ] Service gone: `systemctl --user status clawdbot-gateway` shows "not found"
-- [ ] Config builds without clawdbot
+1. Remove imports from host configs
+2. Delete `nix/home/nixos/clawdbot-gateway.nix` and `nix/home/nixos/clawdbot-client.nix`
+3. Optionally remove flake input `nix-clawdbot`
+4. Rebuild
 
 ---
 
 ## Testing Strategy
 
 ### Unit Tests
-- Flake evaluation: `nix flake check`
-- Build without switch: `nixos-rebuild build`
+- `nix flake check nix/`
+- `nixos-rebuild build --flake .#clawdbot-gateway`
 
 ### Integration Tests
-- Service starts and stays running for 60s
+- Gateway service starts and stays running for 60s
 - Telegram message round-trip works
 
 ### Manual Testing Steps
-1. Send "what time is it" via Telegram - verify AI response
-2. Send "take a screenshot" - verify peekaboo works
-3. Send "open browser and go to news.ycombinator.com" - verify Helium launches
-4. Send "resume my last codex session" - verify coding-agent skill works
-5. Access WebChat from another device: `https://thrawny-desktop.<tailnet>.ts.net`
-6. Send nonsense - verify graceful handling
+1. Send "what time is it" via Telegram
+2. Send "take a screenshot" (if a node host is enabled)
+3. Send "open browser and go to news.ycombinator.com" (desktop node)
+4. Access WebChat from another device: `https://clawdbot-gateway.<tailnet>.ts.net`
+5. Send nonsense - verify graceful handling
 
 ---
 
@@ -415,5 +512,5 @@ systemctl --user disable clawdbot-gateway
 
 - nix-clawdbot repo: https://github.com/clawdbot/nix-clawdbot
 - Clawdbot docs: https://docs.clawd.bot
-- Pattern reference: `nix/home/nixos/default.nix:17` (xremap integration)
-- extraSpecialArgs pattern: `nix/modules/nixos/system.nix:170`
+- Pattern reference: `nix/home/nixos/default.nix` (xremap integration)
+- extraSpecialArgs pattern: `nix/modules/nixos/system.nix`
