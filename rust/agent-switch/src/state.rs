@@ -71,50 +71,6 @@ pub fn now() -> f64 {
         .unwrap_or(0.0)
 }
 
-/// Get the current tmux window ID if running inside tmux
-pub fn get_tmux_window_id() -> Option<String> {
-    if env::var("TMUX").is_err() {
-        return None;
-    }
-    let output = Command::new("tmux")
-        .args(["display-message", "-p", "#{window_id}"])
-        .output()
-        .ok()?;
-    if output.status.success() {
-        let id = String::from_utf8_lossy(&output.stdout).trim().to_string();
-        if !id.is_empty() {
-            return Some(id);
-        }
-    }
-    None
-}
-
-/// Get the focused niri window ID
-pub fn get_niri_window_id() -> Option<String> {
-    let output = Command::new("niri")
-        .args(["msg", "-j", "focused-window"])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let json: serde_json::Value = serde_json::from_slice(&output.stdout).ok()?;
-    json.get("id")
-        .and_then(|v| v.as_u64())
-        .map(|id| id.to_string())
-}
-
-/// Get the current window ID (captures both niri and tmux when available)
-pub fn get_current_window_id() -> Option<(String, WindowId)> {
-    let niri_id = get_niri_window_id();
-    let tmux_id = get_tmux_window_id();
-
-    // Use niri_id as key if available, otherwise tmux_id
-    let key = niri_id.clone().or_else(|| tmux_id.clone())?;
-
-    Some((key, WindowId { niri_id, tmux_id }))
-}
-
 /// Find a session by session_id (for events that don't capture window)
 #[allow(dead_code)]
 pub fn find_by_session_id<'a>(

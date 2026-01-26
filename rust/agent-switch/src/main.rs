@@ -57,7 +57,11 @@ fn main() {
     let cli = Cli::parse();
 
     match cli.command {
-        Command::Track { event } => track::handle_event(&event),
+        Command::Track { event } => {
+            if !track::handle_event(&event) {
+                std::process::exit(1);
+            }
+        }
         Command::Fix => todo!("fix command"),
         Command::List => {
             let mut store = state::load();
