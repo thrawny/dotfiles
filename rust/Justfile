@@ -1,16 +1,13 @@
 # Rust workspace task runner
 # Packages: bash-validator, tmux-fzf-switcher, voice, agent-switch
 
-# On macOS, exclude agent-switch (requires GTK)
-workspace_args := if os() == "macos" { "--workspace --exclude agent-switch" } else { "--workspace" }
-
 # Default recipe
 default:
     @just --list
 
 # Build a package (or all)
 build *PKG:
-    cargo build --release {{ if PKG != "" { "-p " + PKG } else { workspace_args } }}
+    cargo build --release {{ if PKG != "" { "-p " + PKG } else { "--workspace" } }}
 
 # Run a package
 run PKG:
@@ -39,11 +36,11 @@ install PKG:
 
 # Run clippy with auto-fix
 clippy:
-    cargo clippy --fix --allow-dirty --allow-staged --release {{ workspace_args }}
+    cargo clippy --fix --allow-dirty --allow-staged --release --workspace
 
 # Run tests
 test:
-    cargo test --release {{ workspace_args }}
+    cargo test --release --workspace
 
 # Format code
 fmt:

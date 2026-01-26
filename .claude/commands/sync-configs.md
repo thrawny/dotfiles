@@ -14,12 +14,11 @@ Pre-commit hook source (defines ignore filters): @config/git/hooks/pre-commit
 Based on the hook output above:
 
 1. **If no diffs reported**: Say "All configs in sync" and stop
-2. **For each diff reported**: Immediately use AskUserQuestion with options:
-   - **Example → Live**: Update live file from example
-   - **Live → Example**: Update example file from live
-   - **Add to ignore**: Add the differing field(s) to the hook's jq/yq filter
-   - **Skip**: Leave unchanged
+
+2. **For each diff reported**: Parse the diff and summarize the specific changes, then use AskUserQuestion with:
+   - A **question** that names the config and summarizes what changed (e.g., "Claude: hooks changed from session-tracker to agent-switch track, added steer feature")
+   - Option descriptions that explain the concrete effect (e.g., "Revert to agent-switch track commands" not just "Update live from example")
 
 3. **Apply chosen actions**
 
-Do not output any analysis or explanation before using AskUserQuestion.
+Be specific about what will change - users should understand the effect of each option without needing to read the raw diff.
