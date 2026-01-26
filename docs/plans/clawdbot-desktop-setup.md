@@ -18,6 +18,7 @@ Set up Clawdbot on the NixOS desktop (`thrawny-desktop`) using OpenAI Codex for 
 - Responds to Telegram messages from your chat ID
 - Uses Codex subscription (no separate API key needed)
 - Browser control via Helium (ungoogled-chromium)
+- Tailscale: WebChat/dashboard accessible from any device on tailnet
 
 ### Verification
 
@@ -37,7 +38,13 @@ systemctl --user status clawdbot-gateway
 
 ---
 
-## Phase 1: Prerequisites - Telegram Bot Setup
+## Phase 1: Prerequisites
+
+### 1.0 Tailscale Account
+
+1. Go to https://tailscale.com and sign up (free tier works)
+2. Sign in with GitHub, Google, or email
+3. Note your tailnet name (e.g., `tailnet-abc123.ts.net`)
 
 ### 1.1 Create Telegram Bot
 
@@ -72,9 +79,61 @@ chmod 600 ~/.secrets/telegram-token
 
 ---
 
-## Phase 2: Flake Integration
+## Phase 2: Tailscale NixOS Setup
 
-### 2.1 Add Flake Input
+### 2.1 Add Tailscale to System Config
+
+**File**: `nix/modules/nixos/system.nix`
+
+Add to the `services` block (around line 137):
+
+```nix
+services = {
+  # ... existing services ...
+
+  # Tailscale VPN for remote Clawdbot access
+  tailscale.enable = true;
+};
+```
+
+### 2.2 Deploy Tailscale First
+
+**Important**: Deploy Tailscale before adding Clawdbot to verify it works.
+
+```bash
+cd ~/dotfiles/nix
+sudo nixos-rebuild switch --flake .#thrawny-desktop
+```
+
+### 2.3 Authenticate Tailscale
+
+```bash
+sudo tailscale up
+```
+
+This opens a browser to authenticate with your Tailscale account. Your desktop will appear in the Tailscale admin console.
+
+### 2.4 Verify Tailscale
+
+```bash
+tailscale status
+# Should show your device connected to tailnet
+```
+
+### Success Criteria
+
+#### Automated Verification:
+- [ ] Tailscale service running: `systemctl status tailscaled`
+- [ ] Device on tailnet: `tailscale status`
+
+#### Manual Verification:
+- [ ] Device visible in Tailscale admin console at https://login.tailscale.com/admin/machines
+
+---
+
+## Phase 3: Flake Integration
+
+### 3.1 Add Flake Input
 
 **File**: `nix/flake.nix`
 
@@ -85,7 +144,7 @@ nix-clawdbot.url = "github:clawdbot/nix-clawdbot";
 nix-clawdbot.inputs.nixpkgs.follows = "nixpkgs";
 ```
 
-### 2.2 Pass Through Outputs
+### 3.2 Pass Through Outputs
 
 **File**: `nix/flake.nix`
 
@@ -100,7 +159,7 @@ outputs = {
 }:
 ```
 
-### 2.3 Add to mkHost specialArgs
+### 3.3 Add to mkHost specialArgs
 
 **File**: `nix/flake.nix`
 
@@ -128,9 +187,9 @@ specialArgs = {
 
 ---
 
-## Phase 3: Home Manager Configuration
+## Phase 4: Home Manager Configuration
 
-### 3.1 Forward to Home Manager extraSpecialArgs
+### 4.1 Forward to Home Manager extraSpecialArgs
 
 **File**: `nix/modules/nixos/system.nix`
 
@@ -160,7 +219,7 @@ extraSpecialArgs = {
 };
 ```
 
-### 3.2 Create Clawdbot Module
+### 4.2 Create Clawdbot Module
 
 **File**: `nix/home/nixos/clawdbot.nix` (new file)
 
@@ -188,6 +247,9 @@ extraSpecialArgs = {
         "~/dotfiles"
         "~/code"
       ];
+      # Tailscale: expose gateway on tailnet for remote access
+      tailscale.mode = "serve";
+      gateway.auth.allowTailscale = true;
     };
 
     # coding-agent skill: run/resume Codex CLI, Claude Code, OpenCode, or Pi
@@ -207,7 +269,7 @@ extraSpecialArgs = {
 }
 ```
 
-### 3.3 Import Module (Desktop Only)
+### 4.3 Import Module (Desktop Only)
 
 **File**: `nix/hosts/desktop/default.nix`
 
@@ -231,9 +293,9 @@ home-manager.users.thrawny =
 
 ---
 
-## Phase 4: Deploy and Verify
+## Phase 5: Deploy and Verify
 
-### 4.1 Apply Configuration
+### 5.1 Apply Configuration
 
 On desktop:
 
@@ -242,17 +304,28 @@ cd ~/dotfiles/nix
 sudo nixos-rebuild switch --flake .#thrawny-desktop
 ```
 
-### 4.2 Verify Service
+### 5.2 Authenticate Tailscale
 
 ```bash
-# Check service status
+sudo tailscale up
+```
+
+Opens browser to authenticate. Your desktop joins the tailnet.
+
+### 5.3 Verify Services
+
+```bash
+# Tailscale status
+tailscale status
+
+# Clawdbot service status
 systemctl --user status clawdbot-gateway
 
 # View logs
 journalctl --user -u clawdbot-gateway -f
 ```
 
-### 4.3 Test via Telegram
+### 5.4 Test via Telegram
 
 1. Send "hello" to your bot
 2. Should receive a response from Clawdbot
@@ -261,18 +334,20 @@ journalctl --user -u clawdbot-gateway -f
 ### Success Criteria
 
 #### Automated Verification:
-- [ ] Service active: `systemctl --user is-active clawdbot-gateway`
+- [ ] Tailscale connected: `tailscale status | grep -q thrawny-desktop`
+- [ ] Clawdbot active: `systemctl --user is-active clawdbot-gateway`
 
 #### Manual Verification:
 - [ ] Telegram "hello" receives response
 - [ ] Browser command opens browser
+- [ ] WebChat accessible from another device on tailnet
 - [ ] Logs show successful message processing
 
 ---
 
-## Phase 5: Rollback (If Needed)
+## Phase 6: Rollback (If Needed)
 
-### 5.1 Quick Disable
+### 6.1 Quick Disable
 
 Stop the service without removing config:
 
@@ -281,7 +356,7 @@ systemctl --user stop clawdbot-gateway
 systemctl --user disable clawdbot-gateway
 ```
 
-### 5.2 Full Removal
+### 6.2 Full Removal
 
 1. **Remove import** from `nix/hosts/desktop/default.nix`:
    - Remove `imports = [ ../../home/nixos/clawdbot.nix ];`
@@ -295,12 +370,15 @@ systemctl --user disable clawdbot-gateway
    - Remove from `mkHost` specialArgs
    - Remove from `system.nix` extraSpecialArgs
 
-4. **Rebuild**:
+4. **Optionally remove Tailscale** (useful to keep for other purposes):
+   - Remove `services.tailscale.enable = true;` from `system.nix`
+
+5. **Rebuild**:
    ```bash
    sudo nixos-rebuild switch --flake .#thrawny-desktop
    ```
 
-5. **Clean up secrets** (optional):
+6. **Clean up secrets** (optional):
    ```bash
    rm ~/.secrets/telegram-token
    ```
@@ -324,11 +402,12 @@ systemctl --user disable clawdbot-gateway
 - Telegram message round-trip works
 
 ### Manual Testing Steps
-1. Send "what time is it" - verify AI response
+1. Send "what time is it" via Telegram - verify AI response
 2. Send "take a screenshot" - verify peekaboo works
 3. Send "open browser and go to news.ycombinator.com" - verify Helium launches
 4. Send "resume my last codex session" - verify coding-agent skill works
-5. Send nonsense - verify graceful handling
+5. Access WebChat from another device: `https://thrawny-desktop.<tailnet>.ts.net`
+6. Send nonsense - verify graceful handling
 
 ---
 
