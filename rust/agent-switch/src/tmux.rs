@@ -1,9 +1,11 @@
+use crate::daemon::{self, CodexSession, ListResponse};
 use crate::state;
 use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fs;
 use std::fs::OpenOptions;
 use std::io::{self, Read, Write};
+use std::os::unix::net::UnixStream;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Command, Stdio};
@@ -13,12 +15,32 @@ use std::time::Duration;
 
 const KEYS: [char; 12] = ['h', 'j', 'k', 'l', 'u', 'i', 'o', 'p', 'n', 'm', ',', '.'];
 
+/// Query daemon for cached sessions (instant, includes Codex)
+fn query_daemon_sessions() -> Option<ListResponse> {
+    let socket = daemon::socket_path();
+    let mut stream = UnixStream::connect(&socket).ok()?;
+    stream.write_all(b"list").ok()?;
+    let mut response = String::new();
+    stream.read_to_string(&mut response).ok()?;
+    serde_json::from_str(&response).ok()
+}
+
+/// Get Codex session for a pane's current path
+fn get_codex_for_pane<'a>(
+    pane_path: &str,
+    codex_sessions: &'a HashMap<String, CodexSession>,
+) -> Option<&'a CodexSession> {
+    daemon::match_codex_by_dir(pane_path, codex_sessions)
+}
+
 #[derive(Clone)]
 struct TmuxWindow {
     session_name: String,
     session_index: String, // e.g. "main:1"
     window_id: String,     // e.g. "@5"
     window_name: String,
+    pane_path: Option<String>,    // Current pane working directory
+    pane_command: Option<String>, // Current pane command
 }
 
 #[derive(Clone, Copy)]
@@ -35,6 +57,15 @@ impl AgentState {
             "responding" => Some(Self::Responding),
             "idle" => Some(Self::Idle),
             _ => None,
+        }
+    }
+
+    fn from_daemon_state(state: daemon::AgentState) -> Self {
+        match state {
+            daemon::AgentState::Waiting => Self::Waiting,
+            daemon::AgentState::Responding => Self::Responding,
+            daemon::AgentState::Idle => Self::Idle,
+            daemon::AgentState::Unknown => Self::Idle,
         }
     }
 
@@ -136,7 +167,7 @@ fn list_tmux_windows() -> Vec<TmuxWindow> {
             "list-windows",
             "-a",
             "-F",
-            "#{session_name}:#{window_index}\t#{window_id}\t#{window_name}",
+            "#{session_name}:#{window_index}\t#{window_id}\t#{window_name}\t#{pane_current_path}\t#{pane_current_command}",
         ])
         .output()
         .ok();
@@ -157,11 +188,21 @@ fn list_tmux_windows() -> Vec<TmuxWindow> {
         if session_name == "dev" || session_name == "scratch" {
             continue;
         }
+        let pane_path = parts
+            .get(3)
+            .map(|p| p.to_string())
+            .filter(|p| !p.is_empty());
+        let pane_command = parts
+            .get(4)
+            .map(|p| p.to_string())
+            .filter(|p| !p.is_empty());
         windows.push(TmuxWindow {
             session_name,
             session_index: parts[0].to_string(),
             window_id: parts[1].to_string(),
             window_name: parts[2].to_string(),
+            pane_path,
+            pane_command,
         });
     }
     windows
@@ -249,18 +290,38 @@ fn sorted_sessions(windows: &[TmuxWindow], order: &[String]) -> Vec<String> {
     sorted
 }
 
-fn format_status(state: AgentState) -> String {
-    format!("{}[{}]\x1b[0m", state.color(), state.label())
+fn format_status(state: AgentState, agent: &str) -> String {
+    format!("{}{} [{}]\x1b[0m", state.color(), agent, state.label())
 }
 
 fn status_for_window(
     window: &TmuxWindow,
     status_by_tmux_id: &HashMap<String, &state::Session>,
+    codex_by_cwd: &HashMap<String, CodexSession>,
 ) -> Option<String> {
-    status_by_tmux_id
-        .get(&window.window_id)
-        .and_then(|s| AgentState::from_str(&s.state))
-        .map(format_status)
+    // First check Claude sessions
+    if let Some(session) = status_by_tmux_id.get(&window.window_id) {
+        if let Some(state) = AgentState::from_str(&session.state) {
+            return Some(format_status(state, &session.agent));
+        }
+    }
+    // Only check Codex for windows with "codex" in the name or command
+    let has_codex_name = window.window_name.to_lowercase().contains("codex");
+    let has_codex_command = window
+        .pane_command
+        .as_ref()
+        .map(|c| c.to_lowercase().contains("codex"))
+        .unwrap_or(false);
+    if !has_codex_name && !has_codex_command {
+        return None;
+    }
+    if let Some(pane_path) = &window.pane_path {
+        if let Some(codex) = get_codex_for_pane(pane_path, codex_by_cwd) {
+            let state = AgentState::from_daemon_state(codex.state);
+            return Some(format_status(state, "codex"));
+        }
+    }
+    None
 }
 
 fn terminal_lines() -> usize {
@@ -299,6 +360,7 @@ fn render_sessions_screen(
     sessions: &[String],
     windows: &[TmuxWindow],
     status_by_tmux_id: &HashMap<String, &state::Session>,
+    codex_by_cwd: &HashMap<String, CodexSession>,
 ) {
     print_clear(tty);
     let header = "h/j/k/l = select session | / = search | q/Esc = cancel\n\n";
@@ -322,7 +384,7 @@ fn render_sessions_screen(
                 break;
             }
             let wkey = if widx < KEYS.len() { KEYS[widx] } else { '?' };
-            let status = status_for_window(window, status_by_tmux_id);
+            let status = status_for_window(window, status_by_tmux_id, codex_by_cwd);
             let line = if let Some(status) = status {
                 format!("{} {} {}", window.session_index, status, window.window_name)
             } else {
@@ -348,6 +410,7 @@ fn render_windows_screen(
     target_session: &str,
     windows: &[TmuxWindow],
     status_by_tmux_id: &HashMap<String, &state::Session>,
+    codex_by_cwd: &HashMap<String, CodexSession>,
 ) -> Vec<TmuxWindow> {
     print_clear(tty);
     if let Some(tty) = tty.as_mut() {
@@ -368,7 +431,7 @@ fn render_windows_screen(
     {
         session_windows.push(window.clone());
         let wkey = if widx < KEYS.len() { KEYS[widx] } else { '?' };
-        let status = status_for_window(window, status_by_tmux_id);
+        let status = status_for_window(window, status_by_tmux_id, codex_by_cwd);
         let line = if let Some(status) = status {
             format!("{} {} {}", window.session_index, status, window.window_name)
         } else {
@@ -464,6 +527,26 @@ pub fn run() {
         .filter_map(|s| s.window.tmux_id.as_ref().map(|id| (id.clone(), s)))
         .collect();
 
+    // Query daemon for Codex sessions (instant if running, empty otherwise)
+    let codex_by_cwd: HashMap<String, CodexSession> = query_daemon_sessions()
+        .map(|resp| {
+            resp.codex
+                .into_iter()
+                .map(|e| {
+                    (
+                        e.cwd.clone(),
+                        CodexSession {
+                            session_id: e.session_id,
+                            cwd: e.cwd,
+                            state: e.state,
+                            state_updated: e.state_updated,
+                        },
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+
     let mut tty_out = Tty::open();
 
     let _raw = match enable_raw_mode() {
@@ -500,7 +583,13 @@ pub fn run() {
     });
 
     let mut screen = ScreenState::Sessions;
-    render_sessions_screen(&mut tty_out, &sessions, &windows, &status_by_tmux_id);
+    render_sessions_screen(
+        &mut tty_out,
+        &sessions,
+        &windows,
+        &status_by_tmux_id,
+        &codex_by_cwd,
+    );
 
     loop {
         let key = match key_rx.recv_timeout(Duration::from_millis(50)) {
@@ -536,6 +625,7 @@ pub fn run() {
                     &target_session,
                     &windows,
                     &status_by_tmux_id,
+                    &codex_by_cwd,
                 );
                 screen = ScreenState::Windows {
                     target_session,

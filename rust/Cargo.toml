@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["bash-validator", "tmux-fzf-switcher", "voice", "agent-switch"]
+members = ["bash-validator", "voice", "agent-switch"]
 
 [workspace.package]
 edition = "2024"

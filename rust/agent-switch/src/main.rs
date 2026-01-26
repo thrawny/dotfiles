@@ -1,3 +1,4 @@
+mod daemon;
 mod state;
 mod tmux;
 mod track;
@@ -36,7 +37,14 @@ enum Command {
         #[arg(long)]
         fzf: bool,
     },
-    /// Niri GTK daemon
+    /// Run the daemon (session cache + file watchers)
+    Serve {
+        /// Enable niri GTK overlay (Linux only)
+        #[cfg(feature = "niri")]
+        #[arg(long)]
+        niri: bool,
+    },
+    /// Niri GTK daemon (deprecated, use `serve --niri`)
     #[cfg(feature = "niri")]
     Niri {
         /// Toggle visibility (send to running daemon)
@@ -70,6 +78,19 @@ fn main() {
             } else {
                 tmux::run();
             }
+        }
+        #[cfg(feature = "niri")]
+        Command::Serve { niri } => {
+            if niri {
+                let exit_code = niri::run_with_daemon();
+                std::process::exit(exit_code.into());
+            } else {
+                daemon::run_headless();
+            }
+        }
+        #[cfg(not(feature = "niri"))]
+        Command::Serve {} => {
+            daemon::run_headless();
         }
         #[cfg(feature = "niri")]
         Command::Niri { toggle } => {

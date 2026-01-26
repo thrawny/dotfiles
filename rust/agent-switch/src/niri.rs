@@ -1,3 +1,6 @@
+use crate::daemon::{
+    self, AgentSession, AgentState, CodexSession, DaemonMessage, SessionCache, TrackEvent,
+};
 use crate::state;
 use gtk4::prelude::*;
 use gtk4::{Application, ApplicationWindow, Box as GtkBox, Label, Orientation, glib};
@@ -9,110 +12,23 @@ use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::Deserialize;
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::fs;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::os::unix::net::{UnixListener, UnixStream};
+use std::io::{Read, Write};
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::rc::Rc;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::thread;
-use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 const APP_ID: &str = "com.thrawny.agent-switch";
 const KEYS: [char; 8] = ['h', 'j', 'k', 'l', 'u', 'i', 'o', 'p'];
-const CODEX_ACTIVE_WINDOW_SECS: f64 = 30.0;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum AgentState {
-    Waiting,
-    Responding,
-    Idle,
-    Unknown,
-}
-
-impl AgentState {
-    fn from_str(s: &str) -> Self {
-        match s {
-            "waiting" => Self::Waiting,
-            "responding" => Self::Responding,
-            "idle" => Self::Idle,
-            _ => Self::Unknown,
-        }
-    }
-
-    fn label(&self) -> &'static str {
-        match self {
-            Self::Waiting => "waiting",
-            Self::Responding => "working",
-            Self::Idle => "idle",
-            Self::Unknown => "?",
-        }
-    }
-
-    fn color(&self) -> &'static str {
-        match self {
-            Self::Waiting => "#f92672",
-            Self::Responding => "#a6e22e",
-            Self::Idle => "#888888",
-            Self::Unknown => "#888888",
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-#[allow(dead_code)]
-struct AgentSession {
-    agent: String,
-    state: AgentState,
-    cwd: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct CodexRecord {
-    timestamp: Option<String>,
-    #[serde(rename = "type")]
-    record_type: String,
-    payload: serde_json::Value,
-}
-
-#[derive(Debug, Clone)]
-struct CodexSession {
-    session_id: String,
-    cwd: String,
-    state: AgentState,
-    state_updated: f64,
-}
-
-#[derive(Debug, Clone)]
-struct LastMessage {
-    role: String,
-    text: String,
-    timestamp: f64,
-}
-
+// Use DaemonMessage as base, add niri-specific ReloadConfig
 #[derive(Debug)]
-enum Message {
-    Toggle,
-    Track(TrackEvent),
+enum NiriMessage {
+    Daemon(DaemonMessage),
     ReloadConfig,
-    SessionsChanged,
-    CodexChanged,
-}
-
-#[derive(Debug, Clone, serde::Deserialize)]
-struct TrackEvent {
-    event: String,
-    #[serde(default)]
-    agent: Option<String>,
-    session_id: String,
-    #[serde(default)]
-    cwd: Option<String>,
-    #[serde(default)]
-    transcript_path: Option<String>,
-    #[serde(default)]
-    notification_type: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -163,13 +79,6 @@ fn config_path() -> PathBuf {
         .join("projects.toml")
 }
 
-fn socket_path() -> PathBuf {
-    std::env::var("XDG_RUNTIME_DIR")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("/tmp"))
-        .join("agent-switch.sock")
-}
-
 fn load_config() -> Config {
     if let Ok(content) = std::fs::read_to_string(config_path()) {
         if let Ok(config) = toml::from_str::<Config>(&content) {
@@ -202,415 +111,6 @@ fn load_agent_sessions() -> HashMap<u64, AgentSession> {
     sessions
 }
 
-fn codex_sessions_root() -> PathBuf {
-    dirs::home_dir()
-        .unwrap_or_default()
-        .join(".codex")
-        .join("sessions")
-}
-
-fn is_codex_rollout_file(path: &Path) -> bool {
-    let filename = match path.file_name().and_then(|name| name.to_str()) {
-        Some(name) => name,
-        None => return false,
-    };
-    filename.starts_with("rollout-") && filename.ends_with(".jsonl")
-}
-
-fn walk_codex_files(dir: &Path, files: &mut Vec<PathBuf>) {
-    if let Ok(entries) = fs::read_dir(dir) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                walk_codex_files(&path, files);
-            } else if is_codex_rollout_file(path.as_path()) {
-                files.push(path);
-            }
-        }
-    }
-}
-
-fn update_codex_session(
-    codex: &mut HashMap<String, CodexSession>,
-    session_id: &str,
-    cwd: Option<&str>,
-    state: &str,
-    state_updated: Option<f64>,
-) {
-    let updated = state_updated.unwrap_or_else(state::now);
-    let entry = codex.entry(session_id.to_string()).or_insert(CodexSession {
-        session_id: session_id.to_string(),
-        cwd: String::new(),
-        state: AgentState::from_str(state),
-        state_updated: updated,
-    });
-
-    if entry.cwd.is_empty() {
-        if let Some(value) = cwd {
-            entry.cwd = value.to_string();
-        }
-    }
-    entry.state = AgentState::from_str(state);
-    entry.state_updated = updated;
-}
-
-fn update_last_message(
-    last_message: &mut HashMap<String, LastMessage>,
-    session_id: &str,
-    role: &str,
-    text: &str,
-    timestamp: f64,
-) {
-    let replace = match last_message.get(session_id) {
-        Some(existing) => timestamp >= existing.timestamp,
-        None => true,
-    };
-    if replace {
-        last_message.insert(
-            session_id.to_string(),
-            LastMessage {
-                role: role.to_string(),
-                text: text.to_string(),
-                timestamp,
-            },
-        );
-    }
-}
-
-fn handle_codex_record(
-    codex: &mut HashMap<String, CodexSession>,
-    last_message: &mut HashMap<String, LastMessage>,
-    record: CodexRecord,
-    fallback_session_id: Option<&str>,
-    fallback_cwd: Option<&str>,
-) {
-    let record_ts = record_timestamp(&record);
-    match record.record_type.as_str() {
-        "session_meta" => {
-            let session_id = record
-                .payload
-                .get("id")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            if session_id.is_empty() {
-                return;
-            }
-            let cwd = record
-                .payload
-                .get("cwd")
-                .and_then(|v| v.as_str())
-                .or(fallback_cwd);
-            update_codex_session(codex, session_id, cwd, "idle", record_ts);
-        }
-        "event_msg" => {
-            let event_type = record
-                .payload
-                .get("type")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let session_id = record
-                .payload
-                .get("session_id")
-                .and_then(|v| v.as_str())
-                .or(fallback_session_id)
-                .unwrap_or("");
-            if session_id.is_empty() {
-                return;
-            }
-            let Some(ts) = record_ts else {
-                return;
-            };
-            match event_type {
-                "user_message" => {
-                    update_codex_session(codex, session_id, fallback_cwd, "responding", record_ts);
-                    update_last_message(last_message, session_id, "user", "", ts);
-                }
-                "agent_message" => {
-                    update_codex_session(codex, session_id, fallback_cwd, "idle", record_ts);
-                    update_last_message(last_message, session_id, "assistant", "", ts);
-                }
-                _ => {}
-            }
-        }
-        "response_item" => {
-            let role = record
-                .payload
-                .get("role")
-                .and_then(|v| v.as_str())
-                .unwrap_or("");
-            let session_id = record
-                .payload
-                .get("session_id")
-                .and_then(|v| v.as_str())
-                .or(fallback_session_id)
-                .unwrap_or("");
-            if session_id.is_empty() {
-                return;
-            }
-            if role == "assistant" {
-                update_codex_session(codex, session_id, fallback_cwd, "responding", record_ts);
-                let Some(ts) = record_ts else {
-                    return;
-                };
-                let text = extract_assistant_text(&record.payload).unwrap_or_default();
-                update_last_message(last_message, session_id, "assistant", &text, ts);
-            }
-        }
-        _ => {}
-    }
-}
-
-fn process_codex_file(
-    path: &Path,
-    codex: &mut HashMap<String, CodexSession>,
-    last_message: &mut HashMap<String, LastMessage>,
-) {
-    let file = match fs::File::open(path) {
-        Ok(file) => file,
-        Err(_) => return,
-    };
-    let reader = BufReader::new(file);
-    let mut session_id: Option<String> = None;
-    let mut cwd: Option<String> = None;
-
-    for line in reader.lines().map_while(Result::ok) {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let record = match serde_json::from_str::<CodexRecord>(trimmed) {
-            Ok(record) => record,
-            Err(_) => continue,
-        };
-        if session_id.is_none() || cwd.is_none() {
-            if let Some((id, dir)) = read_codex_file_meta(path) {
-                session_id = Some(id);
-                cwd = Some(dir);
-            }
-        }
-        handle_codex_record(
-            codex,
-            last_message,
-            record,
-            session_id.as_deref(),
-            cwd.as_deref(),
-        );
-    }
-}
-
-fn read_codex_file_meta(path: &Path) -> Option<(String, String)> {
-    let file = fs::File::open(path).ok()?;
-    let reader = BufReader::new(file);
-    for line in reader.lines().map_while(Result::ok) {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        let record = serde_json::from_str::<CodexRecord>(trimmed).ok()?;
-        if record.record_type != "session_meta" {
-            continue;
-        }
-        let session_id = record
-            .payload
-            .get("id")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        let cwd = record
-            .payload
-            .get("cwd")
-            .and_then(|v| v.as_str())
-            .unwrap_or("")
-            .to_string();
-        if session_id.is_empty() || cwd.is_empty() {
-            return None;
-        }
-        return Some((session_id, cwd));
-    }
-    None
-}
-
-fn load_codex_sessions() -> HashMap<String, CodexSession> {
-    let mut codex: HashMap<String, CodexSession> = HashMap::new();
-    let mut last_message: HashMap<String, LastMessage> = HashMap::new();
-    let mut mtime_by_cwd: HashMap<String, f64> = HashMap::new();
-    let root = codex_sessions_root();
-    if root.exists() {
-        let mut files = Vec::new();
-        walk_codex_files(root.as_path(), &mut files);
-
-        let mut by_cwd: HashMap<String, (std::time::SystemTime, PathBuf)> = HashMap::new();
-        for file in files {
-            let meta = match fs::metadata(&file).and_then(|m| m.modified()) {
-                Ok(modified) => modified,
-                Err(_) => continue,
-            };
-            let (_, cwd) = match read_codex_file_meta(file.as_path()) {
-                Some(info) => info,
-                None => continue,
-            };
-            let replace = match by_cwd.get(&cwd) {
-                Some((existing, _)) => meta > *existing,
-                None => true,
-            };
-            if replace {
-                by_cwd.insert(cwd, (meta, file));
-            }
-        }
-
-        for (cwd, (meta, file)) in by_cwd.iter() {
-            let mtime = meta
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs_f64())
-                .unwrap_or(0.0);
-            mtime_by_cwd.insert(cwd.clone(), mtime);
-            process_codex_file(file.as_path(), &mut codex, &mut last_message);
-        }
-    }
-
-    apply_codex_recent_activity(&mut codex, &mtime_by_cwd);
-    apply_codex_idle_timeout(&mut codex);
-    apply_codex_waiting(&mut codex, &last_message);
-
-    let mut by_cwd: HashMap<String, CodexSession> = HashMap::new();
-    for entry in codex.values() {
-        if entry.cwd.is_empty() {
-            continue;
-        }
-        let replace = match by_cwd.get(&entry.cwd) {
-            Some(existing) => entry.state_updated >= existing.state_updated,
-            None => true,
-        };
-        if replace {
-            by_cwd.insert(entry.cwd.clone(), entry.clone());
-        }
-    }
-    by_cwd
-}
-
-fn apply_codex_recent_activity(
-    codex: &mut HashMap<String, CodexSession>,
-    mtime_by_cwd: &HashMap<String, f64>,
-) {
-    let now = state::now();
-    for entry in codex.values_mut() {
-        let Some(mtime) = mtime_by_cwd.get(&entry.cwd) else {
-            continue;
-        };
-        if *mtime > entry.state_updated {
-            entry.state_updated = *mtime;
-        }
-        if now - *mtime <= CODEX_ACTIVE_WINDOW_SECS && entry.state != AgentState::Waiting {
-            entry.state = AgentState::Responding;
-        }
-    }
-}
-
-fn record_timestamp(record: &CodexRecord) -> Option<f64> {
-    record
-        .timestamp
-        .as_deref()
-        .and_then(parse_rfc3339_epoch)
-        .or_else(|| {
-            record
-                .payload
-                .get("timestamp")
-                .and_then(|v| v.as_str())
-                .and_then(parse_rfc3339_epoch)
-        })
-}
-
-fn parse_rfc3339_epoch(value: &str) -> Option<f64> {
-    OffsetDateTime::parse(value, &Rfc3339)
-        .ok()
-        .map(|dt| dt.unix_timestamp_nanos() as f64 / 1_000_000_000.0)
-}
-
-fn apply_codex_idle_timeout(codex: &mut HashMap<String, CodexSession>) {
-    let now = state::now();
-    for entry in codex.values_mut() {
-        if entry.state == AgentState::Responding && now - entry.state_updated > 10.0 {
-            entry.state = AgentState::Idle;
-        }
-    }
-}
-
-fn apply_codex_waiting(
-    codex: &mut HashMap<String, CodexSession>,
-    last_message: &HashMap<String, LastMessage>,
-) {
-    for entry in codex.values_mut() {
-        if entry.state != AgentState::Idle {
-            continue;
-        }
-        if let Some(message) = last_message.get(&entry.session_id)
-            && message.role == "assistant"
-            && message.text.trim_end().ends_with('?')
-        {
-            entry.state = AgentState::Waiting;
-        }
-    }
-}
-
-fn extract_assistant_text(payload: &serde_json::Value) -> Option<String> {
-    let content = payload.get("content")?.as_array()?;
-    let mut last_text: Option<String> = None;
-    for item in content {
-        let item_type = item.get("type").and_then(|v| v.as_str()).unwrap_or("");
-        if (item_type == "text" || item_type == "output_text" || item_type == "input_text")
-            && let Some(text) = item.get("text").and_then(|v| v.as_str())
-        {
-            last_text = Some(text.to_string());
-        }
-    }
-    last_text
-}
-
-fn path_depth(path: &str) -> usize {
-    Path::new(path)
-        .components()
-        .filter(|c| !matches!(c, std::path::Component::RootDir))
-        .count()
-}
-
-fn should_match_dir(entry_dir: &str, cwd: &str) -> bool {
-    if cwd.is_empty() || cwd == "/" {
-        return false;
-    }
-    if let Some(home) = dirs::home_dir()
-        && cwd == home.to_string_lossy()
-    {
-        return false;
-    }
-    let entry_path = Path::new(entry_dir);
-    let cwd_path = Path::new(cwd);
-    entry_path.starts_with(cwd_path) || cwd_path.starts_with(entry_path)
-}
-
-fn match_codex_by_dir<'a>(
-    entry_dir: &str,
-    entries: &'a HashMap<String, CodexSession>,
-) -> Option<&'a CodexSession> {
-    let mut best: Option<(&CodexSession, usize)> = None;
-    for (cwd, entry) in entries.iter() {
-        if !should_match_dir(entry_dir, cwd) {
-            continue;
-        }
-        let depth = path_depth(cwd);
-        if best
-            .as_ref()
-            .map(|(current, current_depth)| {
-                depth > *current_depth
-                    || (depth == *current_depth && entry.state_updated > current.state_updated)
-            })
-            .unwrap_or(true)
-        {
-            best = Some((entry, depth));
-        }
-    }
-    best.map(|(entry, _)| entry)
-}
-
 fn codex_state_for_entry(
     entry: &WorkspaceColumn,
     codex_by_cwd: &HashMap<String, CodexSession>,
@@ -621,7 +121,7 @@ fn codex_state_for_entry(
     }
     let dir = entry.dir.as_deref()?;
     let dir = shellexpand::tilde(dir).to_string();
-    match_codex_by_dir(&dir, codex_by_cwd).map(|entry| entry.state)
+    daemon::match_codex_by_dir(&dir, codex_by_cwd).map(|entry| entry.state)
 }
 
 fn niri_request(request: Request) -> Option<Response> {
@@ -921,7 +421,7 @@ fn switch_to_entry(entry: &WorkspaceColumn) {
 }
 
 fn send_toggle() -> Result<(), Box<dyn std::error::Error>> {
-    let path = socket_path();
+    let path = daemon::socket_path();
     let mut stream = UnixStream::connect(&path)?;
     stream.write_all(b"toggle")?;
     let mut response = String::new();
@@ -929,56 +429,7 @@ fn send_toggle() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn start_socket_listener(tx: mpsc::Sender<Message>) {
-    let path = socket_path();
-    let _ = std::fs::remove_file(&path);
-
-    let listener = match UnixListener::bind(&path) {
-        Ok(l) => l,
-        Err(e) => {
-            eprintln!("Failed to bind socket: {}", e);
-            return;
-        }
-    };
-
-    thread::spawn(move || {
-        for stream in listener.incoming() {
-            match stream {
-                Ok(mut stream) => {
-                    let mut buf = [0u8; 4096];
-                    if let Ok(count) = stream.read(&mut buf) {
-                        if count > 0 {
-                            let cmd = String::from_utf8_lossy(&buf[..count]);
-                            let cmd = cmd.trim();
-                            if cmd == "toggle" {
-                                let _ = tx.send(Message::Toggle);
-                                let _ = stream.write_all(b"ok");
-                            } else if let Some(json) = cmd.strip_prefix("track ") {
-                                match serde_json::from_str::<TrackEvent>(json) {
-                                    Ok(event) => {
-                                        let _ = tx.send(Message::Track(event));
-                                        let _ = stream.write_all(b"ok");
-                                    }
-                                    Err(e) => {
-                                        let _ =
-                                            stream.write_all(format!("error: {}", e).as_bytes());
-                                    }
-                                }
-                            } else {
-                                let _ = stream.write_all(b"unknown command");
-                            }
-                        }
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Socket error: {}", e);
-                }
-            }
-        }
-    });
-}
-
-fn start_config_watcher(tx: mpsc::Sender<Message>) {
+fn start_config_watcher(tx: mpsc::Sender<NiriMessage>) {
     let config = config_path();
     let config_dir = config.parent().map(|p| p.to_path_buf());
 
@@ -996,7 +447,7 @@ fn start_config_watcher(tx: mpsc::Sender<Message>) {
                     if dominated_by_config {
                         match event.kind {
                             notify::EventKind::Modify(_) | notify::EventKind::Create(_) => {
-                                let _ = tx_clone.send(Message::ReloadConfig);
+                                let _ = tx_clone.send(NiriMessage::ReloadConfig);
                             }
                             _ => {}
                         }
@@ -1020,70 +471,6 @@ fn start_config_watcher(tx: mpsc::Sender<Message>) {
             loop {
                 std::thread::sleep(std::time::Duration::from_secs(3600));
             }
-        }
-    });
-}
-
-fn start_sessions_watcher(tx: mpsc::Sender<Message>) {
-    let state_file = state::state_file();
-    let state_dir = state_file.parent().map(|p| p.to_path_buf());
-    let codex_dir = codex_sessions_root();
-
-    thread::spawn(move || {
-        let tx_clone = tx.clone();
-        let state_filename = state_file.file_name().map(|s| s.to_os_string());
-
-        let mut watcher = match RecommendedWatcher::new(
-            move |res: Result<notify::Event, notify::Error>| {
-                if let Ok(event) = res {
-                    let is_state_file = event
-                        .paths
-                        .iter()
-                        .any(|p| p.file_name() == state_filename.as_deref());
-                    let is_codex_file = event.paths.iter().any(|p| is_codex_rollout_file(p));
-                    if is_state_file {
-                        match event.kind {
-                            notify::EventKind::Modify(_) | notify::EventKind::Create(_) => {
-                                let _ = tx_clone.send(Message::SessionsChanged);
-                            }
-                            _ => {}
-                        }
-                    } else if is_codex_file {
-                        match event.kind {
-                            notify::EventKind::Modify(_) | notify::EventKind::Create(_) => {
-                                let _ = tx_clone.send(Message::CodexChanged);
-                            }
-                            _ => {}
-                        }
-                    }
-                }
-            },
-            notify::Config::default(),
-        ) {
-            Ok(w) => w,
-            Err(e) => {
-                eprintln!("Failed to create sessions watcher: {}", e);
-                return;
-            }
-        };
-
-        if let Some(dir) = state_dir {
-            let _ = std::fs::create_dir_all(&dir);
-            if let Err(e) = watcher.watch(&dir, RecursiveMode::NonRecursive) {
-                eprintln!("Failed to watch state directory: {}", e);
-                return;
-            }
-        }
-
-        if codex_dir.exists() {
-            if let Err(e) = watcher.watch(&codex_dir, RecursiveMode::Recursive) {
-                eprintln!("Failed to watch codex sessions directory: {}", e);
-                return;
-            }
-        }
-
-        loop {
-            std::thread::sleep(std::time::Duration::from_secs(3600));
         }
     });
 }
@@ -1140,8 +527,9 @@ fn start_focus_tracker(focused_window: Arc<Mutex<Option<u64>>>) {
 
 fn build_ui(
     app: &Application,
-    rx: mpsc::Receiver<Message>,
+    rx: mpsc::Receiver<NiriMessage>,
     focused_window: Arc<Mutex<Option<u64>>>,
+    cache: Arc<Mutex<SessionCache>>,
 ) {
     let window = ApplicationWindow::builder()
         .application(app)
@@ -1159,7 +547,10 @@ fn build_ui(
     let config = load_config();
     let entries = get_workspace_columns(&config);
     let agent_sessions = load_agent_sessions();
-    let codex_sessions = load_codex_sessions();
+    let codex_sessions = {
+        let cache = cache.lock().unwrap();
+        cache.codex_sessions.clone()
+    };
 
     let state = Rc::new(RefCell::new(AppState {
         config,
@@ -1323,10 +714,12 @@ fn build_ui(
     let state_for_poll = state.clone();
     let main_box_for_poll = main_box.clone();
     let focused_window_for_poll = focused_window.clone();
+    let cache_for_poll = cache.clone();
+
     glib::timeout_add_local(std::time::Duration::from_millis(50), move || {
         while let Ok(msg) = rx.try_recv() {
             match msg {
-                Message::Toggle => {
+                NiriMessage::Daemon(DaemonMessage::Toggle) => {
                     let is_visible = window_for_poll.is_visible();
                     if is_visible {
                         window_for_poll.set_visible(false);
@@ -1341,7 +734,10 @@ fn build_ui(
                         let mut state = state_for_poll.borrow_mut();
                         state.entries = get_workspace_columns(&state.config);
                         state.agent_sessions = load_agent_sessions();
-                        state.codex_sessions = load_codex_sessions();
+                        state.codex_sessions = {
+                            let cache = cache_for_poll.lock().unwrap();
+                            cache.codex_sessions.clone()
+                        };
                         state.pending_key = None;
                         let entries = state.entries.clone();
                         let agent_sessions = state.agent_sessions.clone();
@@ -1358,7 +754,7 @@ fn build_ui(
                         window_for_poll.present();
                     }
                 }
-                Message::ReloadConfig => {
+                NiriMessage::ReloadConfig => {
                     let mut state = state_for_poll.borrow_mut();
                     state.config = load_config();
                     state.entries = get_workspace_columns(&state.config);
@@ -1377,7 +773,7 @@ fn build_ui(
                         );
                     }
                 }
-                Message::SessionsChanged => {
+                NiriMessage::Daemon(DaemonMessage::SessionsChanged) => {
                     let mut state = state_for_poll.borrow_mut();
                     state.agent_sessions = load_agent_sessions();
                     if window_for_poll.is_visible() {
@@ -1395,9 +791,12 @@ fn build_ui(
                         );
                     }
                 }
-                Message::CodexChanged => {
+                NiriMessage::Daemon(DaemonMessage::CodexChanged) => {
                     let mut state = state_for_poll.borrow_mut();
-                    state.codex_sessions = load_codex_sessions();
+                    state.codex_sessions = {
+                        let cache = cache_for_poll.lock().unwrap();
+                        cache.codex_sessions.clone()
+                    };
                     if window_for_poll.is_visible() {
                         let entries = state.entries.clone();
                         let pending = state.pending_key;
@@ -1413,9 +812,16 @@ fn build_ui(
                         );
                     }
                 }
-                Message::Track(event) => {
+                NiriMessage::Daemon(DaemonMessage::Track(event)) => {
                     let focused_id = *focused_window_for_poll.lock().unwrap();
                     handle_track_event(&event, focused_id);
+                }
+                NiriMessage::Daemon(DaemonMessage::List(_)) => {
+                    // Handled by socket listener directly
+                }
+                NiriMessage::Daemon(DaemonMessage::Shutdown) => {
+                    // Exit GTK app
+                    std::process::exit(0);
                 }
             }
         }
@@ -1610,6 +1016,89 @@ fn build_entry_list(
     }
 }
 
+/// Run the niri daemon with GTK overlay (new `serve --niri` mode)
+pub fn run_with_daemon() -> glib::ExitCode {
+    let (daemon_tx, daemon_rx) = mpsc::channel::<DaemonMessage>();
+    let (niri_tx, niri_rx) = mpsc::channel::<NiriMessage>();
+    let cache = Arc::new(Mutex::new(SessionCache::new()));
+    let focused_window: Arc<Mutex<Option<u64>>> = Arc::new(Mutex::new(None));
+
+    // Initial load
+    {
+        let mut cache = cache.lock().unwrap();
+        cache.reload_agent_sessions();
+        cache.reload_codex_sessions();
+    }
+
+    eprintln!(
+        "Starting niri daemon with overlay, listening on {:?}",
+        daemon::socket_path()
+    );
+
+    // Start daemon threads (socket listener, file watchers)
+    daemon::start_socket_listener(daemon_tx.clone(), cache.clone());
+    daemon::start_sessions_watcher(daemon_tx.clone());
+
+    // Start niri-specific threads
+    start_config_watcher(niri_tx.clone());
+    start_focus_tracker(focused_window.clone());
+
+    // Bridge daemon messages to niri message channel
+    let niri_tx_clone = niri_tx.clone();
+    let cache_clone = cache.clone();
+    thread::spawn(move || {
+        loop {
+            let msg = match daemon_rx.recv() {
+                Ok(msg) => msg,
+                Err(_) => break,
+            };
+
+            // Handle cache updates for daemon messages
+            match &msg {
+                DaemonMessage::SessionsChanged => {
+                    let mut cache = cache_clone.lock().unwrap();
+                    cache.reload_agent_sessions();
+                }
+                DaemonMessage::CodexChanged => {
+                    let mut cache = cache_clone.lock().unwrap();
+                    cache.reload_codex_sessions();
+                }
+                _ => {}
+            }
+
+            // Forward to GTK thread
+            if niri_tx_clone.send(NiriMessage::Daemon(msg)).is_err() {
+                break;
+            }
+        }
+    });
+
+    let rx = Rc::new(RefCell::new(Some(niri_rx)));
+    let focused_window_rc = Rc::new(RefCell::new(Some(focused_window)));
+    let cache_rc = Rc::new(RefCell::new(Some(cache)));
+
+    let app = Application::builder()
+        .application_id(APP_ID)
+        .flags(gtk4::gio::ApplicationFlags::NON_UNIQUE)
+        .build();
+
+    let rx_clone = rx.clone();
+    let focused_clone = focused_window_rc.clone();
+    let cache_clone = cache_rc.clone();
+    app.connect_activate(move |app| {
+        if let (Some(rx), Some(focused), Some(cache)) = (
+            rx_clone.borrow_mut().take(),
+            focused_clone.borrow_mut().take(),
+            cache_clone.borrow_mut().take(),
+        ) {
+            build_ui(app, rx, focused, cache);
+        }
+    });
+
+    app.run_with_args::<&str>(&[])
+}
+
+/// Legacy run function for backward compatibility (`niri --toggle` and standalone daemon)
 pub fn run(toggle: bool) -> glib::ExitCode {
     if toggle {
         if let Err(e) = send_toggle() {
@@ -1619,32 +1108,6 @@ pub fn run(toggle: bool) -> glib::ExitCode {
         std::process::exit(0);
     }
 
-    let (tx, rx) = mpsc::channel();
-    let focused_window: Arc<Mutex<Option<u64>>> = Arc::new(Mutex::new(None));
-
-    start_socket_listener(tx.clone());
-    start_config_watcher(tx.clone());
-    start_sessions_watcher(tx);
-    start_focus_tracker(focused_window.clone());
-
-    let rx = Rc::new(RefCell::new(Some(rx)));
-    let focused_window = Rc::new(RefCell::new(Some(focused_window)));
-
-    let app = Application::builder()
-        .application_id(APP_ID)
-        .flags(gtk4::gio::ApplicationFlags::NON_UNIQUE)
-        .build();
-
-    let rx_clone = rx.clone();
-    let focused_clone = focused_window.clone();
-    app.connect_activate(move |app| {
-        if let (Some(rx), Some(focused)) = (
-            rx_clone.borrow_mut().take(),
-            focused_clone.borrow_mut().take(),
-        ) {
-            build_ui(app, rx, focused);
-        }
-    });
-
-    app.run_with_args::<&str>(&[])
+    // Legacy mode: run standalone with its own socket listener
+    run_with_daemon()
 }

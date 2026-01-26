@@ -5,17 +5,18 @@ edition.workspace = true
 
 [features]
 default = []
-niri = ["gtk4", "gtk4-layer-shell", "niri-ipc", "notify", "toml", "shellexpand", "time"]
+niri = ["gtk4", "gtk4-layer-shell", "niri-ipc", "toml", "shellexpand"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }
 serde.workspace = true
 serde_json.workspace = true
 dirs.workspace = true
-notify = { version = "8", optional = true }
+libc = "0.2"
+notify = "8"
+time = { version = "0.3", features = ["parsing"] }
 toml = { version = "0.9", optional = true }
 shellexpand = { version = "3", optional = true }
-time = { version = "0.3", features = ["parsing"], optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk4 = { version = "0.10", optional = true }
