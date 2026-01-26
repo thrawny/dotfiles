@@ -21,3 +21,13 @@ vim.opt.termguicolors = true
 -- Disable automatic system clipboard sync
 -- Use <space>y and <space>p for explicit system clipboard operations instead
 vim.opt.clipboard = ""
+
+-- Filetype detection
+vim.filetype.add({
+  filename = {
+    [".env"] = "sh",
+  },
+  pattern = {
+    ["%.env%.[%w_.-]+"] = "sh",
+  },
+})
