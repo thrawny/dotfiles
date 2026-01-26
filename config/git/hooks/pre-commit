@@ -59,7 +59,7 @@ warn_diff_codex() {
   local example="config/codex/config.example.toml"
   [ -f "$real" ] || return 0
   [ -f "$example" ] || return 0
-  local filter='del(.projects, .sandbox_workspace_write.writable_roots, .model, .model_reasoning_effort, .notice)'
+  local filter='del(.projects, .sandbox_workspace_write.writable_roots, .model, .model_reasoning_effort, .notice, .profiles)'
   if ! diff -u <(yq -p=toml -o=json "$filter" "$example" | jq -S '.') \
     <(yq -p=toml -o=json "$filter" "$real" | jq -S '.') >/dev/null; then
     echo "[dotfiles hook] Codex shared keys differ from example:" >&2
