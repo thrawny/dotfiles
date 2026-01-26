@@ -12,6 +12,7 @@ use std::thread;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 const CODEX_ACTIVE_WINDOW_SECS: f64 = 30.0;
+const CODEX_MAX_AGE_SECS: f64 = 7.0 * 24.0 * 60.0 * 60.0; // 7 days
 
 fn log(msg: &str) {
     let ts = OffsetDateTime::now_utc()
@@ -271,11 +272,12 @@ pub fn start_socket_listener(tx: mpsc::Sender<DaemonMessage>, cache: Arc<Mutex<S
                                 match serde_json::from_str::<TrackEvent>(json) {
                                     Ok(event) => {
                                         log(&format!(
-                                            "track {} agent={} session={} tmux={:?}",
+                                            "track {} agent={} session={} tmux={:?} cwd={:?}",
                                             event.event,
                                             event.agent.as_deref().unwrap_or("claude"),
                                             event.session_id,
-                                            event.tmux_id
+                                            event.tmux_id,
+                                            event.cwd
                                         ));
                                         let _ = tx.send(DaemonMessage::Track(event));
                                         let _ = stream.write_all(b"ok");
@@ -433,12 +435,12 @@ fn update_codex_session(
     state: &str,
     state_updated: Option<f64>,
 ) {
-    let updated = state_updated.unwrap_or_else(state::now);
+    let new_state = AgentState::from_str(state);
     let entry = codex.entry(session_id.to_string()).or_insert(CodexSession {
         session_id: session_id.to_string(),
         cwd: String::new(),
-        state: AgentState::from_str(state),
-        state_updated: updated,
+        state: new_state,
+        state_updated: 0.0,
     });
 
     if entry.cwd.is_empty() {
@@ -446,8 +448,11 @@ fn update_codex_session(
             entry.cwd = value.to_string();
         }
     }
-    entry.state = AgentState::from_str(state);
-    entry.state_updated = updated;
+    entry.state = new_state;
+    // Only update timestamp if we have one from the record
+    if let Some(ts) = state_updated {
+        entry.state_updated = ts;
+    }
 }
 
 fn update_last_message(
@@ -654,11 +659,16 @@ pub fn load_codex_sessions() -> HashMap<String, CodexSession> {
             }
         }
 
+        let now = state::now();
         for (cwd, (meta, file)) in by_cwd.iter() {
             let mtime = meta
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs_f64())
                 .unwrap_or(0.0);
+            // Skip files older than cutoff
+            if now - mtime > CODEX_MAX_AGE_SECS {
+                continue;
+            }
             mtime_by_cwd.insert(cwd.clone(), mtime);
             process_codex_file(file.as_path(), &mut codex, &mut last_message);
         }
@@ -668,9 +678,14 @@ pub fn load_codex_sessions() -> HashMap<String, CodexSession> {
     apply_codex_idle_timeout(&mut codex);
     apply_codex_waiting(&mut codex, &last_message);
 
+    let now = state::now();
     let mut by_cwd: HashMap<String, CodexSession> = HashMap::new();
     for entry in codex.values() {
         if entry.cwd.is_empty() {
+            continue;
+        }
+        // Skip sessions with no activity in the cutoff period
+        if now - entry.state_updated > CODEX_MAX_AGE_SECS {
             continue;
         }
         let replace = match by_cwd.get(&entry.cwd) {
@@ -693,11 +708,12 @@ fn apply_codex_recent_activity(
         let Some(mtime) = mtime_by_cwd.get(&entry.cwd) else {
             continue;
         };
-        if *mtime > entry.state_updated {
-            entry.state_updated = *mtime;
-        }
-        if now - *mtime <= CODEX_ACTIVE_WINDOW_SECS && entry.state != AgentState::Waiting {
+        if now - *mtime <= CODEX_ACTIVE_WINDOW_SECS
+            && entry.state != AgentState::Waiting
+            && entry.state != AgentState::Responding
+        {
             entry.state = AgentState::Responding;
+            entry.state_updated = now;
         }
     }
 }
