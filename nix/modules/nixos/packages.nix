@@ -32,7 +32,6 @@ let
     wget
     unzip
     spotify
-    btop
     powertop
     fastfetch
     docker-compose

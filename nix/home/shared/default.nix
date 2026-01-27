@@ -28,6 +28,7 @@ in
   imports = [
     # Shared cross-platform modules
     ./packages.nix
+    ./btop.nix
     ./direnv.nix
     ./git.nix
     ./ghostty.nix
