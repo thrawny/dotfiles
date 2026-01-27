@@ -17,6 +17,8 @@
     niri-flake.url = "github:sodiboo/niri-flake";
     xremap-flake.url = "github:xremap/nix-flake";
     crane.url = "github:ipetkov/crane";
+    disko.url = "github:nix-community/disko";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -32,6 +34,7 @@
       xremap-flake,
       nixpkgs-xwayland,
       crane,
+      disko,
       ...
     }:
     let
@@ -114,6 +117,37 @@
           ]
           ++ modules;
         };
+
+      # Headless hosts (servers) - no desktop/Wayland modules
+      mkHeadlessHost =
+        {
+          system,
+          modules,
+        }:
+        let
+          nurPkgs = import nur {
+            nurpkgs = nixpkgs.legacyPackages.${system};
+            pkgs = nixpkgs.legacyPackages.${system};
+          };
+        in
+        lib.nixosSystem {
+          inherit system;
+          specialArgs = {
+            # system.nix requires these even if headless HM doesn't use them
+            inherit
+              self
+              zen-browser
+              walker
+              nurPkgs
+              xremap-flake
+              ;
+          };
+          modules = [
+            home-manager.nixosModules.home-manager
+            disko.nixosModules.disko
+          ]
+          ++ modules;
+        };
     in
     {
       nixosConfigurations = {
@@ -130,6 +164,13 @@
           modules = [
             nixos-hardware.nixosModules.common-cpu-amd
             ./hosts/desktop/default.nix
+          ];
+        };
+
+        clawdbot-gateway = mkHeadlessHost {
+          system = "x86_64-linux";
+          modules = [
+            ./hosts/clawdbot-gateway/default.nix
           ];
         };
       };
