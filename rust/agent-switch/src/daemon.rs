@@ -235,8 +235,8 @@ pub fn start_socket_listener(tx: mpsc::Sender<DaemonMessage>, cache: Arc<Mutex<S
             match stream {
                 Ok(mut stream) => {
                     let mut buf = [0u8; 4096];
-                    if let Ok(count) = stream.read(&mut buf) {
-                        if count > 0 {
+                    if let Ok(count) = stream.read(&mut buf)
+                        && count > 0 {
                             let cmd = String::from_utf8_lossy(&buf[..count]);
                             let cmd = cmd.trim();
                             if cmd == "toggle" {
@@ -292,7 +292,6 @@ pub fn start_socket_listener(tx: mpsc::Sender<DaemonMessage>, cache: Arc<Mutex<S
                                 let _ = stream.write_all(b"unknown command");
                             }
                         }
-                    }
                 }
                 Err(e) => {
                     eprintln!("Socket error: {}", e);
@@ -353,12 +352,11 @@ pub fn start_sessions_watcher(tx: mpsc::Sender<DaemonMessage>) {
             }
         }
 
-        if codex_dir.exists() {
-            if let Err(e) = watcher.watch(&codex_dir, RecursiveMode::Recursive) {
+        if codex_dir.exists()
+            && let Err(e) = watcher.watch(&codex_dir, RecursiveMode::Recursive) {
                 eprintln!("Failed to watch codex sessions directory: {}", e);
                 return;
             }
-        }
 
         loop {
             std::thread::sleep(std::time::Duration::from_secs(3600));
@@ -442,11 +440,10 @@ fn update_codex_session(
         state_updated: 0.0,
     });
 
-    if entry.cwd.is_empty() {
-        if let Some(value) = cwd {
+    if entry.cwd.is_empty()
+        && let Some(value) = cwd {
             entry.cwd = value.to_string();
         }
-    }
     entry.state = new_state;
     // Only update timestamp if we have one from the record
     if let Some(ts) = state_updated {
@@ -598,12 +595,11 @@ fn process_codex_file(
             Ok(record) => record,
             Err(_) => continue,
         };
-        if session_id.is_none() || cwd.is_none() {
-            if let Some((id, dir)) = read_codex_file_meta(path) {
+        if (session_id.is_none() || cwd.is_none())
+            && let Some((id, dir)) = read_codex_file_meta(path) {
                 session_id = Some(id);
                 cwd = Some(dir);
             }
-        }
         handle_codex_record(
             codex,
             last_message,
@@ -1008,13 +1004,12 @@ fn handle_track_event(event: &TrackEvent, focused_niri_id: Option<u64>) {
             }
         }
         "notification" => {
-            if event.notification_type.as_deref() == Some("permission_prompt") {
-                if let Some(session) = state::find_by_session_id_mut(&mut store, agent, session_id)
+            if event.notification_type.as_deref() == Some("permission_prompt")
+                && let Some(session) = state::find_by_session_id_mut(&mut store, agent, session_id)
                 {
                     session.state = "waiting".to_string();
                     session.state_updated = state::now();
                 }
-            }
         }
         _ => {}
     }
@@ -1050,11 +1045,10 @@ fn ends_with_question(transcript_path: &str) -> bool {
                 .and_then(|c| c.as_array())
             {
                 for item in content_arr {
-                    if item.get("type").and_then(|t| t.as_str()) == Some("text") {
-                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
+                    if item.get("type").and_then(|t| t.as_str()) == Some("text")
+                        && let Some(text) = item.get("text").and_then(|t| t.as_str()) {
                             last_text = Some(text.to_string());
                         }
-                    }
                 }
             }
         }

@@ -300,11 +300,10 @@ fn status_for_window(
     codex_by_cwd: &HashMap<String, CodexSession>,
 ) -> Option<String> {
     // First check Claude sessions
-    if let Some(session) = status_by_tmux_id.get(&window.window_id) {
-        if let Some(state) = AgentState::from_str(&session.state) {
+    if let Some(session) = status_by_tmux_id.get(&window.window_id)
+        && let Some(state) = AgentState::from_str(&session.state) {
             return Some(format_status(state, &session.agent));
         }
-    }
     // Only check Codex for windows with "codex" in the name or command
     let has_codex_name = window.window_name.to_lowercase().contains("codex");
     let has_codex_command = window
@@ -315,12 +314,11 @@ fn status_for_window(
     if !has_codex_name && !has_codex_command {
         return None;
     }
-    if let Some(pane_path) = &window.pane_path {
-        if let Some(codex) = get_codex_for_pane(pane_path, codex_by_cwd) {
+    if let Some(pane_path) = &window.pane_path
+        && let Some(codex) = get_codex_for_pane(pane_path, codex_by_cwd) {
             let state = AgentState::from_daemon_state(codex.state);
             return Some(format_status(state, "codex"));
         }
-    }
     None
 }
 
