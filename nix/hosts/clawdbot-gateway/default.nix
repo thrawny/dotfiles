@@ -48,6 +48,10 @@ in
   systemd.tmpfiles.rules = [
     "L+ /bin/mkdir - - - - ${pkgs.coreutils}/bin/mkdir"
     "L+ /bin/ln - - - - ${pkgs.coreutils}/bin/ln"
+    "L+ /bin/ls - - - - ${pkgs.coreutils}/bin/ls"
+    "L+ /bin/head - - - - ${pkgs.coreutils}/bin/head"
+    "L+ /bin/readlink - - - - ${pkgs.coreutils}/bin/readlink"
+    "L+ /bin/env - - - - ${pkgs.coreutils}/bin/env"
   ];
 
   # Override home-manager to use headless config (no Wayland/UI modules)
