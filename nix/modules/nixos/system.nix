@@ -135,6 +135,7 @@ in
     ];
 
     services = {
+      tailscale.enable = true;
       xserver.enable = false;
       openssh.enable = true;
       pulseaudio.enable = false;
