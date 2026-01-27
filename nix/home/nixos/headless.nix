@@ -8,8 +8,7 @@
 }:
 {
   imports = [
-    # CLI-safe shared modules only (no ghostty/GUI)
-    ../shared/packages.nix
+    # CLI-safe shared modules only (no ghostty/GUI, no packages.nix to avoid nodejs conflict with clawdbot)
     ../shared/btop.nix
     ../shared/direnv.nix
     ../shared/git.nix
@@ -30,9 +29,24 @@
     homeDirectory = "/home/${username}";
     stateVersion = "24.05";
 
-    packages = [
-      pkgs.ncurses # Comprehensive terminfo database
-      pkgs.ghostty.terminfo # Ghostty terminfo (not in ncurses yet)
+    packages = with pkgs; [
+      # Terminfo
+      ncurses
+      ghostty.terminfo
+
+      # Essential CLI tools
+      jq
+      yq-go
+      fzf
+      ripgrep
+      fd
+      bat
+      eza
+      just
+      gh
+      curl
+      wget
+      unzip
     ];
 
     sessionPath = [
