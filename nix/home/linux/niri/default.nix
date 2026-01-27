@@ -492,7 +492,7 @@ in
 
     hotkey-overlay.skip-at-startup = true;
     prefer-no-csd = true;
-    screenshot-path = "~/Pictures/Screenshots/Screenshot from %Y-%m-%d %H-%M-%S.png";
+    screenshot-path = "~/Screenshots/%Y-%m-%d_%H-%M-%S.png";
 
     # Animations
     animations = {
