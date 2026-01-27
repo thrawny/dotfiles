@@ -221,14 +221,14 @@ let
     # Voice (voice-to-text)
     "Mod+R" = {
       action.spawn = [
-        "/home/thrawny/dotfiles/rust/target/release/voice"
+        "${config.home.homeDirectory}/dotfiles/rust/target/release/voice"
         "toggle"
       ];
       hotkey-overlay.title = "Voice Input Toggle";
     };
     "Mod+Shift+R" = {
       action.spawn = [
-        "/home/thrawny/dotfiles/rust/target/release/voice"
+        "${config.home.homeDirectory}/dotfiles/rust/target/release/voice"
         "cancel"
       ];
       hotkey-overlay.title = "Voice Input Cancel";
@@ -468,8 +468,8 @@ in
       { command = [ "mako" ]; }
       {
         command = [
-          "/home/thrawny/dotfiles/rust/target/release/voice"
-          "daemon"
+          "${config.home.homeDirectory}/dotfiles/rust/target/release/voice"
+          "serve"
         ];
       }
       {
