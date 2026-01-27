@@ -110,14 +110,6 @@
           # Replicate Oh My Zsh's WORDCHARS behavior
           export WORDCHARS='_-'
 
-          # ===== PATH Configuration =====
-          PATH=$PATH:$GOPATH/bin:$HOME/dotfiles/bin
-          [[ ":$PATH:" != *":$HOME/.local/bin:"* ]] && PATH="$HOME/.local/bin:''${PATH}"
-          [[ ":$PATH:" != *":$HOME/.claude/local:"* ]] && PATH="$HOME/.claude/local:''${PATH}"
-          [[ ":$PATH:" != *":$HOME/.npm-global/bin:"* ]] && PATH="$HOME/.npm-global/bin:''${PATH}"
-          [[ ":$PATH:" != *":$HOME/.cargo/bin:"* ]] && PATH="$HOME/.cargo/bin:''${PATH}"
-          export PATH
-
           # ===== zsh-vi-mode configuration (before plugin loads) =====
           # Disable vi mode when running inside Neovim terminal
           if [ -n "$NVIM" ]; then
@@ -233,15 +225,16 @@
           }
 
           # ===== vi-mode / fzf compatibility =====
-          # fzf is initialized by HM, but vi-mode can override keybindings
-          # Re-source fzf after vi-mode to restore keybindings
+          # HM loads fzf, but vi-mode overrides keybindings - re-source after vi-mode init
           if [ -z "$NVIM" ]; then
             zvm_after_init() {
-              # Re-source fzf keybindings after vi-mode initialization
-              [ -f "$HOME/.nix-profile/share/fzf/key-bindings.zsh" ] && source "$HOME/.nix-profile/share/fzf/key-bindings.zsh"
+              source ${pkgs.fzf}/share/fzf/key-bindings.zsh
+              source ${pkgs.fzf}/share/fzf/completion.zsh
             }
           else
-            # In Neovim terminal, no vi-mode, just set keybindings
+            # In Neovim terminal, no vi-mode - load fzf directly
+            source ${pkgs.fzf}/share/fzf/key-bindings.zsh
+            source ${pkgs.fzf}/share/fzf/completion.zsh
             bindkey ^e end-of-line
           fi
 

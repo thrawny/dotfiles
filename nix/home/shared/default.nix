@@ -65,6 +65,16 @@ in
 
   home = {
     stateVersion = "24.05";
+
+    # Session-wide PATH (inherited by window managers, waybar, etc.)
+    sessionPath = [
+      "${config.home.homeDirectory}/.cargo/bin"
+      "${config.home.homeDirectory}/.npm-global/bin"
+      "${config.home.homeDirectory}/.claude/local"
+      "${config.home.homeDirectory}/.local/bin"
+      "${config.home.homeDirectory}/go/bin"
+      "${config.home.homeDirectory}/dotfiles/bin"
+    ];
     activation = {
       seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
       seedClaudeSettings = seedExample "config/claude/settings.example.json" "config/claude/settings.json";
