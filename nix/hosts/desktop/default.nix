@@ -34,7 +34,6 @@ in
   networking.hostName = "thrawny-desktop";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
-
   boot = {
     loader = {
       systemd-boot = {
