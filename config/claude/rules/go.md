@@ -5,6 +5,8 @@ alwaysApply: false
 
 # Go Formatting
 
+Always follow `modernize` diagnostics when editing Go code. Apply suggested modernizations to use current Go idioms and language features.
+
 After completing edits to Go files, run:
 
 ```bash
