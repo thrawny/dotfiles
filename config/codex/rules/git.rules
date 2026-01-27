@@ -1,0 +1,12 @@
+# Git commands - allow these to run without prompting
+
+prefix_rule(
+    pattern=["git", "add"],
+    decision="allow",
+    justification="Stage changes"
+)
+prefix_rule(
+    pattern=["git", "commit"],
+    decision="allow",
+    justification="Create commits"
+)
