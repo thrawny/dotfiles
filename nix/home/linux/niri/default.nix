@@ -366,6 +366,7 @@ in
     workspaces = {
       "web" = { };
       "dotfiles" = { };
+      "main" = { };
       "games" = { };
     };
 
