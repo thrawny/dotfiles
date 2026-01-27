@@ -43,10 +43,11 @@ in
     efiInstallAsRemovable = true;
   };
 
-  # Workaround: nix-clawdbot uses /bin/mkdir which doesn't exist on NixOS
+  # Workaround: nix-clawdbot uses hardcoded /bin paths which don't exist on NixOS
   # TODO: File upstream PR to fix this
   systemd.tmpfiles.rules = [
     "L+ /bin/mkdir - - - - ${pkgs.coreutils}/bin/mkdir"
+    "L+ /bin/ln - - - - ${pkgs.coreutils}/bin/ln"
   ];
 
   # Override home-manager to use headless config (no Wayland/UI modules)
