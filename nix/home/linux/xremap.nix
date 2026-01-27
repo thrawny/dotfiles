@@ -45,6 +45,7 @@
             "Super-c" = "C-c";
             "Super-v" = "C-v";
             "Super-x" = "C-x";
+            "Super-r" = "C-r";
 
             # Undo/redo
             "Super-z" = "C-z";
