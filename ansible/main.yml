@@ -98,6 +98,18 @@
         dest: "{{ home_dir }}/.codex/rules/code-quality.rules"
         src: "{{ dotfiles_dir }}/config/codex/rules/code-quality.rules"
 
+    - name: codex git rules are symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.codex/rules/git.rules"
+        src: "{{ dotfiles_dir }}/config/codex/rules/git.rules"
+
+    - name: codex tools rules are symlinked
+      file:
+        state: link
+        dest: "{{ home_dir }}/.codex/rules/tools.rules"
+        src: "{{ dotfiles_dir }}/config/codex/rules/tools.rules"
+
     # =============================================================================
     # All Platforms - Claude Config
     # =============================================================================

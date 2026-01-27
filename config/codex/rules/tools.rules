@@ -1,0 +1,112 @@
+# General tools - allow these to run without prompting
+
+prefix_rule(
+    pattern=["grep"],
+    decision="allow",
+    justification="Search text"
+)
+prefix_rule(
+    pattern=["find"],
+    decision="allow",
+    justification="Find files"
+)
+prefix_rule(
+    pattern=["cat"],
+    decision="allow",
+    justification="Read files"
+)
+
+prefix_rule(
+    pattern=["go", "build"],
+    decision="allow",
+    justification="Go build"
+)
+prefix_rule(
+    pattern=["go", "test"],
+    decision="allow",
+    justification="Go test"
+)
+prefix_rule(
+    pattern=["go", "mod", "tidy"],
+    decision="allow",
+    justification="Go mod tidy"
+)
+prefix_rule(
+    pattern=["go", "doc"],
+    decision="allow",
+    justification="Go doc"
+)
+
+prefix_rule(
+    pattern=["gh", "pr", "view"],
+    decision="allow",
+    justification="GitHub PR view"
+)
+prefix_rule(
+    pattern=["gh", "pr", "checks"],
+    decision="allow",
+    justification="GitHub PR checks"
+)
+prefix_rule(
+    pattern=["gh", "run", "view"],
+    decision="allow",
+    justification="GitHub run view"
+)
+
+prefix_rule(
+    pattern=["tmux-dev", "stop"],
+    decision="allow",
+    justification="tmux-dev stop"
+)
+prefix_rule(
+    pattern=["tmux-dev", "status"],
+    decision="allow",
+    justification="tmux-dev status"
+)
+prefix_rule(
+    pattern=["tmux-dev", "logs"],
+    decision="allow",
+    justification="tmux-dev logs"
+)
+prefix_rule(
+    pattern=["tmux-dev", "list"],
+    decision="allow",
+    justification="tmux-dev list"
+)
+
+prefix_rule(
+    pattern=["git", "log"],
+    decision="allow",
+    justification="Git log"
+)
+
+prefix_rule(
+    pattern=["notify"],
+    decision="allow",
+    justification="Notify"
+)
+prefix_rule(
+    pattern=["linear", "issues"],
+    decision="allow",
+    justification="Linear issues"
+)
+prefix_rule(
+    pattern=["linear", "start"],
+    decision="allow",
+    justification="Linear start"
+)
+prefix_rule(
+    pattern=["remove-handoff"],
+    decision="allow",
+    justification="Remove handoff"
+)
+prefix_rule(
+    pattern=["ast-grep"],
+    decision="allow",
+    justification="ast-grep"
+)
+prefix_rule(
+    pattern=["sg"],
+    decision="allow",
+    justification="ast-grep (sg)"
+)
