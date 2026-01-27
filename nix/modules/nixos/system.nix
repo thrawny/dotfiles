@@ -26,6 +26,17 @@ let
       name = fullName;
       inherit email;
     };
+
+  # Minimal packages for headless servers
+  headlessPackages = with pkgs; [
+    curl
+    git
+    neovim
+    ripgrep
+    tmux
+    wget
+    unzip
+  ];
 in
 {
   options.dotfiles = {
@@ -45,6 +56,12 @@ in
       type = lib.types.nullOr lib.types.str;
       default = null;
       description = "Email to render in ~/.gitconfig.local (optional).";
+    };
+
+    headless = lib.mkOption {
+      type = lib.types.bool;
+      default = false;
+      description = "Headless server mode - skip desktop packages and services.";
     };
   };
 
@@ -83,7 +100,8 @@ in
       shell = pkgs.zsh;
     };
 
-    environment.systemPackages = packages.systemPackages;
+    environment.systemPackages =
+      if cfg.headless then headlessPackages else packages.systemPackages;
 
     programs = {
       zsh = {
@@ -91,11 +109,11 @@ in
         enableGlobalCompInit = false; # Home Manager handles compinit
       };
       direnv.enable = true;
-      niri.enable = true; # uses niri-flake's cached package
+      niri.enable = !cfg.headless; # uses niri-flake's cached package
 
       # Enable nix-ld for running non-Nix binaries (e.g., uv run ruff)
       nix-ld = {
-        enable = true;
+        enable = !cfg.headless;
         libraries = with pkgs; [
           stdenv.cc.cc.lib # Basic C/C++ libraries
           zlib # Compression library
@@ -105,12 +123,12 @@ in
 
       # Enable AppImage support
       appimage = {
-        enable = true;
-        binfmt = true;
+        enable = !cfg.headless;
+        binfmt = !cfg.headless;
       };
     };
 
-    hardware.bluetooth.enable = true;
+    hardware.bluetooth.enable = !cfg.headless;
     networking.networkmanager.enable = true;
 
     # Allow passwordless nix commands for wheel group
@@ -139,29 +157,29 @@ in
       xserver.enable = false;
       openssh.enable = true;
       pulseaudio.enable = false;
-      pipewire = {
+      pipewire = lib.mkIf (!cfg.headless) {
         enable = true;
         alsa.enable = true;
         pulse.enable = true;
         jack.enable = true;
       };
-      greetd = {
+      greetd = lib.mkIf (!cfg.headless) {
         enable = true;
         settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd Hyprland";
       };
       resolved.enable = true;
-      blueman.enable = true;
+      blueman.enable = !cfg.headless;
 
       # Keyd disabled - using xremap instead to avoid double-grab keyboard conflicts
       # Config preserved in git history if needed later
       keyd.enable = false;
     };
 
-    fonts.packages = with pkgs; [
+    fonts.packages = lib.mkIf (!cfg.headless) (with pkgs; [
       noto-fonts
       noto-fonts-color-emoji
       nerd-fonts.caskaydia-mono
-    ];
+    ]);
 
     home-manager = {
       useGlobalPkgs = true;
