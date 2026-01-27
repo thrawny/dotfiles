@@ -20,12 +20,8 @@ in
     firstParty.summarize.enable = false;
 
     instances.default = {
-      providers.telegram = {
-        enable = true;
-        botTokenFile = "${homeDir}/.secrets/telegram-token";
-        allowFrom = [ 781443178 ];
-      };
-
+      # Don't use providers.telegram - it generates old config format
+      # Use configOverrides with new channels.telegram format instead
       configOverrides = {
         auth.profiles."openai-codex:default" = {
           provider = "openai-codex";
@@ -37,6 +33,13 @@ in
         # Tailscale: expose gateway on tailnet
         tailscale.mode = "serve";
         gateway.auth.allowTailscale = true;
+
+        # Telegram config (new format under channels)
+        channels.telegram = {
+          enabled = true;
+          tokenFile = "${homeDir}/.secrets/telegram-token";
+          allowFrom = [ 781443178 ];
+        };
       };
 
       systemd.enable = true;
