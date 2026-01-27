@@ -18,6 +18,7 @@
       "Bash(gh pr view:*)",
       "Bash(gh pr checks:*)",
       "Bash(gh run view:*)",
+      "Bash(gh issue view:*)",
       "Bash(tmux-dev stop:*)",
       "Bash(tmux-dev status:*)",
       "Bash(tmux-dev logs:*)",
