@@ -30,6 +30,10 @@
     homeDirectory = "/home/${username}";
     stateVersion = "24.05";
 
+    packages = [
+      pkgs.ncurses # Comprehensive terminfo database (includes ghostty, kitty, etc.)
+    ];
+
     sessionPath = [
       "${config.home.homeDirectory}/.cargo/bin"
       "${config.home.homeDirectory}/.npm-global/bin"
