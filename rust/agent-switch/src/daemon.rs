@@ -11,7 +11,6 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
-const CODEX_ACTIVE_WINDOW_SECS: f64 = 30.0;
 const CODEX_MAX_AGE_SECS: f64 = 7.0 * 24.0 * 60.0 * 60.0; // 7 days
 
 fn log(msg: &str) {
@@ -530,6 +529,10 @@ fn handle_codex_record(
                     update_codex_session(codex, session_id, fallback_cwd, "idle", record_ts);
                     update_last_message(last_message, session_id, "assistant", "", ts);
                 }
+                // Agent is actively thinking/reasoning
+                "agent_reasoning" => {
+                    update_codex_session(codex, session_id, fallback_cwd, "responding", record_ts);
+                }
                 _ => {}
             }
         }
@@ -537,6 +540,11 @@ fn handle_codex_record(
             let role = record
                 .payload
                 .get("role")
+                .and_then(|v| v.as_str())
+                .unwrap_or("");
+            let item_type = record
+                .payload
+                .get("type")
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
             let session_id = record
@@ -548,8 +556,15 @@ fn handle_codex_record(
             if session_id.is_empty() {
                 return;
             }
-            if role == "assistant" {
+            // Agent is actively working: function calls, reasoning (but NOT final message)
+            if item_type == "function_call"
+                || item_type == "reasoning"
+                || item_type == "function_call_output"
+            {
                 update_codex_session(codex, session_id, fallback_cwd, "responding", record_ts);
+            }
+            // Capture assistant message text for "waiting" detection (ends with ?)
+            if role == "assistant" && item_type == "message" {
                 let Some(ts) = record_ts else {
                     return;
                 };
@@ -634,7 +649,6 @@ fn read_codex_file_meta(path: &Path) -> Option<(String, String)> {
 pub fn load_codex_sessions() -> HashMap<String, CodexSession> {
     let mut codex: HashMap<String, CodexSession> = HashMap::new();
     let mut last_message: HashMap<String, LastMessage> = HashMap::new();
-    let mut mtime_by_cwd: HashMap<String, f64> = HashMap::new();
     let root = codex_sessions_root();
     if root.exists() {
         let mut files = Vec::new();
@@ -660,22 +674,21 @@ pub fn load_codex_sessions() -> HashMap<String, CodexSession> {
         }
 
         let now = state::now();
-        for (cwd, (meta, file)) in by_cwd.iter() {
+        for (_cwd, (meta, file)) in by_cwd.iter() {
             let mtime = meta
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_secs_f64())
                 .unwrap_or(0.0);
+            let age = now - mtime;
             // Skip files older than cutoff
-            if now - mtime > CODEX_MAX_AGE_SECS {
+            if age > CODEX_MAX_AGE_SECS {
                 continue;
             }
-            mtime_by_cwd.insert(cwd.clone(), mtime);
             process_codex_file(file.as_path(), &mut codex, &mut last_message);
         }
     }
 
-    apply_codex_recent_activity(&mut codex, &mtime_by_cwd);
-    apply_codex_idle_timeout(&mut codex);
+    apply_codex_stale_timeout(&mut codex);
     apply_codex_waiting(&mut codex, &last_message);
 
     let now = state::now();
@@ -699,24 +712,10 @@ pub fn load_codex_sessions() -> HashMap<String, CodexSession> {
     by_cwd
 }
 
-fn apply_codex_recent_activity(
-    codex: &mut HashMap<String, CodexSession>,
-    mtime_by_cwd: &HashMap<String, f64>,
-) {
-    let now = state::now();
-    for entry in codex.values_mut() {
-        let Some(mtime) = mtime_by_cwd.get(&entry.cwd) else {
-            continue;
-        };
-        if now - *mtime <= CODEX_ACTIVE_WINDOW_SECS
-            && entry.state != AgentState::Waiting
-            && entry.state != AgentState::Responding
-        {
-            entry.state = AgentState::Responding;
-            entry.state_updated = now;
-        }
-    }
-}
+// Note: We previously had apply_codex_recent_activity() that used file mtime
+// to guess "responding" state, but this caused issues when agent_message
+// correctly set state to "idle" but the recent mtime overrode it.
+// Now we rely solely on record content (function_call, reasoning, agent_message, etc.)
 
 fn record_timestamp(record: &CodexRecord) -> Option<f64> {
     record
@@ -738,11 +737,12 @@ fn parse_rfc3339_epoch(value: &str) -> Option<f64> {
         .map(|dt| dt.unix_timestamp_nanos() as f64 / 1_000_000_000.0)
 }
 
-fn apply_codex_idle_timeout(codex: &mut HashMap<String, CodexSession>) {
+fn apply_codex_stale_timeout(codex: &mut HashMap<String, CodexSession>) {
     let now = state::now();
     for entry in codex.values_mut() {
+        // If "responding" but no updates for 10s, we don't know the actual state
         if entry.state == AgentState::Responding && now - entry.state_updated > 10.0 {
-            entry.state = AgentState::Idle;
+            entry.state = AgentState::Unknown;
         }
     }
 }
