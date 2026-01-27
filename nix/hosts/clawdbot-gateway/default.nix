@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  nix-clawdbot,
   ...
 }:
 let
@@ -13,6 +14,9 @@ in
     ./hardware-configuration.nix
     ./disko.nix
   ];
+
+  # Add clawdbot overlay to make pkgs.clawdbot available
+  nixpkgs.overlays = [ nix-clawdbot.overlays.default ];
 
   dotfiles = {
     username = "thrawny";
@@ -40,5 +44,13 @@ in
   };
 
   # Override home-manager to use headless config (no Wayland/UI modules)
-  home-manager.users.${username} = lib.mkForce (import ../../home/nixos/headless.nix);
+  home-manager.users.${username} = lib.mkForce (
+    { nix-clawdbot, ... }:
+    {
+      imports = [
+        ../../home/nixos/headless.nix
+        ../../home/nixos/clawdbot-gateway.nix
+      ];
+    }
+  );
 }

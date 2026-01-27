@@ -7,6 +7,7 @@
   walker,
   nurPkgs,
   xremap-flake,
+  nix-clawdbot ? null,
   ...
 }:
 let
@@ -197,6 +198,7 @@ in
           walker
           gitIdentity
           xremap-flake
+          nix-clawdbot
           ;
       };
       users.${username} = import ../../home/nixos/default.nix;

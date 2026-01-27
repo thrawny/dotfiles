@@ -9,6 +9,7 @@
 {
   imports = [
     # CLI-safe shared modules only (no ghostty/GUI)
+    ../shared/packages.nix
     ../shared/btop.nix
     ../shared/direnv.nix
     ../shared/git.nix
