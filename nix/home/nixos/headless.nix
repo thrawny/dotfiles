@@ -31,7 +31,8 @@
     stateVersion = "24.05";
 
     packages = [
-      pkgs.ncurses # Comprehensive terminfo database (includes ghostty, kitty, etc.)
+      pkgs.ncurses # Comprehensive terminfo database
+      pkgs.ghostty.terminfo # Ghostty terminfo (not in ncurses yet)
     ];
 
     sessionPath = [
