@@ -28,6 +28,9 @@ in
     email = "jonaslergell@gmail.com";
   };
 
+  # Limit parallel builds to prevent system freezes during large rebuilds
+  nix.settings.max-jobs = 6;
+
   networking.hostName = "thrawny-desktop";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
