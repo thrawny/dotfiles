@@ -53,6 +53,13 @@ fn validate_command(command: &str) -> Vec<&'static str> {
         issues.push("Use 'uv add <package>' instead of pip install for better dependency management and faster installation");
     }
 
+    // Check: rm handoff.md should use remove-handoff
+    if let Ok(re) = Regex::new(r"(?:^|&&\s*)rm\s+(?:-[rf]+\s+)?handoff\.md\b")
+        && re.is_match(command)
+    {
+        issues.push("Use 'remove-handoff' instead of rm handoff.md (preapproved)");
+    }
+
     issues
 }
 
@@ -86,4 +93,23 @@ fn main() -> ExitCode {
     }
 
     ExitCode::SUCCESS
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rm_handoff_detected() {
+        assert!(!validate_command("rm handoff.md").is_empty());
+        assert!(!validate_command("rm -f handoff.md").is_empty());
+        assert!(!validate_command("rm -rf handoff.md").is_empty());
+        assert!(!validate_command("git status && rm handoff.md").is_empty());
+    }
+
+    #[test]
+    fn rm_other_files_allowed() {
+        assert!(validate_command("rm other.md").is_empty());
+        assert!(validate_command("rm -f something.txt").is_empty());
+    }
 }
