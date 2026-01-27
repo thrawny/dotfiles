@@ -15,10 +15,6 @@
     walker.url = "github:abenz1267/walker";
     walker.inputs.elephant.follows = "elephant";
     niri-flake.url = "github:sodiboo/niri-flake";
-    hyprvoice-src = {
-      url = "github:LeonardoTrapani/hyprvoice";
-      flake = false;
-    };
     xremap-flake.url = "github:xremap/nix-flake";
     crane.url = "github:ipetkov/crane";
   };
@@ -33,7 +29,6 @@
       zen-browser,
       walker,
       niri-flake,
-      hyprvoice-src,
       xremap-flake,
       nixpkgs-xwayland,
       crane,
@@ -41,43 +36,6 @@
     }:
     let
       inherit (nixpkgs) lib;
-
-      # Package builders for cross-architecture support
-      mkHyprvoice =
-        pkgs:
-        pkgs.buildGoModule {
-          pname = "hyprvoice";
-          version = hyprvoice-src.shortRev or "unstable";
-          src = hyprvoice-src;
-          vendorHash = "sha256-qYZGccprn+pRbpVeO1qzSOb8yz/j/jdzPMxFyIB9BNA=";
-          doCheck = false; # Tests require wl-copy, wtype etc.
-          nativeBuildInputs = with pkgs; [
-            pkg-config
-            makeWrapper
-          ];
-          buildInputs = with pkgs; [
-            pipewire
-            alsa-lib
-          ];
-          postInstall = ''
-            wrapProgram $out/bin/hyprvoice \
-              --prefix PATH : ${
-                pkgs.lib.makeBinPath (
-                  with pkgs;
-                  [
-                    pipewire
-                    wl-clipboard
-                    wtype
-                  ]
-                )
-              }
-          '';
-          meta = {
-            description = "Voice-to-text for Wayland/Hyprland";
-            homepage = "https://github.com/LeonardoTrapani/hyprvoice";
-            mainProgram = "hyprvoice";
-          };
-        };
 
       # Crane-based Rust builds with dependency caching
       mkRustWorkspace =
@@ -176,15 +134,12 @@
         };
       };
 
-      # Voice-to-text for Wayland - updates via `nix flake update hyprvoice-src`
       packages = {
         x86_64-linux = {
           agent-switch = mkAgentSwitch nixpkgs.legacyPackages.x86_64-linux;
-          hyprvoice = mkHyprvoice nixpkgs.legacyPackages.x86_64-linux;
         };
         aarch64-linux = {
           agent-switch = mkAgentSwitch nixpkgs.legacyPackages.aarch64-linux;
-          hyprvoice = mkHyprvoice nixpkgs.legacyPackages.aarch64-linux;
         };
         aarch64-darwin = {
           agent-switch = mkAgentSwitch nixpkgs.legacyPackages.aarch64-darwin;

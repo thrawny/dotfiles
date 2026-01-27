@@ -16,7 +16,7 @@
     # Cross-platform modules (CLI tools, dotfiles)
     ../../home/shared
 
-    # Linux-specific modules (xremap, hyprvoice)
+    # Linux-specific modules (xremap)
     ../../home/linux
 
     # Niri with DMS integration

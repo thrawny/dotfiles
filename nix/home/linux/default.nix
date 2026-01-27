@@ -4,6 +4,5 @@
 {
   imports = [
     ./xremap.nix
-    ./hyprvoice.nix
   ];
 }

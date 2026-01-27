@@ -153,9 +153,9 @@ let
     ", XF86AudioPrev, exec, playerctl previous"
   ];
 
-  hyprvoiceBinds = [
-    "${mod}, R, exec, ${home}/.local/bin/hyprvoice toggle"
-    "${mod} SHIFT, R, exec, ${home}/.local/bin/hyprvoice cancel"
+  voiceBinds = [
+    "${mod}, R, exec, ${home}/dotfiles/rust/target/release/voice toggle"
+    "${mod} SHIFT, R, exec, ${home}/dotfiles/rust/target/release/voice cancel"
   ];
 
   screenshotBinds = [
@@ -185,7 +185,7 @@ in
       sessionBinds
       scrollBinds
       monitorBinds
-      hyprvoiceBinds
+      voiceBinds
       screenshotBinds
       keyboardBinds
       extras
