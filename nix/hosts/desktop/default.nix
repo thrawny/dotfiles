@@ -34,11 +34,6 @@ in
   networking.hostName = "thrawny-desktop";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
-  # Auto-login to niri on desktop
-  services.greetd.settings.initial_session = {
-    command = "${pkgs.niri}/bin/niri-session";
-    user = "thrawny";
-  };
 
   boot = {
     loader = {
@@ -78,13 +73,29 @@ in
     };
   };
 
-  services.xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver
+  services = {
+    # Auto-login to niri on desktop
+    greetd.settings.initial_session = {
+      command = "${pkgs.niri}/bin/niri-session";
+      user = "thrawny";
+    };
+    xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver
+    # Earlyoom - kill processes before system freezes from memory pressure
+    earlyoom = {
+      enable = true;
+      freeMemThreshold = 5; # Kill when <5% RAM free
+      freeSwapThreshold = 10;
+    };
+  };
 
   # Compressed RAM swap - prevents freezes during memory-intensive operations
   zramSwap = {
     enable = true;
     memoryPercent = 50; # Use up to 50% of RAM (compresses to ~8GB effective swap)
   };
+
+  # High swappiness is fine with zram - use compressed RAM before OOM
+  boot.kernel.sysctl."vm.swappiness" = 180;
 
   # Games partition (~250GB on sdb4)
   fileSystems."/home/${username}/Games" = {

@@ -15,6 +15,10 @@ in
     # Use Codex subscription (OAuth via ~/.codex/auth.json)
     defaults.model = "openai-codex/gpt-5.2-codex";
 
+    # Disable macOS-only first-party plugins
+    firstParty.peekaboo.enable = false;
+    firstParty.summarize.enable = false;
+
     instances.default = {
       providers.telegram = {
         enable = true;
