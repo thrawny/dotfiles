@@ -43,6 +43,12 @@ in
     efiInstallAsRemovable = true;
   };
 
+  # Workaround: nix-clawdbot uses /bin/mkdir which doesn't exist on NixOS
+  # TODO: File upstream PR to fix this
+  systemd.tmpfiles.rules = [
+    "L+ /bin/mkdir - - - - ${pkgs.coreutils}/bin/mkdir"
+  ];
+
   # Override home-manager to use headless config (no Wayland/UI modules)
   home-manager.users.${username} = lib.mkForce (
     { nix-clawdbot, ... }:
