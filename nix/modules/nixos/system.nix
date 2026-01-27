@@ -100,8 +100,7 @@ in
       shell = pkgs.zsh;
     };
 
-    environment.systemPackages =
-      if cfg.headless then headlessPackages else packages.systemPackages;
+    environment.systemPackages = if cfg.headless then headlessPackages else packages.systemPackages;
 
     programs = {
       zsh = {
@@ -129,7 +128,7 @@ in
     };
 
     hardware.bluetooth.enable = !cfg.headless;
-    networking.networkmanager.enable = true;
+    networking.networkmanager.enable = !cfg.headless;
 
     # Allow passwordless nix commands for wheel group
     security.sudo.extraRules = [
@@ -175,11 +174,14 @@ in
       keyd.enable = false;
     };
 
-    fonts.packages = lib.mkIf (!cfg.headless) (with pkgs; [
-      noto-fonts
-      noto-fonts-color-emoji
-      nerd-fonts.caskaydia-mono
-    ]);
+    fonts.packages = lib.mkIf (!cfg.headless) (
+      with pkgs;
+      [
+        noto-fonts
+        noto-fonts-color-emoji
+        nerd-fonts.caskaydia-mono
+      ]
+    );
 
     home-manager = {
       useGlobalPkgs = true;

@@ -190,44 +190,51 @@
         };
       };
 
-      # Dev shell - only includes tools not in home.packages
+      # Dev shells
       devShells =
         let
+          # Minimal shell - works on headless servers
           mkDevShell =
             pkgs:
             pkgs.mkShell {
-              packages =
-                with pkgs;
-                [
-                  # Native build dependencies
-                  pkg-config
-
-                  # Nix tools (not in packages.nix)
-                  nixd
-                  nixfmt
-                  statix
-                  nvd
-
-                  # Lua tools (not in packages.nix)
-                  stylua
-                  selene
-                ]
-                ++ lib.optionals stdenv.isLinux [
-                  # GTK for agent-switch (Linux only)
-                  gtk4
-                  gtk4-layer-shell
-                  glib
-                  cairo
-                  pango
-                  gdk-pixbuf
-                  graphene
-                  harfbuzz
-                ];
+              packages = with pkgs; [
+                pkg-config
+                nixd
+                nixfmt
+                statix
+                nvd
+                stylua
+                selene
+              ];
+            };
+          # Desktop shell - includes GTK for agent-switch
+          mkDesktopDevShell =
+            pkgs:
+            pkgs.mkShell {
+              packages = with pkgs; [
+                pkg-config
+                nixd
+                nixfmt
+                statix
+                nvd
+                stylua
+                selene
+                gtk4
+                gtk4-layer-shell
+                glib
+                cairo
+                pango
+                gdk-pixbuf
+                graphene
+                harfbuzz
+              ];
             };
         in
         {
           x86_64-linux.default = mkDevShell nixpkgs.legacyPackages.x86_64-linux;
+          x86_64-linux.desktop = mkDesktopDevShell nixpkgs.legacyPackages.x86_64-linux;
           aarch64-linux.default = mkDevShell nixpkgs.legacyPackages.aarch64-linux;
+          aarch64-linux.desktop = mkDesktopDevShell nixpkgs.legacyPackages.aarch64-linux;
           aarch64-darwin.default = mkDevShell nixpkgs.legacyPackages.aarch64-darwin;
           x86_64-darwin.default = mkDevShell nixpkgs.legacyPackages.x86_64-darwin;
         };

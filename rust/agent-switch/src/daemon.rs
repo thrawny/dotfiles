@@ -236,62 +236,60 @@ pub fn start_socket_listener(tx: mpsc::Sender<DaemonMessage>, cache: Arc<Mutex<S
                 Ok(mut stream) => {
                     let mut buf = [0u8; 4096];
                     if let Ok(count) = stream.read(&mut buf)
-                        && count > 0 {
-                            let cmd = String::from_utf8_lossy(&buf[..count]);
-                            let cmd = cmd.trim();
-                            if cmd == "toggle" {
-                                log("toggle");
-                                let _ = tx.send(DaemonMessage::Toggle);
-                                let _ = stream.write_all(b"ok");
-                            } else if cmd == "list" {
-                                let (resp_tx, resp_rx) = mpsc::channel();
-                                if tx.send(DaemonMessage::List(resp_tx)).is_ok() {
-                                    if let Ok(response) = resp_rx.recv() {
-                                        if let Ok(json) = serde_json::to_string(&response) {
-                                            let _ = stream.write_all(json.as_bytes());
-                                        } else {
-                                            let _ =
-                                                stream.write_all(b"error: serialization failed");
-                                        }
+                        && count > 0
+                    {
+                        let cmd = String::from_utf8_lossy(&buf[..count]);
+                        let cmd = cmd.trim();
+                        if cmd == "toggle" {
+                            log("toggle");
+                            let _ = tx.send(DaemonMessage::Toggle);
+                            let _ = stream.write_all(b"ok");
+                        } else if cmd == "list" {
+                            let (resp_tx, resp_rx) = mpsc::channel();
+                            if tx.send(DaemonMessage::List(resp_tx)).is_ok() {
+                                if let Ok(response) = resp_rx.recv() {
+                                    if let Ok(json) = serde_json::to_string(&response) {
+                                        let _ = stream.write_all(json.as_bytes());
                                     } else {
-                                        // Daemon busy or shutting down, read cache directly
-                                        let cache = cache.lock().unwrap();
-                                        let response = cache.build_list_response();
-                                        if let Ok(json) = serde_json::to_string(&response) {
-                                            let _ = stream.write_all(json.as_bytes());
-                                        } else {
-                                            let _ =
-                                                stream.write_all(b"error: serialization failed");
-                                        }
+                                        let _ = stream.write_all(b"error: serialization failed");
                                     }
                                 } else {
-                                    let _ = stream.write_all(b"error: daemon not responding");
-                                }
-                            } else if let Some(json) = cmd.strip_prefix("track ") {
-                                match serde_json::from_str::<TrackEvent>(json) {
-                                    Ok(event) => {
-                                        log(&format!(
-                                            "track {} agent={} session={} tmux={:?} cwd={:?}",
-                                            event.event,
-                                            event.agent.as_deref().unwrap_or("claude"),
-                                            event.session_id,
-                                            event.tmux_id,
-                                            event.cwd
-                                        ));
-                                        let _ = tx.send(DaemonMessage::Track(event));
-                                        let _ = stream.write_all(b"ok");
-                                    }
-                                    Err(e) => {
-                                        log(&format!("track parse error: {}", e));
-                                        let _ =
-                                            stream.write_all(format!("error: {}", e).as_bytes());
+                                    // Daemon busy or shutting down, read cache directly
+                                    let cache = cache.lock().unwrap();
+                                    let response = cache.build_list_response();
+                                    if let Ok(json) = serde_json::to_string(&response) {
+                                        let _ = stream.write_all(json.as_bytes());
+                                    } else {
+                                        let _ = stream.write_all(b"error: serialization failed");
                                     }
                                 }
                             } else {
-                                log(&format!("unknown command: {}", cmd));
-                                let _ = stream.write_all(b"unknown command");
+                                let _ = stream.write_all(b"error: daemon not responding");
                             }
+                        } else if let Some(json) = cmd.strip_prefix("track ") {
+                            match serde_json::from_str::<TrackEvent>(json) {
+                                Ok(event) => {
+                                    log(&format!(
+                                        "track {} agent={} session={} tmux={:?} cwd={:?}",
+                                        event.event,
+                                        event.agent.as_deref().unwrap_or("claude"),
+                                        event.session_id,
+                                        event.tmux_id,
+                                        event.cwd
+                                    ));
+                                    let _ = tx.send(DaemonMessage::Track(event));
+                                    let _ = stream.write_all(b"ok");
+                                }
+                                Err(e) => {
+                                    log(&format!("track parse error: {}", e));
+                                    let _ = stream.write_all(format!("error: {}", e).as_bytes());
+                                }
+                            }
+                        } else {
+                            log(&format!("unknown command: {}", cmd));
+                            let _ = stream.write_all(b"unknown command");
                         }
+                    }
                 }
                 Err(e) => {
                     eprintln!("Socket error: {}", e);
@@ -353,10 +351,11 @@ pub fn start_sessions_watcher(tx: mpsc::Sender<DaemonMessage>) {
         }
 
         if codex_dir.exists()
-            && let Err(e) = watcher.watch(&codex_dir, RecursiveMode::Recursive) {
-                eprintln!("Failed to watch codex sessions directory: {}", e);
-                return;
-            }
+            && let Err(e) = watcher.watch(&codex_dir, RecursiveMode::Recursive)
+        {
+            eprintln!("Failed to watch codex sessions directory: {}", e);
+            return;
+        }
 
         loop {
             std::thread::sleep(std::time::Duration::from_secs(3600));
@@ -441,9 +440,10 @@ fn update_codex_session(
     });
 
     if entry.cwd.is_empty()
-        && let Some(value) = cwd {
-            entry.cwd = value.to_string();
-        }
+        && let Some(value) = cwd
+    {
+        entry.cwd = value.to_string();
+    }
     entry.state = new_state;
     // Only update timestamp if we have one from the record
     if let Some(ts) = state_updated {
@@ -596,10 +596,11 @@ fn process_codex_file(
             Err(_) => continue,
         };
         if (session_id.is_none() || cwd.is_none())
-            && let Some((id, dir)) = read_codex_file_meta(path) {
-                session_id = Some(id);
-                cwd = Some(dir);
-            }
+            && let Some((id, dir)) = read_codex_file_meta(path)
+        {
+            session_id = Some(id);
+            cwd = Some(dir);
+        }
         handle_codex_record(
             codex,
             last_message,
@@ -1006,10 +1007,10 @@ fn handle_track_event(event: &TrackEvent, focused_niri_id: Option<u64>) {
         "notification" => {
             if event.notification_type.as_deref() == Some("permission_prompt")
                 && let Some(session) = state::find_by_session_id_mut(&mut store, agent, session_id)
-                {
-                    session.state = "waiting".to_string();
-                    session.state_updated = state::now();
-                }
+            {
+                session.state = "waiting".to_string();
+                session.state_updated = state::now();
+            }
         }
         _ => {}
     }
@@ -1046,9 +1047,10 @@ fn ends_with_question(transcript_path: &str) -> bool {
             {
                 for item in content_arr {
                     if item.get("type").and_then(|t| t.as_str()) == Some("text")
-                        && let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                            last_text = Some(text.to_string());
-                        }
+                        && let Some(text) = item.get("text").and_then(|t| t.as_str())
+                    {
+                        last_text = Some(text.to_string());
+                    }
                 }
             }
         }
