@@ -100,6 +100,7 @@
           export PYTHONDONTWRITEBYTECODE=1
           export PYTHONUNBUFFERED=1
           export GOPATH=$HOME/go
+          export PNPM_HOME="$HOME/.local/share/pnpm"
           export EDITOR=nvim
           export AWS_PAGER=""
           export K9S_CONFIG_DIR=$HOME/.config/k9s
