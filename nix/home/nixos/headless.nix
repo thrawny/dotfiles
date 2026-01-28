@@ -38,11 +38,5 @@
       ghostty.terminfo
     ];
 
-    activation.ensureDotfiles = lib.hm.dag.entryBefore [ "linkGeneration" ] ''
-      repo=${lib.escapeShellArg dotfiles}
-      if [ ! -d "$repo/.git" ]; then
-        ${pkgs.git}/bin/git clone --depth 1 https://github.com/thrawny/dotfiles.git "$repo"
-      fi
-    '';
   };
 }
