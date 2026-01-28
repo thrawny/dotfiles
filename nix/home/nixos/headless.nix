@@ -38,5 +38,8 @@
       ghostty.terminfo
     ];
 
+    sessionVariables = {
+      NVIM_HEADLESS = "1";
+    };
   };
 }
