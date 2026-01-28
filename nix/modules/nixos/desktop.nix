@@ -11,12 +11,6 @@ let
   cfg = config.dotfiles;
   inherit (cfg) username;
 
-  hyprlandPackages = with pkgs; [
-    hyprshot
-    hyprpicker
-    hyprsunset
-  ];
-
   desktopPackages = with pkgs; [
     brightnessctl
     code-cursor-fhs
@@ -38,7 +32,7 @@ let
   ];
 in
 {
-  environment.systemPackages = desktopPackages ++ hyprlandPackages;
+  environment.systemPackages = desktopPackages;
 
   # Pre-trust niri cache so it works on first build (before niri-flake module applies)
   nix.settings = {

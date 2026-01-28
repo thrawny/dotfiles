@@ -5,4 +5,10 @@
     package = pkgs.hyprland;
     portalPackage = pkgs.xdg-desktop-portal-hyprland;
   };
+
+  environment.systemPackages = with pkgs; [
+    hyprshot
+    hyprpicker
+    hyprsunset
+  ];
 }
