@@ -21,7 +21,9 @@ let
 
   basePackages = with pkgs; [
     curl
+    fd
     git
+    gnumake
     neovim
     ripgrep
     tmux

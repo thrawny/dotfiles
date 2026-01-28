@@ -7,6 +7,7 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 **NixOS systems:**
 - `thinkpad` - ThinkPad T14 (x86_64-linux)
 - `thrawny-desktop` - Desktop (x86_64-linux)
+- `clawdbot-gateway` - Headless server (x86_64-linux)
 
 **Home Manager standalone:**
 - `thrawnym1` - MacBook M1 (aarch64-darwin)
@@ -33,5 +34,6 @@ just diff         # Build and show changes (NixOS only)
 
 ## Notes
 
+- Desktop hosts import `modules/nixos/default.nix`; headless hosts import `modules/nixos/headless.nix`.
 - Niri configuration lives under `home/linux/niri/` and is imported explicitly where needed.
 - Niri is the daily driver; Hyprland remains available and can be selected in tuigreet when desired.

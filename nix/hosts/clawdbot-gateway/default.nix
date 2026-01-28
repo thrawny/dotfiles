@@ -9,7 +9,7 @@ let
 in
 {
   imports = [
-    ../../modules/nixos/system.nix
+    ../../modules/nixos/headless.nix
     ./hardware-configuration.nix
     ./disko.nix
   ];
