@@ -28,7 +28,7 @@ in
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOR81cTVFr3icJMAzTqmRU/D5oZSbZanTquggDRcOsZJ jonaslergell@gmail.com"
   ];
 
-  networking.hostName = "clawdbot-gateway";
+  networking.hostName = "thrawny-server";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
   # Use GRUB for Hetzner (legacy BIOS boot)

@@ -7,7 +7,7 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 **NixOS systems:**
 - `thinkpad` - ThinkPad T14 (x86_64-linux)
 - `thrawny-desktop` - Desktop (x86_64-linux)
-- `clawdbot-gateway` - Headless server (x86_64-linux)
+- `thrawny-server` - Headless server (x86_64-linux)
 
 **Home Manager standalone:**
 - `thrawnym1` - MacBook M1 (aarch64-darwin)

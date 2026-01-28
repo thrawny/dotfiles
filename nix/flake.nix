@@ -167,10 +167,10 @@
           ];
         };
 
-        clawdbot-gateway = mkHeadlessHost {
+        thrawny-server = mkHeadlessHost {
           system = "x86_64-linux";
           modules = [
-            ./hosts/clawdbot-gateway/default.nix
+            ./hosts/thrawny-server/default.nix
           ];
         };
       };
