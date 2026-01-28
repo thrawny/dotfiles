@@ -1,0 +1,93 @@
+{
+  config,
+  pkgs,
+  lib,
+  nurPkgs,
+  zen-browser,
+  walker,
+  xremap-flake,
+  ...
+}:
+let
+  cfg = config.dotfiles;
+  inherit (cfg) username;
+  packages = import ./packages.nix {
+    inherit pkgs lib nurPkgs;
+    excludePackages = [ ];
+  };
+in
+{
+  environment.systemPackages = packages.systemPackages;
+
+  # Pre-trust niri cache so it works on first build (before niri-flake module applies)
+  nix.settings = {
+    trusted-substituters = [ "https://niri.cachix.org" ];
+    trusted-public-keys = [
+      "niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964="
+    ];
+  };
+
+  users.users.${username}.extraGroups = [
+    "video"
+    "audio"
+    "input"
+  ];
+
+  programs = {
+    niri.enable = true;
+
+    # Enable nix-ld for running non-Nix binaries (e.g., uv run ruff)
+    nix-ld = {
+      enable = true;
+      libraries = with pkgs; [
+        stdenv.cc.cc.lib
+        zlib
+        openssl
+      ];
+    };
+
+    # Enable AppImage support
+    appimage = {
+      enable = true;
+      binfmt = true;
+    };
+  };
+
+  hardware.bluetooth.enable = true;
+  networking.networkmanager.enable = true;
+
+  services = {
+    pulseaudio.enable = false;
+    pipewire = {
+      enable = true;
+      alsa.enable = true;
+      pulse.enable = true;
+      jack.enable = true;
+    };
+    greetd = {
+      enable = true;
+      settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd Hyprland";
+    };
+    blueman.enable = true;
+
+    # Keyd disabled - using xremap instead to avoid double-grab keyboard conflicts
+    keyd.enable = false;
+  };
+
+  fonts.packages = with pkgs; [
+    noto-fonts
+    noto-fonts-color-emoji
+    nerd-fonts.caskaydia-mono
+  ];
+
+  home-manager = {
+    extraSpecialArgs = {
+      inherit
+        zen-browser
+        walker
+        xremap-flake
+        ;
+    };
+    users.${username} = import ../../home/nixos/default.nix;
+  };
+}

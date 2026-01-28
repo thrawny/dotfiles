@@ -18,7 +18,6 @@ in
     username = "thrawny";
     fullName = "Jonas Lergell";
     email = "jonaslergell@gmail.com";
-    headless = true;
   };
 
   # SSH access
@@ -39,10 +38,5 @@ in
     efiInstallAsRemovable = true;
   };
 
-  # Override home-manager to use headless config (no Wayland/UI modules)
-  home-manager.users.${username} = lib.mkForce {
-    imports = [
-      ../../home/nixos/headless.nix
-    ];
-  };
+  home-manager.users.${username} = import ../../home/nixos/headless.nix;
 }
