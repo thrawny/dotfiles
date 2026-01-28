@@ -155,12 +155,6 @@
             export KUBECTL_EXTERNAL_DIFF="kubectl-dyff"
           fi
 
-          # ===== Mise =====
-          if command -v mise &>/dev/null && [[ -o interactive ]]; then
-            eval "$(mise activate zsh)"
-            source <(mise completion zsh)
-          fi
-
           # ===== Conditional aliases =====
           if bat --version &>/dev/null && [[ -o interactive ]]; then
             alias cat='bat --style=grid,snip --theme "Monokai Extended Origin"'
