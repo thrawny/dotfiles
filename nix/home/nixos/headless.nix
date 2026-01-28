@@ -19,7 +19,7 @@
     ../shared/k9s.nix
     ../shared/lazygit.nix
     ../shared/npm.nix
-    ../shared/nvim.nix
+    ../shared/nvim-headless.nix
     ../shared/starship.nix
     ../shared/tmux.nix
     ../shared/zsh.nix

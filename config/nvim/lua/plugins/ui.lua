@@ -6,11 +6,22 @@ return {
   },
 
   -- Configure noice for LSP hover borders
+  -- Disable cmdline treesitter highlighting (broken with nvim 0.11 query syntax)
   {
     "folke/noice.nvim",
     opts = {
       presets = {
         lsp_doc_border = true,
+      },
+      cmdline = {
+        format = {
+          cmdline = { lang = false },
+          search_down = { lang = false },
+          search_up = { lang = false },
+          filter = { lang = false },
+          lua = { lang = false },
+          help = { lang = false },
+        },
       },
     },
   },

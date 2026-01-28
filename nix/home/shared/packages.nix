@@ -32,7 +32,6 @@
     pnpm
     ripgrep
     tmux
-    neovim
     git
     zsh
     awscli2

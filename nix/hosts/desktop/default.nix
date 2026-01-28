@@ -187,7 +187,12 @@ in
       # Desktop-specific Niri configuration
       programs.niri.settings = {
         spawn-at-startup = [
-          { command = [ "solaar" "--window=hide" ]; }
+          {
+            command = [
+              "solaar"
+              "--window=hide"
+            ];
+          }
         ];
         outputs = {
           "HDMI-A-1" = {
