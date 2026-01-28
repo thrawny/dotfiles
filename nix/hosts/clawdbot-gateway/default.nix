@@ -2,7 +2,6 @@
   config,
   lib,
   pkgs,
-  nix-clawdbot,
   ...
 }:
 let
@@ -14,9 +13,6 @@ in
     ./hardware-configuration.nix
     ./disko.nix
   ];
-
-  # Add clawdbot overlay to make pkgs.clawdbot available
-  nixpkgs.overlays = [ nix-clawdbot.overlays.default ];
 
   dotfiles = {
     username = "thrawny";
@@ -43,25 +39,10 @@ in
     efiInstallAsRemovable = true;
   };
 
-  # Workaround: nix-clawdbot uses hardcoded /bin paths which don't exist on NixOS
-  # TODO: File upstream PR to fix this
-  systemd.tmpfiles.rules = [
-    "L+ /bin/mkdir - - - - ${pkgs.coreutils}/bin/mkdir"
-    "L+ /bin/ln - - - - ${pkgs.coreutils}/bin/ln"
-    "L+ /bin/ls - - - - ${pkgs.coreutils}/bin/ls"
-    "L+ /bin/head - - - - ${pkgs.coreutils}/bin/head"
-    "L+ /bin/readlink - - - - ${pkgs.coreutils}/bin/readlink"
-    "L+ /bin/env - - - - ${pkgs.coreutils}/bin/env"
-  ];
-
   # Override home-manager to use headless config (no Wayland/UI modules)
-  home-manager.users.${username} = lib.mkForce (
-    { nix-clawdbot, ... }:
-    {
-      imports = [
-        ../../home/nixos/headless.nix
-        ../../home/nixos/clawdbot-gateway.nix
-      ];
-    }
-  );
+  home-manager.users.${username} = lib.mkForce {
+    imports = [
+      ../../home/nixos/headless.nix
+    ];
+  };
 }

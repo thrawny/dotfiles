@@ -19,8 +19,6 @@
     crane.url = "github:ipetkov/crane";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
-    nix-clawdbot.url = "github:clawdbot/nix-clawdbot";
-    nix-clawdbot.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -37,7 +35,6 @@
       nixpkgs-xwayland,
       crane,
       disko,
-      nix-clawdbot,
       ...
     }:
     let
@@ -143,7 +140,6 @@
               walker
               nurPkgs
               xremap-flake
-              nix-clawdbot
               ;
           };
           modules = [
