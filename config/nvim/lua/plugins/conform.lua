@@ -20,6 +20,13 @@ return {
     -- Disable formatting for YAML files (Prettier doesn't support custom sequence indentation)
     opts.formatters_by_ft.yaml = {}
 
+    -- Use biome for JSON (allow without biome.json config)
+    opts.formatters_by_ft.json = { "biome" }
+    opts.formatters_by_ft.jsonc = { "biome" }
+    opts.formatters.biome = {
+      require_cwd = false,
+    }
+
     -- Use shfmt with 4-space indentation for bash/shell files
     opts.formatters.shfmt = {
       append_args = { "-i", "4" },

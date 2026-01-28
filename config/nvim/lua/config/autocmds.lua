@@ -52,13 +52,13 @@ vim.api.nvim_create_autocmd("QuitPre", {
   desc = "Force close terminal buffers on quit",
 })
 
--- Disable format-on-save for SQL files (manual formatting still available via ,cf)
+-- Disable format-on-save for SQL and JSON files (manual formatting still available via ,cf)
 vim.api.nvim_create_autocmd("FileType", {
-  pattern = { "sql" },
+  pattern = { "sql", "json", "jsonc" },
   callback = function()
     vim.b.autoformat = false
   end,
-  desc = "Disable autoformat for SQL files",
+  desc = "Disable autoformat for SQL and JSON files",
 })
 
 -- Display tabs as 4 spaces in Go files (Go uses real tabs, this controls visual width)
