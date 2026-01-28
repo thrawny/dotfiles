@@ -1,7 +1,6 @@
 {
   config,
   pkgs,
-  lib,
   nurPkgs,
   zen-browser,
   walker,
@@ -11,13 +10,35 @@
 let
   cfg = config.dotfiles;
   inherit (cfg) username;
-  packages = import ./packages.nix {
-    inherit pkgs lib nurPkgs;
-    excludePackages = [ ];
-  };
+
+  hyprlandPackages = with pkgs; [
+    hyprshot
+    hyprpicker
+    hyprsunset
+  ];
+
+  desktopPackages = with pkgs; [
+    brightnessctl
+    code-cursor-fhs
+    docker-compose
+    fastfetch
+    gnome-themes-extra
+    keyd
+    libnotify
+    networkmanagerapplet
+    pamixer
+    pavucontrol
+    playerctl
+    powertop
+    spotify
+    waybar
+    wl-clipboard
+    wtype
+    nurPkgs.repos.Ev357.helium
+  ];
 in
 {
-  environment.systemPackages = packages.systemPackages;
+  environment.systemPackages = desktopPackages ++ hyprlandPackages;
 
   # Pre-trust niri cache so it works on first build (before niri-flake module applies)
   nix.settings = {
@@ -66,7 +87,7 @@ in
     };
     greetd = {
       enable = true;
-      settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd Hyprland";
+      settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd niri-session";
     };
     blueman.enable = true;
 
