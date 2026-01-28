@@ -113,7 +113,6 @@ in
     services = {
       tailscale.enable = true;
       xserver.enable = false;
-      openssh.enable = true;
       resolved.enable = true;
     };
 
