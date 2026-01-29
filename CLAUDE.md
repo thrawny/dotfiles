@@ -1,15 +1,10 @@
 # Repository Guide (Agent Focus)
 
-This guide distills what an agent needs to know to make safe, precise code changes in this dotfiles repo. It emphasizes source-of-truth locations and symlink rules; system setup steps are included only when necessary for verification.
+This guide distills what an agent needs to know to make safe, precise code changes in this dotfiles repo. It emphasizes source-of-truth locations; system setup steps are included only when necessary for verification.
 
 ## Overview
 
-This repository manages cross-platform dotfiles using **two systems**:
-
-1. **Nix Home Manager** (primary) - Declarative configuration in `nix/`. See `nix/CLAUDE.md` for details.
-2. **Ansible** (legacy) - Symlinks files from `config/` to home directory. Kept for machines without Nix.
-
-**Nix-first development:** When editing shell, terminal, or system configs, prefer editing the Nix files. See `.claude/rules/nix.md` for guidance on which files to edit.
+This repository manages cross-platform dotfiles using **Nix Home Manager** — declarative configuration in `nix/`. See `nix/CLAUDE.md` for details and `.claude/rules/nix.md` for guidance on which files to edit.
 
 ## Task Runner
 
@@ -26,19 +21,20 @@ just rust::build  # Build all rust packages (or specific: just rust::build agent
 
 ## Agent Essentials
 
-- Source of truth: edit files in-repo only; Ansible handles symlinks on install.
+- Source of truth: edit files in-repo only.
 - Primary areas to edit: `nix/`, `config/`, `bin/`, `rust/`.
-- When adding a new config for non-Nix systems, create it under `config/` and add a symlink task in `ansible/main.yml`.
 - You generally do not need to run package managers (Homebrew/APT) or OS setup scripts to modify repo content.
 
 ## Paths: Source → Target
 
-- Shell: `config/zsh/zshrc` → `~/.zshrc`, `config/tmux/tmux.conf` → `~/.tmux.conf`
+Nix Home Manager uses `mkOutOfStoreSymlink` to link config directories into the home directory:
+
 - Editors: `config/nvim` → `~/.config/nvim`
 - Git: `config/git/gitconfig` → `~/.gitconfig`, `config/git/gitignoreglobal` → `~/.gitignoreglobal`
-- Apps: `config/ghostty` → `~/.config/ghostty`, `config/direnv` → `~/.config/direnv`
-- Extras: `config/starship/starship.toml` → `~/.config/starship.toml`, `config/k9s` → `~/.config/k9s`, `config/npm/default-packages` → `~/.default-npm-packages`
-- Codex/Claude: `config/codex/config.toml` → `~/.codex/config.toml`, `config/codex/prompts` → `~/.codex/prompts`, `config/claude/commands` → `~/.claude/commands`, `config/claude/settings.json` → `~/.claude/settings.json`, `config/claude/agents` → `~/.claude/agents`, `config/claude/skills` → `~/.claude/skills`, `config/claude/CLAUDE-GLOBAL.md` → `~/.claude/CLAUDE.md`
+- Apps: `config/k9s` → `~/.config/k9s`, `config/npm/default-packages` → `~/.default-npm-packages`
+- Codex/Claude: `config/codex/` → `~/.codex/`, `config/claude/` → `~/.claude/`
+
+Configs generated entirely by Nix (no files in `config/`): zsh, tmux, ghostty, direnv, starship.
 
 ### Claude Config Locations
 
@@ -53,22 +49,14 @@ When adding Claude commands, agents, skills, or settings:
 - Put in `config/claude/` if it should be available globally across all projects
 - Put in `.claude/` if it's specific to working on this dotfiles repo
 
-Refer to `ansible/main.yml` for the authoritative symlink list.
-
-## Ansible Structure
-
-- `ansible/main.yml` - Single consolidated playbook with all tasks.
-- OS-specific tasks use `when:` conditions based on Ansible facts (`ansible_system`, `ansible_distribution`).
-
 ## Nix Configuration
 
 Flake-based NixOS and Home Manager config in `nix/`. See `nix/CLAUDE.md` for details.
 
 ## Common Agent Tasks
 
-- Update an existing dotfile: edit its source file in this repo (see Paths section). No immediate action is needed unless you want to re-run symlinks on a machine.
-- Add a new config file: place it under `config/` (or relevant dir) and add a corresponding `file` task in `ansible/main.yml` to create the symlink.
-- Modify shell aliases/functions: edit `nix/home/shared/zsh.nix` (Nix) or `config/zsh/zshrc` (legacy).
+- Update an existing dotfile: edit its source file in this repo (see Paths section).
+- Modify shell aliases/functions: edit `nix/home/shared/zsh.nix`.
 - Update Neovim config: edit files in `config/nvim`.
 
 ### Settings Files with Example/Live Pairs
@@ -98,9 +86,8 @@ When asked to modify settings, update the example file first, then ask if the us
 
 ## Verification (optional)
 
-- Python env: `uv sync` installs Ansible locally; `.envrc` activates it via direnv.
-- Apply symlinks on a machine: `ansible-playbook ansible/main.yml`.
-  - OS-specific tasks are selected via Ansible facts (`when:` conditions); no tags are required.
+- Python env: `uv sync` installs dependencies locally; `.envrc` activates it via direnv.
+- Apply Nix config: `just switch`.
 
 ## Python Setup
 
@@ -108,15 +95,13 @@ When asked to modify settings, update the example file first, then ask if the us
   - Entering this directory activates the environment via `.envrc` (`layout uv`).
   - If direnv is not enabled, run `uv sync` and then use `uv run …` or activate `.venv` manually.
 - Requirements: Python `>=3.12` (managed by `uv`).
-- Install dependencies: `uv sync` (add `--dev` to include dev tools like ruff/pyright/ansible-lint).
+- Install dependencies: `uv sync` (add `--dev` to include dev tools like ruff/pyright).
 - Add/remove deps: `uv add <pkg>`, `uv remove <pkg>`.
 - Project package: `claude_tools/` (module with small CLIs and helpers). Entrypoints are defined in `pyproject.toml`:
-  - `claude-work-timer` → `claude_tools.work_timer:cli_main`
   - `claude-loop` → `claude_tools.simple_loop:cli_main`
 - Run scripts (without activating venv explicitly):
-  - `uv run claude-work-timer "refactor X" -d 1h`
   - `uv run claude-loop "fix type errors" -d 30m -w 30s`
-  - Or module form: `uv run -m claude_tools.work_timer --help`
+  - Or module form: `uv run -m claude_tools.simple_loop --help`
 - Notes:
   - `bin/notify-sound` is used by Codex notifications: plays a sound on macOS; no-op on Linux.
   - `bin/notify` shows cross-platform visual notifications (macOS/Linux).

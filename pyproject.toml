@@ -1,10 +1,9 @@
 [project]
 name = "dotfiles"
 version = "0.1.0"
-description = "Personal dotfiles repository with Ansible automation for macOS and Linux"
+description = "Personal dotfiles repository"
 requires-python = ">=3.12"
 dependencies = [
-  "ansible>=10.0.0",
   "anyio>=4.10.0",
   "asyncclick>=8.2.2.2",
   "claude-agent-sdk>=0.1.6",

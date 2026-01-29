@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
-# Minimal image to test-build this dotfiles repo, run devcontainer/install.sh,
-# and validate Ansible symlinks inside a disposable container.
+# Minimal image to test-build this dotfiles repo and run devcontainer/install.sh
+# inside a disposable container.
 
 ARG BASE_IMAGE=mcr.microsoft.com/devcontainers/base:ubuntu-24.04
 FROM ${BASE_IMAGE} AS base
@@ -54,7 +54,6 @@ ARG CODEX_CREDENTIALS
 # - install uv
 # - provision Python via uv if needed
 # - uv sync + install project CLIs
-# - run ansible to link dotfiles
 # - optionally install Claude/Codex CLIs
 RUN --mount=type=cache,target=${HOME}/.cache,uid=1000,gid=1000 \
     --mount=type=cache,target=/root/.cache \

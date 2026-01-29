@@ -4,6 +4,7 @@ _: {
     settings = {
       promptToReturnFromSubprocess = false;
       quitOnTopLevelReturn = true;
+      gui.sidePanelWidth = 0.15;
 
       git.pagers = [
         {
