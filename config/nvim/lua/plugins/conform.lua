@@ -20,7 +20,7 @@ return {
     -- Disable formatting for YAML files (Prettier doesn't support custom sequence indentation)
     opts.formatters_by_ft.yaml = {}
 
-    -- Use biome for JSON (allow without biome.json config)
+    -- Use biome for JSON (autoformat disabled via autocmds.lua)
     opts.formatters_by_ft.json = { "biome" }
     opts.formatters_by_ft.jsonc = { "biome" }
     opts.formatters.biome = {

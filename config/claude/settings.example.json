@@ -1,6 +1,7 @@
 {
   "env": {
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "true"
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "true",
+    "USE_BUILTIN_RIPGREP": 0
   },
   "permissions": {
     "allow": [
@@ -48,10 +49,7 @@
       "Bash(ast-grep:*)"
     ],
     "deny": [],
-    "ask": [
-      "Bash(rm:*)",
-      "Bash(mv:*)"
-    ],
+    "ask": ["Bash(rm:*)", "Bash(mv:*)"],
     "defaultMode": "acceptEdits"
   },
   "hooks": {

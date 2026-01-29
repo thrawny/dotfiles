@@ -56,7 +56,9 @@ vim.api.nvim_create_autocmd("QuitPre", {
 vim.api.nvim_create_autocmd("FileType", {
   pattern = { "sql", "json", "jsonc" },
   callback = function()
-    vim.b.autoformat = false
+    vim.schedule(function()
+      vim.b.autoformat = false
+    end)
   end,
   desc = "Disable autoformat for SQL and JSON files",
 })
