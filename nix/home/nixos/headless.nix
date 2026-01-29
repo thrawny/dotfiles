@@ -23,7 +23,6 @@
     ../shared/starship.nix
     ../shared/tmux.nix
     ../shared/zsh.nix
-    ../shared/mise.nix
   ];
 
   programs.home-manager.enable = true;

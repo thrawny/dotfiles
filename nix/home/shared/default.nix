@@ -22,7 +22,6 @@
     ./starship.nix
     ./tmux.nix
     ./zsh.nix
-    ./mise.nix
   ];
 
   # Let Home Manager manage itself
