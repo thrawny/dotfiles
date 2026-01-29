@@ -7,6 +7,7 @@ local ignored_patterns = {
   "%.DS_Store$",
   "%.ruff_cache/",
   "%target/",
+  "%.direnv/",
 }
 
 local find_all_files = function()
