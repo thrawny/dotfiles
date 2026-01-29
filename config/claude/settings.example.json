@@ -1,6 +1,7 @@
 {
   "env": {
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "true",
+    "CLAUDE_CODE_TMPDIR": "/tmp/claude",
     "USE_BUILTIN_RIPGREP": 0
   },
   "permissions": {
@@ -136,5 +137,8 @@
     "typescript-lsp@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true
   },
-  "plansDirectory": ".claude/plans"
+  "plansDirectory": ".claude/plans",
+  "sandbox": {
+    "excludedCommands": ["git", "go", "npm", "pnpm", "cargo", "make", "just", "uv", "nix", "docker", "tmux"]
+  }
 }

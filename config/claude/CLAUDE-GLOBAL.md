@@ -45,6 +45,12 @@ tmux-dev logs myapp-npm-dev 100
 
 User can `tmux attach -t dev` to tab between all processes. Commands are validated against an allowlist (npm, go, python, docker, etc.).
 
+### Sandbox and Code Execution
+
+When sandbox is enabled, use `python` directly (not `uv run`) for running arbitrary code. The sandbox constrains filesystem writes to the project directory and blocks network access, making it safe to execute. The project's `.venv/bin/python` is used automatically via direnv, so all project packages are available.
+
+Tools that need cache/network access (`go`, `npm`, `cargo`, `uv`, `nix`, `docker`, `make`, `just`) are excluded from the sandbox via `excludedCommands` and controlled by permission rules instead.
+
 ### Searching for Documentation
 
 **Start with context7 mcp**: A good tool for retrieving the latest official documentation and code examples for software libraries.
