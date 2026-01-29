@@ -253,6 +253,12 @@
           extraSpecialArgs = import ./hosts/thrawnym1/default.nix;
         };
 
+        jonas-kanel = home-manager.lib.homeManagerConfiguration {
+          pkgs = nixpkgs.legacyPackages.aarch64-darwin;
+          modules = [ ./home/darwin/default.nix ];
+          extraSpecialArgs = import ./hosts/jonas-kanel/default.nix;
+        };
+
         # Container test configuration (x86_64)
         container-x86_64 = home-manager.lib.homeManagerConfiguration {
           pkgs = nixpkgs.legacyPackages.x86_64-linux;
