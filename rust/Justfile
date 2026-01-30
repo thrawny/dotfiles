@@ -17,6 +17,10 @@ run PKG:
 watch PKG *ARGS:
     watchexec -w {{ PKG }}/src -e rs --restart -- cargo run -p {{ PKG }} {{ ARGS }}
 
+# Watch agent-switch tmux daemon
+watch-tmux:
+    watchexec -w agent-switch/src -e rs --restart -- cargo run -p agent-switch -- serve
+
 # Watch agent-switch niri daemon
 watch-niri:
     watchexec -w agent-switch/src -e rs --restart -- cargo run -p agent-switch --features niri -- niri

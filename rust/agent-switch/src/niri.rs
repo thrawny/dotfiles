@@ -1038,6 +1038,7 @@ pub fn run_with_daemon() -> glib::ExitCode {
     // Start daemon threads (socket listener, file watchers)
     daemon::start_socket_listener(daemon_tx.clone(), cache.clone());
     daemon::start_sessions_watcher(daemon_tx.clone());
+    daemon::start_codex_poller(daemon_tx.clone());
 
     // Start niri-specific threads
     start_config_watcher(niri_tx.clone());

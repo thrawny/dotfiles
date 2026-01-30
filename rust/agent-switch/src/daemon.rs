@@ -326,6 +326,11 @@ pub fn start_sessions_watcher(tx: mpsc::Sender<DaemonMessage>) {
                     } else if is_codex_file {
                         match event.kind {
                             notify::EventKind::Modify(_) | notify::EventKind::Create(_) => {
+                                log(&format!(
+                                    "codex file changed: {:?} ({:?})",
+                                    event.paths.first().and_then(|p| p.file_name()),
+                                    event.kind
+                                ));
                                 let _ = tx_clone.send(DaemonMessage::CodexChanged);
                             }
                             _ => {}
@@ -359,6 +364,40 @@ pub fn start_sessions_watcher(tx: mpsc::Sender<DaemonMessage>) {
 
         loop {
             std::thread::sleep(std::time::Duration::from_secs(3600));
+        }
+    });
+}
+
+/// Poll codex rollout files for changes (FSEvents doesn't fire for appends to open fds)
+pub fn start_codex_poller(tx: mpsc::Sender<DaemonMessage>) {
+    thread::spawn(move || {
+        let root = codex_sessions_root();
+        let mut sizes: HashMap<PathBuf, u64> = HashMap::new();
+
+        loop {
+            thread::sleep(std::time::Duration::from_secs(3));
+
+            if !root.exists() {
+                continue;
+            }
+
+            let mut files = Vec::new();
+            walk_codex_files(root.as_path(), &mut files);
+
+            let mut changed = false;
+            for file in &files {
+                let size = fs::metadata(file).map(|m| m.len()).unwrap_or(0);
+                let prev = sizes.get(file).copied();
+                if prev.is_some_and(|p| p != size) {
+                    changed = true;
+                }
+                sizes.insert(file.clone(), size);
+            }
+
+            if changed {
+                log("codex poll: file size changed");
+                let _ = tx.send(DaemonMessage::CodexChanged);
+            }
         }
     });
 }
@@ -838,6 +877,7 @@ pub fn run_headless() {
 
     start_socket_listener(tx.clone(), cache.clone());
     start_sessions_watcher(tx.clone());
+    start_codex_poller(tx.clone());
     start_tmux_monitor(tx.clone());
 
     loop {
@@ -867,6 +907,12 @@ pub fn run_headless() {
             DaemonMessage::CodexChanged => {
                 let mut cache = cache.lock().unwrap();
                 cache.reload_codex_sessions();
+                for entry in cache.codex_sessions.values() {
+                    log(&format!(
+                        "codex session: cwd={} state={:?} state_updated={}",
+                        entry.cwd, entry.state, entry.state_updated
+                    ));
+                }
             }
             DaemonMessage::Shutdown => {
                 log("daemon shutting down");
