@@ -51,7 +51,7 @@ warn_diff \
   "Claude settings" \
   "config/claude/settings.json" \
   "config/claude/settings.example.json" \
-  'del(.model, .feedbackSurveyState, .alwaysThinkingEnabled)'
+  'del(.model, .feedbackSurveyState, .alwaysThinkingEnabled, .enabledPlugins["greptile@claude-plugins-official"])'
 
 # Codex: compare shared keys using yq (ignore local-only sections).
 warn_diff_codex() {
