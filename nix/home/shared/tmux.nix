@@ -145,7 +145,13 @@ in
         plugin = continuum;
         extraConfig = "set -g @continuum-restore 'on'";
       }
-      vim-tmux-navigator
+      {
+        plugin = vim-tmux-navigator;
+        # Override vim detection to handle Nix store paths and macOS ps leading spaces
+        extraConfig = ''
+          set -g @vim_navigator_check "ps -o state= -o comm= -t '#{pane_tty}' | grep -iqE '^ *[^TXZ ]+ +.*/n?vim(diff)?(-wrapped)?$'"
+        '';
+      }
     ];
 
     extraConfig = lib.concatStringsSep "\n" [
