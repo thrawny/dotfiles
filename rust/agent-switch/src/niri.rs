@@ -458,14 +458,14 @@ fn start_config_watcher(tx: mpsc::Sender<NiriMessage>) {
         ) {
             Ok(w) => w,
             Err(e) => {
-                eprintln!("Failed to create config watcher: {}", e);
+                log::error!("Failed to create config watcher: {}", e);
                 return;
             }
         };
 
         if let Some(dir) = config_dir {
             if let Err(e) = watcher.watch(&dir, RecursiveMode::NonRecursive) {
-                eprintln!("Failed to watch config directory: {}", e);
+                log::error!("Failed to watch config directory: {}", e);
                 return;
             }
             loop {
@@ -481,7 +481,7 @@ fn start_focus_tracker(focused_window: Arc<Mutex<Option<u64>>>) {
             let mut socket = match Socket::connect() {
                 Ok(s) => s,
                 Err(e) => {
-                    eprintln!("Failed to connect to niri: {}", e);
+                    log::error!("Failed to connect to niri: {}", e);
                     thread::sleep(std::time::Duration::from_secs(1));
                     continue;
                 }
@@ -491,7 +491,7 @@ fn start_focus_tracker(focused_window: Arc<Mutex<Option<u64>>>) {
                 Ok(Ok(Response::Handled)) => {}
                 Ok(Ok(_)) => {}
                 result => {
-                    eprintln!("Failed to request event stream: {:?}", result);
+                    log::error!("Failed to request event stream: {:?}", result);
                     thread::sleep(std::time::Duration::from_secs(1));
                     continue;
                 }
@@ -1030,7 +1030,7 @@ pub fn run_with_daemon() -> glib::ExitCode {
         cache.reload_codex_sessions();
     }
 
-    eprintln!(
+    log::info!(
         "Starting niri daemon with overlay, listening on {:?}",
         daemon::socket_path()
     );
@@ -1103,7 +1103,7 @@ pub fn run_with_daemon() -> glib::ExitCode {
 pub fn run(toggle: bool) -> glib::ExitCode {
     if toggle {
         if let Err(e) = send_toggle() {
-            eprintln!("Failed to toggle: {} (is daemon running?)", e);
+            log::error!("Failed to toggle: {} (is daemon running?)", e);
             std::process::exit(1);
         }
         std::process::exit(0);

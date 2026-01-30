@@ -1,4 +1,5 @@
 use crate::state::{self, SessionStore};
+use log::{debug, error, info, warn};
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -12,13 +13,6 @@ use std::thread;
 use time::{OffsetDateTime, format_description::well_known::Rfc3339};
 
 const CODEX_MAX_AGE_SECS: f64 = 7.0 * 24.0 * 60.0 * 60.0; // 7 days
-
-fn log(msg: &str) {
-    let ts = OffsetDateTime::now_utc()
-        .format(&Rfc3339)
-        .unwrap_or_default();
-    eprintln!("[{}] {}", ts, msg);
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -225,7 +219,7 @@ pub fn start_socket_listener(tx: mpsc::Sender<DaemonMessage>, cache: Arc<Mutex<S
     let listener = match UnixListener::bind(&path) {
         Ok(l) => l,
         Err(e) => {
-            eprintln!("Failed to bind socket: {}", e);
+            error!("Failed to bind socket: {}", e);
             return;
         }
     };
@@ -241,7 +235,7 @@ pub fn start_socket_listener(tx: mpsc::Sender<DaemonMessage>, cache: Arc<Mutex<S
                         let cmd = String::from_utf8_lossy(&buf[..count]);
                         let cmd = cmd.trim();
                         if cmd == "toggle" {
-                            log("toggle");
+                            debug!("toggle");
                             let _ = tx.send(DaemonMessage::Toggle);
                             let _ = stream.write_all(b"ok");
                         } else if cmd == "list" {
@@ -269,30 +263,30 @@ pub fn start_socket_listener(tx: mpsc::Sender<DaemonMessage>, cache: Arc<Mutex<S
                         } else if let Some(json) = cmd.strip_prefix("track ") {
                             match serde_json::from_str::<TrackEvent>(json) {
                                 Ok(event) => {
-                                    log(&format!(
+                                    info!(
                                         "track {} agent={} session={} tmux={:?} cwd={:?}",
                                         event.event,
                                         event.agent.as_deref().unwrap_or("claude"),
                                         event.session_id,
                                         event.tmux_id,
                                         event.cwd
-                                    ));
+                                    );
                                     let _ = tx.send(DaemonMessage::Track(event));
                                     let _ = stream.write_all(b"ok");
                                 }
                                 Err(e) => {
-                                    log(&format!("track parse error: {}", e));
+                                    warn!("track parse error: {}", e);
                                     let _ = stream.write_all(format!("error: {}", e).as_bytes());
                                 }
                             }
                         } else {
-                            log(&format!("unknown command: {}", cmd));
+                            warn!("unknown command: {}", cmd);
                             let _ = stream.write_all(b"unknown command");
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("Socket error: {}", e);
+                    error!("Socket error: {}", e);
                 }
             }
         }
@@ -326,11 +320,11 @@ pub fn start_sessions_watcher(tx: mpsc::Sender<DaemonMessage>) {
                     } else if is_codex_file {
                         match event.kind {
                             notify::EventKind::Modify(_) | notify::EventKind::Create(_) => {
-                                log(&format!(
+                                debug!(
                                     "codex file changed: {:?} ({:?})",
                                     event.paths.first().and_then(|p| p.file_name()),
                                     event.kind
-                                ));
+                                );
                                 let _ = tx_clone.send(DaemonMessage::CodexChanged);
                             }
                             _ => {}
@@ -342,7 +336,7 @@ pub fn start_sessions_watcher(tx: mpsc::Sender<DaemonMessage>) {
         ) {
             Ok(w) => w,
             Err(e) => {
-                eprintln!("Failed to create sessions watcher: {}", e);
+                error!("Failed to create sessions watcher: {}", e);
                 return;
             }
         };
@@ -350,7 +344,7 @@ pub fn start_sessions_watcher(tx: mpsc::Sender<DaemonMessage>) {
         if let Some(dir) = state_dir {
             let _ = std::fs::create_dir_all(&dir);
             if let Err(e) = watcher.watch(&dir, RecursiveMode::NonRecursive) {
-                eprintln!("Failed to watch state directory: {}", e);
+                error!("Failed to watch state directory: {}", e);
                 return;
             }
         }
@@ -358,7 +352,7 @@ pub fn start_sessions_watcher(tx: mpsc::Sender<DaemonMessage>) {
         if codex_dir.exists()
             && let Err(e) = watcher.watch(&codex_dir, RecursiveMode::Recursive)
         {
-            eprintln!("Failed to watch codex sessions directory: {}", e);
+            error!("Failed to watch codex sessions directory: {}", e);
             return;
         }
 
@@ -395,7 +389,7 @@ pub fn start_codex_poller(tx: mpsc::Sender<DaemonMessage>) {
             }
 
             if changed {
-                log("codex poll: file size changed");
+                debug!("codex poll: file size changed");
                 let _ = tx.send(DaemonMessage::CodexChanged);
             }
         }
@@ -409,7 +403,7 @@ pub fn start_tmux_monitor(tx: mpsc::Sender<DaemonMessage>) {
             thread::sleep(std::time::Duration::from_secs(5));
             let sockets = find_tmux_sockets();
             if sockets.is_empty() {
-                eprintln!("No tmux sockets found, shutting down daemon");
+                info!("No tmux sockets found, shutting down daemon");
                 let _ = tx.send(DaemonMessage::Shutdown);
                 return;
             }
@@ -873,7 +867,7 @@ pub fn run_headless() {
         cache.reload_codex_sessions();
     }
 
-    log(&format!("daemon started, socket={:?}", socket_path()));
+    info!("daemon started, socket={:?}", socket_path());
 
     start_socket_listener(tx.clone(), cache.clone());
     start_sessions_watcher(tx.clone());
@@ -908,14 +902,14 @@ pub fn run_headless() {
                 let mut cache = cache.lock().unwrap();
                 cache.reload_codex_sessions();
                 for entry in cache.codex_sessions.values() {
-                    log(&format!(
+                    debug!(
                         "codex session: cwd={} state={:?} state_updated={}",
                         entry.cwd, entry.state, entry.state_updated
-                    ));
+                    );
                 }
             }
             DaemonMessage::Shutdown => {
-                log("daemon shutting down");
+                info!("daemon shutting down");
                 break;
             }
         }

@@ -19,11 +19,11 @@ watch PKG *ARGS:
 
 # Watch agent-switch tmux daemon
 watch-tmux:
-    watchexec -w agent-switch/src -e rs --restart -- cargo run -p agent-switch -- serve
+    RUST_LOG=debug watchexec -w agent-switch/src -e rs --restart -- cargo run -p agent-switch -- serve
 
 # Watch agent-switch niri daemon
 watch-niri:
-    watchexec -w agent-switch/src -e rs --restart -- cargo run -p agent-switch --features niri -- niri
+    RUST_LOG=debug watchexec -w agent-switch/src -e rs --restart -- cargo run -p agent-switch --features niri -- niri
 
 # Watch voice daemon
 watch-voice:
