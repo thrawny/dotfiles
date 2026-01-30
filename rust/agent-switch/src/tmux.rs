@@ -193,8 +193,8 @@ fn list_tmux_windows() -> Vec<TmuxWindow> {
             continue;
         }
         let session_name = parts[0].split(':').next().unwrap_or("").to_string();
-        // Skip dev and scratch sessions
-        if session_name == "dev" || session_name == "scratch" {
+        // Skip scratch sessions
+        if session_name == "scratch" {
             continue;
         }
         let pane_path = parts

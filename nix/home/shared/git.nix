@@ -55,13 +55,13 @@ in
       "credential \"https://github.com\"" = {
         helper = [
           ""
-          "!/opt/homebrew/bin/gh auth git-credential"
+          "!${pkgs.gh}/bin/gh auth git-credential"
         ];
       };
       "credential \"https://gist.github.com\"" = {
         helper = [
           ""
-          "!/opt/homebrew/bin/gh auth git-credential"
+          "!${pkgs.gh}/bin/gh auth git-credential"
         ];
       };
     };
