@@ -9,10 +9,8 @@ tool_output_token_limit = 25000
 model_auto_compact_token_limit = 233000
 suppress_unstable_features_warning = true
 
-# Mirror Claude Code's approval behavior:
-# - File edits auto-approved (like Claude's acceptEdits mode)
-# - Commands need approval unless in rules/claude-mirror.rules
-ask_for_approval = "on-failure"
+# Require approval for commands not pre-approved in rules/tools.rules
+approval_policy = "on-request"
 
 # [mcp_servers.context7]
 # args = ["-y", "@upstash/context7-mcp"]

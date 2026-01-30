@@ -48,9 +48,34 @@ prefix_rule(
     justification="GitHub PR checks"
 )
 prefix_rule(
+    pattern=["gh", "pr", "list"],
+    decision="allow",
+    justification="GitHub PR list"
+)
+prefix_rule(
+    pattern=["gh", "pr", "create"],
+    decision="allow",
+    justification="GitHub PR create"
+)
+prefix_rule(
     pattern=["gh", "run", "view"],
     decision="allow",
     justification="GitHub run view"
+)
+prefix_rule(
+    pattern=["gh", "run", "list"],
+    decision="allow",
+    justification="GitHub run list"
+)
+prefix_rule(
+    pattern=["gh", "issue", "view"],
+    decision="allow",
+    justification="GitHub issue view"
+)
+prefix_rule(
+    pattern=["gh", "issue", "list"],
+    decision="allow",
+    justification="GitHub issue list"
 )
 
 prefix_rule(
