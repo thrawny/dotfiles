@@ -5,4 +5,5 @@
     name = "Jonas Lergell";
     email = "jonas@kanel.se";
   };
+  tmuxNonLoginShell = true;
 }

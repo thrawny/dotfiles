@@ -2,6 +2,7 @@
   lib,
   pkgs,
   dotfiles,
+  tmuxNonLoginShell ? false,
   ...
 }:
 
@@ -134,7 +135,6 @@ in
     historyLimit = 50000;
     baseIndex = 1;
     sensibleOnTop = false;
-
     plugins = with pkgs.tmuxPlugins; [
       yank
       {
@@ -151,6 +151,11 @@ in
     extraConfig = lib.concatStringsSep "\n" [
       "# === Terminal Settings ==="
       terminalSettings
+
+      # Non-login shell prevents macOS path_helper from reordering PATH
+      (lib.optionalString tmuxNonLoginShell ''
+        set -g default-command "${pkgs.zsh}/bin/zsh"
+      '')
 
       "# === General ==="
       ''
@@ -182,6 +187,11 @@ in
 
       "# === DevPod ==="
       devpodConfig
+
+      "# === Agent Switch Daemon ==="
+      ''
+        run-shell -b 'pgrep -f "agent-switch serve" >/dev/null 2>&1 || ~/dotfiles/rust/target/release/agent-switch serve &'
+      ''
 
       "# === Misc ==="
       ''

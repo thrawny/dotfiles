@@ -113,13 +113,22 @@ fn enable_raw_mode() -> Option<RawModeGuard> {
 }
 
 fn stty_command(args: &[&str]) -> Option<std::process::ExitStatus> {
-    let mut cmd = Command::new("stty");
-    if cfg!(target_os = "macos") {
-        cmd.args(["-f", "/dev/tty"]);
-    } else {
-        cmd.args(["-F", "/dev/tty"]);
+    // Try GNU stty (-F) first, fall back to BSD stty (-f)
+    let gnu = Command::new("stty")
+        .args(["-F", "/dev/tty"])
+        .args(args)
+        .status()
+        .ok();
+    if let Some(status) = &gnu
+        && status.success()
+    {
+        return gnu;
     }
-    cmd.args(args).status().ok()
+    Command::new("stty")
+        .args(["-f", "/dev/tty"])
+        .args(args)
+        .status()
+        .ok()
 }
 
 struct Tty {
