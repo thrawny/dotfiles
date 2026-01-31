@@ -195,6 +195,14 @@ return {
             GitSignsChange = { fg = yellow },
             GitSignsDelete = { fg = pink },
 
+            -- mini.diff signs and overlay (syntax-highlighted added/removed regions)
+            MiniDiffSignAdd = { fg = cyan },
+            MiniDiffSignChange = { fg = yellow },
+            MiniDiffSignDelete = { fg = pink },
+            MiniDiffOverlayAdd = { bg = "#1a3040", fg = cyan },
+            MiniDiffOverlayChange = { bg = "#3a3020", fg = yellow },
+            MiniDiffOverlayDelete = { bg = "#3a1a2a", fg = pink },
+
             -- Snacks file explorer
             SnacksPickerDirectory = { fg = purple, bold = true },
             SnacksPickerFile = { fg = white },
