@@ -199,9 +199,9 @@ return {
             MiniDiffSignAdd = { fg = cyan },
             MiniDiffSignChange = { fg = yellow },
             MiniDiffSignDelete = { fg = pink },
-            MiniDiffOverlayAdd = { bg = "#1a3040", fg = cyan },
-            MiniDiffOverlayChange = { bg = "#3a3020", fg = yellow },
-            MiniDiffOverlayDelete = { bg = "#3a1a2a", fg = pink },
+            MiniDiffOverlayAdd = { bg = "#004466" },
+            MiniDiffOverlayChange = { bg = "#3a3020" },
+            MiniDiffOverlayDelete = { bg = "#660100" },
 
             -- Snacks file explorer
             SnacksPickerDirectory = { fg = purple, bold = true },
