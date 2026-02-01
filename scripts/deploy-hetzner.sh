@@ -56,6 +56,20 @@ nix run github:nix-community/nixos-anywhere -- \
     --chown "/home/$USERNAME/dotfiles" "1000:100" \
     "$TARGET_HOST"
 
+# Bootstrap Tailscale
+echo ""
+echo "==> Generate a one-off auth key at: https://login.tailscale.com/admin/settings/keys"
+read -rp "Paste Tailscale auth key: " TAILSCALE_AUTH_KEY
+
+if [[ -n "$TAILSCALE_AUTH_KEY" ]]; then
+    echo "==> Authenticating Tailscale..."
+    ssh -o StrictHostKeyChecking=accept-new "$USERNAME@$HOST_IP" \
+        "sudo tailscale up --auth-key '$TAILSCALE_AUTH_KEY'"
+    echo "==> Tailscale connected"
+else
+    echo "==> Skipping Tailscale (no key provided)"
+fi
+
 echo ""
 echo "=== Deployment complete ==="
 echo "SSH in with: ssh $USERNAME@${TARGET_HOST#*@}"

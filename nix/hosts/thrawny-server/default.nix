@@ -28,7 +28,19 @@ in
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOR81cTVFr3icJMAzTqmRU/D5oZSbZanTquggDRcOsZJ jonaslergell@gmail.com"
   ];
 
-  networking.hostName = "thrawny-server";
+  networking = {
+    hostName = "thrawny-server";
+    firewall = {
+      enable = true;
+      trustedInterfaces = [ "tailscale0" ];
+      extraCommands = ''
+        iptables -I INPUT -p tcp --dport 22 -s 84.216.114.142 -j ACCEPT
+      '';
+      extraStopCommands = ''
+        iptables -D INPUT -p tcp --dport 22 -s 84.216.114.142 -j ACCEPT || true
+      '';
+    };
+  };
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
   # Use GRUB for Hetzner (legacy BIOS boot)
