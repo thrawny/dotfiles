@@ -2,11 +2,12 @@
   lib,
   pkgs,
   dotfiles,
-  tmuxNonLoginShell ? false,
   ...
-}:
+}@args:
 
 let
+  tmuxNonLoginShell = args.tmuxNonLoginShell or false;
+
   # Monokai Pro color palette
   colors = {
     bg = "#2d2a2e";

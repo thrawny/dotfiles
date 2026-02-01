@@ -49,6 +49,7 @@
     ruff
     tree-sitter
     gcc
+    cmake
     wget
     usage
     fd
