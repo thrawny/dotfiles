@@ -41,7 +41,7 @@ let
     }
 
     #workspaces button {
-      border: none;
+      border-bottom: 3px solid transparent;
       padding: 0 4px;
       background: transparent;
       color: @waybar-muted;
