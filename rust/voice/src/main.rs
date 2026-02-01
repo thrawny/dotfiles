@@ -16,6 +16,8 @@ use tokio::sync::Mutex;
 #[derive(Debug, Deserialize, Default)]
 struct Config {
     #[serde(default)]
+    api_key: String,
+    #[serde(default)]
     prompt: String,
     #[serde(default)]
     language: String,
@@ -59,6 +61,8 @@ fn default_replacements() -> HashMap<String, String> {
         // Claude
         ("cloude code", "Claude Code"),
         ("cloud code", "Claude Code"),
+        ("cloudmd", "CLAUDE.md"),
+        ("claudemd", "CLAUDE.md"),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -229,7 +233,7 @@ impl Daemon {
     }
 
     async fn transcribe(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let api_key = std::env::var("OPENAI_API_KEY")?;
+        let api_key = resolve_api_key(&self.config.api_key)?;
         let audio_data = tokio::fs::read(&self.audio_file).await?;
 
         let file_part = reqwest::multipart::Part::bytes(audio_data)
@@ -566,7 +570,7 @@ async fn transcribe_file(
     audio_file: &PathBuf,
     config: &Config,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let api_key = std::env::var("OPENAI_API_KEY")?;
+    let api_key = resolve_api_key(&config.api_key)?;
     let audio_data = tokio::fs::read(audio_file).await?;
 
     let file_part = reqwest::multipart::Part::bytes(audio_data)
@@ -625,6 +629,14 @@ fn apply_replacements_static(text: &str, replacements: &HashMap<String, String>)
         }
     }
     result
+}
+
+fn resolve_api_key(config_key: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    if !config_key.is_empty() {
+        return Ok(config_key.to_string());
+    }
+    std::env::var("OPENAI_API_KEY")
+        .map_err(|_| "OPENAI_API_KEY not set and no api_key in voice.toml".into())
 }
 
 fn debug_log(message: &str) {
