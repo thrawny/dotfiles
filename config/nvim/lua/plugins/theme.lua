@@ -195,6 +195,17 @@ return {
             GitSignsChange = { fg = yellow },
             GitSignsDelete = { fg = pink },
 
+            -- mini.diff signs
+            MiniDiffSignAdd = { fg = cyan },
+            MiniDiffSignChange = { fg = yellow },
+            MiniDiffSignDelete = { fg = pink },
+
+            -- mini.diff overlay (matches lazygit delta theme)
+            MiniDiffOverAdd = { bg = "#004466" },
+            MiniDiffOverChange = { bg = "#0077b3" },
+            MiniDiffOverContext = { bg = "#003355" },
+            MiniDiffOverDelete = { bg = "#660100" },
+
             -- Snacks file explorer
             SnacksPickerDirectory = { fg = purple, bold = true },
             SnacksPickerFile = { fg = white },
