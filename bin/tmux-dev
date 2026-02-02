@@ -97,13 +97,12 @@ generate_name() {
     go)
       if [[ "${cmd_words[1]:-}" == "run" ]]; then
         local path="${cmd_words[2]:-main}"
-        if [[ "$path" == *"/main.go" ]]; then
-          path="${path%/main.go}"
-          path="${path##*/}"
-        else
-          path="${path##*/}"
-          path="${path%.go}"
-        fi
+        path="${path%/}"          # strip trailing slash
+        path="${path%/main.go}"   # strip /main.go suffix
+        path="${path%.go}"        # strip .go suffix
+        path="${path##*/}"        # last path component = binary name
+        # go run . or empty -> use directory name
+        [[ "$path" == "." || -z "$path" ]] && path="$folder"
         slug="go-${path}"
       else
         slug="go-${cmd_words[1]:-build}"
