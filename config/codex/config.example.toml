@@ -8,6 +8,7 @@ tool_output_token_limit = 25000
 # With tool_output_token_limit=25000 ⇒ 273000 - (25000 + 15000) = 233000
 model_auto_compact_token_limit = 233000
 suppress_unstable_features_warning = true
+web_search = "live"
 
 # Require approval for commands not pre-approved in rules/tools.rules
 approval_policy = "on-request"
@@ -24,7 +25,6 @@ approval_policy = "on-request"
 ghost_commit = false
 unified_exec = true
 apply_patch_freeform = true
-web_search_request = true
 skills = true
 shell_snapshot = true
 steer = true
