@@ -67,10 +67,6 @@ in
       ".claude/CLAUDE.md".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/CLAUDE-GLOBAL.md";
 
-      # ccstatusline configuration
-      ".config/ccstatusline/settings.json".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/ccstatusline-settings.json";
-
       # Ensure .claude directory exists
       ".claude/.keep".text = "";
 
