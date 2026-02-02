@@ -46,6 +46,13 @@ fn validate_command(command: &str) -> Vec<&'static str> {
         }
     }
 
+    // Check: go vet should use golangci-lint run
+    if let Ok(re) = Regex::new(r"(?:^|&&\s*)go\s+vet\b")
+        && re.is_match(command)
+    {
+        issues.push("Use 'golangci-lint run' instead of go vet for comprehensive linting");
+    }
+
     // Check: pip install should use uv add
     if let Ok(re) = Regex::new(r"(?:^|&&\s*)pip\s+install\b")
         && re.is_match(command)
