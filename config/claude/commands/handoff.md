@@ -9,7 +9,7 @@ Hand off the current work to a new session. The argument (if provided) is the go
 
 If no goal argument provided: infer the logical next goal from the conversation context. If unclear, state your best guess.
 
-First, run `remove-handoff` to delete any existing handoff.md from a previous session.
+First, run the `remove-handoff` command (NOT `rm` - that requires approval). This deletes any existing handoff.md.
 
 Write `handoff.md` with:
 
