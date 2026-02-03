@@ -82,7 +82,26 @@ generate_name() {
   local folder
   folder=$(basename "$PWD")
 
+  # Truncate long folder names (e.g. worktree branches)
+  if [[ ${#folder} -gt 20 ]]; then
+    folder="${folder:0:20}"
+    folder="${folder%-}"  # don't end on a dash
+  fi
+
+  # Unwrap wrapper commands (watchexec, entr, etc.) - use the inner command after --
   local cmd_words=($command)
+  case "${cmd_words[0]}" in
+    watchexec|entr)
+      local i
+      for i in "${!cmd_words[@]}"; do
+        if [[ "${cmd_words[$i]}" == "--" ]]; then
+          cmd_words=("${cmd_words[@]:$((i+1))}")
+          break
+        fi
+      done
+      ;;
+  esac
+
   local main_cmd="${cmd_words[0]}"
   local slug=""
 
@@ -98,6 +117,7 @@ generate_name() {
       if [[ "${cmd_words[1]:-}" == "run" ]]; then
         local path="${cmd_words[2]:-main}"
         path="${path%/}"          # strip trailing slash
+        path="${path%/...}"       # strip /... suffix (go recursive glob)
         path="${path%/main.go}"   # strip /main.go suffix
         path="${path%.go}"        # strip .go suffix
         path="${path##*/}"        # last path component = binary name
