@@ -7,8 +7,10 @@ default:
 
 # === Shortcuts ===
 
-# Switch nix configuration (alias for nix::switch)
-switch: (nix::switch)
+# Switch nix configuration and install Rust binaries
+switch:
+    just nix::switch
+    just rust::install
 
 # === Formatters ===
 

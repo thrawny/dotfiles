@@ -16,7 +16,6 @@
     walker.inputs.elephant.follows = "elephant";
     niri-flake.url = "github:sodiboo/niri-flake";
     xremap-flake.url = "github:xremap/nix-flake";
-    crane.url = "github:ipetkov/crane";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
   };
@@ -33,60 +32,11 @@
       niri-flake,
       xremap-flake,
       nixpkgs-xwayland,
-      crane,
       disko,
       ...
     }:
     let
       inherit (nixpkgs) lib;
-
-      # Crane-based Rust builds with dependency caching
-      mkRustWorkspace =
-        pkgs:
-        let
-          craneLib = crane.mkLib pkgs;
-          src = craneLib.cleanCargoSource ../rust;
-          commonArgs = {
-            inherit src;
-            pname = "rust-workspace";
-            version = "0.1.0";
-            strictDeps = true;
-            nativeBuildInputs = with pkgs; [ pkg-config ];
-            buildInputs =
-              with pkgs;
-              lib.optionals stdenv.isLinux [
-                gtk4
-                gtk4-layer-shell
-                glib
-                cairo
-                pango
-                gdk-pixbuf
-                graphene
-                harfbuzz
-              ];
-          };
-          # Build only dependencies (cached)
-          cargoArtifacts = craneLib.buildDepsOnly commonArgs;
-        in
-        {
-          inherit craneLib commonArgs cargoArtifacts;
-        };
-
-      mkAgentSwitch =
-        pkgs:
-        let
-          ws = mkRustWorkspace pkgs;
-          featureArgs = if pkgs.stdenv.isLinux then "-p agent-switch --features niri" else "-p agent-switch";
-        in
-        ws.craneLib.buildPackage (
-          ws.commonArgs
-          // {
-            inherit (ws) cargoArtifacts;
-            pname = "agent-switch";
-            version = "0.1.0";
-            cargoExtraArgs = featureArgs;
-          }
-        );
 
       mkHost =
         {
@@ -175,21 +125,6 @@
         };
       };
 
-      packages = {
-        x86_64-linux = {
-          agent-switch = mkAgentSwitch nixpkgs.legacyPackages.x86_64-linux;
-        };
-        aarch64-linux = {
-          agent-switch = mkAgentSwitch nixpkgs.legacyPackages.aarch64-linux;
-        };
-        aarch64-darwin = {
-          agent-switch = mkAgentSwitch nixpkgs.legacyPackages.aarch64-darwin;
-        };
-        x86_64-darwin = {
-          agent-switch = mkAgentSwitch nixpkgs.legacyPackages.x86_64-darwin;
-        };
-      };
-
       # Dev shells
       devShells =
         let
@@ -207,7 +142,7 @@
                 selene
               ];
             };
-          # Desktop shell - includes GTK for agent-switch
+          # Desktop shell - includes GTK for GUI apps
           mkDesktopDevShell =
             pkgs:
             pkgs.mkShell {
