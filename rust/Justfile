@@ -25,9 +25,9 @@ watch-tmux:
 watch-niri:
     RUST_LOG=debug watchexec -w agent-switch/src -e rs --restart -- cargo run -p agent-switch --features niri -- niri
 
-# Watch voice daemon
-watch-voice:
-    watchexec -w voice/src -e rs --restart -- cargo run -p voice -- serve
+# Watch voice daemon (provider: openai or groq)
+watch-voice provider="groq":
+    VOICE_DEBUG=1 VOICE_PROVIDER={{ provider }} watchexec -w voice/src -e rs --restart -- cargo run -p voice -- serve
 
 
 # Build with nix (clean build)

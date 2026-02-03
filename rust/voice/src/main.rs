@@ -13,10 +13,22 @@ use tokio::sync::Mutex;
 // Config
 // ============================================================================
 
+#[derive(Debug, Deserialize, Default, Clone, Copy, PartialEq)]
+#[serde(rename_all = "lowercase")]
+enum Provider {
+    #[default]
+    Openai,
+    Groq,
+}
+
 #[derive(Debug, Deserialize, Default)]
 struct Config {
     #[serde(default)]
-    api_key: String,
+    provider: Provider,
+    #[serde(default)]
+    openai_api_key: String,
+    #[serde(default)]
+    groq_api_key: String,
     #[serde(default)]
     prompt: String,
     #[serde(default)]
@@ -75,10 +87,25 @@ fn default_replacements() -> HashMap<String, String> {
 fn load_config() -> Config {
     let path = config_path();
     let mut config = if let Ok(content) = std::fs::read_to_string(&path) {
-        toml::from_str(&content).unwrap_or_default()
+        match toml::from_str(&content) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("Failed to parse {path:?}: {e}");
+                Config::default()
+            }
+        }
     } else {
         Config::default()
     };
+
+    // Allow env var to override provider
+    if let Ok(provider) = std::env::var("VOICE_PROVIDER") {
+        config.provider = match provider.to_lowercase().as_str() {
+            "groq" => Provider::Groq,
+            "openai" => Provider::Openai,
+            _ => config.provider,
+        };
+    }
 
     if config.prompt.is_empty() {
         config.prompt = default_prompt();
@@ -89,6 +116,7 @@ fn load_config() -> Config {
     replacements.extend(config.replacements);
     config.replacements = replacements;
 
+    debug_log(&format!("DEBUG provider={:?}", config.provider));
     config
 }
 
@@ -190,10 +218,17 @@ impl Daemon {
     }
 
     async fn stop_and_transcribe(&mut self) {
+        let total_start = std::time::Instant::now();
+
+        let stop_start = std::time::Instant::now();
         if let Some(mut child) = self.recorder.take() {
             let _ = child.kill().await;
             let _ = child.wait().await;
         }
+        debug_log(&format!(
+            "TIMING stop_recording: {:?}",
+            stop_start.elapsed()
+        ));
 
         // Check if we got any audio
         match tokio::fs::metadata(&self.audio_file).await {
@@ -223,7 +258,9 @@ impl Daemon {
                 let text = self.apply_replacements(&text);
                 debug_log(&format!("DEBUG replaced: {text}"));
                 if !text.is_empty() {
+                    let inject_start = std::time::Instant::now();
                     inject_text(&text).await;
+                    debug_log(&format!("TIMING inject: {:?}", inject_start.elapsed()));
                 }
             }
             Err(e) => {
@@ -232,19 +269,23 @@ impl Daemon {
             }
         }
 
+        debug_log(&format!("TIMING total: {:?}", total_start.elapsed()));
         self.state = State::Idle;
     }
 
     async fn transcribe(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let api_key = resolve_api_key(&self.config.api_key)?;
+        let api_key = resolve_api_key(&self.config)?;
+
+        let read_start = std::time::Instant::now();
         let audio_data = tokio::fs::read(&self.audio_file).await?;
+        debug_log(&format!("TIMING file_read: {:?}", read_start.elapsed()));
 
         let file_part = reqwest::multipart::Part::bytes(audio_data)
             .file_name("audio.wav")
             .mime_str("audio/wav")?;
 
         let model = if self.config.model.is_empty() {
-            "whisper-1"
+            default_model(self.config.provider)
         } else {
             &self.config.model
         };
@@ -261,13 +302,21 @@ impl Daemon {
             form = form.text("prompt", self.config.prompt.clone());
         }
 
+        let endpoint = api_endpoint(self.config.provider);
+        debug_log(&format!(
+            "DEBUG provider={:?} endpoint={endpoint}",
+            self.config.provider
+        ));
+
         let client = reqwest::Client::new();
+        let api_start = std::time::Instant::now();
         let response = client
-            .post("https://api.openai.com/v1/audio/transcriptions")
+            .post(endpoint)
             .bearer_auth(api_key)
             .multipart(form)
             .send()
             .await?;
+        debug_log(&format!("TIMING api_call: {:?}", api_start.elapsed()));
 
         if !response.status().is_success() {
             let status = response.status();
@@ -340,7 +389,7 @@ async fn inject_via_clipboard(text: &str) {
     ));
 
     let mut copy = Command::new("wl-copy");
-    copy.arg("--").arg(text);
+    copy.arg("--primary").arg("--").arg(text);
     if let Err(e) = copy.status().await {
         eprintln!("wl-copy failed: {e}");
         notify("Injection failed").await;
@@ -573,7 +622,7 @@ async fn transcribe_file(
     audio_file: &PathBuf,
     config: &Config,
 ) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let api_key = resolve_api_key(&config.api_key)?;
+    let api_key = resolve_api_key(config)?;
     let audio_data = tokio::fs::read(audio_file).await?;
 
     let file_part = reqwest::multipart::Part::bytes(audio_data)
@@ -581,7 +630,7 @@ async fn transcribe_file(
         .mime_str("audio/wav")?;
 
     let model = if config.model.is_empty() {
-        "whisper-1"
+        default_model(config.provider)
     } else {
         &config.model
     };
@@ -600,7 +649,7 @@ async fn transcribe_file(
 
     let client = reqwest::Client::new();
     let response = client
-        .post("https://api.openai.com/v1/audio/transcriptions")
+        .post(api_endpoint(config.provider))
         .bearer_auth(api_key)
         .multipart(form)
         .send()
@@ -634,12 +683,37 @@ fn apply_replacements_static(text: &str, replacements: &HashMap<String, String>)
     result
 }
 
-fn resolve_api_key(config_key: &str) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    if !config_key.is_empty() {
-        return Ok(config_key.to_string());
+fn resolve_api_key(config: &Config) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    match config.provider {
+        Provider::Openai => {
+            if !config.openai_api_key.is_empty() {
+                return Ok(config.openai_api_key.clone());
+            }
+            std::env::var("OPENAI_API_KEY")
+                .map_err(|_| "OPENAI_API_KEY not set and no openai_api_key in voice.toml".into())
+        }
+        Provider::Groq => {
+            if !config.groq_api_key.is_empty() {
+                return Ok(config.groq_api_key.clone());
+            }
+            std::env::var("GROQ_API_KEY")
+                .map_err(|_| "GROQ_API_KEY not set and no groq_api_key in voice.toml".into())
+        }
     }
-    std::env::var("OPENAI_API_KEY")
-        .map_err(|_| "OPENAI_API_KEY not set and no api_key in voice.toml".into())
+}
+
+fn api_endpoint(provider: Provider) -> &'static str {
+    match provider {
+        Provider::Openai => "https://api.openai.com/v1/audio/transcriptions",
+        Provider::Groq => "https://api.groq.com/openai/v1/audio/transcriptions",
+    }
+}
+
+fn default_model(provider: Provider) -> &'static str {
+    match provider {
+        Provider::Openai => "whisper-1",
+        Provider::Groq => "whisper-large-v3-turbo",
+    }
 }
 
 fn debug_log(message: &str) {
