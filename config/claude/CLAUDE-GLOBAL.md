@@ -23,27 +23,23 @@ The title is automatically set to the current directory name.
 
 ### Development Server Management
 
-Use `tmux-dev` for managing dev servers. All processes run as windows in a single `dev` tmux session. Window names are auto-generated from directory + command:
+Use `tmux-dev` for managing dev servers. All processes run as windows in a single `dev` tmux session:
 
 ```bash
-tmux-dev start <command>       # Start (name auto-generated from cwd + command)
-tmux-dev stop <name>           # Stop a window
-tmux-dev logs <name> [lines]   # View logs
-tmux-dev list                  # List all windows
+tmux-dev start -n <name> <command>  # Start (name is required)
+tmux-dev stop <name>                # Stop a window
+tmux-dev logs <name> [lines]        # View logs
+tmux-dev list                       # List all windows
 ```
 
 Example:
 ```bash
-# In ~/code/myapp: creates window 'myapp-npm-dev'
-tmux-dev start npm run dev
-
-# In ~/code/backend: creates window 'backend-go-api'
-tmux-dev start go run ./cmd/api/main.go
-
-tmux-dev logs myapp-npm-dev 100
+tmux-dev start -n frontend npm run dev
+tmux-dev start -n api go run ./cmd/api/main.go
+tmux-dev logs frontend 100
 ```
 
-User can `tmux attach -t dev` to tab between all processes. Commands are validated against an allowlist (npm, go, python, docker, etc.).
+User can `tmux attach -t dev` to tab between all processes.
 
 ### Sandbox and Code Execution
 

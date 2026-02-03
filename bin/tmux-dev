@@ -14,21 +14,20 @@ show_usage() {
   echo "Usage: tmux-dev <action> [options]"
   echo ""
   echo "All processes run as windows in the '$DEV_SESSION' tmux session."
-  echo "Window names are auto-generated from directory + command."
   echo ""
   echo "Actions:"
-  echo "  start <command...>   - Start (or restart) a dev server"
+  echo "  start -n <name> <command...>  - Start (or restart) a dev server"
   echo "  stop <name>          - Stop a dev server window"
   echo "  status <name>        - Check if window is running or exited"
   echo "  logs <name> [lines]  - Show recent logs from window"
   echo "  list                 - List all dev server windows"
   echo ""
   echo "Examples:"
-  echo "  cd ~/code/myapp && tmux-dev start npm run dev"
-  echo "    -> creates window 'myapp-npm-dev'"
+  echo "  tmux-dev start -n frontend npm run dev"
+  echo "  tmux-dev start -n api go run ./cmd/server/..."
   echo ""
-  echo "  tmux-dev logs myapp-npm-dev 100"
-  echo "  tmux-dev stop myapp-npm-dev"
+  echo "  tmux-dev logs frontend 100"
+  echo "  tmux-dev stop api"
   echo "  tmux-dev list"
   echo ""
   echo "Attach to session: tmux attach -t $DEV_SESSION"
@@ -77,116 +76,17 @@ find_envrc_dir() {
   return 1
 }
 
-generate_name() {
-  local command="$*"
-  local folder
-  folder=$(basename "$PWD")
-
-  # Truncate long folder names (e.g. worktree branches)
-  if [[ ${#folder} -gt 20 ]]; then
-    folder="${folder:0:20}"
-    folder="${folder%-}"  # don't end on a dash
-  fi
-
-  # Unwrap wrapper commands (watchexec, entr, etc.) - use the inner command after --
-  local cmd_words=($command)
-  case "${cmd_words[0]}" in
-    watchexec|entr)
-      local i
-      for i in "${!cmd_words[@]}"; do
-        if [[ "${cmd_words[$i]}" == "--" ]]; then
-          cmd_words=("${cmd_words[@]:$((i+1))}")
-          break
-        fi
-      done
-      ;;
-  esac
-
-  local main_cmd="${cmd_words[0]}"
-  local slug=""
-
-  case "$main_cmd" in
-    npm|yarn|pnpm|bun)
-      if [[ "${cmd_words[1]:-}" == "run" ]]; then
-        slug="${main_cmd}-${cmd_words[2]:-run}"
-      else
-        slug="${main_cmd}-${cmd_words[1]:-start}"
-      fi
-      ;;
-    go)
-      if [[ "${cmd_words[1]:-}" == "run" ]]; then
-        local path="${cmd_words[2]:-main}"
-        path="${path%/}"          # strip trailing slash
-        path="${path%/...}"       # strip /... suffix (go recursive glob)
-        path="${path%/main.go}"   # strip /main.go suffix
-        path="${path%.go}"        # strip .go suffix
-        path="${path##*/}"        # last path component = binary name
-        # go run . or empty -> use directory name
-        [[ "$path" == "." || -z "$path" ]] && path="$folder"
-        slug="go-${path}"
-      else
-        slug="go-${cmd_words[1]:-build}"
-      fi
-      ;;
-    python|python3|uv)
-      local script="${cmd_words[1]:-main}"
-      [[ "$script" == "run" ]] && script="${cmd_words[2]:-main}"
-      script="${script##*/}"
-      script="${script%.py}"
-      slug="py-${script}"
-      ;;
-    make)
-      slug="${cmd_words[1]:-make}"
-      ;;
-    just)
-      # Use the last argument as the target name (e.g., just rust::watch session-tracker -> session-tracker)
-      slug="${cmd_words[-1]}"
-      # If only `just <recipe>`, use the recipe name
-      [[ "$slug" == "just" ]] && slug="${cmd_words[1]:-just}"
-      ;;
-    nix)
-      # Extract package name from flake reference (e.g., .#niri-switcher -> niri-switcher)
-      local flake_ref=""
-      for arg in "${cmd_words[@]:2}"; do
-        if [[ "$arg" == *"#"* ]]; then
-          flake_ref="${arg##*#}"
-          break
-        fi
-      done
-      slug="${flake_ref:-nix}"
-      ;;
-    *)
-      slug="${main_cmd}${cmd_words[1]:+-${cmd_words[1]}}"
-      ;;
-  esac
-
-  slug="${slug,,}"
-  slug="${slug//[^a-z0-9-]/-}"
-
-  # Strip noise words (start, dev, run, make) from slug
-  local noise_words=("start" "dev" "run" "make")
-  for word in "${noise_words[@]}"; do
-    slug="${slug//-${word}-/-}"  # -word- -> -
-    slug="${slug/#${word}-/}"    # word- at start -> empty
-    slug="${slug/%-${word}/}"    # -word at end -> empty
-  done
-
-  slug="${slug//--/-}"
-  slug="${slug#-}"
-  slug="${slug%-}"
-
-  echo "${folder}-${slug}"
-}
-
 handle_start() {
-  if [[ $# -lt 1 ]]; then
-    error "start requires command
-Usage: tmux-dev start <command...>"
+  if [[ "${1:-}" != "-n" || $# -lt 3 ]]; then
+    error "start requires name and command
+Usage: tmux-dev start -n <name> <command...>"
   fi
 
+  shift  # -n
+  local name="$1"
+  shift
+
   local command="$*"
-  local name
-  name=$(generate_name "$command")
 
   ensure_session
 
