@@ -478,6 +478,9 @@ in
       { command = [ "mako" ]; }
       {
         command = [
+          "env"
+          "VOICE_PASTE_MOD=shift"
+          "VOICE_PASTE_KEY=Insert"
           "voice"
           "serve"
         ];

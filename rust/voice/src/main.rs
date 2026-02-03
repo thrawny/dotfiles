@@ -65,6 +65,7 @@ fn default_replacements() -> HashMap<String, String> {
         ("claudemd", "CLAUDE.md"),
         ("weybar", "waybar"),
         ("neary", "niri"),
+        ("vtype", "wtype"),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -393,13 +394,13 @@ fn injection_mode() -> String {
 fn paste_modifier() -> String {
     std::env::var("VOICE_PASTE_MOD")
         .ok()
-        .unwrap_or_else(|| "logo".to_string())
+        .unwrap_or_else(|| "shift".to_string())
 }
 
 fn paste_key() -> String {
     std::env::var("VOICE_PASTE_KEY")
         .ok()
-        .unwrap_or_else(|| "v".to_string())
+        .unwrap_or_else(|| "Insert".to_string())
 }
 
 // ============================================================================
