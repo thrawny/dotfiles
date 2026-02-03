@@ -61,7 +61,7 @@ fn validate_command(command: &str) -> Vec<&'static str> {
     }
 
     // Check: rm handoff.md should use remove-handoff
-    if let Ok(re) = Regex::new(r"(?:^|&&\s*)rm\s+(?:-[rf]+\s+)?handoff\.md\b")
+    if let Ok(re) = Regex::new(r"(?:^|&&\s*)rm\s+(?:-[rf]+\s+)?(?:\S*/)?handoff\.md\b")
         && re.is_match(command)
     {
         issues.push("Use 'remove-handoff' instead of rm handoff.md (preapproved)");
@@ -112,6 +112,8 @@ mod tests {
         assert!(!validate_command("rm -f handoff.md").is_empty());
         assert!(!validate_command("rm -rf handoff.md").is_empty());
         assert!(!validate_command("git status && rm handoff.md").is_empty());
+        assert!(!validate_command("rm -f /Users/jonas/code/kf1-go/handoff.md").is_empty());
+        assert!(!validate_command("rm ./handoff.md").is_empty());
     }
 
     #[test]
