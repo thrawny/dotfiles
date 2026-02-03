@@ -35,12 +35,8 @@ while IFS= read -r worktree_path; do
   should_remove=false
   reason=""
 
-  # Check if remote branch is gone
-  if ! git show-ref --verify --quiet "refs/remotes/origin/$branch"; then
-    should_remove=true
-    reason="remote branch gone"
   # Check if branch is merged into main
-  elif git branch --merged origin/$main | grep -q "^[* ]*${branch}$"; then
+  if git branch --merged origin/$main | grep -q "^[* ]*${branch}$"; then
     should_remove=true
     reason="branch merged"
   # Check if all commits are cherry-picked into main
