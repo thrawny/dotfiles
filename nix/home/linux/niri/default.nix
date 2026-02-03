@@ -373,9 +373,9 @@ in
   programs.niri.settings = {
     # Named workspaces
     workspaces = {
+      "main" = { };
       "web" = { };
       "dotfiles" = { };
-      "main" = { };
     };
 
     # Disable config notification on failure

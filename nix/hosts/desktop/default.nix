@@ -174,7 +174,6 @@ in
           "10, monitor:DP-1" # Right monitor
           "name:b, monitor:DP-1" # Browser workspace
           "name:p, monitor:HDMI-A-1" # Spotify workspace
-          "name:g, monitor:HDMI-A-1" # Games workspace
         ];
         input = lib.mkForce (
           baseInputConfig
@@ -212,9 +211,9 @@ in
         };
         # Bind named workspaces to monitors
         workspaces = {
+          "main".open-on-output = "HDMI-A-1"; # Main on left monitor
           "web".open-on-output = "DP-1"; # Browser on right monitor
           "dotfiles".open-on-output = "HDMI-A-1"; # Dotfiles on left monitor
-          "games".open-on-output = "HDMI-A-1"; # Games on left monitor
         };
       };
     };
