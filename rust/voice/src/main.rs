@@ -64,6 +64,7 @@ fn default_replacements() -> HashMap<String, String> {
         ("cloudmd", "CLAUDE.md"),
         ("claudemd", "CLAUDE.md"),
         ("weybar", "waybar"),
+        ("neary", "niri"),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))

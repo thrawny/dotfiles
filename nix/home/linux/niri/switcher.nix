@@ -1,17 +1,12 @@
 # Agent switcher (Rust GTK4 app)
-# Adds agent-switch package and startup daemon
-{ pkgs, self, ... }:
-let
-  inherit (self.packages.${pkgs.stdenv.hostPlatform.system}) agent-switch;
-in
+# Assumes agent-switch is available on PATH (e.g., ~/.cargo/bin)
+{ ... }:
 {
-  home.packages = [ agent-switch ];
-
   programs.niri.settings = {
     spawn-at-startup = [
       {
         command = [
-          "${agent-switch}/bin/agent-switch"
+          "agent-switch"
           "niri"
         ];
       }
@@ -20,7 +15,7 @@ in
     binds = {
       "Mod+S" = {
         action.spawn = [
-          "${agent-switch}/bin/agent-switch"
+          "agent-switch"
           "niri"
           "--toggle"
         ];

@@ -18,6 +18,25 @@
           name = "Global key remaps";
           remap = {
             "CapsLock" = "Esc";
+            "Shift_R" = {
+              skip_key_event = true;
+              press = [
+                {
+                  launch = [
+                    "voice"
+                    "toggle"
+                  ];
+                }
+              ];
+              release = [
+                {
+                  launch = [
+                    "voice"
+                    "toggle"
+                  ];
+                }
+              ];
+            };
           };
         }
       ];

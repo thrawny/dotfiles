@@ -221,14 +221,23 @@ let
     # Voice (voice-to-text)
     "Mod+R" = {
       action.spawn = [
-        "${config.home.homeDirectory}/dotfiles/rust/target/release/voice"
+        "voice"
         "toggle"
       ];
       hotkey-overlay.title = "Voice Input Toggle";
+      repeat = false;
+    };
+    "Super+P" = {
+      action.spawn = [
+        "voice"
+        "toggle"
+      ];
+      hotkey-overlay.title = "Voice Input Toggle";
+      repeat = false;
     };
     "Mod+Shift+R" = {
       action.spawn = [
-        "${config.home.homeDirectory}/dotfiles/rust/target/release/voice"
+        "voice"
         "cancel"
       ];
       hotkey-overlay.title = "Voice Input Cancel";
@@ -469,7 +478,7 @@ in
       { command = [ "mako" ]; }
       {
         command = [
-          "${config.home.homeDirectory}/dotfiles/rust/target/release/voice"
+          "voice"
           "serve"
         ];
       }

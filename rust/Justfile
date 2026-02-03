@@ -34,9 +34,16 @@ watch-voice:
 nix PKG:
     nix build path:../nix#{{ PKG }}
 
-# Build with nix and symlink to result
-install PKG:
-    nix build path:../nix#{{ PKG }} -o result-{{ PKG }}
+# Install binaries to ~/.cargo/bin (in PATH)
+install *PKG:
+    if [ -n "{{ PKG }}" ]; then \
+        cargo install --path {{ PKG }} --locked --force; \
+    else \
+        cargo install --path bash-validator --locked --force; \
+        cargo install --path voice --locked --force; \
+        cargo install --path agent-switch --locked --force; \
+    fi
+
 
 # Run clippy with auto-fix
 clippy:
