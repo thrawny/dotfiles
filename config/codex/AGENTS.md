@@ -8,8 +8,16 @@ After editing files, run the appropriate formatting/linting tools. These are fal
 
 ### Go
 
+Always follow `modernize` diagnostics when editing Go code. Apply suggested modernizations to use current Go idioms and language features.
+
 ```bash
 golangci-lint fmt --enable golines <files>
+```
+
+Prefer `gotestsum` over `go test` for running tests:
+
+```bash
+gotestsum ./...
 ```
 
 ### Python

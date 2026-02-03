@@ -14,3 +14,12 @@ golangci-lint fmt --enable golines <files>
 ```
 
 This rule applies when no project-specific formatting instructions exist.
+
+# Go Testing
+
+Prefer `gotestsum` over `go test` for running tests. It provides better output formatting and failure summaries:
+
+```bash
+gotestsum ./...
+gotestsum --format testdox ./...  # verbose test names
+```
