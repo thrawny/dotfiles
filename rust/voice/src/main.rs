@@ -79,6 +79,10 @@ fn default_replacements() -> HashMap<String, String> {
         ("weybar", "waybar"),
         ("vtype", "wtype"),
         ("jus", "just"),
+        // Apps
+        ("ghosty", "Ghostty"),
+        ("sunbrowser", "Zen browser"),
+        ("tail net", "tailnet"),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -397,8 +401,9 @@ async fn inject_via_clipboard(text: &str) {
         text.len()
     );
 
+    // Copy to regular clipboard (not primary) for universal compatibility
     let mut copy = Command::new("wl-copy");
-    copy.arg("--primary").arg("--").arg(text);
+    copy.arg("--").arg(text);
     if let Err(e) = copy.status().await {
         eprintln!("wl-copy failed: {e}");
         notify("Injection failed").await;
@@ -409,10 +414,10 @@ async fn inject_via_clipboard(text: &str) {
         tokio::time::sleep(std::time::Duration::from_millis(delay_ms)).await;
     }
 
-    let paste_mod = paste_modifier();
-    let paste_key = paste_key();
+    // Use Ctrl+Shift+V to paste (works universally without conflicting with
+    // Ghostty's Ctrl+V image paste or requiring xremap translation)
     let status = Command::new("wtype")
-        .args(["-M", &paste_mod, "-k", &paste_key, "-m", &paste_mod])
+        .args(["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"])
         .status()
         .await;
 
@@ -447,18 +452,6 @@ fn injection_mode() -> String {
     std::env::var("VOICE_INJECT_MODE")
         .ok()
         .unwrap_or_else(|| "clipboard".to_string())
-}
-
-fn paste_modifier() -> String {
-    std::env::var("VOICE_PASTE_MOD")
-        .ok()
-        .unwrap_or_else(|| "shift".to_string())
-}
-
-fn paste_key() -> String {
-    std::env::var("VOICE_PASTE_KEY")
-        .ok()
-        .unwrap_or_else(|| "Insert".to_string())
 }
 
 // ============================================================================
