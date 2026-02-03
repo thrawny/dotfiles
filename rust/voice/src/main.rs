@@ -1,4 +1,5 @@
 use clap::{Parser, Subcommand};
+use log::debug;
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -16,8 +17,8 @@ use tokio::sync::Mutex;
 #[derive(Debug, Deserialize, Default, Clone, Copy, PartialEq)]
 #[serde(rename_all = "lowercase")]
 enum Provider {
-    #[default]
     Openai,
+    #[default]
     Groq,
 }
 
@@ -76,8 +77,8 @@ fn default_replacements() -> HashMap<String, String> {
         ("cloudmd", "CLAUDE.md"),
         ("claudemd", "CLAUDE.md"),
         ("weybar", "waybar"),
-        ("neary", "niri"),
         ("vtype", "wtype"),
+        ("jus", "just"),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
@@ -116,7 +117,7 @@ fn load_config() -> Config {
     replacements.extend(config.replacements);
     config.replacements = replacements;
 
-    debug_log(&format!("DEBUG provider={:?}", config.provider));
+    debug!("provider={:?}", config.provider);
     config
 }
 
@@ -139,6 +140,79 @@ impl State {
             State::Transcribing => "transcribing",
         }
     }
+}
+
+// ============================================================================
+// Shared transcription and text processing
+// ============================================================================
+
+#[derive(Deserialize)]
+struct TranscriptionResponse {
+    text: String,
+}
+
+async fn transcribe_audio(
+    audio_data: Vec<u8>,
+    config: &Config,
+) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+    let api_key = resolve_api_key(config)?;
+
+    let file_part = reqwest::multipart::Part::bytes(audio_data)
+        .file_name("audio.wav")
+        .mime_str("audio/wav")?;
+
+    let model = if config.model.is_empty() {
+        default_model(config.provider)
+    } else {
+        &config.model
+    };
+
+    let mut form = reqwest::multipart::Form::new()
+        .part("file", file_part)
+        .text("model", model.to_string());
+
+    if !config.language.is_empty() {
+        form = form.text("language", config.language.clone());
+    }
+
+    if !config.prompt.is_empty() {
+        form = form.text("prompt", config.prompt.clone());
+    }
+
+    let endpoint = api_endpoint(config.provider);
+    debug!("provider={:?} endpoint={endpoint}", config.provider);
+
+    let client = reqwest::Client::new();
+    let api_start = std::time::Instant::now();
+    let response = client
+        .post(endpoint)
+        .bearer_auth(api_key)
+        .multipart(form)
+        .send()
+        .await?;
+    debug!("api_call: {:?}", api_start.elapsed());
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("API error {status}: {body}").into());
+    }
+
+    let result: TranscriptionResponse = response.json().await?;
+    Ok(result.text.trim().to_string())
+}
+
+fn apply_replacements(text: &str, replacements: &HashMap<String, String>) -> String {
+    let mut result = text.to_string();
+    for (from, to) in replacements {
+        let mut i = 0;
+        while let Some(pos) = result[i..].to_lowercase().find(&from.to_lowercase()) {
+            let abs_pos = i + pos;
+            result.replace_range(abs_pos..abs_pos + from.len(), to);
+            i = abs_pos + to.len();
+        }
+    }
+    result
 }
 
 // ============================================================================
@@ -225,10 +299,7 @@ impl Daemon {
             let _ = child.kill().await;
             let _ = child.wait().await;
         }
-        debug_log(&format!(
-            "TIMING stop_recording: {:?}",
-            stop_start.elapsed()
-        ));
+        debug!("stop_recording: {:?}", stop_start.elapsed());
 
         // Check if we got any audio
         match tokio::fs::metadata(&self.audio_file).await {
@@ -245,22 +316,34 @@ impl Daemon {
                 return;
             }
             Ok(meta) => {
-                debug_log(&format!("DEBUG audio bytes: {}", meta.len()));
+                debug!("audio bytes: {}", meta.len());
             }
         }
 
         self.state = State::Transcribing;
         notify("Transcribing...").await;
 
-        match self.transcribe().await {
+        let read_start = std::time::Instant::now();
+        let audio_data = match tokio::fs::read(&self.audio_file).await {
+            Ok(data) => data,
+            Err(e) => {
+                eprintln!("Failed to read audio file: {e}");
+                notify(&format!("Error: {e}")).await;
+                self.state = State::Idle;
+                return;
+            }
+        };
+        debug!("file_read: {:?}", read_start.elapsed());
+
+        match transcribe_audio(audio_data, &self.config).await {
             Ok(text) => {
-                debug_log(&format!("DEBUG raw: {text}"));
-                let text = self.apply_replacements(&text);
-                debug_log(&format!("DEBUG replaced: {text}"));
+                debug!("raw: {text}");
+                let text = apply_replacements(&text, &self.config.replacements);
+                debug!("replaced: {text}");
                 if !text.is_empty() {
                     let inject_start = std::time::Instant::now();
                     inject_text(&text).await;
-                    debug_log(&format!("TIMING inject: {:?}", inject_start.elapsed()));
+                    debug!("inject: {:?}", inject_start.elapsed());
                 }
             }
             Err(e) => {
@@ -269,82 +352,8 @@ impl Daemon {
             }
         }
 
-        debug_log(&format!("TIMING total: {:?}", total_start.elapsed()));
+        debug!("total: {:?}", total_start.elapsed());
         self.state = State::Idle;
-    }
-
-    async fn transcribe(&self) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-        let api_key = resolve_api_key(&self.config)?;
-
-        let read_start = std::time::Instant::now();
-        let audio_data = tokio::fs::read(&self.audio_file).await?;
-        debug_log(&format!("TIMING file_read: {:?}", read_start.elapsed()));
-
-        let file_part = reqwest::multipart::Part::bytes(audio_data)
-            .file_name("audio.wav")
-            .mime_str("audio/wav")?;
-
-        let model = if self.config.model.is_empty() {
-            default_model(self.config.provider)
-        } else {
-            &self.config.model
-        };
-
-        let mut form = reqwest::multipart::Form::new()
-            .part("file", file_part)
-            .text("model", model.to_string());
-
-        if !self.config.language.is_empty() {
-            form = form.text("language", self.config.language.clone());
-        }
-
-        if !self.config.prompt.is_empty() {
-            form = form.text("prompt", self.config.prompt.clone());
-        }
-
-        let endpoint = api_endpoint(self.config.provider);
-        debug_log(&format!(
-            "DEBUG provider={:?} endpoint={endpoint}",
-            self.config.provider
-        ));
-
-        let client = reqwest::Client::new();
-        let api_start = std::time::Instant::now();
-        let response = client
-            .post(endpoint)
-            .bearer_auth(api_key)
-            .multipart(form)
-            .send()
-            .await?;
-        debug_log(&format!("TIMING api_call: {:?}", api_start.elapsed()));
-
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            return Err(format!("API error {status}: {body}").into());
-        }
-
-        #[derive(Deserialize)]
-        struct TranscriptionResponse {
-            text: String,
-        }
-
-        let result: TranscriptionResponse = response.json().await?;
-        Ok(result.text.trim().to_string())
-    }
-
-    fn apply_replacements(&self, text: &str) -> String {
-        let mut result = text.to_string();
-        for (from, to) in &self.config.replacements {
-            // Case-insensitive replacement
-            let mut i = 0;
-            while let Some(pos) = result[i..].to_lowercase().find(&from.to_lowercase()) {
-                let abs_pos = i + pos;
-                result.replace_range(abs_pos..abs_pos + from.len(), to);
-                i = abs_pos + to.len();
-            }
-        }
-        result
     }
 }
 
@@ -361,10 +370,10 @@ async fn inject_text(text: &str) {
 
     let delay_ms = wtype_delay_ms(&mode);
     let key_delay_ms = wtype_key_delay_ms();
-    debug_log(&format!(
-        "DEBUG wtype delay_ms={delay_ms} key_delay_ms={key_delay_ms} text_len={}",
+    debug!(
+        "wtype delay_ms={delay_ms} key_delay_ms={key_delay_ms} text_len={}",
         text.len()
-    ));
+    );
 
     let mut cmd = Command::new("wtype");
     if delay_ms > 0 {
@@ -383,10 +392,10 @@ async fn inject_text(text: &str) {
 
 async fn inject_via_clipboard(text: &str) {
     let delay_ms = wtype_delay_ms("clipboard");
-    debug_log(&format!(
-        "DEBUG injector=clipboard delay_ms={delay_ms} text_len={}",
+    debug!(
+        "injector=clipboard delay_ms={delay_ms} text_len={}",
         text.len()
-    ));
+    );
 
     let mut copy = Command::new("wl-copy");
     copy.arg("--primary").arg("--").arg(text);
@@ -586,7 +595,7 @@ async fn run_once() {
     let _ = child.wait().await;
 
     // Check if we got any audio
-    match tokio::fs::metadata(&audio_file).await {
+    let audio_data = match tokio::fs::metadata(&audio_file).await {
         Ok(meta) if meta.len() < 1000 => {
             eprintln!("No audio recorded (file too small)");
             std::process::exit(1);
@@ -596,14 +605,21 @@ async fn run_once() {
             std::process::exit(1);
         }
         Ok(meta) => {
-            debug_log(&format!("DEBUG audio bytes: {}", meta.len()));
+            debug!("audio bytes: {}", meta.len());
+            match tokio::fs::read(&audio_file).await {
+                Ok(data) => data,
+                Err(e) => {
+                    eprintln!("Failed to read audio file: {e}");
+                    std::process::exit(1);
+                }
+            }
         }
-    }
+    };
 
     eprintln!("Transcribing...");
 
     // Transcribe
-    let text = match transcribe_file(&audio_file, &config).await {
+    let text = match transcribe_audio(audio_data, &config).await {
         Ok(text) => text,
         Err(e) => {
             eprintln!("Transcription failed: {e}");
@@ -612,75 +628,10 @@ async fn run_once() {
     };
 
     // Apply replacements and print
-    debug_log(&format!("DEBUG raw: {text}"));
-    let text = apply_replacements_static(&text, &config.replacements);
-    debug_log(&format!("DEBUG replaced: {text}"));
+    debug!("raw: {text}");
+    let text = apply_replacements(&text, &config.replacements);
+    debug!("replaced: {text}");
     println!("{text}");
-}
-
-async fn transcribe_file(
-    audio_file: &PathBuf,
-    config: &Config,
-) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
-    let api_key = resolve_api_key(config)?;
-    let audio_data = tokio::fs::read(audio_file).await?;
-
-    let file_part = reqwest::multipart::Part::bytes(audio_data)
-        .file_name("audio.wav")
-        .mime_str("audio/wav")?;
-
-    let model = if config.model.is_empty() {
-        default_model(config.provider)
-    } else {
-        &config.model
-    };
-
-    let mut form = reqwest::multipart::Form::new()
-        .part("file", file_part)
-        .text("model", model.to_string());
-
-    if !config.language.is_empty() {
-        form = form.text("language", config.language.clone());
-    }
-
-    if !config.prompt.is_empty() {
-        form = form.text("prompt", config.prompt.clone());
-    }
-
-    let client = reqwest::Client::new();
-    let response = client
-        .post(api_endpoint(config.provider))
-        .bearer_auth(api_key)
-        .multipart(form)
-        .send()
-        .await?;
-
-    if !response.status().is_success() {
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        return Err(format!("API error {status}: {body}").into());
-    }
-
-    #[derive(Deserialize)]
-    struct TranscriptionResponse {
-        text: String,
-    }
-
-    let result: TranscriptionResponse = response.json().await?;
-    Ok(result.text.trim().to_string())
-}
-
-fn apply_replacements_static(text: &str, replacements: &HashMap<String, String>) -> String {
-    let mut result = text.to_string();
-    for (from, to) in replacements {
-        let mut i = 0;
-        while let Some(pos) = result[i..].to_lowercase().find(&from.to_lowercase()) {
-            let abs_pos = i + pos;
-            result.replace_range(abs_pos..abs_pos + from.len(), to);
-            i = abs_pos + to.len();
-        }
-    }
-    result
 }
 
 fn resolve_api_key(config: &Config) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
@@ -716,19 +667,13 @@ fn default_model(provider: Provider) -> &'static str {
     }
 }
 
-fn debug_log(message: &str) {
-    if std::env::var("VOICE_DEBUG").ok().as_deref() != Some("1") {
-        return;
-    }
-    println!("{message}");
-}
-
 // ============================================================================
 // Main
 // ============================================================================
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("warn")).init();
     let cli = Cli::parse();
 
     match cli.command {

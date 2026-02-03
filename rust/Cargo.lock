@@ -2094,6 +2094,8 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "dirs",
+ "env_logger",
+ "log",
  "reqwest",
  "serde",
  "tokio",

@@ -27,7 +27,7 @@ watch-niri:
 
 # Watch voice daemon (provider: openai or groq)
 watch-voice provider="groq":
-    VOICE_DEBUG=1 VOICE_PROVIDER={{ provider }} watchexec -w voice/src -e rs --restart -- cargo run -p voice -- serve
+    RUST_LOG=debug VOICE_PROVIDER={{ provider }} watchexec -w voice/src -e rs --restart -- cargo run -p voice -- serve
 
 
 # Build with nix (clean build)
