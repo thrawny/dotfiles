@@ -376,7 +376,6 @@ in
       "web" = { };
       "dotfiles" = { };
       "main" = { };
-      "games" = { };
     };
 
     # Disable config notification on failure
@@ -579,15 +578,6 @@ in
         ];
         open-floating = true;
         open-maximized = false;
-      }
-      # Steam and games on "games" workspace
-      {
-        matches = [
-          { app-id = "^steam$"; }
-          { app-id = "^steam_app_.*$"; }
-          { app-id = "^gamescope$"; }
-        ];
-        open-on-workspace = "games";
       }
       {
         matches = [ { is-active = false; } ];
