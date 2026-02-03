@@ -16,8 +16,11 @@ just switch       # Apply Nix config (auto-detects NixOS vs Home Manager)
 just check        # Format, lint, and evaluate config
 just fmt          # Format all (nix, lua, python)
 just lint         # Lint all
-just rust::build  # Build all rust packages (or specific: just rust::build agent-switch)
+just rust build   # Build all rust packages (or specific: just rust build bash-validator)
+just rust test    # Run all rust tests
 ```
+
+**Prefer `just` over `cd`**: Always run `just` commands from the repo root instead of `cd`ing into subdirectories. This avoids confusion about working directory. If a needed command isn't available, add a `just` recipe rather than `cd`ing around.
 
 ## Agent Essentials
 
