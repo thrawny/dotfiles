@@ -21,6 +21,8 @@
       "Bash(gh pr checks:*)",
       "Bash(gh run view:*)",
       "Bash(gh issue view:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run watch:*)",
       "Bash(tmux-dev stop:*)",
       "Bash(tmux-dev status:*)",
       "Bash(tmux-dev logs:*)",
