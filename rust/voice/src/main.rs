@@ -417,7 +417,9 @@ async fn inject_via_clipboard(text: &str) {
     // Use Ctrl+Shift+V to paste (works universally without conflicting with
     // Ghostty's Ctrl+V image paste or requiring xremap translation)
     let status = Command::new("wtype")
-        .args(["-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl"])
+        .args([
+            "-M", "ctrl", "-M", "shift", "-k", "v", "-m", "shift", "-m", "ctrl",
+        ])
         .status()
         .await;
 

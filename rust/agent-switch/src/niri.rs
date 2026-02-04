@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 use std::rc::Rc;
 use std::sync::mpsc;
@@ -80,10 +80,10 @@ fn config_path() -> PathBuf {
 }
 
 fn load_config() -> Config {
-    if let Ok(content) = std::fs::read_to_string(config_path()) {
-        if let Ok(config) = toml::from_str::<Config>(&content) {
-            return config;
-        }
+    if let Ok(content) = std::fs::read_to_string(config_path())
+        && let Ok(config) = toml::from_str::<Config>(&content)
+    {
+        return config;
     }
     Config::default()
 }
@@ -405,10 +405,10 @@ fn create_workspace(name: &str, dir: Option<&str>) {
 fn switch_to_entry(entry: &WorkspaceColumn) {
     if entry.static_workspace {
         focus_workspace(entry.workspace_ref.clone());
-        if entry.app_label == "(empty)" {
-            if let Some(ref dir) = entry.dir {
-                spawn_terminals(dir);
-            }
+        if entry.app_label == "(empty)"
+            && let Some(ref dir) = entry.dir
+        {
+            spawn_terminals(dir);
         }
     } else {
         if entry.app_label == "(empty)" {
@@ -684,21 +684,19 @@ fn build_ui(
                         &codex_sessions,
                     );
                 }
-            } else {
-                if state.entries.iter().any(|e| e.workspace_key == key_char) {
-                    state.pending_key = Some(key_char);
-                    let entries = state.entries.clone();
-                    let agent_sessions = state.agent_sessions.clone();
-                    let codex_sessions = state.codex_sessions.clone();
-                    drop(state);
-                    build_entry_list(
-                        &main_box_clone,
-                        &entries,
-                        Some(key_char),
-                        &agent_sessions,
-                        &codex_sessions,
-                    );
-                }
+            } else if state.entries.iter().any(|e| e.workspace_key == key_char) {
+                state.pending_key = Some(key_char);
+                let entries = state.entries.clone();
+                let agent_sessions = state.agent_sessions.clone();
+                let codex_sessions = state.codex_sessions.clone();
+                drop(state);
+                build_entry_list(
+                    &main_box_clone,
+                    &entries,
+                    Some(key_char),
+                    &agent_sessions,
+                    &codex_sessions,
+                );
             }
         }
 
@@ -893,12 +891,11 @@ fn handle_track_event(event: &TrackEvent, focused_window_id: Option<u64>) {
             }
         }
         "notification" => {
-            if event.notification_type.as_deref() == Some("permission_prompt") {
-                if let Some(session) = state::find_by_session_id_mut(&mut store, agent, session_id)
-                {
-                    session.state = "waiting".to_string();
-                    session.state_updated = state::now();
-                }
+            if event.notification_type.as_deref() == Some("permission_prompt")
+                && let Some(session) = state::find_by_session_id_mut(&mut store, agent, session_id)
+            {
+                session.state = "waiting".to_string();
+                session.state_updated = state::now();
             }
         }
         _ => {}
@@ -935,10 +932,10 @@ fn ends_with_question(transcript_path: &str) -> bool {
                 .and_then(|c| c.as_array())
             {
                 for item in content_arr {
-                    if item.get("type").and_then(|t| t.as_str()) == Some("text") {
-                        if let Some(text) = item.get("text").and_then(|t| t.as_str()) {
-                            last_text = Some(text.to_string());
-                        }
+                    if item.get("type").and_then(|t| t.as_str()) == Some("text")
+                        && let Some(text) = item.get("text").and_then(|t| t.as_str())
+                    {
+                        last_text = Some(text.to_string());
                     }
                 }
             }

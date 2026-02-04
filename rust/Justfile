@@ -1,6 +1,8 @@
 # Rust workspace task runner
 # Packages: bash-validator, tmux-fzf-switcher, voice, agent-switch
 
+_niri := if os() == "linux" { "--features niri" } else { "" }
+
 # Default recipe
 default:
     @just --list
@@ -41,13 +43,13 @@ install *PKG:
     else \
         cargo install --path bash-validator --locked --force; \
         cargo install --path voice --locked --force; \
-        cargo install --path agent-switch --locked --force; \
+        cargo install --path agent-switch --locked --force {{ _niri }}; \
     fi
 
 
 # Run clippy with auto-fix
 clippy:
-    cargo clippy --fix --allow-dirty --allow-staged --release --workspace
+    cargo clippy --fix --allow-dirty --allow-staged --release --workspace {{ _niri }}
 
 # Run tests
 test:
