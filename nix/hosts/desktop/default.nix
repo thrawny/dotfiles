@@ -20,6 +20,7 @@ in
   imports = [
     ../../modules/nixos/default.nix
     ./hardware-configuration.nix
+    ./microvms.nix
   ];
 
   dotfiles = {

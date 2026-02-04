@@ -18,6 +18,8 @@
     xremap-flake.url = "github:xremap/nix-flake";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
+    microvm.url = "github:microvm-nix/microvm.nix";
+    microvm.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -33,6 +35,7 @@
       xremap-flake,
       nixpkgs-xwayland,
       disko,
+      microvm,
       ...
     }:
     let
@@ -59,7 +62,9 @@
               nurPkgs
               xremap-flake
               nixpkgs-xwayland
+              microvm
               ;
+            homeManagerModule = home-manager.nixosModules.home-manager;
           };
           modules = [
             home-manager.nixosModules.home-manager
@@ -113,6 +118,7 @@
           system = "x86_64-linux";
           modules = [
             nixos-hardware.nixosModules.common-cpu-amd
+            microvm.nixosModules.host
             ./hosts/desktop/default.nix
           ];
         };
