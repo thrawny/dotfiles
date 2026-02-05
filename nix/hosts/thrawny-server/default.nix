@@ -20,6 +20,10 @@ in
     email = "jonaslergell@gmail.com";
   };
 
+  # Prevent openssh from auto-opening port 22 to all IPs;
+  # SSH is only reachable via Tailscale (trusted) and the allowlisted IP below.
+  services.openssh.openFirewall = false;
+
   # SSH access
   users.users.thrawny.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOR81cTVFr3icJMAzTqmRU/D5oZSbZanTquggDRcOsZJ jonaslergell@gmail.com"
