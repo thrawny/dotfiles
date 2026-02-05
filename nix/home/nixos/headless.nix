@@ -32,9 +32,8 @@
     homeDirectory = "/home/${username}";
 
     packages = with pkgs; [
-      # Terminfo for SSH compatibility
+      # Terminfo for SSH compatibility (ncurses 6.6+ includes ghostty)
       ncurses
-      ghostty.terminfo
     ];
 
     sessionVariables = {
