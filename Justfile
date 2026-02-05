@@ -1,16 +1,18 @@
 # Dotfiles task runner
 # Run `just` to see all available recipes
 
+headless := if env("DISPLAY", "") != "" { "false" } else if env("WAYLAND_DISPLAY", "") != "" { "false" } else if os() == "macos" { "false" } else { "true" }
+
 # Default recipe - list all recipes
 default:
     @just --list
 
 # === Shortcuts ===
 
-# Switch nix configuration and install Rust binaries
+# Switch nix configuration and install Rust binaries (skip rust on headless)
 switch:
     just nix::switch
-    just rust::install
+    {{ if headless != "true" { "just rust::install" } else { "" } }}
 
 # === Formatters ===
 

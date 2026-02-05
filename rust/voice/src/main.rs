@@ -83,6 +83,8 @@ fn default_replacements() -> HashMap<String, String> {
         ("ghosty", "Ghostty"),
         ("sunbrowser", "Zen browser"),
         ("tail net", "tailnet"),
+        ("urinal", "journal"),
+        ("pmpm", "pnpm"),
     ]
     .into_iter()
     .map(|(k, v)| (k.to_string(), v.to_string()))
