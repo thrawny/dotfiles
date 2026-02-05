@@ -464,7 +464,13 @@ in
         ];
       }
       { command = [ "ghostty" ]; }
-      { command = [ "zen" ]; }
+      {
+        command = [
+          "zen"
+          "-p"
+          "Default Profile"
+        ];
+      }
       {
         command = [
           "waybar"

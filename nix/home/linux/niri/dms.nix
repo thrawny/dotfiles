@@ -211,7 +211,13 @@ in
         ];
       }
       { command = [ "ghostty" ]; }
-      { command = [ "zen" ]; }
+      {
+        command = [
+          "zen"
+          "-p"
+          "Default Profile"
+        ];
+      }
     ];
 
     # Merge DMS bindings (overrides base bindings)
