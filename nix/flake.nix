@@ -15,6 +15,7 @@
     walker.url = "github:abenz1267/walker";
     walker.inputs.elephant.follows = "elephant";
     niri-flake.url = "github:sodiboo/niri-flake";
+    niri-flake.inputs.niri-stable.url = "github:YaLTeR/niri/v25.11";
     xremap-flake.url = "github:xremap/nix-flake";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
@@ -64,6 +65,7 @@
           modules = [
             home-manager.nixosModules.home-manager
             niri-flake.nixosModules.niri # cached niri package + system setup
+            { nixpkgs.overlays = [ niri-flake.overlays.niri ]; }
           ]
           ++ modules;
         };

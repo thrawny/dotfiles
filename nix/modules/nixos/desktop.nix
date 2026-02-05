@@ -49,7 +49,10 @@ in
   ];
 
   programs = {
-    niri.enable = true;
+    niri = {
+      enable = true;
+      package = pkgs.niri-stable;
+    };
 
     # Enable nix-ld for running non-Nix binaries (e.g., uv run ruff)
     nix-ld = {

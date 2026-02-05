@@ -75,7 +75,7 @@ in
   services = {
     # Auto-login to niri on desktop
     greetd.settings.initial_session = {
-      command = "${pkgs.niri}/bin/niri-session";
+      command = "${config.programs.niri.package}/bin/niri-session";
       user = "thrawny";
     };
     xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver

@@ -31,7 +31,7 @@
 
   # Auto-login to niri on thinkpad
   services.greetd.settings.initial_session = {
-    command = "${pkgs.niri}/bin/niri-session";
+    command = "${config.programs.niri.package}/bin/niri-session";
     user = "thrawny";
   };
 
