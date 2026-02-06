@@ -2,7 +2,8 @@
   "env": {
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "true",
     "CLAUDE_CODE_TMPDIR": "/tmp/claude",
-    "USE_BUILTIN_RIPGREP": "0"
+    "USE_BUILTIN_RIPGREP": "0",
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
   },
   "permissions": {
     "allow": [
