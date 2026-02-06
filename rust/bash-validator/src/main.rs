@@ -47,24 +47,24 @@ fn validate_command(command: &str) -> Vec<&'static str> {
     }
 
     // Check: go vet should use golangci-lint run
-    if let Ok(re) = Regex::new(r"(?:^|&&\s*)go\s+vet\b")
+    if let Ok(re) = Regex::new(r"(?:^|;\s*|&&\s*|\|\|\s*)go\s+vet\b")
         && re.is_match(command)
     {
         issues.push("Use 'golangci-lint run' instead of go vet for comprehensive linting");
     }
 
     // Check: pip install should use uv add
-    if let Ok(re) = Regex::new(r"(?:^|&&\s*)pip\s+install\b")
+    if let Ok(re) = Regex::new(r"(?:^|;\s*|&&\s*|\|\|\s*)pip\s+install\b")
         && re.is_match(command)
     {
         issues.push("Use 'uv add <package>' instead of pip install for better dependency management and faster installation");
     }
 
     // Check: rm handoff.md should use remove-handoff
-    if let Ok(re) = Regex::new(r"(?:^|&&\s*)rm\s+(?:-[rf]+\s+)?(?:\S*/)?handoff\.md\b")
+    if let Ok(re) = Regex::new(r"(?:^|;\s*|&&\s*|\|\|\s*)rm\s+(?:-[rf]+\s+)?(?:\S*/)?handoff\.md\b")
         && re.is_match(command)
     {
-        issues.push("Use 'remove-handoff' instead of rm handoff.md (preapproved)");
+        issues.push("Use 'remove-handoff' (preapproved) instead of rm handoff.md");
     }
 
     issues
@@ -114,6 +114,11 @@ mod tests {
         assert!(!validate_command("git status && rm handoff.md").is_empty());
         assert!(!validate_command("rm -f /Users/jonas/code/kf1-go/handoff.md").is_empty());
         assert!(!validate_command("rm ./handoff.md").is_empty());
+        assert!(!validate_command(
+            "remove-handoff 2>/dev/null; rm -f /Users/jonas/code/kf1-go/handoff.md 2>/dev/null; echo \"done\""
+        ).is_empty());
+        assert!(!validate_command("echo hi; rm handoff.md").is_empty());
+        assert!(!validate_command("false || rm -f handoff.md").is_empty());
     }
 
     #[test]
