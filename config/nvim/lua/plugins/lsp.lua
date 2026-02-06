@@ -56,23 +56,12 @@ return {
             },
           },
         },
-        -- Use system-installed basedpyright (via uv in dotfiles venv)
         basedpyright = {
           mason = false,
         },
-        -- Use system-installed ruff (via uv in dotfiles venv)
         ruff = {
           mason = false,
         },
-      },
-    },
-  },
-  {
-    "mason-org/mason-lspconfig.nvim",
-    opts = {
-      -- Prevent mason-lspconfig from auto-enabling Python tools
-      automatic_enable = {
-        exclude = { "basedpyright", "ruff" },
       },
     },
   },

@@ -1,5 +1,6 @@
-{pkgs, ...}: {
-  home.packages = [pkgs.telegram-desktop];
+{ pkgs, ... }:
+{
+  home.packages = [ pkgs.telegram-desktop ];
 
   # Override desktop entry to remove "Quit Telegram" action from launcher
   xdg.desktopEntries."org.telegram.desktop" = {

@@ -20,6 +20,7 @@
       vtsls
       terraform-ls
       yaml-language-server
+      vscode-langservers-extracted
       nixd
 
       # Formatters/Linters
