@@ -84,10 +84,18 @@ let
     bind-key -n 'C-<' display-popup -E -w 60% -h 60% "~/dotfiles/rust/target/release/agent-switch tmux"
   '';
 
-  # Mouse scroll in alternate screen apps (k9s, htop, etc.) - translates to arrow keys
+  # Mouse scroll for specific TUI apps that don't handle mouse events (e.g. k9s)
+  # Translates wheel events to arrow keys only when the window name matches
+  scrollAppsPattern = "*k9s*";
   mouseScrollBindings = ''
-    bind -n WheelUpPane if -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send -M' 'if -F "#{alternate_on}" "send-keys -N 3 Up" "copy-mode -e"'
-    bind -n WheelDownPane if -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send -M' 'if -F "#{alternate_on}" "send-keys -N 3 Down"'
+    bind -n WheelUpPane \
+      if-shell -F -t = '#{&&:#{alternate_on},#{m:${scrollAppsPattern},#{window_name}}}' \
+        'send-keys -t = -N 3 Up' \
+        'if-shell -F -t = "#{||:#{pane_in_mode},#{mouse_any_flag}}" "send-keys -M" "copy-mode -e -t ="'
+    bind -n WheelDownPane \
+      if-shell -F -t = '#{&&:#{alternate_on},#{m:${scrollAppsPattern},#{window_name}}}' \
+        'send-keys -t = -N 3 Down' \
+        'if-shell -F -t = "#{||:#{pane_in_mode},#{mouse_any_flag}}" "send-keys -M" "send-keys -t = -M"'
   '';
 
   # Copy mode bindings (tmux-yank handles clipboard, these add vim-style selection)
