@@ -84,6 +84,12 @@ let
     bind-key -n 'C-<' display-popup -E -w 60% -h 60% "~/dotfiles/rust/target/release/agent-switch tmux"
   '';
 
+  # Mouse scroll in alternate screen apps (k9s, htop, etc.) - translates to arrow keys
+  mouseScrollBindings = ''
+    bind -n WheelUpPane if -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send -M' 'if -F "#{alternate_on}" "send-keys -N 3 Up" "copy-mode -e"'
+    bind -n WheelDownPane if -F '#{||:#{pane_in_mode},#{mouse_any_flag}}' 'send -M' 'if -F "#{alternate_on}" "send-keys -N 3 Down"'
+  '';
+
   # Copy mode bindings (tmux-yank handles clipboard, these add vim-style selection)
   copyModeBindings = ''
     bind-key -T copy-mode-vi v send-keys -X begin-selection
@@ -185,6 +191,9 @@ in
 
       "# === Session Switching ==="
       sessionSwitching
+
+      "# === Mouse Scroll ==="
+      mouseScrollBindings
 
       "# === Copy Mode ==="
       copyModeBindings
