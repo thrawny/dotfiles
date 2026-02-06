@@ -1,4 +1,18 @@
-_: {
+_:
+let
+  # Monokai palette (matches Ghostty Molokai theme and tmux status bar)
+  fg = "#f0f0f0";
+  bg = "#1c1c1c";
+  currentLine = "#2d2a2e";
+  selection = "#49483e";
+  comment = "#808080";
+  cyan = "#78dce8";
+  green = "#a9dc76";
+  pink = "#ff6188";
+  purple = "#ab9df2";
+  yellow = "#ffd866";
+in
+{
   programs.k9s = {
     enable = true;
     # k9s is installed via packages.nix
@@ -123,10 +137,109 @@ _: {
       };
     };
 
-    # Skins use YAML anchors, so reference files directly (must be Nix paths, not strings)
-    skins = {
-      monokai = ./k9s-skins/monokai.yaml;
-      dracula = ./k9s-skins/dracula.yaml;
+    skins.monokai = {
+      k9s = {
+        body = {
+          fgColor = fg;
+          bgColor = bg;
+          logoColor = purple;
+        };
+        prompt = {
+          fgColor = fg;
+          bgColor = bg;
+          suggestColor = purple;
+        };
+        info = {
+          fgColor = pink;
+          sectionColor = fg;
+        };
+        dialog = {
+          fgColor = fg;
+          bgColor = currentLine;
+          buttonFgColor = fg;
+          buttonBgColor = purple;
+          buttonFocusFgColor = bg;
+          buttonFocusBgColor = yellow;
+          labelFgColor = yellow;
+          fieldFgColor = fg;
+        };
+        frame = {
+          border = {
+            fgColor = selection;
+            focusColor = purple;
+          };
+          menu = {
+            fgColor = fg;
+            keyColor = pink;
+            numKeyColor = pink;
+          };
+          crumbs = {
+            fgColor = fg;
+            bgColor = currentLine;
+            activeColor = yellow;
+          };
+          status = {
+            newColor = cyan;
+            modifyColor = purple;
+            addColor = green;
+            errorColor = pink;
+            highlightColor = yellow;
+            killColor = comment;
+            completedColor = comment;
+          };
+          title = {
+            fgColor = fg;
+            bgColor = currentLine;
+            highlightColor = yellow;
+            counterColor = purple;
+            filterColor = pink;
+          };
+        };
+        views = {
+          charts = {
+            bgColor = bg;
+            defaultDialColors = [
+              purple
+              pink
+            ];
+            defaultChartColors = [
+              purple
+              pink
+            ];
+          };
+          table = {
+            fgColor = fg;
+            bgColor = bg;
+            header = {
+              fgColor = fg;
+              bgColor = currentLine;
+              sorterColor = cyan;
+            };
+          };
+          xray = {
+            fgColor = fg;
+            bgColor = bg;
+            cursorColor = currentLine;
+            graphicColor = purple;
+            showIcons = false;
+          };
+          yaml = {
+            keyColor = pink;
+            colonColor = comment;
+            valueColor = fg;
+          };
+          logs = {
+            fgColor = fg;
+            bgColor = bg;
+            indicator = {
+              fgColor = fg;
+              bgColor = currentLine;
+              toggleOnColor = green;
+              toggleOffColor = comment;
+            };
+          };
+        };
+      };
     };
   };
 }

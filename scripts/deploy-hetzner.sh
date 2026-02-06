@@ -51,6 +51,7 @@ git clone --depth 1 "$DOTFILES_REPO" "$tmpdir/home/$USERNAME/dotfiles"
 # Using UID:GID (1000:100) since username doesn't exist yet during install
 echo "==> Running nixos-anywhere..."
 nix run github:nix-community/nixos-anywhere -- \
+    --build-on local \
     --flake "$REPO_ROOT/nix#$FLAKE_TARGET" \
     --extra-files "$tmpdir" \
     --chown "/home/$USERNAME/dotfiles" "1000:100" \
