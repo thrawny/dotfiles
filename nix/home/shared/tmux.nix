@@ -80,8 +80,8 @@ let
     bind '~' display-popup -E -w 80% -h 80% "tmux new-session -A -s scratch"
 
     # Agent session switcher (Ctrl+` on Mac, Ctrl+< on Linux)
-    bind-key -n C-` display-popup -E -w 60% -h 60% "~/dotfiles/rust/target/release/agent-switch tmux"
-    bind-key -n 'C-<' display-popup -E -w 60% -h 60% "~/dotfiles/rust/target/release/agent-switch tmux"
+    bind-key -n C-` display-popup -E -w 60% -h 60% "agent-switch tmux"
+    bind-key -n 'C-<' display-popup -E -w 60% -h 60% "agent-switch tmux"
   '';
 
   # Mouse scroll for specific TUI apps that don't handle mouse events (e.g. k9s)
@@ -214,7 +214,7 @@ in
 
       "# === Agent Switch Daemon ==="
       ''
-        run-shell -b 'pgrep -f "agent-switch serve" >/dev/null 2>&1 || ~/dotfiles/rust/target/release/agent-switch serve &'
+        run-shell -b 'pgrep -f "agent-switch serve" >/dev/null 2>&1 || agent-switch serve &'
       ''
 
       "# === Misc ==="
