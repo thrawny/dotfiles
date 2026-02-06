@@ -125,6 +125,13 @@
             ./hosts/thrawny-server/default.nix
           ];
         };
+
+        attic-server = mkHeadlessHost {
+          system = "x86_64-linux";
+          modules = [
+            ./hosts/attic-server/default.nix
+          ];
+        };
       };
 
       # Dev shells
