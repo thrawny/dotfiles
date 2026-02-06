@@ -56,6 +56,22 @@ return {
             },
           },
         },
+        -- Without Mason, lua_ls starts before lazydev.nvim can set up its
+        -- workspace/configuration handler, so it never gets the library paths.
+        -- Provide them statically so lua_ls has type info from startup.
+        lua_ls = {
+          settings = {
+            Lua = {
+              workspace = {
+                library = {
+                  vim.env.VIMRUNTIME .. "/lua",
+                  vim.fn.stdpath("data") .. "/lazy/LazyVim/lua",
+                  vim.fn.stdpath("data") .. "/lazy/lazy.nvim/lua",
+                },
+              },
+            },
+          },
+        },
         basedpyright = {
           mason = false,
         },
