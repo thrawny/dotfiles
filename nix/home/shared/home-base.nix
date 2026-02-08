@@ -43,15 +43,7 @@ in
       seedClaudeJson = hmLib.dag.entryBefore [ "linkGeneration" ] ''
         claude_json="${config.home.homeDirectory}/.claude.json"
         if [ ! -s "$claude_json" ]; then
-          cat > "$claude_json" << 'EOF'
-        {
-          "numStartups": 1,
-          "installMethod": "native",
-          "autoUpdates": false,
-          "theme": "dark-daltonized",
-          "editorMode": "vim"
-        }
-        EOF
+          printf '%s\n' '{"numStartups":1,"installMethod":"native","autoUpdates":false,"theme":"dark-daltonized","editorMode":"vim","hasCompletedOnboarding":true}' > "$claude_json"
         fi
       '';
     };

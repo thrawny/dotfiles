@@ -40,5 +40,18 @@
     sessionVariables = {
       NVIM_HEADLESS = "1";
     };
+
+    # Override seed to strip hooks (bash-validator, agent-switch not built on servers)
+    activation.seedClaudeSettings = lib.mkForce (
+      lib.hm.dag.entryBefore [ "linkGeneration" ] ''
+        repo=${lib.escapeShellArg dotfiles}
+        example_path="$repo/config/claude/settings.example.json"
+        dest_path="$repo/config/claude/settings.json"
+        if [ ! -s "$dest_path" ] && [ -e "$example_path" ]; then
+          ${pkgs.jq}/bin/jq 'del(.hooks, .enabledPlugins)' "$example_path" > "$dest_path"
+          chmod 0644 "$dest_path"
+        fi
+      ''
+    );
   };
 }
