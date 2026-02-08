@@ -39,6 +39,7 @@
 
     sessionVariables = {
       NVIM_HEADLESS = "1";
+      COLORTERM = "truecolor";
     };
 
     # Override seed to strip hooks (bash-validator, agent-switch not built on servers)
