@@ -51,11 +51,17 @@ lint-rust:
 # === Type checking ===
 
 # Typecheck all
-typecheck: typecheck-python
+typecheck: typecheck-python typecheck-pi-extensions
 
 # Typecheck Python code
 typecheck-python:
     uv run basedpyright
+
+# Typecheck Pi TypeScript extensions
+# Uses latest TypeScript from config/pi/extensions/package.json
+typecheck-pi-extensions:
+    pnpm --dir config/pi/extensions install
+    pnpm --dir config/pi/extensions run typecheck
 
 # === Tests ===
 

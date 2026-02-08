@@ -40,6 +40,20 @@ cargo fmt
 biome check --write <files>
 ```
 
+For type checking, prefer project task runners (for example `just typecheck`).
+If no task runner recipe exists, run:
+
+```bash
+tsc --noEmit
+```
+
+For type checking, prefer project task runners (for example `just typecheck`).
+If no task runner recipe exists, run:
+
+```bash
+tsc --noEmit
+```
+
 ### Nix
 
 ```bash
