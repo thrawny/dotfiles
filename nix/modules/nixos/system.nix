@@ -121,6 +121,12 @@ in
       }
     ];
 
+    # Raise inotify limits for file watchers (Claude Code, LSPs, large repos)
+    boot.kernel.sysctl = {
+      "fs.inotify.max_user_watches" = 524288;
+      "fs.inotify.max_user_instances" = 1024;
+    };
+
     services = {
       tailscale.enable = true;
       xserver.enable = false;

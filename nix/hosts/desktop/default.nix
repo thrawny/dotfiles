@@ -84,6 +84,10 @@ in
       enable = true;
       freeMemThreshold = 5; # Kill when <5% RAM free
       freeSwapThreshold = 10;
+      extraArgs = [
+        "--avoid '(^|/)(Xwayland|niri|sshd|systemd)$'"
+        "--prefer '(^|/)(claude|bun|node)$'"
+      ];
     };
   };
 
@@ -93,8 +97,17 @@ in
     memoryPercent = 50; # Use up to 50% of RAM (compresses to ~8GB effective swap)
   };
 
-  # High swappiness is fine with zram - use compressed RAM before OOM
-  boot.kernel.sysctl."vm.swappiness" = 180;
+  boot.kernel.sysctl = {
+    # High swappiness is fine with zram - use compressed RAM before OOM
+    "vm.swappiness" = 180;
+    # Reserve 256MB to prevent OOM lockups under sudden memory pressure
+    "vm.min_free_kbytes" = 262144;
+    # Retain filesystem caches longer (helps code indexing / grep)
+    "vm.vfs_cache_pressure" = 50;
+    # Flush dirty pages earlier to avoid I/O stalls
+    "vm.dirty_background_ratio" = 5;
+    "vm.dirty_ratio" = 10;
+  };
 
   # Games partition (~250GB on sdb4)
   fileSystems."/home/${username}/Games" = {
