@@ -87,6 +87,16 @@ in
         enableGlobalCompInit = false; # Home Manager handles compinit
       };
       direnv.enable = true;
+
+      # Enable nix-ld for running non-Nix binaries
+      nix-ld = {
+        enable = true;
+        libraries = with pkgs; [
+          stdenv.cc.cc.lib
+          zlib
+          openssl
+        ];
+      };
     };
 
     # Allow passwordless nix commands for wheel group

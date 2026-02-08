@@ -54,16 +54,6 @@ in
       package = pkgs.niri-stable;
     };
 
-    # Enable nix-ld for running non-Nix binaries (e.g., uv run ruff)
-    nix-ld = {
-      enable = true;
-      libraries = with pkgs; [
-        stdenv.cc.cc.lib
-        zlib
-        openssl
-      ];
-    };
-
     # Enable AppImage support
     appimage = {
       enable = true;
