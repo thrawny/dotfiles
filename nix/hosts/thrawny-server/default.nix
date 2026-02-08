@@ -54,5 +54,10 @@ in
     efiInstallAsRemovable = true;
   };
 
-  home-manager.users.${username} = import ../../home/nixos/headless.nix;
+  home-manager.users.${username} = {
+    imports = [
+      ../../home/nixos/headless.nix
+      ../../home/shared/openclaw-update.nix
+    ];
+  };
 }
