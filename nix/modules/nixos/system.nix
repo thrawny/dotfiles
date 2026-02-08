@@ -117,10 +117,6 @@ in
             command = "/run/current-system/sw/bin/nix-env";
             options = [ "NOPASSWD" ];
           }
-          {
-            command = "/run/current-system/sw/bin/systemd-run";
-            options = [ "NOPASSWD" ];
-          }
         ];
       }
     ];
