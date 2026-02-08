@@ -24,10 +24,6 @@ let
       action.toggle-overview = [ ];
       repeat = false;
     };
-    "Mod+Tab" = {
-      action.toggle-overview = [ ];
-      repeat = false;
-    };
     "Mod+Shift+Slash".action.show-hotkey-overlay = [ ];
 
     # Application Launchers
@@ -593,4 +589,28 @@ in
 
     binds = baseBinds;
   };
+
+  # niri-flake doesn't expose recent-windows settings yet, so append raw KDL
+  # to the generated config file. This isn't circular because finalConfig
+  # depends on settings/config, not on xdg.configFile.source.
+  xdg.configFile.niri-config.source = lib.mkForce (
+    pkgs.writeText "niri-config.kdl" ''
+      ${config.programs.niri.finalConfig}
+
+      recent-windows {
+          debounce-ms 750
+          open-delay-ms 150
+
+          highlight {
+              active-color "${colors.active}ff"
+              urgent-color "${colors.urgent}ff"
+          }
+
+          binds {
+              Mod+Tab         { next-window; }
+              Mod+Shift+Tab   { previous-window; }
+          }
+      }
+    ''
+  );
 }
