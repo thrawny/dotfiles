@@ -61,19 +61,6 @@ in
     configurationLimit = 2;
   };
 
-  nix = {
-    gc = {
-      automatic = true;
-      dates = "daily";
-      options = "--delete-older-than 3d";
-    };
-    optimise.automatic = true;
-    settings = {
-      keep-derivations = false;
-      keep-outputs = false;
-    };
-  };
-
   services.atticd = {
     enable = true;
     environmentFile = "/etc/atticd/atticd.env";
