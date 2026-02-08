@@ -17,8 +17,8 @@
     memoryPercent = 25;
   };
 
-  # Prefer RAM, but allow swapping before OOM under bursty load.
-  boot.kernel.sysctl."vm.swappiness" = 100;
+  # Prefer RAM and only swap under sustained pressure.
+  boot.kernel.sysctl."vm.swappiness" = 10;
 
   nix = {
     gc = {

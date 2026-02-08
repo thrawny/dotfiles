@@ -22,7 +22,8 @@ let
 
     if ! command -v openclaw >/dev/null 2>&1; then
       # Official installer from docs: https://docs.openclaw.ai/install
-      ${pkgs.curl}/bin/curl -fsSL https://openclaw.ai/install.sh | ${pkgs.bash}/bin/bash -s -- --no-onboard
+      ${pkgs.curl}/bin/curl -fsSL --proto '=https' --tlsv1.2 https://openclaw.ai/install.sh \
+        | ${pkgs.bash}/bin/bash -s -- --no-onboard --no-prompt </dev/null
     fi
   '';
 in
