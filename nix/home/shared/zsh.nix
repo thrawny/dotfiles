@@ -60,12 +60,9 @@
         kt = "stern";
         ka = "kubectl apply -f";
         kn = "kubectl -n kube-system";
-        ki = "kubectl -n istio-system";
-        kp = "kubectl get pods";
         gsha = "git rev-parse HEAD | cut -c1-9";
         ku = "kubectl config use-context";
         hb = "gh repo view --web";
-        gotest = "golangci-lint fmt && golangci-lint run --fix && go test $(go list ./... | grep -v /lab/)";
         b = "bat -p --pager=never";
         gcam = "git add -A && git commit -m";
         tfa = "terraform apply";
@@ -73,14 +70,13 @@
         c = "claude";
         cy = "claude --dangerously-skip-permissions";
         pr = "gh pr create --web";
-        kd = "kubectl delete";
-        gcm = "git commit -m";
         gp = "git push --force-with-lease --force-if-includes";
         gw = "git-gtr";
         tp = "terraform plan";
         ta = "terraform apply";
         taf = "terraform apply -auto-approve";
-        ct = "cat ~/.codex/auth.json | jq -c";
+        cx = "codex";
+        cxy = "codex --dangerously-bypass-approvals-and-sandbox";
       };
 
       # Set options
