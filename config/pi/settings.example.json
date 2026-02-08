@@ -1,0 +1,10 @@
+{
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-5.3-codex",
+  "defaultThinkingLevel": "medium",
+  "theme": "monokai-pi",
+  "enabledModels": [
+    "gpt-5.2-codex",
+    "gpt-5.3-codex"
+  ]
+}

@@ -40,6 +40,7 @@ in
       seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
       seedClaudeSettings = seedExample "config/claude/settings.example.json" "config/claude/settings.json";
       seedCursorSettings = seedExample "config/cursor/settings.example.json" "config/cursor/settings.json";
+      seedPiSettings = seedExample "config/pi/settings.example.json" "config/pi/settings.json";
       seedClaudeJson = hmLib.dag.entryBefore [ "linkGeneration" ] ''
         claude_json="${config.home.homeDirectory}/.claude.json"
         if [ ! -s "$claude_json" ]; then
@@ -61,6 +62,20 @@ in
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/rules/git.rules";
       ".codex/rules/tools.rules".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/rules/tools.rules";
+
+      # Pi configuration
+      ".pi/agent/settings.json".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/settings.json";
+      ".pi/agent/AGENTS.md".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/AGENTS.md";
+      ".pi/agent/prompts".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/prompts";
+      ".pi/agent/skills".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/skills";
+      ".pi/agent/extensions".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/extensions";
+      ".pi/agent/themes".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/themes";
 
       # Claude configuration
       ".claude/commands".source =

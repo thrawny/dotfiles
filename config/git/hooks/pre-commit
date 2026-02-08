@@ -41,6 +41,7 @@ warn_diff() {
 # Hard-coded ignored fields:
 # - Cursor: pgsql.serverGroups, pgsql.connections, diffEditor.renderSideBySide, workbench.editor.enablePreview
 # - Claude: model, alwaysThinkingEnabled
+# - Pi: lastChangelogVersion
 warn_diff \
   "Cursor settings" \
   "config/cursor/settings.json" \
@@ -52,6 +53,12 @@ warn_diff \
   "config/claude/settings.json" \
   "config/claude/settings.example.json" \
   'del(.model, .feedbackSurveyState, .alwaysThinkingEnabled, .enabledPlugins["greptile@claude-plugins-official"])'
+
+warn_diff \
+  "Pi settings" \
+  "config/pi/settings.json" \
+  "config/pi/settings.example.json" \
+  'del(.lastChangelogVersion)'
 
 # Codex: compare shared keys using yq (ignore local-only sections).
 warn_diff_codex() {

@@ -35,7 +35,7 @@ Nix Home Manager uses `mkOutOfStoreSymlink` to link config directories into the 
 - Editors: `config/nvim` → `~/.config/nvim`
 - Git: `config/git/gitconfig` → `~/.gitconfig`, `config/git/gitignoreglobal` → `~/.gitignoreglobal`
 - Apps: `config/k9s` → `~/.config/k9s`, `config/npm/default-packages` → `~/.default-npm-packages`
-- Codex/Claude: `config/codex/` → `~/.codex/`, `config/claude/` → `~/.claude/`
+- Codex/Claude/Pi: `config/codex/` → `~/.codex/`, `config/claude/` → `~/.claude/`, `config/pi/` → `~/.pi/agent/`
 
 Configs generated entirely by Nix (no files in `config/`): zsh, tmux, ghostty, direnv, starship.
 
@@ -71,6 +71,7 @@ Some tools have both a tracked example file and a gitignored live file. When upd
 | Claude | `config/claude/settings.example.json`       | `config/claude/settings.json`        |
 | Codex  | `config/codex/config.example.toml`          | `config/codex/config.toml`           |
 | Cursor | `config/cursor/settings.example.json`       | `config/cursor/settings.json`        |
+| Pi     | `config/pi/settings.example.json`           | `config/pi/settings.json`            |
 
 When asked to modify settings, update the example file first, then ask if the user also wants the live file updated.
 
