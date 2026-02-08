@@ -67,6 +67,7 @@ in
         "nix-command"
         "flakes"
       ];
+      trusted-users = [ username ];
     };
 
     users.users.${username} = {
