@@ -45,6 +45,8 @@ in
       '';
     };
   };
+  nix.settings.trusted-users = [ username ];
+
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
   # Use GRUB for Hetzner (legacy BIOS boot)

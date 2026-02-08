@@ -40,6 +40,20 @@ in
       seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
       seedClaudeSettings = seedExample "config/claude/settings.example.json" "config/claude/settings.json";
       seedCursorSettings = seedExample "config/cursor/settings.example.json" "config/cursor/settings.json";
+      seedClaudeJson = hmLib.dag.entryBefore [ "linkGeneration" ] ''
+        claude_json="${config.home.homeDirectory}/.claude.json"
+        if [ ! -s "$claude_json" ]; then
+          cat > "$claude_json" << 'EOF'
+        {
+          "numStartups": 1,
+          "installMethod": "native",
+          "autoUpdates": false,
+          "theme": "dark-daltonized",
+          "editorMode": "vim"
+        }
+        EOF
+        fi
+      '';
     };
 
     file = {

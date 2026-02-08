@@ -17,6 +17,10 @@ switch:
         home-manager switch -b bak --flake ".#$host"
     fi
 
+# Build locally and deploy to a remote NixOS host
+deploy target:
+    nixos-rebuild switch --flake ".#{{target}}" --target-host "{{target}}" --sudo
+
 # Dry-run NixOS rebuild (NixOS only)
 dry:
     sudo nixos-rebuild dry-run --flake ".#$(hostname)"
