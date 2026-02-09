@@ -4,7 +4,7 @@
   "defaultThinkingLevel": "medium",
   "theme": "monokai-pi",
   "enabledModels": [
-    "gpt-5.2-codex",
-    "gpt-5.3-codex"
+    "openai-codex/gpt-5.2-codex",
+    "openai-codex/gpt-5.3-codex"
   ]
 }
