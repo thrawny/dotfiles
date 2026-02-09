@@ -108,9 +108,12 @@ Usage: tmux-dev start -n <name> <command...>"
 
   echo "Starting '$name': $command"
   # Wrap command to keep window open on exit (success or failure)
+  # Escape single quotes so the command survives the bash -c '...' wrapper
+  local escaped_command
+  escaped_command=$(printf '%s' "$command" | sed "s/'/'\\\\''/g")
   # Trailing colon forces tmux to auto-pick window index in the specified session
   tmux new-window -t "${DEV_SESSION}:" -n "$name" -c "$cwd" \
-    "bash -c '${command}; echo; echo \"=== Exited with code: \$?\"; read -p \"Press enter to close...\"'"
+    "bash -c '${escaped_command}; echo; echo \"=== Exited with code: \$?\"; read -p \"Press enter to close...\"'"
 
   # Store command and cwd for reference
   tmux set-option -t "$DEV_SESSION:$name" @cmd "$command"
