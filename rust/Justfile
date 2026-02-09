@@ -42,7 +42,7 @@ install *PKG:
         cargo install --path {{ PKG }} --locked --force; \
     else \
         cargo install --path bash-validator --locked --force; \
-        cargo install --path voice --locked --force; \
+        {{ if os() == "linux" { "cargo install --path voice --locked --force;" } else { "" } }} \
         cargo install --path agent-switch --locked --force {{ _niri }}; \
     fi
 
