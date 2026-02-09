@@ -1,4 +1,13 @@
-{ pkgs, ... }:
+{
+  pkgs,
+  claude-code-nix,
+  llm-agents,
+  ...
+}:
+let
+  claudePkgs = claude-code-nix.packages.${pkgs.system};
+  llmPkgs = llm-agents.packages.${pkgs.system};
+in
 {
   # Shared packages for both NixOS and Darwin
   home.packages = with pkgs; [
@@ -58,5 +67,10 @@
     hyperfine
     eza
     just
+
+    # AI tools
+    (if stdenv.isDarwin then claudePkgs.claude-code else claudePkgs.claude-code-node)
+    llmPkgs.codex
+    llmPkgs.pi
   ];
 }

@@ -83,6 +83,11 @@ eval-all:
         exit 1
     fi
 
+# Update AI tool flake inputs (claude-code-nix, llm-agents) and switch
+ai:
+    nix flake update claude-code-nix llm-agents
+    just switch
+
 # Clean up old generations (keeps last 6) and optimize store
 clean:
     #!/usr/bin/env bash

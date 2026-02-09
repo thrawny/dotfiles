@@ -68,6 +68,14 @@ in
         "flakes"
       ];
       trusted-users = [ username ];
+      extra-substituters = [
+        "https://cache.numtide.com"
+        "https://claude-code.cachix.org"
+      ];
+      extra-trusted-public-keys = [
+        "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
+        "claude-code.cachix.org-1:YeXf2aNu7UTX8Vwrze0za1WEDS+4DuI2kVeWEE4fsRk="
+      ];
     };
 
     users.users.${username} = {

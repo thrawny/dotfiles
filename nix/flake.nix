@@ -19,6 +19,8 @@
     xremap-flake.url = "github:xremap/nix-flake";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
+    claude-code-nix.url = "github:sadjow/claude-code-nix";
+    llm-agents.url = "github:numtide/llm-agents.nix";
   };
 
   outputs =
@@ -34,10 +36,15 @@
       xremap-flake,
       nixpkgs-xwayland,
       disko,
+      claude-code-nix,
+      llm-agents,
       ...
     }:
     let
       inherit (nixpkgs) lib;
+      aiFlakeArgs = {
+        inherit claude-code-nix llm-agents;
+      };
 
       mkHost =
         {
@@ -66,6 +73,7 @@
             home-manager.nixosModules.home-manager
             niri-flake.nixosModules.niri # cached niri package + system setup
             { nixpkgs.overlays = [ niri-flake.overlays.niri ]; }
+            { home-manager.extraSpecialArgs = aiFlakeArgs; }
           ]
           ++ modules;
         };
@@ -97,8 +105,20 @@
           modules = [
             home-manager.nixosModules.home-manager
             disko.nixosModules.disko
+            { home-manager.extraSpecialArgs = aiFlakeArgs; }
           ]
           ++ modules;
+        };
+
+      mkHomeConfiguration =
+        {
+          pkgs,
+          modules,
+          extraSpecialArgs ? { },
+        }:
+        home-manager.lib.homeManagerConfiguration {
+          inherit pkgs modules;
+          extraSpecialArgs = extraSpecialArgs // aiFlakeArgs;
         };
     in
     {
@@ -191,20 +211,20 @@
       };
 
       homeConfigurations = {
-        thrawnym1 = home-manager.lib.homeManagerConfiguration {
+        thrawnym1 = mkHomeConfiguration {
           pkgs = nixpkgs.legacyPackages.aarch64-darwin;
           modules = [ ./home/darwin/default.nix ];
           extraSpecialArgs = import ./hosts/thrawnym1/default.nix;
         };
 
-        jonas-kanel = home-manager.lib.homeManagerConfiguration {
+        jonas-kanel = mkHomeConfiguration {
           pkgs = nixpkgs.legacyPackages.aarch64-darwin;
           modules = [ ./home/darwin/default.nix ];
           extraSpecialArgs = import ./hosts/jonas-kanel/default.nix;
         };
 
         # Container test configuration (x86_64)
-        container-x86_64 = home-manager.lib.homeManagerConfiguration {
+        container-x86_64 = mkHomeConfiguration {
           pkgs = nixpkgs.legacyPackages.x86_64-linux;
           modules = [ ./home/container.nix ];
           extraSpecialArgs = {
@@ -214,7 +234,7 @@
         };
 
         # Container test configuration (aarch64 - for Docker on Mac)
-        container = home-manager.lib.homeManagerConfiguration {
+        container = mkHomeConfiguration {
           pkgs = nixpkgs.legacyPackages.aarch64-linux;
           modules = [ ./home/container.nix ];
           extraSpecialArgs = {
@@ -225,7 +245,7 @@
 
         # Asahi Air with Niri + DankMaterialShell
         # Uses niri installed via DNF, config managed by nix
-        thrawny-asahi-air = home-manager.lib.homeManagerConfiguration {
+        thrawny-asahi-air = mkHomeConfiguration {
           pkgs = nixpkgs.legacyPackages.aarch64-linux;
           modules = [
             niri-flake.homeModules.config # config only, no package (using Fedora's niri)

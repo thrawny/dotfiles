@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   dotfiles,
   ...
 }@args:
@@ -23,6 +24,24 @@ let
     '';
 in
 {
+  nix = {
+    package = lib.mkDefault pkgs.nix;
+    settings = {
+      experimental-features = [
+        "nix-command"
+        "flakes"
+      ];
+      extra-substituters = [
+        "https://cache.numtide.com"
+        "https://claude-code.cachix.org"
+      ];
+      extra-trusted-public-keys = [
+        "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
+        "claude-code.cachix.org-1:YeXf2aNu7UTX8Vwrze0za1WEDS+4DuI2kVeWEE4fsRk="
+      ];
+    };
+  };
+
   home = {
     stateVersion = "24.05";
 
@@ -68,14 +87,11 @@ in
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/settings.json";
       ".pi/agent/AGENTS.md".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/AGENTS.md";
-      ".pi/agent/prompts".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/prompts";
-      ".pi/agent/skills".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/skills";
+      ".pi/agent/prompts".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/prompts";
+      ".pi/agent/skills".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/skills";
       ".pi/agent/extensions".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/extensions";
-      ".pi/agent/themes".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/themes";
+      ".pi/agent/themes".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/themes";
 
       # Claude configuration
       ".claude/commands".source =

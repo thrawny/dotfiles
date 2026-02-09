@@ -183,7 +183,7 @@ in
         setw -g pane-base-index 1
         set-option -g renumber-windows on
         set-option -g automatic-rename on
-        set-option -g automatic-rename-format '#{pane_current_command}'
+        set-option -g automatic-rename-format '#(cmd="#{pane_current_command}"; cmd="''${cmd#.}"; cmd="''${cmd%-unwrap*}"; cmd="''${cmd%-wrap*}"; printf "%s" "$cmd")'
         set-option -g allow-rename on
 
         # Send prefix for nested sessions

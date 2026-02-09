@@ -14,6 +14,10 @@ switch:
     just nix::switch
     {{ if headless != "true" { "just rust::install" } else { "" } }}
 
+# Update AI tool flake inputs and switch
+ai:
+    just nix::ai
+
 # === Formatters ===
 
 # Format all
