@@ -36,7 +36,7 @@ Nix Home Manager uses `mkOutOfStoreSymlink` to link config directories into the 
 - Git: `config/git/gitconfig` → `~/.gitconfig`, `config/git/gitignoreglobal` → `~/.gitignoreglobal`
 - Apps: `config/k9s` → `~/.config/k9s`, `config/npm/default-packages` → `~/.default-npm-packages`
 - Codex/Claude/Pi base config: `config/codex/` → `~/.codex/`, `config/claude/` → `~/.claude/`, `config/pi/` → `~/.pi/agent/`
-- Shared skills: `skills/` → `~/.codex/skills`, `~/.claude/skills`, and `~/.pi/agent/skills`
+- Shared skills: each folder in `skills/` is linked individually to `~/.claude/skills/<skill>` and `~/.pi/agent/skills/<skill>`; Codex also gets individual links except `skill-creator` (Codex uses its built-in one) so each agent can keep its own `.../skills/.system` state outside the repo
 
 Configs generated entirely by Nix (no files in `config/`): zsh, tmux, ghostty, direnv, starship.
 

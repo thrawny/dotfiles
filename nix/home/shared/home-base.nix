@@ -12,6 +12,12 @@ let
     email = null;
   }
   // (args.gitIdentity or { });
+  sharedSkillNames = builtins.attrNames (
+    lib.filterAttrs (name: type: type == "directory" && !(lib.hasPrefix "." name)) (
+      builtins.readDir ../../../skills
+    )
+  );
+  codexSharedSkillNames = lib.filter (name: name != "skill-creator") sharedSkillNames;
   seedExample =
     example: destination:
     hmLib.dag.entryBefore [ "linkGeneration" ] ''
@@ -66,6 +72,40 @@ in
           printf '%s\n' '{"numStartups":1,"installMethod":"native","autoUpdates":false,"theme":"dark-daltonized","editorMode":"vim","hasCompletedOnboarding":true}' > "$claude_json"
         fi
       '';
+      linkSharedSkills = hmLib.dag.entryAfter [ "linkGeneration" ] ''
+        repo=${lib.escapeShellArg dotfiles}
+        skills_src="$repo/skills"
+
+        # Codex has built-in skill-creator; don't override it with our shared one.
+        codex_base="$HOME/.codex/skills"
+        mkdir -p "$codex_base"
+        for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg codexSharedSkillNames)}; do
+          src="$skills_src/$skill"
+          dst="$codex_base/$skill"
+          if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
+            continue
+          fi
+          rm -rf "$dst"
+          ln -s "$src" "$dst"
+        done
+        codex_skill_creator="$codex_base/skill-creator"
+        if [ -L "$codex_skill_creator" ] && [ "$(readlink "$codex_skill_creator")" = "$skills_src/skill-creator" ]; then
+          rm -f "$codex_skill_creator"
+        fi
+
+        for base in "$HOME/.claude/skills" "$HOME/.pi/agent/skills"; do
+          mkdir -p "$base"
+          for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg sharedSkillNames)}; do
+            src="$skills_src/$skill"
+            dst="$base/$skill"
+            if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
+              continue
+            fi
+            rm -rf "$dst"
+            ln -s "$src" "$dst"
+          done
+        done
+      '';
     };
 
     file = {
@@ -81,7 +121,6 @@ in
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/rules/git.rules";
       ".codex/rules/tools.rules".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/rules/tools.rules";
-      ".codex/skills".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/skills";
 
       # Pi configuration
       ".pi/agent/settings.json".source =
@@ -89,7 +128,6 @@ in
       ".pi/agent/AGENTS.md".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/AGENTS.md";
       ".pi/agent/prompts".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/prompts";
-      ".pi/agent/skills".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/skills";
       ".pi/agent/extensions".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/extensions";
       ".pi/agent/themes".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/themes";
@@ -100,7 +138,6 @@ in
       ".claude/settings.json".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/settings.json";
       ".claude/agents".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/agents";
-      ".claude/skills".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/skills";
       ".claude/rules".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/rules";
       ".claude/CLAUDE.md".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/CLAUDE-GLOBAL.md";

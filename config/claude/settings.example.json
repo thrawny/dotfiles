@@ -50,7 +50,8 @@
       "SlashCommand:/handover",
       "Bash(remove-handoff)",
       "Skill(ast-grep)",
-      "Bash(ast-grep:*)"
+      "Bash(ast-grep:*)",
+      "Bash(gotestsum:*)"
     ],
     "deny": [],
     "ask": ["Bash(rm:*)", "Bash(mv:*)"],
