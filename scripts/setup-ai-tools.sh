@@ -4,8 +4,7 @@ set -euo pipefail
 usage() {
     echo "Usage: $0 <target-host>"
     echo ""
-    echo "Install/update Claude Code and Codex CLI on a remote host,"
-    echo "then upload credentials from the local machine."
+    echo "Upload Claude/Codex/Pi auth files to a remote host."
     echo ""
     echo "Example:"
     echo "  $0 thrawny-server"
@@ -15,16 +14,43 @@ usage() {
 [[ $# -lt 1 ]] && usage
 TARGET="$1"
 
-echo "==> Installing Claude Code on ${TARGET}..."
-ssh "$TARGET" "curl -fsSL https://claude.ai/install.sh | bash"
+CLAUDE_AUTH="${HOME}/.claude/.credentials.json"
+CODEX_AUTH="${HOME}/.codex/auth.json"
+PI_AUTH="${HOME}/.pi/agent/auth.json"
 
-echo "==> Installing/updating Codex CLI on ${TARGET}..."
-ssh "$TARGET" "pnpm install -g @openai/codex"
+echo "==> Preparing auth directories on ${TARGET}..."
+ssh "$TARGET" "mkdir -p ~/.claude ~/.codex ~/.pi/agent"
 
-echo "==> Uploading credentials to ${TARGET}..."
-ssh "$TARGET" "mkdir -p ~/.claude ~/.codex"
-scp ~/.claude/.credentials.json "${TARGET}:~/.claude/.credentials.json"
-scp ~/.codex/auth.json "${TARGET}:~/.codex/auth.json"
-ssh "$TARGET" "chmod 600 ~/.claude/.credentials.json ~/.codex/auth.json"
+uploaded=()
 
-echo "==> Done. Verify with: ssh ${TARGET} 'claude --version && codex --version'"
+if [[ -f "${CLAUDE_AUTH}" ]]; then
+    echo "==> Uploading Claude auth..."
+    scp "${CLAUDE_AUTH}" "${TARGET}:~/.claude/.credentials.json"
+    uploaded+=("~/.claude/.credentials.json")
+else
+    echo "==> Skipping Claude auth (missing: ${CLAUDE_AUTH})"
+fi
+
+if [[ -f "${CODEX_AUTH}" ]]; then
+    echo "==> Uploading Codex auth..."
+    scp "${CODEX_AUTH}" "${TARGET}:~/.codex/auth.json"
+    uploaded+=("~/.codex/auth.json")
+else
+    echo "==> Skipping Codex auth (missing: ${CODEX_AUTH})"
+fi
+
+if [[ -f "${PI_AUTH}" ]]; then
+    echo "==> Uploading Pi auth..."
+    scp "${PI_AUTH}" "${TARGET}:~/.pi/agent/auth.json"
+    uploaded+=("~/.pi/agent/auth.json")
+else
+    echo "==> Skipping Pi auth (missing: ${PI_AUTH})"
+fi
+
+if [[ ${#uploaded[@]} -gt 0 ]]; then
+    echo "==> Fixing auth file permissions on ${TARGET}..."
+    ssh "$TARGET" "chmod 600 ${uploaded[*]}"
+    echo "==> Done. Synced: ${uploaded[*]}"
+else
+    echo "==> Nothing uploaded (no local auth files found)."
+fi

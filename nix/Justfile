@@ -85,8 +85,16 @@ eval-all:
 
 # Update AI tool flake inputs (claude-code-nix, llm-agents) and switch
 ai:
+    #!/usr/bin/env bash
+    set -euo pipefail
     nix flake update claude-code-nix llm-agents
     just switch
+    if ! git diff --quiet HEAD -- flake.lock; then
+        git add flake.lock
+        git commit -m "chore(nix): update AI flake inputs" -- flake.lock
+    else
+        echo "No flake.lock changes to commit."
+    fi
 
 # Clean up old generations (keeps last 6) and optimize store
 clean:
