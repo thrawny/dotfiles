@@ -25,7 +25,7 @@ just rust test    # Run all rust tests
 ## Agent Essentials
 
 - Source of truth: edit files in-repo only.
-- Primary areas to edit: `nix/`, `config/`, `bin/`, `rust/`.
+- Primary areas to edit: `nix/`, `config/`, `skills/`, `bin/`, `rust/`.
 - You generally do not need to run package managers (Homebrew/APT) or OS setup scripts to modify repo content.
 
 ## Paths: Source → Target
@@ -35,7 +35,8 @@ Nix Home Manager uses `mkOutOfStoreSymlink` to link config directories into the 
 - Editors: `config/nvim` → `~/.config/nvim`
 - Git: `config/git/gitconfig` → `~/.gitconfig`, `config/git/gitignoreglobal` → `~/.gitignoreglobal`
 - Apps: `config/k9s` → `~/.config/k9s`, `config/npm/default-packages` → `~/.default-npm-packages`
-- Codex/Claude/Pi: `config/codex/` → `~/.codex/`, `config/claude/` → `~/.claude/`, `config/pi/` → `~/.pi/agent/`
+- Codex/Claude/Pi base config: `config/codex/` → `~/.codex/`, `config/claude/` → `~/.claude/`, `config/pi/` → `~/.pi/agent/`
+- Shared skills: `skills/` → `~/.codex/skills`, `~/.claude/skills`, and `~/.pi/agent/skills`
 
 Configs generated entirely by Nix (no files in `config/`): zsh, tmux, ghostty, direnv, starship.
 
@@ -49,7 +50,8 @@ Two different locations exist for Claude configuration in this repo:
 | `.claude/` | **Project-specific** - only for this dotfiles repo | (not symlinked) |
 
 When adding Claude commands, agents, skills, or settings:
-- Put in `config/claude/` if it should be available globally across all projects
+- Put commands/agents/settings in `config/claude/` if they should be global
+- Put shared skills in `skills/` (symlinked to all agents)
 - Put in `.claude/` if it's specific to working on this dotfiles repo
 
 ## Nix Configuration

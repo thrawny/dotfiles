@@ -81,6 +81,7 @@ in
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/rules/git.rules";
       ".codex/rules/tools.rules".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/rules/tools.rules";
+      ".codex/skills".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/skills";
 
       # Pi configuration
       ".pi/agent/settings.json".source =
@@ -88,7 +89,7 @@ in
       ".pi/agent/AGENTS.md".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/AGENTS.md";
       ".pi/agent/prompts".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/prompts";
-      ".pi/agent/skills".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/skills";
+      ".pi/agent/skills".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/skills";
       ".pi/agent/extensions".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/extensions";
       ".pi/agent/themes".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/themes";
@@ -99,7 +100,7 @@ in
       ".claude/settings.json".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/settings.json";
       ".claude/agents".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/agents";
-      ".claude/skills".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/skills";
+      ".claude/skills".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/skills";
       ".claude/rules".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/rules";
       ".claude/CLAUDE.md".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/CLAUDE-GLOBAL.md";
