@@ -76,17 +76,35 @@ in
         repo=${lib.escapeShellArg dotfiles}
         skills_src="$repo/skills"
 
-        # Codex has built-in skill-creator; don't override it with our shared one.
-        codex_base="$HOME/.codex/skills"
-        mkdir -p "$codex_base"
-        for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg codexSharedSkillNames)}; do
+        ensure_base_dir() {
+          base="$1"
+          if [ -L "$base" ]; then
+            echo "Replacing legacy skills symlink at $base"
+            rm -f "$base"
+          elif [ -e "$base" ] && [ ! -d "$base" ]; then
+            echo "Replacing non-directory skills path at $base"
+            rm -rf "$base"
+          fi
+          mkdir -p "$base"
+        }
+
+        link_skill() {
+          base="$1"
+          skill="$2"
           src="$skills_src/$skill"
-          dst="$codex_base/$skill"
+          dst="$base/$skill"
           if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
-            continue
+            return
           fi
           rm -rf "$dst"
           ln -s "$src" "$dst"
+        }
+
+        # Codex has built-in skill-creator; don't override it with our shared one.
+        codex_base="$HOME/.codex/skills"
+        ensure_base_dir "$codex_base"
+        for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg codexSharedSkillNames)}; do
+          link_skill "$codex_base" "$skill"
         done
         codex_skill_creator="$codex_base/skill-creator"
         if [ -L "$codex_skill_creator" ] && [ "$(readlink "$codex_skill_creator")" = "$skills_src/skill-creator" ]; then
@@ -94,15 +112,9 @@ in
         fi
 
         for base in "$HOME/.claude/skills" "$HOME/.pi/agent/skills"; do
-          mkdir -p "$base"
+          ensure_base_dir "$base"
           for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg sharedSkillNames)}; do
-            src="$skills_src/$skill"
-            dst="$base/$skill"
-            if [ -L "$dst" ] && [ "$(readlink "$dst")" = "$src" ]; then
-              continue
-            fi
-            rm -rf "$dst"
-            ln -s "$src" "$dst"
+            link_skill "$base" "$skill"
           done
         done
       '';
