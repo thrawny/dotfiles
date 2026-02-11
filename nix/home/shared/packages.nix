@@ -68,6 +68,25 @@ in
     eza
     just
 
+    # LSPs
+    gopls
+    basedpyright
+    pyright
+    lua-language-server
+    vtsls
+    typescript-language-server
+    terraform-ls
+    yaml-language-server
+    vscode-langservers-extracted
+    nixd
+
+    # Formatters/Linters
+    stylua
+    selene
+    taplo
+    nixfmt
+    statix
+
     # AI tools
     (if stdenv.isDarwin then claudePkgs.claude-code else claudePkgs.claude-code-node)
     llmPkgs.codex
