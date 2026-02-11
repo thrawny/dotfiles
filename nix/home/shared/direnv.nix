@@ -1,11 +1,11 @@
-_: {
+{ config, ... }: {
   programs.direnv = {
     enable = true;
     enableZshIntegration = true;
     nix-direnv.enable = true;
     config.whitelist.prefix = [
-      "~/dotfiles"
-      "~/code"
+      "${config.home.homeDirectory}/dotfiles"
+      "${config.home.homeDirectory}/code"
     ];
     stdlib = ''
       dotenv_if_exists .env

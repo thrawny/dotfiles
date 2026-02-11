@@ -95,8 +95,6 @@ in
         enable = true;
         enableGlobalCompInit = false; # Home Manager handles compinit
       };
-      direnv.enable = true;
-
       # Enable nix-ld for running non-Nix binaries
       nix-ld = {
         enable = true;
