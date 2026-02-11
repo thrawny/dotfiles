@@ -23,7 +23,7 @@
               press = [
                 {
                   launch = [
-                    "voice"
+                    "wayvoice"
                     "toggle"
                   ];
                 }
@@ -31,7 +31,7 @@
               release = [
                 {
                   launch = [
-                    "voice"
+                    "wayvoice"
                     "toggle"
                   ];
                 }

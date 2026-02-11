@@ -217,7 +217,7 @@ let
     # Voice (voice-to-text)
     "Mod+R" = {
       action.spawn = [
-        "voice"
+        "wayvoice"
         "toggle"
       ];
       hotkey-overlay.title = "Voice Input Toggle";
@@ -225,7 +225,7 @@ let
     };
     "Super+P" = {
       action.spawn = [
-        "voice"
+        "wayvoice"
         "toggle"
       ];
       hotkey-overlay.title = "Voice Input Toggle";
@@ -233,7 +233,7 @@ let
     };
     "Mod+Shift+R" = {
       action.spawn = [
-        "voice"
+        "wayvoice"
         "cancel"
       ];
       hotkey-overlay.title = "Voice Input Cancel";
@@ -482,7 +482,7 @@ in
           "env"
           "VOICE_PASTE_MOD=shift"
           "VOICE_PASTE_KEY=Insert"
-          "voice"
+          "wayvoice"
           "serve"
         ];
       }

@@ -154,8 +154,8 @@ let
   ];
 
   voiceBinds = [
-    "${mod}, R, exec, ${home}/dotfiles/rust/target/release/voice toggle"
-    "${mod} SHIFT, R, exec, ${home}/dotfiles/rust/target/release/voice cancel"
+    "${mod}, R, exec, wayvoice toggle"
+    "${mod} SHIFT, R, exec, wayvoice cancel"
   ];
 
   screenshotBinds = [

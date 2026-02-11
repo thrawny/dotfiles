@@ -1,5 +1,5 @@
 # Rust workspace task runner
-# Packages: bash-validator, voice
+# Packages: bash-validator
 
 # Default recipe
 default:
@@ -17,11 +17,6 @@ run PKG:
 watch PKG *ARGS:
     watchexec -w {{ PKG }}/src -e rs --restart -- cargo run -p {{ PKG }} {{ ARGS }}
 
-# Watch voice daemon (provider: openai or groq)
-watch-voice provider="groq":
-    RUST_LOG=debug VOICE_PROVIDER={{ provider }} watchexec -w voice/src -e rs --restart -- cargo run -p voice -- serve
-
-
 # Build with nix (clean build)
 nix PKG:
     nix build path:../nix#{{ PKG }}
@@ -32,9 +27,7 @@ install *PKG:
         cargo install --path {{ PKG }} --locked --force; \
     else \
         cargo install --path bash-validator --locked --force; \
-        {{ if os() == "linux" { "cargo install --path voice --locked --force;" } else { "" } }} \
     fi
-
 
 # Run clippy with auto-fix
 clippy:
