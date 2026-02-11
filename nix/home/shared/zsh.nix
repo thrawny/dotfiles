@@ -67,8 +67,12 @@
         gcam = "git add -A && git commit -m";
         tfa = "terraform apply";
         bu = "brew upgrade";
-        c = "claude";
-        cy = "claude --dangerously-skip-permissions";
+        c = if pkgs.stdenv.isLinux then "claude-node" else "claude";
+        cy =
+          if pkgs.stdenv.isLinux then
+            "claude-node --dangerously-skip-permissions"
+          else
+            "claude --dangerously-skip-permissions";
         pr = "gh pr create --web";
         gp = "git push --force-with-lease --force-if-includes";
         gw = "git-gtr";

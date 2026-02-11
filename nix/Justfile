@@ -4,6 +4,60 @@
 default:
     @just --list
 
+# One-off: patch /etc/nix/nix.conf with cache trust settings (for bootstrap cases)
+hack-nix-conf-caches:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    conf="/etc/nix/nix.conf"
+    tmp="$(mktemp)"
+    trap 'rm -f "$tmp" "$tmp.new"' EXIT
+
+    sudo cp "$conf" "$tmp"
+    sudo cp "$conf" "$conf.bak.$(date +%Y%m%d-%H%M%S)"
+
+    add_value() {
+        key="$1"
+        value="$2"
+
+        if grep -Eq "^${key}[[:space:]]*=" "$tmp"; then
+            current="$(grep -E "^${key}[[:space:]]*=" "$tmp" | head -n1 | sed -E "s/^${key}[[:space:]]*=[[:space:]]*//")"
+            if [[ " $current " != *" $value "* ]]; then
+                new="$current $value"
+                awk -v k="$key" -v n="$new" '
+                    BEGIN { done = 0 }
+                    $0 ~ "^" k "[[:space:]]*=" && done == 0 { print k " = " n; done = 1; next }
+                    { print }
+                ' "$tmp" > "$tmp.new"
+                mv "$tmp.new" "$tmp"
+            fi
+        else
+            printf '%s = %s\n' "$key" "$value" >> "$tmp"
+        fi
+    }
+
+    # Needed for daemon/root builds to actually query these caches.
+    add_value substituters "https://cache.numtide.com"
+    add_value substituters "https://claude-code.cachix.org"
+    add_value substituters "https://niri.cachix.org"
+
+    # Keep trusted-substituters aligned for explicit extra-substituter usage.
+    add_value trusted-substituters "https://cache.numtide.com"
+    add_value trusted-substituters "https://claude-code.cachix.org"
+    add_value trusted-substituters "https://niri.cachix.org"
+
+    add_value trusted-public-keys "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
+    add_value trusted-public-keys "claude-code.cachix.org-1:YeXf2aNu7UTX8Vwrze0za1WEDS+4DuI2kVeWEE4fsRk="
+    add_value trusted-public-keys "niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964="
+
+    sudo install -Dm0644 "$tmp" "$conf"
+    if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q '^nix-daemon\\.service'; then
+        sudo systemctl restart nix-daemon
+    fi
+
+    echo "Updated $conf"
+    sudo grep -E '^(substituters|trusted-substituters|trusted-public-keys)[[:space:]]*=' "$conf"
+
 # Switch configuration (auto-detects NixOS vs Home Manager)
 switch:
     #!/usr/bin/env bash
