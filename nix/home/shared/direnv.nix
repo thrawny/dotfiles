@@ -3,6 +3,10 @@ _: {
     enable = true;
     enableZshIntegration = true;
     nix-direnv.enable = true;
+    config.whitelist.prefix = [
+      "~/dotfiles"
+      "~/code"
+    ];
     stdlib = ''
       dotenv_if_exists .env
       dotenv_if_exists .env.local
