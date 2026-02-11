@@ -154,10 +154,8 @@
         };
       };
 
-      # Dev shells
       devShells =
         let
-          # Minimal shell - works on headless servers
           mkDevShell =
             pkgs:
             pkgs.mkShell {
@@ -171,34 +169,10 @@
                 selene
               ];
             };
-          # Desktop shell - includes GTK for GUI apps
-          mkDesktopDevShell =
-            pkgs:
-            pkgs.mkShell {
-              packages = with pkgs; [
-                pkg-config
-                nixd
-                nixfmt
-                statix
-                nvd
-                stylua
-                selene
-                gtk4
-                gtk4-layer-shell
-                glib
-                cairo
-                pango
-                gdk-pixbuf
-                graphene
-                harfbuzz
-              ];
-            };
         in
         {
           x86_64-linux.default = mkDevShell nixpkgs.legacyPackages.x86_64-linux;
-          x86_64-linux.desktop = mkDesktopDevShell nixpkgs.legacyPackages.x86_64-linux;
           aarch64-linux.default = mkDevShell nixpkgs.legacyPackages.aarch64-linux;
-          aarch64-linux.desktop = mkDesktopDevShell nixpkgs.legacyPackages.aarch64-linux;
           aarch64-darwin.default = mkDevShell nixpkgs.legacyPackages.aarch64-darwin;
           x86_64-darwin.default = mkDevShell nixpkgs.legacyPackages.x86_64-darwin;
         };

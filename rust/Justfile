@@ -1,7 +1,5 @@
 # Rust workspace task runner
-# Packages: bash-validator, tmux-fzf-switcher, voice, agent-switch
-
-_niri := if os() == "linux" { "--features niri" } else { "" }
+# Packages: bash-validator, voice
 
 # Default recipe
 default:
@@ -19,14 +17,6 @@ run PKG:
 watch PKG *ARGS:
     watchexec -w {{ PKG }}/src -e rs --restart -- cargo run -p {{ PKG }} {{ ARGS }}
 
-# Watch agent-switch tmux daemon
-watch-tmux:
-    RUST_LOG=debug watchexec -w agent-switch/src -e rs --restart -- cargo run -p agent-switch -- serve
-
-# Watch agent-switch niri daemon
-watch-niri:
-    RUST_LOG=debug watchexec -w agent-switch/src -e rs --restart -- cargo run -p agent-switch --features niri -- niri
-
 # Watch voice daemon (provider: openai or groq)
 watch-voice provider="groq":
     RUST_LOG=debug VOICE_PROVIDER={{ provider }} watchexec -w voice/src -e rs --restart -- cargo run -p voice -- serve
@@ -43,13 +33,12 @@ install *PKG:
     else \
         cargo install --path bash-validator --locked --force; \
         {{ if os() == "linux" { "cargo install --path voice --locked --force;" } else { "" } }} \
-        cargo install --path agent-switch --locked --force {{ _niri }}; \
     fi
 
 
 # Run clippy with auto-fix
 clippy:
-    cargo clippy --fix --allow-dirty --allow-staged --release --workspace {{ _niri }}
+    cargo clippy --fix --allow-dirty --allow-staged --release --workspace
 
 # Run tests
 test:
