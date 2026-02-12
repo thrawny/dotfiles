@@ -179,12 +179,6 @@ function cleanupTmuxRename(state: TmuxState): void {
 	state.windowId = null;
 }
 
-function resetTmuxRename(state: TmuxState): void {
-	cleanupTmuxRename(state);
-	setupTmuxRename(state);
-	updateBusyState(state, state.busy);
-}
-
 function installProcessExitHooks(state: TmuxState): void {
 	if (state.hooksInstalled) return;
 	state.hooksInstalled = true;
@@ -225,31 +219,5 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_shutdown", async () => {
 		cleanupTmuxRename(state);
-	});
-
-	// Fallback: handle reset commands even if command registration/autocomplete is unavailable.
-	pi.on("input", async (event, ctx) => {
-		const text = event.text.trim();
-		if (text === "/tmux-window-reset" || text === "/tmuxreset") {
-			resetTmuxRename(state);
-			ctx.ui.notify("Reset tmux window naming", "info");
-			return { action: "handled" };
-		}
-	});
-
-	pi.registerCommand("tmux-window-reset", {
-		description: "Reset and re-enable tmux window naming for this Pi pane",
-		handler: async (_args, ctx) => {
-			resetTmuxRename(state);
-			ctx.ui.notify("Reset tmux window naming", "info");
-		},
-	});
-
-	pi.registerCommand("tmuxreset", {
-		description: "Alias for /tmux-window-reset",
-		handler: async (_args, ctx) => {
-			resetTmuxRename(state);
-			ctx.ui.notify("Reset tmux window naming", "info");
-		},
 	});
 }
