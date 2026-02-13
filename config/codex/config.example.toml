@@ -31,7 +31,13 @@ shell_snapshot = true
 steer = true
 
 [sandbox_workspace_write]
-writable_roots = ["/Users/jonas/Library/Caches"]
+writable_roots = [
+  "/Users/jonas/Library/Caches",
+  "/Users/jonas/.cache",
+  "/Users/brew/Library/Caches",
+  "/Users/jonas/.npm",
+  "/Users/jonas/.matplotlib",
+]
 network_access = true
 
 [projects."/Users/jonas/dotfiles"]
