@@ -17,7 +17,11 @@ Based on the hook output above:
 
 2. **For each diff reported**: Parse the diff and summarize the specific changes, then use AskUserQuestion with:
    - A **question** that names the config and summarizes what changed (e.g., "Claude: hooks changed from session-tracker to agent-switch track, added steer feature")
-   - Option descriptions that explain the concrete effect (e.g., "Revert to agent-switch track commands" not just "Update live from example")
+   - **Three options**:
+     - **Pull from repo** (apply example → live): The example file is the tracked source of truth, updated from other machines. This option catches up the local live file to match.
+     - **Push to repo** (apply live → example): The local live file has intentional changes. This option updates the tracked example file so other machines get them too.
+     - **Skip**: Leave both files as-is.
+   - Option descriptions should explain the concrete effect (e.g., "Adopt agent-switch track hooks from repo" not just "Update live from example")
 
 3. **Apply chosen actions**
 
