@@ -2,64 +2,15 @@
 
 **Project-specific AGENTS.md files take precedence over these global defaults.**
 
-## Code Quality Tools
+## Rules Source of Truth
 
-After editing files, run the appropriate formatting/linting tools. These are fallback defaults when a project has no specific instructions.
+Language/tooling instructions are provided by the `claude-rules` extension from rule files in:
 
-### Go
+- `~/.claude/rules`
+- `<repo>/.claude/rules` (project-specific)
 
-Always follow `modernize` diagnostics when editing Go code. Apply suggested modernizations to use current Go idioms and language features.
-
-```bash
-golangci-lint fmt --enable golines <files>
-```
-
-Prefer `gotestsum` over `go test` for running tests:
-
-```bash
-gotestsum ./...
-```
-
-### Python
-
-```bash
-ruff check --fix <files> && ruff format <files>
-```
-
-Pre-existing type errors can be ignored.
-
-### Rust
-
-```bash
-cargo fmt
-```
-
-### TypeScript/JavaScript
-
-```bash
-biome check --write <files>
-```
-
-For type checking, prefer project task runners (for example `just typecheck`).
-If no task runner recipe exists, run:
-
-```bash
-tsc --noEmit
-```
-
-For type checking, prefer project task runners (for example `just typecheck`).
-If no task runner recipe exists, run:
-
-```bash
-tsc --noEmit
-```
-
-### Nix
-
-```bash
-nixfmt <files>
-```
+Keep per-language formatting/testing guidance in rule files instead of duplicating it here.
 
 ## Task Runners
 
-If the project has a `Justfile`, prefer using `just` commands over raw tool invocations. Run `just` to see available recipes.
+If the project has a `Justfile`, prefer `just` commands over raw tool invocations. Run `just` to see available recipes.
