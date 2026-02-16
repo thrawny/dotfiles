@@ -152,6 +152,24 @@
         "type": "github"
       }
     },
+    "flake-utils_2": {
+      "inputs": {
+        "systems": "systems_5"
+      },
+      "locked": {
+        "lastModified": 1731533236,
+        "narHash": "sha256-l0KFg5HjrsfsO/JpG+r7fRrqm12kzFHyUHqHCVpMMbI=",
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "rev": "11707dc2f618dd54ca8739b309ec4fc024de578b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "numtide",
+        "repo": "flake-utils",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -459,6 +477,21 @@
         "type": "github"
       }
     },
+    "nixpkgs_9": {
+      "locked": {
+        "lastModified": 1764635402,
+        "narHash": "sha256-6rYcajRLe2C5ZYnV1HYskJl+QAkhvseWTzbdQiTN9OI=",
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "rev": "5f53b0d46d320352684242d000b36dcfbbf7b0bc",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nixos",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nur": {
       "inputs": {
         "flake-parts": "flake-parts",
@@ -492,7 +525,8 @@
         "nur": "nur",
         "walker": "walker",
         "xremap-flake": "xremap-flake",
-        "zen-browser": "zen-browser"
+        "zen-browser": "zen-browser",
+        "zmx": "zmx"
       }
     },
     "systems": {
@@ -552,6 +586,21 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default-linux",
+        "type": "github"
+      }
+    },
+    "systems_5": {
+      "locked": {
+        "lastModified": 1681028828,
+        "narHash": "sha256-Vy1rq5AaRuLzOxct8nz4T6wlgyUR7zLU309k9mBC768=",
+        "owner": "nix-systems",
+        "repo": "default",
+        "rev": "da67096a3b9bf56a91d16901293e51ba5b49a27e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-systems",
+        "repo": "default",
         "type": "github"
       }
     },
@@ -687,6 +736,43 @@
       "original": {
         "owner": "0xc000022070",
         "repo": "zen-browser-flake",
+        "type": "github"
+      }
+    },
+    "zig2nix": {
+      "inputs": {
+        "flake-utils": "flake-utils_2",
+        "nixpkgs": "nixpkgs_9"
+      },
+      "locked": {
+        "lastModified": 1764678235,
+        "narHash": "sha256-NNQWR3DAufaH7fs6ZplfAv1xPHEc0Ne3Z0v4MNHCqSw=",
+        "owner": "Cloudef",
+        "repo": "zig2nix",
+        "rev": "8b6ec85bccdf6b91ded19e9ef671205937e271e6",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Cloudef",
+        "repo": "zig2nix",
+        "type": "github"
+      }
+    },
+    "zmx": {
+      "inputs": {
+        "zig2nix": "zig2nix"
+      },
+      "locked": {
+        "lastModified": 1770919195,
+        "narHash": "sha256-KbzPW1nm48iJuNkYqDf4PQOGUC4ZjSbtj+tByT0g1iI=",
+        "owner": "neurosnap",
+        "repo": "zmx",
+        "rev": "e21e726ca7ef7f37b08f02165cd35c7ab089a4b5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "neurosnap",
+        "repo": "zmx",
         "type": "github"
       }
     }

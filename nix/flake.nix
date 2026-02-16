@@ -21,6 +21,7 @@
     disko.inputs.nixpkgs.follows = "nixpkgs";
     claude-code-nix.url = "github:sadjow/claude-code-nix";
     llm-agents.url = "github:numtide/llm-agents.nix";
+    zmx.url = "github:neurosnap/zmx";
   };
 
   outputs =
@@ -38,12 +39,13 @@
       disko,
       claude-code-nix,
       llm-agents,
+      zmx,
       ...
     }:
     let
       inherit (nixpkgs) lib;
-      aiFlakeArgs = {
-        inherit claude-code-nix llm-agents;
+      flakeArgs = {
+        inherit claude-code-nix llm-agents zmx;
       };
 
       mkHost =
@@ -73,7 +75,7 @@
             home-manager.nixosModules.home-manager
             niri-flake.nixosModules.niri # cached niri package + system setup
             { nixpkgs.overlays = [ niri-flake.overlays.niri ]; }
-            { home-manager.extraSpecialArgs = aiFlakeArgs; }
+            { home-manager.extraSpecialArgs = flakeArgs; }
           ]
           ++ modules;
         };
@@ -105,7 +107,7 @@
           modules = [
             home-manager.nixosModules.home-manager
             disko.nixosModules.disko
-            { home-manager.extraSpecialArgs = aiFlakeArgs; }
+            { home-manager.extraSpecialArgs = flakeArgs; }
           ]
           ++ modules;
         };
@@ -118,7 +120,7 @@
         }:
         home-manager.lib.homeManagerConfiguration {
           inherit pkgs modules;
-          extraSpecialArgs = extraSpecialArgs // aiFlakeArgs;
+          extraSpecialArgs = extraSpecialArgs // flakeArgs;
         };
     in
     {
