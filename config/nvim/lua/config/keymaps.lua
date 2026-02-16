@@ -25,6 +25,51 @@ vim.keymap.set("n", "<Leader>o", ":noh<CR>", { desc = "Clear search highlighting
 -- Terminal mode: Ctrl+A goes to start of line (shell behavior)
 vim.keymap.set("t", "<C-a>", "<Home>", { desc = "Go to start of line in terminal" })
 
+-- Reload workspace after external file changes (e.g. after an AI coding session)
+-- Force-stops LSP, reloads all buffers from disk, clears diagnostics, then restarts.
+-- This avoids the stale-buffer problem where LspRestart alone sends outdated content
+-- to the new gopls, putting it in an inconsistent state.
+vim.keymap.set("n", "<Leader>cR", function()
+  -- Force-stop all LSP clients (not just restart, to avoid race conditions)
+  for _, client in ipairs(vim.lsp.get_clients()) do
+    client:stop(true)
+  end
+
+  -- Delete buffers for files that no longer exist on disk
+  local removed = 0
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) then
+      local name = vim.api.nvim_buf_get_name(buf)
+      if name ~= "" and vim.fn.filereadable(name) == 0 then
+        vim.api.nvim_buf_delete(buf, { force = true })
+        removed = removed + 1
+      end
+    end
+  end
+
+  -- Reload remaining buffers from disk so LSP gets fresh content
+  for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].modifiable and vim.api.nvim_buf_get_name(buf) ~= "" then
+      vim.api.nvim_buf_call(buf, function()
+        vim.cmd("edit!")
+      end)
+    end
+  end
+
+  -- Clear stale diagnostics from the old LSP session
+  vim.diagnostic.reset()
+
+  -- Restart LSP after gopls has fully terminated
+  vim.defer_fn(function()
+    vim.cmd("edit")
+    local msg = "Workspace reloaded"
+    if removed > 0 then
+      msg = msg .. " (cleaned " .. removed .. " stale buffers)"
+    end
+    vim.notify(msg)
+  end, 300)
+end, { desc = "Reload workspace (buffers + LSP)" })
+
 -- Terminal toggle with Alt+; is defined in lua/plugins/ui.lua (snacks.nvim keys spec)
 
 -- Copy file reference to clipboard for Claude Code
