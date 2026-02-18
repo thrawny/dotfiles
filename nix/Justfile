@@ -141,14 +141,50 @@ eval-all:
 ai:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    get_version() { "$1" --version 2>/dev/null | head -1 || echo "not installed"; }
+
+    old_claude=$(get_version claude)
+    old_codex=$(get_version codex)
+    old_pi=$(get_version pi)
+
     nix flake update claude-code-nix llm-agents
-    just switch
-    if ! git diff --quiet HEAD -- flake.lock; then
-        git add flake.lock
-        git commit -m "chore(nix): update AI flake inputs" -- flake.lock
-    else
-        echo "No flake.lock changes to commit."
+
+    if git diff --quiet -- flake.lock; then
+        echo "No updates available."
+        exit 0
     fi
+
+    just switch
+
+    new_claude=$(get_version claude)
+    new_codex=$(get_version codex)
+    new_pi=$(get_version pi)
+
+    changed=false
+    echo ""
+    echo "==> Version changes:"
+    if [ "$old_claude" != "$new_claude" ]; then
+        echo "  claude: $old_claude -> $new_claude"
+        changed=true
+    fi
+    if [ "$old_codex" != "$new_codex" ]; then
+        echo "  codex: $old_codex -> $new_codex"
+        changed=true
+    fi
+    if [ "$old_pi" != "$new_pi" ]; then
+        echo "  pi: $old_pi -> $new_pi"
+        changed=true
+    fi
+    if [ "$changed" = false ]; then
+        echo "  (no version changes detected)"
+        echo "Reverting flake.lock."
+        git checkout -- flake.lock
+        exit 0
+    fi
+
+    git add flake.lock
+    git commit -m "chore(nix): update AI flake inputs" -- flake.lock
 
 # Clean up old generations (keeps last 6) and optimize store
 clean:
