@@ -7,8 +7,9 @@
   ...
 }:
 let
-  claudePkgs = claude-code-nix.packages.${pkgs.system};
-  llmPkgs = llm-agents.packages.${pkgs.system};
+  inherit (pkgs.stdenv.hostPlatform) system;
+  claudePkgs = claude-code-nix.packages.${system};
+  llmPkgs = llm-agents.packages.${system};
 in
 {
   # Shared packages for both NixOS and Darwin
@@ -97,6 +98,6 @@ in
       llmPkgs.pi
     ]
     ++ lib.optionals pkgs.stdenv.isLinux [
-      zmx.packages.${pkgs.system}.default
+      zmx.packages.${system}.default
     ];
 }
