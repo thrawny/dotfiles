@@ -104,7 +104,9 @@ vim.api.nvim_create_autocmd("User", {
           table.insert(query_bufs, buf)
         end
       end
-      if #query_bufs == 0 then return end
+      if #query_bufs == 0 then
+        return
+      end
 
       require("lazy").load({ plugins = { "vim-dadbod", "vim-dadbod-ui", "vim-dadbod-completion" } })
 
