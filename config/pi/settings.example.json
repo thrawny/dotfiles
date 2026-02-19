@@ -3,8 +3,6 @@
   "defaultModel": "gpt-5.3-codex",
   "defaultThinkingLevel": "medium",
   "theme": "monokai-pi",
-  "enabledModels": [
-    "openai-codex/gpt-5.2-codex",
-    "openai-codex/gpt-5.3-codex"
-  ]
+  "shellPath": "/run/current-system/sw/bin/zsh",
+  "enabledModels": ["openai-codex/gpt-5.2-codex", "openai-codex/gpt-5.3-codex"]
 }
