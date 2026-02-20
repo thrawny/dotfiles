@@ -11,6 +11,7 @@
     stdlib = ''
       dotenv_if_exists .env
       dotenv_if_exists .env.local
+      dotenv_if_exists .secrets
 
       layout_uv() {
           if [[ -d ".venv" ]]; then

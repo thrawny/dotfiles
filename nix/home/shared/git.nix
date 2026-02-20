@@ -40,6 +40,7 @@ in
           ".env.local"
           ".envrc"
           ".claude/settings.local.json"
+          ".secrets"
         ];
         includeDirs = [
           ".venv"
