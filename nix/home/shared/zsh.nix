@@ -251,7 +251,8 @@
           # Only init for interactive shells (avoids broken Claude Code snapshot)
           [[ -o interactive ]] && eval "$(zoxide init --cmd cd zsh)"
 
-          # ===== Local Overrides =====
+          # ===== Secrets & Local Overrides =====
+          [ -f ~/.secrets ] && source ~/.secrets
           [ -f ~/.zsh.local ] && source ~/.zsh.local
         ''
       ];
