@@ -58,7 +58,7 @@ warn_diff \
   "Pi settings" \
   "config/pi/settings.json" \
   "config/pi/settings.example.json" \
-  'del(.lastChangelogVersion, .defaultThinkingLevel)'
+  'del(.lastChangelogVersion, .defaultThinkingLevel, .shellPath)'
 
 # Codex: compare shared keys using yq (ignore local-only sections).
 warn_diff_codex() {
