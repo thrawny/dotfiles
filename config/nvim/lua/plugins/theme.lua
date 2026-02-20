@@ -141,6 +141,10 @@ return {
             ["@lsp.type.class.python"] = { fg = cyan },
             ["@lsp.type.namespace.python"] = { fg = white },
 
+            -- TypeScript/JavaScript constants in purple
+            ["@constant.typescript"] = { fg = purple },
+            ["@constant.javascript"] = { fg = purple },
+
             -- Rust (minimal colors like Python)
             ["@variable.rust"] = { fg = white },
             ["@variable.member.rust"] = { fg = white },
