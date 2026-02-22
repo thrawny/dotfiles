@@ -25,11 +25,6 @@
 
     # NixOS-specific modules
     ./btop.nix
-    ./cursor.nix
-    ./hyprland/default.nix
-    ./hypridle.nix
-    ./hyprlock.nix
-    ./hyprpaper.nix
     ./mako.nix
     ./telegram.nix
     ./walker.nix
@@ -44,7 +39,6 @@
     stateVersion = "24.05";
 
     packages = with pkgs; [
-      grimblast # Screenshot tool for Hyprland (grim + slurp wrapper)
       vesktop # Discord client with Wayland screen sharing support
       zathura # PDF viewer with vim keybindings and auto-reload
     ];

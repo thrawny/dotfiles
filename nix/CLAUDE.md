@@ -37,4 +37,3 @@ just diff         # Build and show changes (NixOS only)
 
 - Desktop hosts import `modules/nixos/default.nix`; headless hosts import `modules/nixos/headless.nix`.
 - Niri configuration lives under `home/linux/niri/` and is imported explicitly where needed.
-- Niri is the daily driver; Hyprland remains available and can be selected in tuigreet when desired.

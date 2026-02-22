@@ -17,7 +17,7 @@ When making changes to shell, editor, or tool configuration:
 | Neovim                            | `config/nvim/` (symlinked by Nix)                  |
 | Ghostty                           | `nix/home/shared/ghostty.nix`                      |
 | Direnv                            | `nix/home/shared/direnv.nix`                       |
-| Window managers (Niri, Hyprland)  | `nix/home/linux/niri/`, `nix/home/nixos/hyprland/` |
+| Window manager (Niri)             | `nix/home/linux/niri/`                             |
 | PATH entries                      | `nix/home/shared/home-base.nix` (`sessionPath`)   |
 | Packages                          | `nix/home/shared/packages.nix`                     |
 

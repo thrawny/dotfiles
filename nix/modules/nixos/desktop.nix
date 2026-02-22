@@ -13,7 +13,6 @@ let
 
   desktopPackages = with pkgs; [
     brightnessctl
-    code-cursor-fhs
     docker-compose
     fastfetch
     gnome-themes-extra

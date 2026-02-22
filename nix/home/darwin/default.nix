@@ -12,9 +12,7 @@
     ../shared
 
     # Darwin-specific modules
-    ./cursor.nix
     ./ghostty.nix
-
     ./aerospace.nix
     ./setup.nix
   ];

@@ -47,11 +47,6 @@ let
       color: @waybar-muted;
     }
 
-    /* Hyprland */
-    #workspaces button.active {
-      color: @waybar-accent;
-    }
-
     /* Niri */
     #workspaces button.focused {
       color: @waybar-accent;
@@ -191,53 +186,8 @@ in
 {
   programs.waybar = {
     enable = true;
-
-    # Default config for Hyprland
-    settings = [
-      (
-        sharedModules
-        // {
-          layer = "top";
-          position = "top";
-          height = 26;
-          "modules-left" = [ "hyprland/workspaces" ];
-          "modules-center" = [ ];
-          "modules-right" = [
-            "custom/quotabar"
-            "idle_inhibitor"
-            "hyprland/language"
-            "tray"
-            "network"
-            "pulseaudio"
-            "battery"
-            "clock"
-          ];
-
-          "hyprland/workspaces" = {
-            on-click = "activate";
-            format = "{icon}";
-            "format-icons" = {
-              default = "○";
-              active = "●";
-            };
-            "persistent-workspaces" = {
-              "1" = [ ];
-              "2" = [ ];
-              "3" = [ ];
-              "4" = [ ];
-            };
-          };
-
-          "hyprland/language" = {
-            format = "{}";
-            format-en = "AU";
-            format-sv = "SE";
-            on-click = "hyprctl switchxkblayout all next";
-          };
-        }
-      )
-    ];
-
+    # No default config - using Niri-specific config below
+    settings = [ ];
     style = sharedStyle;
   };
 

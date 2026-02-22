@@ -64,7 +64,6 @@ in
     activation = {
       seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
       seedClaudeSettings = seedExample "config/claude/settings.example.json" "config/claude/settings.json";
-      seedCursorSettings = seedExample "config/cursor/settings.example.json" "config/cursor/settings.json";
       seedPiSettings = seedExample "config/pi/settings.example.json" "config/pi/settings.json";
       seedClaudeJson = hmLib.dag.entryBefore [ "linkGeneration" ] ''
         claude_json="${config.home.homeDirectory}/.claude.json"

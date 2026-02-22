@@ -21,6 +21,7 @@
     ./nvim.nix
     ./starship.nix
     ./tmux.nix
+    ./zmx.nix
     ./zsh.nix
   ];
 

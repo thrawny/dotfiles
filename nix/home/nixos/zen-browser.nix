@@ -4,6 +4,7 @@
 
   programs.zen-browser = {
     enable = true;
+    suppressXdgMigrationWarning = true;
   };
 
   # Fix profile reset on Nix rebuilds
