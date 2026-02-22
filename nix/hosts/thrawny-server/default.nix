@@ -57,7 +57,6 @@ in
   home-manager.users.${username} = {
     imports = [
       ../../home/nixos/headless.nix
-      ../../home/shared/openclaw-update.nix
     ];
   };
 }
