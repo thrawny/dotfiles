@@ -191,7 +191,7 @@ clean:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "==> Checking /nix/store size before cleanup..."
-    du -sh /nix/store
+    du -sh /nix/store 2>&1 | grep -v 'Permission denied' || true
 
     echo ""
     echo "==> Removing old user profile generations (keeping last 6)..."
@@ -211,7 +211,7 @@ clean:
 
     echo ""
     echo "==> Cleanup complete! Final /nix/store size:"
-    du -sh /nix/store
+    du -sh /nix/store 2>&1 | grep -v 'Permission denied' || true
 
 # Format Nix files
 fmt:
