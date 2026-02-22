@@ -142,9 +142,19 @@ ai:
     #!/usr/bin/env bash
     set -euo pipefail
 
-    get_version() { "$1" --version 2>/dev/null | head -1 || echo "not installed"; }
+    get_version() {
+        local v
+        v=$("$1" --version 2>/dev/null | head -1)
+        echo "${v:-not installed}"
+    }
 
-    old_claude=$(get_version claude)
+    if command -v claude-node &>/dev/null; then
+        claude_bin=claude-node
+    else
+        claude_bin=claude
+    fi
+
+    old_claude=$(get_version "$claude_bin")
     old_codex=$(get_version codex)
     old_pi=$(get_version pi)
 
@@ -157,7 +167,7 @@ ai:
 
     just switch
 
-    new_claude=$(get_version claude)
+    new_claude=$(get_version "$claude_bin")
     new_codex=$(get_version codex)
     new_pi=$(get_version pi)
 
