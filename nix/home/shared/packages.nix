@@ -3,13 +3,35 @@
   lib,
   claude-code-nix,
   llm-agents,
-  zmx,
   ...
 }:
 let
   inherit (pkgs.stdenv.hostPlatform) system;
   claudePkgs = claude-code-nix.packages.${system};
   llmPkgs = llm-agents.packages.${system};
+  zmxBinary = pkgs.stdenvNoCC.mkDerivation {
+    pname = "zmx";
+    version = "0.3.0";
+    src = pkgs.fetchurl {
+      url = "https://zmx.sh/a/zmx-0.3.0-linux-x86_64.tar.gz";
+      sha256 = "0cnzvyj4afrjvl9w9zn2bd1v8sd0iixdgal1jzjs79mm3rcg3bzw";
+    };
+    dontUnpack = true;
+    installPhase = ''
+      runHook preInstall
+      mkdir -p "$out/bin"
+      tar -xzf "$src" -C "$out/bin"
+      chmod 755 "$out/bin/zmx"
+      runHook postInstall
+    '';
+    meta = {
+      description = "Session persistence for terminal processes";
+      homepage = "https://zmx.sh/";
+      license = lib.licenses.mit;
+      platforms = [ "x86_64-linux" ];
+      mainProgram = "zmx";
+    };
+  };
 in
 {
   # Shared packages for both NixOS and Darwin
@@ -97,7 +119,7 @@ in
       llmPkgs.codex
       llmPkgs.pi
     ]
-    ++ lib.optionals pkgs.stdenv.isLinux [
-      zmx.packages.${system}.default
+    ++ lib.optionals (system == "x86_64-linux") [
+      zmxBinary
     ];
 }

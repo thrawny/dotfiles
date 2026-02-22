@@ -18,6 +18,11 @@ _: {
         format = "in [📦 devpod]($style) ";
         style = "bold blue";
       };
+
+      env_var.ZMX_SESSION = {
+        format = "in [🛸 zmx:$env_value]($style) ";
+        style = "bold cyan";
+      };
     };
   };
 }
