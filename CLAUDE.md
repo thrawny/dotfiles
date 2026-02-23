@@ -63,8 +63,6 @@ Some tools have both a tracked example file and a gitignored live file. When upd
 - Theme: monokai-nightasty
 - Settings file: `config/nvim/lazyvim.json`
 
-### Python
+### Utility Scripts
 
-- `claude_tools/` module with CLI helpers. Entrypoint: `claude-loop` -> `claude_tools.simple_loop:cli_main`
-- Uses `uv` + `direnv` (auto-activated via `.envrc`). Python >=3.12.
 - `bin/notify` shows cross-platform visual notifications. `bin/notify-sound` plays a sound on macOS.

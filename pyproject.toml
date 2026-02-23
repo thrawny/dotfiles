@@ -1,29 +1,3 @@
-[project]
-name = "dotfiles"
-version = "0.1.0"
-description = "Personal dotfiles repository"
-requires-python = ">=3.12"
-dependencies = [
-  "anyio>=4.10.0",
-  "asyncclick>=8.2.2.2",
-  "claude-agent-sdk>=0.1.6",
-  "pyyaml>=6.0.2",
-  "requests>=2.32.4",
-]
-
-[project.scripts]
-claude-loop = "claude_tools.simple_loop:cli_main"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["claude_tools"]
-
-[dependency-groups]
-dev = ["basedpyright>=1.32.1", "ruff>=0.14.2"]
-
 [tool.basedpyright]
 include = [".", "bin/kpf", "bin/notify", "bin/notify-sound"]
 exclude = [
@@ -33,12 +7,10 @@ exclude = [
   ".git",
   "lab"
 ]
-venvPath = "."
-venv = ".venv"
-reportExplicitAny = false # Allow explicit Any types for dynamic data
-reportAny = false # Allow Any types in general (needed for JSON, kwargs, etc.)
-reportUnusedCallResult = false # Don't require _ = for unused call results
-reportImplicitOverride = false # Don't require @override decorator
+reportExplicitAny = false
+reportAny = false
+reportUnusedCallResult = false
+reportImplicitOverride = false
 
 [tool.ruff]
 extend-include = ["bin/kpf", "bin/notify", "bin/notify-sound"]
