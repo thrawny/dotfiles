@@ -4,9 +4,9 @@
     ./system.nix
   ];
 
-  security.sudo.wheelNeedsPassword = false;
-  services.openssh.enable = true;
-  documentation.enable = false;
+  # srvos.server sets mutableUsers = false, but we want to keep
+  # imperatively-set console passwords until sops is set up.
+  users.mutableUsers = true;
 
   # Keep server generations lean on hosts using GRUB.
   boot.loader.grub.configurationLimit = 2;

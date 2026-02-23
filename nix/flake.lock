@@ -523,10 +523,31 @@
         "nixpkgs": "nixpkgs_5",
         "nixpkgs-xwayland": "nixpkgs-xwayland",
         "nur": "nur",
+        "srvos": "srvos",
         "walker": "walker",
         "xremap-flake": "xremap-flake",
         "zen-browser": "zen-browser",
         "zmx": "zmx"
+      }
+    },
+    "srvos": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1771812348,
+        "narHash": "sha256-d8LL7nSpFueYtZhK29t7j3JiaKLA4lqW8neJv/uZGQc=",
+        "owner": "nix-community",
+        "repo": "srvos",
+        "rev": "ffc8fceb1e3cad06b5074cda30f88132b4fb4869",
+        "type": "github"
+      },
+      "original": {
+        "owner": "nix-community",
+        "repo": "srvos",
+        "type": "github"
       }
     },
     "systems": {

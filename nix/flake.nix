@@ -19,6 +19,8 @@
     xremap-flake.url = "github:xremap/nix-flake";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
+    srvos.url = "github:nix-community/srvos";
+    srvos.inputs.nixpkgs.follows = "nixpkgs";
     claude-code-nix.url = "github:sadjow/claude-code-nix";
     llm-agents.url = "github:numtide/llm-agents.nix";
     zmx.url = "github:neurosnap/zmx";
@@ -37,6 +39,7 @@
       xremap-flake,
       nixpkgs-xwayland,
       disko,
+      srvos,
       claude-code-nix,
       llm-agents,
       zmx,
@@ -72,6 +75,8 @@
               ;
           };
           modules = [
+            srvos.nixosModules.desktop
+            srvos.nixosModules.mixins-trusted-nix-caches
             home-manager.nixosModules.home-manager
             niri-flake.nixosModules.niri # cached niri package + system setup
             { nixpkgs.overlays = [ niri-flake.overlays.niri ]; }
@@ -105,6 +110,8 @@
               ;
           };
           modules = [
+            srvos.nixosModules.server
+            srvos.nixosModules.mixins-trusted-nix-caches
             home-manager.nixosModules.home-manager
             disko.nixosModules.disko
             { home-manager.extraSpecialArgs = flakeArgs; }

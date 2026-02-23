@@ -61,12 +61,7 @@ in
 
     nixpkgs.config.allowUnfree = true;
 
-    # Enable flakes and nix command
     nix.settings = {
-      experimental-features = [
-        "nix-command"
-        "flakes"
-      ];
       trusted-users = [ username ];
       extra-substituters = [
         "https://cache.numtide.com"

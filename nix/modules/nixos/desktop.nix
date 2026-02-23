@@ -64,7 +64,6 @@ in
   networking.networkmanager.enable = true;
 
   services = {
-    pulseaudio.enable = false;
     pipewire = {
       enable = true;
       alsa.enable = true;

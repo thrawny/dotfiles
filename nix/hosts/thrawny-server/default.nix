@@ -37,11 +37,8 @@ in
     firewall = {
       enable = true;
       trustedInterfaces = [ "tailscale0" ];
-      extraCommands = ''
-        iptables -I INPUT -p tcp --dport 22 -s 84.216.114.142 -j ACCEPT
-      '';
-      extraStopCommands = ''
-        iptables -D INPUT -p tcp --dport 22 -s 84.216.114.142 -j ACCEPT || true
+      extraInputRules = ''
+        tcp dport 22 ip saddr 84.216.114.142 accept
       '';
     };
   };
