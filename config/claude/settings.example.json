@@ -129,6 +129,7 @@
   "enabledPlugins": {
     "ast-grep@ast-grep-marketplace": true,
     "gopls-lsp@claude-plugins-official": true,
+    "lua-lsp@claude-plugins-official": true,
     "pyright-lsp@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true

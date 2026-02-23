@@ -12,28 +12,19 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 
 **Home Manager standalone:**
 - `thrawnym1` - MacBook M1 (aarch64-darwin)
+- `jonas-kanel` - Work MacBook Pro M3 (aarch64-darwin)
 - `thrawny-asahi-air` - Asahi Linux on MacBook Air (aarch64-linux)
-
-## Commands
-
-```bash
-just check        # Format, lint, and evaluate config (auto-detects NixOS vs Home Manager)
-just switch       # Apply changes (auto-detects NixOS vs Home Manager)
-just dry          # Full build without switching (NixOS only)
-just diff         # Build and show changes (NixOS only)
-```
 
 ## Structure
 
 - `flake.nix` - Main flake configuration
-- `hosts/` - Per-host configurations
-- `modules/nixos/` - NixOS system modules
-- `home/shared/` - Cross-platform Home Manager modules
-- `home/nixos/` - NixOS-specific Home Manager modules
+- `hosts/` - Per-host configurations (variables in `default.nix`, host-specific packages in `home.nix`)
+- `modules/nixos/` - NixOS system modules (desktop imports `default.nix`, headless imports `headless.nix`)
+- `home/shared/` - Cross-platform Home Manager modules (packages, zsh, git, tmux, etc.)
 - `home/darwin/` - macOS-specific Home Manager modules
-- `home/linux/` - Linux/Wayland Home Manager modules (including Asahi)
+- `home/nixos/` - NixOS-specific Home Manager modules
+- `home/linux/` - Linux/Wayland Home Manager modules (Niri config in `niri/`)
 
-## Notes
+## Host-Specific Packages
 
-- Desktop hosts import `modules/nixos/default.nix`; headless hosts import `modules/nixos/headless.nix`.
-- Niri configuration lives under `home/linux/niri/` and is imported explicitly where needed.
+Global packages go in `home/shared/packages.nix`. Host-specific packages go in `hosts/<hostname>/home.nix` and are wired into `flake.nix` via the `modules` list. See `hosts/jonas-kanel/home.nix` for an example.
