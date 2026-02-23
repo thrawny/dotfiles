@@ -129,7 +129,7 @@
   "enabledPlugins": {
     "ast-grep@ast-grep-marketplace": true,
     "gopls-lsp@claude-plugins-official": true,
-    "lua-lsp@claude-plugins-official": true,
+    "lua-lsp@claude-plugins-official": false,
     "pyright-lsp@claude-plugins-official": true,
     "typescript-lsp@claude-plugins-official": true,
     "rust-analyzer-lsp@claude-plugins-official": true
@@ -137,5 +137,6 @@
   "plansDirectory": ".claude/plans",
   "sandbox": {
     "excludedCommands": ["git", "go", "npm", "pnpm", "cargo", "make", "just", "uv", "nix", "docker", "tmux"]
-  }
+  },
+  "skipDangerousModePermissionPrompt": true
 }
