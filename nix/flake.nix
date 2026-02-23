@@ -202,26 +202,6 @@
           extraSpecialArgs = import ./hosts/jonas-kanel/default.nix;
         };
 
-        # Container test configuration (x86_64)
-        container-x86_64 = mkHomeConfiguration {
-          pkgs = nixpkgs.legacyPackages.x86_64-linux;
-          modules = [ ./home/container.nix ];
-          extraSpecialArgs = {
-            username = "root";
-            dotfiles = "/root/dotfiles";
-          };
-        };
-
-        # Container test configuration (aarch64 - for Docker on Mac)
-        container = mkHomeConfiguration {
-          pkgs = nixpkgs.legacyPackages.aarch64-linux;
-          modules = [ ./home/container.nix ];
-          extraSpecialArgs = {
-            username = "root";
-            dotfiles = "/root/dotfiles";
-          };
-        };
-
         # Asahi Air with Niri + DankMaterialShell
         # Uses niri installed via DNF, config managed by nix
         thrawny-asahi-air = mkHomeConfiguration {
