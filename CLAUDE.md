@@ -53,7 +53,6 @@ Some tools have both a tracked example file and a gitignored live file. When upd
 |--------|---------------------------------------------|--------------------------------------|
 | Claude | `config/claude/settings.example.json`       | `config/claude/settings.json`        |
 | Codex  | `config/codex/config.example.toml`          | `config/codex/config.toml`           |
-| Cursor | `config/cursor/settings.example.json`       | `config/cursor/settings.json`        |
 | Pi     | `config/pi/settings.example.json`           | `config/pi/settings.json`            |
 
 ### LazyVim Setup

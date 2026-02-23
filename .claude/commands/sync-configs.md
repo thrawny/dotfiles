@@ -1,6 +1,6 @@
 ---
 allowed-tools: Read, Write, Edit, AskUserQuestion
-description: Sync example and live config files (Claude, Codex, Cursor)
+description: Sync example and live config files (Claude, Codex, Pi)
 ---
 
 ## Context

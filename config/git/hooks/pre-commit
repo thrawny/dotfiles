@@ -39,15 +39,8 @@ warn_diff() {
 }
 
 # Hard-coded ignored fields:
-# - Cursor: pgsql.serverGroups, pgsql.connections, diffEditor.renderSideBySide, workbench.editor.enablePreview
 # - Claude: model, alwaysThinkingEnabled
 # - Pi: lastChangelogVersion, defaultThinkingLevel
-warn_diff \
-  "Cursor settings" \
-  "config/cursor/settings.json" \
-  "config/cursor/settings.example.json" \
-  'del(.["pgsql.serverGroups"], .["pgsql.connections"], .["diffEditor.renderSideBySide"], .["workbench.editor.enablePreview"])'
-
 warn_diff \
   "Claude settings" \
   "config/claude/settings.json" \

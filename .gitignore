@@ -11,8 +11,6 @@ config/lazygit/state.yml
 
 config/codex/config.toml
 
-config/cursor/settings.json
-
 config/claude/settings.json
 
 config/pi/settings.json
