@@ -195,7 +195,10 @@
 
         jonas-kanel = mkHomeConfiguration {
           pkgs = nixpkgs.legacyPackages.aarch64-darwin;
-          modules = [ ./home/darwin/default.nix ];
+          modules = [
+            ./home/darwin/default.nix
+            ./hosts/jonas-kanel/home.nix
+          ];
           extraSpecialArgs = import ./hosts/jonas-kanel/default.nix;
         };
 

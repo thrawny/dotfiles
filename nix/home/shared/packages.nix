@@ -69,6 +69,12 @@ in
     hyperfine
     eza
     just
+    autossh
+    kustomize
+    kubernetes-helm
+    netcat-gnu
+    jwt-cli
+    zig
 
     # LSPs
     gopls
