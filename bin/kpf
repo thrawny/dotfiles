@@ -24,6 +24,8 @@ Example config:
     remote_port = 8080
 """
 
+# pyright: basic
+
 from __future__ import annotations
 
 import signal
@@ -31,11 +33,12 @@ import subprocess
 import sys
 import threading
 import time
-import tomllib
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any
+
+import tomllib
 
 
 @dataclass
