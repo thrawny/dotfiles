@@ -4,5 +4,10 @@
   "defaultThinkingLevel": "medium",
   "theme": "monokai-pi",
   "shellPath": "/run/current-system/sw/bin/zsh",
-  "enabledModels": ["openai-codex/gpt-5.2-codex", "openai-codex/gpt-5.3-codex"]
+  "enabledModels": [
+    "openai-codex/gpt-5.2-codex",
+    "openai-codex/gpt-5.3-codex",
+    "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-opus-4-6"
+  ]
 }
