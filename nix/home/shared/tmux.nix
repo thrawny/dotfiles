@@ -75,10 +75,6 @@ let
     bind C-n send-keys C-a n
     bind C-p send-keys C-a p
 
-    # Persistent scratch terminal
-    bind ` display-popup -E -w 80% -h 80% "tmux new-session -A -s scratch -c ~"
-    bind '~' display-popup -E -w 80% -h 80% "tmux new-session -A -s scratch"
-
     # Agent session switcher (Ctrl+` on Mac, Ctrl+< on Linux)
     bind-key -n C-` display-popup -E -w 60% -h 60% "agent-switch tmux"
     bind-key -n 'C-<' display-popup -E -w 60% -h 60% "agent-switch tmux"
