@@ -369,9 +369,15 @@ in
   programs.niri.settings = {
     # Named workspaces
     workspaces = {
-      "main" = { };
-      "web" = { };
-      "dotfiles" = { };
+      "1-main" = {
+        name = "main";
+      };
+      "2-web" = {
+        name = "web";
+      };
+      "3-dotfiles" = {
+        name = "dotfiles";
+      };
     };
 
     # Disable config notification on failure
@@ -462,7 +468,9 @@ in
       { command = [ "ghostty" ]; }
       {
         command = [
-          "zen"
+          "zen-beta"
+          "--name"
+          "zen-beta"
           "-p"
           "Default Profile"
         ];

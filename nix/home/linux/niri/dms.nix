@@ -213,7 +213,9 @@ in
       { command = [ "ghostty" ]; }
       {
         command = [
-          "zen"
+          "zen-beta"
+          "--name"
+          "zen-beta"
           "-p"
           "Default Profile"
         ];
