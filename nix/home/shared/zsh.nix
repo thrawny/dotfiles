@@ -180,6 +180,10 @@
             cd "$(git gtr go "$1")"
           }
 
+          function gwn() {
+            git gtr new "$@" && tmux-project "$(git gtr go "$1")"
+          }
+
           function kcaev() {
             envsubst < $1 | kubectl apply -f -
           }
