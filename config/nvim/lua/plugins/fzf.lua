@@ -2,7 +2,7 @@
 
 local ignored_patterns = {
   "%.git/",
-  "node_modules/",
+  "%node_modules/",
   "%.venv/",
   "%.DS_Store$",
   "%.ruff_cache/",
