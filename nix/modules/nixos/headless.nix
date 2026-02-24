@@ -1,4 +1,4 @@
-{ ... }:
+{ lib, ... }:
 {
   imports = [
     ./system.nix
@@ -6,7 +6,7 @@
 
   # srvos.server sets mutableUsers = false, but we want to keep
   # imperatively-set console passwords until sops is set up.
-  users.mutableUsers = true;
+  users.mutableUsers = lib.mkForce true;
 
   # Keep server generations lean on hosts using GRUB.
   boot.loader.grub.configurationLimit = 2;
