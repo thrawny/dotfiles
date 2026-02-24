@@ -89,6 +89,14 @@ check-all: fmt lint (nix::eval-all)
 # CI: lint, typecheck, format, and test
 ci: fmt lint typecheck test
 
+# === Setup ===
+
+# Configure git hooks for this repo
+setup-hooks:
+    git config core.hooksPath scripts
+    chmod +x scripts/pre-commit
+    @echo "Configured core.hooksPath to scripts/"
+
 # === Submodules ===
 
 mod nix
