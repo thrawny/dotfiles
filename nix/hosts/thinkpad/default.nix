@@ -29,12 +29,6 @@
     grub.enable = lib.mkForce false;
   };
 
-  # Auto-login to niri on thinkpad
-  services.greetd.settings.initial_session = {
-    command = "${config.programs.niri.package}/bin/niri-session";
-    user = "thrawny";
-  };
-
   # Host-specific home-manager overrides
   home-manager.users.${config.dotfiles.username} = {
     programs.ghostty.settings.font-size = 11;

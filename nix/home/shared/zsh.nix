@@ -256,7 +256,11 @@
           [[ -o interactive ]] && eval "$(zoxide init --cmd cd zsh)"
 
           # ===== Secrets & Local Overrides =====
-          [ -f ~/.secrets ] && source ~/.secrets
+          if [ -f ~/.secrets ]; then
+            set -a
+            source ~/.secrets
+            set +a
+          fi
           [ -f ~/.zsh.local ] && source ~/.zsh.local
         ''
       ];

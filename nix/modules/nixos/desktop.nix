@@ -10,6 +10,15 @@
 let
   cfg = config.dotfiles;
   inherit (cfg) username;
+  niriSessionCommand = pkgs.writeShellScript "niri-session-with-secrets" ''
+    set -e
+    if [ -f "$HOME/.secrets" ]; then
+      set -a
+      . "$HOME/.secrets"
+      set +a
+    fi
+    exec ${config.programs.niri.package}/bin/niri-session
+  '';
 
   desktopPackages = with pkgs; [
     brightnessctl
@@ -77,7 +86,13 @@ in
     };
     greetd = {
       enable = true;
-      settings.default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd niri-session";
+      settings = {
+        initial_session = {
+          command = niriSessionCommand;
+          user = username;
+        };
+        default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd ${niriSessionCommand}";
+      };
     };
     blueman.enable = true;
 
