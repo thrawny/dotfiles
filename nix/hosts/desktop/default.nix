@@ -184,9 +184,9 @@ in
         };
         # Bind named workspaces to monitors
         workspaces = {
-          "main".open-on-output = "HDMI-A-1"; # Main on left monitor
-          "web".open-on-output = "DP-1"; # Browser on right monitor
-          "dotfiles".open-on-output = "HDMI-A-1"; # Dotfiles on left monitor
+          "1-main".open-on-output = "HDMI-A-1"; # Main on left monitor
+          "2-web".open-on-output = "DP-1"; # Browser on right monitor
+          "3-dotfiles".open-on-output = "HDMI-A-1"; # Dotfiles on left monitor
         };
       };
     };
