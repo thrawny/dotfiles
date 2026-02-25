@@ -102,11 +102,35 @@ in
     keyd.enable = false;
   };
 
-  fonts.packages = with pkgs; [
-    noto-fonts
-    noto-fonts-color-emoji
-    nerd-fonts.caskaydia-mono
-  ];
+  fonts = {
+    packages = with pkgs; [
+      inter
+      noto-fonts
+      noto-fonts-color-emoji
+      nerd-fonts.caskaydia-mono
+    ];
+    fontconfig = {
+      defaultFonts.sansSerif = [ "Inter" ];
+      localConf = ''
+        <?xml version="1.0"?>
+        <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
+        <fontconfig>
+          <match>
+            <test name="family"><string>Helvetica</string></test>
+            <edit name="family" mode="assign" binding="strong"><string>Inter</string></edit>
+          </match>
+          <match>
+            <test name="family"><string>Helvetica Neue</string></test>
+            <edit name="family" mode="assign" binding="strong"><string>Inter</string></edit>
+          </match>
+          <match>
+            <test name="family"><string>Arial</string></test>
+            <edit name="family" mode="assign" binding="strong"><string>Inter</string></edit>
+          </match>
+        </fontconfig>
+      '';
+    };
+  };
 
   home-manager = {
     extraSpecialArgs = {
