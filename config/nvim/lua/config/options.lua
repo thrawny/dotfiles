@@ -26,8 +26,9 @@ vim.opt.clipboard = ""
 vim.filetype.add({
   filename = {
     [".env"] = "sh",
+    [".secrets"] = "sh",
   },
   pattern = {
-    ["%.env%.[%w_.-]+"] = "sh",
+    ["%.env[%w_.-]*"] = "sh",
   },
 })
