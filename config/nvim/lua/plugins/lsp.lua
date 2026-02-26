@@ -15,6 +15,36 @@ return {
         end,
       })
 
+      -- Work around noisy taplo shutdown errors on quit.
+      -- taplo may respond with "server is shutting down" after Neovim already
+      -- cleaned up callbacks, which triggers a false-positive
+      -- NO_RESULT_CALLBACK_FOUND error on exit.
+      vim.api.nvim_create_autocmd("LspAttach", {
+        callback = function(args)
+          local client = vim.lsp.get_client_by_id(args.data.client_id)
+          if not client or client.name ~= "taplo" or client._taplo_error_filter_patched then
+            return
+          end
+
+          local orig_write_error = client.write_error
+          client.write_error = function(self, code, err)
+            local no_callback = code == vim.lsp.rpc.client_errors.NO_RESULT_CALLBACK_FOUND
+            local shutting_down = type(err) == "table"
+              and err.error
+              and err.error.data == "server is shutting down"
+              and err.error.message == "Invalid request"
+
+            if no_callback and shutting_down then
+              return
+            end
+
+            return orig_write_error(self, code, err)
+          end
+
+          client._taplo_error_filter_patched = true
+        end,
+      })
+
       -- Disable semantic token highlighting for all LSP servers
       -- Instead of removing the capability (which breaks some LSP features),
       -- we clear all semantic highlight groups so they have no visual effect
