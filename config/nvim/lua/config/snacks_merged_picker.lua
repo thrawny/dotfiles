@@ -20,7 +20,10 @@ function M.opts(overrides)
     ignored = true,
     exclude = vim.deepcopy(M.exclude),
     multi = {
-      { source = "files" },
+      {
+        source = "files",
+        args = { "--full-path" },
+      },
       { source = "grep" },
     },
     format = "file",
