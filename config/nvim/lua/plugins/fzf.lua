@@ -32,7 +32,6 @@ return {
   {
     "ibhagwan/fzf-lua",
     keys = {
-      { "<leader>.", find_all_files, desc = "Find Files (all)" },
       { "<leader>/", grep_all_in_cwd, desc = "Grep (cwd)" },
     },
     opts = {

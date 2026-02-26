@@ -10,6 +10,26 @@ M.exclude = {
   "**/.DS_Store",
 }
 
+local function files_query_for_path(search)
+  local query = vim.trim(search or "")
+  if query:find("%s") then
+    return query:gsub("%s+", ".*")
+  end
+  return query
+end
+
+local function files_finder(opts, ctx)
+  local files = require("snacks.picker.source.files")
+  local files_ctx = ctx
+  local query = files_query_for_path(ctx.filter.search)
+  if query ~= ctx.filter.search then
+    files_ctx = ctx:clone(opts)
+    files_ctx.filter = ctx.filter:clone()
+    files_ctx.filter.search = query
+  end
+  return files.files(opts, files_ctx)
+end
+
 ---@param overrides? table
 ---@return table
 function M.opts(overrides)
@@ -22,6 +42,7 @@ function M.opts(overrides)
     multi = {
       {
         source = "files",
+        finder = files_finder,
         args = { "--full-path" },
       },
       { source = "grep" },
@@ -35,6 +56,14 @@ function M.opts(overrides)
       frecency = true,
       sort_empty = true,
     },
+    transform = function(item)
+      if item.source_id == 1 then
+        item.label = "[F]"
+      elseif item.source_id == 2 then
+        item.label = "[G]"
+      end
+      return item
+    end,
     win = {
       input = {
         keys = {

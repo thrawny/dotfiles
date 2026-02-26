@@ -48,7 +48,7 @@ return {
         desc = "Git Status (Explorer)",
       },
       {
-        "<leader>sF",
+        "<leader>.",
         function()
           Snacks.picker(merged_picker.opts())
         end,
