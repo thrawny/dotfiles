@@ -1,3 +1,8 @@
+[project]
+name = "dotfiles"
+version = "0.0.0"
+requires-python = ">=3.13"
+
 [tool.basedpyright]
 include = [".", "bin/kpf", "bin/notify", "bin/notify-sound"]
 exclude = [
