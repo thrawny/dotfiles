@@ -25,12 +25,30 @@ function M.opts(overrides)
     },
     format = "file",
     sort = {
-      fields = { "score:desc", "source_id", "#text", "idx" },
+      fields = { "source_id", "score:desc", "#text", "idx" },
     },
     matcher = {
       cwd_bonus = true,
       frecency = true,
       sort_empty = true,
+    },
+    win = {
+      input = {
+        keys = {
+          ["<a-h>"] = false,
+          ["<a-i>"] = false,
+          ["<c-y>"] = { "toggle_hidden", mode = { "i", "n" } },
+          ["<c-o>"] = { "toggle_ignored", mode = { "i", "n" } },
+        },
+      },
+      list = {
+        keys = {
+          ["<a-h>"] = false,
+          ["<a-i>"] = false,
+          ["<c-y>"] = "toggle_hidden",
+          ["<c-o>"] = "toggle_ignored",
+        },
+      },
     },
   }
 
