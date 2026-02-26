@@ -15,9 +15,6 @@ web_search = "live"
 [tui]
 status_line = ["model-with-reasoning", "context-used", "git-branch"]
 
-# Require approval for commands not pre-approved in rules/tools.rules
-approval_policy = "on-request"
-
 # [mcp_servers.context7]
 # args = ["-y", "@upstash/context7-mcp"]
 # command = "npx"
@@ -33,6 +30,7 @@ apply_patch_freeform = true
 skills = true
 shell_snapshot = true
 steer = true
+voice_transcription = true
 
 [sandbox_workspace_write]
 writable_roots = [
