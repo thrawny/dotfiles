@@ -556,6 +556,24 @@ in
       }
       {
         matches = [
+          {
+            app-id = "^com\.mitchellh\.ghostty$";
+            at-startup = true;
+          }
+        ];
+        open-on-workspace = "dotfiles";
+      }
+      {
+        matches = [
+          {
+            app-id = "^zen-beta$";
+            at-startup = true;
+          }
+        ];
+        open-on-workspace = "web";
+      }
+      {
+        matches = [
           { app-id = "^gnome-calculator$"; }
           { app-id = "^galculator$"; }
           { app-id = "blueman-manager"; }
