@@ -40,8 +40,8 @@ let
       hotkey-overlay.title = "Previous Window";
     };
     "Mod+N" = {
-      action.focus-workspace = 1;
-      hotkey-overlay.title = "Workspace 1";
+      action.focus-monitor-previous = [ ];
+      hotkey-overlay.title = "Previous Monitor";
     };
     "Mod+B" = {
       action.focus-workspace = "web";
@@ -104,10 +104,8 @@ let
     "Mod+Shift+L".action.move-column-right = [ ];
 
     # Column Navigation
-    "Mod+Home".action.focus-column-first = [ ];
-    "Mod+End".action.focus-column-last = [ ];
-    "Mod+Ctrl+Home".action.move-column-to-first = [ ];
-    "Mod+Ctrl+End".action.move-column-to-last = [ ];
+    "Mod+Comma".action.focus-column-first = [ ];
+    "Mod+Period".action.focus-column-last = [ ];
 
     # Monitor Navigation
     "Mod+Ctrl+Left".action.focus-monitor-left = [ ];
@@ -134,20 +132,14 @@ let
     "Mod+Super+L".action.move-workspace-to-monitor-right = [ ];
 
     # Workspace Navigation
-    "Mod+Page_Down".action.focus-workspace-down = [ ];
-    "Mod+Page_Up".action.focus-workspace-up = [ ];
     "Mod+U".action.focus-workspace-down = [ ];
     "Mod+I".action.focus-workspace-up = [ ];
-    "Mod+Comma".action.focus-workspace-up = [ ];
-    "Mod+Period".action.focus-workspace-down = [ ];
     "Mod+Ctrl+Down".action.move-column-to-workspace-down = [ ];
     "Mod+Ctrl+Up".action.move-column-to-workspace-up = [ ];
     "Mod+Ctrl+U".action.move-column-to-workspace-down = [ ];
     "Mod+Ctrl+I".action.move-column-to-workspace-up = [ ];
 
     # Move Workspaces
-    "Mod+Shift+Page_Down".action.move-workspace-down = [ ];
-    "Mod+Shift+Page_Up".action.move-workspace-up = [ ];
     "Mod+Shift+U".action.move-workspace-down = [ ];
     "Mod+Shift+I".action.move-workspace-up = [ ];
 
