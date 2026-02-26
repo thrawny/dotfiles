@@ -101,3 +101,4 @@ setup-hooks:
 
 mod nix
 mod rust
+mod nvim "config/nvim"

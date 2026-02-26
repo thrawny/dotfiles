@@ -1,3 +1,5 @@
+local merged_picker = require("config.snacks_merged_picker")
+
 return {
   -- Disable bufferline (top tab view)
   {
@@ -44,6 +46,13 @@ return {
           Snacks.picker.git_status({ ignored = false })
         end,
         desc = "Git Status (Explorer)",
+      },
+      {
+        "<leader>sF",
+        function()
+          Snacks.picker(merged_picker.opts())
+        end,
+        desc = "Find + Grep (merged)",
       },
       {
         "<leader>`",

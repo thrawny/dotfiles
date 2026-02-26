@@ -1,0 +1,60 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+query="${1:-ghostty}"
+top="${2:-20}"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+fixture_dir="$(mktemp -d)"
+trap 'rm -rf "${fixture_dir}"' EXIT
+
+mkdir -p \
+  "${fixture_dir}/src" \
+  "${fixture_dir}/docs" \
+  "${fixture_dir}/deep/nested" \
+  "${fixture_dir}/pkg/node_modules/foo" \
+  "${fixture_dir}/target/build" \
+  "${fixture_dir}/.direnv"
+
+cat >"${fixture_dir}/src/ghostty.lua" <<'EOF'
+return "ghostty module"
+EOF
+
+cat >"${fixture_dir}/src/alpha.lua" <<'EOF'
+local message = "ghostty appears in content"
+return message
+EOF
+
+cat >"${fixture_dir}/docs/ghostty-notes.md" <<'EOF'
+# Notes
+This file mentions ghostty too.
+EOF
+
+cat >"${fixture_dir}/deep/nested/notes.txt" <<'EOF'
+ghostty appears in nested content
+EOF
+
+cat >"${fixture_dir}/pkg/node_modules/foo/lib.js" <<'EOF'
+const name = "ghostty from node_modules";
+EOF
+
+cat >"${fixture_dir}/target/build/generated.txt" <<'EOF'
+ghostty target output
+EOF
+
+cat >"${fixture_dir}/.direnv/envrc" <<'EOF'
+ghostty in direnv
+EOF
+
+echo "Fixture: ${fixture_dir}"
+echo "Query: ${query}"
+echo "Top: ${top}"
+
+cd "${repo_root}"
+
+PICKER_CWD="${fixture_dir}" \
+  PICKER_QUERY="${query}" \
+  PICKER_TOP="${top}" \
+  nvim --headless -u config/nvim/init.lua -i NONE \
+  +"set noundofile" \
+  +"lua require('config.snacks_merged_picker_harness').run()" \
+  +qa!

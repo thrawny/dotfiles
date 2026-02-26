@@ -20,3 +20,4 @@ config/niri/dms/colors.kdl
 result
 
 .venv
+.nvimlog
