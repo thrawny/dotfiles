@@ -144,12 +144,6 @@ in
       ".codex/prompts".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/prompts";
       ".codex/AGENTS.md".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/AGENTS.md";
-      ".codex/rules/code-quality.rules".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/rules/code-quality.rules";
-      ".codex/rules/git.rules".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/rules/git.rules";
-      ".codex/rules/tools.rules".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/rules/tools.rules";
 
       # Pi configuration
       ".pi/agent/settings.json".source =
