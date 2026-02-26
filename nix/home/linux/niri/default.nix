@@ -84,20 +84,12 @@ let
     "Mod+G".action.toggle-column-tabbed-display = [ ];
 
     # Focus Navigation
-    "Mod+Left".action.focus-column-left = [ ];
-    "Mod+Down".action.focus-window-down = [ ];
-    "Mod+Up".action.focus-window-up = [ ];
-    "Mod+Right".action.focus-column-right = [ ];
     "Mod+H".action.focus-column-left = [ ];
     "Mod+J".action.focus-window-down = [ ];
     "Mod+K".action.focus-window-up = [ ];
     "Mod+L".action.focus-column-right = [ ];
 
     # Window Movement
-    "Mod+Shift+Left".action.move-column-left = [ ];
-    "Mod+Shift+Down".action.move-window-down = [ ];
-    "Mod+Shift+Up".action.move-window-up = [ ];
-    "Mod+Shift+Right".action.move-column-right = [ ];
     "Mod+Shift+H".action.move-column-left = [ ];
     "Mod+Shift+J".action.move-window-down = [ ];
     "Mod+Shift+K".action.move-window-up = [ ];
@@ -108,18 +100,12 @@ let
     "Mod+Period".action.focus-column-last = [ ];
 
     # Monitor Navigation
-    "Mod+Ctrl+Left".action.focus-monitor-left = [ ];
-    "Mod+Ctrl+Right".action.focus-monitor-right = [ ];
     "Mod+Ctrl+H".action.focus-monitor-left = [ ];
     "Mod+Ctrl+J".action.focus-monitor-down = [ ];
     "Mod+Ctrl+K".action.focus-monitor-up = [ ];
     "Mod+Ctrl+L".action.focus-monitor-right = [ ];
 
     # Move Column to Monitor
-    "Mod+Shift+Ctrl+Left".action.move-column-to-monitor-left = [ ];
-    "Mod+Shift+Ctrl+Down".action.move-column-to-monitor-down = [ ];
-    "Mod+Shift+Ctrl+Up".action.move-column-to-monitor-up = [ ];
-    "Mod+Shift+Ctrl+Right".action.move-column-to-monitor-right = [ ];
     "Mod+Shift+Ctrl+H".action.move-column-to-monitor-left = [ ];
     "Mod+Shift+Ctrl+J".action.move-column-to-monitor-down = [ ];
     "Mod+Shift+Ctrl+K".action.move-column-to-monitor-up = [ ];
@@ -134,8 +120,6 @@ let
     # Workspace Navigation
     "Mod+U".action.focus-workspace-down = [ ];
     "Mod+I".action.focus-workspace-up = [ ];
-    "Mod+Ctrl+Down".action.move-column-to-workspace-down = [ ];
-    "Mod+Ctrl+Up".action.move-column-to-workspace-up = [ ];
     "Mod+Ctrl+U".action.move-column-to-workspace-down = [ ];
     "Mod+Ctrl+I".action.move-column-to-workspace-up = [ ];
 
