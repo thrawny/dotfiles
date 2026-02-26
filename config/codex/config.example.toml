@@ -31,6 +31,7 @@ skills = true
 shell_snapshot = true
 steer = true
 voice_transcription = true
+multi_agent = true
 
 [sandbox_workspace_write]
 writable_roots = [
