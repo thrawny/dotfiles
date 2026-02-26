@@ -79,24 +79,29 @@ prefix_rule(
 )
 
 prefix_rule(
-    pattern=["tmux-dev", "stop"],
+    pattern=["zmx", "kill"],
     decision="allow",
-    justification="tmux-dev stop"
+    justification="zmx kill"
 )
 prefix_rule(
-    pattern=["tmux-dev", "status"],
+    pattern=["zmx", "wait"],
     decision="allow",
-    justification="tmux-dev status"
+    justification="zmx wait"
 )
 prefix_rule(
-    pattern=["tmux-dev", "logs"],
+    pattern=["zmx", "history"],
     decision="allow",
-    justification="tmux-dev logs"
+    justification="zmx history"
 )
 prefix_rule(
-    pattern=["tmux-dev", "list"],
+    pattern=["zmx", "list"],
     decision="allow",
-    justification="tmux-dev list"
+    justification="zmx list"
+)
+prefix_rule(
+    pattern=["zmx", "detach"],
+    decision="allow",
+    justification="zmx detach"
 )
 
 prefix_rule(

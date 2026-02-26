@@ -1,6 +1,6 @@
 ---
 name: zmx
-description: Manage persistent terminal sessions with zmx for long-running or resumable commands. Use when users mention zmx directly or ask to start, monitor, attach to, inspect logs/history for, wait on, detach from, or stop background processes that should survive shell disconnects.
+description: Manage persistent terminal sessions with zmx for long-running or resumable commands, including dev server lifecycle tasks. Use when users mention zmx directly or ask to start/stop/restart dev servers, inspect logs/history, monitor status, wait for completion, attach/detach sessions, or run background processes that should survive shell disconnects.
 ---
 
 # zmx
@@ -56,5 +56,6 @@ zmx detach                               # Detach clients from current session
 
 - Do not kill or detach sessions without explicit user intent.
 - Read history before suggesting restarts.
+- Use `zmx history` for logs (there is no `zmx logs` command).
 - Wrap complex commands in `sh -lc '...'` to preserve quoting, pipes, and env expansion.
 - Keep session naming consistent within a task; avoid duplicate sessions for the same service.

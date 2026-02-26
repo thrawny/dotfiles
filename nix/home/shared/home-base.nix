@@ -99,9 +99,26 @@ in
           ln -s "$src" "$dst"
         }
 
+        prune_removed_repo_skills() {
+          base="$1"
+          for dst in "$base"/*; do
+            [ -L "$dst" ] || continue
+            src="$(readlink "$dst")"
+            case "$src" in
+              "$skills_src"/*)
+                if [ ! -e "$src" ]; then
+                  echo "Removing stale shared skill link at $dst"
+                  rm -f "$dst"
+                fi
+                ;;
+            esac
+          done
+        }
+
         # Codex has built-in skill-creator; don't override it with our shared one.
         codex_base="$HOME/.codex/skills"
         ensure_base_dir "$codex_base"
+        prune_removed_repo_skills "$codex_base"
         for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg codexSharedSkillNames)}; do
           link_skill "$codex_base" "$skill"
         done
@@ -112,6 +129,7 @@ in
 
         for base in "$HOME/.claude/skills" "$HOME/.pi/agent/skills"; do
           ensure_base_dir "$base"
+          prune_removed_repo_skills "$base"
           for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg sharedSkillNames)}; do
             link_skill "$base" "$skill"
           done

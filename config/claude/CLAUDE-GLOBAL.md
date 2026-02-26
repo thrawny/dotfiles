@@ -23,23 +23,22 @@ The title is automatically set to the current directory name.
 
 ### Development Server Management
 
-Use `tmux-dev` for managing dev servers. All processes run as windows in a single `dev` tmux session:
+Use `zmx` for managing long-running dev processes with persistent sessions:
 
 ```bash
-tmux-dev start -n <name> <command>  # Start (name is required)
-tmux-dev stop <name>                # Stop a window
-tmux-dev logs <name> [lines]        # View logs
-tmux-dev list                       # List all windows
+zmx run <name> sh -lc '<command>'      # Start/send command without attaching
+zmx attach <name> sh -lc '<command>'   # Start and attach interactively
+zmx history <name> | tail -n <lines>   # View logs
+zmx list --short                        # List sessions
+zmx kill <name>                         # Stop a session
 ```
 
 Example:
 ```bash
-tmux-dev start -n frontend npm run dev
-tmux-dev start -n api go run ./cmd/api/main.go
-tmux-dev logs frontend 100
+zmx run frontend sh -lc 'npm run dev'
+zmx run api sh -lc 'go run ./cmd/api/main.go'
+zmx history frontend | tail -n 100
 ```
-
-User can `tmux attach -t dev` to tab between all processes.
 
 ### Sandbox and Code Execution
 
