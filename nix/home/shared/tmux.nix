@@ -215,6 +215,9 @@ in
 
       "# === Misc ==="
       ''
+        # Keep Ctrl+\ unbound (vim-tmux-navigator binds it by default)
+        unbind -n C-\\
+
         # Clear screen (C-l used by vim-tmux-navigator)
         bind C-l send-keys 'C-l'
 
