@@ -107,7 +107,7 @@ eval-all:
     failed=0
 
     echo "==> Evaluating NixOS configurations..."
-    for host in thinkpad thrawny-desktop; do
+    for host in thinkpad z13 thrawny-desktop; do
         echo -n "  $host: "
         if nix eval ".#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null 2>&1; then
             echo "ok"

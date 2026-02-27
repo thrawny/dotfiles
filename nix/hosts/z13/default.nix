@@ -1,7 +1,6 @@
 {
   lib,
   config,
-  pkgs,
   ...
 }:
 {
@@ -17,13 +16,10 @@
     email = "jonaslergell@gmail.com";
   };
 
-  networking.hostName = "thinkpad";
+  networking.hostName = "z13";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
-  # Lenovo ThinkPad T14 Gen 1
-  # Intel Core i5-10310U, 16GB RAM, 256GB NVMe, FHD panel
-
-  # Bootloader: ThinkPad uses systemd-boot via the EFI partition; force-disable GRUB to avoid nix build errors.
+  # ThinkPads use UEFI/systemd-boot.
   boot.loader = {
     systemd-boot = {
       enable = true;
@@ -32,6 +28,9 @@
     efi.canTouchEfiVariables = true;
     grub.enable = lib.mkForce false;
   };
+
+  # Z13 G2 includes WWAN hardware in your configuration.
+  networking.modemmanager.enable = true;
 
   # Host-specific home-manager overrides
   home-manager.users.${config.dotfiles.username} = {

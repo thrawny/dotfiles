@@ -135,8 +135,16 @@
         thinkpad = mkHost {
           system = "x86_64-linux";
           modules = [
-            nixos-hardware.nixosModules.lenovo-thinkpad-t14
+            nixos-hardware.nixosModules.lenovo-thinkpad-t14-intel-gen1
             ./hosts/thinkpad/default.nix
+          ];
+        };
+
+        z13 = mkHost {
+          system = "x86_64-linux";
+          modules = [
+            nixos-hardware.nixosModules.lenovo-thinkpad-z13-gen2
+            ./hosts/z13/default.nix
           ];
         };
 
