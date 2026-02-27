@@ -64,6 +64,12 @@ function M.opts(overrides)
       end
       return item
     end,
+    layout = {
+      preset = "default",
+      layout = {
+        [2] = { win = "preview", width = 0.6 },
+      },
+    },
     win = {
       input = {
         keys = {
