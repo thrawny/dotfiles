@@ -72,6 +72,69 @@ vim.api.nvim_create_autocmd("FileType", {
   desc = "Set tab width to 4 for Go files",
 })
 
+local function is_dadbod_query_path(path)
+  if path == "" then
+    return false
+  end
+  local save_path = vim.fn.stdpath("data") .. "/dadbod_ui"
+  return path:find(save_path, 1, true) ~= nil
+end
+
+local function restore_dadbod_query_buffer(buf)
+  if not vim.api.nvim_buf_is_valid(buf) or not vim.api.nvim_buf_is_loaded(buf) then
+    return
+  end
+
+  local path = vim.api.nvim_buf_get_name(buf)
+  if not is_dadbod_query_path(path) then
+    return
+  end
+
+  local save_path = vim.fn.stdpath("data") .. "/dadbod_ui"
+  local tmp_path = save_path .. "/tmp"
+
+  require("lazy").load({ plugins = { "vim-dadbod", "vim-dadbod-ui", "vim-dadbod-completion" } })
+
+  -- connections_list() triggers s:init() to load saved connections without opening the drawer
+  local conn_by_name = {}
+  for _, c in ipairs(vim.fn["db_ui#connections_list"]()) do
+    conn_by_name[c.name] = c.name .. "_" .. c.source
+  end
+
+  local parent = vim.fn.fnamemodify(path, ":h")
+  local db_name
+
+  if vim.fn.fnamemodify(parent, ":h") == save_path then
+    db_name = vim.fn.fnamemodify(parent, ":t")
+  elseif parent == tmp_path then
+    local filename = vim.fn.fnamemodify(path, ":t")
+    for name in pairs(conn_by_name) do
+      if filename:find("^" .. vim.pesc(name) .. "%-") then
+        db_name = name
+        break
+      end
+    end
+  end
+
+  local key = db_name and conn_by_name[db_name]
+  if key then
+    local info = vim.fn["db_ui#get_conn_info"](key)
+    if info.conn and info.conn ~= "" then
+      vim.b[buf].dbui_db_key_name = key
+      vim.b[buf].db = info.conn
+    end
+  end
+
+  -- Set/re-trigger filetype so treesitter + dadbod ftplugin apply
+  vim.api.nvim_buf_call(buf, function()
+    if vim.bo.filetype ~= "sql" then
+      vim.bo.filetype = "sql"
+    else
+      vim.cmd("doautocmd FileType sql")
+    end
+  end)
+end
+
 -- Wipe dadbod-ui special buffers before session save (they can't be restored properly)
 vim.api.nvim_create_autocmd("User", {
   pattern = "PersistenceSavePre",
@@ -96,64 +159,22 @@ vim.api.nvim_create_autocmd("User", {
   callback = function()
     vim.schedule(function()
       local save_path = vim.fn.stdpath("data") .. "/dadbod_ui"
-      local tmp_path = save_path .. "/tmp"
-
-      local query_bufs = {}
       for _, buf in ipairs(vim.api.nvim_list_bufs()) do
         if vim.api.nvim_buf_is_loaded(buf) and vim.api.nvim_buf_get_name(buf):find(save_path, 1, true) then
-          table.insert(query_bufs, buf)
+          restore_dadbod_query_buffer(buf)
         end
-      end
-      if #query_bufs == 0 then
-        return
-      end
-
-      require("lazy").load({ plugins = { "vim-dadbod", "vim-dadbod-ui", "vim-dadbod-completion" } })
-
-      -- connections_list() triggers s:init() to load saved connections without opening the drawer
-      local conn_by_name = {}
-      for _, c in ipairs(vim.fn["db_ui#connections_list"]()) do
-        conn_by_name[c.name] = c.name .. "_" .. c.source
-      end
-
-      for _, buf in ipairs(query_bufs) do
-        local path = vim.api.nvim_buf_get_name(buf)
-        local parent = vim.fn.fnamemodify(path, ":h")
-        local db_name
-
-        if vim.fn.fnamemodify(parent, ":h") == save_path then
-          db_name = vim.fn.fnamemodify(parent, ":t")
-        elseif parent == tmp_path then
-          local filename = vim.fn.fnamemodify(path, ":t")
-          for name in pairs(conn_by_name) do
-            if filename:find("^" .. vim.pesc(name) .. "%-") then
-              db_name = name
-              break
-            end
-          end
-        end
-
-        local key = db_name and conn_by_name[db_name]
-        if key then
-          local info = vim.fn["db_ui#get_conn_info"](key)
-          if info.conn and info.conn ~= "" then
-            vim.b[buf].dbui_db_key_name = key
-            vim.b[buf].db = info.conn
-          end
-        end
-
-        -- Set/re-trigger filetype so treesitter + dadbod ftplugin apply
-        vim.api.nvim_buf_call(buf, function()
-          if vim.bo.filetype ~= "sql" then
-            vim.bo.filetype = "sql"
-          else
-            vim.cmd("doautocmd FileType sql")
-          end
-        end)
       end
     end)
   end,
   desc = "Restore dadbod-ui query buffer connections after session load",
+})
+
+-- Also restore dadbod query buffers when opened later from buffer list.
+vim.api.nvim_create_autocmd({ "BufReadPost", "BufEnter" }, {
+  callback = function(args)
+    restore_dadbod_query_buffer(args.buf)
+  end,
+  desc = "Restore dadbod-ui query buffer context on buffer open/enter",
 })
 
 -- Detect bun shebang and set filetype to typescript
