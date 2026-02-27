@@ -8,6 +8,7 @@ let
   zmxBinary = pkgs.stdenvNoCC.mkDerivation {
     pname = "zmx";
     version = "0.4.0";
+    nativeBuildInputs = [ pkgs.installShellFiles ];
     src = pkgs.fetchurl {
       url = "https://zmx.sh/a/zmx-0.4.0-linux-x86_64.tar.gz";
       sha256 = "sha256-+ubSJrmPjf7qCXb/L57xYyzw6f2ky5IdCPKunr2Vo3g=";
@@ -18,6 +19,9 @@ let
       mkdir -p "$out/bin"
       tar -xzf "$src" -C "$out/bin"
       chmod 755 "$out/bin/zmx"
+
+      "$out/bin/zmx" completions zsh > _zmx
+      installShellCompletion --zsh _zmx
       runHook postInstall
     '';
     meta = {
