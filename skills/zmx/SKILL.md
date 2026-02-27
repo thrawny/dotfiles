@@ -1,6 +1,6 @@
 ---
 name: zmx
-description: Manage persistent terminal sessions with zmx for long-running or resumable commands, including dev server lifecycle tasks. Use when users mention zmx directly or ask to start/stop/restart dev servers, inspect logs/history, monitor status, wait for completion, attach/detach sessions, or run background processes that should survive shell disconnects.
+description: Manage persistent terminal sessions with zmx for long-running or resumable commands, including dev server lifecycle tasks. Use proactively whenever zmx commands will be executed (whether user-requested or agent-initiated), and when users ask to start/stop/restart dev servers, inspect logs/history, monitor status, wait for completion, attach/detach sessions, or run background processes that should survive shell disconnects.
 ---
 
 # zmx

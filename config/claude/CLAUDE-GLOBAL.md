@@ -23,22 +23,7 @@ The title is automatically set to the current directory name.
 
 ### Development Server Management
 
-Use `zmx` for managing long-running dev processes with persistent sessions:
-
-```bash
-zmx run <name> sh -lc '<command>'      # Start/send command without attaching
-zmx attach <name> sh -lc '<command>'   # Start and attach interactively
-zmx history <name> | tail -n <lines>   # View logs
-zmx list --short                        # List sessions
-zmx kill <name>                         # Stop a session
-```
-
-Example:
-```bash
-zmx run frontend sh -lc 'npm run dev'
-zmx run api sh -lc 'go run ./cmd/api/main.go'
-zmx history frontend | tail -n 100
-```
+Use the `zmx` skill.
 
 ### Sandbox and Code Execution
 
