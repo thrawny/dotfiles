@@ -29,7 +29,7 @@ fmt-lua:
 
 # Format Python files
 fmt-python:
-    uv run ruff check --fix && uv run ruff format .
+    ruff check --fix && ruff format .
 
 # Format Rust files
 fmt-rust:
@@ -46,7 +46,7 @@ lint-lua:
 
 # Lint Python files
 lint-python:
-    uv run ruff check .
+    ruff check .
 
 # Lint Rust files
 lint-rust:
@@ -59,7 +59,7 @@ typecheck: typecheck-python typecheck-pi-extensions
 
 # Typecheck Python code
 typecheck-python:
-    uv run basedpyright
+    basedpyright
 
 # Typecheck Pi TypeScript extensions
 # Uses latest TypeScript from config/pi/extensions/package.json
