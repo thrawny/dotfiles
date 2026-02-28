@@ -15,6 +15,14 @@
       # Key-to-key remapping (like xmodmap)
       modmap = [
         {
+          name = "Built-in keyboard Alt/Super swap";
+          device.only = [ "AT Translated Set 2 keyboard" ];
+          remap = {
+            "Alt_L" = "Super_L";
+            "Super_L" = "Alt_L";
+          };
+        }
+        {
           name = "Global key remaps";
           remap = {
             "CapsLock" = "Esc";
