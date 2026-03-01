@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+error() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
+show_usage() {
+  echo "Usage: niri-project [directory]"
+  echo ""
+  echo "Create a niri workspace for a project with a terminal."
+  echo "Workspace name is derived from the directory basename."
+  echo ""
+  echo "Arguments:"
+  echo "  directory   Project directory (default: current directory)"
+  echo ""
+  echo "Examples:"
+  echo "  niri-project              # Use current directory"
+  echo "  niri-project ~/code/myapp # Use specified directory"
+}
+
+main() {
+  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    show_usage
+    exit 0
+  fi
+
+  local project_dir="${1:-$PWD}"
+  project_dir=$(cd "$project_dir" && pwd)
+
+  if [[ ! -d "$project_dir" ]]; then
+    error "Directory does not exist: $project_dir"
+  fi
+
+  local workspace_name
+  workspace_name=$(basename "$project_dir")
+
+  # If workspace already exists, just focus it
+  if niri msg -j workspaces | jq -e ".[] | select(.name == \"$workspace_name\")" >/dev/null 2>&1; then
+    niri msg action focus-workspace "$workspace_name"
+    exit 0
+  fi
+
+  # Get the focused monitor
+  local focused_output
+  focused_output=$(niri msg -j workspaces | jq -r '.[] | select(.is_focused) | .output')
+
+  # Find the trailing empty workspace on this monitor (highest idx, unnamed, no windows)
+  local target_idx
+  target_idx=$(niri msg -j workspaces | jq \
+    "[.[] | select(.output == \"$focused_output\" and .name == null and .active_window_id == null) | .idx] | max")
+
+  if [[ "$target_idx" == "null" || -z "$target_idx" ]]; then
+    # No empty workspace available — focus the last one and go down to create one
+    local last_idx
+    last_idx=$(niri msg -j workspaces | jq \
+      "[.[] | select(.output == \"$focused_output\") | .idx] | max")
+    niri msg action focus-workspace "$last_idx"
+    niri msg action focus-workspace-down
+  else
+    niri msg action focus-workspace "$target_idx"
+  fi
+
+  # Name the workspace and spawn a terminal
+  niri msg action set-workspace-name "$workspace_name"
+  niri msg action spawn -- ghostty --working-directory="$project_dir"
+}
+
+main "$@"
