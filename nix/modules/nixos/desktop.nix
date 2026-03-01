@@ -54,6 +54,7 @@ in
     "video"
     "audio"
     "input"
+    "uinput"
   ];
 
   programs = {
@@ -69,6 +70,7 @@ in
     };
   };
 
+  hardware.uinput.enable = true;
   hardware.bluetooth.enable = true;
   networking.networkmanager.enable = true;
 
