@@ -13,6 +13,7 @@
       window-padding-x = 10;
       window-padding-y = 5;
       gtk-titlebar = false;
+      confirm-close-surface = false;
       cursor-style-blink = false;
       font-synthetic-style = false;
       minimum-contrast = 1.2;

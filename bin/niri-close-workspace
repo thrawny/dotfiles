@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+main() {
+  # Get the focused workspace
+  local workspace
+  workspace=$(niri msg -j workspaces | jq '.[] | select(.is_focused)')
+
+  local workspace_id workspace_name
+  workspace_id=$(echo "$workspace" | jq '.id')
+  workspace_name=$(echo "$workspace" | jq -r '.name // empty')
+
+  # Close all windows on the focused workspace
+  local window_ids
+  window_ids=$(niri msg -j windows | jq -r ".[] | select(.workspace_id == $workspace_id) | .id")
+  for id in $window_ids; do
+    niri msg action close-window --id "$id"
+  done
+
+  # Focus the previous workspace
+  niri msg action focus-workspace-up
+
+  # Unset the workspace name so niri removes the empty workspace
+  if [[ -n "$workspace_name" ]]; then
+    niri msg action unset-workspace-name "$workspace_name"
+  fi
+}
+
+main "$@"
