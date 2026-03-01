@@ -1,6 +1,6 @@
 # agent-switch
 
-Unified tool for tracking and switching between AI coding agent sessions (Claude, Codex, OpenCode).
+Unified tool for tracking and switching between AI coding agent sessions (Claude, Codex, OpenCode, Pi).
 
 ## Goals
 
@@ -142,7 +142,7 @@ Keybind calls: `agent-switch niri --toggle`
 
 Daemonless, similar to tmux but queries Terminal.app or iTerm windows.
 
-## Hook Integration
+## Agent Integration
 
 ### Claude
 
@@ -157,6 +157,67 @@ Daemonless, similar to tmux but queries Terminal.app or iTerm windows.
   }
 }
 ```
+
+### Pi coding agent (extension-based)
+
+Pi uses TypeScript extensions instead of JSON hook commands.
+
+1. Put an extension at `~/.pi/agent/extensions/agent-switch.ts`
+2. Ensure `agent-switch` is on `PATH`
+3. Start the daemon with `agent-switch serve` (or `agent-switch serve --niri`)
+
+Minimal extension example:
+
+```ts
+import { execFileSync } from "node:child_process";
+import path from "node:path";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@mariozechner/pi-coding-agent";
+
+type TrackEvent = "session-start" | "session-end" | "prompt-submit" | "stop";
+
+function sessionId(ctx: ExtensionContext): string {
+  const file = ctx.sessionManager.getSessionFile();
+  if (!file) return `pi-${process.pid}`;
+  const base = path.basename(file);
+  const ext = path.extname(base);
+  return ext ? base.slice(0, -ext.length) : base;
+}
+
+function track(ctx: ExtensionContext, event: TrackEvent) {
+  execFileSync("agent-switch", ["track", event], {
+    input: JSON.stringify({
+      agent: "pi",
+      session_id: sessionId(ctx),
+      cwd: ctx.cwd,
+      event,
+    }),
+    encoding: "utf8",
+    stdio: ["pipe", "ignore", "pipe"],
+  });
+}
+
+export default function (pi: ExtensionAPI) {
+  pi.on("session_start", async (_event, ctx) => track(ctx, "session-start"));
+  pi.on("session_shutdown", async (_event, ctx) => track(ctx, "session-end"));
+  pi.on("agent_start", async (_event, ctx) => track(ctx, "prompt-submit"));
+  pi.on("agent_end", async (_event, ctx) => track(ctx, "stop"));
+}
+```
+
+Event mapping reference:
+
+| Pi event | `agent-switch` event |
+|---|---|
+| `session_start` | `session-start` |
+| `session_shutdown` | `session-end` |
+| `agent_start` | `prompt-submit` |
+| `agent_end` | `stop` |
+| `session_switch` / `session_fork` | `session-end` (previous) + `session-start` (new) |
+
+Full production example: `config/pi/extensions/agent-switch.ts`.
 
 ### Codex / OpenCode
 
