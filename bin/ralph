@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# ralph — agent-agnostic task loop
+#
+# Reads tasks from a TOML file, feeds them to a coding agent one at a time.
+# Each iteration gets a fresh context window. Progress lives in files and git.
+#
+# Usage:
+#   ralph                        # claude, 10 iterations, TASKS.toml
+#   ralph 20                     # claude, 20 iterations
+#   ralph --agent codex          # use codex CLI
+#   ralph --agent aider 15       # aider, 15 iterations
+#   ralph --tasks todo.toml      # custom task file
+
+set -euo pipefail
+
+AGENT="claude"
+TASKS_FILE="TASKS.toml"
+MAX_ITERATIONS=10
+
+show_usage() {
+  cat <<'EOF'
+Usage: ralph [options] [max-iterations]
+
+Options:
+  --agent <cmd>    Agent CLI to use (default: claude)
+  --tasks <file>   Task file path (default: TASKS.toml)
+  -h, --help       Show this help
+
+Examples:
+  ralph                        # claude, 10 iterations
+  ralph 20                     # claude, 20 iterations
+  ralph --agent codex          # codex CLI
+  ralph --agent aider 15       # aider, 15 iterations
+  ralph --tasks todo.toml 5    # custom task file, 5 iterations
+
+Task file format (TOML):
+  [[tasks]]
+  title = "Add hot reloading"
+  priority = "high"
+  status = "pending"
+EOF
+}
+
+build_prompt() {
+  cat <<EOF
+Read ${TASKS_FILE}. Pick the highest priority task with status = "pending" (high > medium > low). If priorities are equal, pick whichever makes the most sense given the current codebase.
+
+Implement it. Run tests and checks. Set its status to "done" in ${TASKS_FILE}. Commit with a descriptive message.
+
+ONLY DO ONE TASK.
+
+If all tasks are done, output RALPH_DONE.
+EOF
+}
+
+run_agent() {
+  local prompt="$1"
+  case "$AGENT" in
+    claude)
+      claude -p "$prompt" --permission-mode acceptEdits 2>&1 | tee /dev/stderr
+      ;;
+    codex)
+      codex -p "$prompt" 2>&1 | tee /dev/stderr
+      ;;
+    *)
+      $AGENT -p "$prompt" 2>&1 | tee /dev/stderr
+      ;;
+  esac
+}
+
+main() {
+  while [[ $# -gt 0 ]]; do
+    case $1 in
+      -h|--help)   show_usage; exit 0 ;;
+      --agent)     AGENT="$2"; shift 2 ;;
+      --agent=*)   AGENT="${1#*=}"; shift ;;
+      --tasks)     TASKS_FILE="$2"; shift 2 ;;
+      --tasks=*)   TASKS_FILE="${1#*=}"; shift ;;
+      [0-9]*)      MAX_ITERATIONS="$1"; shift ;;
+      *)           echo "Unknown option: $1" >&2; show_usage; exit 1 ;;
+    esac
+  done
+
+  if [[ ! -f "$TASKS_FILE" ]]; then
+    echo "Error: ${TASKS_FILE} not found in $(pwd)" >&2
+    exit 1
+  fi
+
+  local branch
+  branch=$(git branch --show-current 2>/dev/null || echo "unknown")
+
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  echo "Agent:  $AGENT"
+  echo "Tasks:  $TASKS_FILE"
+  echo "Branch: $branch"
+  echo "Max:    $MAX_ITERATIONS iterations"
+  echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+  local prompt
+  prompt=$(build_prompt)
+
+  for ((i=1; i<=MAX_ITERATIONS; i++)); do
+    echo ""
+    echo "=============== Iteration $i of $MAX_ITERATIONS ==============="
+    echo ""
+
+    local output
+    output=$(run_agent "$prompt") || true
+
+    if echo "$output" | grep -q "RALPH_DONE"; then
+      echo ""
+      echo "All tasks complete after $i iterations."
+      notify "Ralph done — all tasks complete after $i iterations" 2>/dev/null || true
+      exit 0
+    fi
+
+    echo ""
+    echo "Iteration $i complete. Continuing..."
+    sleep 2
+  done
+
+  echo ""
+  echo "Reached max iterations ($MAX_ITERATIONS) without completing all tasks."
+  notify "Ralph stopped — reached $MAX_ITERATIONS iterations" 2>/dev/null || true
+  exit 1
+}
+
+main "$@"
