@@ -175,6 +175,11 @@ in
               x = 2560;
               y = 0;
             };
+            mode = {
+              width = 2560;
+              height = 1440;
+              refresh = 143.912;
+            };
           };
         };
         # Bind named workspaces to monitors
