@@ -64,5 +64,40 @@ zmx detach                               # Detach clients from current session
 - Do not kill or detach sessions without explicit user intent.
 - Read history before suggesting restarts.
 - Use `zmx history` for logs (there is no `zmx logs` command).
-- Prefer direct argument form (`zmx run <name> <command...>`). Use `sh -lc '...'` only when shell syntax is required (pipes, redirects, `&&`, globbing).
+- Prefer direct argument form (`zmx run <name> <command...>`).
+- Do not use `sh -lc` unless the command contains at least one of: `|`, `&&`, `||`, `>`, `<`, `*`, `$()`.
 - Keep session naming consistent within a task; avoid duplicate sessions for the same service.
+
+## Command form checklist
+
+Before running a command, ask:
+- Do I need shell parsing? If no, use direct args.
+- Am I only invoking one binary with normal flags/args? If yes, use direct args.
+- Am I using pipes, redirects, conditionals, globbing, or command substitution? If yes, `sh -lc` may be appropriate.
+
+## Anti-patterns and fixes
+
+- Bad: `zmx run s sh -lc 'ssh -N -L 8888:localhost:8888 user@host'`
+- Good: `zmx run s ssh -N -L 8888:localhost:8888 user@host`
+- Bad: `zmx run mqtt sh -lc 'mosquitto_sub -h broker -t sensors/# -v'`
+- Good: `zmx run mqtt mosquitto_sub -h broker -t sensors/# -v`
+- Bad: `zmx run test sh -lc 'go test ./...'`
+- Good: `zmx run test go test ./...`
+
+## Common command patterns (direct-arg first)
+
+- SSH tunnel:
+  `zmx run tunnel ssh -N -L 8888:localhost:8888 user@host`
+- MQTT subscriber:
+  `zmx run mqtt mosquitto_sub -h broker.example.com -t sensors/# -v`
+- Go tests:
+  `zmx run test go test ./...`
+- Tail a logfile:
+  `zmx run logs tail -f /var/log/system.log`
+- Tail zmx history (outside session):
+  `zmx history <session> | tail -n 200`
+
+## Failure handling
+
+- If a command exits immediately with usage/help output, retry once in direct-arg form before any other debugging.
+- If it still fails, inspect `zmx history <session> | tail -n 200` and check argument ordering/quoting.
