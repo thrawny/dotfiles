@@ -203,6 +203,24 @@
             done
           }
 
+          function zmx-clear-all() {
+            if ! command -v zmx >/dev/null 2>&1; then
+              echo "zmx is not installed"
+              return 1
+            fi
+
+            local killed=0
+            while IFS= read -r session; do
+              [[ -z "$session" ]] && continue
+              zmx kill "$session"
+              ((killed++))
+            done < <(zmx list --short)
+
+            if [[ $killed -eq 0 ]]; then
+              echo "No zmx sessions to clear"
+            fi
+          }
+
           function dbp() {
             docker build -t $1 . && docker push $1
           }
