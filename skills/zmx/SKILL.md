@@ -47,42 +47,41 @@ zmx detach                               # Detach clients from current session
 
 ### Check logs or status
 
-- Do not create a new session for log requests.
+- Reuse the existing session for log requests.
 - If the session is missing, tell the user and ask whether to start it.
 - Use `zmx history <session> | tail -n <N>` (`N=200` by default unless user asks otherwise).
 - If a task exits unexpectedly with little/no output, check history for immediate completion markers (for example `ZMX_TASK_COMPLETED:0`) before retrying.
 
 ### Stop or disconnect
 
-- Stop only when explicitly requested.
+- Stop sessions when the user explicitly requests it.
 - Use `zmx kill <session>` for full teardown.
-- Use `zmx detach` only to disconnect clients, not to stop the process.
+- Use `zmx detach` to disconnect clients.
 - If restart fails due to port conflicts, check and clean up listeners explicitly (`lsof -i :<port>` then terminate stale processes).
 
 ## Guardrails
 
-- Do not kill or detach sessions without explicit user intent.
+- Kill or detach sessions only with explicit user intent.
 - Read history before suggesting restarts.
-- Use `zmx history` for logs (there is no `zmx logs` command).
+- Use `zmx history` for logs.
 - Prefer direct argument form (`zmx run <name> <command...>`).
-- Do not use `sh -lc` unless the command contains at least one of: `|`, `&&`, `||`, `>`, `<`, `*`, `$()`.
-- Keep session naming consistent within a task; avoid duplicate sessions for the same service.
+- For pipes, redirects, conditionals, or globbing: single-quote the entire command string so zmx passes it intact to the inner shell (e.g., `zmx run s 'cmd1 | cmd2'`).
+- Keep session naming consistent within a task and use one session per service.
 
 ## Command form checklist
 
 Before running a command, ask:
-- Do I need shell parsing? If no, use direct args.
-- Am I only invoking one binary with normal flags/args? If yes, use direct args.
-- Am I using pipes, redirects, conditionals, globbing, or command substitution? If yes, `sh -lc` may be appropriate.
+- Use direct args when invoking one binary with normal flags/args.
+- Use single-quoted command strings when using pipes, redirects, conditionals, globbing, or command substitution: `zmx run s 'cmd1 | cmd2'`.
 
-## Anti-patterns and fixes
+## Command examples
 
-- Bad: `zmx run s sh -lc 'ssh -N -L 8888:localhost:8888 user@host'`
-- Good: `zmx run s ssh -N -L 8888:localhost:8888 user@host`
-- Bad: `zmx run mqtt sh -lc 'mosquitto_sub -h broker -t sensors/# -v'`
-- Good: `zmx run mqtt mosquitto_sub -h broker -t sensors/# -v`
-- Bad: `zmx run test sh -lc 'go test ./...'`
-- Good: `zmx run test go test ./...`
+- SSH tunnel:
+  `zmx run s ssh -N -L 8888:localhost:8888 user@host`
+- MQTT subscriber:
+  `zmx run mqtt mosquitto_sub -h broker -t sensors/# -v`
+- Go tests:
+  `zmx run test go test ./...`
 
 ## Common command patterns (direct-arg first)
 
@@ -90,6 +89,8 @@ Before running a command, ask:
   `zmx run tunnel ssh -N -L 8888:localhost:8888 user@host`
 - MQTT subscriber:
   `zmx run mqtt mosquitto_sub -h broker.example.com -t sensors/# -v`
+- MQTT subscriber with pipe (single-quote the whole command):
+  `zmx run mqtt 'mosquitto_sub -h localhost -p 1883 -t topic -v | jq .field'`
 - Go tests:
   `zmx run test go test ./...`
 - Tail a logfile:
