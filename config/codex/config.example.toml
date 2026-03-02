@@ -30,7 +30,6 @@ unified_exec = true
 apply_patch_freeform = true
 skills = true
 shell_snapshot = true
-steer = true
 voice_transcription = true
 multi_agent = true
 
