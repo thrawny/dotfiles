@@ -383,6 +383,7 @@ in
         repeat-rate = 30;
       };
       touchpad = {
+        click-method = "clickfinger";
         natural-scroll = true;
         tap = true;
         scroll-factor = 0.3;

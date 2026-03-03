@@ -194,12 +194,27 @@
           x86_64-darwin.default = mkDevShell nixpkgs.legacyPackages.x86_64-darwin;
         };
 
-      formatter = {
-        x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.nixfmt-tree;
-        aarch64-linux = nixpkgs.legacyPackages.aarch64-linux.nixfmt-tree;
-        aarch64-darwin = nixpkgs.legacyPackages.aarch64-darwin.nixfmt-tree;
-        x86_64-darwin = nixpkgs.legacyPackages.x86_64-darwin.nixfmt-tree;
-      };
+      formatter =
+        let
+          mkFormatter =
+            pkgs:
+            pkgs.writeShellApplication {
+              name = "treefmt";
+              runtimeInputs = [
+                pkgs.treefmt
+                pkgs.nixfmt
+              ];
+              text = ''
+                treefmt "$@"
+              '';
+            };
+        in
+        {
+          x86_64-linux = mkFormatter nixpkgs.legacyPackages.x86_64-linux;
+          aarch64-linux = mkFormatter nixpkgs.legacyPackages.aarch64-linux;
+          aarch64-darwin = mkFormatter nixpkgs.legacyPackages.aarch64-darwin;
+          x86_64-darwin = mkFormatter nixpkgs.legacyPackages.x86_64-darwin;
+        };
 
       homeConfigurations = {
         thrawnym1 = mkHomeConfiguration {
