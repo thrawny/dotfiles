@@ -13,10 +13,10 @@
   dotfiles = {
     username = "thrawny";
     fullName = "Jonas Lergell";
-    email = "jonaslergell@gmail.com";
+    email = "jonas@lergell.se";
   };
 
-  networking.hostName = "z13";
+  networking.hostName = "thrawny-z13";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
   # ThinkPads use UEFI/systemd-boot.

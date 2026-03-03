@@ -140,11 +140,11 @@
           ];
         };
 
-        z13 = mkHost {
+        thrawny-z13 = mkHost {
           system = "x86_64-linux";
           modules = [
             nixos-hardware.nixosModules.lenovo-thinkpad-z13-gen2
-            ./hosts/z13/default.nix
+            ./hosts/thrawny-z13/default.nix
           ];
         };
 
