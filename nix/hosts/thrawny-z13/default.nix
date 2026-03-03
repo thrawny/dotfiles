@@ -1,6 +1,7 @@
 {
   lib,
   config,
+  pkgs,
   ...
 }:
 {
@@ -55,5 +56,7 @@
     programs.niri.settings.window-rules = [
       { open-maximized = true; }
     ];
+
+    home.packages = [ pkgs.google-chrome ];
   };
 }
