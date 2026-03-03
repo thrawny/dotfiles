@@ -85,8 +85,6 @@
             "Super-t" = "C-t";
 
             # Navigation with Arrows (macOS-style)
-            "Super-Left" = "Home";
-            "Super-Right" = "End";
             "Super-Up" = "C-Home";
             "Super-Down" = "C-End";
 
