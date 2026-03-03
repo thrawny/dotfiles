@@ -122,6 +122,7 @@ in
 
       # Claude/AI tools
       ".claude/plans"
+      ".claude/worktrees"
       ".playwright-mcp"
 
       # Workflow files
