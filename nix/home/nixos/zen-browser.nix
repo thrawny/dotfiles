@@ -43,8 +43,16 @@
         ]
         # Super+Left/Right: browser back/forward (Alt is reserved for Niri)
         ++ [
-          { id = "goBackKb"; keycode = "VK_LEFT"; modifiers.meta = true; }
-          { id = "goForwardKb"; keycode = "VK_RIGHT"; modifiers.meta = true; }
+          {
+            id = "goBackKb";
+            keycode = "VK_LEFT";
+            modifiers.meta = true;
+          }
+          {
+            id = "goForwardKb";
+            keycode = "VK_RIGHT";
+            modifiers.meta = true;
+          }
         ];
     };
   };

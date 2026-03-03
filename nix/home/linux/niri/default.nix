@@ -248,56 +248,50 @@ let
   mediaBinds = {
     "XF86AudioRaiseVolume" = {
       action.spawn = [
-        "wpctl"
-        "set-volume"
-        "-l"
-        "1"
-        "@DEFAULT_AUDIO_SINK@"
-        "5%+"
+        "swayosd-client"
+        "--output-volume"
+        "raise"
       ];
       allow-when-locked = true;
     };
     "XF86AudioLowerVolume" = {
       action.spawn = [
-        "wpctl"
-        "set-volume"
-        "@DEFAULT_AUDIO_SINK@"
-        "5%-"
+        "swayosd-client"
+        "--output-volume"
+        "lower"
       ];
       allow-when-locked = true;
     };
     "XF86AudioMute" = {
       action.spawn = [
-        "wpctl"
-        "set-mute"
-        "@DEFAULT_AUDIO_SINK@"
-        "toggle"
+        "swayosd-client"
+        "--output-volume"
+        "mute-toggle"
       ];
       allow-when-locked = true;
     };
     "XF86AudioMicMute" = {
       action.spawn = [
-        "wpctl"
-        "set-mute"
-        "@DEFAULT_AUDIO_SOURCE@"
-        "toggle"
+        "swayosd-client"
+        "--input-volume"
+        "mute-toggle"
       ];
       allow-when-locked = true;
     };
 
     "XF86MonBrightnessUp" = {
       action.spawn = [
-        "brightnessctl"
-        "set"
-        "5%+"
+        "swayosd-client"
+        "--brightness"
+        "raise"
       ];
       allow-when-locked = true;
     };
     "XF86MonBrightnessDown" = {
       action.spawn = [
-        "brightnessctl"
-        "set"
-        "5%-"
+        "swayosd-client"
+        "--brightness"
+        "lower"
       ];
       allow-when-locked = true;
     };
@@ -345,7 +339,10 @@ let
     // mediaBinds;
 in
 {
-  home.packages = [ pkgs.swaybg ];
+  home.packages = [
+    pkgs.swaybg
+    pkgs.swayosd
+  ];
 
   programs.niri.settings = {
     # Named workspaces
@@ -441,6 +438,7 @@ in
 
     # Spawn at startup (xwayland-satellite spawned on-demand by niri)
     spawn-at-startup = [
+      { command = [ "swayosd-server" ]; }
       {
         command = [
           "bash"
