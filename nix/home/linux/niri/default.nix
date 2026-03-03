@@ -386,6 +386,7 @@ in
         click-method = "clickfinger";
         natural-scroll = true;
         tap = true;
+        drag = false;
         scroll-factor = 0.3;
       };
     };
