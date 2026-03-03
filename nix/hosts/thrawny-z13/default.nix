@@ -18,6 +18,7 @@
   };
 
   networking.hostName = "thrawny-z13";
+  boot.extraModprobeConfig = "options cfg80211 ieee80211_regdom=SE";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
   # ThinkPads use UEFI/systemd-boot.
@@ -57,6 +58,9 @@
       { open-maximized = true; }
     ];
 
-    home.packages = [ pkgs.google-chrome ];
+    home.packages = [
+      pkgs.google-chrome
+      pkgs.slack
+    ];
   };
 }
