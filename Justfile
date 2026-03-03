@@ -10,13 +10,15 @@ default:
 # === Shortcuts ===
 
 # Switch nix configuration and install Rust binaries (skip rust on headless)
-switch:
-    just nix::switch
-    {{ if headless != "true" { "just rust::install" } else { "" } }}
+switch: (nix::switch) install-rust-if-not-headless
+
+# Install default Rust binaries unless running headless
+[private]
+install-rust-if-not-headless:
+    {{ if headless != "true" { "cargo install --path rust/bash-validator --locked --force" } else { "@true" } }}
 
 # Update AI tool flake inputs and switch
-ai:
-    just nix::ai
+ai: (nix::ai)
 
 # === Formatters ===
 
@@ -32,8 +34,7 @@ fmt-python:
     ruff check --fix && ruff format .
 
 # Format Rust files
-fmt-rust:
-    just rust::fmt
+fmt-rust: (rust::fmt)
 
 # === Linters ===
 
@@ -49,8 +50,7 @@ lint-python:
     ruff check .
 
 # Lint Rust files
-lint-rust:
-    just rust::clippy
+lint-rust: (rust::clippy)
 
 # === Type checking ===
 
