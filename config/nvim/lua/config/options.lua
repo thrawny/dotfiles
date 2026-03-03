@@ -15,6 +15,9 @@ vim.g.ai_cmp = false
 -- Auto-reload files when changed externally
 vim.opt.autoread = true
 
+-- Open files with all folds expanded
+vim.opt.foldlevel = 99
+
 -- Enable 24-bit RGB color (required for terminal colors to work properly)
 vim.opt.termguicolors = true
 
