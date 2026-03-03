@@ -14,7 +14,6 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 **Home Manager standalone:**
 - `thrawnym1` - MacBook M1 (aarch64-darwin)
 - `jonas-kanel` - Work MacBook Pro M3 (aarch64-darwin)
-- `thrawny-asahi-air` - Asahi Linux on MacBook Air (aarch64-linux)
 
 ## Structure
 

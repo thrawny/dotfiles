@@ -1,6 +1,5 @@
 # Base Niri window manager configuration
 # Import this for any Linux system using niri
-# Add ./dms.nix for DankMaterialShell integration
 # Add ./switcher.nix for agent-switch
 {
   config,

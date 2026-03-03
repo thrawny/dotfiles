@@ -19,7 +19,7 @@
     # Linux-specific modules
     ../linux
 
-    # Niri window manager (base + switcher, no DMS)
+    # Niri window manager
     ../linux/niri
     ../linux/niri/switcher.nix
 

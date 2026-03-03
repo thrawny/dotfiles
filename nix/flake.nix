@@ -232,25 +232,6 @@
           extraSpecialArgs = import ./hosts/jonas-kanel/default.nix;
         };
 
-        # Asahi Air with Niri + DankMaterialShell
-        # Uses niri installed via DNF, config managed by nix
-        thrawny-asahi-air = mkHomeConfiguration {
-          pkgs = nixpkgs.legacyPackages.aarch64-linux;
-          modules = [
-            niri-flake.homeModules.config # config only, no package (using Fedora's niri)
-            xremap-flake.homeManagerModules.default
-            ./hosts/thrawny-asahi-air/default.nix
-          ];
-          extraSpecialArgs = {
-            inherit self xremap-flake;
-            username = "thrawny";
-            dotfiles = "/home/thrawny/dotfiles";
-            gitIdentity = {
-              name = "Jonas Lergell";
-              email = "jonaslergell@gmail.com";
-            };
-          };
-        };
       };
     };
 }
