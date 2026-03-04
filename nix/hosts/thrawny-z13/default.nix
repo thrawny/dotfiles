@@ -53,10 +53,39 @@
   home-manager.users.${config.dotfiles.username} = {
     programs.ghostty.settings.font-size = 11;
 
-    # Laptop: open windows maximized (small screen)
-    programs.niri.settings.window-rules = [
-      { open-maximized = true; }
-    ];
+    programs.niri.settings = {
+      outputs = {
+        # Laptop screen - leftmost
+        "eDP-1" = {
+          scale = 1.75;
+          position = {
+            x = 0;
+            y = 0;
+          };
+        };
+        # LG 27GL850 - middle (main monitor)
+        "DP-8" = {
+          scale = 1.0;
+          position = {
+            x = 1646;
+            y = 0;
+          };
+        };
+        # AOC Q27G2WG4 - right
+        "DP-2" = {
+          scale = 1.0;
+          position = {
+            x = 4206;
+            y = 0;
+          };
+        };
+      };
+      workspaces = {
+        "1-main".open-on-output = "DP-8";
+        "2-web".open-on-output = "DP-2";
+        "3-dotfiles".open-on-output = "DP-8";
+      };
+    };
 
     home.packages = [
       pkgs.google-chrome
