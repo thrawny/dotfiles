@@ -45,9 +45,7 @@
 
   # Lid close: suspend immediately, hibernate after 2 hours
   services.logind.settings.Login.HandleLidSwitch = "suspend-then-hibernate";
-  systemd.sleep.extraConfig = ''
-    HibernateDelaySec=2h
-  '';
+  systemd.sleep.settings.Sleep.HibernateDelaySec = "2h";
 
   # Host-specific home-manager overrides
   home-manager.users.${config.dotfiles.username} = {
