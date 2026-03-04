@@ -74,16 +74,7 @@ Before running a command, ask:
 - Use direct args when invoking one binary with normal flags/args.
 - Use single-quoted command strings when using pipes, redirects, conditionals, globbing, or command substitution: `zmx run s 'cmd1 | cmd2'`.
 
-## Command examples
-
-- SSH tunnel:
-  `zmx run s ssh -N -L 8888:localhost:8888 user@host`
-- MQTT subscriber:
-  `zmx run mqtt mosquitto_sub -h broker -t sensors/# -v`
-- Go tests:
-  `zmx run test go test ./...`
-
-## Common command patterns (direct-arg first)
+## Examples
 
 - SSH tunnel:
   `zmx run tunnel ssh -N -L 8888:localhost:8888 user@host`
@@ -95,8 +86,6 @@ Before running a command, ask:
   `zmx run test go test ./...`
 - Tail a logfile:
   `zmx run logs tail -f /var/log/system.log`
-- Tail zmx history (outside session):
-  `zmx history <session> | tail -n 200`
 
 ## Failure handling
 

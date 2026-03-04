@@ -17,7 +17,9 @@ let
       builtins.readDir ../../../skills
     )
   );
-  codexSharedSkillNames = lib.filter (name: name != "skill-creator") sharedSkillNames;
+  noSkillCreator = lib.filter (name: name != "skill-creator") sharedSkillNames;
+  codexSharedSkillNames = noSkillCreator;
+  claudeSharedSkillNames = noSkillCreator;
   seedExample =
     example: destination:
     hmLib.dag.entryBefore [ "linkGeneration" ] ''
@@ -127,12 +129,23 @@ in
           rm -f "$codex_skill_creator"
         fi
 
-        for base in "$HOME/.claude/skills" "$HOME/.pi/agent/skills"; do
-          ensure_base_dir "$base"
-          prune_removed_repo_skills "$base"
-          for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg sharedSkillNames)}; do
-            link_skill "$base" "$skill"
-          done
+        # Claude uses plugin skill-creator; don't override it with our shared one.
+        claude_base="$HOME/.claude/skills"
+        ensure_base_dir "$claude_base"
+        prune_removed_repo_skills "$claude_base"
+        for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg claudeSharedSkillNames)}; do
+          link_skill "$claude_base" "$skill"
+        done
+        claude_skill_creator="$claude_base/skill-creator"
+        if [ -L "$claude_skill_creator" ] && [ "$(readlink "$claude_skill_creator")" = "$skills_src/skill-creator" ]; then
+          rm -f "$claude_skill_creator"
+        fi
+
+        pi_base="$HOME/.pi/agent/skills"
+        ensure_base_dir "$pi_base"
+        prune_removed_repo_skills "$pi_base"
+        for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg sharedSkillNames)}; do
+          link_skill "$pi_base" "$skill"
         done
       '';
     };
