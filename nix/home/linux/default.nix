@@ -3,6 +3,7 @@
 # Note: xwayland-satellite is spawned on-demand by niri when X11 apps connect
 {
   imports = [
+    ./hyprlock.nix
     ./xremap.nix
   ];
 }

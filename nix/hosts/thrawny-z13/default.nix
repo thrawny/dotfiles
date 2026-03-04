@@ -43,6 +43,13 @@
     }
   ];
 
+  # Fingerprint reader (Synaptics on Z13 Gen 2)
+  services.fprintd.enable = true; # sudo/login get fprintAuth automatically
+  security.pam.services.polkit-1 = {
+    fprintAuth = true;
+    unixAuth = false; # fingerprint only, no user password
+  }; # 1Password
+
   # Lid close: suspend immediately, hibernate after 2 hours
   services.logind.settings.Login.HandleLidSwitch = "suspend-then-hibernate";
   systemd.sleep.settings.Sleep.HibernateDelaySec = "2h";
