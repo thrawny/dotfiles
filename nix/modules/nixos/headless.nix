@@ -8,6 +8,13 @@
   # imperatively-set console passwords until sops is set up.
   users.mutableUsers = lib.mkForce true;
 
+  # Re-enable ~/.ssh/authorized_keys alongside Nix-managed keys
+  # (srvos restricts to only /etc/ssh/authorized_keys.d/%u)
+  services.openssh.authorizedKeysFiles = lib.mkForce [
+    "/etc/ssh/authorized_keys.d/%u"
+    "%h/.ssh/authorized_keys"
+  ];
+
   # Keep server generations lean on hosts using GRUB.
   boot.loader.grub.configurationLimit = 2;
 

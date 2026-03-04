@@ -19,7 +19,8 @@
     xremap-flake.url = "github:xremap/nix-flake";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
-    srvos.url = "github:nix-community/srvos";
+    # Pin to PR #771: fix deprecated systemd.sleep.extraConfig for NixOS 26.05
+    srvos.url = "github:nix-community/srvos/752772adba542cab1162ad271f0b3d69adc59349";
     srvos.inputs.nixpkgs.follows = "nixpkgs";
     claude-code-nix.url = "github:sadjow/claude-code-nix";
     llm-agents.url = "github:numtide/llm-agents.nix";
@@ -115,6 +116,7 @@
             home-manager.nixosModules.home-manager
             disko.nixosModules.disko
             { home-manager.extraSpecialArgs = flakeArgs; }
+
           ]
           ++ modules;
         };

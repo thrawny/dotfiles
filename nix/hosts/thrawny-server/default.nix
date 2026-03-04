@@ -22,7 +22,13 @@ in
 
   # Prevent openssh from auto-opening port 22 to all IPs;
   # SSH is only reachable via Tailscale (trusted) and the allowlisted IP below.
-  services.openssh.openFirewall = false;
+  services.openssh = {
+    openFirewall = false;
+    # Listen on 2222 so OpenSSH is reachable alongside Tailscale SSH,
+    # which intercepts port 22 on the Tailscale IP.
+    ports = [ 2222 ];
+
+  };
 
   # SSH access
   users.users.thrawny.openssh.authorizedKeys.keys = [
@@ -38,7 +44,7 @@ in
       enable = true;
       trustedInterfaces = [ "tailscale0" ];
       extraInputRules = ''
-        tcp dport 22 ip saddr 84.216.114.142 accept
+        tcp dport 2222 ip saddr 84.216.114.142 accept
       '';
     };
   };
