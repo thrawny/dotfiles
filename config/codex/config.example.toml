@@ -1,6 +1,6 @@
 editor = "cursor"
 sandbox_mode = "workspace-write"
-model = "gpt-5.2-codex"
+model = "gpt-5.3-codex"
 model_reasoning_effort = "high"
 tool_output_token_limit = 25000
 # Leave room for native compaction near the 272–273k context window.
@@ -34,21 +34,11 @@ voice_transcription = true
 multi_agent = true
 
 [sandbox_workspace_write]
-writable_roots = [
-  "/Users/jonas/Library/Caches",
-  "/Users/jonas/.cache",
-  "/Users/brew/Library/Caches",
-  "/Users/jonas/.npm",
-  "/Users/jonas/.matplotlib",
-]
+writable_roots = ["/home/thrawny/.cache", "/home/thrawny/.npm"]
 network_access = true
 
-[projects."/Users/jonas/dotfiles"]
+[projects."/home/thrawny/dotfiles"]
 trust_level = "trusted"
 
-[projects."/Users/jonas/code"]
+[projects."/home/thrawny/code"]
 trust_level = "trusted"
-
-[profiles.clawdbot]
-model = "gpt-5.2-codex"
-reasoning = "medium"
