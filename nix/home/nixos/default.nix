@@ -24,6 +24,7 @@
     ../linux/niri/switcher.nix
 
     # NixOS-specific modules
+    ./hypridle.nix
     ./btop.nix
     ./mako.nix
     ./telegram.nix
