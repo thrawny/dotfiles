@@ -12,6 +12,7 @@
     stdlib = ''
       dotenv_if_exists .env
       dotenv_if_exists .env.local
+      source_env_if_exists .envrc.local
       dotenv_if_exists .secrets
 
       layout_uv() {
