@@ -57,15 +57,14 @@
         vim = "nvim";
         svh = "sudo nvim /etc/hosts";
         k = "kubectl";
-        kt = "stern";
+        kp = "kubectl get pod";
         ka = "kubectl apply -f";
         kn = "kubectl -n kube-system";
-        gsha = "git rev-parse HEAD | cut -c1-9";
         ku = "kubectl config use-context";
+        gsha = "git rev-parse HEAD | cut -c1-9";
         hb = "gh repo view --web";
         b = "bat -p --pager=never";
         gcam = "git add -A && git commit -m";
-        tfa = "terraform apply";
         bu = "brew upgrade";
         c = if pkgs.stdenv.isLinux then "claude-node" else "claude";
         cy =
