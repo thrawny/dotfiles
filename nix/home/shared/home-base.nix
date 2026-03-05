@@ -54,6 +54,10 @@ in
     stateVersion = "24.05";
 
     # Session-wide PATH (inherited by window managers, waybar, etc.)
+    sessionVariables = {
+      KUBECTL_EXTERNAL_DIFF = "kubectl-dyff";
+    };
+
     sessionPath = [
       "${config.home.homeDirectory}/.cargo/bin"
       "${config.home.homeDirectory}/.npm-global/bin"

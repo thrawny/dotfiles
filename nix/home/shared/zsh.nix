@@ -53,7 +53,7 @@
       shellAliases = {
         h = "history";
         l = "ls -lh";
-        fig = "docker-compose";
+        fig = "docker compose";
         vim = "nvim";
         svh = "sudo nvim /etc/hosts";
         k = "kubectl";
@@ -65,7 +65,11 @@
         hb = "gh repo view --web";
         b = "bat -p --pager=never";
         gcam = "git add -A && git commit -m";
+      }
+      // lib.optionalAttrs pkgs.stdenv.isDarwin {
         bu = "brew upgrade";
+      }
+      // {
         c = if pkgs.stdenv.isLinux then "claude-node" else "claude";
         cy =
           if pkgs.stdenv.isLinux then
@@ -80,6 +84,10 @@
         taf = "terraform apply -auto-approve";
         cx = "codex";
         cxy = "codex --dangerously-bypass-approvals-and-sandbox";
+      }
+      // lib.optionalAttrs pkgs.stdenv.isLinux {
+        pbcopy = "wl-copy";
+        pbpaste = "wl-paste";
       };
 
       # Set options
@@ -127,13 +135,10 @@
           )
         '')
         ''
-          # ===== OS-specific Configuration =====
+          # ===== macOS: Homebrew =====
           if [[ "$(uname)" == "Darwin" ]]; then
             [[ -x /opt/homebrew/bin/brew ]] && eval "$(/opt/homebrew/bin/brew shellenv)"
             alias cct='security find-generic-password -s "Claude Code-credentials" -w | jq -c "{claudeAiOauth}"'
-          else
-            alias pbcopy='wl-copy'
-            alias pbpaste='wl-paste'
           fi
 
           # Homebrew completions (macOS)
@@ -149,15 +154,6 @@
           # zmx (Homebrew installs may not ship _zmx into site-functions)
           if type brew &> /dev/null && command -v zmx &> /dev/null; then
             source <(zmx completions zsh)
-          fi
-
-          # ===== kubectl =====
-          if command -v kubectl &> /dev/null; then
-            source <(kubectl completion zsh)
-          fi
-
-          if command -v dyff &> /dev/null; then
-            export KUBECTL_EXTERNAL_DIFF="kubectl-dyff"
           fi
 
           # ===== Conditional aliases =====
@@ -188,20 +184,6 @@
             git gtr new "$@" && tmux-project "$(git gtr go "$1")"
           }
 
-          function kcaev() {
-            envsubst < $1 | kubectl apply -f -
-          }
-
-          function ktc() {
-            stern $1 -c $1 -e "kube-probe|Checking status...|health check|Accepted connection from /100" ''${@:2}
-          }
-
-          function kcpf() {
-            while true; do
-              kubectl port-forward "$@"
-            done
-          }
-
           function zmx-clear-all() {
             if ! command -v zmx >/dev/null 2>&1; then
               echo "zmx is not installed"
@@ -218,18 +200,6 @@
             if [[ $killed -eq 0 ]]; then
               echo "No zmx sessions to clear"
             fi
-          }
-
-          function dbp() {
-            docker build -t $1 . && docker push $1
-          }
-
-          function ktjq() {
-            stern $1 --output raw | jq -r -R 'fromjson? | "\(.["@timestamp"]) [\(.level)] - \(.message)"' ''${@:2}
-          }
-
-          function uuid() {
-            python3 -c "import uuid;print(uuid.uuid4())"
           }
 
           function al() {
