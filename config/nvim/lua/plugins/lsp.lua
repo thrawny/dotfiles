@@ -102,6 +102,13 @@ return {
             },
           },
         },
+        taplo = {
+          root_dir = function(bufnr, cb)
+            local fname = vim.api.nvim_buf_get_name(bufnr)
+            local root = vim.fs.root(bufnr, { ".taplo.toml", "taplo.toml", ".git" })
+            cb(root or vim.fs.dirname(fname))
+          end,
+        },
         basedpyright = {
           mason = false,
         },
