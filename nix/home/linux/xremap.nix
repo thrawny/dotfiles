@@ -83,6 +83,7 @@
             "Super-s" = "C-s";
             "Super-w" = "C-w";
             "Super-t" = "C-t";
+            "Super-Alt-i" = "C-Shift-i";
 
             # Navigation with Arrows (macOS-style)
             "Super-Up" = "C-Home";
