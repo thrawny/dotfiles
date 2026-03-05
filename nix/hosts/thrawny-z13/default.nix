@@ -95,6 +95,7 @@
     home.packages = [
       pkgs.google-chrome
       pkgs.slack
+      pkgs.teams-for-linux
     ];
   };
 }
