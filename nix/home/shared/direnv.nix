@@ -7,6 +7,7 @@
     config.whitelist.prefix = [
       "${config.home.homeDirectory}/dotfiles"
       "${config.home.homeDirectory}/code"
+      "${config.home.homeDirectory}/work"
     ];
     stdlib = ''
       dotenv_if_exists .env
