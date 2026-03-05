@@ -174,7 +174,7 @@ in
             numKeyColor = pink;
           };
           crumbs = {
-            fgColor = fg;
+            fgColor = bg;
             bgColor = currentLine;
             activeColor = yellow;
           };

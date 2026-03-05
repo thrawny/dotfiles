@@ -9,6 +9,22 @@ let
   inherit (pkgs.stdenv.hostPlatform) system;
   claudePkgs = claude-code-nix.packages.${system};
   llmPkgs = llm-agents.packages.${system};
+  kubectl134 =
+    if pkgs.stdenv.isLinux && pkgs.stdenv.hostPlatform.isx86_64 then
+      pkgs.stdenvNoCC.mkDerivation {
+        pname = "kubectl";
+        version = "1.34.5";
+        src = pkgs.fetchurl {
+          url = "https://dl.k8s.io/release/v1.34.5/bin/linux/amd64/kubectl";
+          hash = "sha256-ahfdg4d4OzFEplU1440Cw1ECfpcY6jSmw2BHbLJtKLs=";
+        };
+        dontUnpack = true;
+        installPhase = ''
+          install -Dm755 "$src" "$out/bin/kubectl"
+        '';
+      }
+    else
+      pkgs.kubectl;
 in
 {
   # Shared packages for both NixOS and Darwin
@@ -53,6 +69,7 @@ in
     gnugrep
     gnused
     k9s
+    kubectl134
     kind
     cowsay
     watch

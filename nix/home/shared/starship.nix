@@ -11,7 +11,8 @@ _: {
 
       kubernetes = {
         disabled = false;
-        format = "on [$symbol$context]($style) ";
+        symbol = "☸ ";
+        format = "on [$symbol $context]($style) ";
       };
 
       env_var.DEVPOD = {
