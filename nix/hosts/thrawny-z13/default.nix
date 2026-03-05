@@ -21,6 +21,29 @@
   boot.extraModprobeConfig = "options cfg80211 ieee80211_regdom=SE";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
+  services = {
+    # temp ssh
+    openssh = {
+      enable = true;
+      openFirewall = true;
+      ports = [ 2222 ];
+      settings = {
+        PubkeyAuthentication = true;
+        AuthenticationMethods = "publickey";
+        AuthorizedKeysFile = ".ssh/authorized_keys";
+        PasswordAuthentication = false;
+        KbdInteractiveAuthentication = false;
+        PermitRootLogin = "no";
+      };
+    };
+
+    # Fingerprint reader (Synaptics on Z13 Gen 2)
+    fprintd.enable = true; # sudo/login get fprintAuth automatically
+
+    # Lid close: suspend immediately, hibernate after 2 hours
+    logind.settings.Login.HandleLidSwitch = "suspend-then-hibernate";
+  };
+
   # ThinkPads use UEFI/systemd-boot.
   boot = {
     loader = {
@@ -43,15 +66,11 @@
     }
   ];
 
-  # Fingerprint reader (Synaptics on Z13 Gen 2)
-  services.fprintd.enable = true; # sudo/login get fprintAuth automatically
   security.pam.services.polkit-1 = {
     fprintAuth = true;
     unixAuth = false; # fingerprint only, no user password
   }; # 1Password
 
-  # Lid close: suspend immediately, hibernate after 2 hours
-  services.logind.settings.Login.HandleLidSwitch = "suspend-then-hibernate";
   systemd.sleep.settings.Sleep.HibernateDelaySec = "2h";
 
   # Host-specific home-manager overrides
