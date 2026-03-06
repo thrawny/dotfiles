@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+main() {
+  local target_output="${1:?Usage: niri-move-workspaces <output> [--except <workspace>...]}"
+  shift
+
+  # Parse --except arguments
+  local -a except=()
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --except) shift; except+=("$1"); shift ;;
+      *) echo "Unknown argument: $1" >&2; exit 1 ;;
+    esac
+  done
+
+  # Get all named workspaces not on the target output
+  local workspaces
+  workspaces=$(niri msg -j workspaces | jq -r --arg output "$target_output" \
+    '.[] | select(.output != $output and .name != null) | .name')
+
+  for ws in $workspaces; do
+    # Skip excepted workspaces
+    local skip=false
+    for e in "${except[@]+"${except[@]}"}"; do
+      if [[ "$ws" == "$e" ]]; then
+        skip=true
+        break
+      fi
+    done
+    if [[ "$skip" == true ]]; then
+      continue
+    fi
+
+    niri msg action move-workspace-to-monitor --reference "$ws" "$target_output"
+  done
+}
+
+main "$@"

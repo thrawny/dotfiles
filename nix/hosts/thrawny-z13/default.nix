@@ -79,15 +79,15 @@
 
     programs.niri.settings = {
       outputs = {
-        # Laptop screen - leftmost
+        # Laptop screen - centered below work ultrawide
         "eDP-1" = {
           scale = 1.75;
           position = {
-            x = 0;
-            y = 0;
+            x = 898;
+            y = 1440;
           };
         };
-        # LG 27GL850 - middle (main monitor)
+        # Home: LG 27GL850 - middle (main monitor)
         "DP-8" = {
           scale = 1.0;
           position = {
@@ -95,11 +95,19 @@
             y = 0;
           };
         };
-        # AOC Q27G2WG4 - right
+        # Home: AOC Q27G2WG4 - right
         "DP-2" = {
           scale = 1.0;
           position = {
             x = 4206;
+            y = 0;
+          };
+        };
+        # Work: Philips 346E2C ultrawide - above laptop
+        "DP-1" = {
+          scale = 1.0;
+          position = {
+            x = 0;
             y = 0;
           };
         };

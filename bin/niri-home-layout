@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+main() {
+  # Main + dotfiles on DP-8 (LG), web on DP-2 (AOC)
+  niri-move-workspaces DP-8 --except web
+  niri-move-workspaces DP-2 --except main --except dotfiles
+}
+
+main "$@"
