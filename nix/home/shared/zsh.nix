@@ -104,17 +104,6 @@
       initContent = lib.mkMerge [
         (lib.mkBefore ''
           # ===== Exports =====
-          export PYTHONDONTWRITEBYTECODE=1
-          export PYTHONUNBUFFERED=1
-          export GOPATH=$HOME/go
-          export PNPM_HOME="$HOME/.local/share/pnpm"
-          export EDITOR=nvim
-          export AWS_PAGER=""
-          export K9S_CONFIG_DIR=$HOME/.config/k9s
-          export LANG=en_US.UTF-8
-          export LC_ALL=en_US.UTF-8
-          export LC_CTYPE=en_US.UTF-8
-
           # Replicate Oh My Zsh's WORDCHARS behavior
           export WORDCHARS='_-'
 
@@ -154,6 +143,11 @@
           # zmx (Homebrew installs may not ship _zmx into site-functions)
           if type brew &> /dev/null && command -v zmx &> /dev/null; then
             source <(zmx completions zsh)
+          fi
+
+          # ===== kubectl =====
+          if command -v kubectl &> /dev/null; then
+            source <(kubectl completion zsh)
           fi
 
           # ===== Conditional aliases =====

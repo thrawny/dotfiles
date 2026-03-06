@@ -374,6 +374,7 @@ in
           layout = "au,se";
           options = "caps:escape";
         };
+        track-layout = "window";
         numlock = true;
         repeat-delay = 200;
         repeat-rate = 30;

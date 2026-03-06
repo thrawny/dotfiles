@@ -55,6 +55,15 @@ in
 
     # Session-wide PATH (inherited by window managers, waybar, etc.)
     sessionVariables = {
+      PYTHONDONTWRITEBYTECODE = "1";
+      PYTHONUNBUFFERED = "1";
+      GOPATH = "$HOME/go";
+      PNPM_HOME = "$HOME/.local/share/pnpm";
+      EDITOR = "nvim";
+      AWS_PAGER = "";
+      LANG = "en_US.UTF-8";
+      LC_ALL = "en_US.UTF-8";
+      LC_CTYPE = "en_US.UTF-8";
       KUBECTL_EXTERNAL_DIFF = "kubectl-dyff";
     };
 
