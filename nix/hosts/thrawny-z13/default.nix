@@ -40,6 +40,9 @@
     # Fingerprint reader (Synaptics on Z13 Gen 2)
     fprintd.enable = true; # sudo/login get fprintAuth automatically
 
+    # ZeroTier VPN
+    zerotierone.enable = true;
+
     # Lid close: suspend immediately, hibernate after 2 hours
     logind.settings.Login.HandleLidSwitch = "suspend-then-hibernate";
   };
