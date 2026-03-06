@@ -60,6 +60,8 @@ in
       GOPATH = "$HOME/go";
       PNPM_HOME = "$HOME/.local/share/pnpm";
       EDITOR = "nvim";
+      VISUAL = "nvim";
+      MANPAGER = "nvim +Man!";
       AWS_PAGER = "";
       LANG = "en_US.UTF-8";
       LC_ALL = "en_US.UTF-8";
