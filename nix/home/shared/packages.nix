@@ -114,6 +114,9 @@ in
 
     # AI tools
     (if stdenv.isDarwin then claudePkgs.claude-code else claudePkgs.claude-code-node)
+  ]
+  ++ lib.optionals stdenv.isLinux [
+    claudePkgs.claude-code
     llmPkgs.codex
     llmPkgs.pi
   ];
