@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Find the LG 27GL850 output name and cycle it off/on to wake it from deep sleep
+
+output=$(niri msg outputs | grep -B0 'LG Electronics 27GL850' | head -1 | sed 's/Output "\(.*\)" (.*/\1/')
+
+if [[ -z "$output" ]]; then
+  notify "LG monitor not found"
+  exit 1
+fi
+
+connector=$(niri msg outputs | grep 'LG Electronics 27GL850' | sed 's/.*(\(.*\))/\1/')
+
+niri msg output "$connector" off
+sleep 1
+niri msg output "$connector" on

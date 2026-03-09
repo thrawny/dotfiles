@@ -66,11 +66,7 @@ let
     };
     "Mod+Shift+P".action.power-off-monitors = [ ];
     "Mod+Super+M" = {
-      action.spawn = [
-        "bash"
-        "-c"
-        "niri msg output HDMI-A-1 off && sleep 1 && niri msg output HDMI-A-1 on"
-      ];
+      action.spawn = [ "wake-lg" ];
       hotkey-overlay.title = "Wake LG Monitor";
       allow-when-locked = true;
     };
