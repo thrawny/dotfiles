@@ -19,13 +19,13 @@ main() {
     niri msg action close-window --id "$id"
   done
 
+  # Unset the workspace name while still focused so niri removes it once empty
+  if [[ -n "$workspace_name" ]]; then
+    niri msg action unset-workspace-name
+  fi
+
   # Focus the previous workspace
   niri msg action focus-workspace-up
-
-  # Unset the workspace name so niri removes the empty workspace
-  if [[ -n "$workspace_name" ]]; then
-    niri msg action unset-workspace-name "$workspace_name"
-  fi
 }
 
 main "$@"

@@ -207,6 +207,7 @@
       pkgs.google-chrome
       pkgs.slack
       pkgs.teams-for-linux
+      pkgs.terraform
     ];
   };
 }
