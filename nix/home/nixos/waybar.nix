@@ -27,16 +27,16 @@ let
     #pulseaudio,
     #tray,
     #workspaces,
-    #idle_inhibitor,
+    #custom-caffeine,
     #language {
       padding: 0 8px;
     }
 
-    #idle_inhibitor.deactivated {
+    #custom-caffeine.deactivated {
       color: @waybar-muted;
     }
 
-    #idle_inhibitor.activated {
+    #custom-caffeine.activated {
       color: @waybar-accent;
     }
 
@@ -172,14 +172,12 @@ let
       on-click = "${homeDir}/.cargo/bin/quotabar popup";
     };
 
-    "idle_inhibitor" = {
-      format = "{icon}";
-      "format-icons" = {
-        activated = "󰅶";
-        deactivated = "󰛊";
-      };
-      tooltip-format-activated = "Caffeine: ON";
-      tooltip-format-deactivated = "Caffeine: OFF";
+    "custom/caffeine" = {
+      exec = "${homeDir}/dotfiles/bin/caffeine status";
+      return-type = "json";
+      interval = "once";
+      signal = 8;
+      on-click = "${homeDir}/dotfiles/bin/caffeine toggle";
     };
   };
 in
@@ -202,7 +200,7 @@ in
       "modules-center" = [ "niri/window" ];
       "modules-right" = [
         "custom/quotabar"
-        "idle_inhibitor"
+        "custom/caffeine"
         "niri/language"
         "tray"
         "network"

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Toggle or query systemd idle inhibition for use as a waybar custom module.
+# Uses systemd-inhibit which hypridle respects (unlike the Wayland idle-inhibit
+# protocol which niri drops when the surface is occluded).
+
+PIDFILE="${XDG_RUNTIME_DIR}/caffeine.pid"
+
+is_active() {
+  [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+}
+
+case "${1:-status}" in
+  toggle)
+    if is_active; then
+      kill "$(cat "$PIDFILE")"
+      rm -f "$PIDFILE"
+    else
+      systemd-inhibit --what=idle --who=caffeine --why="User requested" sleep infinity &
+      echo $! > "$PIDFILE"
+    fi
+    pkill -RTMIN+8 waybar
+    ;;
+  status)
+    if is_active; then
+      echo '{"text":"󰅶","tooltip":"Caffeine: ON","class":"activated"}'
+    else
+      echo '{"text":"󰛊","tooltip":"Caffeine: OFF","class":"deactivated"}'
+    fi
+    ;;
+esac
