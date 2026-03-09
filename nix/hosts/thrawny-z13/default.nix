@@ -141,7 +141,7 @@
 
   security.pam.services.polkit-1 = {
     fprintAuth = true;
-    unixAuth = false; # fingerprint only, no user password
+    unixAuth = true;
   }; # 1Password
 
   # mt7921e WiFi fails to restore from D3cold during hibernate (kernel bug #217415).
