@@ -18,8 +18,78 @@
   };
 
   networking.hostName = "thrawny-z13";
-  boot.extraModprobeConfig = "options cfg80211 ieee80211_regdom=SE";
+  boot.extraModprobeConfig = ''
+    options cfg80211 ieee80211_regdom=SE
+    options thinkpad_acpi fan_control=1 experimental=1
+  '';
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
+
+  # Thinkfan: custom fan curve for quieter operation
+  services.thinkfan = {
+    enable = true;
+    sensors = [
+      {
+        type = "hwmon";
+        query = "/sys/class/hwmon";
+        name = "k10temp";
+        indices = [ 1 ];
+      }
+      {
+        type = "hwmon";
+        query = "/sys/class/hwmon";
+        name = "amdgpu";
+        indices = [ 1 ];
+      }
+    ];
+    fans = [
+      {
+        type = "tpacpi";
+        query = "/proc/acpi/ibm/fan";
+      }
+    ];
+    levels = [
+      [
+        0
+        0
+        55
+      ]
+      [
+        1
+        48
+        60
+      ]
+      [
+        2
+        55
+        65
+      ]
+      [
+        3
+        60
+        70
+      ]
+      [
+        4
+        65
+        75
+      ]
+      [
+        5
+        70
+        80
+      ]
+      [
+        7
+        75
+        85
+      ]
+      [
+        "level full-speed"
+        85
+        32767
+      ]
+    ];
+  };
 
   services = {
     # temp ssh
