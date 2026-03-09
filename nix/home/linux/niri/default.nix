@@ -160,12 +160,12 @@ let
       hotkey-overlay.title = "Web Workspace";
     };
 
-    "Mod+U".action.focus-workspace-down = [ ];
-    "Mod+I".action.focus-workspace-up = [ ];
-    "Mod+Ctrl+U".action.move-column-to-workspace-down = [ ];
-    "Mod+Ctrl+I".action.move-column-to-workspace-up = [ ];
-    "Mod+Shift+U".action.move-workspace-down = [ ];
-    "Mod+Shift+I".action.move-workspace-up = [ ];
+    "Mod+U".action.focus-workspace-up = [ ];
+    "Mod+I".action.focus-workspace-down = [ ];
+    "Mod+Ctrl+U".action.move-column-to-workspace-up = [ ];
+    "Mod+Ctrl+I".action.move-column-to-workspace-down = [ ];
+    "Mod+Shift+U".action.move-workspace-up = [ ];
+    "Mod+Shift+I".action.move-workspace-down = [ ];
 
     "Mod+1".action.focus-workspace = 1;
     "Mod+2".action.focus-workspace = 2;
