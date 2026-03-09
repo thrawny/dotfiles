@@ -74,6 +74,17 @@
     unixAuth = false; # fingerprint only, no user password
   }; # 1Password
 
+  # mt7921e WiFi fails to restore from D3cold during hibernate (kernel bug #217415).
+  # Unload the driver before sleep and reload after resume as a workaround.
+  powerManagement = {
+    powerDownCommands = ''
+      ${pkgs.kmod}/bin/rmmod mt7921e || true
+    '';
+    resumeCommands = ''
+      ${pkgs.kmod}/bin/modprobe mt7921e
+    '';
+  };
+
   systemd.sleep.settings.Sleep.HibernateDelaySec = "2h";
 
   # Host-specific home-manager overrides
