@@ -1,3 +1,5 @@
+disabled = ["repeated_keys"]
+
 ignore = [
   ".direnv",
   "hosts/*/hardware-configuration.nix",

@@ -448,8 +448,6 @@ in
           "zen-beta"
           "--name"
           "zen-beta"
-          "-p"
-          "Default Profile"
         ];
       }
       {

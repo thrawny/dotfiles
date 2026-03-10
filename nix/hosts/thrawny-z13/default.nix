@@ -144,6 +144,15 @@
     unixAuth = true;
   }; # 1Password
 
+  # Hibernate when battery is critical (safety net for clamshell + unplug scenario)
+  services.upower = {
+    enable = true;
+    percentageLow = 20;
+    percentageCritical = 10;
+    percentageAction = 5;
+    criticalPowerAction = "Hibernate";
+  };
+
   # mt7921e WiFi fails to restore from D3cold during hibernate (kernel bug #217415).
   # Unload the driver before sleep and reload after resume as a workaround.
   powerManagement = {
