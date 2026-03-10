@@ -4,7 +4,6 @@
 
   programs.zen-browser = {
     enable = true;
-    suppressXdgMigrationWarning = true;
 
     # Declarative profile prevents the profile reset issue on Nix rebuilds.
     # The wrapper sets MOZ_LEGACY_PROFILES=1, and Home Manager manages
