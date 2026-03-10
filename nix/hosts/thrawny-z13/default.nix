@@ -21,6 +21,7 @@
   boot.extraModprobeConfig = ''
     options cfg80211 ieee80211_regdom=SE
     options thinkpad_acpi fan_control=1 experimental=1
+    options mt7921e disable_aspm=Y
   '';
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
@@ -153,15 +154,23 @@
     criticalPowerAction = "Hibernate";
   };
 
-  # mt7921e WiFi fails to restore from D3cold during hibernate (kernel bug #217415).
-  # Unload the driver before sleep and reload after resume as a workaround.
-  powerManagement = {
-    powerDownCommands = ''
-      ${pkgs.kmod}/bin/rmmod mt7921e || true
-    '';
-    resumeCommands = ''
-      ${pkgs.kmod}/bin/modprobe mt7921e
-    '';
+  # mt7921e fails to restore reliably from hibernate on some systems.
+  # Unload it before sleep and reprobe it after wake to avoid the broken
+  # PCIe resume path entirely.
+  systemd.services.mt7921e-sleep = {
+    description = "Remove mt7921e before sleep";
+    wantedBy = [ "sleep.target" ];
+    before = [ "sleep.target" ];
+    unitConfig = {
+      DefaultDependencies = false;
+      StopWhenUnneeded = true;
+    };
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "-${pkgs.kmod}/bin/modprobe -r mt7921e";
+      ExecStop = "${pkgs.kmod}/bin/modprobe mt7921e";
+    };
   };
 
   systemd.sleep.settings.Sleep.HibernateDelaySec = "2h";
