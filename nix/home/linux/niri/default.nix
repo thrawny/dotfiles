@@ -42,6 +42,16 @@ let
       action.spawn = [ "spotify" ];
       hotkey-overlay.title = "Spotify";
     };
+    "Mod+Shift+Space" = {
+      action.spawn = [
+        "ghostty"
+        "--title=niri-project-picker"
+        "-e"
+        "niri-project-picker"
+      ];
+      hotkey-overlay.title = "Open Project";
+      repeat = false;
+    };
     "Mod+Shift+S" = {
       action.spawn = [ "slack" ];
       hotkey-overlay.title = "Slack";
@@ -87,6 +97,11 @@ let
     };
     "Mod+W" = {
       action.close-window = [ ];
+      repeat = false;
+    };
+    "Mod+Shift+W" = {
+      action.spawn = [ "niri-close-workspace" ];
+      hotkey-overlay.title = "Close Workspace";
       repeat = false;
     };
     "Mod+F".action.maximize-column = [ ];
@@ -576,6 +591,7 @@ in
           { app-id = "^xdg-desktop-portal"; }
           { app-id = "zoom"; }
           { app-id = "^com\\.thrawny\\.agent-switch$"; }
+          { title = "^niri-project-picker$"; }
           { app-id = "^spotify$"; }
           { app-id = "^1password$"; }
         ];

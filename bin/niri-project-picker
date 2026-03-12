@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+dir=$(zoxide query -l | while read -r d; do
+  git -C "$d" rev-parse --show-toplevel 2>/dev/null
+done | awk '!seen[$0]++' | fzf --prompt="project> " --height=100% --header="Esc to type a path") || {
+  read -rep "path> " dir
+  [[ -n "$dir" ]] && dir=$(eval echo "$dir")
+}
+
+[[ -n "${dir:-}" ]] && niri-project "$dir"
