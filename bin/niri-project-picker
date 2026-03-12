@@ -3,11 +3,23 @@
 [[ "${TRACE}" ]] && set -x
 set -euo pipefail
 
-dir=$(zoxide query -l | while read -r d; do
-  git -C "$d" rev-parse --show-toplevel 2>/dev/null
-done | awk '!seen[$0]++' | fzf --prompt="project> " --height=100% --header="Esc to type a path") || {
-  read -rep "path> " dir
+projects=$(zoxide query -l | while read -r d; do
+  git -C "$d" rev-parse --show-toplevel 2>/dev/null || true
+done | awk '!seen[$0]++')
+
+set +e
+output=$(fzf --prompt="project> " --height=100% --header="Esc to type a path" --expect=esc <<< "$projects")
+rc=$?
+set -e
+
+key=$(head -1 <<< "$output")
+dir=$(sed -n '2p' <<< "$output")
+
+if [[ "$key" == "esc" ]]; then
+  read -rep "path> " dir || exit 0
   [[ -n "$dir" ]] && dir=$(eval echo "$dir")
-}
+elif [[ $rc -ne 0 ]]; then
+  exit 0
+fi
 
 [[ -n "${dir:-}" ]] && niri-project "$dir"
