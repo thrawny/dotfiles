@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+main() {
+  local layout="${1:?Usage: niri-layout <laptop|home|work>}"
+
+  case "$layout" in
+    laptop)
+      niri-move-workspaces eDP-1
+      niri-set-column-width 1.0
+      ;;
+    home)
+      # Main + dotfiles on DP-8 (LG), web on DP-2 (AOC)
+      niri-move-workspaces DP-8 --except web
+      niri-move-workspaces DP-2 --except main --except dotfiles
+      niri-set-column-width 0.5
+      ;;
+    work)
+      # Everything except main on DP-1 (Philips ultrawide)
+      niri-move-workspaces DP-1 --except main
+      niri-set-column-width 0.33333
+      ;;
+    *)
+      echo "Unknown layout: $layout" >&2
+      echo "Available: laptop, home, work" >&2
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

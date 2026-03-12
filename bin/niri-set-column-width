@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+main() {
+  local proportion="${1:?Usage: niri-set-column-width <proportion>}"
+  local local_kdl="${XDG_CONFIG_HOME:-$HOME/.config}/niri/local.kdl"
+
+  # Seed the file with the layout block if it doesn't exist or is empty
+  if [[ ! -s "$local_kdl" ]]; then
+    cat > "$local_kdl" <<'EOF'
+layout {
+    default-column-width { proportion 0.5; }
+}
+EOF
+  fi
+
+  # Replace just the default-column-width line, preserving everything else
+  sed -i "s/default-column-width {[^}]*}/default-column-width { proportion $proportion; }/" "$local_kdl"
+}
+
+main "$@"
