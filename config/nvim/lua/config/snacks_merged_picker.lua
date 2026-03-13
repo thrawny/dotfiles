@@ -10,12 +10,35 @@ M.exclude = {
   "**/.DS_Store",
 }
 
+local function permutations(parts)
+  if #parts == 1 then
+    return { parts[1] }
+  end
+  local result = {}
+  for i = 1, #parts do
+    local rest = {}
+    for j = 1, #parts do
+      if j ~= i then
+        table.insert(rest, parts[j])
+      end
+    end
+    for _, perm in ipairs(permutations(rest)) do
+      table.insert(result, parts[i] .. ".*" .. perm)
+    end
+  end
+  return result
+end
+
 local function files_query_for_path(search)
   local query = vim.trim(search or "")
-  if query:find("%s") then
-    return query:gsub("%s+", ".*")
+  local parts = vim.split(query, "%s+", { trimempty = true })
+  if #parts <= 1 then
+    return query
   end
-  return query
+  if #parts > 4 then
+    return table.concat(parts, ".*")
+  end
+  return table.concat(permutations(parts), "|")
 end
 
 local function files_finder(opts, ctx)
