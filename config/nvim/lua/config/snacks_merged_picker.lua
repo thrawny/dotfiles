@@ -88,9 +88,17 @@ function M.opts(overrides)
       return item
     end,
     layout = {
-      preset = "default",
       layout = {
-        [2] = { win = "preview", width = 0.6 },
+        box = "vertical",
+        width = 0.6,
+        min_width = 100,
+        height = 0.8,
+        border = true,
+        title = "{title} {live} {flags}",
+        title_pos = "center",
+        { win = "input", height = 1, border = "bottom" },
+        { win = "list", border = "none" },
+        { win = "preview", title = "{preview}", height = 0.6, border = "top" },
       },
     },
     win = {
