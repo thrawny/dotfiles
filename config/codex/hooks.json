@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-switch track session-start --agent codex",
+            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-start --agent codex; fi'",
             "timeout": 5
           }
         ]
