@@ -91,6 +91,10 @@ let
       action.focus-window-previous = [ ];
       hotkey-overlay.title = "Previous Window";
     };
+    "Mod+Shift+M" = {
+      action.focus-workspace-previous = [ ];
+      hotkey-overlay.title = "Previous Workspace";
+    };
     "Mod+N" = {
       action.focus-monitor-previous = [ ];
       hotkey-overlay.title = "Previous Monitor";
