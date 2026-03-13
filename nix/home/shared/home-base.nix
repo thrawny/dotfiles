@@ -169,6 +169,8 @@ in
       # Codex configuration (individual symlinks - Codex 0.88.0+ preserves symlinks)
       ".codex/config.toml".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/config.toml";
+      ".codex/hooks.json".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/hooks.json";
       ".codex/prompts".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/prompts";
       ".codex/AGENTS.md".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/AGENTS.md";

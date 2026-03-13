@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "agent-switch track session-start --agent codex",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
