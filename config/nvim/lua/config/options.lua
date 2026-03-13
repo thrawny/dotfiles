@@ -15,6 +15,9 @@ vim.g.ai_cmp = false
 -- Auto-reload files when changed externally
 vim.opt.autoread = true
 
+-- Disable swap files (autosave handles crash recovery)
+vim.opt.swapfile = false
+
 -- Open files with all folds expanded
 vim.opt.foldlevel = 99
 
