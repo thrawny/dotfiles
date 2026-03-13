@@ -599,6 +599,11 @@ in
         open-maximized = false;
       }
       {
+        matches = [ { app-id = "^org\\.pulseaudio\\.pavucontrol$"; } ];
+        min-width = 1000;
+        min-height = 700;
+      }
+      {
         matches = [ { is-active = false; } ];
         opacity = 0.9;
       }
