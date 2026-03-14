@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { basename } from "node:path";
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { SESSION_NAMED_EVENT } from "./session-namer.ts";
 
 type TmuxState = {
 	windowId: string | null;
@@ -8,8 +9,7 @@ type TmuxState = {
 	busy: boolean;
 };
 
-const WINDOW_IDLE = "pi";
-const WINDOW_BUSY = "pi*";
+const WINDOW_BUSY_SUFFIX = "*";
 const STATE_MANAGED = "@pi_tmux_managed";
 const STATE_PREV_NAME = "@pi_tmux_prev_name";
 const STATE_PREV_AUTO = "@pi_tmux_prev_auto";
@@ -156,13 +156,18 @@ function setupTmuxRename(state: TmuxState): void {
 	activateManagedName(windowId);
 }
 
-function updateBusyState(state: TmuxState, busy: boolean): void {
+function buildWindowName(sessionName: string | undefined, busy: boolean): string {
+	const base = sessionName ? `π · ${sessionName}` : "π";
+	return busy ? base + WINDOW_BUSY_SUFFIX : base;
+}
+
+function updateBusyState(state: TmuxState, busy: boolean, sessionName?: string): void {
 	const windowId = resolveWindowId(state);
 	if (!windowId) return;
 
 	const managed = getWindowOption(windowId, STATE_MANAGED) === "1";
 	if (!managed) return;
-	setWindowName(windowId, busy ? WINDOW_BUSY : WINDOW_IDLE);
+	setWindowName(windowId, buildWindowName(sessionName, busy));
 }
 
 function cleanupTmuxRename(state: TmuxState): void {
@@ -172,7 +177,7 @@ function cleanupTmuxRename(state: TmuxState): void {
 	const managed = getWindowOption(windowId, STATE_MANAGED) === "1";
 	const currentName = runTmux(["display-message", "-p", "-t", windowId, "#W"]);
 
-	if (managed || currentName === WINDOW_IDLE || currentName === WINDOW_BUSY) {
+	if (managed || currentName?.startsWith("π")) {
 		restoreOriginalWindowState(windowId);
 	}
 
@@ -205,16 +210,26 @@ export default function (pi: ExtensionAPI) {
 		state.busy = false;
 		installProcessExitHooks(state);
 		setupTmuxRename(state);
+		updateBusyState(state, false, pi.getSessionName());
 	});
 
 	pi.on("agent_start", async () => {
 		state.busy = true;
-		updateBusyState(state, true);
+		updateBusyState(state, true, pi.getSessionName());
 	});
 
 	pi.on("agent_end", async () => {
 		state.busy = false;
-		updateBusyState(state, false);
+		updateBusyState(state, false, pi.getSessionName());
+	});
+
+	pi.on("session_switch", async () => {
+		state.busy = false;
+		updateBusyState(state, false, pi.getSessionName());
+	});
+
+	pi.events.on(SESSION_NAMED_EVENT, () => {
+		updateBusyState(state, state.busy, pi.getSessionName());
 	});
 
 	pi.on("session_shutdown", async () => {
