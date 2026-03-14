@@ -10,5 +10,8 @@
     "anthropic/claude-opus-4-6",
     "fireworks/accounts/fireworks/models/kimi-k2p5"
   ],
-  "packages": ["git:github.com/davebcn87/pi-autoresearch"]
+  "packages": [
+    "git:github.com/davebcn87/pi-autoresearch",
+    "git:github.com/HazAT/pi-smart-sessions"
+  ]
 }
