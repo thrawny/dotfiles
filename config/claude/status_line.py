@@ -11,9 +11,6 @@ SEP = "\ue0b4"  # Rounded right arrow separator
 START_CAP = "\ue0b6"  # Rounded left cap
 END_CAP = "\ue0b4"  # Rounded right cap
 
-# Context compaction happens around 150k, so use that as the "full" threshold
-COMPACTION_THRESHOLD = 150_000
-
 
 def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
     """Convert hex color to RGB tuple."""
@@ -166,17 +163,16 @@ def get_context_from_input(data: dict) -> tuple[int, float] | None:
     if "context_window" in data:
         cw = data["context_window"]
         api_percentage = cw.get("used_percentage")
-        window_size = cw.get("context_window_size", 200000)
+        window_size = cw.get("context_window_size", 200_000)
         if api_percentage is not None:
-            # Calculate tokens from API percentage (based on full window)
             tokens = int(window_size * api_percentage / 100)
-            # Recalculate percentage based on compaction threshold
-            percentage = min(100, (tokens / COMPACTION_THRESHOLD) * 100)
-            return (tokens, percentage)
+            return (tokens, api_percentage)
     return None
 
 
-def get_context_from_transcript(transcript_path: str) -> tuple[int, float] | None:
+def get_context_from_transcript(
+    transcript_path: str, window_size: int = 200_000
+) -> tuple[int, float] | None:
     """Fallback: parse transcript for context info."""
     try:
         with open(transcript_path) as f:
@@ -200,7 +196,7 @@ def get_context_from_transcript(transcript_path: str) -> tuple[int, float] | Non
                         + usage.get("cache_creation_input_tokens", 0)
                         + usage.get("cache_read_input_tokens", 0)
                     )
-                    percentage = min(100, (tokens / COMPACTION_THRESHOLD) * 100)
+                    percentage = min(100, (tokens / window_size) * 100)
                     return (tokens, percentage)
             except (json.JSONDecodeError, KeyError):
                 continue
@@ -217,9 +213,10 @@ def main() -> None:
     model = model.replace("Claude ", "")  # Shorten "Claude Opus 4.5" to "Opus 4.5"
 
     # Context info (try new API first, fallback to transcript)
+    window_size = data.get("context_window", {}).get("context_window_size", 200_000)
     context_info = get_context_from_input(data)
     if not context_info and "transcript_path" in data:
-        context_info = get_context_from_transcript(data["transcript_path"])
+        context_info = get_context_from_transcript(data["transcript_path"], window_size)
 
     # Git info
     branch = get_git_branch()
