@@ -12,9 +12,11 @@ main() {
       niri-set-column-width 1.0
       ;;
     home)
-      # Main + dotfiles on DP-8 (LG), web on DP-2 (AOC)
+      # Everything on DP-8 (LG), except web on DP-2 (AOC)
       niri-move-workspaces DP-8 --except web
-      niri-move-workspaces DP-2 --except main --except dotfiles
+      niri msg action move-workspace-to-monitor --reference web DP-2
+      niri msg action move-workspace-to-index --reference main 1
+      niri msg action move-workspace-to-index --reference dotfiles 2
       niri-set-column-width 0.5
       ;;
     work)
