@@ -1,14 +1,13 @@
 {
-  "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.3-codex",
+  "defaultProvider": "openai",
+  "defaultModel": "gpt-5.4",
   "defaultThinkingLevel": "medium",
   "theme": "monokai-pi",
   "shellPath": "/run/current-system/sw/bin/zsh",
   "enabledModels": [
-    "openai-codex/gpt-5.2-codex",
-    "openai-codex/gpt-5.3-codex",
-    "openai-codex/gpt-5.4",
+    "openai/gpt-5.4",
     "anthropic/claude-sonnet-4-6",
-    "anthropic/claude-opus-4-6"
+    "anthropic/claude-opus-4-6",
+    "fireworks/accounts/fireworks/models/kimi-k2p5"
   ]
 }

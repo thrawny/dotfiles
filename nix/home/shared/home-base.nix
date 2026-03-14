@@ -178,6 +178,8 @@ in
       # Pi configuration
       ".pi/agent/settings.json".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/settings.json";
+      ".pi/agent/models.json".source =
+        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/models.json";
       ".pi/agent/AGENTS.md".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/AGENTS.md";
       ".pi/agent/prompts".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/prompts";

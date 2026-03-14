@@ -148,10 +148,10 @@ ai:
         echo "${v:-not installed}"
     }
 
-    if command -v claude-node &>/dev/null; then
-        claude_bin=claude-node
-    else
+    if command -v claude &>/dev/null; then
         claude_bin=claude
+    elif command -v claude-node &>/dev/null; then
+        claude_bin=claude-node
     fi
 
     old_claude=$(get_version "$claude_bin")

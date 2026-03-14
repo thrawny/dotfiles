@@ -70,12 +70,8 @@
         bu = "brew upgrade";
       }
       // {
-        c = if pkgs.stdenv.isLinux then "claude-node" else "claude";
-        cy =
-          if pkgs.stdenv.isLinux then
-            "claude-node --dangerously-skip-permissions"
-          else
-            "claude --dangerously-skip-permissions";
+        c = "claude";
+        cy = "claude --dangerously-skip-permissions";
         pr = "gh pr create --web";
         gp = "git push --force-with-lease --force-if-includes";
         gw = "git-gtr";
