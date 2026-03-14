@@ -9,5 +9,6 @@
     "anthropic/claude-sonnet-4-6",
     "anthropic/claude-opus-4-6",
     "fireworks/accounts/fireworks/models/kimi-k2p5"
-  ]
+  ],
+  "packages": ["git:github.com/davebcn87/pi-autoresearch"]
 }
