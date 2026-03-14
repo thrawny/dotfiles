@@ -8,7 +8,7 @@ sandbox() {
   while IFS= read -r -d '' f; do
     local tmp
     tmp=$(mktemp)
-    sed 's/=.*/=/' "$f" > "$tmp"
+    sed 's/=.*/=<redacted>/' "$f" > "$tmp"
     args+=(--ro-bind "$tmp" "$f")
     tmpfiles+=("$tmp")
   done < <(fd -H -g '.secrets' ~ --type f -0 2>/dev/null)
