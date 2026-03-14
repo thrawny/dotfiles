@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+sandbox() {
+  local tmpfiles=() args=()
+
+  # Redact .secrets files (show keys, hide values)
+  while IFS= read -r -d '' f; do
+    local tmp
+    tmp=$(mktemp)
+    sed 's/=.*/=/' "$f" > "$tmp"
+    args+=(--ro-bind "$tmp" "$f")
+    tmpfiles+=("$tmp")
+  done < <(fd -H -g '.secrets' ~ --type f -0 2>/dev/null)
+
+  # Deny access to sensitive paths (replaced with empty tmpfs)
+  local deny=(
+    ~/.ssh
+    ~/.gnupg
+    ~/.aws/credentials
+    ~/.config/gh
+    ~/.kube
+
+    ~/.claude/.credentials.json
+    ~/.codex/auth.json
+    ~/.pi/agent/auth.json
+  )
+  for d in "${deny[@]}"; do
+    d="${d/#\~/$HOME}"
+    [[ -e "$d" ]] || continue
+    if [[ -d "$d" ]]; then
+      args+=(--tmpfs "$d")
+    else
+      args+=(--bind /dev/null "$d")
+    fi
+  done
+
+  # Writable paths (add more as needed)
+  local writable=(
+    ~/.cache
+    ~/.local
+  )
+  for d in "${writable[@]}"; do
+    d="${d/#\~/$HOME}"
+    [[ -e "$d" ]] && args+=(--bind "$d" "$d")
+  done
+
+  bwrap \
+    --ro-bind / / \
+    --bind "${PWD}" "${PWD}" \
+    --tmpfs /tmp \
+    --dev /dev \
+    --proc /proc \
+    --die-with-parent \
+    --new-session \
+    "${args[@]}" \
+    -- "$@"
+
+  rm -f "${tmpfiles[@]}"
+}
+
+sandbox "$@"
