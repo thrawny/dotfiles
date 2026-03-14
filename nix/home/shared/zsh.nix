@@ -80,6 +80,9 @@
         taf = "terraform apply -auto-approve";
         cx = "codex";
         cxy = "codex --dangerously-bypass-approvals-and-sandbox";
+        scx = "sandbox codex --dangerously-bypass-approvals-and-sandbox";
+        scl = "sandbox claude --dangerously-skip-permissions";
+        spi = "sandbox pi";
       }
       // lib.optionalAttrs pkgs.stdenv.isLinux {
         pbcopy = "wl-copy";
