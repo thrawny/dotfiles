@@ -200,6 +200,11 @@
         # Home: AOC Q27G2WG4 - right
         "DP-2" = {
           scale = 1.0;
+          mode = {
+            width = 2560;
+            height = 1440;
+            refresh = 143.912;
+          };
           position = {
             x = 4206;
             y = 0;
