@@ -53,8 +53,8 @@ let
       repeat = false;
     };
     "Mod+Shift+S" = {
-      action.spawn = [ "slack" ];
-      hotkey-overlay.title = "Slack";
+      action.spawn = [ "agent-switch" "niri" "--toggle-agents" ];
+      hotkey-overlay.title = "Agent Sessions";
     };
   };
 
