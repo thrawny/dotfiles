@@ -20,10 +20,17 @@ sandbox() {
     ~/.codex
     ~/.claude
     ~/.pi
+    ~/dotfiles
+    ~/code
   )
   for d in "${writable[@]}"; do
     d="${d/#\~/$HOME}"
     [[ -e "$d" ]] && args+=(--bind "$d" "$d")
+  done
+
+  # work/*/code directories
+  for d in ~/work/*/code; do
+    [[ -d "$d" ]] && args+=(--bind "$d" "$d")
   done
 
   # Deny access to sensitive paths (applied after writable to override)
