@@ -53,7 +53,11 @@ let
       repeat = false;
     };
     "Mod+Shift+S" = {
-      action.spawn = [ "agent-switch" "niri" "--toggle-agents" ];
+      action.spawn = [
+        "agent-switch"
+        "niri"
+        "--toggle-agents"
+      ];
       hotkey-overlay.title = "Agent Sessions";
     };
   };
