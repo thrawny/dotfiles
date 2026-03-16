@@ -139,7 +139,7 @@
           zstyle ':completion:*' list-colors "''${(s.:.)LS_COLORS}"
           zstyle ':completion:*' menu select
 
-          # zmx (Homebrew installs may not ship _zmx into site-functions)
+          # zmx: Homebrew installs don't ship _zmx into site-functions
           if type brew &> /dev/null && command -v zmx &> /dev/null; then
             source <(zmx completions zsh)
           fi

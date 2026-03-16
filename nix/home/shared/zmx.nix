@@ -20,7 +20,8 @@ let
       tar -xzf "$src" -C "$out/bin"
       chmod 755 "$out/bin/zmx"
 
-      "$out/bin/zmx" completions zsh > _zmx
+      echo '#compdef zmx' > _zmx
+      "$out/bin/zmx" completions zsh >> _zmx
       installShellCompletion --zsh _zmx
       runHook postInstall
     '';
