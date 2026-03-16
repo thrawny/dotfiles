@@ -97,6 +97,24 @@ in
           stdenv.cc.cc.lib
           zlib
           openssl
+          glib
+          nspr
+          nss
+          atk
+          at-spi2-atk
+          dbus
+          expat
+          at-spi2-core
+          libx11
+          libxcomposite
+          libxdamage
+          libxext
+          libxfixes
+          libxrandr
+          libgbm
+          libxcb
+          libxkbcommon
+          alsa-lib
         ];
       };
     };
