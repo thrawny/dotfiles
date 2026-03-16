@@ -8,6 +8,7 @@ M.exclude = {
   "**/target/**",
   "**/.direnv/**",
   "**/.DS_Store",
+  "**/dbt/logs/**",
 }
 
 local function permutations(parts)

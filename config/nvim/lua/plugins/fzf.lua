@@ -8,6 +8,7 @@ local ignored_patterns = {
   "%.ruff_cache/",
   "%target/",
   "%.direnv/",
+  "dbt/logs/",
 }
 
 local find_all_files = function()
