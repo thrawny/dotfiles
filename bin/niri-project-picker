@@ -3,9 +3,14 @@
 [[ "${TRACE}" ]] && set -x
 set -euo pipefail
 
-projects=$(zoxide query -l | while read -r d; do
-  git -C "$d" rev-parse --show-toplevel 2>/dev/null || true
-done | awk '!seen[$0]++')
+projects=$({
+  zoxide query -l | while read -r d; do
+    git -C "$d" rev-parse --show-toplevel 2>/dev/null || true
+  done
+  for d in ~/code/*/ ~/work/*/code/*/; do
+    [[ -d "$d" ]] && printf '%s\n' "${d%/}"
+  done
+} | awk '!seen[$0]++')
 
 set +e
 output=$(fzf --prompt="project> " --height=100% --header="Esc to type a path" --expect=esc <<< "$projects")
