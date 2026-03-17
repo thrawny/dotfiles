@@ -16,6 +16,16 @@ wayvoice replace add --substring <from> <to>  # Match inside words too
 
 Rules are stored in `~/.config/wayvoice/config.toml`.
 
+## Proactive detection
+
+The user dictates via voice, so watch for words that look like mistranscriptions — real words that don't fit the context. When you spot a likely voice error, fix it in your response AND suggest adding a wayvoice replacement so it doesn't recur. Examples of patterns to watch for:
+
+- Technical terms transcribed as common words: "nicks" → Nix, "way voice" → wayvoice, "gifts" → git, "home brew" → Homebrew, "doc her" → Docker
+- Proper nouns mangled into dictionary words: "clothes" → Claude, "answer ball" → Ansible
+- Homophones or near-homophones that don't fit context: "their" → there, "weight" → wait (only when clearly wrong)
+
+When you detect one: respond to the user's actual intent (interpreting the correct word), then suggest: "It looks like wayvoice transcribed X as Y — want me to add a replacement?"
+
 ## Workflow
 
 1. Identify the mistranscribed word (`from`) and the intended word (`to`) from context.
@@ -37,3 +47,6 @@ Rules are stored in `~/.config/wayvoice/config.toml`.
 
 - User says "'gifts' should be 'git'" but wants "gifts" as a standalone word left alone, only fixing inside compounds:
   Ask the user to clarify, then use `--substring` if appropriate.
+
+- Agent notices user wrote "I need to update my nicks config" in a dotfiles repo:
+  Respond about Nix config, then suggest: "It looks like wayvoice transcribed 'Nix' as 'nicks' — want me to add a replacement?"
