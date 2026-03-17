@@ -154,6 +154,10 @@
     criticalPowerAction = "Hibernate";
   };
 
+  # Keep NixOS's generated pre-sleep/pre-shutdown wrappers as valid no-op units.
+  # Without this, systemd gets empty oneshot services and logs bad-setting errors.
+  powerManagement.powerDownCommands = ":";
+
   # mt7921e fails to restore reliably from hibernate on some systems.
   # Unload it before sleep and reprobe it after wake to avoid the broken
   # PCIe resume path entirely.
@@ -173,7 +177,10 @@
     };
   };
 
-  systemd.sleep.settings.Sleep.HibernateDelaySec = "2h";
+  systemd.sleep.settings.Sleep = {
+    HibernateDelaySec = "2h";
+    HibernateMode = "shutdown";
+  };
 
   # Host-specific home-manager overrides
   home-manager.users.${config.dotfiles.username} = {
