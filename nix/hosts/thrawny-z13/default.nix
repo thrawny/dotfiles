@@ -99,21 +99,6 @@ in
   };
 
   services = {
-    # temp ssh
-    openssh = {
-      enable = true;
-      openFirewall = true;
-      ports = [ 2222 ];
-      settings = {
-        PubkeyAuthentication = true;
-        AuthenticationMethods = "publickey";
-        AuthorizedKeysFile = ".ssh/authorized_keys";
-        PasswordAuthentication = false;
-        KbdInteractiveAuthentication = false;
-        PermitRootLogin = "no";
-      };
-    };
-
     # Fingerprint reader (Synaptics on Z13 Gen 2)
     fprintd.enable = true; # sudo/login get fprintAuth automatically
 
