@@ -1,6 +1,19 @@
 ---
 name: wayvoice
-description: Fix voice dictation misspellings by adding text replacements to wayvoice. Use when the user mentions a misspelling, mistranscription, or wrong word from voice input (e.g., "fix that misspelling", "it keeps saying X instead of Y", "add a replacement for..."). Also load this skill proactively when you notice words that look like voice mistranscriptions — real words that don't fit the technical context, such as common words where a technical term or proper noun was clearly intended (e.g., "nicks" for Nix, "way land" for Wayland, "home brew" for Homebrew).
+description: >
+  Detect and fix voice dictation errors by adding wayvoice text replacements. Two trigger modes:
+  DIRECT: Any mention of fixing a misspelling, typo, mistranscription, or wrong word — even terse
+  requests like "fix that misspelling" or "fix that typo" with no other context. Also "it keeps
+  saying X instead of Y" or "add a replacement for...".
+  PROACTIVE (critical): The user dictates via voice. ALWAYS trigger when you notice real English
+  words that don't belong in the technical context — these are voice mistranscriptions. Watch every
+  message for: common words replacing technical terms ("nicks" for Nix, "gifts" for git, "home brew"
+  for Homebrew, "doc her" for Docker, "post gress" for Postgres, "red is" for Redis), terms split
+  into multiple words ("way land" for Wayland, "way voice" for wayvoice), or proper nouns mangled
+  into dictionary words ("clothes" for Claude). If a word is valid English but semantically wrong for
+  the programming/sysadmin domain being discussed, assume it's a voice error and trigger this skill
+  to add a correction rule.
+  Do NOT use for general wayvoice configuration, microphone setup, or troubleshooting.
 ---
 
 # wayvoice replacements

@@ -17,9 +17,18 @@ let
       builtins.readDir ../../../skills
     )
   );
+  linuxOnlySkills = [
+    "wayvoice"
+    "skill-eval"
+  ];
   noSkillCreator = lib.filter (name: name != "skill-creator") sharedSkillNames;
-  codexSharedSkillNames = noSkillCreator;
-  claudeSharedSkillNames = noSkillCreator;
+  noLinuxOnly = lib.filter (name: !builtins.elem name linuxOnlySkills) sharedSkillNames;
+  codexSharedSkillNames = lib.filter (
+    name: !builtins.elem name (linuxOnlySkills ++ [ "skill-creator" ])
+  ) sharedSkillNames;
+  claudeSharedSkillNames = lib.filter (
+    name: !builtins.elem name (linuxOnlySkills ++ [ "skill-creator" ])
+  ) sharedSkillNames;
   seedExample =
     example: destination:
     hmLib.dag.entryBefore [ "linkGeneration" ] ''
@@ -159,7 +168,7 @@ in
         pi_base="$HOME/.pi/agent/skills"
         ensure_base_dir "$pi_base"
         prune_removed_repo_skills "$pi_base"
-        for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg sharedSkillNames)}; do
+        for skill in ${lib.concatStringsSep " " (map lib.escapeShellArg noLinuxOnly)}; do
           link_skill "$pi_base" "$skill"
         done
       '';
