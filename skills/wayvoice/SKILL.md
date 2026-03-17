@@ -1,19 +1,16 @@
 ---
 name: wayvoice
 description: >
-  Detect and fix voice dictation errors by adding wayvoice keywords and text replacements. Two trigger modes:
-  DIRECT: Any mention of fixing a misspelling, typo, mistranscription, or wrong word — even terse
-  requests like "fix that misspelling" or "fix that typo" with no other context. Also "it keeps
-  saying X instead of Y" or "add a replacement for...".
-  PROACTIVE (critical): The user dictates via voice. ALWAYS trigger when you notice real English
-  words that don't belong in the technical context — these are voice mistranscriptions. Watch every
-  message for: common words replacing technical terms ("nicks" for Nix, "gifts" for git, "home brew"
-  for Homebrew, "doc her" for Docker, "post gress" for Postgres, "red is" for Redis), terms split
-  into multiple words ("way land" for Wayland, "way voice" for wayvoice), or proper nouns mangled
-  into dictionary words ("clothes" for Claude). If a word is valid English but semantically wrong for
-  the programming/sysadmin domain being discussed, assume it's a voice error and trigger this skill
-  to add a correction rule.
-  Do NOT use for general wayvoice configuration, microphone setup, or troubleshooting.
+  Detect and fix voice dictation errors by adding wayvoice keywords and text replacements.
+  DIRECT: Any mention of fixing a misspelling, typo, mistranscription, or wrong word — even
+  terse "fix that misspelling" with no context. Also "it keeps saying X instead of Y".
+  PROACTIVE: The user dictates via voice. ALWAYS trigger when you notice real English words
+  that don't fit the technical context — these are voice errors. Watch for: technical terms as
+  common words ("nicks"=Nix, "gifts"=git, "home brew"=Homebrew, "doc her"=Docker, "post
+  gress"=Postgres), split words ("way land"=Wayland), proper nouns as dictionary words
+  ("clothes"=Claude). If a word is valid English but wrong for the programming domain, assume
+  voice error and trigger this skill.
+  Not for wayvoice configuration or microphone setup.
 ---
 
 # wayvoice corrections
