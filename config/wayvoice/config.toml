@@ -1,2 +1,5 @@
 [replacements]
 Wavois = "wayvoice"
+n-bar = "env var"
+"n var" = "env var"
+".files" = "dotfiles"
