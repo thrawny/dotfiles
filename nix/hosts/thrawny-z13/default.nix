@@ -4,6 +4,12 @@
   pkgs,
   ...
 }:
+let
+  pinCurrentBootForHibernate = pkgs.writeShellScript "pin-current-boot-for-hibernate" ''
+    set -euo pipefail
+    exec ${pkgs.systemd}/bin/bootctl set-oneshot @current
+  '';
+in
 {
   imports = [
     ../../modules/nixos/default.nix
@@ -176,6 +182,14 @@
       ExecStop = "${pkgs.kmod}/bin/modprobe mt7921e";
     };
   };
+
+  # If a newer generation has been switched in but not rebooted yet, hibernating
+  # across that boot-entry mismatch can fail. Pin the next boot to the currently
+  # running system for one boot so resume uses the same kernel/initrd.
+  systemd.services.systemd-hibernate.serviceConfig.ExecStartPre = [ pinCurrentBootForHibernate ];
+  systemd.services.systemd-suspend-then-hibernate.serviceConfig.ExecStartPre = [
+    pinCurrentBootForHibernate
+  ];
 
   systemd.sleep.settings.Sleep = {
     HibernateDelaySec = "2h";
