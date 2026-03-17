@@ -1,6 +1,6 @@
 ---
 name: wayvoice
-description: Fix voice dictation misspellings by adding text replacements to wayvoice. Use when the user mentions a misspelling, mistranscription, or wrong word from voice input and wants it corrected for future dictation (e.g., "fix that misspelling", "it keeps saying X instead of Y", "add a replacement for...", "that word is wrong").
+description: Fix voice dictation misspellings by adding text replacements to wayvoice. Use when the user mentions a misspelling, mistranscription, or wrong word from voice input (e.g., "fix that misspelling", "it keeps saying X instead of Y", "add a replacement for..."). Also load this skill proactively when you notice words that look like voice mistranscriptions — real words that don't fit the technical context, such as common words where a technical term or proper noun was clearly intended (e.g., "nicks" for Nix, "way land" for Wayland, "home brew" for Homebrew).
 ---
 
 # wayvoice replacements
