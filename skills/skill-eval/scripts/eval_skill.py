@@ -6,6 +6,8 @@ Runs from an isolated temp directory with --setting-sources to prevent
 the real skill from competing with the test command.
 """
 
+# pyright: basic
+
 import argparse
 import json
 import os
