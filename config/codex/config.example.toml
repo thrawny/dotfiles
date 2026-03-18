@@ -32,6 +32,7 @@ skills = true
 shell_snapshot = true
 voice_transcription = true
 multi_agent = true
+codex_hooks = true
 
 [sandbox_workspace_write]
 writable_roots = ["/home/thrawny/.cache", "/home/thrawny/.npm"]
