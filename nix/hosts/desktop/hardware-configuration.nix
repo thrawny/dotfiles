@@ -34,6 +34,12 @@
     fsType = "ext4";
   };
 
+  fileSystems."/nix/store" = {
+    device = "/dev/disk/by-uuid/a1041a91-34e4-483c-b4f6-8a6b1238231d";
+    fsType = "ext4";
+    neededForBoot = true;
+  };
+
   fileSystems."/boot" = {
     device = "/dev/disk/by-uuid/A288-6304";
     fsType = "vfat";
