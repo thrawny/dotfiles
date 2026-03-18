@@ -74,6 +74,13 @@ in
 
   services = {
     xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver
+    # Sunshine - game streaming server for Moonlight
+    sunshine = {
+      enable = true;
+      capSysAdmin = true; # Required for DRM/KMS screen capture
+      openFirewall = true;
+      autoStart = true;
+    };
     # Earlyoom - kill processes before system freezes from memory pressure
     earlyoom = {
       enable = true;
