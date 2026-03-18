@@ -138,8 +138,5 @@
     "skill-creator@claude-plugins-official": true
   },
   "plansDirectory": ".claude/plans",
-  "sandbox": {
-    "excludedCommands": ["git", "go", "npm", "pnpm", "cargo", "make", "just", "uv", "nix", "docker", "tmux"]
-  },
   "skipDangerousModePermissionPrompt": true
 }
