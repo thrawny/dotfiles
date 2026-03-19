@@ -15,6 +15,9 @@ return {
         nixd = {
           settings = {
             nixd = {
+              diagnostic = {
+                suppress = { "sema-unused-def-lambda-noarg-formal" },
+              },
               formatting = {
                 command = { "nixfmt" },
               },
