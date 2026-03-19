@@ -358,7 +358,6 @@ let
 in
 {
   home.packages = [
-    pkgs.swaybg
     pkgs.swayosd
   ];
 
@@ -450,6 +449,10 @@ in
         matches = [ { namespace = "^quickshell$"; } ];
         place-within-backdrop = true;
       }
+      {
+        matches = [ { namespace = "^wpaperd$"; } ];
+        place-within-backdrop = true;
+      }
     ];
 
     # Overview
@@ -490,15 +493,6 @@ in
           "VOICE_PASTE_KEY=Insert"
           "wayvoice"
           "serve"
-        ];
-      }
-      {
-        command = [
-          "swaybg"
-          "-i"
-          "${config.home.homeDirectory}/dotfiles/assets/nasa.jpg"
-          "-m"
-          "fill"
         ];
       }
     ];
@@ -650,4 +644,13 @@ in
   home.activation.niri-local-kdl = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     touch "$HOME/.config/niri/local.kdl"
   '';
+
+  services.wpaperd = {
+    enable = true;
+    settings.any = {
+      path = "${config.home.homeDirectory}/dotfiles/assets";
+      sorting = "random";
+      duration = "1h";
+    };
+  };
 }
