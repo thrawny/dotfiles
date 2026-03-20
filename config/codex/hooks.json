@@ -11,6 +11,30 @@
           }
         ]
       }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track prompt-submit --agent codex; fi'",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track stop --agent codex; fi'",
+            "timeout": 5
+          }
+        ]
+      }
     ]
   }
 }
