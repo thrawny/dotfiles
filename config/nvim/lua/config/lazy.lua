@@ -1,4 +1,7 @@
 local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
+local store_config = vim.env.NVIM_STORE_CONFIG == "1"
+local lockfile = store_config and (vim.fn.stdpath("state") .. "/lazy-lock.json") or nil
+
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
   local lazyrepo = "https://github.com/folke/lazy.nvim.git"
   local out = vim.fn.system({ "git", "clone", "--filter=blob:none", "--branch=stable", lazyrepo, lazypath })
@@ -25,6 +28,7 @@ function _G.dev_plugin_exists(name)
 end
 
 require("lazy").setup({
+  lockfile = lockfile,
   ---@diagnostic disable-next-line: assign-type-mismatch
   dev = {
     path = vim.g.dev_path,
@@ -65,9 +69,11 @@ require("lazy").setup({
     version = false, -- always use the latest git commit
     -- version = "*", -- try installing the latest stable version for plugins that support semver
   },
-  install = { colorscheme = { "monokai-nightasty", "tokyonight", "habamax" } },
+  install = {
+    colorscheme = { "monokai-nightasty", "tokyonight", "habamax" },
+  },
   checker = {
-    enabled = true, -- check for plugin updates periodically
+    enabled = true,
     notify = false, -- notify on update
   }, -- automatically check for plugin updates
   performance = {

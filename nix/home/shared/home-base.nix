@@ -2,26 +2,32 @@
   config,
   lib,
   pkgs,
-  dotfiles,
   ...
 }@args:
 let
   hmLib = lib.hm;
+  containerAssets = args.containerAssets or null;
+  dotfiles = args.dotfiles or null;
+  repoBacked = containerAssets == null;
   gitIdentity = {
     name = null;
     email = null;
   }
   // (args.gitIdentity or { });
+  configPath =
+    rel: if repoBacked then "${dotfiles}/config/${rel}" else containerAssets.config + "/${rel}";
+  skillPath =
+    name: if repoBacked then "${dotfiles}/skills/${name}" else containerAssets.skills + "/${name}";
+  skillsRoot = if repoBacked then ../../../skills else containerAssets.skills;
   sharedSkillNames = builtins.attrNames (
     lib.filterAttrs (name: type: type == "directory" && !(lib.hasPrefix "." name)) (
-      builtins.readDir ../../../skills
+      builtins.readDir skillsRoot
     )
   );
   linuxOnlySkills = [
     "wayvoice"
     "skill-eval"
   ];
-  noSkillCreator = lib.filter (name: name != "skill-creator") sharedSkillNames;
   noLinuxOnly = lib.filter (name: !builtins.elem name linuxOnlySkills) sharedSkillNames;
   codexSharedSkillNames = lib.filter (
     name: !builtins.elem name (linuxOnlySkills ++ [ "skill-creator" ])
@@ -31,14 +37,35 @@ let
   ) sharedSkillNames;
   seedExample =
     example: destination:
-    hmLib.dag.entryBefore [ "linkGeneration" ] ''
-      repo=${lib.escapeShellArg dotfiles}
-      example_path="$repo/${example}"
-      dest_path="$repo/${destination}"
-      if [ ! -s "$dest_path" ] && [ -e "$example_path" ]; then
-        install -Dm0644 "$example_path" "$dest_path"
-      fi
-    '';
+    if repoBacked then
+      hmLib.dag.entryBefore [ "linkGeneration" ] ''
+        repo=${lib.escapeShellArg dotfiles}
+        example_path="$repo/${example}"
+        dest_path="$repo/${destination}"
+        if [ ! -s "$dest_path" ] && [ -e "$example_path" ]; then
+          install -Dm0644 "$example_path" "$dest_path"
+        fi
+      ''
+    else
+      hmLib.dag.entryBefore [ "linkGeneration" ] ''
+        dest_path=${lib.escapeShellArg destination}
+        if [ ! -s "$dest_path" ]; then
+          install -Dm0644 ${lib.escapeShellArg (toString example)} "$dest_path"
+        fi
+      '';
+  configSource =
+    rel: if repoBacked then config.lib.file.mkOutOfStoreSymlink (configPath rel) else configPath rel;
+  skillFiles =
+    base: names:
+    lib.listToAttrs (
+      map (
+        name:
+        lib.nameValuePair "${base}/${name}" {
+          source =
+            if repoBacked then config.lib.file.mkOutOfStoreSymlink (skillPath name) else skillPath name;
+        }
+      ) names
+    );
 in
 {
   nix = {
@@ -62,7 +89,6 @@ in
   home = {
     stateVersion = "24.05";
 
-    # Session-wide PATH (inherited by window managers, waybar, etc.)
     sessionVariables = {
       PYTHONDONTWRITEBYTECODE = "1";
       PYTHONUNBUFFERED = "1";
@@ -84,19 +110,43 @@ in
       "${config.home.homeDirectory}/.local/share/pnpm"
       "${config.home.homeDirectory}/.local/bin"
       "${config.home.homeDirectory}/go/bin"
-      "${config.home.homeDirectory}/dotfiles/bin"
-    ];
+    ]
+    ++ lib.optionals repoBacked [ "${config.home.homeDirectory}/dotfiles/bin" ];
 
     activation = {
-      seedCodexConfig = seedExample "config/codex/config.example.toml" "config/codex/config.toml";
-      seedClaudeSettings = seedExample "config/claude/settings.example.json" "config/claude/settings.json";
-      seedPiSettings = seedExample "config/pi/settings.example.json" "config/pi/settings.json";
+      seedCodexConfig =
+        if repoBacked then
+          seedExample "config/codex/config.example.toml" "config/codex/config.toml"
+        else
+          seedExample (configPath "codex/config.example.toml") "${config.home.homeDirectory}/.codex/config.toml";
+      seedClaudeSettings =
+        if repoBacked then
+          seedExample "config/claude/settings.example.json" "config/claude/settings.json"
+        else
+          hmLib.dag.entryBefore [ "linkGeneration" ] ''
+            dest_path=${lib.escapeShellArg "${config.home.homeDirectory}/.claude/settings.json"}
+            if [ ! -s "$dest_path" ]; then
+              install -d -m0755 "$(dirname "$dest_path")"
+              ${pkgs.jq}/bin/jq '
+                del(.hooks, .enabledPlugins)
+                | .statusLine.command = "python3 ~/.claude/status_line.py"
+              ' ${lib.escapeShellArg (toString (configPath "claude/settings.example.json"))} > "$dest_path"
+              chmod 0644 "$dest_path"
+            fi
+          '';
+      seedPiSettings =
+        if repoBacked then
+          seedExample "config/pi/settings.example.json" "config/pi/settings.json"
+        else
+          seedExample (configPath "pi/settings.example.json") "${config.home.homeDirectory}/.pi/agent/settings.json";
       seedClaudeJson = hmLib.dag.entryBefore [ "linkGeneration" ] ''
         claude_json="${config.home.homeDirectory}/.claude.json"
         if [ ! -s "$claude_json" ]; then
           printf '%s\n' '{"numStartups":1,"installMethod":"native","autoUpdates":false,"theme":"dark-daltonized","editorMode":"vim","hasCompletedOnboarding":true}' > "$claude_json"
         fi
       '';
+    }
+    // lib.optionalAttrs repoBacked {
       linkSharedSkills = hmLib.dag.entryAfter [ "linkGeneration" ] ''
         repo=${lib.escapeShellArg dotfiles}
         skills_src="$repo/skills"
@@ -141,7 +191,6 @@ in
           done
         }
 
-        # Codex has built-in skill-creator; don't override it with our shared one.
         codex_base="$HOME/.codex/skills"
         ensure_base_dir "$codex_base"
         prune_removed_repo_skills "$codex_base"
@@ -153,7 +202,6 @@ in
           rm -f "$codex_skill_creator"
         fi
 
-        # Claude uses plugin skill-creator; don't override it with our shared one.
         claude_base="$HOME/.claude/skills"
         ensure_base_dir "$claude_base"
         prune_removed_repo_skills "$claude_base"
@@ -175,38 +223,20 @@ in
     };
 
     file = {
-      # Codex configuration (individual symlinks - Codex 0.88.0+ preserves symlinks)
-      ".codex/config.toml".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/config.toml";
-      ".codex/hooks.json".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/hooks.json";
-      ".codex/prompts".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/prompts";
-      ".codex/AGENTS.md".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/codex/AGENTS.md";
+      ".codex/hooks.json".source = configSource "codex/hooks.json";
+      ".codex/prompts".source = configSource "codex/prompts";
+      ".codex/AGENTS.md".source = configSource "codex/AGENTS.md";
 
-      # Pi configuration
-      ".pi/agent/settings.json".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/settings.json";
-      ".pi/agent/models.json".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/models.json";
-      ".pi/agent/AGENTS.md".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/AGENTS.md";
-      ".pi/agent/prompts".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/prompts";
-      ".pi/agent/extensions".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/extensions";
-      ".pi/agent/themes".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/pi/themes";
+      ".pi/agent/models.json".source = configSource "pi/models.json";
+      ".pi/agent/AGENTS.md".source = configSource "pi/AGENTS.md";
+      ".pi/agent/prompts".source = configSource "pi/prompts";
+      ".pi/agent/extensions".source = configSource "pi/extensions";
+      ".pi/agent/themes".source = configSource "pi/themes";
 
-      # Claude configuration
-      ".claude/commands".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/commands";
-      ".claude/settings.json".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/settings.json";
-      ".claude/agents".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/agents";
-      ".claude/rules".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/rules";
-      ".claude/CLAUDE.md".source =
-        config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/claude/CLAUDE-GLOBAL.md";
-
-      # Ensure .claude directory exists
+      ".claude/commands".source = configSource "claude/commands";
+      ".claude/agents".source = configSource "claude/agents";
+      ".claude/rules".source = configSource "claude/rules";
+      ".claude/CLAUDE.md".source = configSource "claude/CLAUDE-GLOBAL.md";
       ".claude/.keep".text = "";
 
       ".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
@@ -218,6 +248,17 @@ in
           )
           + "\n";
       };
-    };
+    }
+    // lib.optionalAttrs repoBacked {
+      ".codex/config.toml".source = configSource "codex/config.toml";
+      ".pi/agent/settings.json".source = configSource "pi/settings.json";
+      ".claude/settings.json".source = configSource "claude/settings.json";
+    }
+    // lib.optionalAttrs (!repoBacked) {
+      ".claude/status_line.py".source = configSource "claude/status_line.py";
+    }
+    // lib.optionalAttrs (!repoBacked) (skillFiles ".codex/skills" codexSharedSkillNames)
+    // lib.optionalAttrs (!repoBacked) (skillFiles ".claude/skills" claudeSharedSkillNames)
+    // lib.optionalAttrs (!repoBacked) (skillFiles ".pi/agent/skills" noLinuxOnly);
   };
 }

@@ -196,6 +196,14 @@ ai:
     git add flake.lock
     git commit -m "chore(nix): update AI flake inputs" -- flake.lock
 
+# Build the headless Incus/LXC image bundle
+incus-image:
+    nix build .#headless-incus-image
+    @echo "Built result/ with:"
+    @echo "  result/metadata.tar.xz"
+    @echo "  result/rootfs.tar.xz"
+    @echo "Import with: incus image import result/metadata.tar.xz result/rootfs.tar.xz --alias headless-incus"
+
 # Clean up old generations (keeps last 6) and optimize store
 clean:
     #!/usr/bin/env bash

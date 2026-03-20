@@ -1,14 +1,25 @@
-{ config, ... }:
+{
+  config,
+  lib,
+  ...
+}@args:
+let
+  containerAssets = args.containerAssets or null;
+  repoBacked = containerAssets == null;
+in
 {
   programs.direnv = {
     enable = true;
     enableZshIntegration = true;
     nix-direnv.enable = true;
-    config.whitelist.prefix = [
-      "${config.home.homeDirectory}/dotfiles"
-      "${config.home.homeDirectory}/code"
-      "${config.home.homeDirectory}/work"
-    ];
+    config.whitelist.prefix =
+      lib.optionals repoBacked [
+        "${config.home.homeDirectory}/dotfiles"
+      ]
+      ++ [
+        "${config.home.homeDirectory}/code"
+        "${config.home.homeDirectory}/work"
+      ];
     stdlib = ''
       dotenv_if_exists .env
       dotenv_if_exists .env.local

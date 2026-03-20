@@ -3,6 +3,7 @@
   pkgs,
   lib,
   self,
+  options,
   ...
 }:
 let
@@ -145,7 +146,8 @@ in
       xserver.enable = false;
       resolved.enable = true;
     };
-
+  }
+  // lib.optionalAttrs (builtins.hasAttr "home-manager" options) {
     home-manager = {
       useGlobalPkgs = true;
       useUserPackages = true;

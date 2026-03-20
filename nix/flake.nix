@@ -51,6 +51,16 @@
       flakeArgs = {
         inherit claude-code-nix llm-agents zmx;
       };
+      containerAssets = {
+        config = builtins.path {
+          path = ../config;
+          name = "dotfiles-config";
+        };
+        skills = builtins.path {
+          path = ../skills;
+          name = "dotfiles-skills";
+        };
+      };
 
       mkHost =
         {
@@ -137,6 +147,24 @@
           ++ modules;
         };
 
+      mkContainerImage =
+        {
+          system,
+          modules,
+          extraSpecialArgs ? { },
+        }:
+        lib.nixosSystem {
+          inherit system;
+          specialArgs = {
+            inherit self;
+          };
+          modules = [
+            home-manager.nixosModules.home-manager
+            { home-manager.extraSpecialArgs = flakeArgs // extraSpecialArgs; }
+          ]
+          ++ modules;
+        };
+
       mkHomeConfiguration =
         {
           pkgs,
@@ -147,6 +175,14 @@
           inherit pkgs modules;
           extraSpecialArgs = extraSpecialArgs // flakeArgs;
         };
+
+      headlessIncus = mkContainerImage {
+        system = "x86_64-linux";
+        extraSpecialArgs = {
+          inherit containerAssets;
+        };
+        modules = [ ./images/headless-incus.nix ];
+      };
     in
     {
       nixosConfigurations = {
@@ -187,6 +223,31 @@
             ./hosts/attic-server/default.nix
           ];
         };
+
+        headless-incus = headlessIncus;
+      };
+
+      packages = {
+        x86_64-linux =
+          let
+            pkgs = nixpkgs.legacyPackages.x86_64-linux;
+          in
+          {
+            headless-incus-metadata = headlessIncus.config.system.build.metadata;
+            headless-incus-rootfs = headlessIncus.config.system.build.tarball;
+            headless-incus-squashfs = headlessIncus.config.system.build.squashfs;
+            headless-incus-image = pkgs.runCommand "headless-incus-image" { } ''
+              mkdir -p "$out"
+              ln -s ${headlessIncus.config.system.build.metadata}/tarball/*.tar.xz "$out/metadata.tar.xz"
+              ln -s ${headlessIncus.config.system.build.tarball}/tarball/*.tar.xz "$out/rootfs.tar.xz"
+              cat > "$out/README" <<'EOF'
+              Build artifacts for the headless Incus/LXC image.
+
+              Import with:
+                incus image import ./metadata.tar.xz ./rootfs.tar.xz --alias headless-incus
+              EOF
+            '';
+          };
       };
 
       devShells =

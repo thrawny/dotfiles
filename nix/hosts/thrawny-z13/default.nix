@@ -17,7 +17,6 @@
     email = "jonas@lergell.se";
   };
 
-  networking.hostName = "thrawny-z13";
   boot.extraModprobeConfig = ''
     options cfg80211 ieee80211_regdom=SE
     options thinkpad_acpi fan_control=1 experimental=1
@@ -103,6 +102,52 @@
     logind.settings.Login.HandleLidSwitch = "suspend-then-hibernate";
   };
 
+  users.users.${config.dotfiles.username}.extraGroups = [ "incus-admin" ];
+
+  virtualisation.incus = {
+    enable = true;
+    preseed = {
+      networks = [
+        {
+          name = "incusbr0";
+          type = "bridge";
+          config = {
+            "ipv4.address" = "10.0.100.1/24";
+            "ipv4.nat" = "true";
+            "ipv6.address" = "none";
+          };
+        }
+      ];
+      profiles = [
+        {
+          name = "default";
+          devices = {
+            eth0 = {
+              name = "eth0";
+              network = "incusbr0";
+              type = "nic";
+            };
+            root = {
+              path = "/";
+              pool = "default";
+              size = "35GiB";
+              type = "disk";
+            };
+          };
+        }
+      ];
+      storage_pools = [
+        {
+          name = "default";
+          driver = "dir";
+          config = {
+            source = "/var/lib/incus/storage-pools/default";
+          };
+        }
+      ];
+    };
+  };
+
   # ThinkPads use UEFI/systemd-boot.
   boot = {
     loader = {
@@ -129,6 +174,12 @@
     fprintAuth = true;
     unixAuth = true;
   }; # 1Password
+
+  networking = {
+    hostName = "thrawny-z13";
+    nftables.enable = true;
+    firewall.trustedInterfaces = [ "incusbr0" ];
+  };
 
   # Hibernate when battery is critical (safety net for clamshell + unplug scenario)
   services.upower = {

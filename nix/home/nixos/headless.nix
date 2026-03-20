@@ -2,16 +2,16 @@
   lib,
   pkgs,
   username,
-  dotfiles,
-  config,
   ...
-}:
+}@args:
+let
+  containerAssets = args.containerAssets or null;
+  dotfiles = args.dotfiles or null;
+  repoBacked = containerAssets == null;
+in
 {
   imports = [
-    # Shared home config (sessionPath, file symlinks, activation scripts)
     ../shared/home-base.nix
-
-    # CLI-safe shared modules only (no ghostty/GUI)
     ../shared/packages.nix
     ../shared/btop.nix
     ../shared/direnv.nix
@@ -33,7 +33,6 @@
     homeDirectory = "/home/${username}";
 
     packages = with pkgs; [
-      # Terminfo for SSH compatibility
       ncurses
       (lib.hiPrio ghostty.terminfo)
     ];
@@ -41,19 +40,23 @@
     sessionVariables = {
       NVIM_HEADLESS = "1";
       COLORTERM = "truecolor";
+    }
+    // lib.optionalAttrs (!repoBacked) {
+      NVIM_STORE_CONFIG = "1";
     };
 
-    # Override seed to strip hooks (bash-validator, agent-switch not built on servers)
-    activation.seedClaudeSettings = lib.mkForce (
-      lib.hm.dag.entryBefore [ "linkGeneration" ] ''
-        repo=${lib.escapeShellArg dotfiles}
-        example_path="$repo/config/claude/settings.example.json"
-        dest_path="$repo/config/claude/settings.json"
-        if [ ! -s "$dest_path" ] && [ -e "$example_path" ]; then
-          ${pkgs.jq}/bin/jq 'del(.hooks, .enabledPlugins)' "$example_path" > "$dest_path"
-          chmod 0644 "$dest_path"
-        fi
-      ''
-    );
+    activation = lib.optionalAttrs repoBacked {
+      seedClaudeSettings = lib.mkForce (
+        lib.hm.dag.entryBefore [ "linkGeneration" ] ''
+          repo=${lib.escapeShellArg dotfiles}
+          example_path="$repo/config/claude/settings.example.json"
+          dest_path="$repo/config/claude/settings.json"
+          if [ ! -s "$dest_path" ] && [ -e "$example_path" ]; then
+            ${pkgs.jq}/bin/jq 'del(.hooks, .enabledPlugins)' "$example_path" > "$dest_path"
+            chmod 0644 "$dest_path"
+          fi
+        ''
+      );
+    };
   };
 }
