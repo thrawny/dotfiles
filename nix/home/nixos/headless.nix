@@ -1,15 +1,11 @@
 {
   homeSource,
+  dotfiles,
   lib,
   pkgs,
   username,
   ...
-}@args:
-let
-  dotfiles = args.dotfiles or null;
-  repoBacked = homeSource == "repo";
-  storeBacked = homeSource == "store";
-in
+}:
 {
   imports = [
     ../shared/home-base.nix
@@ -42,11 +38,11 @@ in
       NVIM_HEADLESS = "1";
       COLORTERM = "truecolor";
     }
-    // lib.optionalAttrs storeBacked {
+    // lib.optionalAttrs (homeSource == "store") {
       NVIM_STORE_CONFIG = "1";
     };
 
-    activation = lib.optionalAttrs repoBacked {
+    activation = lib.optionalAttrs (homeSource == "repo") {
       seedClaudeSettings = lib.mkForce (
         lib.hm.dag.entryBefore [ "linkGeneration" ] ''
           repo=${lib.escapeShellArg dotfiles}

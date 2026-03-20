@@ -1,29 +1,19 @@
 {
   config,
+  configPath,
+  configSource,
   homeSource,
   lib,
   ...
-}@args:
-let
-  containerAssets = args.containerAssets or null;
-  dotfiles = args.dotfiles or null;
-  repoBacked = homeSource == "repo";
-  storeBacked = homeSource == "store";
-in
+}:
 {
-  xdg.configFile."nvim".source =
-    if repoBacked then
-      config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/nvim"
-    else
-      containerAssets.config + "/nvim";
+  xdg.configFile."nvim".source = configSource "nvim";
 
-  home.activation = lib.optionalAttrs storeBacked {
+  home.activation = lib.optionalAttrs (homeSource == "store") {
     seedLazyLockfile = lib.hm.dag.entryBefore [ "linkGeneration" ] ''
       dest_path=${lib.escapeShellArg "${config.home.homeDirectory}/.local/state/nvim/lazy-lock.json"}
       if [ ! -s "$dest_path" ]; then
-        install -Dm0644 ${
-          lib.escapeShellArg (toString (containerAssets.config + "/nvim/lazy-lock.json"))
-        } "$dest_path"
+        install -Dm0644 ${lib.escapeShellArg (toString (configPath "nvim/lazy-lock.json"))} "$dest_path"
       fi
     '';
   };
