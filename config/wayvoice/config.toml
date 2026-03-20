@@ -1,5 +1,8 @@
 [replacements]
 Wavois = "wayvoice"
+nbin = "nvim"
 n-bar = "env var"
 "n var" = "env var"
 ".files" = "dotfiles"
+simlink = "symlink"
+"sim linking" = "symlinking"
