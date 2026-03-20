@@ -1,3 +1,4 @@
+extra_keywords = ["symlink"]
 [replacements]
 Wavois = "wayvoice"
 nbin = "nvim"
