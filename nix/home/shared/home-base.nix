@@ -1,5 +1,6 @@
 {
   config,
+  homeSource,
   lib,
   pkgs,
   ...
@@ -8,7 +9,8 @@ let
   hmLib = lib.hm;
   containerAssets = args.containerAssets or null;
   dotfiles = args.dotfiles or null;
-  repoBacked = containerAssets == null;
+  repoBacked = homeSource == "repo";
+  storeBacked = homeSource == "store";
   gitIdentity = {
     name = null;
     email = null;
@@ -68,6 +70,21 @@ let
     );
 in
 {
+  assertions = [
+    {
+      assertion = repoBacked || storeBacked;
+      message = "dotfiles homeSource must be either repo or store.";
+    }
+    {
+      assertion = repoBacked || containerAssets != null;
+      message = "Store-backed home config requires containerAssets to be provided.";
+    }
+    {
+      assertion = (!repoBacked) || dotfiles != null;
+      message = "Repo-backed home config requires dotfiles to be provided.";
+    }
+  ];
+
   nix = {
     package = lib.mkDefault pkgs.nix;
     settings = {
@@ -254,11 +271,11 @@ in
       ".pi/agent/settings.json".source = configSource "pi/settings.json";
       ".claude/settings.json".source = configSource "claude/settings.json";
     }
-    // lib.optionalAttrs (!repoBacked) {
+    // lib.optionalAttrs storeBacked {
       ".claude/status_line.py".source = configSource "claude/status_line.py";
     }
-    // lib.optionalAttrs (!repoBacked) (skillFiles ".codex/skills" codexSharedSkillNames)
-    // lib.optionalAttrs (!repoBacked) (skillFiles ".claude/skills" claudeSharedSkillNames)
-    // lib.optionalAttrs (!repoBacked) (skillFiles ".pi/agent/skills" noLinuxOnly);
+    // lib.optionalAttrs storeBacked (skillFiles ".codex/skills" codexSharedSkillNames)
+    // lib.optionalAttrs storeBacked (skillFiles ".claude/skills" claudeSharedSkillNames)
+    // lib.optionalAttrs storeBacked (skillFiles ".pi/agent/skills" noLinuxOnly);
   };
 }

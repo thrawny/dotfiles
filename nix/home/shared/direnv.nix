@@ -1,11 +1,11 @@
 {
   config,
+  homeSource,
   lib,
   ...
-}@args:
+}:
 let
-  containerAssets = args.containerAssets or null;
-  repoBacked = containerAssets == null;
+  repoBacked = homeSource == "repo";
 in
 {
   programs.direnv = {

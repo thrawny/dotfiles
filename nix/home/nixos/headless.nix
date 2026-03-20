@@ -1,13 +1,14 @@
 {
+  homeSource,
   lib,
   pkgs,
   username,
   ...
 }@args:
 let
-  containerAssets = args.containerAssets or null;
   dotfiles = args.dotfiles or null;
-  repoBacked = containerAssets == null;
+  repoBacked = homeSource == "repo";
+  storeBacked = homeSource == "store";
 in
 {
   imports = [
@@ -41,7 +42,7 @@ in
       NVIM_HEADLESS = "1";
       COLORTERM = "truecolor";
     }
-    // lib.optionalAttrs (!repoBacked) {
+    // lib.optionalAttrs storeBacked {
       NVIM_STORE_CONFIG = "1";
     };
 

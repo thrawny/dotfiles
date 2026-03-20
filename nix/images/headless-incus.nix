@@ -18,6 +18,7 @@ in
 
   dotfiles = {
     username = "thrawny";
+    homeSource = "store";
     fullName = "Jonas Lergell";
     email = "jonaslergell@gmail.com";
   };

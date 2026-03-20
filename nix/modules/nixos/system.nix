@@ -40,6 +40,15 @@ in
       description = "Unix username for the primary dotfiles-managed account.";
     };
 
+    homeSource = lib.mkOption {
+      type = lib.types.enum [
+        "repo"
+        "store"
+      ];
+      default = "repo";
+      description = "Where Home Manager should source dotfiles-managed home files from.";
+    };
+
     fullName = lib.mkOption {
       type = lib.types.nullOr lib.types.str;
       default = null;
@@ -159,6 +168,7 @@ in
           username
           gitIdentity
           ;
+        homeSource = cfg.homeSource;
       };
     };
   };

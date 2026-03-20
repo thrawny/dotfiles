@@ -51,7 +51,7 @@
       flakeArgs = {
         inherit claude-code-nix llm-agents zmx;
       };
-      containerAssets = {
+      storeHomeAssets = {
         config = builtins.path {
           path = ../config;
           name = "dotfiles-config";
@@ -107,7 +107,11 @@
                 })
               ];
             }
-            { home-manager.extraSpecialArgs = flakeArgs; }
+            {
+              home-manager.extraSpecialArgs = flakeArgs // {
+                containerAssets = storeHomeAssets;
+              };
+            }
           ]
           ++ modules;
         };
@@ -141,7 +145,11 @@
             srvos.nixosModules.mixins-trusted-nix-caches
             home-manager.nixosModules.home-manager
             disko.nixosModules.disko
-            { home-manager.extraSpecialArgs = flakeArgs; }
+            {
+              home-manager.extraSpecialArgs = flakeArgs // {
+                containerAssets = storeHomeAssets;
+              };
+            }
 
           ]
           ++ modules;
@@ -179,7 +187,8 @@
       headlessIncus = mkContainerImage {
         system = "x86_64-linux";
         extraSpecialArgs = {
-          inherit containerAssets;
+          homeSource = "store";
+          containerAssets = storeHomeAssets;
         };
         modules = [ ./images/headless-incus.nix ];
       };

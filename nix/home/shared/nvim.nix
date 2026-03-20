@@ -1,12 +1,14 @@
 {
   config,
+  homeSource,
   lib,
   ...
 }@args:
 let
   containerAssets = args.containerAssets or null;
   dotfiles = args.dotfiles or null;
-  repoBacked = containerAssets == null;
+  repoBacked = homeSource == "repo";
+  storeBacked = homeSource == "store";
 in
 {
   xdg.configFile."nvim".source =
@@ -15,7 +17,7 @@ in
     else
       containerAssets.config + "/nvim";
 
-  home.activation = lib.optionalAttrs (!repoBacked) {
+  home.activation = lib.optionalAttrs storeBacked {
     seedLazyLockfile = lib.hm.dag.entryBefore [ "linkGeneration" ] ''
       dest_path=${lib.escapeShellArg "${config.home.homeDirectory}/.local/state/nvim/lazy-lock.json"}
       if [ ! -s "$dest_path" ]; then
