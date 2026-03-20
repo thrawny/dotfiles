@@ -1,4 +1,6 @@
 {
+  config,
+  configPath,
   homeSource,
   dotfiles,
   lib,
@@ -18,10 +20,14 @@
     ../shared/npm.nix
     ../shared/nvim.nix
     ../shared/starship.nix
-    ../shared/tmux.nix
     ../shared/zsh.nix
     ../shared/zmx.nix
   ];
+
+  _module.args = {
+    enableCodexHooks = false;
+    enablePiExtensions = false;
+  };
 
   programs.home-manager.enable = true;
 
@@ -42,14 +48,46 @@
       NVIM_STORE_CONFIG = "1";
     };
 
-    activation = lib.optionalAttrs (homeSource == "repo") {
+    activation = {
+      seedCodexConfig = lib.mkForce (
+        lib.hm.dag.entryBefore [ "linkGeneration" ] ''
+          if [ "${homeSource}" = "repo" ]; then
+            dest_path=${lib.escapeShellArg "${dotfiles}/config/codex/config.toml"}
+            example_path=${lib.escapeShellArg "${dotfiles}/config/codex/config.example.toml"}
+          else
+            dest_path=${lib.escapeShellArg "${config.home.homeDirectory}/.codex/config.toml"}
+            example_path=${lib.escapeShellArg "${configPath "codex/config.example.toml"}"}
+          fi
+
+          if [ ! -s "$dest_path" ] && [ -e "$example_path" ]; then
+            install -d -m0755 "$(dirname "$dest_path")"
+            sed \
+              -e 's/^voice_transcription = true$/voice_transcription = false/' \
+              -e 's/^multi_agent = true$/multi_agent = false/' \
+              -e 's/^codex_hooks = true$/codex_hooks = false/' \
+              "$example_path" > "$dest_path"
+            chmod 0644 "$dest_path"
+          fi
+        ''
+      );
+
       seedClaudeSettings = lib.mkForce (
         lib.hm.dag.entryBefore [ "linkGeneration" ] ''
-          repo=${lib.escapeShellArg dotfiles}
-          example_path="$repo/config/claude/settings.example.json"
-          dest_path="$repo/config/claude/settings.json"
+          if [ "${homeSource}" = "repo" ]; then
+            dest_path=${lib.escapeShellArg "${dotfiles}/config/claude/settings.json"}
+            example_path=${lib.escapeShellArg "${dotfiles}/config/claude/settings.example.json"}
+          else
+            dest_path=${lib.escapeShellArg "${config.home.homeDirectory}/.claude/settings.json"}
+            example_path=${lib.escapeShellArg "${configPath "claude/settings.example.json"}"}
+          fi
+
           if [ ! -s "$dest_path" ] && [ -e "$example_path" ]; then
-            ${pkgs.jq}/bin/jq 'del(.hooks, .enabledPlugins)' "$example_path" > "$dest_path"
+            install -d -m0755 "$(dirname "$dest_path")"
+            if [ "${homeSource}" = "repo" ]; then
+              ${pkgs.jq}/bin/jq 'del(.hooks)' "$example_path" > "$dest_path"
+            else
+              ${pkgs.jq}/bin/jq 'del(.hooks) | .statusLine.command = "python3 ~/.claude/status_line.py"' "$example_path" > "$dest_path"
+            fi
             chmod 0644 "$dest_path"
           fi
         ''

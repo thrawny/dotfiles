@@ -9,6 +9,7 @@ let
   hmLib = lib.hm;
   containerAssets = args.containerAssets or null;
   dotfiles = args.dotfiles or null;
+  excludedSharedSkills = args.excludedSharedSkills or [ ];
   repoBacked = homeSource == "repo";
   storeBacked = homeSource == "store";
   gitIdentity = {
@@ -21,9 +22,11 @@ let
   skillPath =
     name: if repoBacked then "${dotfiles}/skills/${name}" else containerAssets.skills + "/${name}";
   skillsRoot = if repoBacked then ../../../skills else containerAssets.skills;
-  sharedSkillNames = builtins.attrNames (
-    lib.filterAttrs (name: type: type == "directory" && !(lib.hasPrefix "." name)) (
-      builtins.readDir skillsRoot
+  sharedSkillNames = lib.filter (name: !builtins.elem name excludedSharedSkills) (
+    builtins.attrNames (
+      lib.filterAttrs (name: type: type == "directory" && !(lib.hasPrefix "." name)) (
+        builtins.readDir skillsRoot
+      )
     )
   );
   linuxOnlySkills = [
