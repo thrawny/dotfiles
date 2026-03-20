@@ -168,7 +168,7 @@ in
           username
           gitIdentity
           ;
-        homeSource = cfg.homeSource;
+        inherit (cfg) homeSource;
       };
     };
   };

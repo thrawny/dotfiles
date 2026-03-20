@@ -24,7 +24,7 @@ let
     #clock,
     #battery,
     #network,
-    #pulseaudio,
+    #wireplumber,
     #tray,
     #workspaces,
     #custom-caffeine,
@@ -106,19 +106,15 @@ let
       "on-click" = "nm-connection-editor";
     };
 
-    pulseaudio = {
+    wireplumber = {
       format = "{icon}";
       "format-muted" = "󰝟";
-      "format-icons" = {
-        default = [
-          "󰕿"
-          "󰖀"
-          "󰕾"
-        ];
-        headphones = "󰋋";
-        handsfree = "󰋎";
-      };
-      "tooltip-format" = "{desc}\n{volume}%";
+      "format-icons" = [
+        "󰕿"
+        "󰖀"
+        "󰕾"
+      ];
+      "tooltip-format" = "{node_name}\n{volume}%";
       "scroll-step" = 5;
       "on-click" = "pavucontrol";
     };
@@ -204,7 +200,7 @@ in
         "niri/language"
         "tray"
         "network"
-        "pulseaudio"
+        "wireplumber"
         "battery"
         "clock"
       ];
