@@ -43,6 +43,8 @@ in
 
   networking.useDHCP = lib.mkDefault true;
 
+  environment.sessionVariables.INCUS_CONTAINER = "incus";
+
   nix = {
     gc = {
       automatic = true;
