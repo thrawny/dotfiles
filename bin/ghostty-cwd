@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Spawn a new Ghostty window in the focused terminal's working directory.
+# If a Ghostty window is focused, simulate Ctrl+Shift+N so Ghostty's own
+# new_window action handles CWD inheritance via OSC 7.
+# Otherwise, spawn a fresh Ghostty instance.
+set -euo pipefail
+
+app_id=$(niri msg -j focused-window 2>/dev/null | jq -r '.app_id // empty') || app_id=""
+
+if [[ "$app_id" == "com.mitchellh.ghostty" ]]; then
+  wtype -M ctrl -M shift -k n -m shift -m ctrl
+else
+  exec ghostty
+fi

@@ -27,7 +27,7 @@ let
 
   launcherBinds = {
     "Mod+Return" = {
-      action.spawn = [ "ghostty" ];
+      action.spawn = [ "ghostty-cwd" ];
       hotkey-overlay.title = "Open Terminal";
     };
     "Super+Space" = {
