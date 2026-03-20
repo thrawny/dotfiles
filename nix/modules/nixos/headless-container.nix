@@ -34,6 +34,8 @@ in
     ./system.nix
   ];
 
+  virtualisation.docker.enable = true;
+
   users.mutableUsers = lib.mkForce true;
 
   services.openssh.authorizedKeysFiles = lib.mkForce [
