@@ -274,6 +274,7 @@
                 nvd
                 stylua
                 selene
+                cachix
               ];
             };
         in
