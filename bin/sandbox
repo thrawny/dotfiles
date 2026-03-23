@@ -3,16 +3,6 @@ set -euo pipefail
 
 sandbox() {
   local tmpfiles=() args=()
-  local sandbox_zmx_dir=/tmp/zmx
-  local default_zmx_dir
-
-  if [[ -n "${XDG_RUNTIME_DIR:-}" ]]; then
-    default_zmx_dir="${XDG_RUNTIME_DIR%/}/zmx"
-  elif [[ -n "${TMPDIR:-}" ]]; then
-    default_zmx_dir="${TMPDIR%/}/zmx"
-  else
-    default_zmx_dir=/tmp/zmx
-  fi
 
   # Redact .secrets files (show keys, hide values)
   while IFS= read -r -d '' f; do
@@ -34,20 +24,14 @@ sandbox() {
     ~/.zsh_history
     ~/dotfiles
     ~/code
-    /run/user/${UID}
   )
   for d in "${writable[@]}"; do
     d="${d/#\~/$HOME}"
     [[ -e "$d" ]] && args+=(--bind "$d" "$d")
   done
 
-  # Give each sandbox its own zmx namespace and hide host control sockets.
-  for d in "$default_zmx_dir" "${ZMX_DIR:-}"; do
-    [[ -n "$d" ]] || continue
-    d="${d/#\~/$HOME}"
-    [[ "$d" == "$sandbox_zmx_dir" ]] && continue
-    args+=(--tmpfs "$d")
-  done
+  # Hide host runtime sockets and give the sandbox its own empty runtime dir.
+  [[ -d "/run/user/${UID}" ]] && args+=(--tmpfs "/run/user/${UID}")
 
   # work/*/code and work/*/.direnv directories
   for d in ~/work/*/code ~/work/*/.direnv; do
@@ -84,7 +68,6 @@ sandbox() {
     --dev /dev \
     --proc /proc \
     --die-with-parent \
-    --setenv ZMX_DIR "$sandbox_zmx_dir" \
     "${args[@]}" \
     -- "$@"
 
