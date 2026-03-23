@@ -28,7 +28,7 @@ zmx detach                               # Detach clients from current session
 3. Choose the action:
    - Start or attach interactively: `zmx attach <session> <command...>`
    - Send command without attaching: `zmx run <session> <command...>`
-   - With inline env vars: `VAR=value zmx run <session> <command...>`
+   - With inline env vars: `zmx run <session> env VAR=value <command...>`
    - Inspect logs: `zmx history <session> | tail -n 200`
    - Wait for completion: `zmx wait <session>`
 4. Report whether the session already existed or was created, then summarize output.
@@ -40,8 +40,8 @@ zmx detach                               # Detach clients from current session
 - Prefer stable names like `<project>-api` or `<project>-web`.
 - Use `zmx attach <session> <command...>` when interactive monitoring is useful.
 - Use `zmx run <session> <command...>` when the user wants fire-and-forget execution.
-- For env-var-driven commands, prefix env vars before `zmx` so the subprocess inherits them.
-  Example: `DB_NAME=test_db FEATURE_FLAG=true zmx run api go run ./cmd/foo`
+- For env-var-driven commands, use `env` as the command so zmx passes the vars correctly.
+  Example: `zmx run api env DB_NAME=test_db FEATURE_FLAG=true go run ./cmd/foo`
 - For commands that need a subdirectory without `cd ... &&`, prefer command-native directory flags.
   Example: `zmx run frontend pnpm --dir web -F @kanel/installer-app dev`
 
@@ -65,14 +65,16 @@ zmx detach                               # Detach clients from current session
 - Read history before suggesting restarts.
 - Use `zmx history` for logs.
 - Prefer direct argument form (`zmx run <name> <command...>`).
-- For pipes, redirects, conditionals, or globbing: single-quote the entire command string so zmx passes it intact to the inner shell (e.g., `zmx run s 'cmd1 | cmd2'`).
+- Never wrap the entire command in quotes — zmx takes `[command...]` as separate args and will treat a quoted string as a literal executable path.
+- For subcommand args that need shell interpretation (pipes, `&&`, globbing), quote only that specific argument: `zmx run s cmd --flag 'sub1 && sub2'`.
 - Keep session naming consistent within a task and use one session per service.
 
 ## Command form checklist
 
 Before running a command, ask:
 - Use direct args when invoking one binary with normal flags/args.
-- Use single-quoted command strings when using pipes, redirects, conditionals, globbing, or command substitution: `zmx run s 'cmd1 | cmd2'`.
+- Only quote the specific argument that needs shell interpretation, not the whole command: `zmx run s watchexec -- 'cmd1 && cmd2'`.
+- For inline env vars, use `env` as the command: `zmx run s env VAR=val command args...`.
 
 ## Examples
 
@@ -80,8 +82,8 @@ Before running a command, ask:
   `zmx run tunnel ssh -N -L 8888:localhost:8888 user@host`
 - MQTT subscriber:
   `zmx run mqtt mosquitto_sub -h broker.example.com -t sensors/# -v`
-- MQTT subscriber with pipe (single-quote the whole command):
-  `zmx run mqtt 'mosquitto_sub -h localhost -p 1883 -t topic -v | jq .field'`
+- MQTT subscriber with pipe (quote only the shell expression):
+  `zmx run mqtt sh -c 'mosquitto_sub -h localhost -p 1883 -t topic -v | jq .field'`
 - Go tests:
   `zmx run test go test ./...`
 - Tail a logfile:
