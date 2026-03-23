@@ -20,6 +20,7 @@ sandbox() {
     ~/.codex
     ~/.claude
     ~/.pi
+    ~/.zsh_history
     ~/dotfiles
     ~/code
     /run/user/${UID}
@@ -29,8 +30,8 @@ sandbox() {
     [[ -e "$d" ]] && args+=(--bind "$d" "$d")
   done
 
-  # work/*/code directories
-  for d in ~/work/*/code; do
+  # work/*/code and work/*/.direnv directories
+  for d in ~/work/*/code ~/work/*/.direnv; do
     [[ -d "$d" ]] && args+=(--bind "$d" "$d")
   done
 
@@ -38,7 +39,7 @@ sandbox() {
   local deny=(
     ~/.ssh
     ~/.gnupg
-    ~/.aws/credentials
+    ~/.aws
     ~/.config/gh
     ~/.kube
   )
@@ -50,6 +51,11 @@ sandbox() {
     else
       args+=(--bind /dev/null "$d")
     fi
+  done
+
+  # Block nested .aws dirs in work projects
+  for d in ~/work/*/.aws; do
+    [[ -d "$d" ]] && args+=(--tmpfs "$d")
   done
 
   bwrap \
