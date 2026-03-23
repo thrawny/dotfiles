@@ -1,6 +1,6 @@
-extra_keywords = ["symlink"]
+extra_keywords = ["symlink", "cachix", "thrawny"]
 [replacements]
-Wavois = "wayvoice"
+wavois = "wayvoice"
 nbin = "nvim"
 n-bar = "env var"
 "n var" = "env var"
@@ -10,3 +10,9 @@ simlink = "symlink"
 lasergit = "lazygit"
 "operational shock" = "operational soc"
 prequel = "prequal"
+czu = "csv"
+pubview = "webview"
+"guitar action" = "github action"
+throney = "thrawny"
+cashics = "cachix"
+kasex = "Cachix"
