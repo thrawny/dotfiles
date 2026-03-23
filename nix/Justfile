@@ -247,22 +247,14 @@ cache:
         exit 1
     fi
 
-    # Packages from flake inputs compiled from source, not in any upstream cache
-    # Excludes helium (AppImage download, not compiled)
-    patterns='niri-|walker-|elephant-|xremap-'
+    # Push entire system closure — upstream caches (cache.nixos.org, niri, zmx, etc.)
+    # are configured on the Cachix dashboard, so already-cached paths are skipped.
+    echo "Pushing system closure to thrawny..."
+    nix path-info -r /run/current-system | cachix push thrawny
 
-    # Get current system closure and filter for flake-input packages
-    paths=$(nix path-info -r /run/current-system 2>/dev/null | grep -E "$patterns")
-
-    if [ -z "$paths" ]; then
-        echo "No matching paths found in closure."
-        exit 0
-    fi
-
-    echo "Pushing $(echo "$paths" | wc -l) paths to thrawny:"
-    echo "$paths" | sed 's|/nix/store/[a-z0-9]*-|  |'
     echo ""
-    echo "$paths" | cachix push thrawny
+    echo "Pinning system closure (keeping last 3 revisions)..."
+    cachix pin thrawny "$(hostname)" /run/current-system --keep-revisions 3
 
 # Format Nix files
 fmt:
