@@ -31,7 +31,14 @@ sandbox() {
   done
 
   # Hide host runtime sockets and give the sandbox its own empty runtime dir.
-  [[ -d "/run/user/${UID}" ]] && args+=(--tmpfs "/run/user/${UID}")
+  if [[ -d "/run/user/${UID}" ]]; then
+    args+=(--tmpfs "/run/user/${UID}")
+    args+=(
+      --ro-bind-try
+      "/run/user/${UID}/agent-switch.sock"
+      "/run/user/${UID}/agent-switch.sock"
+    )
+  fi
 
   # work/*/code and work/*/.direnv directories
   for d in ~/work/*/code ~/work/*/.direnv; do
@@ -68,6 +75,7 @@ sandbox() {
     --dev /dev \
     --proc /proc \
     --die-with-parent \
+    --setenv SANDBOX 1 \
     "${args[@]}" \
     -- "$@"
 

@@ -247,6 +247,13 @@
             set +a
           fi
           [ -f ~/.zsh.local ] && source ~/.zsh.local
+
+          if [[ -n "$SANDBOX" ]]; then
+            SAVEHIST=0
+            unsetopt APPEND_HISTORY
+            unsetopt INC_APPEND_HISTORY
+            unsetopt SHARE_HISTORY
+          fi
         ''
       ];
       # Starship is configured separately in starship.nix

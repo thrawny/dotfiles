@@ -29,6 +29,11 @@ _: {
         format = "in [🛸 zmx:$env_value]($style) ";
         style = "bold cyan";
       };
+
+      env_var.SANDBOX = {
+        format = "in [🫧 sandbox]($style) ";
+        style = "bold yellow";
+      };
     };
   };
 }
