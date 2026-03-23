@@ -1,41 +1,15 @@
 {
   pkgs,
   lib,
+  zmx,
   ...
 }:
 let
   inherit (pkgs.stdenv.hostPlatform) system;
-  zmxBinary = pkgs.stdenvNoCC.mkDerivation {
-    pname = "zmx";
-    version = "0.4.2";
-    nativeBuildInputs = [ pkgs.installShellFiles ];
-    src = pkgs.fetchurl {
-      url = "https://zmx.sh/a/zmx-0.4.2-linux-x86_64.tar.gz";
-      sha256 = "sha256-JSPSkAbo4NdoyA9APK0pROkNWMuj9oqRJ3sLgNDB8jc=";
-    };
-    dontUnpack = true;
-    installPhase = ''
-      runHook preInstall
-      mkdir -p "$out/bin"
-      tar -xzf "$src" -C "$out/bin"
-      chmod 755 "$out/bin/zmx"
-
-      echo '#compdef zmx' > _zmx
-      "$out/bin/zmx" completions zsh >> _zmx
-      installShellCompletion --zsh _zmx
-      runHook postInstall
-    '';
-    meta = {
-      description = "Session persistence for terminal processes";
-      homepage = "https://zmx.sh/";
-      license = lib.licenses.mit;
-      platforms = [ "x86_64-linux" ];
-      mainProgram = "zmx";
-    };
-  };
+  zmxPkg = zmx.packages.${system}.zmx;
 in
 {
-  home.packages = lib.optionals (system == "x86_64-linux") [
-    zmxBinary
+  home.packages = lib.optionals (builtins.hasAttr system zmx.packages) [
+    zmxPkg
   ];
 }

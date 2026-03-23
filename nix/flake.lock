@@ -555,11 +555,11 @@
     },
     "nixpkgs_9": {
       "locked": {
-        "lastModified": 1764635402,
-        "narHash": "sha256-6rYcajRLe2C5ZYnV1HYskJl+QAkhvseWTzbdQiTN9OI=",
+        "lastModified": 1774232173,
+        "narHash": "sha256-T3eZ0qmTBHf8/RDRcqjokzxRs7zNg4Jy6vqzL95RTmo=",
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "5f53b0d46d320352684242d000b36dcfbbf7b0bc",
+        "rev": "609808cb49c288b0006dbefa69f788f09284799b",
         "type": "github"
       },
       "original": {
@@ -843,11 +843,11 @@
         "nixpkgs": "nixpkgs_9"
       },
       "locked": {
-        "lastModified": 1764678235,
-        "narHash": "sha256-NNQWR3DAufaH7fs6ZplfAv1xPHEc0Ne3Z0v4MNHCqSw=",
+        "lastModified": 1774233260,
+        "narHash": "sha256-Pw234vVLbEr2C2DICIAi0v3CcvbHuBjp1CyjnRe/ems=",
         "owner": "Cloudef",
         "repo": "zig2nix",
-        "rev": "8b6ec85bccdf6b91ded19e9ef671205937e271e6",
+        "rev": "7f2d17402a284480b2fde02f3b179309a62d250a",
         "type": "github"
       },
       "original": {
@@ -858,18 +858,36 @@
     },
     "zmx": {
       "inputs": {
-        "zig2nix": "zig2nix"
+        "zig2nix": "zig2nix",
+        "zmx-src": "zmx-src"
       },
       "locked": {
-        "lastModified": 1774232253,
-        "narHash": "sha256-wvAAeVasYQAA9Sdsq+BsnGWOqtM2vMv5f2/t39PkWos=",
+        "lastModified": 1774264396,
+        "narHash": "sha256-J+S+jfJoznEducqClP0Qth41Do/E/x+abMs4bdUgJ3o=",
+        "owner": "thrawny",
+        "repo": "zmx-flake",
+        "rev": "7ad9daecb2486692eaa1852a2a794aa5284d03d2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "thrawny",
+        "repo": "zmx-flake",
+        "type": "github"
+      }
+    },
+    "zmx-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1773885465,
+        "narHash": "sha256-ehbriI3xW40oVUbokhNuxYvueqFhkmHCVNZpqxQLr3A=",
         "owner": "neurosnap",
         "repo": "zmx",
-        "rev": "3b0e4e8432f1fccfa3eae057c42f245ee7a6a703",
+        "rev": "27bd9b8421e00cf44efbcf763a094cc06f7ff885",
         "type": "github"
       },
       "original": {
         "owner": "neurosnap",
+        "ref": "v0.4.2",
         "repo": "zmx",
         "type": "github"
       }

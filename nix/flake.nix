@@ -24,7 +24,7 @@
     srvos.inputs.nixpkgs.follows = "nixpkgs";
     claude-code-nix.url = "github:sadjow/claude-code-nix";
     llm-agents.url = "github:numtide/llm-agents.nix";
-    zmx.url = "github:neurosnap/zmx";
+    zmx.url = "github:thrawny/zmx-flake";
   };
 
   outputs =
@@ -90,6 +90,7 @@
             srvos.nixosModules.mixins-trusted-nix-caches
             home-manager.nixosModules.home-manager
             niri-flake.nixosModules.niri # cached niri package + system setup
+            zmx.nixosModules.cache
             {
               nixpkgs.overlays = [
                 niri-flake.overlays.niri
@@ -145,6 +146,7 @@
             srvos.nixosModules.mixins-trusted-nix-caches
             home-manager.nixosModules.home-manager
             disko.nixosModules.disko
+            zmx.nixosModules.cache
             {
               home-manager.extraSpecialArgs = flakeArgs // {
                 containerAssets = storeHomeAssets;
@@ -154,6 +156,7 @@
           ]
           ++ modules;
         };
+
 
       mkContainerImage =
         {
