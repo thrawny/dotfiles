@@ -204,11 +204,15 @@ ai:
 
 # Build the headless Incus/LXC image bundle
 incus-image:
-    nix build .#headless-incus-image
-    @echo "Built result/ with:"
-    @echo "  result/metadata.tar.xz"
-    @echo "  result/rootfs.tar.xz"
-    @echo "Import with: incus image import result/metadata.tar.xz result/rootfs.tar.xz --alias headless-incus"
+    @nix build .#headless-incus-image
+
+# Import the headless Incus/LXC image directly from the Nix store
+incus-image-import alias='headless-incus':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    out="$(nix build .#headless-incus-image --no-link --print-out-paths)"
+    echo "Importing image from $out"
+    incus image import "$out/metadata.tar.xz" "$out/rootfs.tar.xz" --alias "{{alias}}"
 
 # Clean up old generations (keeps last 6) and optimize store
 clean:
