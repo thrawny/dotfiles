@@ -9,7 +9,7 @@ main() {
   case "$layout" in
     laptop)
       niri-move-workspaces eDP-1
-      niri-set-column-width 1.0
+      niri-set-column-width 0.5
       ;;
     home)
       # Everything on DP-8 (LG), except web on DP-2 (AOC)
