@@ -5,10 +5,10 @@
   "theme": "monokai-pi",
   "shellPath": "/run/current-system/sw/bin/zsh",
   "enabledModels": [
-    "openai/gpt-5.4",
     "anthropic/claude-sonnet-4-6",
     "anthropic/claude-opus-4-6",
-    "fireworks/accounts/fireworks/models/kimi-k2p5"
+    "fireworks/accounts/fireworks/models/kimi-k2p5",
+    "openai-codex/gpt-5.4"
   ],
   "packages": [
     "git:github.com/davebcn87/pi-autoresearch"
