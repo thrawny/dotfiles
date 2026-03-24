@@ -220,6 +220,10 @@ let
 
     "Mod+Backslash".action.switch-preset-column-width = [ ];
     "Mod+Shift+Backslash".action.switch-preset-window-height = [ ];
+    "Mod+Super+Backslash" = {
+      action.spawn = [ "niri-cycle-workspace-column-width" ];
+      hotkey-overlay.title = "Cycle Workspace Column Width";
+    };
     "Mod+Ctrl+R".action.reset-window-height = [ ];
     "Mod+Ctrl+F".action.expand-column-to-available-width = [ ];
     "Mod+C".action.center-column = [ ];
