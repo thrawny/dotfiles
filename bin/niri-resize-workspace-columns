@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+usage() {
+  echo "Usage: niri-resize-workspace-columns <proportion> [<proportion> ...]" >&2
+  echo "Examples:" >&2
+  echo "  niri-resize-workspace-columns 0.5         # apply 0.5 to every column" >&2
+  echo "  niri-resize-workspace-columns 1/3         # apply exact thirds to every column" >&2
+  echo "  niri-resize-workspace-columns 0.5 0.33 1  # set each column individually" >&2
+}
+
+normalize_width() {
+  local input="$1"
+
+  if [[ ! "$input" =~ ^([0-9]+([.][0-9]+)?|[.][0-9]+|[0-9]+/[0-9]+)$ ]]; then
+    echo "Invalid proportion: $input" >&2
+    exit 1
+  fi
+
+  awk -v value="$input" 'BEGIN {
+    if (value ~ /\//) {
+      split(value, parts, "/")
+      if (parts[2] == 0) {
+        exit 1
+      }
+      proportion = parts[1] / parts[2]
+    } else {
+      proportion = value + 0
+    }
+
+    pct = proportion * 100
+    if (pct <= 0) {
+      exit 1
+    }
+
+    out = sprintf("%.12f", pct)
+    sub(/0+$/, "", out)
+    sub(/\.$/, "", out)
+    print out "%"
+  }'
+}
+
+focus_column_for_resize() {
+  local column_index="$1"
+  local fallback_window_id="$2"
+  local focused_column
+
+  niri msg action focus-tiling >/dev/null
+  niri msg action focus-column "$column_index" >/dev/null
+
+  focused_column=$(niri msg -j focused-window 2>/dev/null | jq -r '.layout.pos_in_scrolling_layout[0] // empty' 2>/dev/null || true)
+  if [[ "$focused_column" == "$((column_index - 1))" ]]; then
+    return 0
+  fi
+
+  niri msg action focus-window --id "$fallback_window_id" >/dev/null
+}
+
+main() {
+  if [[ "$#" -eq 0 ]]; then
+    usage
+    exit 1
+  fi
+
+  local focused_workspace_id focused_window_id windows_json
+  focused_workspace_id=$(niri msg -j workspaces | jq -r '.[] | select(.is_focused) | .id')
+  focused_window_id=$(niri msg -j focused-window 2>/dev/null | jq -r '.id // empty' 2>/dev/null || true)
+  windows_json=$(niri msg -j windows)
+
+  mapfile -t column_window_ids < <(
+    jq -r --argjson workspace_id "$focused_workspace_id" '
+      map(
+        select(
+          .workspace_id == $workspace_id
+          and (.is_floating | not)
+          and (.layout.pos_in_scrolling_layout != null)
+        )
+      )
+      | sort_by(.layout.pos_in_scrolling_layout[0], .layout.pos_in_scrolling_layout[1])
+      | group_by(.layout.pos_in_scrolling_layout[0])
+      | map(first.id)
+      | .[]
+    ' <<<"$windows_json"
+  )
+
+  if [[ "${#column_window_ids[@]}" -eq 0 ]]; then
+    echo "No tiling columns found in the focused workspace" >&2
+    exit 1
+  fi
+
+  if [[ "$#" -ne 1 && "$#" -ne "${#column_window_ids[@]}" ]]; then
+    echo "Expected either 1 proportion for all columns or ${#column_window_ids[@]} proportions for the focused workspace, got $#" >&2
+    exit 1
+  fi
+
+  local i width input_width
+  for ((i = 1; i <= ${#column_window_ids[@]}; i++)); do
+    if [[ "$#" -eq 1 ]]; then
+      input_width="$1"
+    else
+      input_width="${!i}"
+    fi
+
+    width=$(normalize_width "$input_width")
+    focus_column_for_resize "$i" "${column_window_ids[$((i - 1))]}"
+    niri msg action set-column-width "$width" >/dev/null
+  done
+
+  if [[ -n "$focused_window_id" ]]; then
+    niri msg action focus-window --id "$focused_window_id" >/dev/null
+  fi
+}
+
+main "$@"
