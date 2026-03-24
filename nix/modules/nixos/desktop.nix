@@ -132,6 +132,13 @@ in
     };
   };
 
+  xdg.portal = {
+    extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+    config.niri = {
+      "org.freedesktop.impl.portal.FileChooser" = "gtk";
+    };
+  };
+
   home-manager = {
     extraSpecialArgs = {
       inherit
