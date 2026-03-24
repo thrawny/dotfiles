@@ -21,6 +21,7 @@ sandbox() {
     ~/.claude.json
     ~/.claude
     ~/.pi
+    ~/.npm
     ~/.zsh_history
     ~/dotfiles
     ~/code
@@ -47,6 +48,12 @@ sandbox() {
         "/run/user/${UID}/${WAYLAND_DISPLAY}"
       )
     fi
+  fi
+
+  # Expose Claude Code browser bridge socket for Chrome extension integration
+  local bridge_dir="/tmp/claude-mcp-browser-bridge-${USER}"
+  if [[ -d "$bridge_dir" ]]; then
+    args+=(--bind "$bridge_dir" "$bridge_dir")
   fi
 
   # work/*/code and work/*/.direnv directories
