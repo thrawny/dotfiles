@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE:-}" ]] && set -x
+set -euo pipefail
+shopt -s nullglob
+
+main() {
+  local container="headless"
+  local user="thrawny"
+  local mode="copy"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --mount-rw)
+        mode="mount"
+        ;;
+      --copy)
+        mode="copy"
+        ;;
+      --user)
+        user="$2"
+        shift
+        ;;
+      --help|-h)
+        usage
+        return 0
+        ;;
+      *)
+        container="$1"
+        ;;
+    esac
+    shift
+  done
+
+  local home
+  if [[ "$user" == "root" ]]; then
+    home="/root"
+  else
+    home="/home/$user"
+  fi
+
+  local -a host_files=(
+    "$HOME/.claude/.credentials.json"
+    "$HOME/.pi/agent/auth.json"
+    "$HOME/.codex/auth.json"
+  )
+  local -a dest_files=(
+    "$home/.claude/.credentials.json"
+    "$home/.pi/agent/auth.json"
+    "$home/.codex/auth.json"
+  )
+  local -a device_names=(
+    "claude-credentials"
+    "pi-auth"
+    "codex-auth"
+  )
+
+  incus info "$container" >/dev/null
+  ensure_dirs "$container" "$user" "$home"
+
+  local i
+  for i in "${!host_files[@]}"; do
+    if [[ ! -f "${host_files[$i]}" ]]; then
+      echo "Missing host file: ${host_files[$i]}" >&2
+      exit 1
+    fi
+
+    if [[ "$mode" == "mount" ]]; then
+      mount_file "$container" "${device_names[$i]}" "${host_files[$i]}" "${dest_files[$i]}"
+    else
+      copy_file "$container" "$user" "${host_files[$i]}" "${dest_files[$i]}"
+    fi
+  done
+
+  echo "Prepared Incus container '$container' for user '$user' via mode '$mode'."
+}
+
+usage() {
+  cat <<'EOF'
+Usage: incus-prepare [--copy|--mount-rw] [--user USER] [container]
+
+Defaults:
+  mode: copy
+  user: thrawny
+  container: headless
+
+Container may be local or remote, e.g.:
+  headless
+  myremote:headless
+
+Examples:
+  incus-prepare
+  incus-prepare my-container
+  incus-prepare myremote:headless
+  incus-prepare --user alice my-container
+  incus-prepare --mount-rw headless
+EOF
+}
+
+ensure_dirs() {
+  local container="$1" user="$2" home="$3"
+
+  incus exec "$container" -- mkdir -p \
+    "$home/.claude" \
+    "$home/.pi/agent" \
+    "$home/.codex"
+
+  if [[ "$user" != "root" ]]; then
+    local owner_spec
+    owner_spec="$(container_owner_spec "$container" "$user")"
+    incus exec "$container" -- chown -R "$owner_spec" \
+      "$home/.claude" \
+      "$home/.pi" \
+      "$home/.codex"
+  fi
+}
+
+copy_file() {
+  local container="$1" user="$2" src="$3" dest="$4"
+
+  incus file push "$src" "$(container_file_target "$container" "$dest")"
+
+  if [[ "$user" != "root" ]]; then
+    local owner_spec
+    owner_spec="$(container_owner_spec "$container" "$user")"
+    incus exec "$container" -- chown "$owner_spec" "$dest"
+  fi
+}
+
+container_owner_spec() {
+  local container="$1" user="$2" group
+  group="$(incus exec "$container" -- id -gn "$user")"
+  printf '%s:%s\n' "$user" "$group"
+}
+
+container_file_target() {
+  local container="$1" dest="$2"
+  printf '%s%s\n' "$container" "$dest"
+}
+
+mount_file() {
+  local container="$1" device_name="$2" src="$3" dest="$4"
+
+  incus config device remove "$container" "$device_name" >/dev/null 2>&1 || true
+  incus config device add "$container" "$device_name" disk \
+    source="$src" \
+    path="$dest"
+}
+
+main "$@"
