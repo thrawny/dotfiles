@@ -76,7 +76,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-switch track stop"
+            "command": "agent-switch track stop --agent claude"
           }
         ]
       }
@@ -86,7 +86,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-switch track prompt-submit"
+            "command": "agent-switch track prompt-submit --agent claude"
           }
         ]
       }
@@ -97,7 +97,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-switch track notification"
+            "command": "agent-switch track notification --agent claude"
           }
         ]
       }
@@ -107,7 +107,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-switch track session-start"
+            "command": "agent-switch track session-start --agent claude"
           }
         ]
       }
@@ -117,7 +117,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-switch track session-end"
+            "command": "agent-switch track session-end --agent claude"
           }
         ]
       }

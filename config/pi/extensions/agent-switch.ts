@@ -17,6 +17,7 @@ type TrackPayload = {
 	session_id: string;
 	cwd: string;
 	event: TrackEvent;
+	transcript_path?: string;
 };
 
 const START_TIMEOUT_MS = 800;
@@ -71,12 +72,18 @@ export default function (pi: ExtensionAPI) {
 			sessionId ?? sessionIdFromContext(ctx, ephemeralSessionId);
 		if (!resolvedSessionId) return;
 
-		const result = runTrack(event, {
+		const payload: TrackPayload = {
 			agent: "pi",
 			session_id: resolvedSessionId,
 			cwd: ctx.cwd,
 			event,
-		});
+		};
+		const sessionFile = ctx.sessionManager.getSessionFile();
+		if (sessionFile) {
+			payload.transcript_path = sessionFile;
+		}
+
+		const result = runTrack(event, payload);
 
 		if (!result.ok) {
 			disabled = true;
