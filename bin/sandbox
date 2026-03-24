@@ -5,15 +5,6 @@ set -euo pipefail
 sandbox() {
   local tmpfiles=() args=()
 
-  # Redact .secrets files (show keys, hide values)
-  while IFS= read -r -d '' f; do
-    local tmp
-    tmp=$(mktemp)
-    sed 's/=.*/="REDACTED"/' "$f" > "$tmp"
-    args+=(--ro-bind "$tmp" "$f")
-    tmpfiles+=("$tmp")
-  done < <(fd -H -g '.secrets' ~ --type f -0 2>/dev/null)
-
   # Writable paths (add more as needed)
   local writable=(
     ~/.cache
@@ -61,6 +52,15 @@ sandbox() {
   for d in ~/work/*/code ~/work/*/.direnv; do
     [[ -d "$d" ]] && args+=(--bind "$d" "$d")
   done
+
+  # Redact .secrets* files after writable binds so file-level mounts win.
+  while IFS= read -r -d '' f; do
+    local tmp
+    tmp=$(mktemp)
+    sed 's/=.*/="REDACTED"/' "$f" > "$tmp"
+    args+=(--ro-bind "$tmp" "$f")
+    tmpfiles+=("$tmp")
+  done < <(fd -H -g '.secrets*' ~ --type f -0 2>/dev/null)
 
   # Deny access to sensitive paths (applied after writable to override)
   local deny=(
