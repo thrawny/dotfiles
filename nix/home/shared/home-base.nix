@@ -122,6 +122,7 @@ in
       LC_ALL = "en_US.UTF-8";
       LC_CTYPE = "en_US.UTF-8";
       KUBECTL_EXTERNAL_DIFF = "kubectl-dyff";
+      CLAUDE_CONFIG_DIR = "${config.home.homeDirectory}/.claude";
     };
 
     activation = {
