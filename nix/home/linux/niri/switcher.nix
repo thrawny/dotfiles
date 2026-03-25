@@ -12,7 +12,7 @@ _: {
     ];
 
     binds = {
-      "Mod+S" = {
+      "Mod+A" = {
         action.spawn = [
           "agent-switch"
           "niri"

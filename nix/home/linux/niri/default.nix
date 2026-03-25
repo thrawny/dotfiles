@@ -52,7 +52,7 @@ let
       hotkey-overlay.title = "Open Project";
       repeat = false;
     };
-    "Mod+Shift+S" = {
+    "Mod+S" = {
       action.spawn = [
         "agent-switch"
         "niri"
