@@ -70,6 +70,16 @@ vim.keymap.set("n", "<Leader>cR", function()
   end, 300)
 end, { desc = "Reload workspace (buffers + LSP)" })
 
+-- Toggle blink.cmp completion for current buffer
+vim.api.nvim_create_user_command("ToggleCompletion", function()
+  if vim.b.completion == false then
+    vim.b.completion = true
+  else
+    vim.b.completion = false
+  end
+  vim.notify("Completion " .. (vim.b.completion and "enabled" or "disabled"))
+end, {})
+
 -- Terminal toggle with Alt+; is defined in lua/plugins/ui.lua (snacks.nvim keys spec)
 
 -- Copy file reference to clipboard for Claude Code
