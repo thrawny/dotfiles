@@ -71,7 +71,14 @@ switch:
     host=$(hostname | sed 's/\.local$//')
     if [ -f /etc/NIXOS ]; then
         echo "NixOS detected, running nixos-rebuild switch..."
+        running_kernel=$(uname -r)
         sudo nixos-rebuild switch --flake ".#$host"
+        new_kernel=$(readlink /run/current-system/kernel | grep -oP 'linux-\K[^/]+')
+        if [ "$running_kernel" != "$new_kernel" ]; then
+            echo ""
+            echo "⚠️  Kernel changed: $running_kernel -> $new_kernel"
+            echo "   Reboot before hibernating to avoid resume issues."
+        fi
     else
         echo "Standalone Home Manager detected, running home-manager switch..."
         home-manager switch -b bak --flake ".#$host"
