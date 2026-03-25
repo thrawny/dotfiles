@@ -268,6 +268,7 @@
     };
 
     home.packages = [
+      pkgs.element-desktop
       pkgs.google-chrome
       pkgs.slack
       pkgs.teams-for-linux
