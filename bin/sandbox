@@ -10,7 +10,6 @@ sandbox() {
     ~/.cache
     ~/.local
     ~/.codex
-    ~/.claude.json
     ~/.claude
     ~/.pi
     ~/.npm
