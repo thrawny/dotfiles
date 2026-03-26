@@ -1,4 +1,7 @@
+post_process = true
+post_process_model = "llama-3.3-70b-versatile"
 extra_keywords = ["symlink", "cachix", "thrawny"]
+
 [replacements]
 wavois = "wayvoice"
 nbin = "nvim"
@@ -17,3 +20,4 @@ throney = "thrawny"
 cashics = "cachix"
 kasex = "Cachix"
 zms = "zmx"
+groc = "groq"
