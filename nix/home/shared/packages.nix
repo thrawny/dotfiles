@@ -95,6 +95,7 @@ in
       netcat-gnu
       jwt-cli
       zig
+      diffnav
 
       # LSPs
       gopls
