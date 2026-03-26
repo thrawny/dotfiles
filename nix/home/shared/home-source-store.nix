@@ -1,13 +1,9 @@
 {
-  claudeSharedSkillNames,
-  codexSharedSkillNames,
   config,
   configPath,
   configSource,
   lib,
-  noLinuxOnly,
   pkgs,
-  skillFiles,
   ...
 }:
 let
@@ -43,9 +39,6 @@ in
 
     file = {
       ".claude/status_line.py".source = configSource "claude/status_line.py";
-    }
-    // skillFiles ".codex/skills" codexSharedSkillNames
-    // skillFiles ".claude/skills" claudeSharedSkillNames
-    // skillFiles ".pi/agent/skills" noLinuxOnly;
+    };
   };
 }

@@ -19,8 +19,6 @@ let
   // (args.gitIdentity or { });
   configPath =
     rel: if repoBacked then "${dotfiles}/config/${rel}" else containerAssets.config + "/${rel}";
-  skillPath =
-    name: if repoBacked then "${dotfiles}/skills/${name}" else containerAssets.skills + "/${name}";
   skillsRoot = if repoBacked then ../../../skills else containerAssets.skills;
   sharedSkillNames = lib.filter (name: !builtins.elem name excludedSharedSkills) (
     builtins.attrNames (
@@ -33,13 +31,14 @@ let
     "wayvoice"
     "skill-eval"
   ];
+  codexExcluded = linuxOnlySkills ++ [
+    "skill-creator"
+    "wayvoice"
+  ];
+  claudeExcluded = linuxOnlySkills ++ [ "skill-creator" ];
   noLinuxOnly = lib.filter (name: !builtins.elem name linuxOnlySkills) sharedSkillNames;
-  codexSharedSkillNames = lib.filter (
-    name: !builtins.elem name (linuxOnlySkills ++ [ "skill-creator" ])
-  ) sharedSkillNames;
-  claudeSharedSkillNames = lib.filter (
-    name: !builtins.elem name (linuxOnlySkills ++ [ "skill-creator" ])
-  ) sharedSkillNames;
+  codexSharedSkillNames = lib.filter (name: !builtins.elem name codexExcluded) sharedSkillNames;
+  claudeSharedSkillNames = lib.filter (name: !builtins.elem name claudeExcluded) sharedSkillNames;
   configSource =
     rel: if repoBacked then config.lib.file.mkOutOfStoreSymlink (configPath rel) else configPath rel;
   skillFiles =
@@ -48,8 +47,7 @@ let
       map (
         name:
         lib.nameValuePair "${base}/${name}" {
-          source =
-            if repoBacked then config.lib.file.mkOutOfStoreSymlink (skillPath name) else skillPath name;
+          source = skillsRoot + "/${name}";
         }
       ) names
     );
@@ -62,11 +60,9 @@ in
 
   _module.args = {
     inherit
-      claudeSharedSkillNames
-      codexSharedSkillNames
       configPath
       configSource
-      noLinuxOnly
+      linuxOnlySkills
       skillFiles
       ;
   };
@@ -134,16 +130,20 @@ in
       '';
     };
 
-    file = {
-      ".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
-        text =
-          lib.concatStringsSep "\n" (
-            [ "[user]" ]
-            ++ lib.optionals (gitIdentity.name != null) [ "\tname = ${gitIdentity.name}" ]
-            ++ lib.optionals (gitIdentity.email != null) [ "\temail = ${gitIdentity.email}" ]
-          )
-          + "\n";
+    file =
+      skillFiles ".codex/skills" codexSharedSkillNames
+      // skillFiles ".claude/skills" claudeSharedSkillNames
+      // skillFiles ".pi/agent/skills" noLinuxOnly
+      // {
+        ".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
+          text =
+            lib.concatStringsSep "\n" (
+              [ "[user]" ]
+              ++ lib.optionals (gitIdentity.name != null) [ "\tname = ${gitIdentity.name}" ]
+              ++ lib.optionals (gitIdentity.email != null) [ "\temail = ${gitIdentity.email}" ]
+            )
+            + "\n";
+        };
       };
-    };
   };
 }
