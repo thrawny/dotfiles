@@ -12,6 +12,7 @@
     ./home-base.nix
     ./packages.nix
     ./btop.nix
+    ./diffnav.nix
     ./direnv.nix
     ./git.nix
     ./ghostty.nix

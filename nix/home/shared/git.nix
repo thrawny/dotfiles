@@ -35,6 +35,22 @@ in
       merge.conflictStyle = "zdiff3";
       rerere.enabled = true;
 
+      delta = {
+        dark = true;
+        paging = "never";
+        syntax-theme = "Monokai Extended";
+        line-numbers = true;
+        plus-style = "syntax \"#004466\"";
+        plus-emph-style = "syntax \"#0077b3\"";
+        plus-non-emph-style = "syntax \"#003355\"";
+        minus-style = "syntax \"#660100\"";
+        minus-emph-style = "syntax \"#b30100\"";
+        minus-non-emph-style = "syntax \"#440100\"";
+        line-numbers-minus-style = "#ff6666";
+        line-numbers-plus-style = "#66aaff";
+        line-numbers-zero-style = "#888888";
+      };
+
       # gtr (git-tree-restore) custom tool settings
       "gtr \"copy\"" = {
         include = [
