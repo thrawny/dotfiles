@@ -55,6 +55,7 @@ require("lazy").setup({
     { import = "lazyvim.plugins.extras.coding.mini-surround" },
     { import = "lazyvim.plugins.extras.formatting.biome" },
     { import = "lazyvim.plugins.extras.ai.supermaven" },
+    { import = "lazyvim.plugins.extras.util.rest" },
     -- Conditionally import nix extra (only if nixd is available)
     vim.fn.executable("nixd") == 1 and { import = "lazyvim.plugins.extras.lang.nix" } or {},
     -- import/override with your plugins
