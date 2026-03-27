@@ -88,6 +88,11 @@ in
       networking.useDHCP = lib.mkDefault true;
       environment.sessionVariables.INCUS_CONTAINER = "incus";
       services.tailscale.enable = lib.mkForce false;
+      services.resolved.enable = lib.mkForce false;
+      environment.etc."resolv.conf".text = lib.mkForce ''
+        nameserver 1.1.1.1
+        nameserver 8.8.8.8
+      '';
 
       system.build.image = lib.mkForce (pkgs.runCommand "headless-incus-image" { } ''
         mkdir -p "$out"
