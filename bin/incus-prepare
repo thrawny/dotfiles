@@ -165,8 +165,15 @@ setup_git_credentials() {
 GITCONF
 
   if [[ -n "$token" ]]; then
-    incus exec "$container" -- su - "$user" -c \
-      "printf 'https://%s:%s@github.com\n' '$user' '$token' > '$home/.git-credentials' && chmod 600 '$home/.git-credentials'"
+    local tmpfile
+    tmpfile="$(mktemp)"
+    printf 'https://x-access-token:%s@github.com\n' "$token" > "$tmpfile"
+    incus file push "$tmpfile" "$(container_file_target "$container" "$home/.git-credentials")"
+    rm -f "$tmpfile"
+    incus exec "$container" -- chmod 600 "$home/.git-credentials"
+    if [[ "$user" != "root" ]]; then
+      incus exec "$container" -- chown "$(container_owner_spec "$container" "$user")" "$home/.git-credentials"
+    fi
   fi
 }
 
@@ -176,7 +183,7 @@ clone_repo() {
   repo_name="$(basename "$url" .git)"
 
   incus exec "$container" -- su - "$user" -c \
-    "mkdir -p '$home/code' && git clone --depth 1 '$url' '$home/code/$repo_name'"
+    "mkdir -p '$home/code' && git clone --depth 1 '$url' '$home/code/$repo_name' && cd '$home/code/$repo_name' && git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
 }
 
 mount_file() {
