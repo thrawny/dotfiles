@@ -8,6 +8,8 @@ main() {
   local container="headless"
   local user="thrawny"
   local mode="copy"
+  local github_token=""
+  local repo_url=""
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -25,8 +27,15 @@ main() {
         usage
         return 0
         ;;
+      https://github.com/*)
+        repo_url="$1"
+        ;;
       *)
-        container="$1"
+        if [[ -z "$container" || "$container" == "headless" ]] && [[ "$1" == *:* || ! "$1" == ghp_* ]]; then
+          container="$1"
+        else
+          github_token="$1"
+        fi
         ;;
     esac
     shift
@@ -72,28 +81,33 @@ main() {
     fi
   done
 
+  setup_git_credentials "$container" "$user" "$home" "$github_token"
+
+  if [[ -n "$repo_url" ]]; then
+    clone_repo "$container" "$user" "$home" "$repo_url"
+  fi
+
   echo "Prepared Incus container '$container' for user '$user' via mode '$mode'."
 }
 
 usage() {
   cat <<'EOF'
-Usage: incus-prepare [--copy|--mount-rw] [--user USER] [container]
+Usage: incus-prepare [options] [container] [github-token] [repo-url]
 
-Defaults:
-  mode: copy
-  user: thrawny
-  container: headless
+Arguments:
+  container     Container name, local or remote (default: headless)
+  github-token  GitHub PAT for git credential store
+  repo-url      GitHub repo URL to shallow-clone into ~/code/<repo>
 
-Container may be local or remote, e.g.:
-  headless
-  myremote:headless
+Options:
+  --copy        Copy credentials into container (default)
+  --mount-rw    Bind-mount credentials from host
+  --user USER   Container user (default: thrawny)
 
 Examples:
-  incus-prepare
-  incus-prepare my-container
-  incus-prepare myremote:headless
+  incus-prepare builder:dev
+  incus-prepare builder:dev ghp_xxx https://github.com/org/repo
   incus-prepare --user alice my-container
-  incus-prepare --mount-rw headless
 EOF
 }
 
@@ -136,6 +150,33 @@ container_owner_spec() {
 container_file_target() {
   local container="$1" dest="$2"
   printf '%s%s\n' "$container" "$dest"
+}
+
+setup_git_credentials() {
+  local container="$1" user="$2" home="$3" token="$4"
+  local gitconfig_local="$home/.gitconfig.local"
+
+  # Only write if .gitconfig.local doesn't already exist (HM manages it when identity is set)
+  incus exec "$container" -- test -f "$gitconfig_local" && return 0
+
+  incus exec "$container" -- su - "$user" -c "cat > '$gitconfig_local'" <<'GITCONF'
+[credential]
+	helper = store
+GITCONF
+
+  if [[ -n "$token" ]]; then
+    incus exec "$container" -- su - "$user" -c \
+      "printf 'https://%s:%s@github.com\n' '$user' '$token' > '$home/.git-credentials' && chmod 600 '$home/.git-credentials'"
+  fi
+}
+
+clone_repo() {
+  local container="$1" user="$2" home="$3" url="$4"
+  local repo_name
+  repo_name="$(basename "$url" .git)"
+
+  incus exec "$container" -- su - "$user" -c \
+    "mkdir -p '$home/code' && git clone --depth 1 '$url' '$home/code/$repo_name'"
 }
 
 mount_file() {
