@@ -228,13 +228,6 @@
           ];
         };
 
-        attic-server = mkHeadlessHost {
-          system = "x86_64-linux";
-          modules = [
-            ./hosts/attic-server/default.nix
-          ];
-        };
-
         headless-incus = headlessIncus;
       };
 
