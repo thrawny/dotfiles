@@ -2,6 +2,7 @@
   config,
   lib,
   pkgs,
+  modulesPath,
   ...
 }:
 let
@@ -31,37 +32,22 @@ let
 in
 {
   imports = [
-    ./system.nix
+    ../modules/nixos/headless.nix
   ];
 
-  virtualisation.docker.enable = true;
-
-  users.mutableUsers = lib.mkForce true;
-
-  services.openssh.authorizedKeysFiles = lib.mkForce [
-    "/etc/ssh/authorized_keys.d/%u"
-    "%h/.ssh/authorized_keys"
-  ];
-
-  networking.useDHCP = lib.mkDefault true;
-
-  environment.sessionVariables.INCUS_CONTAINER = "incus";
-
-  nix = {
-    gc = {
-      automatic = true;
-      dates = "daily";
-      options = "--delete-older-than 1d";
-    };
-    optimise.automatic = true;
-    settings = {
-      keep-derivations = false;
-      keep-outputs = false;
-    };
+  home-manager.users.${username} = {
+    imports = [ ../home/nixos/headless.nix ];
   };
 
-  services.tailscale.enable = lib.mkForce false;
-  services.resolved.enable = lib.mkForce false;
+  dotfiles = {
+    username = "thrawny";
+    homeSource = "store";
+  };
+
+  networking.hostName = "headless";
+  nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
+
+  virtualisation.docker.enable = true;
 
   systemd.services.headless-nvim-restore = {
     description = "Restore Neovim plugins for the headless image";
@@ -83,4 +69,31 @@ in
       RestartSec = 5;
     };
   };
+
+  # Custom Incus image variant: LXC rootfs + metadata + container-specific config
+  image.modules.incus =
+    {
+      config,
+      lib,
+      pkgs,
+      modulesPath,
+      ...
+    }:
+    {
+      imports = [
+        (modulesPath + "/virtualisation/lxc-container.nix")
+        (modulesPath + "/virtualisation/lxc-image-metadata.nix")
+      ];
+
+      networking.useDHCP = lib.mkDefault true;
+      environment.sessionVariables.INCUS_CONTAINER = "incus";
+      services.tailscale.enable = lib.mkForce false;
+      services.resolved.enable = lib.mkForce false;
+
+      system.build.image = lib.mkForce (pkgs.runCommand "headless-incus-image" { } ''
+        mkdir -p "$out"
+        ln -s ${config.system.build.metadata}/tarball/*.tar.xz "$out/metadata.tar.xz"
+        ln -s ${config.system.build.tarball}/tarball/*.tar.xz "$out/rootfs.tar.xz"
+      '');
+    };
 }
