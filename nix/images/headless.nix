@@ -47,6 +47,7 @@ in
   networking.hostName = "headless";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
+  nix.settings.sandbox = false;
   virtualisation.docker.enable = true;
 
   systemd.services.headless-nvim-restore = {
