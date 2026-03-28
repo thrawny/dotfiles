@@ -194,8 +194,12 @@ clone_repo() {
   local repo_name
   repo_name="$(basename "$url" .git)"
 
-  incus exec "$container" -- su - "$user" -c \
-    "mkdir -p '$home/code' && git clone --depth 1 '$url' '$home/code/$repo_name' && cd '$home/code/$repo_name' && git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
+  if incus exec "$container" -- test -d "$home/code/$repo_name"; then
+    echo "Repo already cloned: ~/code/$repo_name"
+  else
+    incus exec "$container" -- su - "$user" -c \
+      "mkdir -p '$home/code' && git clone --depth 1 '$url' '$home/code/$repo_name' && cd '$home/code/$repo_name' && git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
+  fi
 }
 
 install_packages() {
@@ -206,7 +210,7 @@ install_packages() {
     pkgs+=("nixpkgs#${pkg}")
   done
   echo "Installing packages: $*"
-  incus exec "$container" -- su - "$user" -c "nix profile install ${pkgs[*]}"
+  incus exec "$container" -- su - "$user" -c "nix profile add ${pkgs[*]}"
 }
 
 mount_file() {
