@@ -124,6 +124,7 @@ in
     activation = {
       seedClaudeJson = hmLib.dag.entryBefore [ "linkGeneration" ] ''
         claude_json="${config.home.homeDirectory}/.claude/.claude.json"
+        install -d -m0755 "$(dirname "$claude_json")"
         if [ ! -s "$claude_json" ]; then
           printf '%s\n' '{"numStartups":1,"installMethod":"native","autoUpdates":false,"theme":"dark-daltonized","editorMode":"vim","hasCompletedOnboarding":true,"effortCalloutV2Dismissed":true}' > "$claude_json"
         fi
