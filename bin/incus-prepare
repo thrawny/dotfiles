@@ -10,6 +10,7 @@ main() {
   local mode="copy"
   local github_token=""
   local repo_url=""
+  local -a extra_packages=()
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -26,6 +27,11 @@ main() {
       --help|-h)
         usage
         return 0
+        ;;
+      --)
+        shift
+        extra_packages=("$@")
+        break
         ;;
       https://github.com/*)
         repo_url="$1"
@@ -87,17 +93,22 @@ main() {
     clone_repo "$container" "$user" "$home" "$repo_url"
   fi
 
+  if [[ ${#extra_packages[@]} -gt 0 ]]; then
+    install_packages "$container" "$user" "${extra_packages[@]}"
+  fi
+
   echo "Prepared Incus container '$container' for user '$user' via mode '$mode'."
 }
 
 usage() {
   cat <<'EOF'
-Usage: incus-prepare [options] [container] [github-token] [repo-url]
+Usage: incus-prepare [options] [container] [github-token] [repo-url] [-- packages...]
 
 Arguments:
   container     Container name, local or remote (default: headless)
   github-token  GitHub PAT for git credential store
   repo-url      GitHub repo URL to shallow-clone into ~/code/<repo>
+  packages      Nixpkgs packages to install via nix profile (after --)
 
 Options:
   --copy        Copy credentials into container (default)
@@ -107,6 +118,7 @@ Options:
 Examples:
   incus-prepare builder:dev
   incus-prepare builder:dev ghp_xxx https://github.com/org/repo
+  incus-prepare builder:dev ghp_xxx https://github.com/org/repo -- mosquitto upx
   incus-prepare --user alice my-container
 EOF
 }
@@ -184,6 +196,17 @@ clone_repo() {
 
   incus exec "$container" -- su - "$user" -c \
     "mkdir -p '$home/code' && git clone --depth 1 '$url' '$home/code/$repo_name' && cd '$home/code/$repo_name' && git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
+}
+
+install_packages() {
+  local container="$1" user="$2"
+  shift 2
+  local -a pkgs=()
+  for pkg in "$@"; do
+    pkgs+=("nixpkgs#${pkg}")
+  done
+  echo "Installing packages: $*"
+  incus exec "$container" -- su - "$user" -c "nix profile install ${pkgs[*]}"
 }
 
 mount_file() {
