@@ -10,6 +10,7 @@
   imports = [
     # Shared cross-platform modules
     ./home-base.nix
+    ./ai-tools.nix
     ./packages.nix
     ./btop.nix
     ./diffnav.nix

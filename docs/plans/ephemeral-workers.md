@@ -9,7 +9,7 @@ This plan intentionally avoids Terraform for worker lifecycle. Infrastructure is
 ## Current State
 
 - NixOS deployment script exists: `scripts/deploy-hetzner.sh`
-- `attic-server` host exists (cache service + Tailscale bootstrap pattern)
+- `obelisk` host exists (Forgejo service + Tailscale bootstrap pattern)
 - Build strategy supports local build + remote deployment (`--build-on local`)
 - No dedicated reusable host/profile for disposable workers yet
 - No create/destroy/prune worker scripts yet
@@ -25,7 +25,7 @@ This plan intentionally avoids Terraform for worker lifecycle. Infrastructure is
   - optional initial command
   - destroy VM when done
 - No long-lived state system required for worker lifecycle
-- Works with local prebuild + optional Attic cache acceleration
+- Works with local prebuild + optional cache acceleration
 
 ## What We're NOT Doing
 
@@ -111,7 +111,7 @@ Optional acceleration:
 
 - prebuild `diskoScript` and `toplevel` once
 - reuse with `nixos-anywhere --store-paths`
-- allow workers to pull substitutes from Attic/cache.nixos.org
+- allow workers to pull substitutes from cache.nixos.org
 
 ---
 
@@ -164,7 +164,7 @@ Optional acceleration:
 ## Phase 4: Optional Performance Enhancements
 
 1. Add prebuild/reuse mode (`--store-paths`)
-2. Add optional cache hints/output for Attic integration
+2. Add optional cache hints/output
 3. Add script flag to skip build when store paths provided
 
 ### Success Criteria

@@ -95,10 +95,12 @@ in
         nameserver 8.8.8.8
       '';
 
-      system.build.image = lib.mkForce (pkgs.runCommand "headless-incus-image" { } ''
-        mkdir -p "$out"
-        ln -s ${config.system.build.metadata}/tarball/*.tar.xz "$out/metadata.tar.xz"
-        ln -s ${config.system.build.tarball}/tarball/*.tar.xz "$out/rootfs.tar.xz"
-      '');
+      system.build.image = lib.mkForce (
+        pkgs.runCommand "headless-incus-image" { } ''
+          mkdir -p "$out"
+          ln -s ${config.system.build.metadata}/tarball/*.tar.xz "$out/metadata.tar.xz"
+          ln -s ${config.system.build.tarball}/tarball/*.tar.xz "$out/rootfs.tar.xz"
+        ''
+      );
     };
 }

@@ -202,6 +202,13 @@
           ];
         };
 
+        obelisk = mkHeadlessHost {
+          system = "x86_64-linux";
+          modules = [
+            ./hosts/obelisk/default.nix
+          ];
+        };
+
         headless = mkHeadlessHost {
           system = "x86_64-linux";
           modules = [

@@ -10,10 +10,6 @@ FLAKE_TARGET="${2:-thrawny-server}"
 DOTFILES_REPO="https://github.com/thrawny/dotfiles.git"
 USERNAME="thrawny"
 TAILSCALE_AUTH_KEY=""
-# Keep in sync with nix/hosts/attic-server/default.nix
-ATTIC_S3_REGION="${ATTIC_S3_REGION:-hel1}"
-ATTIC_S3_BUCKET="${ATTIC_S3_BUCKET:-thrawny-attic-storage}"
-ATTIC_S3_ENDPOINT="${ATTIC_S3_ENDPOINT:-https://hel1.your-objectstorage.com}"
 
 usage() {
     echo "Usage: $0 <target-host> [flake-target]"
@@ -25,8 +21,31 @@ usage() {
     echo "Example:"
     echo "  $0 root@157.90.168.158"
     echo "  $0 root@157.90.168.158 thrawny-server"
-    echo "  $0 root@157.90.168.158 attic-server"
+    echo "  $0 root@157.90.168.158 obelisk"
     exit 1
+}
+
+stage_password_hash() {
+    mkdir -p "$tmpdir/etc"
+    printf '%s\n' "$1" > "$tmpdir/etc/user-password"
+    chmod 600 "$tmpdir/etc/user-password"
+}
+
+stage_user_password() {
+    local password=""
+    echo ""
+    echo "==> Console login password for $USERNAME (optional)"
+    echo "    Used for Hetzner console access as a recovery fallback."
+    read -rsp "    Enter password (leave empty to skip): " password
+    echo ""
+    if [[ -z "$password" ]]; then
+        stage_password_hash "!"
+        return
+    fi
+
+    local hashed
+    hashed=$(mkpasswd -m sha-512 "$password")
+    stage_password_hash "$hashed"
 }
 
 stage_tailscale_auth_key() {
@@ -38,45 +57,6 @@ stage_tailscale_auth_key() {
     mkdir -p "$tmpdir/etc/tailscale"
     printf '%s\n' "$key" > "$tmpdir/etc/tailscale/auth-key"
     chmod 600 "$tmpdir/etc/tailscale/auth-key"
-}
-
-stage_attic_env_file() {
-    local attic_access_key_id=""
-    local attic_secret_access_key=""
-    local token_rs256_secret_base64=""
-
-    if ! command -v openssl >/dev/null 2>&1; then
-        echo "Error: openssl is required to generate ATTIC_SERVER_TOKEN_RS256_SECRET_BASE64"
-        exit 1
-    fi
-
-    echo "==> Attic bootstrap (attic-server target)"
-    echo "    Storage settings come from nix/hosts/attic-server/default.nix:"
-    echo "    region=$ATTIC_S3_REGION bucket=$ATTIC_S3_BUCKET endpoint=$ATTIC_S3_ENDPOINT"
-    read -rp "    Continue with these values? [Y/n] " confirm_storage
-    if [[ "${confirm_storage:-Y}" =~ ^[Nn]$ ]]; then
-        echo "Update nix/hosts/attic-server/default.nix storage settings, then rerun."
-        exit 1
-    fi
-
-    while [[ -z "$attic_access_key_id" ]]; do
-        read -rp "    S3 Access Key ID: " attic_access_key_id
-    done
-
-    while [[ -z "$attic_secret_access_key" ]]; do
-        read -rsp "    S3 Secret Access Key: " attic_secret_access_key
-        echo ""
-    done
-
-    token_rs256_secret_base64="$(openssl genrsa -traditional 4096 | openssl base64 -A)"
-
-    mkdir -p "$tmpdir/etc/atticd"
-    cat > "$tmpdir/etc/atticd/atticd.env" <<EOF
-ATTIC_SERVER_TOKEN_RS256_SECRET_BASE64=$token_rs256_secret_base64
-AWS_ACCESS_KEY_ID=$attic_access_key_id
-AWS_SECRET_ACCESS_KEY=$attic_secret_access_key
-EOF
-    chmod 600 "$tmpdir/etc/atticd/atticd.env"
 }
 
 if [[ $# -lt 1 ]]; then
@@ -103,14 +83,14 @@ trap 'rm -rf "$tmpdir"' EXIT
 echo "==> Cloning dotfiles..."
 git clone --depth 1 "$DOTFILES_REPO" "$tmpdir/home/$USERNAME/dotfiles"
 
-if [[ "$FLAKE_TARGET" == "attic-server" ]]; then
+if [[ "$FLAKE_TARGET" == "obelisk" ]]; then
     echo ""
     echo "==> Tailscale auth key (optional, used on first boot)"
     echo "    Generate at: https://login.tailscale.com/admin/settings/keys"
     read -rsp "    Paste Tailscale auth key (leave empty to skip): " TAILSCALE_AUTH_KEY
     echo ""
     stage_tailscale_auth_key "$TAILSCALE_AUTH_KEY"
-    stage_attic_env_file
+    stage_user_password
 fi
 
 # Deploy
@@ -123,7 +103,7 @@ nix run github:nix-community/nixos-anywhere -- \
     --chown "/home/$USERNAME/dotfiles" "1000:100" \
     "$TARGET_HOST"
 
-if [[ "$FLAKE_TARGET" == "attic-server" ]]; then
+if [[ "$FLAKE_TARGET" == "obelisk" ]]; then
     if [[ -n "$TAILSCALE_AUTH_KEY" ]]; then
         echo ""
         echo "==> Tailscale auth key provisioned to /etc/tailscale/auth-key"
@@ -134,7 +114,7 @@ if [[ "$FLAKE_TARGET" == "attic-server" ]]; then
         echo "    Run on server later: sudo tailscale up --auth-key <key>"
     fi
 else
-    # Bootstrap Tailscale for non-attic hosts
+    # Bootstrap Tailscale for other hosts
     echo ""
     echo "==> Generate a one-off auth key at: https://login.tailscale.com/admin/settings/keys"
     read -rp "Paste Tailscale auth key: " TAILSCALE_AUTH_KEY

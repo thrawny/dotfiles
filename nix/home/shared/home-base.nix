@@ -6,10 +6,8 @@
   ...
 }@args:
 let
-  hmLib = lib.hm;
   containerAssets = args.containerAssets or null;
   dotfiles = args.dotfiles or null;
-  excludedSharedSkills = args.excludedSharedSkills or [ ];
   repoBacked = homeSource == "repo";
   storeBacked = homeSource == "store";
   gitIdentity = {
@@ -19,51 +17,14 @@ let
   // (args.gitIdentity or { });
   configPath =
     rel: if repoBacked then "${dotfiles}/config/${rel}" else containerAssets.config + "/${rel}";
-  skillsRoot = if repoBacked then ../../../skills else containerAssets.skills;
-  sharedSkillNames = lib.filter (name: !builtins.elem name excludedSharedSkills) (
-    builtins.attrNames (
-      lib.filterAttrs (name: type: type == "directory" && !(lib.hasPrefix "." name)) (
-        builtins.readDir skillsRoot
-      )
-    )
-  );
-  linuxOnlySkills = [
-    "wayvoice"
-    "skill-eval"
-  ];
-  codexExcluded = linuxOnlySkills ++ [
-    "skill-creator"
-    "wayvoice"
-  ];
-  claudeExcluded = linuxOnlySkills ++ [ "skill-creator" ];
-  noLinuxOnly = lib.filter (name: !builtins.elem name linuxOnlySkills) sharedSkillNames;
-  codexSharedSkillNames = lib.filter (name: !builtins.elem name codexExcluded) sharedSkillNames;
-  claudeSharedSkillNames = lib.filter (name: !builtins.elem name claudeExcluded) sharedSkillNames;
   configSource =
     rel: if repoBacked then config.lib.file.mkOutOfStoreSymlink (configPath rel) else configPath rel;
-  skillFiles =
-    base: names:
-    lib.listToAttrs (
-      map (
-        name:
-        lib.nameValuePair "${base}/${name}" {
-          source = skillsRoot + "/${name}";
-        }
-      ) names
-    );
 in
 {
-  imports = [
-    ./home-source-common.nix
-    (if repoBacked then ./home-source-repo.nix else ./home-source-store.nix)
-  ];
-
   _module.args = {
     inherit
       configPath
       configSource
-      linuxOnlySkills
-      skillFiles
       ;
   };
 
@@ -105,6 +66,15 @@ in
   home = {
     stateVersion = "24.05";
 
+    sessionPath = [
+      "$HOME/.cargo/bin"
+      "$HOME/.npm-global/bin"
+      "$HOME/.local/share/pnpm"
+      "$HOME/.local/bin"
+      "$HOME/go/bin"
+    ]
+    ++ lib.optionals repoBacked [ "${config.home.homeDirectory}/dotfiles/bin" ];
+
     sessionVariables = {
       PYTHONDONTWRITEBYTECODE = "1";
       PYTHONUNBUFFERED = "1";
@@ -118,33 +88,18 @@ in
       LC_ALL = "en_US.UTF-8";
       LC_CTYPE = "en_US.UTF-8";
       KUBECTL_EXTERNAL_DIFF = "kubectl-dyff";
-      CLAUDE_CONFIG_DIR = "${config.home.homeDirectory}/.claude";
     };
 
-    activation = {
-      seedClaudeJson = hmLib.dag.entryBefore [ "linkGeneration" ] ''
-        claude_json="${config.home.homeDirectory}/.claude/.claude.json"
-        install -d -m0755 "$(dirname "$claude_json")"
-        if [ ! -s "$claude_json" ]; then
-          printf '%s\n' '{"numStartups":1,"installMethod":"native","autoUpdates":false,"theme":"dark-daltonized","editorMode":"vim","hasCompletedOnboarding":true,"effortCalloutV2Dismissed":true}' > "$claude_json"
-        fi
-      '';
-    };
-
-    file =
-      skillFiles ".codex/skills" codexSharedSkillNames
-      // skillFiles ".claude/skills" claudeSharedSkillNames
-      // skillFiles ".pi/agent/skills" noLinuxOnly
-      // {
-        ".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
-          text =
-            lib.concatStringsSep "\n" (
-              [ "[user]" ]
-              ++ lib.optionals (gitIdentity.name != null) [ "\tname = ${gitIdentity.name}" ]
-              ++ lib.optionals (gitIdentity.email != null) [ "\temail = ${gitIdentity.email}" ]
-            )
-            + "\n";
-        };
+    file = {
+      ".gitconfig.local" = lib.mkIf (gitIdentity.name != null || gitIdentity.email != null) {
+        text =
+          lib.concatStringsSep "\n" (
+            [ "[user]" ]
+            ++ lib.optionals (gitIdentity.name != null) [ "\tname = ${gitIdentity.name}" ]
+            ++ lib.optionals (gitIdentity.email != null) [ "\temail = ${gitIdentity.email}" ]
+          )
+          + "\n";
       };
+    };
   };
 }

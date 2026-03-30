@@ -9,7 +9,7 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 - `thrawny-z13` - ThinkPad Z13 Gen 2 (Ryzen 7 PRO 7840U, 64GB RAM, 2TB NVMe, 2.8K OLED, 4G) (x86_64-linux)
 - `thrawny-desktop` - Desktop (x86_64-linux)
 - `thrawny-server` - Headless server (x86_64-linux)
-- `attic-server` - Headless Attic cache server (x86_64-linux)
+- `obelisk` - Headless service server (Forgejo, PostgreSQL) (x86_64-linux)
 
 **Home Manager standalone:**
 - `thrawnym1` - MacBook M1 (aarch64-darwin)

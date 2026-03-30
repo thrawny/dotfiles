@@ -95,7 +95,6 @@ Agent microVMs (Hetzner, ephemeral)
     ▼
 NixOS VPS (Hetzner CX22, always-on)
 ├── Forgejo (git hosting, policy enforcement)
-├── Attic (Nix binary cache)
 ├── Tailscale (networking + TLS)
     │
     │ mirror/sync
@@ -118,11 +117,6 @@ GitHub (public/community repos)
 - NixOS `services.forgejo` module handles everything
 - Registration disabled, users created via CLI
 
-### Hosting: Attic
-
-- Rust binary, ~50-100 MB RAM idle
-- S3 backend for store path storage (Hetzner Object Storage)
-
 ### Networking: Tailscale Serve
 
 No nginx or Caddy needed. Tailscale Serve handles TLS and routing declaratively:
@@ -132,7 +126,6 @@ services.tailscale.serve = {
   enable = true;
   services = {
     forgejo.endpoints."tcp:443" = "http://localhost:3000";
-    attic.endpoints."tcp:443" = "http://localhost:8080";
   };
 };
 ```
@@ -145,14 +138,10 @@ Tailscale free plan: 100 devices, 3 users.
 
 - `services.forgejo.dump` for automatic daily Forgejo backups
 - Restic to Hetzner Storage Box for offsite backup
-- SQLite online backup: `sqlite3 forgejo.db ".backup /backup/forgejo.db"`
-
 ### Cost
 
 | Component | Specs | EUR/mo (ex. VAT) |
 |---|---|---|
 | CX22 VPS | 2 vCPU, 4 GB RAM, 40 GB disk | 3.79 |
-| Object Storage | 1 TB storage + 1 TB egress | 4.99 |
-| **Total** | | **8.78** |
 
-Object storage can be deferred until local disk fills up (start at 3.79/mo). Agent VMs billed hourly when running (~0.006/hr for CX22).
+Agent VMs billed hourly when running (~0.006/hr for CX22).

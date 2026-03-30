@@ -11,6 +11,7 @@
 {
   imports = [
     ../shared/home-base.nix
+    ../shared/ai-tools.nix
     ../shared/packages.nix
     ../shared/btop.nix
     ../shared/direnv.nix
