@@ -37,7 +37,7 @@ main() {
         repo_url="$1"
         ;;
       *)
-        if [[ -z "$container" || "$container" == "headless" ]] && [[ "$1" == *:* || ! "$1" == ghp_* ]]; then
+        if [[ -z "$container" || "$container" == "headless" ]] && ! is_github_token "$1"; then
           container="$1"
         else
           github_token="$1"
@@ -100,6 +100,17 @@ main() {
   echo "Prepared Incus container '$container' for user '$user' via mode '$mode'."
 }
 
+is_github_token() {
+  case "$1" in
+    ghp_*|gho_*|ghu_*|ghs_*|ghr_*|github_pat_*|gh_pat_*)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 Usage: incus-prepare [options] [container] [github-token] [repo-url] [-- packages...]
@@ -117,8 +128,8 @@ Options:
 
 Examples:
   incus-prepare builder:dev
-  incus-prepare builder:dev ghp_xxx https://github.com/org/repo
-  incus-prepare builder:dev ghp_xxx https://github.com/org/repo -- mosquitto upx
+  incus-prepare builder:dev github_pat_xxx https://github.com/org/repo
+  incus-prepare builder:dev github_pat_xxx https://github.com/org/repo -- mosquitto upx
   incus-prepare --user alice my-container
 EOF
 }
@@ -168,13 +179,13 @@ setup_git_credentials() {
   local container="$1" user="$2" home="$3" token="$4"
   local gitconfig_local="$home/.gitconfig.local"
 
-  # Only write if .gitconfig.local doesn't already exist (HM manages it when identity is set)
-  incus exec "$container" -- test -f "$gitconfig_local" && return 0
-
-  incus exec "$container" -- su - "$user" -c "cat > '$gitconfig_local'" <<'GITCONF'
+  # Only create .gitconfig.local if it doesn't already exist (HM manages it when identity is set)
+  if ! incus exec "$container" -- test -f "$gitconfig_local"; then
+    incus exec "$container" -- su - "$user" -c "cat > '$gitconfig_local'" <<'GITCONF'
 [credential]
 	helper = store
 GITCONF
+  fi
 
   if [[ -n "$token" ]]; then
     local tmpfile

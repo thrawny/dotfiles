@@ -31,10 +31,14 @@ let
     "skill-eval"
   ];
   codexExcluded = linuxOnlySkills ++ [
+    "brave-search"
     "skill-creator"
     "wayvoice"
   ];
-  claudeExcluded = linuxOnlySkills ++ [ "skill-creator" ];
+  claudeExcluded = linuxOnlySkills ++ [
+    "brave-search"
+    "skill-creator"
+  ];
   noLinuxOnly = lib.filter (name: !builtins.elem name linuxOnlySkills) sharedSkillNames;
   codexSharedSkillNames = lib.filter (name: !builtins.elem name codexExcluded) sharedSkillNames;
   claudeSharedSkillNames = lib.filter (name: !builtins.elem name claudeExcluded) sharedSkillNames;
