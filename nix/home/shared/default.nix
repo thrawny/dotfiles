@@ -11,7 +11,10 @@
     # Shared cross-platform modules
     ./home-base.nix
     ./ai-tools.nix
-    ./packages.nix
+    ./packages/core.nix
+    ./packages/workstation.nix
+    ./packages/cloud.nix
+    ./packages/ai.nix
     ./btop.nix
     ./diffnav.nix
     ./direnv.nix

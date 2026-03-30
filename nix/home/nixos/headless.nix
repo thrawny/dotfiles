@@ -12,7 +12,8 @@
   imports = [
     ../shared/home-base.nix
     ../shared/ai-tools.nix
-    ../shared/packages.nix
+    ../shared/packages/core.nix
+    ../shared/packages/ai.nix
     ../shared/btop.nix
     ../shared/direnv.nix
     ../shared/git.nix
