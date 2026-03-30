@@ -140,6 +140,7 @@ in
       # Claude/AI tools
       ".claude/plans"
       ".claude/worktrees"
+      ".claude/scheduled_tasks.lock"
       ".playwright-mcp"
 
       # Workflow files
