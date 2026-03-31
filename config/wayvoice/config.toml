@@ -1,6 +1,6 @@
 post_process = true
 post_process_model = "llama-3.3-70b-versatile"
-extra_keywords = ["symlink", "cachix", "thrawny"]
+extra_keywords = ["symlink", "cachix", "thrawny", "droop"]
 
 [replacements]
 wavois = "wayvoice"
