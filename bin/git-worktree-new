@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: git-worktree-new <branch> [git worktree add args...]" >&2
+  exit 1
+fi
+
+branch="$1"; shift
+root=$(git rev-parse --show-toplevel)
+repo=$(basename "$root")
+wt_dir="${root}/../${repo}-worktrees/${branch}"
+
+if [[ ! -d "$wt_dir" ]]; then
+  git worktree add -b "$branch" "$wt_dir" "$@"
+
+  for f in .envrc .secrets .env.local .claude/settings.local.json; do
+    if [[ -f "${root}/${f}" ]]; then
+      mkdir -p "$(dirname "${wt_dir}/${f}")"
+      cp "${root}/${f}" "${wt_dir}/${f}"
+    fi
+  done
+fi
+
+niri-project "$wt_dir"

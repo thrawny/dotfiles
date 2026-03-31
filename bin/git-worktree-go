@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: git-worktree-go <branch>" >&2
+  exit 1
+fi
+
+root=$(git rev-parse --show-toplevel)
+repo=$(basename "$root")
+echo "${root}/../${repo}-worktrees/${1}"

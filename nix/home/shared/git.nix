@@ -51,22 +51,6 @@ in
         line-numbers-zero-style = "#888888";
       };
 
-      # gtr (git-tree-restore) custom tool settings
-      "gtr \"copy\"" = {
-        include = [
-          ".env.local"
-          ".envrc"
-          ".claude/settings.local.json"
-          ".secrets"
-        ];
-        includeDirs = [
-          ".venv"
-          "node_modules"
-        ];
-      };
-
-      "gtr \"editor\"".default = "nvim";
-      "gtr \"ai\"".default = "claude";
     }
     // lib.optionalAttrs isDarwin {
       # macOS: use gh CLI for GitHub credential management

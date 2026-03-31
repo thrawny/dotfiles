@@ -74,7 +74,7 @@
         cy = "claude --dangerously-skip-permissions";
         pr = "gh pr create --web";
         gp = "git push --force-with-lease --force-if-includes";
-        gw = "git-gtr";
+        gw = "git worktree";
         tp = "terraform plan";
         ta = "terraform apply";
         taf = "terraform apply -auto-approve";
@@ -170,12 +170,9 @@
           }
 
           function gwg() {
-            cd "$(git gtr go "$1")"
+            cd "$(git-worktree-go "$1")"
           }
 
-          function gwn() {
-            git gtr new "$@" && tmux-project "$(git gtr go "$1")"
-          }
 
           function zmx-clear-all() {
             if ! command -v zmx >/dev/null 2>&1; then
