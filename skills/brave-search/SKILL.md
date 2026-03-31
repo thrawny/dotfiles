@@ -5,7 +5,7 @@ description: Web search and content extraction via Brave Search API. Use for sea
 
 # Brave Search
 
-Web search and content extraction using the official Brave Search API. No browser required. The scripts are standalone Bun executables with no npm install step.
+Web search and content extraction using the official Brave Search API. No browser required.
 
 ## Setup
 
@@ -18,7 +18,11 @@ Requires a Brave Search API account with a free subscription. A credit card is r
    ```bash
    export BRAVE_API_KEY="your-api-key-here"
    ```
-5. Ensure `bun` is installed and executable in `PATH`.
+5. Install dependencies (run once):
+   ```bash
+   cd {baseDir}
+   npm install
+   ```
 
 ## Search
 
