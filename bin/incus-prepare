@@ -10,6 +10,8 @@ main() {
   local mode="copy"
   local github_token=""
   local repo_url=""
+  local repo_path=""
+  local session_scope="repo"
   local -a extra_packages=()
 
   while [[ $# -gt 0 ]]; do
@@ -19,6 +21,19 @@ main() {
         ;;
       --copy)
         mode="copy"
+        ;;
+      --no-sessions)
+        session_scope="none"
+        ;;
+      --repo-sessions)
+        session_scope="repo"
+        ;;
+      --all-sessions)
+        session_scope="all"
+        ;;
+      --path)
+        repo_path="$(resolve_host_path "$2")"
+        shift
         ;;
       --user)
         user="$2"
@@ -33,11 +48,11 @@ main() {
         extra_packages=("$@")
         break
         ;;
-      https://github.com/*)
+      https://github.com/*|git@github.com:*)
         repo_url="$1"
         ;;
       *)
-        if [[ -z "$container" || "$container" == "headless" ]] && ! is_github_token "$1"; then
+        if [[ "$container" == "headless" ]] && ! is_github_token "$1"; then
           container="$1"
         else
           github_token="$1"
@@ -52,6 +67,15 @@ main() {
     home="/root"
   else
     home="/home/$user"
+  fi
+
+  if [[ -z "$repo_path" && ( "$session_scope" != "none" || -n "$repo_url" ) ]]; then
+    repo_path="$(resolve_repo_path)"
+  fi
+  if [[ -n "$repo_path" && -z "$repo_url" ]]; then
+    repo_url="$(normalize_repo_url "$(detect_repo_url "$repo_path")")"
+  else
+    repo_url="$(normalize_repo_url "$repo_url")"
   fi
 
   local -a host_files=(
@@ -90,14 +114,23 @@ main() {
   setup_git_credentials "$container" "$user" "$home" "$github_token"
 
   if [[ -n "$repo_url" ]]; then
-    clone_repo "$container" "$user" "$home" "$repo_url"
+    clone_repo "$container" "$user" "$home" "$repo_url" "$repo_path"
+  elif [[ -n "$repo_path" ]]; then
+    ensure_repo_parent "$container" "$user" "$repo_path"
+    if ! incus exec "$container" -- test -d "$repo_path"; then
+      echo "Warning: repo path does not exist in container and no repo URL was supplied or detected: $repo_path" >&2
+    fi
+  fi
+
+  if [[ "$session_scope" != "none" ]]; then
+    copy_sessions "$container" "$user" "$home" "$session_scope" "$repo_path"
   fi
 
   if [[ ${#extra_packages[@]} -gt 0 ]]; then
     install_packages "$container" "$user" "${extra_packages[@]}"
   fi
 
-  echo "Prepared Incus container '$container' for user '$user' via mode '$mode'."
+  echo "Prepared Incus container '$container' for user '$user' via mode '$mode' (sessions: $session_scope)."
 }
 
 is_github_token() {
@@ -118,18 +151,24 @@ Usage: incus-prepare [options] [container] [github-token] [repo-url] [-- package
 Arguments:
   container     Container name, local or remote (default: headless)
   github-token  GitHub PAT for git credential store
-  repo-url      GitHub repo URL to shallow-clone into ~/code/<repo>
+  repo-url      GitHub repo URL to clone into the same absolute path as the local repo
   packages      Nixpkgs packages to install via nix profile (after --)
 
 Options:
-  --copy        Copy credentials into container (default)
-  --mount-rw    Bind-mount credentials from host
-  --user USER   Container user (default: thrawny)
+  --copy         Copy credentials into container (default)
+  --mount-rw     Bind-mount credentials from host
+  --path PATH    Mirror this absolute local repo path inside the container
+  --no-sessions  Skip copying agent session state
+  --repo-sessions
+                 Copy all Claude/Codex/Pi sessions for the current repo (default)
+  --all-sessions Copy all Claude/Codex/Pi sessions across all repos
+  --user USER    Container user (default: thrawny)
 
 Examples:
-  incus-prepare builder:dev
+  incus-prepare headless
   incus-prepare builder:dev github_pat_xxx https://github.com/org/repo
-  incus-prepare builder:dev github_pat_xxx https://github.com/org/repo -- mosquitto upx
+  incus-prepare --path /home/thrawny/dotfiles headless
+  incus-prepare --all-sessions headless github_pat_xxx https://github.com/org/repo -- mosquitto upx
   incus-prepare --user alice my-container
 EOF
 }
@@ -155,12 +194,28 @@ ensure_dirs() {
 copy_file() {
   local container="$1" user="$2" src="$3" dest="$4"
 
-  incus file push "$src" "$(container_file_target "$container" "$dest")"
+  incus file push -p "$src" "$(container_file_target "$container" "$dest")"
 
   if [[ "$user" != "root" ]]; then
     local owner_spec
     owner_spec="$(container_owner_spec "$container" "$user")"
     incus exec "$container" -- chown "$owner_spec" "$dest"
+  fi
+}
+
+copy_dir() {
+  local container="$1" user="$2" src="$3" dest="$4"
+
+  [[ -d "$src" ]] || return 0
+
+  incus exec "$container" -- mkdir -p "$(dirname "$dest")"
+  tar -C "$(dirname "$src")" -cf - -- "$(basename "$src")" \
+    | incus exec "$container" -- tar -C "$(dirname "$dest")" -xf -
+
+  if [[ "$user" != "root" ]]; then
+    local owner_spec
+    owner_spec="$(container_owner_spec "$container" "$user")"
+    incus exec "$container" -- chown -R "$owner_spec" "$dest"
   fi
 }
 
@@ -173,6 +228,65 @@ container_owner_spec() {
 container_file_target() {
   local container="$1" dest="$2"
   printf '%s%s\n' "$container" "$dest"
+}
+
+resolve_host_path() {
+  local path="$1"
+
+  if [[ -z "$path" ]]; then
+    echo "Missing required path argument." >&2
+    exit 1
+  fi
+  if [[ ! -d "$path" ]]; then
+    echo "Path does not exist or is not a directory: $path" >&2
+    exit 1
+  fi
+
+  (cd "$path" && pwd -P)
+}
+
+resolve_repo_path() {
+  local git_root
+
+  if git_root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    printf '%s\n' "$git_root"
+    return 0
+  fi
+
+  echo "Could not detect the current repo path. Run from inside the repo or pass --path." >&2
+  exit 1
+}
+
+detect_repo_url() {
+  local repo_path="$1"
+
+  [[ -n "$repo_path" ]] || return 0
+  git -C "$repo_path" remote get-url origin 2>/dev/null || true
+}
+
+normalize_repo_url() {
+  local url="$1"
+
+  case "$url" in
+    git@github.com:*)
+      printf 'https://github.com/%s\n' "${url#git@github.com:}"
+      ;;
+    *)
+      printf '%s\n' "$url"
+      ;;
+  esac
+}
+
+claude_project_slug() {
+  local repo_path="$1"
+  local trimmed="${repo_path#/}"
+  printf -- '-%s\n' "${trimmed//\//-}"
+}
+
+pi_session_slug() {
+  local repo_path="$1"
+  local trimmed="${repo_path#/}"
+  printf -- '--%s--\n' "${trimmed//\//-}"
 }
 
 setup_git_credentials() {
@@ -200,17 +314,145 @@ GITCONF
   fi
 }
 
-clone_repo() {
-  local container="$1" user="$2" home="$3" url="$4"
-  local repo_name
-  repo_name="$(basename "$url" .git)"
+ensure_repo_parent() {
+  local container="$1" user="$2" repo_path="$3"
 
-  if incus exec "$container" -- test -d "$home/code/$repo_name"; then
-    echo "Repo already cloned: ~/code/$repo_name"
-  else
-    incus exec "$container" -- su - "$user" -c \
-      "mkdir -p '$home/code' && git clone --depth 1 '$url' '$home/code/$repo_name' && cd '$home/code/$repo_name' && git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
+  [[ -n "$repo_path" ]] || return 0
+
+  incus exec "$container" -- mkdir -p "$(dirname "$repo_path")"
+  if [[ "$user" != "root" ]]; then
+    incus exec "$container" -- chown "$(container_owner_spec "$container" "$user")" "$(dirname "$repo_path")"
   fi
+}
+
+clone_repo() {
+  local container="$1" user="$2" home="$3" url="$4" repo_path="$5"
+  local repo_name dest_path
+
+  repo_name="$(basename "$url" .git)"
+  if [[ -n "$repo_path" ]]; then
+    dest_path="$repo_path"
+  else
+    dest_path="$home/code/$repo_name"
+  fi
+
+  if incus exec "$container" -- test -d "$dest_path"; then
+    echo "Repo already present: $dest_path"
+  else
+    ensure_repo_parent "$container" "$user" "$dest_path"
+    incus exec "$container" -- su - "$user" -c \
+      "git clone --depth 1 '$url' '$dest_path' && cd '$dest_path' && git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
+  fi
+}
+
+copy_sessions() {
+  local container="$1" user="$2" home="$3" scope="$4" repo_path="$5"
+
+  case "$scope" in
+    repo)
+      [[ -n "$repo_path" ]] || {
+        echo "Repo-scoped sessions require a repo path. Run from inside the repo or pass --path." >&2
+        exit 1
+      }
+      echo "Copying agent sessions for repo: $repo_path"
+      copy_repo_claude_sessions "$container" "$user" "$home" "$repo_path"
+      copy_repo_codex_sessions "$container" "$user" "$home" "$repo_path"
+      copy_repo_pi_sessions "$container" "$user" "$home" "$repo_path"
+      ;;
+    all)
+      echo "Copying all agent sessions."
+      copy_all_claude_sessions "$container" "$user" "$home"
+      copy_all_codex_sessions "$container" "$user" "$home"
+      copy_all_pi_sessions "$container" "$user" "$home"
+      ;;
+    *)
+      echo "Unknown session scope: $scope" >&2
+      exit 1
+      ;;
+  esac
+}
+
+copy_repo_claude_sessions() {
+  local container="$1" user="$2" home="$3" repo_path="$4"
+  local project_slug project_dir
+  local session_file session_id
+
+  project_slug="$(claude_project_slug "$repo_path")"
+  project_dir="$HOME/.claude/projects/$project_slug"
+
+  copy_dir "$container" "$user" "$project_dir" "$home/.claude/projects/$project_slug"
+  copy_dir "$container" "$user" "$HOME/.claude/sessions" "$home/.claude/sessions"
+
+  for session_file in "$project_dir"/*.jsonl; do
+    [[ -f "$session_file" ]] || continue
+    session_id="$(basename "$session_file" .jsonl)"
+    copy_dir "$container" "$user" "$HOME/.claude/file-history/$session_id" "$home/.claude/file-history/$session_id"
+  done
+}
+
+copy_repo_codex_sessions() {
+  local container="$1" user="$2" home="$3" repo_path="$4"
+  local file relative metadata_file
+  local -a session_files=()
+
+  mapfile -t session_files < <(
+    rg -l --fixed-strings -g '*.jsonl' "\"cwd\":\"$repo_path\"" "$HOME/.codex/sessions" 2>/dev/null || true
+  )
+
+  for file in "${session_files[@]}"; do
+    relative="${file#"$HOME/.codex/sessions/"}"
+    copy_file "$container" "$user" "$file" "$home/.codex/sessions/$relative"
+  done
+
+  for metadata_file in \
+    "$HOME/.codex/session_index.jsonl" \
+    "$HOME/.codex/history.jsonl" \
+    "$HOME"/.codex/state_*.sqlite* \
+    "$HOME"/.codex/logs_*.sqlite*
+  do
+    [[ -f "$metadata_file" ]] || continue
+    copy_file "$container" "$user" "$metadata_file" "$home/.codex/$(basename "$metadata_file")"
+  done
+}
+
+copy_repo_pi_sessions() {
+  local container="$1" user="$2" home="$3" repo_path="$4"
+  local slug
+
+  slug="$(pi_session_slug "$repo_path")"
+  copy_dir "$container" "$user" "$HOME/.pi/agent/sessions/$slug" "$home/.pi/agent/sessions/$slug"
+}
+
+copy_all_claude_sessions() {
+  local container="$1" user="$2" home="$3"
+
+  copy_dir "$container" "$user" "$HOME/.claude/projects" "$home/.claude/projects"
+  copy_dir "$container" "$user" "$HOME/.claude/file-history" "$home/.claude/file-history"
+  copy_dir "$container" "$user" "$HOME/.claude/session-env" "$home/.claude/session-env"
+  copy_dir "$container" "$user" "$HOME/.claude/shell-snapshots" "$home/.claude/shell-snapshots"
+  copy_dir "$container" "$user" "$HOME/.claude/sessions" "$home/.claude/sessions"
+}
+
+copy_all_codex_sessions() {
+  local container="$1" user="$2" home="$3"
+  local metadata_file
+
+  copy_dir "$container" "$user" "$HOME/.codex/sessions" "$home/.codex/sessions"
+  for metadata_file in \
+    "$HOME/.codex/session_index.jsonl" \
+    "$HOME/.codex/history.jsonl" \
+    "$HOME"/.codex/state_*.sqlite* \
+    "$HOME"/.codex/logs_*.sqlite*
+  do
+    [[ -f "$metadata_file" ]] || continue
+    copy_file "$container" "$user" "$metadata_file" "$home/.codex/$(basename "$metadata_file")"
+  done
+}
+
+copy_all_pi_sessions() {
+  local container="$1" user="$2" home="$3"
+
+  copy_dir "$container" "$user" "$HOME/.pi/agent/sessions" "$home/.pi/agent/sessions"
 }
 
 install_packages() {
