@@ -20,12 +20,6 @@ install-rust-if-not-headless:
 # Update AI tool flake inputs and switch
 ai: (nix::ai)
 
-# Build the headless Incus/LXC image bundle
-incus-image: (nix::incus-image)
-
-# Import the headless Incus/LXC image directly from the Nix store
-incus-image-import alias='headless-incus':
-    just nix incus-image-import {{alias}}
 
 # === Formatters ===
 

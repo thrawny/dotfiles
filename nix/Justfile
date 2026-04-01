@@ -209,15 +209,23 @@ ai:
     git add flake.lock
     git commit -m "chore(nix): update AI flake inputs" -- flake.lock
 
-# Build the headless Incus/LXC image bundle
-incus-image:
+# Build and import the headless Incus/LXC image (optionally to a remote)
+incus-image remote='':
+    #!/usr/bin/env bash
+    set -euo pipefail
     nix build .#nixosConfigurations.headless.config.system.build.images.incus \
-      --out-link ~/.cache/nix-images/headless-incus
+      --out-link ~/.cache/nix-images/headless
+    remote="{{remote}}"
+    incus image import ~/.cache/nix-images/headless/metadata.tar.xz \
+      ~/.cache/nix-images/headless/rootfs.tar.zst --alias headless ${remote:+$remote:}
 
-# Import the headless Incus/LXC image (builds first if needed)
-incus-image-import alias='headless-incus': incus-image
-    incus image import ~/.cache/nix-images/headless-incus/metadata.tar.xz \
-      ~/.cache/nix-images/headless-incus/rootfs.tar.xz --alias "{{alias}}"
+# Launch a headless Incus container (optionally on a remote)
+incus-launch name remote='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    remote="{{remote}}"
+    prefix="${remote:+$remote:}"
+    incus launch "${prefix}headless" "${prefix}{{name}}" -c security.nesting=true
 
 # Clean up old generations (keeps last 6) and optimize store
 clean:
