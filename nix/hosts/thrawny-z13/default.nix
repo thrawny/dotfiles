@@ -9,6 +9,7 @@
     ../../modules/nixos/default.nix
     ../../modules/nixos/laptop.nix
     ./hardware-configuration.nix
+    ./hibernate.nix
   ];
 
   dotfiles = {
@@ -21,7 +22,6 @@
   boot.extraModprobeConfig = ''
     options cfg80211 ieee80211_regdom=SE
     options thinkpad_acpi fan_control=1 experimental=1
-    options mt7921e disable_aspm=Y
   '';
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
@@ -98,9 +98,6 @@
 
     # ZeroTier VPN
     zerotierone.enable = true;
-
-    # Lid close: suspend immediately, hibernate after 2 hours
-    logind.settings.Login.HandleLidSwitch = "suspend-then-hibernate";
   };
 
   users.users.${config.dotfiles.username}.extraGroups = [ "incus-admin" ];
@@ -159,17 +156,7 @@
       efi.canTouchEfiVariables = true;
       grub.enable = lib.mkForce false;
     };
-    resumeDevice = "/dev/mapper/luks-4d3e8b23-c336-4111-9c1c-ee5ec021e465";
-    kernelParams = [ "resume_offset=351778816" ];
   };
-
-  # Swapfile for hibernate (must be >= RAM size)
-  swapDevices = [
-    {
-      device = "/swapfile";
-      size = 65536; # 64 GiB
-    }
-  ];
 
   security.pam.services.polkit-1 = {
     fprintAuth = true;
@@ -181,40 +168,6 @@
     nftables.enable = true;
     firewall.trustedInterfaces = [ "incusbr0" ];
   };
-
-  # Hibernate when battery is critical (safety net for clamshell + unplug scenario)
-  services.upower = {
-    enable = true;
-    percentageLow = 20;
-    percentageCritical = 10;
-    percentageAction = 5;
-    criticalPowerAction = "Hibernate";
-  };
-
-  # Keep NixOS's generated pre-sleep/pre-shutdown wrappers as valid no-op units.
-  # Without this, systemd gets empty oneshot services and logs bad-setting errors.
-  powerManagement.powerDownCommands = ":";
-
-  # mt7921e fails to restore reliably from hibernate on some systems.
-  # Unload it before sleep and reprobe it after wake to avoid the broken
-  # PCIe resume path entirely.
-  systemd.services.mt7921e-sleep = {
-    description = "Remove mt7921e before sleep";
-    wantedBy = [ "sleep.target" ];
-    before = [ "sleep.target" ];
-    unitConfig = {
-      DefaultDependencies = false;
-      StopWhenUnneeded = true;
-    };
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      ExecStart = "-${pkgs.kmod}/bin/modprobe -r mt7921e";
-      ExecStop = "${pkgs.kmod}/bin/modprobe mt7921e";
-    };
-  };
-
-  systemd.sleep.settings.Sleep.HibernateDelaySec = "2h";
 
   # Host-specific home-manager overrides
   home-manager.users.${config.dotfiles.username} = {
