@@ -1,6 +1,6 @@
 post_process = false
 post_process_model = "llama-3.3-70b-versatile"
-extra_keywords = ["symlink", "cachix", "thrawny", "droop", "incus", "clamshell"]
+extra_keywords = ["symlink", "cachix", "thrawny", "droop", "incus", "clamshell", "slug", "phase"]
 
 [replacements]
 wavois = "wayvoice"
@@ -21,3 +21,5 @@ cashics = "cachix"
 kasex = "Cachix"
 zms = "zmx"
 groc = "groq"
+deer = "dir"
+"in cus" = "incus"
