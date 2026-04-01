@@ -10,3 +10,5 @@ Home Manager links each shared skill folder individually to:
 This keeps agent-managed state (for example `.../skills/.system`) in each agent's own config directory, not in this repo.
 
 Add each skill as `skills/<skill-name>/SKILL.md` (plus any references/scripts/assets).
+
+Codex-only skills live under `config/codex/skills/<skill-name>/SKILL.md` and are linked only to `~/.codex/skills/<skill-name>`.

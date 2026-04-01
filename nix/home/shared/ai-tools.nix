@@ -19,6 +19,7 @@ let
   configSource =
     rel: if repoBacked then config.lib.file.mkOutOfStoreSymlink (configPath rel) else configPath rel;
   skillsRoot = if repoBacked then ../../../skills else containerAssets.skills;
+  codexSkillsRoot = if repoBacked then ../../../config/codex/skills else configPath "codex/skills";
   sharedSkillNames = lib.filter (name: !builtins.elem name excludedSharedSkills) (
     builtins.attrNames (
       lib.filterAttrs (name: type: type == "directory" && !(lib.hasPrefix "." name)) (
@@ -26,6 +27,15 @@ let
       )
     )
   );
+  codexOnlySkillNames =
+    if builtins.pathExists codexSkillsRoot then
+      builtins.attrNames (
+        lib.filterAttrs (name: type: type == "directory" && !(lib.hasPrefix "." name)) (
+          builtins.readDir codexSkillsRoot
+        )
+      )
+    else
+      [ ];
   linuxOnlySkills = [
     "wayvoice"
     "skill-eval"
@@ -49,6 +59,16 @@ let
         name:
         lib.nameValuePair "${base}/${name}" {
           source = skillsRoot + "/${name}";
+        }
+      ) names
+    );
+  codexSkillFiles =
+    base: names:
+    lib.listToAttrs (
+      map (
+        name:
+        lib.nameValuePair "${base}/${name}" {
+          source = codexSkillsRoot + "/${name}";
         }
       ) names
     );
@@ -119,6 +139,7 @@ in
 
     file =
       skillFiles ".codex/skills" codexSharedSkillNames
+      // codexSkillFiles ".codex/skills" codexOnlySkillNames
       // skillFiles ".claude/skills" claudeSharedSkillNames
       // skillFiles ".pi/agent/skills" noLinuxOnly
       // lib.optionalAttrs enableCodexHooks {

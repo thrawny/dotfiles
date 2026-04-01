@@ -20,11 +20,12 @@ just rust test    # Run all rust tests
 
 ## Paths: Source to Target
 
-Nix Home Manager uses `mkOutOfStoreSymlink` to link config directories into the home directory:
+Nix Home Manager uses `mkOutOfStoreSymlink` to link tracked config into the home directory:
 
 - `config/nvim` -> `~/.config/nvim`
-- `config/codex/` -> `~/.codex/`, `config/claude/` -> `~/.claude/`, `config/pi/` -> `~/.pi/agent/`
+- `config/codex/` -> tracked files under `~/.codex/`, `config/claude/` -> `~/.claude/`, `config/pi/` -> `~/.pi/agent/`
 - Each folder in `skills/` -> `~/.claude/skills/<skill>`, `~/.pi/agent/skills/<skill>`, and `~/.codex/skills/<skill>` (except `skill-creator` for Codex)
+- Each folder in `config/codex/skills/` -> `~/.codex/skills/<skill>` only
 
 Configs generated entirely by Nix (no files in `config/`): zsh, tmux, ghostty, direnv, starship etc.
 
@@ -37,6 +38,7 @@ Configs generated entirely by Nix (no files in `config/`): zsh, tmux, ghostty, d
 
 - Global commands/agents/settings -> `config/claude/`
 - Shared skills -> `skills/`
+- Codex-only skills -> `config/codex/skills/`
 - Dotfiles-repo-specific -> `.claude/`
 
 ### Settings Files with Example/Live Pairs
