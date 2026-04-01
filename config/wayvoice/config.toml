@@ -1,6 +1,6 @@
-post_process = true
+post_process = false
 post_process_model = "llama-3.3-70b-versatile"
-extra_keywords = ["symlink", "cachix", "thrawny", "droop", "incus"]
+extra_keywords = ["symlink", "cachix", "thrawny", "droop", "incus", "clamshell"]
 
 [replacements]
 wavois = "wayvoice"
