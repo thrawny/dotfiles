@@ -50,6 +50,8 @@ COLORS = {
     "percentage_crit": (WHITE, DARK_RED),
     "branch": (WHITE, BLUE),
     "changes": (BLACK, GREEN),
+    "sandbox": (WHITE, DARK_RED),
+    "container": (WHITE, BLUE),
 }
 
 
@@ -107,6 +109,26 @@ def get_git_branch() -> str | None:
                         return ref.replace("ref: refs/heads/", "")
         except OSError:
             pass
+    return None
+
+
+def env_flag_set(name: str) -> bool:
+    """Return True when an env flag is set to a truthy value."""
+    value = os.getenv(name)
+    if not value:
+        return False
+    return value.strip().lower() not in {"0", "false"}
+
+
+def get_runtime_badge() -> tuple[str, tuple[str, str]] | None:
+    """Return the badge text/colors for the current runtime environment."""
+    if env_flag_set("SANDBOX"):
+        return ("🫧", COLORS["sandbox"])
+
+    incus_container = os.getenv("INCUS_CONTAINER", "").strip()
+    if incus_container:
+        return (f"🐳 {incus_container}", COLORS["container"])
+
     return None
 
 
@@ -228,6 +250,8 @@ def main() -> None:
     # Determine what segments we have and calculate context colors
     has_branch = branch is not None
     has_changes = changes is not None
+    runtime_badge = get_runtime_badge()
+    has_runtime_badge = runtime_badge is not None
 
     # Calculate context colors and warning state based on usage percentage
     ctx_colors: tuple[str, str] | None = None
@@ -250,6 +274,8 @@ def main() -> None:
         next_bg = COLORS["branch"][1]
     elif has_changes:
         next_bg = COLORS["changes"][1]
+    elif has_runtime_badge:
+        next_bg = runtime_badge[1][1]
     else:
         next_bg = None
     segments.append(segment(model, *COLORS["model"], next_bg))
@@ -263,6 +289,8 @@ def main() -> None:
             next_bg = COLORS["branch"][1]
         elif has_changes:
             next_bg = COLORS["changes"][1]
+        elif has_runtime_badge:
+            next_bg = runtime_badge[1][1]
         else:
             next_bg = None
         segments.append(
@@ -278,6 +306,8 @@ def main() -> None:
     if branch:
         if has_changes:
             next_bg = COLORS["changes"][1]
+        elif has_runtime_badge:
+            next_bg = runtime_badge[1][1]
         else:
             next_bg = None
         segments.append(
@@ -287,7 +317,11 @@ def main() -> None:
     # Git changes segment
     if changes:
         added, removed = changes
-        segments.append(segment(f"+{added}, -{removed}", *COLORS["changes"], None))
+        next_bg = runtime_badge[1][1] if has_runtime_badge else None
+        segments.append(segment(f"+{added}, -{removed}", *COLORS["changes"], next_bg))
+
+    if runtime_badge:
+        segments.append(segment(runtime_badge[0], *runtime_badge[1], None))
 
     # Output with rounded start cap
     output = f"{fg_true(COLORS['model'][1])}{START_CAP}{reset()}"

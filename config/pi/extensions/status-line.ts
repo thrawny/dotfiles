@@ -68,6 +68,34 @@ function truncate(text: string, maxLen = 20): string {
 	return `${text.slice(0, maxLen - 1)}…`;
 }
 
+function envFlagSet(name: string): boolean {
+	const value = process.env[name];
+	if (!value) return false;
+	const normalized = value.trim().toLowerCase();
+	return normalized !== "0" && normalized !== "false";
+}
+
+function getRuntimeBadge(): { text: string; fg: string; bg: string } | null {
+	if (envFlagSet("SANDBOX")) {
+		return {
+			text: "🫧",
+			fg: COLORS.white,
+			bg: COLORS.darkRed,
+		};
+	}
+
+	const incusContainer = process.env.INCUS_CONTAINER?.trim();
+	if (incusContainer) {
+		return {
+			text: `🐳 ${incusContainer}`,
+			fg: COLORS.white,
+			bg: COLORS.blue,
+		};
+	}
+
+	return null;
+}
+
 function getGitChanges(): { added: number; removed: number } | null {
 	try {
 		const out = execFileSync("git", ["diff", "--shortstat"], {
@@ -98,6 +126,7 @@ function install(ctx: ExtensionContext, getThinkingLevel: () => string) {
 			render(width: number): string[] {
 				const branch = footerData.getGitBranch();
 				const changes = getGitChanges();
+				const runtimeBadge = getRuntimeBadge();
 				const usage = ctx.getContextUsage();
 
 				let tokens = usage?.tokens ?? 0;
@@ -116,41 +145,39 @@ function install(ctx: ExtensionContext, getThinkingLevel: () => string) {
 					warn = "\uf071 ";
 				}
 
-				const segments: string[] = [];
-				const hasBranch = branch !== null;
-				const hasChanges = changes !== null;
-
-				segments.push(
-					segment(
-						`${warn}${formatTokens(Math.max(0, Math.round(tokens)))} ${percent.toFixed(1)}%`,
-						ctxFg,
-						ctxBg,
-						hasBranch ? COLORS.blue : hasChanges ? COLORS.green : undefined,
-					),
-				);
+				const segmentSpecs: Array<{ text: string; fg: string; bg: string }> = [
+					{
+						text: `${warn}${formatTokens(Math.max(0, Math.round(tokens)))} ${percent.toFixed(1)}%`,
+						fg: ctxFg,
+						bg: ctxBg,
+					},
+				];
 
 				if (branch) {
-					segments.push(
-						segment(
-							`\ue0a0 ${truncate(branch)}`,
-							COLORS.white,
-							COLORS.blue,
-							hasChanges ? COLORS.green : undefined,
-						),
-					);
+					segmentSpecs.push({
+						text: `\ue0a0 ${truncate(branch)}`,
+						fg: COLORS.white,
+						bg: COLORS.blue,
+					});
 				}
 
 				if (changes) {
-					segments.push(
-						segment(
-							`+${changes.added}, -${changes.removed}`,
-							COLORS.black,
-							COLORS.green,
-						),
-					);
+					segmentSpecs.push({
+						text: `+${changes.added}, -${changes.removed}`,
+						fg: COLORS.black,
+						bg: COLORS.green,
+					});
 				}
 
-				const left = `${fgTrue(ctxBg)}${START_CAP}${reset()}${segments.join("")}`;
+				if (runtimeBadge) {
+					segmentSpecs.push(runtimeBadge);
+				}
+
+				const segments = segmentSpecs.map((part, index) =>
+					segment(part.text, part.fg, part.bg, segmentSpecs[index + 1]?.bg),
+				);
+
+				const left = `${fgTrue(segmentSpecs[0].bg)}${START_CAP}${reset()}${segments.join("")}`;
 
 				const thinking = getThinkingLevel();
 				let rightText = ctx.model?.id || "no-model";
