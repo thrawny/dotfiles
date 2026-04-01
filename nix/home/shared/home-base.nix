@@ -73,7 +73,8 @@ in
       "$HOME/.local/bin"
       "$HOME/go/bin"
     ]
-    ++ lib.optionals repoBacked [ "${config.home.homeDirectory}/dotfiles/bin" ];
+    ++ lib.optionals repoBacked [ "${config.home.homeDirectory}/dotfiles/bin" ]
+    ++ lib.optionals storeBacked [ "${containerAssets.bin}" ];
 
     sessionVariables = {
       PYTHONDONTWRITEBYTECODE = "1";

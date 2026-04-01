@@ -60,6 +60,10 @@
           path = ../skills;
           name = "dotfiles-skills";
         };
+        bin = builtins.path {
+          path = ../bin;
+          name = "dotfiles-bin";
+        };
       };
 
       mkHost =
