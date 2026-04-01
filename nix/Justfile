@@ -220,12 +220,21 @@ incus-image remote='':
       ~/.cache/nix-images/headless/rootfs.tar.zst --alias headless ${remote:+$remote:}
 
 # Launch a headless Incus container (optionally on a remote)
-incus-launch name remote='':
+incus-launch name remote='local':
     #!/usr/bin/env bash
     set -euo pipefail
     remote="{{remote}}"
     prefix="${remote:+$remote:}"
-    incus launch "${prefix}headless" "${prefix}{{name}}" -c security.nesting=true
+    incus launch "${prefix}headless" "${prefix}{{name}}" \
+      -c security.nesting=true
+    # Write incus prompt label into the container
+    if [[ -n "$remote" ]]; then
+      val="incus:$remote:{{name}}"
+    else
+      val="incus:{{name}}"
+    fi
+    while ! incus exec "${prefix}{{name}}" -- su - thrawny -c true 2>/dev/null; do sleep 0.5; done
+    incus exec "${prefix}{{name}}" -- su - thrawny -c "echo 'export INCUS_CONTAINER=\"$val\"' > ~/.zsh.local"
 
 # Clean up old generations (keeps last 6) and optimize store
 clean:

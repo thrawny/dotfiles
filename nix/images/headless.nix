@@ -87,7 +87,6 @@ in
       ];
 
       networking.useDHCP = lib.mkDefault true;
-      environment.sessionVariables.INCUS_CONTAINER = "incus";
       services.tailscale.enable = lib.mkForce false;
       services.resolved.enable = lib.mkForce false;
       environment.etc."resolv.conf".text = lib.mkForce ''
@@ -95,30 +94,32 @@ in
         nameserver 8.8.8.8
       '';
 
-      system.build.tarball = lib.mkForce (pkgs.callPackage (modulesPath + "/../lib/make-system-tarball.nix") {
-        fileName = config.image.baseName;
-        extraArgs = "--owner=0";
-        storeContents = [
-          {
-            object = config.system.build.toplevel;
-            symlink = "none";
-          }
-        ];
-        contents = [
-          {
-            source = config.system.build.toplevel + "/init";
-            target = "/sbin/init";
-          }
-          {
-            source = config.system.build.toplevel + "/etc/os-release";
-            target = "/etc/os-release";
-          }
-        ];
-        extraCommands = "mkdir -p proc sys dev";
-        compressCommand = "zstd -T0 -3";
-        compressionExtension = ".zst";
-        extraInputs = [ pkgs.zstd ];
-      });
+      system.build.tarball = lib.mkForce (
+        pkgs.callPackage (modulesPath + "/../lib/make-system-tarball.nix") {
+          fileName = config.image.baseName;
+          extraArgs = "--owner=0";
+          storeContents = [
+            {
+              object = config.system.build.toplevel;
+              symlink = "none";
+            }
+          ];
+          contents = [
+            {
+              source = config.system.build.toplevel + "/init";
+              target = "/sbin/init";
+            }
+            {
+              source = config.system.build.toplevel + "/etc/os-release";
+              target = "/etc/os-release";
+            }
+          ];
+          extraCommands = "mkdir -p proc sys dev";
+          compressCommand = "zstd -T0 -3";
+          compressionExtension = ".zst";
+          extraInputs = [ pkgs.zstd ];
+        }
+      );
 
       system.build.image = lib.mkForce (
         pkgs.runCommand "headless-incus-image" { } ''

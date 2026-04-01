@@ -15,16 +15,6 @@ _: {
         format = "on [$symbol $context]($style) ";
       };
 
-      env_var.DEVPOD = {
-        format = "in [📦 devpod]($style) ";
-        style = "bold blue";
-      };
-
-      env_var.INCUS_CONTAINER = {
-        format = "via [🐳 $env_value]($style) ";
-        style = "blue bold";
-      };
-
       env_var.ZMX_SESSION = {
         format = "in [🛸 zmx:$env_value]($style) ";
         style = "bold cyan";

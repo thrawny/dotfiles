@@ -33,6 +33,11 @@
 
   programs.home-manager.enable = true;
 
+  programs.starship.settings.env_var.INCUS_CONTAINER = {
+    format = "via [🐳 $env_value]($style) ";
+    style = "blue bold";
+  };
+
   home = {
     inherit username;
     homeDirectory = "/home/${username}";
