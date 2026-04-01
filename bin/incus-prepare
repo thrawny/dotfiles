@@ -122,6 +122,10 @@ main() {
     fi
   fi
 
+  if [[ -n "$repo_path" ]]; then
+    set_repo_git_identity "$container" "$user" "$repo_path"
+  fi
+
   if [[ "$session_scope" != "none" ]]; then
     copy_sessions "$container" "$user" "$home" "$session_scope" "$repo_path"
   fi
@@ -311,6 +315,22 @@ GITCONF
     if [[ "$user" != "root" ]]; then
       incus exec "$container" -- chown "$(container_owner_spec "$container" "$user")" "$home/.git-credentials"
     fi
+  fi
+}
+
+set_repo_git_identity() {
+  local container="$1" user="$2" repo_path="$3"
+  local name email
+
+  name="${GIT_AUTHOR_NAME:-$(git config user.name 2>/dev/null || true)}"
+  email="${GIT_AUTHOR_EMAIL:-$(git config user.email 2>/dev/null || true)}"
+
+  [[ -n "$name" && -n "$email" ]] || return 0
+
+  if incus exec "$container" -- test -d "$repo_path/.git"; then
+    incus exec "$container" -- su - "$user" -c \
+      "git -C '$repo_path' config user.name '$name' && git -C '$repo_path' config user.email '$email'"
+    echo "Set git identity in $repo_path: $name <$email>"
   fi
 }
 
