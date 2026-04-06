@@ -4,6 +4,7 @@
   pkgs,
   dotfiles,
   username,
+  nix-index-database,
   ...
 }@args:
 {
@@ -28,10 +29,14 @@
     ./tmux.nix
     ./zmx.nix
     ./zsh.nix
+
+    # Prebuilt nix-index database + comma wrapper
+    nix-index-database.homeModules.nix-index
   ];
 
   # Let Home Manager manage itself
   programs.home-manager.enable = true;
+  programs.nix-index-database.comma.enable = true;
 
   # Fuzzy search for Nix packages
   programs.nix-search-tv = {

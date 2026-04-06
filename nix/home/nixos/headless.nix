@@ -6,6 +6,7 @@
   lib,
   pkgs,
   username,
+  nix-index-database,
   ...
 }:
 {
@@ -24,6 +25,9 @@
     ../shared/starship.nix
     ../shared/zsh.nix
     ../shared/zmx.nix
+
+    # Prebuilt nix-index database + comma wrapper
+    nix-index-database.homeModules.nix-index
   ];
 
   _module.args = {
@@ -32,6 +36,7 @@
   };
 
   programs.home-manager.enable = true;
+  programs.nix-index-database.comma.enable = true;
 
   programs.starship.settings.env_var.INCUS_CONTAINER = {
     format = "via [🐳 $env_value]($style) ";

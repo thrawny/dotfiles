@@ -18,7 +18,6 @@
     bash
     curl
     wget
-    comma
     procps
     watch
     just

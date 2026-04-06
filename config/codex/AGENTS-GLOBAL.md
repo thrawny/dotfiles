@@ -1,7 +1,5 @@
 # Global Codex Instructions
 
-**Project-specific AGENTS.md files take precedence over these global defaults.**
-
 ## Code Quality Tools
 
 After editing files, run the appropriate formatting/linting tools. These are fallback defaults when a project has no specific instructions.
@@ -52,7 +50,3 @@ tsc --noEmit
 ```bash
 nixfmt <files>
 ```
-
-## Task Runners
-
-If the project has a `Justfile`, prefer using `just` commands over raw tool invocations. Run `just` to see available recipes.

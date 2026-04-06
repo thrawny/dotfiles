@@ -7,6 +7,8 @@
     nixpkgs-xwayland.url = "github:NixOS/nixpkgs/b60793b86201040d9dee019a05089a9150d08b5b";
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
+    nix-index-database.url = "github:Mic92/nix-index-database";
+    nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
     nixos-hardware.url = "github:NixOS/nixos-hardware";
     nur.url = "github:nix-community/NUR";
     zen-browser.url = "github:0xc000022070/zen-browser-flake";
@@ -32,6 +34,7 @@
       self,
       nixpkgs,
       home-manager,
+      nix-index-database,
       nixos-hardware,
       nur,
       zen-browser,
@@ -49,7 +52,12 @@
     let
       inherit (nixpkgs) lib;
       flakeArgs = {
-        inherit claude-code-nix llm-agents zmx;
+        inherit
+          claude-code-nix
+          llm-agents
+          nix-index-database
+          zmx
+          ;
       };
       storeHomeAssets = {
         config = builtins.path {
