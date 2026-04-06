@@ -1,5 +1,6 @@
 {
   username = "thrawny";
+  homeSource = "repo";
   dotfiles = "/Users/thrawny/dotfiles";
   gitIdentity = {
     name = "Jonas Lergell";

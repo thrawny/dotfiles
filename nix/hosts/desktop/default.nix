@@ -2,7 +2,6 @@
   config,
   lib,
   pkgs,
-  nurPkgs,
   nixpkgs-xwayland,
   ...
 }:
@@ -13,7 +12,7 @@ let
 in
 {
   nixpkgs.overlays = [
-    (final: prev: {
+    (_: _: {
       inherit (pkgs-xwayland) xwayland;
     })
   ];

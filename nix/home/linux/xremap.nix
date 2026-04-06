@@ -1,12 +1,6 @@
 # xremap configuration for Linux systems
 # Replaces keyd for key remapping with per-app exclusion support
-{
-  config,
-  lib,
-  pkgs,
-  ...
-}:
-{
+_: {
   services.xremap = {
     enable = true;
     withNiri = true;

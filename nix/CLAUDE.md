@@ -13,7 +13,6 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 
 **Home Manager standalone:**
 - `thrawnym1` - MacBook M1 (aarch64-darwin)
-- `jonas-kanel` - Work MacBook Pro M3 (aarch64-darwin)
 
 ## Structure
 
@@ -27,4 +26,4 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 
 ## Host-Specific Packages
 
-Global packages go in `home/shared/packages.nix`. Host-specific packages go in `hosts/<hostname>/home.nix` and are wired into `flake.nix` via the `modules` list. See `hosts/jonas-kanel/home.nix` for an example.
+Global packages go in `home/shared/packages.nix`. Host-specific packages go in `hosts/<hostname>/home.nix` and are wired into `flake.nix` via the `modules` list.

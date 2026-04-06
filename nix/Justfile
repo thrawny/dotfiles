@@ -289,6 +289,7 @@ fmt:
 # Lint Nix files
 lint:
     statix check .
+    deadnix --fail --exclude '**/hardware-configuration.nix' .
 
 # Format, lint, and evaluate current host
 check: fmt lint eval

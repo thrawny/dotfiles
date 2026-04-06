@@ -1,12 +1,8 @@
 {
-  config,
-  lib,
   pkgs,
-  dotfiles,
-  username,
   nix-index-database,
   ...
-}@args:
+}:
 {
   imports = [
     # Shared cross-platform modules

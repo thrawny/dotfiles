@@ -107,8 +107,8 @@
               nixpkgs.overlays = [
                 niri-flake.overlays.niri
                 # Pin spotify to 1.2.74 (close button broken with minimize-to-tray since 1.2.79)
-                (final: prev: {
-                  spotify = prev.spotify.overrideAttrs (old: {
+                (_: prev: {
+                  spotify = prev.spotify.overrideAttrs (_: {
                     version = "1.2.74.477.g3be53afe";
                     rev = "89";
                     src = prev.fetchurl {
@@ -239,6 +239,7 @@
                 nixd
                 nixfmt
                 statix
+                deadnix
                 nvd
                 stylua
                 selene
@@ -281,16 +282,6 @@
           modules = [ ./home/darwin/default.nix ];
           extraSpecialArgs = import ./hosts/thrawnym1/default.nix;
         };
-
-        jonas-kanel = mkHomeConfiguration {
-          pkgs = nixpkgs.legacyPackages.aarch64-darwin;
-          modules = [
-            ./home/darwin/default.nix
-            ./hosts/jonas-kanel/home.nix
-          ];
-          extraSpecialArgs = import ./hosts/jonas-kanel/default.nix;
-        };
-
       };
     };
 }

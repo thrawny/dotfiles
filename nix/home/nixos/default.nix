@@ -1,10 +1,6 @@
 {
-  config,
-  lib,
   pkgs,
-  dotfiles,
   username,
-  self,
   xremap-flake,
   ...
 }:
