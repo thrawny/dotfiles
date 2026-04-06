@@ -92,6 +92,13 @@
     ];
   };
 
+  # Battery longevity: keep charge between 40-80%.
+  # Override temporarily with: sudo tlp fullcharge BAT0
+  services.tlp.settings = {
+    START_CHARGE_THRESH_BAT0 = 40;
+    STOP_CHARGE_THRESH_BAT0 = 80;
+  };
+
   services = {
     # Fingerprint reader (Synaptics on Z13 Gen 2)
     fprintd.enable = true; # sudo/login get fprintAuth automatically
