@@ -49,7 +49,7 @@ sandbox() {
   fi
 
   # work/*/code and work/*/.direnv directories
-  for d in ~/work/*/code ~/work/*/.direnv; do
+  for d in ~/work/*/code ~/work/*/.direnv ~/work/*/bin; do
     [[ -d "$d" ]] && args+=(--bind "$d" "$d")
   done
 
