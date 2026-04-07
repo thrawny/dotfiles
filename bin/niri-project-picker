@@ -7,8 +7,8 @@ projects=$({
   zoxide query -l | while read -r d; do
     git -C "$d" rev-parse --show-toplevel 2>/dev/null || true
   done
-  for d in ~/code/*/ ~/work/*/code/*/; do
-    [[ -d "$d" ]] && printf '%s\n' "${d%/}"
+  find ~/code ~/work/*/code -maxdepth 3 -name .git 2>/dev/null | while read -r g; do
+    printf '%s\n' "${g%/.git}"
   done
 } | awk '!seen[$0]++')
 
