@@ -263,20 +263,48 @@ clean:
     echo "==> Cleanup complete! Final /nix/store size:"
     du -sh /nix/store 2>&1 | grep -v 'Permission denied' || true
 
-# Push uncached flake-input packages to Cachix
-cache:
+# Push system closure to Cachix, excluding large upstream binaries
+cache dry_run="":
     #!/usr/bin/env bash
     set -euo pipefail
 
-    if [ -z "${CACHIX_AUTH_TOKEN:-}" ]; then
+    dry_run="{{dry_run}}"
+
+    if [ -z "$dry_run" ] && [ -z "${CACHIX_AUTH_TOKEN:-}" ]; then
         echo "Error: CACHIX_AUTH_TOKEN not set"
         exit 1
     fi
 
-    # Push entire system closure — upstream caches (cache.nixos.org, niri, zmx, etc.)
-    # are configured on the Cachix dashboard, so already-cached paths are skipped.
-    echo "Pushing system closure to thrawny..."
-    nix path-info -r /run/current-system | cachix push thrawny
+    # Large pre-built binaries that have their own distribution
+    exclude=(
+        helium
+        zen-beta
+        spotify
+        slack
+        teams-for-linux
+        google-chrome
+        1password
+    )
+
+    pattern=$(printf '|%s' "${exclude[@]}")
+    pattern="${pattern:1}"
+
+    all_paths=$(nix path-info -r /run/current-system)
+    total=$(echo "$all_paths" | wc -l)
+    paths=$(echo "$all_paths" | grep -Ev "/nix/store/[a-z0-9]+-($pattern)-")
+    kept=$(echo "$paths" | wc -l)
+    skipped=$((total - kept))
+
+    if [ -n "$dry_run" ]; then
+        echo "DRY RUN: would push $kept paths, skipping $skipped"
+        echo ""
+        echo "Excluded:"
+        echo "$all_paths" | grep -E "/nix/store/[a-z0-9]+-($pattern)-" | sed 's|/nix/store/[a-z0-9]*-|  |'
+        exit 0
+    fi
+
+    echo "Pushing $kept paths to thrawny (skipping $skipped large upstream binaries)..."
+    echo "$paths" | cachix push thrawny
 
     echo ""
     echo "Pinning system closure (keeping last 3 revisions)..."
