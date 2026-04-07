@@ -30,16 +30,20 @@ local function permutations(parts)
   return result
 end
 
+local function normalize_separators(s)
+  return s:gsub("[_-]", "[-_]")
+end
+
 local function files_query_for_path(search)
   local query = vim.trim(search or "")
   local parts = vim.split(query, "%s+", { trimempty = true })
   if #parts <= 1 then
-    return query
+    return normalize_separators(query)
   end
   if #parts > 4 then
-    return table.concat(parts, ".*")
+    return normalize_separators(table.concat(parts, ".*"))
   end
-  return table.concat(permutations(parts), "|")
+  return normalize_separators(table.concat(permutations(parts), "|"))
 end
 
 local function files_finder(opts, ctx)
