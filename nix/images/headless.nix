@@ -32,6 +32,7 @@ in
 {
   imports = [
     ../modules/nixos/headless.nix
+    ../modules/nixos/docker.nix
   ];
 
   home-manager.users.${username} = {
@@ -47,7 +48,6 @@ in
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
   nix.settings.sandbox = false;
-  virtualisation.docker.enable = true;
 
   systemd.services.headless-nvim-restore = {
     description = "Restore Neovim plugins for the headless image";
