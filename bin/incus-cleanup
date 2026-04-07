@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE:-}" ]] && set -x
+set -euo pipefail
+shopt -s nullglob
+
+main() {
+  local container="headless"
+  local user="thrawny"
+  local archive_dir="$HOME/.local/share/incus-cleanup"
+  local keep=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --keep)
+        keep=true
+        ;;
+      --output)
+        archive_dir="$2"
+        shift
+        ;;
+      --user)
+        user="$2"
+        shift
+        ;;
+      --help|-h)
+        usage
+        return 0
+        ;;
+      *)
+        container="$1"
+        ;;
+    esac
+    shift
+  done
+
+  local home
+  if [[ "$user" == "root" ]]; then
+    home="/root"
+  else
+    home="/home/$user"
+  fi
+
+  incus info "$container" >/dev/null
+
+  # Ensure the container is running so we can exec into it
+  local was_stopped=false
+  if ! incus exec "$container" -- true 2>/dev/null; then
+    was_stopped=true
+    incus start "$container"
+    echo "Started container '$container' for archiving."
+  fi
+
+  local timestamp
+  timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  local safe_container="${container//:/_}"
+  local archive_name="${safe_container}-${timestamp}"
+  local staging_dir
+  staging_dir="$(mktemp -d)"
+  # shellcheck disable=SC2064
+  trap "rm -rf '$staging_dir'" EXIT
+
+  echo "Scanning for git repos in container '$container'..."
+  local -a repo_paths=()
+  mapfile -t repo_paths < <(find_git_repos "$container" "$home")
+
+  if [[ ${#repo_paths[@]} -gt 0 ]]; then
+    mkdir -p "$staging_dir/repos"
+    for repo_path in "${repo_paths[@]}"; do
+      archive_repo "$container" "$user" "$repo_path" "$staging_dir/repos"
+    done
+  else
+    echo "No git repos found."
+  fi
+
+  echo "Extracting session transcripts..."
+  extract_sessions "$container" "$user" "$home" "$staging_dir"
+
+  mkdir -p "$archive_dir"
+  local archive_path="$archive_dir/${archive_name}.tar.gz"
+
+  if [[ -z "$(ls -A "$staging_dir")" ]]; then
+    echo "Nothing to archive."
+  else
+    tar -C "$staging_dir" -czf "$archive_path" .
+    echo "Archive: $archive_path"
+  fi
+
+  if [[ "$keep" == true ]]; then
+    echo "Keeping container '$container' (stopped)."
+    incus stop "$container" --force 2>/dev/null || true
+  else
+    echo "Deleting container '$container'..."
+    incus delete "$container" --force
+    echo "Deleted."
+  fi
+}
+
+usage() {
+  cat <<'EOF'
+Usage: incus-cleanup [options] [container]
+
+Archives code state and session transcripts from an Incus container,
+then deletes it.
+
+Arguments:
+  container     Container name (default: headless)
+
+Options:
+  --keep        Stop the container instead of deleting it
+  --output DIR  Archive destination (default: ~/.local/share/incus-cleanup)
+  --user USER   Container user (default: thrawny)
+
+The archive contains:
+  repos/       Git bundles and uncommitted diffs for each repo found
+  sessions/    Claude, Codex, and Pi session data
+
+Examples:
+  incus-cleanup headless
+  incus-cleanup --keep builder:dev
+  incus-cleanup --output /tmp/archives my-container
+EOF
+}
+
+find_git_repos() {
+  local container="$1" home="$2"
+
+  incus exec "$container" -- find "$home" \
+    -maxdepth 5 \
+    -name .git \
+    -type d \
+    -not -path '*/\.*/*' \
+    2>/dev/null \
+    | sed 's|/\.git$||'
+}
+
+archive_repo() {
+  local container="$1" user="$2" repo_path="$3" dest_dir="$4"
+
+  local repo_slug="${repo_path#/}"
+  repo_slug="${repo_slug//\//_}"
+  local repo_dir="$dest_dir/$repo_slug"
+  mkdir -p "$repo_dir"
+
+  echo "  Archiving repo: $repo_path"
+
+  # Git bundle (all local refs)
+  local bundle_tmp
+  bundle_tmp="$(mktemp)"
+  if incus exec "$container" -- su - "$user" -c \
+    "git -C '$repo_path' bundle create /tmp/repo.bundle --all 2>/dev/null"; then
+    incus file pull "$container/tmp/repo.bundle" "$bundle_tmp"
+    mv "$bundle_tmp" "$repo_dir/repo.bundle"
+    incus exec "$container" -- rm -f /tmp/repo.bundle
+    echo "    Bundled refs."
+  else
+    rm -f "$bundle_tmp"
+    echo "    Warning: git bundle failed (empty repo?)."
+  fi
+
+  # Uncommitted changes (staged + unstaged + untracked)
+  local diff_output
+  diff_output="$(incus exec "$container" -- su - "$user" -c \
+    "git -C '$repo_path' diff HEAD 2>/dev/null" || true)"
+  if [[ -n "$diff_output" ]]; then
+    printf '%s\n' "$diff_output" > "$repo_dir/uncommitted.diff"
+    echo "    Saved uncommitted diff."
+  fi
+
+  # Untracked files list
+  local untracked
+  untracked="$(incus exec "$container" -- su - "$user" -c \
+    "git -C '$repo_path' ls-files --others --exclude-standard 2>/dev/null" || true)"
+  if [[ -n "$untracked" ]]; then
+    printf '%s\n' "$untracked" > "$repo_dir/untracked-files.txt"
+    echo "    Listed untracked files."
+  fi
+
+  # Recent log
+  incus exec "$container" -- su - "$user" -c \
+    "git -C '$repo_path' log --oneline -50 2>/dev/null" \
+    > "$repo_dir/recent-log.txt" || true
+}
+
+extract_sessions() {
+  local container="$1" user="$2" home="$3" staging_dir="$4"
+  local sessions_dir="$staging_dir/sessions"
+
+  # Claude sessions
+  if incus exec "$container" -- test -d "$home/.claude/projects"; then
+    mkdir -p "$sessions_dir/claude"
+    pull_dir "$container" "$home/.claude/projects" "$sessions_dir/claude/projects"
+    pull_dir "$container" "$home/.claude/sessions" "$sessions_dir/claude/sessions"
+  fi
+
+  # Codex sessions
+  if incus exec "$container" -- test -d "$home/.codex/sessions"; then
+    mkdir -p "$sessions_dir/codex"
+    pull_dir "$container" "$home/.codex/sessions" "$sessions_dir/codex/sessions"
+    # Metadata files
+    for f in session_index.jsonl history.jsonl; do
+      if incus exec "$container" -- test -f "$home/.codex/$f"; then
+        incus file pull "$container$home/.codex/$f" "$sessions_dir/codex/$f"
+      fi
+    done
+  fi
+
+  # Pi sessions
+  if incus exec "$container" -- test -d "$home/.pi/agent/sessions"; then
+    mkdir -p "$sessions_dir/pi"
+    pull_dir "$container" "$home/.pi/agent/sessions" "$sessions_dir/pi/sessions"
+  fi
+
+  if [[ -d "$sessions_dir" && -n "$(ls -A "$sessions_dir" 2>/dev/null)" ]]; then
+    echo "  Extracted sessions."
+  else
+    echo "  No sessions found."
+  fi
+}
+
+pull_dir() {
+  local container="$1" src="$2" dest="$3"
+
+  incus exec "$container" -- test -d "$src" || return 0
+  mkdir -p "$dest"
+  incus exec "$container" -- tar -C "$(dirname "$src")" -cf - -- "$(basename "$src")" \
+    | tar -C "$(dirname "$dest")" -xf -
+}
+
+main "$@"
