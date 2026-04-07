@@ -1,7 +1,7 @@
 {
   config,
   pkgs,
-  nurPkgs,
+  helium-browser,
   zen-browser,
   walker,
   xremap-flake,
@@ -22,7 +22,6 @@ let
 
   desktopPackages = with pkgs; [
     brightnessctl
-    docker-compose
     fastfetch
     gnome-themes-extra
     keyd
@@ -36,7 +35,7 @@ let
     waybar
     wl-clipboard
     wtype
-    nurPkgs.repos.Ev357.helium
+    helium-browser.packages.${pkgs.system}.default
   ];
 in
 {

@@ -13,6 +13,8 @@
     nur.url = "github:nix-community/NUR";
     zen-browser.url = "github:0xc000022070/zen-browser-flake";
     zen-browser.inputs.nixpkgs.follows = "nixpkgs";
+    helium-browser.url = "github:schembriaiden/helium-browser-nix-flake";
+    helium-browser.inputs.nixpkgs.follows = "nixpkgs";
     elephant.url = "github:abenz1267/elephant";
     walker.url = "github:abenz1267/walker";
     walker.inputs.elephant.follows = "elephant";
@@ -38,6 +40,7 @@
       nixos-hardware,
       nur,
       zen-browser,
+      helium-browser,
       walker,
       niri-flake,
       xremap-flake,
@@ -95,6 +98,7 @@
               nurPkgs
               xremap-flake
               nixpkgs-xwayland
+              helium-browser
               ;
           };
           modules = [
