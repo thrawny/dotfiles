@@ -126,6 +126,7 @@ in
       ".claude/worktrees"
       ".claude/scheduled_tasks.lock"
       ".playwright-mcp"
+      ".codex"
 
       # Workflow files
       "/progress.md"
