@@ -1,0 +1,114 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -uo pipefail
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: git-worktree-merge <branch> [--remove]" >&2
+  exit 1
+fi
+
+branch="$1"
+shift
+
+remove=false
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --remove) remove=true ;;
+    *) echo "Unknown option: $1" >&2; exit 1 ;;
+  esac
+  shift
+done
+
+root=$(git rev-parse --show-toplevel)
+repo=$(basename "$root")
+wt_dir="${root}/../${repo}-worktrees/${branch}"
+
+if [[ ! -d "$wt_dir" ]]; then
+  echo "Worktree not found: $wt_dir" >&2
+  exit 1
+fi
+
+cd "$root"
+
+if ! git show-ref --verify --quiet "refs/heads/$branch"; then
+  echo "Branch '$branch' not found" >&2
+  exit 1
+fi
+
+original_branch=$(git rev-parse --abbrev-ref HEAD)
+interrupted=true
+
+cleanup() {
+  if [[ "$interrupted" == true ]]; then
+    echo "Error occurred, cleaning up..." >&2
+    
+    # Abort rebase if in progress
+    if [[ -d "$(git rev-parse --git-path rebase-merge 2>/dev/null)" ]] || \
+       [[ -d "$(git rev-parse --git-path rebase-apply 2>/dev/null)" ]]; then
+      git rebase --abort 2>/dev/null || true
+    fi
+    
+    # Return to original branch
+    if [[ "$original_branch" != "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" ]]; then
+      git checkout "$original_branch" 2>/dev/null || true
+    fi
+    
+    echo "Aborted due to error" >&2
+    exit 1
+  fi
+}
+trap cleanup EXIT
+
+# Pre-flight checks
+
+if ! git diff-index --quiet HEAD --; then
+  echo "Working tree has uncommitted changes. Commit or stash them first." >&2
+  exit 1
+fi
+
+echo "Fetching latest origin/main..."
+if ! git fetch origin main; then
+  echo "Failed to fetch origin/main" >&2
+  exit 1
+fi
+
+if ! git rev-parse --verify --quiet origin/main >/dev/null; then
+  echo "origin/main does not exist" >&2
+  exit 1
+fi
+
+echo "Rebasing $branch onto origin/main..."
+if ! git rebase origin/main "$branch"; then
+  echo "Rebase failed (conflicts). Aborting..." >&2
+  exit 1
+fi
+
+echo "Checking out main..."
+if ! git checkout main; then
+  echo "Failed to checkout main" >&2
+  exit 1
+fi
+
+echo "Fast-forward merging $branch..."
+if ! git merge --ff-only "$branch"; then
+  echo "Merge failed (not fast-forwardable - did main change during rebase?)" >&2
+  exit 1
+fi
+
+# Success - clear error flag
+interrupted=false
+trap - EXIT
+
+if [[ "$remove" == true ]]; then
+  echo "Removing worktree $branch..."
+  # First try clean removal, then force if needed
+  git worktree remove "$wt_dir" 2>/dev/null || git worktree remove --force "$wt_dir" 2>/dev/null || true
+  # Prune stale worktree references
+  git worktree prune 2>/dev/null || true
+  git branch -d "$branch" 2>/dev/null || true
+  echo "Worktree and branch removed"
+fi
+
+echo "Merge complete: $branch -> main"

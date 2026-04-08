@@ -14,7 +14,11 @@ repo=$(basename "$root")
 wt_dir="${root}/../${repo}-worktrees/${branch}"
 
 if [[ ! -d "$wt_dir" ]]; then
-  git worktree add -b "$branch" "$wt_dir" "$@"
+  if git show-ref --verify --quiet "refs/heads/$branch"; then
+    git worktree add "$wt_dir" "$branch" "$@"
+  else
+    git worktree add -b "$branch" "$wt_dir" "$@"
+  fi
 
   for f in .envrc .secrets .env.local .claude/settings.local.json; do
     if [[ -f "${root}/${f}" ]]; then
