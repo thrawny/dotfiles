@@ -3,7 +3,15 @@
 set -euo pipefail
 
 sandbox() {
-  local tmpfiles=() args=()
+  local tmpfiles=() args=() extra=()
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --) shift; break ;;
+      -*) extra+=("$1"); shift ;;
+      *) break ;;
+    esac
+  done
 
   # Writable paths (add more as needed)
   local writable=(
@@ -99,6 +107,7 @@ sandbox() {
     --die-with-parent \
     --setenv SANDBOX 1 \
     "${args[@]}" \
+    "${extra[@]}" \
     -- "$@"
 
   rm -f "${tmpfiles[@]}"
