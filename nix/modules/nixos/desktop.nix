@@ -133,8 +133,19 @@ in
 
   xdg.portal = {
     extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
+    # niri-flake sets configPackages = [ niri ] with default=gnome;gtk, but
+    # config.niri overrides that entirely, so replicate the defaults here.
+    # FileChooser must use gtk because the gnome portal delegates to Nautilus
+    # which isn't installed.
     config.niri = {
+      default = [
+        "gnome"
+        "gtk"
+      ];
+      "org.freedesktop.impl.portal.Access" = "gtk";
       "org.freedesktop.impl.portal.FileChooser" = "gtk";
+      "org.freedesktop.impl.portal.Notification" = "gtk";
+      "org.freedesktop.impl.portal.Secret" = "gnome-keyring";
     };
   };
 
