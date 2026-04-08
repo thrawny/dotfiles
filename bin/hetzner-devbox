@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE:-}" ]] && set -x
+set -euo pipefail
+
+SERVER_NAME="devbox"
+SERVER_TYPE="cpx32"
+IMAGE="debian-13"
+LOCATIONS=(hel1 nbg1 fsn1)
+REMOTE_NAME="hetzner-devbox"
+TS_HOSTNAME="hetzner-devbox"
+SSH_KEY_NAME="${HCLOUD_SSH_KEY_NAME:?HCLOUD_SSH_KEY_NAME must be set}"
+
+cloud_init() {
+  local ts_authkey="$1"
+  cat <<EOF
+#!/bin/bash
+set -euo pipefail
+
+apt-get update
+apt-get install -y incus dnsmasq-base curl
+
+# Tailscale
+curl -fsSL https://tailscale.com/install.sh | sh
+tailscale up --authkey="$ts_authkey" --ssh --hostname="$TS_HOSTNAME" --advertise-tags=tag:devbox
+
+# Incus — listen only on Tailscale
+TS_IP=\$(tailscale ip -4)
+cat <<PRESEED | incus admin init --preseed
+config:
+  core.https_address: "\${TS_IP}:8443"
+networks:
+  - name: incusbr0
+    type: bridge
+storage_pools:
+  - name: default
+    driver: dir
+profiles:
+  - name: default
+    config:
+      security.nesting: "true"
+    devices:
+      root:
+        path: /
+        pool: default
+        type: disk
+      eth0:
+        name: eth0
+        network: incusbr0
+        type: nic
+PRESEED
+EOF
+}
+
+cmd_up() {
+  if hcloud server describe "$SERVER_NAME" >/dev/null 2>&1; then
+    echo "Server $SERVER_NAME already exists, skipping creation."
+  else
+    echo "Generating Tailscale auth key..."
+    local ts_authkey
+    ts_authkey="$(go run tailscale.com/cmd/get-authkey@latest -tags tag:devbox -ephemeral)"
+
+    local user_data_file
+    user_data_file="$(mktemp)"
+    # shellcheck disable=SC2064
+    trap "rm -f '$user_data_file'" EXIT
+    cloud_init "$ts_authkey" > "$user_data_file"
+
+    local location
+    for location in "${LOCATIONS[@]}"; do
+      echo "Trying $location..."
+      if hcloud server create \
+        --name "$SERVER_NAME" \
+        --type "$SERVER_TYPE" \
+        --image "$IMAGE" \
+        --location "$location" \
+        --ssh-key "$SSH_KEY_NAME" \
+        --user-data-from-file "$user_data_file" 2>&1; then
+        echo "Created in $location."
+        break
+      fi
+      echo "$location unavailable, trying next..."
+    done
+  fi
+
+  local ip
+  ip="$(hcloud server ip "$SERVER_NAME")"
+  ssh-keygen -R "$ip" >/dev/null 2>&1 || true
+
+  echo "Waiting for Tailscale to come up..."
+  local ts_ip=""
+  for _ in $(seq 60); do
+    ts_ip="$(tailscale status --json 2>/dev/null \
+      | jq -r ".Peer[] | select(.HostName == \"$TS_HOSTNAME\") | .TailscaleIPs[0] // empty" 2>/dev/null || true)"
+    [[ -n "$ts_ip" ]] && break
+    sleep 5
+  done
+  if [[ -z "$ts_ip" ]]; then
+    echo "Timed out waiting for $TS_HOSTNAME on tailnet" >&2
+    echo "Checking cloud-init via SSH..."
+    ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=accept-new "root@$ip" \
+      "cloud-init status 2>&1; echo '---'; tail -20 /var/log/cloud-init-output.log" 2>&1 || true
+    exit 1
+  fi
+  echo "Tailscale IP: $ts_ip"
+
+  echo "Waiting for Incus API on tailnet..."
+  until curl -sk --connect-timeout 2 "https://$ts_ip:8443" >/dev/null 2>&1; do
+    sleep 5
+  done
+
+  echo "Generating Incus trust token..."
+  local token
+  token="$(tailscale ssh "root@$TS_HOSTNAME" "incus config trust add $REMOTE_NAME")"
+  token="$(printf '%s\n' "$token" | tr -d '\r' | tail -n 1)"
+  if [[ -z "$token" ]]; then
+    echo "Failed to get Incus trust token" >&2
+    exit 1
+  fi
+
+  echo "Adding remote $REMOTE_NAME..."
+  incus remote remove "$REMOTE_NAME" >/dev/null 2>&1 || true
+  incus remote add "$REMOTE_NAME" "https://$ts_ip:8443" --accept-certificate --token "$token"
+
+  echo "Ready: $REMOTE_NAME -> $ts_ip ($TS_HOSTNAME)"
+}
+
+cmd_down() {
+  echo "Removing Incus remote $REMOTE_NAME..."
+  incus remote remove "$REMOTE_NAME" >/dev/null 2>&1 || true
+
+  echo "Deleting server $SERVER_NAME..."
+  hcloud server delete "$SERVER_NAME" 2>/dev/null || echo "Server not found, already deleted."
+
+  echo "Done."
+}
+
+cmd_ssh() {
+  exec tailscale ssh "root@$TS_HOSTNAME" "$@"
+}
+
+cmd_status() {
+  hcloud server describe "$SERVER_NAME"
+}
+
+case "${1:-}" in
+  up)     cmd_up ;;
+  down)   cmd_down ;;
+  ssh)    shift; cmd_ssh "$@" ;;
+  status) cmd_status ;;
+  *)
+    echo "Usage: hetzner-devbox up|down|ssh|status"
+    exit 1
+    ;;
+esac

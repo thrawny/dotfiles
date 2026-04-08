@@ -24,7 +24,7 @@ let
 
     install -d -m0755 "$XDG_CACHE_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "${nvimStateDir}"
 
-    ${pkgs.neovim}/bin/nvim --headless '+Lazy! restore' +qa
+    ${pkgs.neovim}/bin/nvim --headless -c 'lua require("lazy").restore({ wait = true })' -c 'qa'
 
     touch ${lib.escapeShellArg restoreMarker}
   '';

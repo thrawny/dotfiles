@@ -233,6 +233,7 @@
       pkgs.slack
       pkgs.teams-for-linux
       pkgs.terraform
+      pkgs.hcloud
     ];
   };
 }
