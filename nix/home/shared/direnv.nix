@@ -32,8 +32,10 @@ in
           fi
 
           if [[ -z $VIRTUAL_ENV || ! -d $VIRTUAL_ENV ]]; then
-              log_status "No uv project exists. Executing \`uv init\` to create one."
-              uv init
+              if [[ ! -f pyproject.toml ]]; then
+                  log_status "No uv project exists. Executing \`uv init\` to create one."
+                  uv init
+              fi
               uv venv
               VIRTUAL_ENV="$(pwd)/.venv"
           fi
