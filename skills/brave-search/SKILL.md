@@ -21,7 +21,15 @@ Requires a Brave Search API account with a free subscription. A credit card is r
 5. Install dependencies (run once):
    ```bash
    cd {baseDir}
-   npm install
+   bun install
+   ```
+6. Important: `search.js` and `content.js` are Bun scripts with a `#!/usr/bin/env bun` shebang and executable permissions.
+   - Execute them directly: `{baseDir}/search.js "query"`
+   - Do **not** run them with `node`
+   - `bun {baseDir}/search.js "query"` also works if direct execution fails
+7. Optional: add the skill directory to your `PATH` so the commands can be run without the full path:
+   ```bash
+   export PATH="{baseDir}:$PATH"
    ```
 
 ## Search
@@ -34,7 +42,12 @@ Requires a Brave Search API account with a free subscription. A credit card is r
 {baseDir}/search.js "query" --freshness 2024-01-01to2024-06-30  # Date range
 {baseDir}/search.js "query" --country DE            # Results from Germany
 {baseDir}/search.js "query" -n 3 --content          # Combined options
+
+# Also valid if preferred:
+bun {baseDir}/search.js "query"
 ```
+
+These are Bun scripts. Prefer direct execution via the shebang; do not invoke them with `node`.
 
 ### Options
 
@@ -52,7 +65,12 @@ Requires a Brave Search API account with a free subscription. A credit card is r
 
 ```bash
 {baseDir}/content.js https://example.com/article
+
+# Also valid if preferred:
+bun {baseDir}/content.js https://example.com/article
 ```
+
+This is a Bun script. Prefer direct execution via the shebang; do not invoke it with `node`.
 
 Fetches a URL and extracts readable content as markdown.
 
