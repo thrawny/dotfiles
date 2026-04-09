@@ -10,8 +10,5 @@
     "fireworks/accounts/fireworks/models/kimi-k2p5",
     "openai-codex/gpt-5.4"
   ],
-  "packages": [
-    "git:github.com/davebcn87/pi-autoresearch"
-  ],
   "hideThinkingBlock": true
 }
