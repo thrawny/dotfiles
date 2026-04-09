@@ -26,6 +26,32 @@ in
       source_env_if_exists .envrc.local
       dotenv_if_exists .secrets
 
+      use_zmx() {
+          local project_name dir_name
+
+          if git rev-parse --git-common-dir &>/dev/null 2>&1; then
+              local git_common_dir git_dir
+              git_common_dir="$(realpath "$(git rev-parse --git-common-dir)")"
+              git_dir="$(realpath "$(git rev-parse --git-dir)")"
+
+              project_name="$(basename "$(dirname "$git_common_dir")")"
+
+              if [[ "$git_dir" != "$git_common_dir" ]]; then
+                  local worktree_name
+                  worktree_name="$(basename "$(git rev-parse --show-toplevel)")"
+                  dir_name="''${project_name}-''${worktree_name}"
+              else
+                  dir_name="$project_name"
+              fi
+          else
+              dir_name="$(basename "$PWD")"
+          fi
+
+          local zmx_dir="$HOME/.cache/zmx/$dir_name"
+          mkdir -p "$zmx_dir"
+          export ZMX_DIR="$zmx_dir"
+      }
+
       layout_uv() {
           if [[ -d ".venv" ]]; then
               VIRTUAL_ENV="$(pwd)/.venv"
