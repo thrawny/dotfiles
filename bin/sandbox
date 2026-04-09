@@ -48,6 +48,25 @@ sandbox() {
         "/run/user/${UID}/${WAYLAND_DISPLAY}"
       )
     fi
+
+    # Expose D-Bus session socket so notify-send works
+    args+=(
+      --ro-bind-try
+      "/run/user/${UID}/bus"
+      "/run/user/${UID}/bus"
+    )
+
+    # Expose PipeWire/PulseAudio socket so paplay (notification sounds) works
+    args+=(
+      --ro-bind-try
+      "/run/user/${UID}/pulse"
+      "/run/user/${UID}/pulse"
+    )
+    args+=(
+      --ro-bind-try
+      "/run/user/${UID}/pipewire-0"
+      "/run/user/${UID}/pipewire-0"
+    )
   fi
 
   # Forward SSH agent socket so git can authenticate without exposing ~/.ssh
