@@ -77,6 +77,7 @@ in
     ++ lib.optionals storeBacked [ "${containerAssets.bin}" ];
 
     sessionVariables = {
+      FZF_CTRL_R_OPTS = "--bind esc:print-query --bind ctrl-c:print-query";
       PYTHONDONTWRITEBYTECODE = "1";
       PYTHONUNBUFFERED = "1";
       GOPATH = "$HOME/go";
