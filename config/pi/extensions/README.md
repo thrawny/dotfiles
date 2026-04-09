@@ -8,6 +8,9 @@ Examples:
 - `my-extension.ts`
 - `my-extension/index.ts`
 
+Current custom extensions include:
+- `loop.ts` — session-local recurring prompts via `/loop every 5m ...`
+
 ## Agent Switch integration
 
 `agent-switch.ts` forwards Pi lifecycle events to `agent-switch track` so session state is shared with tmux/niri switchers.
