@@ -2,6 +2,7 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
+import { Type } from "@sinclair/typebox";
 
 type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 
@@ -27,13 +28,14 @@ let currentCtx: ExtensionContext | null = null;
 let activeLoopRunId: number | null = null;
 let piRef: ExtensionAPI | null = null;
 let restoringAfterLoopRun = false;
-let activeLoopRestore:
-	| {
-		modelId?: string;
-		provider?: string;
-		thinkingLevel: ThinkingLevel;
-	  }
-	| null = null;
+let loopCompleteToolRegistered = false;
+let activeLoopToolTargetId: number | null = null;
+let activeLoopToolPreviousTools: string[] | null = null;
+let activeLoopRestore: {
+	modelId?: string;
+	provider?: string;
+	thinkingLevel: ThinkingLevel;
+} | null = null;
 
 function clearLoop(loop: Loop) {
 	clearInterval(loop.timer);
@@ -91,14 +93,13 @@ function parseDuration(input: string): { ms: number; rest: string } | null {
 	const unit = match[2].toLowerCase();
 	const rest = match[3].trim();
 
-	const multiplier =
-		unit.startsWith("s")
-			? 1000
-			: unit.startsWith("m")
-				? 60_000
-				: unit.startsWith("h")
-					? 3_600_000
-					: 86_400_000;
+	const multiplier = unit.startsWith("s")
+		? 1000
+		: unit.startsWith("m")
+			? 60_000
+			: unit.startsWith("h")
+				? 3_600_000
+				: 86_400_000;
 
 	return {
 		ms: value * multiplier,
@@ -229,12 +230,14 @@ function parseNaturalLoopSpec(
 ): { ms: number; prompt: string; modelOverride?: ModelOverride } | null {
 	const usingMatch = input.match(/^(.*?)\s+(?:using|with)\s+(.+)$/i);
 	const body = usingMatch ? usingMatch[1].trim() : input.trim();
-	const modelOverride = usingMatch ? parseModelOverride(usingMatch[2]) : undefined;
+	const modelOverride = usingMatch
+		? parseModelOverride(usingMatch[2])
+		: undefined;
 	if (usingMatch && !modelOverride) return null;
 
 	if (body.startsWith("every ")) {
 		const parsed = parseDuration(body.slice(6).trim());
-		if (!parsed || !parsed.rest) return null;
+		if (!parsed?.rest) return null;
 		return { ms: parsed.ms, prompt: parsed.rest, modelOverride };
 	}
 
@@ -287,10 +290,7 @@ function formatModelOverride(
 
 function loopSummary(loop: Loop): string {
 	const dueIn = formatRelative(
-		Math.max(
-			0,
-			(loop.lastRunAt ?? loop.createdAt) + loop.everyMs - Date.now(),
-		),
+		Math.max(0, (loop.lastRunAt ?? loop.createdAt) + loop.everyMs - Date.now()),
 	);
 	const lastRun = loop.lastRunAt
 		? `${formatRelative(Date.now() - loop.lastRunAt)} ago`
@@ -306,18 +306,27 @@ function showLoopStatus(ctx: ExtensionContext) {
 	}
 
 	ctx.ui.notify(
-		[`Active loops (${allLoops.length})`, ...allLoops.map(loopSummary)].join("\n"),
+		[`Active loops (${allLoops.length})`, ...allLoops.map(loopSummary)].join(
+			"\n",
+		),
 		"info",
 	);
 }
 
 function markLoopDue(loopId: number) {
 	const loop = loops.get(loopId);
-	if (!loop || !currentCtx || activeLoopRunId !== null || !currentCtx.isIdle()) return;
+	const ctx = currentCtx;
+	if (!loop || !ctx || activeLoopRunId !== null || !ctx.isIdle()) return;
 	loop.lastRunAt = Date.now();
 	activeLoopRunId = loop.id;
-	currentCtx.ui.notify(
-		`Running loop #${loop.id}: ${loop.prompt}${formatModelOverride(loop.modelOverride, currentCtx.model?.id)}`,
+	activeLoopToolTargetId = loop.id;
+	setLoopToolActive(true);
+	ctx.ui.notify(
+		`loop_complete active: ${piRef?.getActiveTools().includes("loop_complete") ? "yes" : "no"}`,
+		"info",
+	);
+	ctx.ui.notify(
+		`Running loop #${loop.id}: ${loop.prompt}${formatModelOverride(loop.modelOverride, ctx.model?.id)}`,
 		"info",
 	);
 	piRef?.sendUserMessage(loopMessage(loop));
@@ -332,7 +341,7 @@ async function findModel(ctx: ExtensionContext, query: string) {
 		return ctx.modelRegistry.find(providerMatch[1], providerMatch[2]) ?? null;
 	}
 
-	const available = await ctx.modelRegistry.getAvailable();
+	const available = ctx.modelRegistry.getAvailable();
 	const exactNormalized = normalize(trimmed);
 
 	for (const model of available) {
@@ -367,14 +376,20 @@ async function applyLoopOverride(loop: Loop, ctx: ExtensionContext) {
 	if (loop.modelOverride.query !== "current") {
 		const model = await findModel(ctx, loop.modelOverride.query);
 		if (!model) {
-			ctx.ui.notify(`Loop #${loop.id}: model not found: ${loop.modelOverride.query}`, "warning");
+			ctx.ui.notify(
+				`Loop #${loop.id}: model not found: ${loop.modelOverride.query}`,
+				"warning",
+			);
 			activeLoopRestore = null;
 			return;
 		}
 
 		const success = await piRef.setModel(model);
 		if (!success) {
-			ctx.ui.notify(`Loop #${loop.id}: no API key for ${model.provider}/${model.id}`, "warning");
+			ctx.ui.notify(
+				`Loop #${loop.id}: no API key for ${model.provider}/${model.id}`,
+				"warning",
+			);
 			activeLoopRestore = null;
 			return;
 		}
@@ -403,20 +418,92 @@ async function restoreAfterLoopRun(ctx: ExtensionContext) {
 	}
 }
 
-async function flushPendingLoops() {
-	return;
-}
-
 function parseLoopId(value: string): number | null {
 	const id = Number.parseInt(value, 10);
 	if (!Number.isFinite(id)) return null;
 	return id;
 }
 
+function ensureLoopToolRegistered() {
+	if (!piRef || loopCompleteToolRegistered) return;
+	loopCompleteToolRegistered = true;
+
+	piRef.registerTool({
+		name: "loop_complete",
+		label: "Complete Loop",
+		description: "Stop the currently running loop when its task is complete.",
+		parameters: Type.Object({
+			reason: Type.Optional(
+				Type.String({ description: "Why the loop is complete" }),
+			),
+		}),
+		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+			if (activeLoopToolTargetId === null) {
+				return {
+					content: [{ type: "text", text: "No active loop to complete." }],
+					details: { completed: false },
+				};
+			}
+
+			const loop = loops.get(activeLoopToolTargetId);
+			if (!loop) {
+				activeLoopToolTargetId = null;
+				return {
+					content: [{ type: "text", text: "Loop already stopped." }],
+					details: { completed: false },
+				};
+			}
+
+			clearLoop(loop);
+			activeLoopRunId = null;
+			const reason = params.reason?.trim();
+			return {
+				content: [
+					{
+						type: "text",
+						text: reason
+							? `Completed loop #${loop.id}: ${reason}`
+							: `Completed loop #${loop.id}.`,
+					},
+				],
+				details: { loopId: loop.id, completed: true, reason },
+			};
+		},
+	});
+}
+
+function setLoopToolActive(enabled: boolean) {
+	if (!piRef) return;
+	const toolName = "loop_complete";
+	const active = piRef.getActiveTools();
+	const hasTool = active.includes(toolName);
+
+	if (enabled) {
+		ensureLoopToolRegistered();
+		const refreshedActive = piRef.getActiveTools();
+		if (refreshedActive.includes(toolName)) return;
+		activeLoopToolPreviousTools = refreshedActive;
+		piRef.setActiveTools([...refreshedActive, toolName]);
+		return;
+	}
+
+	if (!hasTool) {
+		activeLoopToolPreviousTools = null;
+		return;
+	}
+
+	if (activeLoopToolPreviousTools) {
+		piRef.setActiveTools(activeLoopToolPreviousTools);
+	} else {
+		piRef.setActiveTools(active.filter((name) => name !== toolName));
+	}
+	activeLoopToolPreviousTools = null;
+}
+
 function helpText(): string {
 	return [
 		"Loop commands:",
-		"/loop <duration> [model|thinking] \"<prompt>\"",
+		'/loop <duration> [model|thinking] "<prompt>"',
 		"/loop <duration> [model|thinking] -- <prompt>",
 		"/loop <prompt> every <duration>",
 		"/loop every <duration> <prompt>",
@@ -427,10 +514,10 @@ function helpText(): string {
 		"/loop stop all",
 		"",
 		"Examples:",
-		"/loop 10s \"say hi\"",
+		'/loop 10s "say hi"',
 		"/loop 10s off -- say hi",
 		"/loop 5m off -- check memory growth and notify using notify cli",
-		"/loop 5m gpt-5 off \"check CI status\"",
+		'/loop 5m gpt-5 off "check CI status"',
 		"/loop say hi every 10s",
 		"/loop check CI status every 5m with no thinking",
 	].join("\n");
@@ -443,12 +530,16 @@ export default function (pi: ExtensionAPI) {
 		clearAllLoops();
 		currentCtx = ctx;
 		activeLoopRestore = null;
+		activeLoopToolTargetId = null;
+		setLoopToolActive(false);
 	});
 
 	pi.on("session_shutdown", async () => {
 		clearAllLoops();
 		currentCtx = null;
 		activeLoopRestore = null;
+		activeLoopToolTargetId = null;
+		setLoopToolActive(false);
 	});
 
 	pi.on("before_agent_start", async (event, ctx) => {
@@ -458,16 +549,22 @@ export default function (pi: ExtensionAPI) {
 		const loop = loops.get(loopId);
 		if (!loop) return;
 		await applyLoopOverride(loop, ctx);
+		return {
+			systemPrompt: `${event.systemPrompt}\n\nThis is a recurring loop run for loop #${loop.id}. If the user's task is complete and the loop should stop, call the loop_complete tool instead of continuing the loop.`,
+		};
 	});
 
 	pi.on("agent_end", async (_event, ctx) => {
 		currentCtx = ctx;
 		activeLoopRunId = null;
 		await restoreAfterLoopRun(ctx);
+		activeLoopToolTargetId = null;
+		setLoopToolActive(false);
 	});
 
 	pi.registerCommand("loop", {
-		description: "Run periodic prompts inside the current session while Pi stays open",
+		description:
+			"Run periodic prompts inside the current session while Pi stays open",
 		handler: async (args, ctx) => {
 			currentCtx = ctx;
 			const input = args.trim();
