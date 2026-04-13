@@ -1,4 +1,8 @@
 
+---
+description: Monitor the current branch PR and fix issues; optional arg: `now` or wait seconds
+---
+
 ## Context
 
 - `gh pr view <PR> --json state,mergeable,reviewDecision,title` - Get structured status info
@@ -17,9 +21,12 @@ Based on the above context, monitor the PR associated with the current branch an
 
 2. **Accept wait time parameter**:
 
-   - Default to 120 seconds if no argument provided
-   - Allow user to specify custom wait time in seconds (e.g., `/prcheck 120`)
-   - Start by waiting the specified time, then do the first round of checks
+   - The first argument is `$1`
+   - Default to `now` if no argument is provided
+   - Treat `now` as `0` seconds and begin checks immediately (e.g., `/prcheck now`)
+   - Allow the user to specify a custom wait time in seconds (e.g., `/prcheck 120`)
+   - If the argument is neither `now` nor a valid number of seconds, explain the valid options and fall back to `now`
+   - Start by waiting the resolved time, then do the first round of checks
 
 3. **Enter monitoring loop**:
 
