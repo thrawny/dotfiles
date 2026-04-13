@@ -199,7 +199,8 @@ return {
             GitSignsChange = { fg = yellow },
             GitSignsDelete = { fg = pink },
 
-
+            -- codediff explorer selected file
+            CodeDiffExplorerSelected = { bg = "#3a3a4a" },
 
             -- Snacks file explorer
             SnacksPickerDirectory = { fg = purple, bold = true },
