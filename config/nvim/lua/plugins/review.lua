@@ -5,8 +5,6 @@ return {
       highlights = {
         line_insert = "#004466",
         line_delete = "#660100",
-        char_insert = "#0077b3",
-        char_delete = "#b30100",
       },
       diff = {
         layout = "inline",

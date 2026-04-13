@@ -18,6 +18,9 @@ vim.opt.autoread = true
 -- Disable swap files (autosave handles crash recovery)
 vim.opt.swapfile = false
 
+-- Disable invisible character rendering (tabs as >, trailing spaces, etc.)
+vim.opt.list = false
+
 -- Open files with all folds expanded
 vim.opt.foldlevel = 99
 
