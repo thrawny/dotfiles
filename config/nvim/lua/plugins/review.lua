@@ -8,6 +8,12 @@ return {
         char_insert = "#0077b3",
         char_delete = "#b30100",
       },
+      keymaps = {
+        view = {
+          next_hunk = "}",
+          prev_hunk = "{",
+        },
+      },
     },
   },
 
@@ -23,6 +29,16 @@ return {
       { "<leader>R", "<cmd>Review commits<cr>", desc = "Review commits" },
     },
     opts = {},
+  },
 
+  -- Remap {/} to hunk navigation in normal buffers (gitsigns)
+  {
+    "lewis6991/gitsigns.nvim",
+    keys = {
+      ---@diagnostic disable-next-line: param-type-mismatch
+      { "}", function() require("gitsigns").nav_hunk("next") end, desc = "Next Hunk" },
+      ---@diagnostic disable-next-line: param-type-mismatch
+      { "{", function() require("gitsigns").nav_hunk("prev") end, desc = "Prev Hunk" },
+    },
   },
 }
