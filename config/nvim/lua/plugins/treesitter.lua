@@ -34,4 +34,11 @@ return {
       opts.auto_install = false
     end,
   },
+
+  -- Disable treesitter textobjects move (]f, ]c, ]a etc.)
+  -- Collides with codediff hunk navigation and never used
+  {
+    "nvim-treesitter/nvim-treesitter-textobjects",
+    opts = { move = { enable = false } },
+  },
 }
