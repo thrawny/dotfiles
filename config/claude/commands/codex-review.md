@@ -25,8 +25,7 @@ Run `codex review` to find code issues, fix any major ones (P1/P2), and repeat u
    - If no P1/P2 issues remain, report success and stop
    - If P1/P2 issues are found:
      - Summarize the issues clearly
-     - Fix each P1/P2 issue in the code
-     - Commit the fixes (use `/gc`) so the next review round sees them
+     - Fix each P1/P2 issue individually and commit it separately (use `/gc` after each fix)
      - Move to the next round
 
 4. **After all rounds**:
