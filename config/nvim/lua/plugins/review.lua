@@ -8,6 +8,9 @@ return {
         char_insert = "#0077b3",
         char_delete = "#b30100",
       },
+      diff = {
+        layout = "inline",
+      },
       keymaps = {
         view = {
           next_hunk = "}",
