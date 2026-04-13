@@ -223,18 +223,18 @@ return {
   {
     "lewis6991/gitsigns.nvim",
     keys = {
-      ---@diagnostic disable-next-line: param-type-mismatch
       {
         "}",
         function()
+          ---@diagnostic disable-next-line: param-type-mismatch
           require("gitsigns").nav_hunk("next")
         end,
         desc = "Next Hunk",
       },
-      ---@diagnostic disable-next-line: param-type-mismatch
       {
         "{",
         function()
+          ---@diagnostic disable-next-line: param-type-mismatch
           require("gitsigns").nav_hunk("prev")
         end,
         desc = "Prev Hunk",
