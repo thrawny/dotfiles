@@ -2,6 +2,9 @@ return {
   {
     "esmuellert/codediff.nvim",
     init = function()
+      -- Custom tabline: show "Review" for codediff tabs
+      vim.o.tabline = "%!v:lua.require'config.codediff_tabline'()"
+
       -- Monkeypatch: replace codediff's winbar-clearing autocmd with one that sets our winbar
       vim.api.nvim_create_autocmd("User", {
         pattern = "CodeDiffOpen",
@@ -13,6 +16,7 @@ return {
             if not sess then
               return
             end
+
 
             -- Replace the lifecycle augroup to stop winbar clearing
             local group_name = "codediff_lifecycle_tab_" .. tabpage
