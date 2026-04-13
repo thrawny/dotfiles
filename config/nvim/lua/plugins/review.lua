@@ -124,11 +124,23 @@ return {
               local cursor = vim.api.nvim_win_get_cursor(0)[1]
               return cursor <= changes[1].modified.start_line
             end
+            -- Suppress codediff's echo messages during navigation
+            local orig_echo = vim.api.nvim_echo
+            local function silent_nav(fn)
+              vim.api.nvim_echo = function() end
+              local ok, err = pcall(fn)
+              vim.api.nvim_echo = orig_echo
+              if not ok then error(err) end
+            end
             lifecycle.set_tab_keymap(tabpage, "n", "<Tab>", function()
-              if on_last_hunk() then nav.next_file() else nav.next_hunk() end
+              silent_nav(function()
+                if on_last_hunk() then nav.next_file() else nav.next_hunk() end
+              end)
             end, { desc = "Next hunk (cross-file)" })
             lifecycle.set_tab_keymap(tabpage, "n", "<S-Tab>", function()
-              if on_first_hunk() then nav.prev_file() else nav.prev_hunk() end
+              silent_nav(function()
+                if on_first_hunk() then nav.prev_file() else nav.prev_hunk() end
+              end)
             end, { desc = "Prev hunk (cross-file)" })
             lifecycle.set_tab_keymap(tabpage, "n", "<C-n>", function()
               nav.next_file()
