@@ -120,9 +120,10 @@ let
     };
 
     battery = {
-      format = "{icon}";
-      "format-charging" = "{icon}";
-      "format-plugged" = "";
+      format = "{icon} {capacity}%";
+      "format-charging" = "{icon} {capacity}%";
+      "format-not-charging" = "{icon} {capacity}%";
+      "format-plugged" = "{icon} {capacity}%";
       "format-icons" = {
         charging = [
           "󰢜"
@@ -149,9 +150,10 @@ let
           "󰁹"
         ];
       };
-      "format-full" = "󰂅";
+      "format-full" = "󰂅 {capacity}%";
       "tooltip-format-discharging" = "{power:>1.0f}W↓ {capacity}%";
       "tooltip-format-charging" = "{power:>1.0f}W↑ {capacity}%";
+      "tooltip-format-not-charging" = "AC connected • {capacity}%";
       interval = 5;
       states = {
         warning = 20;
