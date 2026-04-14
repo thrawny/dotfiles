@@ -212,10 +212,51 @@ return {
       "MunifTanjim/nui.nvim",
     },
     cmd = { "Review" },
-    keys = {
-      { "<leader>r", "<cmd>Review<cr>", desc = "Review" },
-      { "<leader>R", "<cmd>Review commits<cr>", desc = "Review commits" },
-    },
+    keys = function()
+      local function restore_review_buffers(lifecycle, tabpage)
+        local orig_buf, mod_buf = lifecycle.get_buffers(tabpage)
+        for _, buf in ipairs({ orig_buf, mod_buf }) do
+          if buf and vim.api.nvim_buf_is_valid(buf) then
+            vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
+            vim.api.nvim_set_option_value("readonly", false, { buf = buf })
+          end
+        end
+      end
+
+      return {
+        {
+          "<leader>rr",
+          function()
+            local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
+            local tabpage = vim.api.nvim_get_current_tabpage()
+            if ok and lifecycle.get_session(tabpage) then
+              restore_review_buffers(lifecycle, tabpage)
+              require("review").close()
+            else
+              vim.cmd("Review")
+            end
+          end,
+          desc = "Review",
+        },
+        { "<leader>rm", "<cmd>Review commits main HEAD<cr>", desc = "Review main..HEAD" },
+        { "<leader>rc", "<cmd>Review commits<cr>", desc = "Review commits" },
+        {
+          "<leader>rx",
+          function()
+            local review = require("review")
+            local lifecycle = require("codediff.ui.lifecycle")
+            local tabpage = vim.api.nvim_get_current_tabpage()
+            review.export()
+            restore_review_buffers(lifecycle, tabpage)
+            review.clear()
+            vim.cmd("tabclose")
+            require("review.hooks").on_session_closed()
+            require("review.storage").clear_revisions()
+          end,
+          desc = "Review close + clear",
+        },
+      }
+    end,
     opts = {},
   },
 
