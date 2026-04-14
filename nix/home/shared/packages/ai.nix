@@ -16,6 +16,7 @@ in
     claudePkgs.claude-code
     llmPkgs.codex
     llmPkgs.pi
+    pkgs.agent-browser
   ]
   ++ lib.optionals isLinux [
     pkgs.bubblewrap
