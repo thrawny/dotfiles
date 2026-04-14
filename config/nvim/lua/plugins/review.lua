@@ -17,7 +17,6 @@ return {
               return
             end
 
-
             -- Replace the lifecycle augroup to stop winbar clearing
             local group_name = "codediff_lifecycle_tab_" .. tabpage
             local group = vim.api.nvim_create_augroup(group_name, { clear = true })

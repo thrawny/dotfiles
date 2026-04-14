@@ -10,7 +10,9 @@ return function()
     else
       local bufnr = vim.fn.tabpagebuflist(i)[vim.fn.tabpagewinnr(i)]
       local name = vim.fn.fnamemodify(vim.fn.bufname(bufnr), ":t")
-      if name == "" then name = "[No Name]" end
+      if name == "" then
+        name = "[No Name]"
+      end
       label = " " .. name .. " "
     end
     table.insert(parts, hl .. "%" .. i .. "T" .. label)
