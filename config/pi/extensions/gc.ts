@@ -59,7 +59,18 @@ function parseStatus(repoRoot: string): ChangedFile[] {
 		});
 }
 
-function getSessionTouchedFiles(branch: SessionEntry[]): Set<string> {
+function normalizeRepoPath(repoRoot: string, filePath: string): string {
+	const resolved = path.isAbsolute(filePath)
+		? filePath
+		: path.resolve(repoRoot, filePath);
+	const relative = path.relative(repoRoot, resolved);
+	return relative.split(path.sep).join("/");
+}
+
+function getSessionTouchedFiles(
+	repoRoot: string,
+	branch: SessionEntry[],
+): Set<string> {
 	const files = new Set<string>();
 
 	for (const entry of branch) {
@@ -71,7 +82,7 @@ function getSessionTouchedFiles(branch: SessionEntry[]): Set<string> {
 			if (block.name !== "edit" && block.name !== "write") continue;
 			const maybePath = block.arguments?.path;
 			if (typeof maybePath === "string" && maybePath.trim()) {
-				files.add(maybePath);
+				files.add(normalizeRepoPath(repoRoot, maybePath.trim()));
 			}
 		}
 	}
@@ -79,7 +90,10 @@ function getSessionTouchedFiles(branch: SessionEntry[]): Set<string> {
 	return files;
 }
 
-function markSessionTouched(changedFiles: ChangedFile[], sessionTouched: Set<string>): ChangedFile[] {
+function markSessionTouched(
+	changedFiles: ChangedFile[],
+	sessionTouched: Set<string>,
+): ChangedFile[] {
 	return changedFiles.map((file) => ({
 		...file,
 		sessionTouched: sessionTouched.has(file.path),
@@ -87,10 +101,15 @@ function markSessionTouched(changedFiles: ChangedFile[], sessionTouched: Set<str
 }
 
 function defaultPaths(changedFiles: ChangedFile[]): string[] {
-	return changedFiles.filter((file) => file.sessionTouched).map((file) => file.path);
+	return changedFiles
+		.filter((file) => file.sessionTouched)
+		.map((file) => file.path);
 }
 
-function heuristicPaths(changedFiles: ChangedFile[], instructions: string): string[] {
+function heuristicPaths(
+	changedFiles: ChangedFile[],
+	instructions: string,
+): string[] {
 	const text = instructions.trim().toLowerCase();
 	if (!text) return [];
 
@@ -110,7 +129,10 @@ function heuristicPaths(changedFiles: ChangedFile[], instructions: string): stri
 function heuristicMessage(paths: string[], instructions: string): string {
 	const trimmed = instructions.trim();
 	if (trimmed && trimmed.toLowerCase() !== "all") {
-		const cleaned = trimmed.replace(/^only\s+/i, "").replace(/^file\s+/i, "").trim();
+		const cleaned = trimmed
+			.replace(/^only\s+/i, "")
+			.replace(/^file\s+/i, "")
+			.trim();
 		if (cleaned) {
 			const sentence = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 			return sentence.length > 72 ? sentence.slice(0, 72).trimEnd() : sentence;
@@ -169,18 +191,33 @@ async function suggestPlan(
 
 	if (!ctx.model) return fallback;
 
-	const auth = await (ctx.modelRegistry as unknown as {
-		getApiKeyAndHeaders: (model: NonNullable<ExtensionContext["model"]>) => Promise<{
-			ok: boolean;
-			apiKey?: string;
-			headers?: Record<string, string>;
-			error?: string;
-		}>;
-	}).getApiKeyAndHeaders(ctx.model);
+	const auth = await (
+		ctx.modelRegistry as unknown as {
+			getApiKeyAndHeaders: (
+				model: NonNullable<ExtensionContext["model"]>,
+			) => Promise<{
+				ok: boolean;
+				apiKey?: string;
+				headers?: Record<string, string>;
+				error?: string;
+			}>;
+		}
+	).getApiKeyAndHeaders(ctx.model);
 	if (!auth.ok || !auth.apiKey) return fallback;
 
-	const diffStat = tryGit(repoRoot, ["diff", "--stat", "--", ...preferredPaths]);
-	const diffText = tryGit(repoRoot, ["diff", "--unified=0", "--no-color", "--", ...preferredPaths]);
+	const diffStat = tryGit(repoRoot, [
+		"diff",
+		"--stat",
+		"--",
+		...preferredPaths,
+	]);
+	const diffText = tryGit(repoRoot, [
+		"diff",
+		"--unified=0",
+		"--no-color",
+		"--",
+		...preferredPaths,
+	]);
 	const truncatedDiff = (diffText ?? "").slice(0, 12000);
 
 	const systemPrompt = `You generate git commit plans. Return only valid JSON with shape {"includePaths": string[], "commitMessage": string}.
@@ -221,15 +258,17 @@ Rules:
 	if (!response || response.stopReason === "aborted") return fallback;
 
 	const text = response.content
-		.filter((block): block is { type: "text"; text: string } => block.type === "text")
+		.filter(
+			(block): block is { type: "text"; text: string } => block.type === "text",
+		)
 		.map((block) => block.text)
 		.join("\n");
 
 	try {
 		const parsed = JSON.parse(sanitizeJson(text)) as Partial<CommitPlan>;
 		const allowed = new Set(changedFiles.map((file) => file.path));
-		const includePaths = (parsed.includePaths ?? []).filter((file): file is string =>
-			typeof file === "string" && allowed.has(file),
+		const includePaths = (parsed.includePaths ?? []).filter(
+			(file): file is string => typeof file === "string" && allowed.has(file),
 		);
 		const commitMessage =
 			typeof parsed.commitMessage === "string" && parsed.commitMessage.trim()
@@ -288,7 +327,7 @@ export default function (pi: ExtensionAPI) {
 
 			const changedFiles = markSessionTouched(
 				parseStatus(repoRoot),
-				getSessionTouchedFiles(ctx.sessionManager.getBranch()),
+				getSessionTouchedFiles(repoRoot, ctx.sessionManager.getBranch()),
 			);
 			if (changedFiles.length === 0) {
 				ctx.ui.notify("No changes to commit", "info");
@@ -309,13 +348,23 @@ export default function (pi: ExtensionAPI) {
 					trimmedArgs.length > 0
 						? heuristicPaths(changedFiles, trimmedArgs)
 						: defaultPaths(changedFiles);
-				const fallbackPreferred = preferred.length > 0 ? preferred : defaultPaths(changedFiles);
+				const fallbackPreferred =
+					preferred.length > 0 ? preferred : defaultPaths(changedFiles);
 				if (fallbackPreferred.length === 0) {
-					ctx.ui.notify("No changed files from this session to commit", "warning");
+					ctx.ui.notify(
+						"No changed files from this session to commit",
+						"warning",
+					);
 					return;
 				}
 
-				const plan = await suggestPlan(ctx, repoRoot, changedFiles, fallbackPreferred, trimmedArgs);
+				const plan = await suggestPlan(
+					ctx,
+					repoRoot,
+					changedFiles,
+					fallbackPreferred,
+					trimmedArgs,
+				);
 				selectedPaths = plan.includePaths;
 				suggestedMessage = plan.commitMessage;
 			}
