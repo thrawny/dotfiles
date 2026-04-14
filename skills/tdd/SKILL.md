@@ -25,6 +25,8 @@ Use TDD as an interactive workflow: plan the next behavior, write one failing te
 5. RED:
    - write exactly one focused failing test
    - add only minimal scaffolding needed so the test fails for the right reason
+   - the target failure must be behavioral, not a compilation, syntax, import, or missing-symbol error
+   - if needed, create stubs or placeholder implementations first so the test can execute and fail on behavior
    - run the relevant test command and confirm the failure is real
    - summarize what failed and why
    - stop and wait for approval
@@ -44,6 +46,8 @@ Use TDD as an interactive workflow: plan the next behavior, write one failing te
 ## Guardrails
 
 - Never write implementation before the failing test.
+- In RED, do not stop at a compilation, syntax, import, or missing-symbol failure unless the user explicitly wants that as the first checkpoint.
+- Prefer minimal scaffolding so the failing test reaches the intended behavioral assertion.
 - Always show real test output before moving phases.
 - Keep tests descriptive, isolated, and resilient to internal refactors.
 - Prefer adding a new test for a new behavior instead of broadening one test excessively.
