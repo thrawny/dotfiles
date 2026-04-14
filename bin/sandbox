@@ -16,6 +16,7 @@ sandbox() {
   # Writable paths (add more as needed)
   local writable=(
     ~/.cache
+    ~/go
     ~/.local
     ~/.bun/install/cache
     ~/.codex
