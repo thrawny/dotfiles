@@ -125,30 +125,6 @@ return {
             local tabpage = vim.api.nvim_get_current_tabpage()
             local lifecycle = require("codediff.ui.lifecycle")
             local nav = require("codediff.ui.view.navigation")
-            local function on_last_hunk()
-              local sess = lifecycle.get_session(tabpage)
-              if not sess or not sess.stored_diff_result then
-                return true
-              end
-              local changes = sess.stored_diff_result.changes
-              if not changes or #changes == 0 then
-                return true
-              end
-              local cursor = vim.api.nvim_win_get_cursor(0)[1]
-              return cursor >= changes[#changes].modified.start_line
-            end
-            local function on_first_hunk()
-              local sess = lifecycle.get_session(tabpage)
-              if not sess or not sess.stored_diff_result then
-                return true
-              end
-              local changes = sess.stored_diff_result.changes
-              if not changes or #changes == 0 then
-                return true
-              end
-              local cursor = vim.api.nvim_win_get_cursor(0)[1]
-              return cursor <= changes[1].modified.start_line
-            end
             -- Suppress codediff's echo messages during navigation
             local orig_echo = vim.api.nvim_echo
             local function silent_nav(fn)
@@ -159,23 +135,30 @@ return {
                 error(err)
               end
             end
+            local cfg = require("codediff.config")
+            local function next_hunk_cross_file()
+              local old = cfg.options.diff.cycle_next_hunk
+              cfg.options.diff.cycle_next_hunk = false
+              local ok = nav.next_hunk()
+              cfg.options.diff.cycle_next_hunk = old
+              if not ok then
+                nav.next_file()
+              end
+            end
+            local function prev_hunk_cross_file()
+              local old = cfg.options.diff.cycle_next_hunk
+              cfg.options.diff.cycle_next_hunk = false
+              local ok = nav.prev_hunk()
+              cfg.options.diff.cycle_next_hunk = old
+              if not ok then
+                nav.prev_file()
+              end
+            end
             lifecycle.set_tab_keymap(tabpage, "n", "<Tab>", function()
-              silent_nav(function()
-                if on_last_hunk() then
-                  nav.next_file()
-                else
-                  nav.next_hunk()
-                end
-              end)
+              silent_nav(next_hunk_cross_file)
             end, { desc = "Next hunk (cross-file)" })
             lifecycle.set_tab_keymap(tabpage, "n", "<S-Tab>", function()
-              silent_nav(function()
-                if on_first_hunk() then
-                  nav.prev_file()
-                else
-                  nav.prev_hunk()
-                end
-              end)
+              silent_nav(prev_hunk_cross_file)
             end, { desc = "Prev hunk (cross-file)" })
             lifecycle.set_tab_keymap(tabpage, "n", "<C-n>", function()
               nav.next_file()
@@ -237,7 +220,11 @@ return {
         local markdown = require("review.export").generate_markdown()
         vim.fn.setreg("+", markdown)
         vim.fn.setreg("*", markdown)
-        vim.notify(string.format("Exported %d comment(s) to clipboard", count), vim.log.levels.INFO, { title = "review.nvim" })
+        vim.notify(
+          string.format("Exported %d comment(s) to clipboard", count),
+          vim.log.levels.INFO,
+          { title = "review.nvim" }
+        )
       end
 
       return {
