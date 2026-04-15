@@ -226,6 +226,20 @@ return {
         end
       end
 
+      local function export_review_to_clipboard_only()
+        local store = require("review.store")
+        local count = store.count()
+        if count == 0 then
+          vim.notify("No comments to export", vim.log.levels.WARN, { title = "review.nvim" })
+          return
+        end
+
+        local markdown = require("review.export").generate_markdown()
+        vim.fn.setreg("+", markdown)
+        vim.fn.setreg("*", markdown)
+        vim.notify(string.format("Exported %d comment(s) to clipboard", count), vim.log.levels.INFO, { title = "review.nvim" })
+      end
+
       return {
         {
           "<leader>rr",
@@ -249,12 +263,17 @@ return {
         { "<leader>rm", "<cmd>Review commits main HEAD<cr>", desc = "Review main..HEAD" },
         { "<leader>rc", "<cmd>Review commits<cr>", desc = "Review commits" },
         {
+          "<leader>re",
+          export_review_to_clipboard_only,
+          desc = "Review export",
+        },
+        {
           "<leader>rx",
           function()
             local review = require("review")
             local lifecycle = require("codediff.ui.lifecycle")
             local tabpage = vim.api.nvim_get_current_tabpage()
-            review.export()
+            export_review_to_clipboard_only()
             restore_review_buffers(lifecycle, tabpage)
             review.clear()
             vim.cmd("tabclose")
