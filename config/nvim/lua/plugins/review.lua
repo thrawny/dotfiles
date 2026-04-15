@@ -150,6 +150,7 @@ return {
       },
       diff = {
         layout = "inline",
+        show_hunk_navigation_message = false,
       },
       keymaps = {
         view = {
