@@ -38,12 +38,25 @@ function sessionIdFromContext(
 	return sessionIdFromFile(ctx.sessionManager.getSessionFile()) ?? ephemeralId;
 }
 
+function normalizedSessionName(
+	sessionName: string | null | undefined,
+): string | null {
+	const trimmed = sessionName?.trim();
+	return trimmed ? trimmed : null;
+}
+
 function runTrack(
 	event: TrackEvent,
 	payload: TrackPayload,
+	sessionName?: string | null,
 ): { ok: true } | { ok: false; error: string } {
 	try {
-		execFileSync("agent-switch", ["track", event], {
+		const args = ["track", event];
+		const normalizedName = normalizedSessionName(sessionName);
+		if (normalizedName) {
+			args.push("--session-name", normalizedName);
+		}
+		execFileSync("agent-switch", args, {
 			input: JSON.stringify(payload),
 			encoding: "utf8",
 			stdio: ["pipe", "ignore", "pipe"],
@@ -83,7 +96,7 @@ export default function (pi: ExtensionAPI) {
 			payload.transcript_path = sessionFile;
 		}
 
-		const result = runTrack(event, payload);
+		const result = runTrack(event, payload, pi.getSessionName());
 
 		if (!result.ok) {
 			disabled = true;
