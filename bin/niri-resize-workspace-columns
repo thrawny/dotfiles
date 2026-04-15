@@ -4,22 +4,24 @@
 set -euo pipefail
 
 usage() {
-  echo "Usage: niri-resize-workspace-columns <proportion> [<proportion> ...]" >&2
+  echo "Usage: niri-resize-workspace-columns [--toggle] <proportion> [<proportion> ...]" >&2
   echo "Examples:" >&2
-  echo "  niri-resize-workspace-columns 0.5         # apply 0.5 to every column" >&2
-  echo "  niri-resize-workspace-columns 1/3         # apply exact thirds to every column" >&2
-  echo "  niri-resize-workspace-columns 0.5 0.33 1  # set each column individually" >&2
+  echo "  niri-resize-workspace-columns 0.5               # apply 0.5 to every column" >&2
+  echo "  niri-resize-workspace-columns 1/3               # apply exact thirds to every column" >&2
+  echo "  niri-resize-workspace-columns 0.5 0.33 1        # set each column individually" >&2
+  echo "  niri-resize-workspace-columns --toggle 0.5 1/3  # detect current layout, then flip it" >&2
 }
 
-normalize_width() {
+parse_proportion() {
   local input="$1"
+  local proportion
 
   if [[ ! "$input" =~ ^([0-9]+([.][0-9]+)?|[.][0-9]+|[0-9]+/[0-9]+)$ ]]; then
     echo "Invalid proportion: $input" >&2
     exit 1
   fi
 
-  awk -v value="$input" 'BEGIN {
+  if ! proportion=$(awk -v value="$input" 'BEGIN {
     if (value ~ /\//) {
       split(value, parts, "/")
       if (parts[2] == 0) {
@@ -30,16 +32,170 @@ normalize_width() {
       proportion = value + 0
     }
 
-    pct = proportion * 100
-    if (pct <= 0) {
+    if (proportion <= 0) {
       exit 1
     }
 
+    out = sprintf("%.12f", proportion)
+    sub(/0+$/, "", out)
+    sub(/\.$/, "", out)
+    print out
+  }'); then
+    echo "Invalid proportion: $input" >&2
+    exit 1
+  fi
+
+  printf '%s\n' "$proportion"
+}
+
+normalize_width() {
+  local proportion
+  proportion=$(parse_proportion "$1")
+
+  awk -v proportion="$proportion" 'BEGIN {
+    pct = proportion * 100
     out = sprintf("%.12f", pct)
     sub(/0+$/, "", out)
     sub(/\.$/, "", out)
     print out "%"
   }'
+}
+
+nearest_preset_index() {
+  local current="$1"
+  shift
+
+  awk -v current="$current" -v preset_values="$*" 'BEGIN {
+    count = split(preset_values, values, " ")
+    best_index = -1
+    best_distance = 0
+
+    for (i = 1; i <= count; i++) {
+      distance = current - values[i]
+      if (distance < 0) {
+        distance = -distance
+      }
+
+      if (best_index == -1 || distance < best_distance) {
+        best_index = i - 1
+        best_distance = distance
+      }
+    }
+
+    print best_index
+  }'
+}
+
+detect_toggle_width() {
+  local focused_workspace_id="$1"
+  local focused_output_name="$2"
+  local windows_json="$3"
+  shift 3
+  local -a presets=("$@")
+
+  if [[ "${#presets[@]}" -eq 0 ]]; then
+    echo "Toggle mode requires at least one preset" >&2
+    exit 1
+  fi
+
+  if [[ -z "$focused_output_name" ]]; then
+    printf '%s\n' "${presets[0]}"
+    return 0
+  fi
+
+  local output_width
+  output_width=$(niri msg -j outputs | jq -r --arg output_name "$focused_output_name" '
+    .[]
+    | select(.name == $output_name)
+    | .logical.width? // empty
+  ')
+
+  if [[ -z "$output_width" ]]; then
+    printf '%s\n' "${presets[0]}"
+    return 0
+  fi
+
+  local -a preset_values=()
+  local preset
+  for preset in "${presets[@]}"; do
+    preset_values+=("$(parse_proportion "$preset")")
+  done
+
+  local -a column_ratios=()
+  mapfile -t column_ratios < <(
+    jq -r --argjson workspace_id "$focused_workspace_id" --argjson output_width "$output_width" '
+      map(
+        select(
+          .workspace_id == $workspace_id
+          and (.is_floating | not)
+          and (.layout.pos_in_scrolling_layout != null)
+        )
+      )
+      | sort_by(.layout.pos_in_scrolling_layout[0], .layout.pos_in_scrolling_layout[1])
+      | group_by(.layout.pos_in_scrolling_layout[0])
+      | map(first.layout.tile_size[0] / $output_width)
+      | .[]
+    ' <<<"$windows_json"
+  )
+
+  if [[ "${#column_ratios[@]}" -eq 0 ]]; then
+    printf '%s\n' "${presets[0]}"
+    return 0
+  fi
+
+  local -a votes=()
+  local idx
+  for ((idx = 0; idx < ${#presets[@]}; idx++)); do
+    votes[idx]=0
+  done
+
+  local ratio nearest_index
+  for ratio in "${column_ratios[@]}"; do
+    nearest_index=$(nearest_preset_index "$ratio" "${preset_values[@]}")
+    votes[$nearest_index]=$((votes[$nearest_index] + 1))
+  done
+
+  local best_index=-1
+  local max_votes=-1
+  local tied=false
+  for ((idx = 0; idx < ${#votes[@]}; idx++)); do
+    if (( votes[idx] > max_votes )); then
+      best_index=$idx
+      max_votes=${votes[idx]}
+      tied=false
+    elif (( votes[idx] == max_votes )); then
+      tied=true
+    fi
+  done
+
+  if [[ "$tied" == true ]]; then
+    local focused_ratio
+    focused_ratio=$(jq -r --argjson workspace_id "$focused_workspace_id" --argjson output_width "$output_width" '
+      map(
+        select(
+          .workspace_id == $workspace_id
+          and (.is_floating | not)
+          and .is_focused
+          and (.layout.pos_in_scrolling_layout != null)
+        )
+      )
+      | if length == 0 then empty else (.[0].layout.tile_size[0] / $output_width) end
+    ' <<<"$windows_json")
+
+    if [[ -n "$focused_ratio" ]]; then
+      best_index=$(nearest_preset_index "$focused_ratio" "${preset_values[@]}")
+    else
+      local average_ratio
+      average_ratio=$(printf '%s\n' "${column_ratios[@]}" | awk 'NR > 0 { sum += $1 } END { if (NR > 0) print sum / NR }')
+      if [[ -n "$average_ratio" ]]; then
+        best_index=$(nearest_preset_index "$average_ratio" "${preset_values[@]}")
+      fi
+    fi
+  fi
+
+  local next_index
+  next_index=$(( (best_index + 1 + ${#presets[@]}) % ${#presets[@]} ))
+  printf '%s\n' "${presets[$next_index]}"
 }
 
 focus_column_for_resize() {
@@ -51,7 +207,7 @@ focus_column_for_resize() {
   niri msg action focus-column "$column_index" >/dev/null
 
   focused_column=$(niri msg -j focused-window 2>/dev/null | jq -r '.layout.pos_in_scrolling_layout[0] // empty' 2>/dev/null || true)
-  if [[ "$focused_column" == "$((column_index - 1))" ]]; then
+  if [[ "$focused_column" == "$column_index" ]]; then
     return 0
   fi
 
@@ -59,15 +215,32 @@ focus_column_for_resize() {
 }
 
 main() {
+  local toggle_mode=false
+  if [[ "${1:-}" == "--toggle" ]]; then
+    toggle_mode=true
+    shift
+  fi
+
   if [[ "$#" -eq 0 ]]; then
     usage
     exit 1
   fi
 
-  local focused_workspace_id focused_window_id windows_json
-  focused_workspace_id=$(niri msg -j workspaces | jq -r '.[] | select(.is_focused) | .id')
+  local focused_workspace_json focused_workspace_id focused_output_name focused_window_id windows_json
+  if ! focused_workspace_json=$(niri msg -j workspaces | jq -ce '.[] | select(.is_focused)'); then
+    echo "Unable to determine the focused workspace" >&2
+    exit 1
+  fi
+
+  focused_workspace_id=$(jq -r '.id' <<<"$focused_workspace_json")
+  focused_output_name=$(jq -r '.output // empty' <<<"$focused_workspace_json")
   focused_window_id=$(niri msg -j focused-window 2>/dev/null | jq -r '.id // empty' 2>/dev/null || true)
   windows_json=$(niri msg -j windows)
+
+  local -a requested_widths=("$@")
+  if [[ "$toggle_mode" == true ]]; then
+    requested_widths=("$(detect_toggle_width "$focused_workspace_id" "$focused_output_name" "$windows_json" "${requested_widths[@]}")")
+  fi
 
   mapfile -t column_window_ids < <(
     jq -r --argjson workspace_id "$focused_workspace_id" '
@@ -90,17 +263,17 @@ main() {
     exit 1
   fi
 
-  if [[ "$#" -ne 1 && "$#" -ne "${#column_window_ids[@]}" ]]; then
-    echo "Expected either 1 proportion for all columns or ${#column_window_ids[@]} proportions for the focused workspace, got $#" >&2
+  if [[ "${#requested_widths[@]}" -ne 1 && "${#requested_widths[@]}" -ne "${#column_window_ids[@]}" ]]; then
+    echo "Expected either 1 proportion for all columns or ${#column_window_ids[@]} proportions for the focused workspace, got ${#requested_widths[@]}" >&2
     exit 1
   fi
 
   local i width input_width
   for ((i = 1; i <= ${#column_window_ids[@]}; i++)); do
-    if [[ "$#" -eq 1 ]]; then
-      input_width="$1"
+    if [[ "${#requested_widths[@]}" -eq 1 ]]; then
+      input_width="${requested_widths[0]}"
     else
-      input_width="${!i}"
+      input_width="${requested_widths[$((i - 1))]}"
     fi
 
     width=$(normalize_width "$input_width")
