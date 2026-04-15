@@ -1,7 +1,17 @@
+local codediff_dir = vim.fn.expand("~/code/codediff.nvim")
+local codediff_spec = {
+  name = "esmuellert/codediff.nvim",
+}
+
+if (vim.uv or vim.loop).fs_stat(codediff_dir) then
+  codediff_spec.dir = codediff_dir
+else
+  codediff_spec[1] = "thrawny/codediff.nvim"
+  codediff_spec.branch = "tab-hunk-crossfile"
+end
+
 return {
-  {
-    dir = vim.fn.expand("~/code/codediff.nvim"),
-    name = "esmuellert/codediff.nvim",
+  vim.tbl_extend("force", codediff_spec, {
     config = function(_, opts)
       require("codediff").setup(opts)
     end,
@@ -163,7 +173,7 @@ return {
         },
       },
     },
-  },
+  }),
 
   {
     "georgeguimaraes/review.nvim",
