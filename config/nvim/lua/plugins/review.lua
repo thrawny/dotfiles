@@ -1,6 +1,10 @@
 return {
   {
-    "esmuellert/codediff.nvim",
+    dir = vim.fn.expand("~/code/codediff.nvim"),
+    name = "esmuellert/codediff.nvim",
+    config = function(_, opts)
+      require("codediff").setup(opts)
+    end,
     init = function()
       -- Custom tabline: show "Review" for codediff tabs
       vim.o.tabline = "%!v:lua.require'config.codediff_tabline'()"
@@ -8,9 +12,9 @@ return {
       -- Monkeypatch: replace codediff's winbar-clearing autocmd with one that sets our winbar
       vim.api.nvim_create_autocmd("User", {
         pattern = "CodeDiffOpen",
-        callback = function()
+        callback = function(ev)
           vim.defer_fn(function()
-            local tabpage = vim.api.nvim_get_current_tabpage()
+            local tabpage = ev.data and ev.data.tabpage or vim.api.nvim_get_current_tabpage()
             local lifecycle = require("codediff.ui.lifecycle")
             local sess = lifecycle.get_session(tabpage)
             if not sess then
@@ -119,24 +123,25 @@ return {
       })
 
       vim.api.nvim_create_autocmd("User", {
-        pattern = { "CodeDiffOpen", "CodeDiffFileSelect" },
+        pattern = { "CodeDiffOpen", "CodeDiffRender" },
         callback = function(ev)
           local tabpage = ev.data and ev.data.tabpage or vim.api.nvim_get_current_tabpage()
-          vim.defer_fn(function()
+          vim.schedule(function()
             if not vim.api.nvim_tabpage_is_valid(tabpage) then
               return
             end
-
             local lifecycle = require("codediff.ui.lifecycle")
+            if not lifecycle.get_session(tabpage) then
+              return
+            end
             local nav = require("codediff.ui.view.navigation")
-            lifecycle.set_tab_keymap(tabpage, "n", "<Tab>", nav.next_hunk, { desc = "Next hunk" })
-            lifecycle.set_tab_keymap(tabpage, "n", "<C-i>", nav.next_hunk, { desc = "Next hunk" })
-            lifecycle.set_tab_keymap(tabpage, "n", "<S-Tab>", nav.prev_hunk, { desc = "Prev hunk" })
-            lifecycle.set_tab_keymap(tabpage, "n", "<C-n>", nav.next_file, { desc = "Next file" })
-            lifecycle.set_tab_keymap(tabpage, "n", "<C-p>", nav.prev_file, { desc = "Prev file" })
-          end, 300)
+            lifecycle.set_tab_keymap(tabpage, "n", "<Tab>", nav.next_hunk_or_file, { desc = "Next hunk or file" })
+            lifecycle.set_tab_keymap(tabpage, "n", "<C-i>", nav.next_hunk_or_file, { desc = "Next hunk or file" })
+            lifecycle.set_tab_keymap(tabpage, "n", "<S-Tab>", nav.prev_hunk_or_file, { desc = "Prev hunk or file" })
+          end)
         end,
       })
+
     end,
     opts = {
       highlights = {
@@ -150,6 +155,10 @@ return {
         view = {
           next_hunk = "}",
           prev_hunk = "{",
+          next_hunk_or_file = "<Tab>",
+          prev_hunk_or_file = "<S-Tab>",
+          next_file = "<C-n>",
+          prev_file = "<C-p>",
         },
       },
     },
