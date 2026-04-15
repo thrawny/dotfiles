@@ -211,6 +211,10 @@ return {
       "MunifTanjim/nui.nvim",
     },
     cmd = { "Review" },
+    config = function(_, opts)
+      require("review").setup(opts)
+      require("config.review_monkeypatch").apply()
+    end,
     keys = function()
       local function restore_review_buffers(lifecycle, tabpage)
         local orig_buf, mod_buf = lifecycle.get_buffers(tabpage)
