@@ -120,52 +120,20 @@ return {
 
       vim.api.nvim_create_autocmd("User", {
         pattern = { "CodeDiffOpen", "CodeDiffFileSelect" },
-        callback = function()
+        callback = function(ev)
+          local tabpage = ev.data and ev.data.tabpage or vim.api.nvim_get_current_tabpage()
           vim.defer_fn(function()
-            local tabpage = vim.api.nvim_get_current_tabpage()
+            if not vim.api.nvim_tabpage_is_valid(tabpage) then
+              return
+            end
+
             local lifecycle = require("codediff.ui.lifecycle")
             local nav = require("codediff.ui.view.navigation")
-            -- Suppress codediff's echo messages during navigation
-            local orig_echo = vim.api.nvim_echo
-            local function silent_nav(fn)
-              vim.api.nvim_echo = function() end
-              local ok, err = pcall(fn)
-              vim.api.nvim_echo = orig_echo
-              if not ok then
-                error(err)
-              end
-            end
-            local cfg = require("codediff.config")
-            local function next_hunk_cross_file()
-              local old = cfg.options.diff.cycle_next_hunk
-              cfg.options.diff.cycle_next_hunk = false
-              local ok = nav.next_hunk()
-              cfg.options.diff.cycle_next_hunk = old
-              if not ok then
-                nav.next_file()
-              end
-            end
-            local function prev_hunk_cross_file()
-              local old = cfg.options.diff.cycle_next_hunk
-              cfg.options.diff.cycle_next_hunk = false
-              local ok = nav.prev_hunk()
-              cfg.options.diff.cycle_next_hunk = old
-              if not ok then
-                nav.prev_file()
-              end
-            end
-            lifecycle.set_tab_keymap(tabpage, "n", "<Tab>", function()
-              silent_nav(next_hunk_cross_file)
-            end, { desc = "Next hunk (cross-file)" })
-            lifecycle.set_tab_keymap(tabpage, "n", "<S-Tab>", function()
-              silent_nav(prev_hunk_cross_file)
-            end, { desc = "Prev hunk (cross-file)" })
-            lifecycle.set_tab_keymap(tabpage, "n", "<C-n>", function()
-              nav.next_file()
-            end, { desc = "Next file" })
-            lifecycle.set_tab_keymap(tabpage, "n", "<C-p>", function()
-              nav.prev_file()
-            end, { desc = "Prev file" })
+            lifecycle.set_tab_keymap(tabpage, "n", "<Tab>", nav.next_hunk, { desc = "Next hunk" })
+            lifecycle.set_tab_keymap(tabpage, "n", "<C-i>", nav.next_hunk, { desc = "Next hunk" })
+            lifecycle.set_tab_keymap(tabpage, "n", "<S-Tab>", nav.prev_hunk, { desc = "Prev hunk" })
+            lifecycle.set_tab_keymap(tabpage, "n", "<C-n>", nav.next_file, { desc = "Next file" })
+            lifecycle.set_tab_keymap(tabpage, "n", "<C-p>", nav.prev_file, { desc = "Prev file" })
           end, 300)
         end,
       })
@@ -271,7 +239,12 @@ return {
         },
       }
     end,
-    opts = {},
+    opts = {
+      keymaps = {
+        next_file = false,
+        prev_file = false,
+      },
+    },
   },
 
   -- Remap {/} to hunk navigation in normal buffers (gitsigns)
