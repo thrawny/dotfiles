@@ -4,6 +4,7 @@ import type {
 	ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
+import { SESSION_NAMED_EVENT } from "./session-namer";
 
 const START_CAP = "\ue0b6";
 const SEP = "\ue0b4";
@@ -116,7 +117,11 @@ function getGitChanges(): { added: number; removed: number } | null {
 	}
 }
 
-function install(ctx: ExtensionContext, getThinkingLevel: () => string) {
+function install(
+	ctx: ExtensionContext,
+	getThinkingLevel: () => string,
+	getSessionName: () => string | undefined,
+) {
 	ctx.ui.setFooter((tui, _theme, footerData) => {
 		const unsub = footerData.onBranchChange(() => tui.requestRender());
 
@@ -125,6 +130,7 @@ function install(ctx: ExtensionContext, getThinkingLevel: () => string) {
 			invalidate() {},
 			render(width: number): string[] {
 				const branch = footerData.getGitBranch();
+				const sessionName = getSessionName()?.trim();
 				const changes = getGitChanges();
 				const runtimeBadge = getRuntimeBadge();
 				const usage = ctx.getContextUsage();
@@ -191,6 +197,21 @@ function install(ctx: ExtensionContext, getThinkingLevel: () => string) {
 
 				const leftWidth = visibleWidth(left);
 				const rightWidth = visibleWidth(right);
+				const centerText = sessionName ? ` ${sessionName} ` : "";
+				const centerSlot = width - leftWidth - rightWidth;
+				if (centerText && centerSlot > 1) {
+					const renderedCenter = truncateToWidth(centerText, centerSlot, "");
+					if (renderedCenter) {
+						const centerWidth = visibleWidth(renderedCenter);
+						const centerPad = centerSlot - centerWidth;
+						if (centerPad >= 0) {
+							const leftPad = " ".repeat(Math.floor(centerPad / 2));
+							const rightPad = " ".repeat(centerPad - Math.floor(centerPad / 2));
+							return [`${left}${leftPad}${renderedCenter}${rightPad}${right}`];
+						}
+					}
+				}
+
 				if (leftWidth + 2 + rightWidth <= width) {
 					const pad = " ".repeat(Math.max(2, width - leftWidth - rightWidth));
 					return [`${left}${pad}${right}`];
@@ -203,14 +224,35 @@ function install(ctx: ExtensionContext, getThinkingLevel: () => string) {
 }
 
 export default function (pi: ExtensionAPI) {
+	let currentCtx: ExtensionContext | undefined;
+
+	const apply = (ctx: ExtensionContext) => {
+		currentCtx = ctx;
+		install(ctx, () => pi.getThinkingLevel(), () => pi.getSessionName());
+	};
+
 	pi.on("session_start", async (_event, ctx) => {
-		install(ctx, () => pi.getThinkingLevel());
+		apply(ctx);
+	});
+
+	pi.on("session_switch", async (_event, ctx) => {
+		apply(ctx);
+	});
+
+	pi.on("session_shutdown", async () => {
+		currentCtx = undefined;
+	});
+
+	pi.events.on(SESSION_NAMED_EVENT, () => {
+		if (currentCtx) {
+			apply(currentCtx);
+		}
 	});
 
 	pi.registerCommand("statusline", {
 		description: "Apply Claude-like powerline status footer",
 		handler: async (_args, ctx) => {
-			install(ctx, () => pi.getThinkingLevel());
+			apply(ctx);
 			ctx.ui.notify("Applied status line", "info");
 		},
 	});
