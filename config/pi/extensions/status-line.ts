@@ -4,7 +4,6 @@ import type {
 	ExtensionContext,
 } from "@mariozechner/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
-import { SESSION_NAMED_EVENT } from "./session-namer";
 
 const START_CAP = "\ue0b6";
 const SEP = "\ue0b4";
@@ -241,12 +240,6 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_shutdown", async () => {
 		currentCtx = undefined;
-	});
-
-	pi.events.on(SESSION_NAMED_EVENT, () => {
-		if (currentCtx) {
-			apply(currentCtx);
-		}
 	});
 
 	pi.registerCommand("statusline", {
