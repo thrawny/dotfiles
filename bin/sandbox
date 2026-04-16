@@ -70,6 +70,33 @@ sandbox() {
     )
   fi
 
+  # Optionally create a dedicated SSH agent for a specific key.
+  if [[ -n "${SANDBOX_SSH_KEY:-}" ]]; then
+    local key="${SANDBOX_SSH_KEY/#\~/$HOME}"
+    local runtime_dir="${XDG_RUNTIME_DIR:-/run/user/${UID}}"
+    local key_id
+
+    if resolved_key=$(realpath "$key" 2>/dev/null); then
+      key="$resolved_key"
+    fi
+    key_id=$(printf '%s' "$key" | sha256sum | cut -d' ' -f1)
+
+    [[ -d "$runtime_dir" ]] || {
+      echo "sandbox: runtime dir not found: $runtime_dir" >&2
+      exit 1
+    }
+
+    export SSH_AUTH_SOCK="$runtime_dir/sandbox-ssh-${key_id}.sock"
+
+    if ! timeout 2 ssh-add -l >/dev/null 2>&1; then
+      rm -f "$SSH_AUTH_SOCK"
+      eval "$(ssh-agent -a "$SSH_AUTH_SOCK")" >/dev/null 2>&1
+    fi
+
+    timeout 5 ssh-add "$key" </dev/null 2>/dev/null || true
+    export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -F /dev/null}"
+  fi
+
   # Forward SSH agent socket so git can authenticate without exposing ~/.ssh
   if [[ -n "${SSH_AUTH_SOCK:-}" && -S "${SSH_AUTH_SOCK}" ]]; then
     args+=(--ro-bind "$SSH_AUTH_SOCK" "$SSH_AUTH_SOCK")
