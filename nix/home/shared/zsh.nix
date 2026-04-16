@@ -209,6 +209,8 @@
             zvm_after_init() {
               source ${pkgs.fzf}/share/fzf/key-bindings.zsh
               source ${pkgs.fzf}/share/fzf/completion.zsh
+              bindkey -M viins '^F' forward-word
+              bindkey -M emacs '^F' forward-word
             }
           else
             # In Neovim terminal, no vi-mode - load fzf directly
