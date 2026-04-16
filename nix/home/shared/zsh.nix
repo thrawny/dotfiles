@@ -221,16 +221,6 @@
           bindkey ^F forward-word
           bindkey ^f forward-word
 
-          # ===== Auto-start tmux in devpod =====
-          if [[ -n "$DEVPOD" ]] && [[ -z "$TMUX" ]]; then
-            tmux attach-session -t main 2>/dev/null || tmux new-session -s main
-            exit
-          fi
-
-          if [[ -n "$DEVPOD" ]] && [[ -n "$TMUX" ]]; then
-            alias exit='tmux detach'
-          fi
-
           # ===== Zoxide =====
           # Only init for interactive shells (avoids broken Claude Code snapshot)
           [[ -o interactive ]] && eval "$(zoxide init --cmd cd zsh)"

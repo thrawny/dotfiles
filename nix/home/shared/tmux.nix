@@ -127,12 +127,6 @@ let
     set -g message-style 'fg=${fg} bg=${darkGray} bold'
   '';
 
-  # DevPod-specific settings
-  devpodConfig = ''
-    if-shell '[ -n "$DEVPOD" ]' 'set -g status off'
-    if-shell '[ -n "$DEVPOD" ]' 'set -g detach-on-destroy off'
-  '';
-
 in
 {
   programs.tmux = {
@@ -203,9 +197,6 @@ in
 
       "# === Status Bar ==="
       statusBar
-
-      "# === DevPod ==="
-      devpodConfig
 
       "# === Agent Switch Daemon ==="
       ''
