@@ -1,6 +1,7 @@
 local codediff_dir = vim.fn.expand("~/code/codediff.nvim")
+local codediff_plugin_name = "codediff.nvim"
 local codediff_spec = {
-  name = "esmuellert/codediff.nvim",
+  name = codediff_plugin_name,
 }
 
 if (vim.uv or vim.loop).fs_stat(codediff_dir) then
@@ -178,7 +179,7 @@ return {
   {
     "georgeguimaraes/review.nvim",
     dependencies = {
-      "esmuellert/codediff.nvim",
+      codediff_plugin_name,
       "MunifTanjim/nui.nvim",
     },
     cmd = { "Review" },
