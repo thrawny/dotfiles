@@ -1,6 +1,11 @@
 ---
 name: git-commit
-description: Create focused git commits for the current task. Use when the user asks to commit, make a git commit, stage and commit changes, or write a commit message. DIRECT trigger: if the user's whole message is just "commit" or just "gc", use this skill. Determine the correct files to stage, ask if scope is unclear, then stage and commit with a concise imperative message.
+description: >
+  Create focused git commits for the current task. Use when the user asks to
+  commit, make a git commit, stage and commit changes, or write a commit
+  message. DIRECT trigger: if the user's whole message is just "commit" or just
+  "gc", use this skill. Determine the correct files to stage, ask if scope is
+  unclear, then stage and commit with a concise imperative message.
 ---
 
 # Git Commit
