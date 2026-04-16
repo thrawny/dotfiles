@@ -1,5 +1,5 @@
 {
-  "defaultProvider": "openai",
+  "defaultProvider": "openai-codex",
   "defaultModel": "gpt-5.4",
   "defaultThinkingLevel": "medium",
   "theme": "monokai-pi",
@@ -8,7 +8,15 @@
     "anthropic/claude-sonnet-4-6",
     "anthropic/claude-opus-4-6",
     "fireworks/accounts/fireworks/models/kimi-k2p5",
-    "openai-codex/gpt-5.4"
+    "openai-codex/gpt-5.4",
+    "fireworks/accounts/fireworks/models/glm-5p1",
+    "claude-bridge/claude-opus-4-6",
+    "claude-bridge/claude-sonnet-4-6",
+    "openai-codex/gpt-5.3-codex-spark"
   ],
-  "hideThinkingBlock": true
+  "hideThinkingBlock": true,
+  "packages": [
+    "npm:pi-claude-bridge",
+    "npm:@sting8k/pi-vcc"
+  ]
 }
