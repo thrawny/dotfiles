@@ -236,7 +236,7 @@
           [[ -o interactive ]] && eval "$(zoxide init --cmd cd zsh)"
 
           # ===== Secrets & Local Overrides =====
-          if [ -f ~/.secrets ]; then
+          if [[ -z "$SANDBOX" ]] && [ -f ~/.secrets ]; then
             set -a
             source ~/.secrets
             set +a
