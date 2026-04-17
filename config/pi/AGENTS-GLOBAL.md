@@ -1,3 +1,1 @@
-# Global Pi Instructions
-
 

@@ -38,20 +38,17 @@ hack-nix-conf-caches:
 
     # Needed for daemon/root builds to actually query these caches.
     add_value substituters "https://cache.numtide.com"
-    add_value substituters "https://claude-code.cachix.org"
     add_value substituters "https://niri.cachix.org"
     add_value substituters "https://zmx.cachix.org"
     add_value substituters "https://thrawny.cachix.org"
 
     # Keep trusted-substituters aligned for explicit extra-substituter usage.
     add_value trusted-substituters "https://cache.numtide.com"
-    add_value trusted-substituters "https://claude-code.cachix.org"
     add_value trusted-substituters "https://niri.cachix.org"
     add_value trusted-substituters "https://zmx.cachix.org"
     add_value trusted-substituters "https://thrawny.cachix.org"
 
     add_value trusted-public-keys "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
-    add_value trusted-public-keys "claude-code.cachix.org-1:YeXf2aNu7UTX8Vwrze0za1WEDS+4DuI2kVeWEE4fsRk="
     add_value trusted-public-keys "niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964="
     add_value trusted-public-keys "zmx.cachix.org-1:9E7zdDiSiG9PnSl8RFHbZ3AW2NmIy/7SPK9rRwed7r4="
     add_value trusted-public-keys "thrawny.cachix.org-1:RCPvyTqc1GNCRnAhHAaP2ZOnsWoaZQyhhCqf33lMOcg="
