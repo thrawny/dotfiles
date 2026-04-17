@@ -152,7 +152,6 @@ return {
           end)
         end,
       })
-
     end,
     opts = {
       highlights = {

@@ -26,7 +26,6 @@
     # Pin to PR #771: fix deprecated systemd.sleep.extraConfig for NixOS 26.05
     srvos.url = "github:nix-community/srvos/752772adba542cab1162ad271f0b3d69adc59349";
     srvos.inputs.nixpkgs.follows = "nixpkgs";
-    claude-code-nix.url = "github:sadjow/claude-code-nix";
     llm-agents.url = "github:numtide/llm-agents.nix";
     zmx.url = "github:thrawny/zmx-flake";
   };
@@ -47,7 +46,6 @@
       nixpkgs-xwayland,
       disko,
       srvos,
-      claude-code-nix,
       llm-agents,
       zmx,
       ...
@@ -56,7 +54,6 @@
       inherit (nixpkgs) lib;
       flakeArgs = {
         inherit
-          claude-code-nix
           llm-agents
           nix-index-database
           zmx

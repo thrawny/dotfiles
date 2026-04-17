@@ -150,7 +150,7 @@ eval-all:
         exit 1
     fi
 
-# Update AI tool flake inputs (claude-code-nix, llm-agents) and switch
+# Update AI tool flake inputs (llm-agents) and switch
 ai:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -171,7 +171,7 @@ ai:
     old_codex=$(get_version codex)
     old_pi=$(get_version pi)
 
-    nix flake update claude-code-nix llm-agents
+    nix flake update llm-agents
 
     if git diff --quiet -- flake.lock; then
         echo "No updates available."
