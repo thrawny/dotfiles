@@ -185,7 +185,9 @@ function install(
 				const left = `${fgTrue(segmentSpecs[0].bg)}${START_CAP}${reset()}${segments.join("")}`;
 
 				const thinking = getThinkingLevel();
-				let rightText = ctx.model?.id || "no-model";
+				let rightText = ctx.model
+					? `${ctx.model.provider}/${ctx.model.id}`
+					: "no-model";
 				if (ctx.model?.reasoning) {
 					rightText =
 						thinking === "off"
@@ -205,7 +207,9 @@ function install(
 						const centerPad = centerSlot - centerWidth;
 						if (centerPad >= 0) {
 							const leftPad = " ".repeat(Math.floor(centerPad / 2));
-							const rightPad = " ".repeat(centerPad - Math.floor(centerPad / 2));
+							const rightPad = " ".repeat(
+								centerPad - Math.floor(centerPad / 2),
+							);
 							return [`${left}${leftPad}${renderedCenter}${rightPad}${right}`];
 						}
 					}
@@ -227,7 +231,11 @@ export default function (pi: ExtensionAPI) {
 
 	const apply = (ctx: ExtensionContext) => {
 		currentCtx = ctx;
-		install(ctx, () => pi.getThinkingLevel(), () => pi.getSessionName());
+		install(
+			ctx,
+			() => pi.getThinkingLevel(),
+			() => pi.getSessionName(),
+		);
 	};
 
 	pi.on("session_start", async (_event, ctx) => {
