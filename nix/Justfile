@@ -206,6 +206,23 @@ ai:
     git add flake.lock
     git commit -m "chore(nix): update AI flake inputs" -- flake.lock
 
+# Update all flake inputs and switch
+update:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    nix flake update
+
+    if git diff --quiet -- flake.lock; then
+        echo "No updates available."
+        exit 0
+    fi
+
+    just switch
+
+    git add flake.lock
+    git commit -m "chore(nix): update flake inputs" -- flake.lock
+
 # Build and import the headless Incus/LXC image (optionally to a remote)
 incus-image remote='':
     #!/usr/bin/env bash

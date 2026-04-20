@@ -20,6 +20,9 @@ install-rust-if-not-headless:
 # Update AI tool flake inputs and switch
 ai: (nix::ai)
 
+# Update all flake inputs and switch
+update: (nix::update)
+
 
 # === Formatters ===
 
