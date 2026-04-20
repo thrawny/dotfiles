@@ -112,7 +112,6 @@ let
       repeat = false;
     };
     "Mod+F".action.maximize-column = [ ];
-    "Mod+Shift+F".action.fullscreen-window = [ ];
     "Mod+V".action.toggle-window-floating = [ ];
     "Mod+Shift+V".action.switch-focus-between-floating-and-tiling = [ ];
     "Mod+G".action.toggle-column-tabbed-display = [ ];

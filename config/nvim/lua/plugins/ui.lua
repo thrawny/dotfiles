@@ -67,6 +67,18 @@ return {
         hidden = true, -- Show hidden files by default
         ignored = true, -- Show gitignored files by default
         exclude = { ".DS_Store" },
+        win = {
+          input = {
+            keys = {
+              ["<c-g>"] = false,
+            },
+          },
+          list = {
+            keys = {
+              ["<c-g>"] = false,
+            },
+          },
+        },
       },
       terminal = {
         win = {

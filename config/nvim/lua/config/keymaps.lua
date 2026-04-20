@@ -25,6 +25,10 @@ vim.keymap.set("n", "<Leader>o", ":noh<CR>", { desc = "Clear search highlighting
 -- Terminal mode: Ctrl+A goes to start of line (shell behavior)
 vim.keymap.set("t", "<C-a>", "<Home>", { desc = "Go to start of line in terminal" })
 
+-- Leave Ctrl+G available for the interactive-shell overlay handoff.
+-- Disable Neovim's built-in Ctrl+G behavior across common modes.
+vim.keymap.set({ "n", "x", "s", "o", "i", "c", "t" }, "<C-g>", "<Nop>", { desc = "Unbind Ctrl+G" })
+
 -- Reload workspace after external file changes (e.g. after an AI coding session)
 -- Force-stops LSP, reloads all buffers from disk, clears diagnostics, then restarts.
 -- This avoids the stale-buffer problem where LspRestart alone sends outdated content
