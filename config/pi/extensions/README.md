@@ -9,7 +9,7 @@ Examples:
 - `my-extension/index.ts`
 
 Current custom extensions include:
-- `loop.ts` — session-local recurring prompts via `/loop 5m -- ...`
+- `loop/` — session-local recurring loop tool, enabled per session by `/loop ...`
 - `show-active-tools.ts` — `/show-active-tools` for debugging active tool state
 
 ## Agent Switch integration
