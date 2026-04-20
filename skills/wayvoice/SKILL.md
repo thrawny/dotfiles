@@ -1,21 +1,22 @@
 ---
 name: wayvoice
 description: >
-  Detect and fix voice dictation errors by adding wayvoice keywords and text replacements.
-  DIRECT: Any mention of fixing a misspelling, typo, mistranscription, or wrong word — even
-  terse "fix that misspelling" with no context. Also "it keeps saying X instead of Y".
-  PROACTIVE: The user dictates via voice. ALWAYS trigger when you notice real English words
-  that don't fit the technical context — these are voice errors. Watch for: technical terms as
-  common words ("nicks"=Nix, "gifts"=git, "home brew"=Homebrew, "doc her"=Docker, "post
-  gress"=Postgres), split words ("way land"=Wayland), proper nouns as dictionary words
-  ("clothes"=Claude). If a word is valid English but wrong for the programming domain, assume
-  voice error and trigger this skill.
-  Not for wayvoice configuration or microphone setup.
+  Run `wayvoice keyword add` or `wayvoice replace add` to teach voice dictation a new term or
+  fix a recurring mistranscription. Load this skill at the moment you decide to add a keyword
+  or replacement — its purpose is the exact command syntax, not detection.
+  Trigger when: (1) the user says "add a wayvoice keyword/replacement", "fix that
+  misspelling", "it keeps saying X instead of Y"; OR (2) you notice a mistranscription in the
+  user's voice input (real English words wrong for context — "nicks"=Nix, "clothes"=Claude,
+  "way land"=Wayland, "doc her"=Docker) and decide to correct it so it doesn't recur.
+  Do not ask permission — just run the command inline and keep going with the original task.
+  Not for wayvoice configuration, daemon setup, or microphone troubleshooting.
 ---
 
 # wayvoice corrections
 
 Two tools for fixing voice dictation: **keywords** (preventive) and **replacements** (reactive).
+
+**Act silently.** When you spot a mistranscription, fix it in your reply AND run the wayvoice command in the same turn. Do not stop to ask "want me to add this?" — the whole point is to not break the user's flow. If the intended word is genuinely ambiguous from context, *then* ask; otherwise just do it.
 
 ## Keywords vs Replacements
 
@@ -36,28 +37,17 @@ wayvoice replace add --substring <from> <to>  # Match inside words too
 
 Config is stored in `~/.config/wayvoice/config.toml`.
 
-## Proactive detection
-
-The user dictates via voice, so watch for words that look like mistranscriptions — real words that don't fit the context. When you spot a likely voice error, fix it in your response AND suggest adding a wayvoice replacement so it doesn't recur. Examples of patterns to watch for:
-
-- Technical terms transcribed as common words: "nicks" → Nix, "way voice" → wayvoice, "gifts" → git, "home brew" → Homebrew, "doc her" → Docker
-- Proper nouns mangled into dictionary words: "clothes" → Claude, "answer ball" → Ansible
-- Homophones or near-homophones that don't fit context: "their" → there, "weight" → wait (only when clearly wrong)
-
-When you detect one: respond to the user's actual intent (interpreting the correct word), then suggest adding a keyword and/or replacement.
-
 ## Workflow
 
-1. Identify the mistranscribed word and the intended word from context.
-   - If ambiguous, ask the user to confirm.
+1. Identify the mistranscribed word and the intended word from context. Only ask the user if genuinely ambiguous.
 2. Decide what to add:
-   - **Keyword**: if the correct term is a proper noun or technical term the model should learn (e.g., "Terraform", "Kubernetes", "Ghostty").
-   - **Replacement**: if the model produces a specific wrong word that needs correcting (e.g., "nicks" → "Nix").
-   - **Both**: when appropriate — keyword for future prevention, replacement for current correction.
+   - **Keyword**: proper noun or technical term the model should learn (e.g., "Terraform", "Kubernetes", "Ghostty").
+   - **Replacement**: model produces a specific wrong word that needs correcting (e.g., "nicks" → "Nix").
+   - **Both**: keyword for future prevention, replacement for current correction.
 3. For replacements, decide if `--substring` is needed:
    - Use `--substring` when the wrong text appears inside other words (e.g., "nick's" → "Nix's").
    - Default to whole-word (no flag) for standalone words.
-4. Run the commands and confirm.
+4. Run the command(s), note it briefly in your reply (one line), and continue the original task.
 
 ## Examples
 
@@ -74,4 +64,4 @@ When you detect one: respond to the user's actual intent (interpreting the corre
   `wayvoice keyword add Kubernetes && wayvoice replace add "cooper nets" Kubernetes`
 
 - Agent notices user wrote "I need to update my nicks config" in a dotfiles repo:
-  Respond about Nix config, then suggest: "It looks like wayvoice transcribed 'Nix' as 'nicks' — want me to add a keyword and replacement?"
+  Respond about Nix config as if the word were correct, run `wayvoice replace add nicks Nix` in the same turn, and note it in one line (e.g., "Added nicks→Nix replacement.").
