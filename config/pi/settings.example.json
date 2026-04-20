@@ -12,7 +12,9 @@
     "fireworks/accounts/fireworks/models/glm-5p1",
     "claude-bridge/claude-opus-4-6",
     "claude-bridge/claude-sonnet-4-6",
-    "openai-codex/gpt-5.3-codex-spark"
+    "openai-codex/gpt-5.3-codex-spark",
+    "claude-bridge/claude-opus-4-7",
+    "anthropic/claude-opus-4-7"
   ],
   "hideThinkingBlock": true,
   "packages": [
