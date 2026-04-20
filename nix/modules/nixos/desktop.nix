@@ -35,7 +35,7 @@ let
     waybar
     wl-clipboard
     wtype
-    (helium-browser.packages.${pkgs.system}.default.overrideAttrs (old: {
+    (helium-browser.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (old: {
       installPhase =
         builtins.replaceStrings
           [ "--enable-features=WaylandWindowDecorations" ]
