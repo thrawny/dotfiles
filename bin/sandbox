@@ -17,6 +17,7 @@ sandbox() {
   local writable=(
     ~/.cache
     ~/go
+    ~/.cargo
     ~/.local
     ~/.bun/install/cache
     ~/.codex
