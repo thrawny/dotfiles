@@ -223,33 +223,6 @@ update:
     git add flake.lock
     git commit -m "chore(nix): update flake inputs" -- flake.lock
 
-# Build and import the headless Incus/LXC image (optionally to a remote)
-incus-image remote='':
-    #!/usr/bin/env bash
-    set -euo pipefail
-    nix build .#nixosConfigurations.headless.config.system.build.images.incus \
-      --out-link ~/.cache/nix-images/headless
-    remote="{{remote}}"
-    incus image import ~/.cache/nix-images/headless/metadata.tar.xz \
-      ~/.cache/nix-images/headless/rootfs.tar.zst --alias headless ${remote:+$remote:}
-
-# Launch a headless Incus container (optionally on a remote)
-incus-launch name remote='local':
-    #!/usr/bin/env bash
-    set -euo pipefail
-    remote="{{remote}}"
-    prefix="${remote:+$remote:}"
-    incus launch "${prefix}headless" "${prefix}{{name}}" \
-      -c security.nesting=true
-    # Write incus prompt label into the container
-    if [[ -n "$remote" ]]; then
-      val="incus:$remote:{{name}}"
-    else
-      val="incus:{{name}}"
-    fi
-    while ! incus exec "${prefix}{{name}}" -- su - thrawny -c true 2>/dev/null; do sleep 0.5; done
-    incus exec "${prefix}{{name}}" -- su - thrawny -c "echo 'export INCUS_CONTAINER=\"$val\"' > ~/.zsh.local"
-
 # Clean up old generations (keeps last 6) and optimize store
 clean:
     #!/usr/bin/env bash

@@ -5,17 +5,27 @@ set -euo pipefail
 shopt -s nullglob
 
 main() {
-  local container="headless"
+  local container=""
+  local remote="local"
   local user="thrawny"
+  local prepare=true
   local mode="copy"
   local github_token=""
   local repo_url=""
   local repo_path=""
   local session_scope="repo"
+  local session_scope_explicit=false
   local -a extra_packages=()
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
+      --remote)
+        remote="$2"
+        shift
+        ;;
+      --no-prepare)
+        prepare=false
+        ;;
       --mount-rw)
         mode="mount"
         ;;
@@ -24,12 +34,15 @@ main() {
         ;;
       --no-sessions)
         session_scope="none"
+        session_scope_explicit=true
         ;;
       --repo-sessions)
         session_scope="repo"
+        session_scope_explicit=true
         ;;
       --all-sessions)
         session_scope="all"
+        session_scope_explicit=true
         ;;
       --path)
         repo_path="$(resolve_host_path "$2")"
@@ -52,31 +65,241 @@ main() {
         repo_url="$1"
         ;;
       *)
-        if [[ "$container" == "headless" ]] && ! is_github_token "$1"; then
+        if [[ -z "$container" ]]; then
           container="$1"
-        else
+        elif is_github_token "$1"; then
           github_token="$1"
+        else
+          echo "Unexpected argument: $1" >&2
+          usage >&2
+          exit 1
         fi
         ;;
     esac
     shift
   done
 
-  local home
-  if [[ "$user" == "root" ]]; then
-    home="/root"
-  else
-    home="/home/$user"
+  if [[ -z "$container" ]]; then
+    usage >&2
+    exit 1
   fi
 
-  if [[ -z "$repo_path" && ( "$session_scope" != "none" || -n "$repo_url" ) ]]; then
-    repo_path="$(resolve_repo_path)"
+  parse_container_arg "$container"
+  container="$PARSED_CONTAINER"
+  remote="$PARSED_REMOTE"
+
+  local home
+  home="$(user_home "$user")"
+
+  local repo_root
+  repo_root="$(script_repo_root)"
+
+  local image_path
+  image_path="$(build_headless_image "$repo_root")"
+  sync_headless_image "$remote" "$image_path"
+
+  local target_container
+  target_container="$(container_ref "$container" "$remote")"
+  launch_container "$target_container" "$container" "$remote" "$user" "$home"
+
+  if [[ "$prepare" != true ]]; then
+    echo "Launched Incus container '$target_container'."
+    return 0
   fi
+
+  if [[ -z "$repo_path" ]]; then
+    repo_path="$(current_repo_path_or_empty)"
+  fi
+
   if [[ -n "$repo_path" && -z "$repo_url" ]]; then
     repo_url="$(normalize_repo_url "$(detect_repo_url "$repo_path")")"
   else
     repo_url="$(normalize_repo_url "$repo_url")"
   fi
+
+  if [[ "$session_scope" == "repo" && -z "$repo_path" ]]; then
+    if [[ "$session_scope_explicit" == true ]]; then
+      echo "Repo-scoped sessions require a repo path. Run from inside the repo or pass --path." >&2
+      exit 1
+    fi
+    session_scope="none"
+  fi
+
+  prepare_container \
+    "$target_container" \
+    "$user" \
+    "$home" \
+    "$mode" \
+    "$github_token" \
+    "$repo_url" \
+    "$repo_path" \
+    "$session_scope" \
+    "${extra_packages[@]}"
+}
+
+usage() {
+  cat <<'EOF'
+Usage: incus-dev <name|remote:name> [options] [github-token] [repo-url] [-- packages...]
+
+Builds the headless image, uploads it when the target remote is stale,
+launches the container, and optionally prepares it.
+
+Arguments:
+  name          Container name, or remote:name
+  github-token  Optional GitHub PAT for git credential store
+  repo-url      Optional GitHub repo URL to clone
+  packages      Nixpkgs packages to install via nix profile (after --)
+
+Options:
+  --no-prepare      Launch only; skip credentials, repo, sessions, packages
+  --copy            Copy credentials into container (default)
+  --mount-rw        Bind-mount credentials from host
+  --path PATH       Mirror this absolute local repo path inside the container
+  --no-sessions     Skip copying agent session state
+  --repo-sessions   Copy Claude/Codex/Pi sessions for the current repo
+  --all-sessions    Copy all Claude/Codex/Pi sessions
+  --user USER       Container user (default: thrawny)
+
+If run inside a git repo, preparation clones that repo into the same absolute
+path in the container and copies repo-scoped sessions by default.
+
+Examples:
+  incus-dev kf1-go
+  incus-dev local:kf1-go
+  incus-dev kanel-devbox:kf1-go
+  incus-dev kf1-go --no-prepare
+  incus-dev kf1-go --path /home/thrawny/dotfiles
+  incus-dev kf1-go github_pat_xxx https://github.com/org/repo -- mosquitto upx
+EOF
+}
+
+script_repo_root() {
+  local script_path
+  script_path="$(readlink -f "${BASH_SOURCE[0]}")"
+  dirname "$(dirname "$script_path")"
+}
+
+parse_container_arg() {
+  local value="$1"
+
+  PARSED_REMOTE="local"
+  PARSED_CONTAINER="$value"
+
+  if [[ "$value" == *:* ]]; then
+    PARSED_REMOTE="${value%%:*}"
+    PARSED_CONTAINER="${value#*:}"
+  fi
+
+  if [[ -z "$PARSED_REMOTE" || -z "$PARSED_CONTAINER" ]]; then
+    echo "Invalid container name: $value" >&2
+    exit 1
+  fi
+}
+
+user_home() {
+  local user="$1"
+
+  if [[ "$user" == "root" ]]; then
+    printf '/root\n'
+  else
+    printf '/home/%s\n' "$user"
+  fi
+}
+
+container_ref() {
+  local container="$1" remote="$2"
+  printf '%s%s\n' "${remote:+$remote:}" "$container"
+}
+
+remote_ref() {
+  local remote="$1"
+  printf '%s:\n' "$remote"
+}
+
+build_headless_image() {
+  local repo_root="$1"
+
+  nix build "$repo_root/nix#nixosConfigurations.headless.config.system.build.images.incus" \
+    --no-link \
+    --print-out-paths
+}
+
+image_property() {
+  local image_ref="$1" key="$2"
+
+  incus image show "$image_ref" 2>/dev/null | awk -v key="$key:" '
+    /^properties:/ { in_props = 1; next }
+    in_props && /^[^[:space:]]/ { in_props = 0 }
+    in_props {
+      sub(/^[[:space:]]+/, "", $0)
+      if (index($0, key) == 1) {
+        sub("^" key "[[:space:]]*", "", $0)
+        print
+        exit
+      }
+    }
+  '
+}
+
+sync_headless_image() {
+  local remote="$1" image_path="$2"
+  local image_ref
+  image_ref="$(container_ref headless "$remote")"
+
+  local current_path
+  current_path="$(image_property "$image_ref" nix_store_path || true)"
+
+  if [[ "$current_path" == "$image_path" ]]; then
+    echo "Image '$image_ref' already up to date."
+    return 0
+  fi
+
+  echo "Importing headless image to '$remote'."
+  incus image import \
+    "$image_path/metadata.tar.xz" \
+    "$image_path/rootfs.tar.zst" \
+    "$(remote_ref "$remote")" \
+    nix_store_path="$image_path" \
+    --alias headless \
+    --reuse
+}
+
+launch_container() {
+  local target_container="$1" name="$2" remote="$3" user="$4" home="$5"
+  local image_ref
+  image_ref="$(container_ref headless "$remote")"
+
+  incus launch "$image_ref" "$target_container" -c security.nesting=true
+
+  local label
+  label="incus:$remote:$name"
+  wait_for_user_shell "$target_container" "$user" "$home"
+  write_container_label "$target_container" "$user" "$home" "$label"
+}
+
+wait_for_user_shell() {
+  local container="$1" user="$2" home="$3"
+
+  while ! container_shell_as_user "$container" "$user" "$home" "true" >/dev/null 2>&1; do
+    sleep 0.5
+  done
+}
+
+write_container_label() {
+  local container="$1" user="$2" home="$3" label="$4"
+
+  incus exec "$container" -- env \
+    HOME="$home" \
+    USER="$user" \
+    LOGNAME="$user" \
+    INCUS_CONTAINER_VALUE="$label" \
+    runuser -u "$user" -- sh -lc 'printf "%s\n" "export INCUS_CONTAINER=\"$INCUS_CONTAINER_VALUE\"" > ~/.zsh.local'
+}
+
+prepare_container() {
+  local container="$1" user="$2" home="$3" mode="$4" github_token="$5" repo_url="$6" repo_path="$7" session_scope="$8"
+  shift 8
+  local -a extra_packages=("$@")
 
   local -a host_files=(
     "$HOME/.claude/.credentials.json"
@@ -123,7 +346,7 @@ main() {
   fi
 
   if [[ -n "$repo_path" ]]; then
-    set_repo_git_identity "$container" "$user" "$repo_path"
+    set_repo_git_identity "$container" "$user" "$home" "$repo_path"
   fi
 
   if [[ "$session_scope" != "none" ]]; then
@@ -131,7 +354,7 @@ main() {
   fi
 
   if [[ ${#extra_packages[@]} -gt 0 ]]; then
-    install_packages "$container" "$user" "${extra_packages[@]}"
+    install_packages "$container" "$user" "$home" "${extra_packages[@]}"
   fi
 
   echo "Prepared Incus container '$container' for user '$user' via mode '$mode' (sessions: $session_scope)."
@@ -148,33 +371,55 @@ is_github_token() {
   esac
 }
 
-usage() {
-  cat <<'EOF'
-Usage: incus-prepare [options] [container] [github-token] [repo-url] [-- packages...]
+resolve_host_path() {
+  local path="$1"
 
-Arguments:
-  container     Container name, local or remote (default: headless)
-  github-token  GitHub PAT for git credential store
-  repo-url      GitHub repo URL to clone into the same absolute path as the local repo
-  packages      Nixpkgs packages to install via nix profile (after --)
+  if [[ -z "$path" ]]; then
+    echo "Missing required path argument." >&2
+    exit 1
+  fi
+  if [[ ! -d "$path" ]]; then
+    echo "Path does not exist or is not a directory: $path" >&2
+    exit 1
+  fi
 
-Options:
-  --copy         Copy credentials into container (default)
-  --mount-rw     Bind-mount credentials from host
-  --path PATH    Mirror this absolute local repo path inside the container
-  --no-sessions  Skip copying agent session state
-  --repo-sessions
-                 Copy all Claude/Codex/Pi sessions for the current repo (default)
-  --all-sessions Copy all Claude/Codex/Pi sessions across all repos
-  --user USER    Container user (default: thrawny)
+  (cd "$path" && pwd -P)
+}
 
-Examples:
-  incus-prepare headless
-  incus-prepare builder:dev github_pat_xxx https://github.com/org/repo
-  incus-prepare --path /home/thrawny/dotfiles headless
-  incus-prepare --all-sessions headless github_pat_xxx https://github.com/org/repo -- mosquitto upx
-  incus-prepare --user alice my-container
-EOF
+current_repo_path_or_empty() {
+  git rev-parse --show-toplevel 2>/dev/null || true
+}
+
+detect_repo_url() {
+  local repo_path="$1"
+
+  [[ -n "$repo_path" ]] || return 0
+  git -C "$repo_path" remote get-url origin 2>/dev/null || true
+}
+
+normalize_repo_url() {
+  local url="$1"
+
+  case "$url" in
+    git@github.com:*)
+      printf 'https://github.com/%s\n' "${url#git@github.com:}"
+      ;;
+    *)
+      printf '%s\n' "$url"
+      ;;
+  esac
+}
+
+claude_project_slug() {
+  local repo_path="$1"
+  local trimmed="${repo_path#/}"
+  printf -- '-%s\n' "${trimmed//\//-}"
+}
+
+pi_session_slug() {
+  local repo_path="$1"
+  local trimmed="${repo_path#/}"
+  printf -- '--%s--\n' "${trimmed//\//-}"
 }
 
 ensure_dirs() {
@@ -234,92 +479,44 @@ container_file_target() {
   printf '%s%s\n' "$container" "$dest"
 }
 
-resolve_host_path() {
-  local path="$1"
+container_shell_as_user() {
+  local container="$1" user="$2" home="$3" command="$4"
 
-  if [[ -z "$path" ]]; then
-    echo "Missing required path argument." >&2
-    exit 1
+  if [[ "$user" == "root" ]]; then
+    incus exec "$container" -- env HOME="$home" USER=root LOGNAME=root sh -lc "$command"
+  else
+    incus exec "$container" -- env HOME="$home" USER="$user" LOGNAME="$user" \
+      runuser -u "$user" -- sh -lc "$command"
   fi
-  if [[ ! -d "$path" ]]; then
-    echo "Path does not exist or is not a directory: $path" >&2
-    exit 1
-  fi
-
-  (cd "$path" && pwd -P)
-}
-
-resolve_repo_path() {
-  local git_root
-
-  if git_root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
-    printf '%s\n' "$git_root"
-    return 0
-  fi
-
-  echo "Could not detect the current repo path. Run from inside the repo or pass --path." >&2
-  exit 1
-}
-
-detect_repo_url() {
-  local repo_path="$1"
-
-  [[ -n "$repo_path" ]] || return 0
-  git -C "$repo_path" remote get-url origin 2>/dev/null || true
-}
-
-normalize_repo_url() {
-  local url="$1"
-
-  case "$url" in
-    git@github.com:*)
-      printf 'https://github.com/%s\n' "${url#git@github.com:}"
-      ;;
-    *)
-      printf '%s\n' "$url"
-      ;;
-  esac
-}
-
-claude_project_slug() {
-  local repo_path="$1"
-  local trimmed="${repo_path#/}"
-  printf -- '-%s\n' "${trimmed//\//-}"
-}
-
-pi_session_slug() {
-  local repo_path="$1"
-  local trimmed="${repo_path#/}"
-  printf -- '--%s--\n' "${trimmed//\//-}"
 }
 
 setup_git_credentials() {
   local container="$1" user="$2" home="$3" token="$4"
   local gitconfig_local="$home/.gitconfig.local"
 
-  # Only create .gitconfig.local if it doesn't already exist (HM manages it when identity is set)
   if ! incus exec "$container" -- test -f "$gitconfig_local"; then
-    incus exec "$container" -- su - "$user" -c "cat > '$gitconfig_local'" <<'GITCONF'
+    local tmpfile
+    tmpfile="$(mktemp)"
+    cat > "$tmpfile" <<'EOF'
 [credential]
 	helper = store
-GITCONF
+EOF
+    copy_file "$container" "$user" "$tmpfile" "$gitconfig_local"
+    rm -f "$tmpfile"
   fi
 
   if [[ -n "$token" ]]; then
     local tmpfile
     tmpfile="$(mktemp)"
     printf 'https://x-access-token:%s@github.com\n' "$token" > "$tmpfile"
-    incus file push "$tmpfile" "$(container_file_target "$container" "$home/.git-credentials")"
+    copy_file "$container" "$user" "$tmpfile" "$home/.git-credentials"
     rm -f "$tmpfile"
     incus exec "$container" -- chmod 600 "$home/.git-credentials"
-    if [[ "$user" != "root" ]]; then
-      incus exec "$container" -- chown "$(container_owner_spec "$container" "$user")" "$home/.git-credentials"
-    fi
   fi
 }
 
 set_repo_git_identity() {
-  local container="$1" user="$2" repo_path="$3"
+  local container="$1" user="$2" home="$3" repo_path="$4"
   local name email
 
   name="${GIT_AUTHOR_NAME:-$(git config user.name 2>/dev/null || true)}"
@@ -328,7 +525,7 @@ set_repo_git_identity() {
   [[ -n "$name" && -n "$email" ]] || return 0
 
   if incus exec "$container" -- test -d "$repo_path/.git"; then
-    incus exec "$container" -- su - "$user" -c \
+    container_shell_as_user "$container" "$user" "$home" \
       "git -C '$repo_path' config user.name '$name' && git -C '$repo_path' config user.email '$email'"
     echo "Set git identity in $repo_path: $name <$email>"
   fi
@@ -360,7 +557,7 @@ clone_repo() {
     echo "Repo already present: $dest_path"
   else
     ensure_repo_parent "$container" "$user" "$dest_path"
-    incus exec "$container" -- su - "$user" -c \
+    container_shell_as_user "$container" "$user" "$home" \
       "git clone --depth 1 '$url' '$dest_path' && cd '$dest_path' && git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
   fi
 }
@@ -476,14 +673,17 @@ copy_all_pi_sessions() {
 }
 
 install_packages() {
-  local container="$1" user="$2"
-  shift 2
+  local container="$1" user="$2" home="$3"
+  shift 3
   local -a pkgs=()
+  local pkg
+
   for pkg in "$@"; do
     pkgs+=("nixpkgs#${pkg}")
   done
+
   echo "Installing packages: $*"
-  incus exec "$container" -- su - "$user" -c "nix profile add ${pkgs[*]}"
+  container_shell_as_user "$container" "$user" "$home" "nix profile add ${pkgs[*]}"
 }
 
 mount_file() {
