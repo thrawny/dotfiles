@@ -32,6 +32,7 @@
     zsh
     starship
     gcc
+    lsof
 
     # Git
     gh
@@ -41,9 +42,11 @@
 
     # Languages
     nodejs_24
-    (python313.withPackages (ps: with ps; [
-      requests
-    ]))
+    (python313.withPackages (
+      ps: with ps; [
+        requests
+      ]
+    ))
     uv
     ruff
     go
