@@ -269,7 +269,9 @@ launch_container() {
   local image_ref
   image_ref="$(container_ref headless "$remote")"
 
-  incus launch "$image_ref" "$target_container" -c security.nesting=true
+  incus launch "$image_ref" "$target_container" \
+    -c security.nesting=true \
+    -c raw.lxc='lxc.apparmor.profile=unconfined'
 
   local label
   label="incus:$remote:$name"
