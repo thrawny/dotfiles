@@ -15,6 +15,15 @@
           "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
         },
         {
+          "id": "accounts/fireworks/models/kimi-k2p6",
+          "name": "Kimi K2.6 (Fireworks)",
+          "reasoning": true,
+          "input": ["text", "image"],
+          "contextWindow": 262144,
+          "maxTokens": 16384,
+          "cost": { "input": 0.95, "output": 4.0, "cacheRead": 0.16, "cacheWrite": 0 }
+        },
+        {
           "id": "accounts/fireworks/models/glm-5p1",
           "name": "GLM 5.1 (Fireworks)",
           "reasoning": true,
