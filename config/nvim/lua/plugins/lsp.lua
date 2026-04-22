@@ -1,17 +1,30 @@
+local function is_special_lsp_path(path)
+  return path:match("^%a+://") or path:match("^/nix/store/")
+end
+
 return {
   {
     "neovim/nvim-lspconfig",
     init = function()
       -- Prevent LSP from attaching to non-file URI schemes (diffview://, fugitive://, etc.)
-      -- This avoids gopls "DocumentURI scheme is not 'file'" errors
+      -- and to read-only Nix store sources. This avoids noisy diagnostics from
+      -- buffers that are outside the editable project/workspace.
       vim.api.nvim_create_autocmd("LspAttach", {
         callback = function(args)
           local bufname = vim.api.nvim_buf_get_name(args.buf)
-          if bufname:match("^%a+://") then
-            vim.schedule(function()
-              vim.lsp.buf_detach_client(args.buf, args.data.client_id)
-            end)
+          if not is_special_lsp_path(bufname) then
+            return
           end
+
+          local client = vim.lsp.get_client_by_id(args.data.client_id)
+          vim.schedule(function()
+            if client then
+              local ns = vim.lsp.diagnostic.get_namespace(client.id)
+              vim.diagnostic.reset(ns, args.buf)
+            end
+            vim.diagnostic.disable(args.buf)
+            vim.lsp.buf_detach_client(args.buf, args.data.client_id)
+          end)
         end,
       })
 
