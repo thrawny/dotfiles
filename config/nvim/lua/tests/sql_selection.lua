@@ -21,7 +21,10 @@ end
 
 local function assert_equal(actual, expected, message)
   if actual ~= expected then
-    error((message or "assertion failed") .. string.format("\nexpected: %s\nactual: %s", vim.inspect(expected), vim.inspect(actual)))
+    error(
+      (message or "assertion failed")
+        .. string.format("\nexpected: %s\nactual: %s", vim.inspect(expected), vim.inspect(actual))
+    )
   end
 end
 
@@ -103,7 +106,11 @@ M.tests[#M.tests + 1] = {
         return error_node
       end, function()
         assert_equal(select_sql_statement(), true, "expected selection to succeed")
-        assert_equal(get_selected_text(), "GRANT SELECT ON users TO reader;", "expected semicolon fallback to ignore narrow error nodes")
+        assert_equal(
+          get_selected_text(),
+          "GRANT SELECT ON users TO reader;",
+          "expected semicolon fallback to ignore narrow error nodes"
+        )
       end)
     end)
   end,
@@ -124,7 +131,11 @@ M.tests[#M.tests + 1] = {
         return punctuation
       end, function()
         assert_equal(select_sql_statement(), true, "expected selection to succeed")
-        assert_equal(get_selected_text(), "SELECT 1;", "expected full statement to be selected when cursor is on the semicolon")
+        assert_equal(
+          get_selected_text(),
+          "SELECT 1;",
+          "expected full statement to be selected when cursor is on the semicolon"
+        )
       end)
     end)
   end,
@@ -179,7 +190,11 @@ M.tests[#M.tests + 1] = {
         return nil
       end, function()
         assert_equal(select_sql_statement(), true, "expected paragraph fallback to succeed")
-        assert_equal(get_selected_text(), "GRANT SELECT ON users TO reader\nTO PUBLIC", "expected paragraph fallback to select contiguous non-blank lines")
+        assert_equal(
+          get_selected_text(),
+          "GRANT SELECT ON users TO reader\nTO PUBLIC",
+          "expected paragraph fallback to select contiguous non-blank lines"
+        )
       end)
     end)
   end,
@@ -212,7 +227,11 @@ M.tests[#M.tests + 1] = {
       parser:parse()
 
       assert_equal(select_sql_statement(), true, "expected selection to succeed with real parser")
-      assert_equal(get_selected_text(), "GRANT SELECT ON users TO reader;", "expected real parser smoke test to select the statement")
+      assert_equal(
+        get_selected_text(),
+        "GRANT SELECT ON users TO reader;",
+        "expected real parser smoke test to select the statement"
+      )
     end)
   end,
 }

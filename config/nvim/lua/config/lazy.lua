@@ -2,6 +2,48 @@ local lazypath = vim.fn.stdpath("data") .. "/lazy/lazy.nvim"
 local store_config = vim.env.NVIM_STORE_CONFIG == "1"
 local lockfile = store_config and (vim.fn.stdpath("state") .. "/lazy-lock.json") or nil
 
+local function read_file(path)
+  local fd = io.open(path, "r")
+  if not fd then
+    return nil
+  end
+  local data = fd:read("*a")
+  fd:close()
+  return data
+end
+
+local function find_local_spec()
+  local path = vim.uv.cwd()
+  while path and path ~= "" do
+    local file = path .. "/.lazy.lua"
+    if vim.fn.filereadable(file) == 1 then
+      local dir = path
+      return {
+        name = vim.fn.fnamemodify(file, ":~:."),
+        import = function()
+          -- Trust the repo directory once so edits to `.lazy.lua` don't need
+          -- to be re-approved on every change.
+          if not vim.secure.read(dir) then
+            return {}
+          end
+
+          local data = read_file(file)
+          if not data then
+            return {}
+          end
+
+          return loadstring(data, "@" .. file)()
+        end,
+      }
+    end
+    local parent = vim.fn.fnamemodify(path, ":h")
+    if parent == path then
+      break
+    end
+    path = parent
+  end
+end
+
 if not (vim.uv or vim.loop).fs_stat(lazypath) then
   local lazyrepo = "https://github.com/folke/lazy.nvim.git"
   local out = vim.fn.system({ "git", "clone", "--filter=blob:none", "--branch=stable", lazyrepo, lazypath })
@@ -29,6 +71,7 @@ end
 
 require("lazy").setup({
   lockfile = lockfile,
+  local_spec = false,
   ---@diagnostic disable-next-line: assign-type-mismatch
   dev = {
     path = vim.g.dev_path,
@@ -59,6 +102,9 @@ require("lazy").setup({
     vim.fn.executable("nixd") == 1 and { import = "lazyvim.plugins.extras.lang.nix" } or {},
     -- import/override with your plugins
     { import = "plugins" },
+    -- Use directory trust for project-local specs so `.lazy.lua` can change
+    -- without needing to re-run `:trust` after every edit.
+    find_local_spec(),
   },
   defaults = {
     -- By default, only LazyVim plugins will be lazy-loaded. Your custom plugins will load during startup.
