@@ -149,7 +149,6 @@ in
         ".codex/prompts".source = configSource "codex/prompts";
         ".codex/AGENTS.md".source = configSource "codex/AGENTS-GLOBAL.md";
 
-        ".pi/agent/models.json".source = configSource "pi/models.json";
         ".pi/agent/AGENTS.md".source = configSource "pi/AGENTS-GLOBAL.md";
         ".pi/agent/prompts".source = configSource "pi/prompts";
         ".pi/agent/themes".source = configSource "pi/themes";
