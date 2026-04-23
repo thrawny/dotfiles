@@ -118,21 +118,34 @@ function getGitChanges(): { added: number; removed: number } | null {
 
 function install(
 	ctx: ExtensionContext,
+	getCurrentCtx: () => ExtensionContext | undefined,
 	getThinkingLevel: () => string,
-	getSessionName: () => string | undefined,
 ) {
 	ctx.ui.setFooter((tui, _theme, footerData) => {
 		const unsub = footerData.onBranchChange(() => tui.requestRender());
+
+		const safe = <T>(fn: () => T, fallback: T): T => {
+			try {
+				return fn();
+			} catch {
+				return fallback;
+			}
+		};
 
 		return {
 			dispose: unsub,
 			invalidate() {},
 			render(width: number): string[] {
+				const activeCtx = getCurrentCtx();
 				const branch = footerData.getGitBranch();
-				const sessionName = getSessionName()?.trim();
+				const sessionName = activeCtx
+					? safe(() => activeCtx.sessionManager.getSessionName()?.trim(), undefined)
+					: undefined;
 				const changes = getGitChanges();
 				const runtimeBadge = getRuntimeBadge();
-				const usage = ctx.getContextUsage();
+				const usage = activeCtx
+					? safe(() => activeCtx.getContextUsage(), undefined)
+					: undefined;
 
 				let tokens = usage?.tokens ?? 0;
 				let percent = usage?.percent ?? 0;
@@ -184,11 +197,12 @@ function install(
 
 				const left = `${fgTrue(segmentSpecs[0].bg)}${START_CAP}${reset()}${segments.join("")}`;
 
-				const thinking = getThinkingLevel();
-				let rightText = ctx.model
-					? `${ctx.model.provider}/${ctx.model.id}`
+				const model = activeCtx ? safe(() => activeCtx.model, undefined) : undefined;
+				const thinking = activeCtx ? safe(getThinkingLevel, "off") : "off";
+				let rightText = model
+					? `${model.provider}/${model.id}`
 					: "no-model";
-				if (ctx.model?.reasoning) {
+				if (model?.reasoning) {
 					rightText =
 						thinking === "off"
 							? `${rightText} • thinking off`
@@ -231,23 +245,16 @@ export default function (pi: ExtensionAPI) {
 
 	const apply = (ctx: ExtensionContext) => {
 		currentCtx = ctx;
-		install(
-			ctx,
-			() => pi.getThinkingLevel(),
-			() => pi.getSessionName(),
-		);
+		install(ctx, () => currentCtx, () => pi.getThinkingLevel());
 	};
 
 	pi.on("session_start", async (_event, ctx) => {
 		apply(ctx);
 	});
 
-	pi.on("session_switch", async (_event, ctx) => {
-		apply(ctx);
-	});
-
-	pi.on("session_shutdown", async () => {
+	pi.on("session_shutdown", async (_event, ctx) => {
 		currentCtx = undefined;
+		ctx.ui.setFooter(undefined);
 	});
 
 	pi.registerCommand("statusline", {
