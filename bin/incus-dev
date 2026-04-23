@@ -91,19 +91,25 @@ main() {
   local home
   home="$(user_home "$user")"
 
-  local repo_root
-  repo_root="$(script_repo_root)"
-
-  local image_path
-  image_path="$(build_headless_image "$repo_root")"
-  sync_headless_image "$remote" "$image_path"
-
   local target_container
   target_container="$(container_ref "$container" "$remote")"
-  launch_container "$target_container" "$container" "$remote" "$user" "$home"
+
+  if container_exists "$target_container"; then
+    echo "Using existing Incus container '$target_container'."
+    ensure_container_started "$target_container"
+    wait_for_user_shell "$target_container" "$user" "$home"
+  else
+    local repo_root
+    repo_root="$(script_repo_root)"
+
+    local image_path
+    image_path="$(build_headless_image "$repo_root")"
+    sync_headless_image "$remote" "$image_path"
+    launch_container "$target_container" "$container" "$remote" "$user" "$home"
+  fi
 
   if [[ "$prepare" != true ]]; then
-    echo "Launched Incus container '$target_container'."
+    echo "Container '$target_container' is ready."
     return 0
   fi
 
@@ -209,6 +215,21 @@ user_home() {
 container_ref() {
   local container="$1" remote="$2"
   printf '%s%s\n' "${remote:+$remote:}" "$container"
+}
+
+container_exists() {
+  local container="$1"
+  incus info "$container" >/dev/null 2>&1
+}
+
+ensure_container_started() {
+  local container="$1"
+
+  if incus exec "$container" -- true >/dev/null 2>&1; then
+    return 0
+  fi
+
+  incus start "$container" >/dev/null
 }
 
 remote_ref() {
@@ -454,6 +475,16 @@ copy_file() {
   fi
 }
 
+copy_file_if_missing() {
+  local container="$1" user="$2" src="$3" dest="$4"
+
+  if incus exec "$container" -- test -e "$dest"; then
+    return 0
+  fi
+
+  copy_file "$container" "$user" "$src" "$dest"
+}
+
 copy_dir() {
   local container="$1" user="$2" src="$3" dest="$4"
 
@@ -468,6 +499,18 @@ copy_dir() {
     owner_spec="$(container_owner_spec "$container" "$user")"
     incus exec "$container" -- chown -R "$owner_spec" "$dest"
   fi
+}
+
+copy_dir_if_missing() {
+  local container="$1" user="$2" src="$3" dest="$4"
+
+  [[ -d "$src" ]] || return 0
+
+  if incus exec "$container" -- test -e "$dest"; then
+    return 0
+  fi
+
+  copy_dir "$container" "$user" "$src" "$dest"
 }
 
 container_owner_spec() {
@@ -599,13 +642,13 @@ copy_repo_claude_sessions() {
   project_slug="$(claude_project_slug "$repo_path")"
   project_dir="$HOME/.claude/projects/$project_slug"
 
-  copy_dir "$container" "$user" "$project_dir" "$home/.claude/projects/$project_slug"
-  copy_dir "$container" "$user" "$HOME/.claude/sessions" "$home/.claude/sessions"
+  copy_dir_if_missing "$container" "$user" "$project_dir" "$home/.claude/projects/$project_slug"
+  copy_dir_if_missing "$container" "$user" "$HOME/.claude/sessions" "$home/.claude/sessions"
 
   for session_file in "$project_dir"/*.jsonl; do
     [[ -f "$session_file" ]] || continue
     session_id="$(basename "$session_file" .jsonl)"
-    copy_dir "$container" "$user" "$HOME/.claude/file-history/$session_id" "$home/.claude/file-history/$session_id"
+    copy_dir_if_missing "$container" "$user" "$HOME/.claude/file-history/$session_id" "$home/.claude/file-history/$session_id"
   done
 }
 
@@ -620,7 +663,7 @@ copy_repo_codex_sessions() {
 
   for file in "${session_files[@]}"; do
     relative="${file#"$HOME/.codex/sessions/"}"
-    copy_file "$container" "$user" "$file" "$home/.codex/sessions/$relative"
+    copy_file_if_missing "$container" "$user" "$file" "$home/.codex/sessions/$relative"
   done
 
   for metadata_file in \
@@ -630,7 +673,7 @@ copy_repo_codex_sessions() {
     "$HOME"/.codex/logs_*.sqlite*
   do
     [[ -f "$metadata_file" ]] || continue
-    copy_file "$container" "$user" "$metadata_file" "$home/.codex/$(basename "$metadata_file")"
+    copy_file_if_missing "$container" "$user" "$metadata_file" "$home/.codex/$(basename "$metadata_file")"
   done
 }
 
@@ -639,24 +682,24 @@ copy_repo_pi_sessions() {
   local slug
 
   slug="$(pi_session_slug "$repo_path")"
-  copy_dir "$container" "$user" "$HOME/.pi/agent/sessions/$slug" "$home/.pi/agent/sessions/$slug"
+  copy_dir_if_missing "$container" "$user" "$HOME/.pi/agent/sessions/$slug" "$home/.pi/agent/sessions/$slug"
 }
 
 copy_all_claude_sessions() {
   local container="$1" user="$2" home="$3"
 
-  copy_dir "$container" "$user" "$HOME/.claude/projects" "$home/.claude/projects"
-  copy_dir "$container" "$user" "$HOME/.claude/file-history" "$home/.claude/file-history"
-  copy_dir "$container" "$user" "$HOME/.claude/session-env" "$home/.claude/session-env"
-  copy_dir "$container" "$user" "$HOME/.claude/shell-snapshots" "$home/.claude/shell-snapshots"
-  copy_dir "$container" "$user" "$HOME/.claude/sessions" "$home/.claude/sessions"
+  copy_dir_if_missing "$container" "$user" "$HOME/.claude/projects" "$home/.claude/projects"
+  copy_dir_if_missing "$container" "$user" "$HOME/.claude/file-history" "$home/.claude/file-history"
+  copy_dir_if_missing "$container" "$user" "$HOME/.claude/session-env" "$home/.claude/session-env"
+  copy_dir_if_missing "$container" "$user" "$HOME/.claude/shell-snapshots" "$home/.claude/shell-snapshots"
+  copy_dir_if_missing "$container" "$user" "$HOME/.claude/sessions" "$home/.claude/sessions"
 }
 
 copy_all_codex_sessions() {
   local container="$1" user="$2" home="$3"
   local metadata_file
 
-  copy_dir "$container" "$user" "$HOME/.codex/sessions" "$home/.codex/sessions"
+  copy_dir_if_missing "$container" "$user" "$HOME/.codex/sessions" "$home/.codex/sessions"
   for metadata_file in \
     "$HOME/.codex/session_index.jsonl" \
     "$HOME/.codex/history.jsonl" \
@@ -664,14 +707,14 @@ copy_all_codex_sessions() {
     "$HOME"/.codex/logs_*.sqlite*
   do
     [[ -f "$metadata_file" ]] || continue
-    copy_file "$container" "$user" "$metadata_file" "$home/.codex/$(basename "$metadata_file")"
+    copy_file_if_missing "$container" "$user" "$metadata_file" "$home/.codex/$(basename "$metadata_file")"
   done
 }
 
 copy_all_pi_sessions() {
   local container="$1" user="$2" home="$3"
 
-  copy_dir "$container" "$user" "$HOME/.pi/agent/sessions" "$home/.pi/agent/sessions"
+  copy_dir_if_missing "$container" "$user" "$HOME/.pi/agent/sessions" "$home/.pi/agent/sessions"
 }
 
 install_packages() {
