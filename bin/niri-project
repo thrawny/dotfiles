@@ -9,34 +9,72 @@ error() {
 }
 
 show_usage() {
-  echo "Usage: niri-project [directory]"
+  echo "Usage: niri-project [--name NAME] [directory]"
   echo ""
   echo "Create a niri workspace for a project with a terminal."
-  echo "Workspace name is derived from the directory basename."
+  echo "Workspace name is derived from the directory basename unless overridden."
+  echo ""
+  echo "Options:"
+  echo "  --name NAME  Override the workspace name"
+  echo "  -h, --help   Show this help"
   echo ""
   echo "Arguments:"
-  echo "  directory   Project directory (default: current directory)"
+  echo "  directory    Project directory (default: current directory)"
   echo ""
   echo "Examples:"
-  echo "  niri-project              # Use current directory"
-  echo "  niri-project ~/code/myapp # Use specified directory"
+  echo "  niri-project                     # Use current directory"
+  echo "  niri-project ~/code/myapp        # Use specified directory"
+  echo "  niri-project --name foo          # Override workspace name"
+  echo "  niri-project --name foo ~/code/myapp"
 }
 
 main() {
-  if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
-    show_usage
-    exit 0
+  local workspace_name=""
+  local project_dir="$PWD"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)
+        show_usage
+        exit 0
+        ;;
+      --name)
+        [[ $# -ge 2 ]] || error "Missing value for --name"
+        workspace_name="$2"
+        shift 2
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        error "Unknown option: $1"
+        ;;
+      *)
+        [[ "$project_dir" == "$PWD" ]] || error "Only one directory argument is supported"
+        project_dir="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ $# -gt 0 ]]; then
+    [[ "$project_dir" == "$PWD" ]] || error "Only one directory argument is supported"
+    project_dir="$1"
+    shift
   fi
 
-  local project_dir="${1:-$PWD}"
+  [[ $# -eq 0 ]] || error "Unexpected arguments: $*"
+
   project_dir=$(cd "$project_dir" && pwd)
 
   if [[ ! -d "$project_dir" ]]; then
     error "Directory does not exist: $project_dir"
   fi
 
-  local workspace_name
-  workspace_name=$(basename "$project_dir")
+  if [[ -z "$workspace_name" ]]; then
+    workspace_name=$(basename "$project_dir")
+  fi
 
   # If workspace already exists, just focus it
   if niri msg -j workspaces | jq -e ".[] | select(.name == \"$workspace_name\")" >/dev/null 2>&1; then
