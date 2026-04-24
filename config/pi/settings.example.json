@@ -10,7 +10,8 @@
     "fireworks/accounts/fireworks/models/kimi-k2p6",
     "fireworks/accounts/fireworks/models/glm-5p1",
     "openai-codex/gpt-5.4",
-    "openai-codex/gpt-5.3-codex-spark"
+    "openai-codex/gpt-5.3-codex-spark",
+    "openai-codex/gpt-5.5"
   ],
   "hideThinkingBlock": true,
   "packages": ["npm:pi-claude-bridge", "npm:@sting8k/pi-vcc"]
