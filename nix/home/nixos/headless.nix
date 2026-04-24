@@ -52,6 +52,10 @@
       (lib.hiPrio ghostty.terminfo)
     ];
 
+    sessionPath = lib.mkBefore [
+      "$HOME/.nix-profile/bin"
+    ];
+
     sessionVariables = {
       NVIM_HEADLESS = "1";
       COLORTERM = "truecolor";
