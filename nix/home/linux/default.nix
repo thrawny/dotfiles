@@ -3,15 +3,11 @@
 # Note: xwayland-satellite is spawned on-demand by niri when X11 apps connect
 {
   config,
-  lib,
   linuxOnlySkills,
   dotfiles,
   skillFiles,
   ...
 }:
-let
-  codexLinuxSkills = lib.filter (s: s != "wayvoice") linuxOnlySkills;
-in
 {
   imports = [
     ./hyprlock.nix
@@ -21,7 +17,7 @@ in
   home.file =
     skillFiles ".claude/skills" linuxOnlySkills
     // skillFiles ".pi/agent/skills" linuxOnlySkills
-    // skillFiles ".codex/skills" codexLinuxSkills
+    // skillFiles ".codex/skills" linuxOnlySkills
     // {
       ".config/wayvoice/config.toml".source =
         config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/wayvoice/config.toml";

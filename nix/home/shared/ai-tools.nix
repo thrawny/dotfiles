@@ -37,13 +37,11 @@ let
     else
       [ ];
   linuxOnlySkills = [
-    "wayvoice"
     "skill-eval"
   ];
   codexExcluded = linuxOnlySkills ++ [
     "brave-search"
     "skill-creator"
-    "wayvoice"
   ];
   claudeExcluded = linuxOnlySkills ++ [
     "brave-search"
