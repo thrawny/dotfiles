@@ -15,6 +15,8 @@ main() {
   local repo_path=""
   local session_scope="repo"
   local session_scope_explicit=false
+  local tailscale_authkey=""
+  local tailscale_ephemeral=false
   local -a extra_packages=()
 
   while [[ $# -gt 0 ]]; do
@@ -51,6 +53,13 @@ main() {
       --user)
         user="$2"
         shift
+        ;;
+      --tailscale-authkey)
+        tailscale_authkey="$2"
+        shift
+        ;;
+      --tailscale-ephemeral)
+        tailscale_ephemeral=true
         ;;
       --help|-h)
         usage
@@ -131,6 +140,10 @@ main() {
     session_scope="none"
   fi
 
+  if [[ "$tailscale_ephemeral" == true && -z "$tailscale_authkey" ]]; then
+    tailscale_authkey="$(generate_tailscale_authkey)"
+  fi
+
   prepare_container \
     "$target_container" \
     "$user" \
@@ -140,6 +153,7 @@ main() {
     "$repo_url" \
     "$repo_path" \
     "$session_scope" \
+    "$tailscale_authkey" \
     "${extra_packages[@]}"
 }
 
@@ -165,6 +179,10 @@ Options:
   --repo-sessions   Copy Claude/Codex/Pi sessions for the current repo
   --all-sessions    Copy all Claude/Codex/Pi sessions
   --user USER       Container user (default: thrawny)
+  --tailscale-authkey KEY
+                    Join Tailscale using this auth key
+  --tailscale-ephemeral
+                    Generate and use an ephemeral devbox auth key
 
 If run inside a git repo, preparation clones that repo into the same absolute
 path in the container and copies repo-scoped sessions by default.
@@ -175,6 +193,7 @@ Examples:
   incus-dev kanel-devbox:kf1-go
   incus-dev kf1-go --no-prepare
   incus-dev kf1-go --path /home/thrawny/dotfiles
+  incus-dev kf1-go --tailscale-ephemeral --no-sessions
   incus-dev kf1-go github_pat_xxx https://github.com/org/repo -- mosquitto upx
 EOF
 }
@@ -290,9 +309,11 @@ launch_container() {
   local image_ref
   image_ref="$(container_ref headless "$remote")"
 
-  incus launch "$image_ref" "$target_container" \
+  incus init "$image_ref" "$target_container" \
     -c security.nesting=true \
     -c raw.lxc='lxc.apparmor.profile=unconfined'
+  incus config device add "$target_container" tun unix-char path=/dev/net/tun
+  incus start "$target_container"
 
   local label
   label="incus:$remote:$name"
@@ -320,8 +341,8 @@ write_container_label() {
 }
 
 prepare_container() {
-  local container="$1" user="$2" home="$3" mode="$4" github_token="$5" repo_url="$6" repo_path="$7" session_scope="$8"
-  shift 8
+  local container="$1" user="$2" home="$3" mode="$4" github_token="$5" repo_url="$6" repo_path="$7" session_scope="$8" tailscale_authkey="$9"
+  shift 9
   local -a extra_packages=("$@")
 
   local -a host_files=(
@@ -359,6 +380,7 @@ prepare_container() {
 
   setup_git_credentials "$container" "$user" "$home" "$github_token"
   sync_container_secrets "$container" "$user" "$home" "$github_token"
+  setup_tailscale "$container" "$tailscale_authkey"
 
   if [[ -n "$repo_url" ]]; then
     clone_repo "$container" "$user" "$home" "$repo_url" "$repo_path"
@@ -382,6 +404,19 @@ prepare_container() {
   fi
 
   echo "Prepared Incus container '$container' for user '$user' via mode '$mode' (sessions: $session_scope)."
+}
+
+generate_tailscale_authkey() {
+  go run tailscale.com/cmd/get-authkey@latest -tags tag:devbox -ephemeral
+}
+
+setup_tailscale() {
+  local container="$1" authkey="$2"
+
+  [[ -n "$authkey" ]] || return 0
+
+  incus exec "$container" -- systemctl enable --now tailscaled.service
+  incus exec "$container" -- tailscale up --auth-key "$authkey"
 }
 
 is_github_token() {
