@@ -358,6 +358,7 @@ prepare_container() {
   done
 
   setup_git_credentials "$container" "$user" "$home" "$github_token"
+  sync_container_secrets "$container" "$user" "$home" "$github_token"
 
   if [[ -n "$repo_url" ]]; then
     clone_repo "$container" "$user" "$home" "$repo_url" "$repo_path"
@@ -558,6 +559,43 @@ EOF
     rm -f "$tmpfile"
     incus exec "$container" -- chmod 600 "$home/.git-credentials"
   fi
+}
+
+sync_container_secrets() {
+  local container="$1" user="$2" home="$3" github_token="$4"
+
+  if [[ -z "${TELEGRAM_NOTIFICATION_BOT_TOKEN:-}" && -z "${TELEGRAM_NOTIFICATION_CHAT_ID:-}" && -z "$github_token" ]]; then
+    return 0
+  fi
+
+  local tmpfile
+  tmpfile="$(mktemp)"
+  {
+    if incus exec "$container" -- test -f "$home/.secrets"; then
+      incus exec "$container" -- cat "$home/.secrets" \
+        | grep -Ev '^(export[[:space:]]+)?(TELEGRAM_(NOTIFICATION_)?(BOT_TOKEN|CHAT_ID)|GITHUB_TOKEN)=' || true
+    fi
+    if [[ -n "$github_token" ]]; then
+      printf 'GITHUB_TOKEN=%s\n' "$(shell_quote "$github_token")"
+    fi
+    if [[ -n "${TELEGRAM_NOTIFICATION_BOT_TOKEN:-}" ]]; then
+      printf 'TELEGRAM_NOTIFICATION_BOT_TOKEN=%s\n' "$(shell_quote "$TELEGRAM_NOTIFICATION_BOT_TOKEN")"
+    fi
+    if [[ -n "${TELEGRAM_NOTIFICATION_CHAT_ID:-}" ]]; then
+      printf 'TELEGRAM_NOTIFICATION_CHAT_ID=%s\n' "$(shell_quote "$TELEGRAM_NOTIFICATION_CHAT_ID")"
+    fi
+  } > "$tmpfile"
+
+  copy_file "$container" "$user" "$tmpfile" "$home/.secrets"
+  rm -f "$tmpfile"
+  incus exec "$container" -- chmod 600 "$home/.secrets"
+
+  echo "Copied host secrets into $container:$home/.secrets."
+}
+
+shell_quote() {
+  local value="$1"
+  printf "'%s'" "${value//\'/\'\\\'\'}"
 }
 
 set_repo_git_identity() {

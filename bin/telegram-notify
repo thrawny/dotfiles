@@ -1,0 +1,84 @@
+#!/usr/bin/env -S uv run --script
+#
+# /// script
+# dependencies = ["requests"]
+# ///
+"""Send a simple Telegram notification via a bot.
+
+Usage:
+    telegram-notify "Agent finished"
+    telegram-notify --title dotfiles "Agent finished"
+
+Environment variables:
+    TELEGRAM_NOTIFICATION_BOT_TOKEN: Bot token from @BotFather.
+    TELEGRAM_NOTIFICATION_CHAT_ID: Target chat ID.
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+
+import requests
+
+
+def send_message(token: str, chat_id: str, text: str) -> None:
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    response = requests.post(
+        url,
+        data={
+            "chat_id": chat_id,
+            "text": text,
+            "disable_web_page_preview": "true",
+        },
+        timeout=10,
+    )
+    response.raise_for_status()
+    payload = response.json()
+
+    if not payload.get("ok"):
+        description = payload.get("description", "unknown Telegram API error")
+        raise RuntimeError(description)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Send a Telegram notification")
+    parser.add_argument("message", nargs="+", help="Message text to send")
+    parser.add_argument(
+        "--title",
+        default=None,
+        help="Optional title prefix. Defaults to the current directory name.",
+    )
+    parser.add_argument(
+        "--no-title",
+        action="store_true",
+        help="Send only the message without a title prefix.",
+    )
+    args = parser.parse_args()
+
+    token = os.environ.get("TELEGRAM_NOTIFICATION_BOT_TOKEN")
+    chat_id = os.environ.get("TELEGRAM_NOTIFICATION_CHAT_ID")
+    if not token or not chat_id:
+        print(
+            "TELEGRAM_NOTIFICATION_BOT_TOKEN and TELEGRAM_NOTIFICATION_CHAT_ID must be set.",
+            file=sys.stderr,
+        )
+        return 2
+
+    message = " ".join(args.message)
+    if not args.no_title:
+        title = args.title or os.path.basename(os.getcwd())
+        message = f"{title}: {message}"
+
+    try:
+        send_message(token, chat_id, message)
+    except (requests.RequestException, TimeoutError, RuntimeError) as error:
+        print(f"Telegram notification failed: {error}", file=sys.stderr)
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
