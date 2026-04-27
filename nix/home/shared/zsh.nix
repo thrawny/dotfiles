@@ -53,7 +53,6 @@
         l = "ls -lh";
         fig = "docker compose";
         vim = "nvim";
-        svh = "sudo nvim /etc/hosts";
         k = "kubectl";
         kp = "kubectl get pod";
         ka = "kubectl apply -f";
@@ -61,7 +60,6 @@
         ku = "kubectl config use-context";
         gsha = "git rev-parse HEAD | cut -c1-9";
         hb = "gh repo view --web";
-        b = "bat -p --pager=never";
         gcam = "git add -A && git commit -m";
       }
       // lib.optionalAttrs pkgs.stdenv.isDarwin {
