@@ -3,11 +3,21 @@
 [[ "${TRACE}" ]] && set -x
 set -euo pipefail
 
+set_output_power() {
+  local output="$1"
+  local state="$2"
+
+  # Layouts are shared across machines/docks, so don't fail if an output is
+  # currently disconnected or named differently by the kernel/dock.
+  niri msg output "$output" "$state" >/dev/null 2>&1 || true
+}
+
 main() {
   local layout="${1:?Usage: niri-layout <laptop|home|work>}"
 
   case "$layout" in
     laptop)
+      set_output_power eDP-1 on
       niri-move-workspaces eDP-1
       niri-set-column-width 0.5
       ;;
@@ -17,10 +27,14 @@ main() {
       niri msg action move-workspace-to-monitor --reference web DP-2
       niri msg action move-workspace-to-index --reference main 1
       niri msg action move-workspace-to-index --reference dotfiles 2
+      # Home is clamshell: keep the laptop panel disabled so focus-monitor
+      # bindings (e.g. Mod+N) can't land on the hidden eDP output.
+      set_output_power eDP-1 off
       niri-set-column-width 0.5
       ;;
     work)
       # Everything except main on DP-1 (Philips ultrawide)
+      set_output_power eDP-1 on
       niri-move-workspaces DP-1 --except main
       niri-set-column-width 0.33333
       ;;

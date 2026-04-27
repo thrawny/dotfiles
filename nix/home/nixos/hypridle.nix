@@ -18,6 +18,10 @@
           on-timeout = "${dotfiles}/bin/dpms-off";
           on-resume = "${dotfiles}/bin/dpms-on";
         }
+        {
+          timeout = 1800;
+          on-timeout = "systemctl suspend";
+        }
       ];
     };
   };

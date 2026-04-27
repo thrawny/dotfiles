@@ -1,8 +1,37 @@
 {
+  config,
   lib,
   pkgs,
   ...
 }:
+let
+  inherit (config.dotfiles) username;
+  uid = toString config.users.users.${username}.uid;
+
+  niriLidOutput = pkgs.writeShellScript "niri-lid-output" ''
+    set -euo pipefail
+
+    lid_state="$(${pkgs.gnugrep}/bin/grep -h -o 'open\|closed' /proc/acpi/button/lid/*/state | ${pkgs.coreutils}/bin/head -1 || true)"
+    case "$lid_state" in
+      open) output_state=on ;;
+      closed) output_state=off ;;
+      *) exit 0 ;;
+    esac
+
+    niri_socket="$(${pkgs.findutils}/bin/find /run/user/${uid} -maxdepth 1 -type s -name 'niri.*.sock' -printf '%T@ %p\n' 2>/dev/null \
+      | ${pkgs.coreutils}/bin/sort -nr \
+      | ${pkgs.coreutils}/bin/head -1 \
+      | ${pkgs.gawk}/bin/awk '{print $2}')"
+
+    [[ -n "$niri_socket" ]] || exit 0
+
+    exec ${pkgs.util-linux}/bin/runuser -u ${username} -- \
+      ${pkgs.coreutils}/bin/env \
+        XDG_RUNTIME_DIR=/run/user/${uid} \
+        NIRI_SOCKET="$niri_socket" \
+        ${config.programs.niri.package}/bin/niri msg output eDP-1 "$output_state"
+  '';
+in
 {
   boot = {
     extraModprobeConfig = lib.mkAfter ''
@@ -13,8 +42,23 @@
   };
 
   services = {
-    # Lid close: plain suspend. Manual hibernate remains available.
-    logind.settings.Login.HandleLidSwitch = "suspend";
+    # Lid close is handled by acpid below. Suspend remains manual,
+    # plus the critical battery safety net below.
+    logind.settings.Login = {
+      HandleLidSwitch = "ignore";
+      HandleLidSwitchDocked = "ignore";
+      HandleLidSwitchExternalPower = "ignore";
+    };
+
+    # In niri, a closed laptop panel can still be focusable unless the output is
+    # disabled. Keep eDP-1 in sync with the physical lid state.
+    acpid = {
+      enable = true;
+      handlers.niri-lid-output = {
+        event = "button/lid.*";
+        action = "${niriLidOutput}";
+      };
+    };
 
     # Hibernate when battery is critical (safety net for clamshell + unplug scenario).
     upower = {

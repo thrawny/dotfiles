@@ -83,6 +83,17 @@ let
       hotkey-overlay.title = "Wake LG Monitor";
       allow-when-locked = true;
     };
+    "Mod+Super+E" = {
+      action.spawn = [
+        "niri"
+        "msg"
+        "output"
+        "eDP-1"
+        "on"
+      ];
+      hotkey-overlay.title = "Wake Laptop Monitor";
+      allow-when-locked = true;
+    };
     "Mod+Super+Space" = {
       action.switch-layout = "next";
       hotkey-overlay.title = "Switch Keyboard Layout";
