@@ -1,0 +1,228 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE:-}" ]] && set -x
+set -euo pipefail
+shopt -s nullglob
+
+main() {
+  local container=""
+  local user="thrawny"
+  local repo_path=""
+  local dry_run=false
+  local force=false
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --path)
+        repo_path="$(resolve_host_path "$2")"
+        shift
+        ;;
+      --user)
+        user="$2"
+        shift
+        ;;
+      --dry-run|-n)
+        dry_run=true
+        ;;
+      --force)
+        force=true
+        ;;
+      --help|-h)
+        usage
+        return 0
+        ;;
+      *)
+        if [[ -z "$container" ]]; then
+          container="$1"
+        else
+          echo "Unexpected argument: $1" >&2
+          usage >&2
+          exit 1
+        fi
+        ;;
+    esac
+    shift
+  done
+
+  if [[ -z "$container" ]]; then
+    usage >&2
+    exit 1
+  fi
+
+  if [[ -z "$repo_path" ]]; then
+    repo_path="$(current_repo_path_or_empty)"
+  fi
+  if [[ -z "$repo_path" ]]; then
+    echo "Could not detect repo path. Run from inside a git repo or pass --path." >&2
+    exit 1
+  fi
+
+  local home slug remote_dir local_dir tmpdir
+  home="$(user_home "$user")"
+  slug="$(pi_session_slug "$repo_path")"
+  remote_dir="$home/.pi/agent/sessions/$slug"
+  local_dir="$HOME/.pi/agent/sessions/$slug"
+  tmpdir="$(mktemp -d)"
+  trap 'rm -rf "${tmpdir:-}"' EXIT
+
+  incus info "$container" >/dev/null
+
+  if ! incus exec "$container" -- test -d "$remote_dir"; then
+    echo "No remote Pi session directory: $container:$remote_dir"
+    return 0
+  fi
+
+  mkdir -p "$local_dir"
+
+  echo "Pulling Pi sessions from $container:$remote_dir"
+  echo "Merging into $local_dir"
+  [[ "$dry_run" == true ]] && echo "Dry run: no files will be changed"
+
+  local -a remote_files=()
+  mapfile -t remote_files < <(
+    incus exec "$container" -- find "$remote_dir" -maxdepth 1 -type f -name '*.jsonl' -printf '%f\n' | sort
+  )
+
+  local name remote_tmp local_file
+  for name in "${remote_files[@]}"; do
+    remote_tmp="$tmpdir/$name"
+    local_file="$local_dir/$name"
+    incus file pull "$container$remote_dir/$name" "$remote_tmp" >/dev/null
+    merge_session_file "$container" "$remote_tmp" "$local_file" "$local_dir" "$dry_run" "$force"
+  done
+}
+
+usage() {
+  cat <<'EOF'
+Usage: incus-pull-pi-sessions <container|remote:container> [options]
+
+Pull repo-scoped Pi session JSONL files from an Incus container back to the host.
+Remote sessions are imported as cloned local sessions with fresh session IDs and
+friendly names like remote-session-kf1-go-6fb4034e-2026-04-27. Identical remote
+files already present locally are skipped unless --force is used.
+
+Options:
+  --path PATH    Repo path whose Pi session slug should be synced
+                 (default: current git repo root)
+  --user USER    Container user (default: thrawny)
+  --dry-run, -n  Show what would happen without changing local files
+  --force        Clone even when an identical local file already exists
+  --help, -h     Show this help
+
+Examples:
+  incus-pull-pi-sessions kanel-devbox:kf1-go
+  incus-pull-pi-sessions kanel-devbox:kf1-go --path /home/thrawny/work/kanel/code/kf1-go
+  incus-pull-pi-sessions kanel-devbox:kf1-go --dry-run
+EOF
+}
+
+resolve_host_path() {
+  local path="$1"
+  if [[ -z "$path" ]]; then
+    echo "Missing required path argument." >&2
+    exit 1
+  fi
+  if [[ ! -d "$path" ]]; then
+    echo "Path does not exist or is not a directory: $path" >&2
+    exit 1
+  fi
+  (cd "$path" && pwd -P)
+}
+
+current_repo_path_or_empty() {
+  git rev-parse --show-toplevel 2>/dev/null || true
+}
+
+user_home() {
+  local user="$1"
+  if [[ "$user" == "root" ]]; then
+    printf '/root\n'
+  else
+    printf '/home/%s\n' "$user"
+  fi
+}
+
+pi_session_slug() {
+  local repo_path="$1"
+  local trimmed="${repo_path#/}"
+  printf -- '--%s--\n' "${trimmed//\//-}"
+}
+
+merge_session_file() {
+  local container="$1" remote_file="$2" local_file="$3" local_dir="$4" dry_run="$5" force="$6"
+  local name
+  name="$(basename "$local_file")"
+
+  if [[ -e "$local_file" ]] && cmp -s "$remote_file" "$local_file" && [[ "$force" != true ]]; then
+    echo "SKIP identical source already local: $name"
+    return 0
+  fi
+
+  echo "CLONE remote: $name"
+  if [[ "$dry_run" != true ]]; then
+    clone_remote_session "$container" "$remote_file" "$local_dir"
+  fi
+}
+
+clone_remote_session() {
+  local container="$1" remote_file="$2" local_dir="$3"
+  python3 - "$container" "$remote_file" "$local_dir" <<'PY'
+import json
+import os
+import pathlib
+import re
+import sys
+import uuid
+from datetime import datetime, timezone
+
+container, remote_file, local_dir = sys.argv[1:]
+path = pathlib.Path(remote_file)
+lines = path.read_text(encoding="utf-8").splitlines()
+if not lines:
+    raise SystemExit(f"Empty session file: {remote_file}")
+
+header = json.loads(lines[0])
+old_id = str(header.get("id") or "unknown")
+new_id = str(uuid.uuid4())
+now = datetime.now(timezone.utc)
+now_iso = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+file_ts = now_iso.replace(":", "-").replace(".", "-")
+
+container_name = container.split(":")[-1]
+safe_container = re.sub(r"[^A-Za-z0-9_.-]+", "-", container_name).strip("-") or "container"
+old_short = old_id.split("-")[0][:8] if old_id != "unknown" else "unknown"
+date = now.date().isoformat()
+session_name = f"remote-session-{safe_container}-{old_short}-{date}"
+
+header["id"] = new_id
+header["timestamp"] = now_iso
+header["parentSession"] = str(path.name)
+
+last_entry_id = None
+for line in lines[1:]:
+    try:
+        entry = json.loads(line)
+    except json.JSONDecodeError:
+        continue
+    if entry.get("type") != "session" and entry.get("id"):
+        last_entry_id = entry["id"]
+
+out_lines = [json.dumps(header, separators=(",", ":"), ensure_ascii=False)]
+out_lines.extend(lines[1:])
+if last_entry_id:
+    out_lines.append(json.dumps({
+        "type": "session_info",
+        "id": uuid.uuid4().hex[:8],
+        "parentId": last_entry_id,
+        "timestamp": now_iso,
+        "name": session_name,
+    }, separators=(",", ":"), ensure_ascii=False))
+
+out_path = pathlib.Path(local_dir) / f"{file_ts}_{new_id}.jsonl"
+out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+print(f"  wrote {out_path.name}")
+print(f"  name  {session_name}")
+PY
+}
+
+main "$@"
