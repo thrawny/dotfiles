@@ -363,6 +363,7 @@ prepare_container() {
 
   incus info "$container" >/dev/null
   ensure_dirs "$container" "$user" "$home"
+  setup_user_systemd "$container" "$user" "$home"
 
   local i
   for i in "${!host_files[@]}"; do
@@ -497,6 +498,22 @@ ensure_dirs() {
       "$home/.pi" \
       "$home/.codex"
   fi
+}
+
+setup_user_systemd() {
+  local container="$1" user="$2" home="$3" uid
+
+  uid="$(incus exec "$container" -- id -u "$user")"
+  incus exec "$container" -- loginctl enable-linger "$user"
+  incus exec "$container" -- systemctl start "user@$uid.service"
+
+  incus exec "$container" -- env \
+    HOME="$home" \
+    USER="$user" \
+    LOGNAME="$user" \
+    XDG_RUNTIME_DIR="/run/user/$uid" \
+    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
+    runuser -u "$user" -- systemctl --user daemon-reload
 }
 
 copy_file() {
