@@ -500,10 +500,19 @@ ensure_dirs() {
   fi
 }
 
+wait_for_systemd() {
+  local container="$1"
+
+  while ! incus exec "$container" -- systemctl list-units >/dev/null 2>&1; do
+    sleep 0.5
+  done
+}
+
 setup_user_systemd() {
   local container="$1" user="$2" home="$3" uid
 
   uid="$(incus exec "$container" -- id -u "$user")"
+  wait_for_systemd "$container"
   incus exec "$container" -- loginctl enable-linger "$user"
   incus exec "$container" -- systemctl start "user@$uid.service"
 
