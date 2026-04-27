@@ -9,13 +9,8 @@ default:
 
 # === Shortcuts ===
 
-# Switch nix configuration and install Rust binaries (skip rust on headless)
-switch: (nix::switch) install-rust-if-not-headless
-
-# Install default Rust binaries unless running headless
-[private]
-install-rust-if-not-headless:
-    {{ if headless != "true" { "cargo install --path rust/bash-validator --locked --force" } else { "@true" } }}
+# Switch nix configuration
+switch: (nix::switch)
 
 # Update AI tool flake inputs and switch
 ai: (nix::ai)
@@ -27,7 +22,7 @@ update: (nix::update)
 # === Formatters ===
 
 # Format all
-fmt: (nix::fmt) fmt-lua fmt-python fmt-rust
+fmt: (nix::fmt) fmt-lua fmt-python
 
 # Format Lua files
 fmt-lua:
@@ -37,13 +32,10 @@ fmt-lua:
 fmt-python:
     ruff check --fix && ruff format .
 
-# Format Rust files
-fmt-rust: (rust::fmt)
-
 # === Linters ===
 
 # Lint all
-lint: (nix::lint) lint-lua lint-python lint-rust
+lint: (nix::lint) lint-lua lint-python
 
 # Lint Lua files (TODO: fix selene config for neovim globals)
 lint-lua:
@@ -52,9 +44,6 @@ lint-lua:
 # Lint Python files
 lint-python:
     ruff check .
-
-# Lint Rust files
-lint-rust: (rust::clippy)
 
 # === Type checking ===
 
@@ -104,5 +93,4 @@ setup-hooks:
 # === Submodules ===
 
 mod nix
-mod rust
 mod nvim "config/nvim"

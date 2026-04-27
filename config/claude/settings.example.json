@@ -60,17 +60,6 @@
     "defaultMode": "acceptEdits"
   },
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "bash-validator"
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [
