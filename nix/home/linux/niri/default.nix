@@ -649,14 +649,9 @@ in
           }
       }
 
-      include "local.kdl"
+      include optional=true "local.kdl"
     ''
   );
-
-  # Ensure local.kdl exists so the non-optional include doesn't fail
-  home.activation.niri-local-kdl = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-    touch "$HOME/.config/niri/local.kdl"
-  '';
 
   services.wpaperd = {
     enable = true;

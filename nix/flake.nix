@@ -19,7 +19,7 @@
     walker.url = "github:abenz1267/walker";
     walker.inputs.elephant.follows = "elephant";
     niri-flake.url = "github:sodiboo/niri-flake";
-    niri-flake.inputs.niri-stable.url = "github:YaLTeR/niri/v25.11";
+    niri-flake.inputs.niri-stable.url = "github:niri-wm/niri/v26.04";
     xremap-flake.url = "github:xremap/nix-flake";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
@@ -107,6 +107,14 @@
             {
               nixpkgs.overlays = [
                 niri-flake.overlays.niri
+                # niri-flake's stable package still applies a pre-26.04 service
+                # patch that expects /usr/bin in niri.service. niri 26.04 no
+                # longer needs it, and the patch fails the build.
+                (_: prev: {
+                  niri-stable = prev.niri-stable.override {
+                    replace-service-with-usr-bin = false;
+                  };
+                })
                 # Pin spotify to 1.2.74 (close button broken with minimize-to-tray since 1.2.79)
                 (_: prev: {
                   spotify = prev.spotify.overrideAttrs (_: {
