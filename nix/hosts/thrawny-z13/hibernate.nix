@@ -6,7 +6,6 @@
 }:
 let
   inherit (config.dotfiles) username;
-  uid = toString config.users.users.${username}.uid;
 
   niriLidOutput = pkgs.writeShellScript "niri-lid-output" ''
     set -euo pipefail
@@ -18,16 +17,23 @@ let
       *) exit 0 ;;
     esac
 
-    niri_socket="$(${pkgs.findutils}/bin/find /run/user/${uid} -maxdepth 1 -type s -name 'niri.*.sock' -printf '%T@ %p\n' 2>/dev/null \
-      | ${pkgs.coreutils}/bin/sort -nr \
-      | ${pkgs.coreutils}/bin/head -1 \
-      | ${pkgs.gawk}/bin/awk '{print $2}')"
+    uid="$(${pkgs.coreutils}/bin/id -u ${username})"
+    runtime_dir="/run/user/$uid"
 
-    [[ -n "$niri_socket" ]] || exit 0
+    niri_socket=""
+    for socket in "$runtime_dir"/niri.*.sock; do
+      [[ -S "$socket" ]] || continue
+      niri_socket="$socket"
+      break
+    done
+
+    echo "apply lid=$lid_state output=$output_state runtime=$runtime_dir socket=$niri_socket"
+
+    [[ -n "$niri_socket" ]] || exit 1
 
     exec ${pkgs.util-linux}/bin/runuser -u ${username} -- \
       ${pkgs.coreutils}/bin/env \
-        XDG_RUNTIME_DIR=/run/user/${uid} \
+        XDG_RUNTIME_DIR="$runtime_dir" \
         NIRI_SOCKET="$niri_socket" \
         ${config.programs.niri.package}/bin/niri msg output eDP-1 "$output_state"
   '';
@@ -48,16 +54,6 @@ in
       HandleLidSwitch = "ignore";
       HandleLidSwitchDocked = "ignore";
       HandleLidSwitchExternalPower = "ignore";
-    };
-
-    # In niri, a closed laptop panel can still be focusable unless the output is
-    # disabled. Keep eDP-1 in sync with the physical lid state.
-    acpid = {
-      enable = true;
-      handlers.niri-lid-output = {
-        event = "button/lid.*";
-        action = "${niriLidOutput}";
-      };
     };
 
     # Hibernate when battery is critical (safety net for clamshell + unplug scenario).
@@ -85,6 +81,35 @@ in
   # mt7921e fails to restore reliably from hibernate on some systems.
   # Unload it before sleep and reprobe it after wake to avoid the broken
   # PCIe resume path entirely.
+  systemd.services.niri-lid-output = {
+    description = "Sync niri laptop output with lid state";
+    wantedBy = [ "multi-user.target" ];
+    serviceConfig = {
+      Restart = "always";
+      RestartSec = 1;
+      ExecStart = pkgs.writeShellScript "niri-lid-output-watch" ''
+        set -euo pipefail
+
+        last_applied=""
+        while true; do
+          lid_state="$(${pkgs.gnugrep}/bin/grep -h -o 'open\|closed' /proc/acpi/button/lid/*/state | ${pkgs.coreutils}/bin/head -1 || true)"
+
+          if [[ -n "$lid_state" && "$lid_state" != "$last_applied" ]]; then
+            echo "lid state changed: $lid_state"
+            if ${niriLidOutput}; then
+              last_applied="$lid_state"
+            else
+              echo "failed to apply lid state: $lid_state"
+              sleep 5
+            fi
+          fi
+
+          sleep 1
+        done
+      '';
+    };
+  };
+
   systemd.services.mt7921e-sleep = {
     description = "Remove mt7921e before sleep";
     wantedBy = [ "sleep.target" ];
