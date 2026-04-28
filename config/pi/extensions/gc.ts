@@ -9,11 +9,14 @@ interface ChangedFile {
 	sessionTouched: boolean;
 }
 
+type PiThinkingLevel = ReturnType<ExtensionAPI["getThinkingLevel"]>;
+
 interface PendingCommit {
 	root: string;
 	changed: ChangedFile[];
 	preferred: string[];
 	previousTools: string[];
+	previousThinkingLevel: PiThinkingLevel;
 }
 
 let pendingCommit: PendingCommit | undefined;
@@ -90,9 +93,11 @@ function requestedPaths(changed: ChangedFile[], args: string): string[] {
 	return changed.filter((file) => file.sessionTouched).map((file) => file.path);
 }
 
-function restoreTools(pi: ExtensionAPI): void {
+function restoreState(pi: ExtensionAPI): void {
 	const previousTools = pendingCommit?.previousTools ?? pi.getActiveTools().filter((tool) => tool !== "gc_commit");
+	const previousThinkingLevel = pendingCommit?.previousThinkingLevel;
 	pi.setActiveTools(previousTools.filter((tool) => tool !== "gc_commit"));
+	if (previousThinkingLevel) pi.setThinkingLevel(previousThinkingLevel);
 	pendingCommit = undefined;
 }
 
@@ -117,7 +122,7 @@ export default function (pi: ExtensionAPI) {
 			git(pendingCommit.root, ["add", "--", ...includePaths]);
 			git(pendingCommit.root, ["commit", "-m", commitMessage]);
 			const hash = git(pendingCommit.root, ["rev-parse", "--short", "HEAD"]);
-			restoreTools(pi);
+			restoreState(pi);
 
 			return {
 				content: [{ type: "text", text: `Committed ${hash}: ${commitMessage}` }],
@@ -149,9 +154,11 @@ export default function (pi: ExtensionAPI) {
 				changed,
 				preferred,
 				previousTools: pi.getActiveTools().filter((tool) => tool !== "gc_commit"),
+				previousThinkingLevel: pi.getThinkingLevel(),
 			};
 
 			ctx.ui.notify("Planning commit...", "info");
+			pi.setThinkingLevel("off");
 			pi.setActiveTools(["gc_commit"]);
 			pi.sendMessage(
 				{
@@ -190,10 +197,10 @@ ${diff}`,
 	});
 
 	pi.on("agent_end", async () => {
-		restoreTools(pi);
+		restoreState(pi);
 	});
 
 	pi.on("tool_result", async (event) => {
-		if (event.toolName === "gc_commit") restoreTools(pi);
+		if (event.toolName === "gc_commit") restoreState(pi);
 	});
 }
