@@ -36,7 +36,7 @@ function parseStatus(root: string): ChangedFile[] {
 
 	return out.split("\n").filter(Boolean).map((line) => {
 		const status = line.slice(0, 2);
-		const rawPath = line.slice(3).trim();
+		const rawPath = line.slice(2).trim();
 		const renameParts = rawPath.split(" -> ");
 		return {
 			path: renameParts[renameParts.length - 1] ?? rawPath,
@@ -75,8 +75,9 @@ function markTouched(changed: ChangedFile[], touched: Set<string>): ChangedFile[
 
 function requestedPaths(changed: ChangedFile[], args: string): string[] {
 	const text = args.trim().toLowerCase();
+	const tokens = text.split(/\s+/).filter(Boolean);
 	if (!text) return changed.filter((file) => file.sessionTouched).map((file) => file.path);
-	if (text === "all" || text.includes("--all") || text.includes("-a")) return changed.map((file) => file.path);
+	if (tokens.includes("all") || tokens.includes("--all") || tokens.includes("-a")) return changed.map((file) => file.path);
 
 	const exact = changed.filter((file) => text.includes(file.path.toLowerCase())).map((file) => file.path);
 	if (exact.length > 0) return exact;
@@ -112,17 +113,6 @@ export default function (pi: ExtensionAPI) {
 			const commitMessage = params.commitMessage.trim();
 			if (includePaths.length === 0) throw new Error("No valid paths");
 			if (!commitMessage) throw new Error("No commit message");
-
-			if (ctx.hasUI) {
-				const ok = await ctx.ui.confirm(
-					`Commit ${includePaths.length} file(s)?`,
-					`${includePaths.join("\n")}\n\nMessage: ${commitMessage}`,
-				);
-				if (!ok) {
-					restoreTools(pi);
-					throw new Error("Commit cancelled");
-				}
-			}
 
 			git(pendingCommit.root, ["add", "--", ...includePaths]);
 			git(pendingCommit.root, ["commit", "-m", commitMessage]);
@@ -170,13 +160,16 @@ export default function (pi: ExtensionAPI) {
 
 Do not call any other tools. Do not answer in text. Use prior session context to understand intent, but ground the commit in the changed files and diff below.
 
+User commit instruction:
+${args || "(none)"}
+
 Rules:
 - includePaths must be a subset of changed file paths.
-- Prefer preferred/session-touched paths unless args clearly request all or other files.
+- If the user commit instruction is "all", "--all", or "-a", include every changed file.
+- If the user commit instruction mentions paths, filenames, scopes, or intent, choose matching files.
+- Otherwise prefer preferred/session-touched paths.
+- Use the user commit instruction as guidance for the commit message when relevant.
 - commitMessage must be concise, imperative, specific, no trailing period.
-
-Args:
-${args}
 
 Changed files:
 ${JSON.stringify(changed, null, 2)}
