@@ -67,7 +67,7 @@ main() {
   if [[ ${#repo_paths[@]} -gt 0 ]]; then
     mkdir -p "$staging_dir/repos"
     for repo_path in "${repo_paths[@]}"; do
-      archive_repo "$container" "$user" "$repo_path" "$staging_dir/repos"
+      archive_repo "$container" "$repo_path" "$staging_dir/repos"
     done
   else
     echo "No git repos found."
@@ -112,7 +112,8 @@ Options:
   --user USER   Container user (default: thrawny)
 
 The archive contains:
-  repos/       Git bundles and uncommitted diffs for each repo found
+  repos/       Full working-tree copies of each git repo found, including .git,
+               untracked files, and git-ignored files
   sessions/    Claude, Codex, and Pi session data
 
 Examples:
@@ -129,57 +130,24 @@ find_git_repos() {
     -maxdepth 5 \
     -name .git \
     -type d \
-    -not -path '*/\.*/*' \
     2>/dev/null \
     | sed 's|/\.git$||'
 }
 
 archive_repo() {
-  local container="$1" user="$2" repo_path="$3" dest_dir="$4"
+  local container="$1" repo_path="$2" dest_dir="$3"
 
   local repo_slug="${repo_path#/}"
   repo_slug="${repo_slug//\//_}"
   local repo_dir="$dest_dir/$repo_slug"
   mkdir -p "$repo_dir"
 
-  echo "  Archiving repo: $repo_path"
+  echo "  Archiving full repo: $repo_path"
 
-  # Git bundle (all local refs)
-  local bundle_tmp
-  bundle_tmp="$(mktemp)"
-  if incus exec "$container" -- su - "$user" -c \
-    "git -C '$repo_path' bundle create /tmp/repo.bundle --all 2>/dev/null"; then
-    incus file pull "$container/tmp/repo.bundle" "$bundle_tmp"
-    mv "$bundle_tmp" "$repo_dir/repo.bundle"
-    incus exec "$container" -- rm -f /tmp/repo.bundle
-    echo "    Bundled refs."
-  else
-    rm -f "$bundle_tmp"
-    echo "    Warning: git bundle failed (empty repo?)."
-  fi
+  incus exec "$container" -- tar -C "$(dirname "$repo_path")" -cf - -- "$(basename "$repo_path")" \
+    | tar -C "$repo_dir" --strip-components=1 -xf -
 
-  # Uncommitted changes (staged + unstaged + untracked)
-  local diff_output
-  diff_output="$(incus exec "$container" -- su - "$user" -c \
-    "git -C '$repo_path' diff HEAD 2>/dev/null" || true)"
-  if [[ -n "$diff_output" ]]; then
-    printf '%s\n' "$diff_output" > "$repo_dir/uncommitted.diff"
-    echo "    Saved uncommitted diff."
-  fi
-
-  # Untracked files list
-  local untracked
-  untracked="$(incus exec "$container" -- su - "$user" -c \
-    "git -C '$repo_path' ls-files --others --exclude-standard 2>/dev/null" || true)"
-  if [[ -n "$untracked" ]]; then
-    printf '%s\n' "$untracked" > "$repo_dir/untracked-files.txt"
-    echo "    Listed untracked files."
-  fi
-
-  # Recent log
-  incus exec "$container" -- su - "$user" -c \
-    "git -C '$repo_path' log --oneline -50 2>/dev/null" \
-    > "$repo_dir/recent-log.txt" || true
+  echo "    Copied working tree, including .git and ignored files."
 }
 
 extract_sessions() {
