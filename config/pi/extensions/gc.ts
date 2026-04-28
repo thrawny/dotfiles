@@ -91,22 +91,22 @@ function requestedPaths(changed: ChangedFile[], args: string): string[] {
 }
 
 function restoreTools(pi: ExtensionAPI): void {
-	const previousTools = pendingCommit?.previousTools ?? pi.getActiveTools().filter((tool) => tool !== "gc2_commit");
-	pi.setActiveTools(previousTools.filter((tool) => tool !== "gc2_commit"));
+	const previousTools = pendingCommit?.previousTools ?? pi.getActiveTools().filter((tool) => tool !== "gc_commit");
+	pi.setActiveTools(previousTools.filter((tool) => tool !== "gc_commit"));
 	pendingCommit = undefined;
 }
 
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
-		name: "gc2_commit",
-		label: "GC2 Commit",
-		description: "Create the pending gc2 git commit with selected files and a commit message.",
+		name: "gc_commit",
+		label: "GC Commit",
+		description: "Create the pending gc git commit with selected files and a commit message.",
 		parameters: Type.Object({
 			includePaths: Type.Array(Type.String({ description: "Repository-relative paths to commit" })),
 			commitMessage: Type.String({ description: "Concise imperative git commit message" }),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			if (!pendingCommit) throw new Error("No pending gc2 commit");
+			if (!pendingCommit) throw new Error("No pending gc commit");
 
 			const allowed = new Set(pendingCommit.changed.map((file) => file.path));
 			const includePaths = params.includePaths.filter((file) => allowed.has(file));
@@ -127,8 +127,8 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerCommand("gc2", {
-		description: "Fast focused git commit via a temporary gc2 commit tool",
+	pi.registerCommand("gc", {
+		description: "Fast focused git commit via a temporary gc commit tool",
 		handler: async (args, ctx) => {
 			const root = repoRoot(ctx.cwd);
 			let changed = parseStatus(root);
@@ -148,15 +148,15 @@ export default function (pi: ExtensionAPI) {
 				root,
 				changed,
 				preferred,
-				previousTools: pi.getActiveTools().filter((tool) => tool !== "gc2_commit"),
+				previousTools: pi.getActiveTools().filter((tool) => tool !== "gc_commit"),
 			};
 
 			ctx.ui.notify("Planning commit...", "info");
-			pi.setActiveTools(["gc2_commit"]);
+			pi.setActiveTools(["gc_commit"]);
 			pi.sendMessage(
 				{
-					customType: "gc2-context",
-					content: `Create a git commit by calling gc2_commit exactly once.
+					customType: "gc-context",
+					content: `Create a git commit by calling gc_commit exactly once.
 
 Do not call any other tools. Do not answer in text. Use prior session context to understand intent, but ground the commit in the changed files and diff below.
 
@@ -194,6 +194,6 @@ ${diff}`,
 	});
 
 	pi.on("tool_result", async (event) => {
-		if (event.toolName === "gc2_commit") restoreTools(pi);
+		if (event.toolName === "gc_commit") restoreTools(pi);
 	});
 }
