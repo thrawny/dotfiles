@@ -191,7 +191,15 @@
           };
         };
         # Home: LG 27GL850 - middle (main monitor)
+        # The dock can enumerate this monitor as either DP-8 or DP-9.
         "DP-8" = {
+          scale = 1.0;
+          position = {
+            x = 1646;
+            y = 0;
+          };
+        };
+        "DP-9" = {
           scale = 1.0;
           position = {
             x = 1646;
