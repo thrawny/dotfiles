@@ -88,7 +88,16 @@ export default function (pi: ExtensionAPI) {
 		const content = typeof message.content === "string" ? message.content : JSON.stringify(message.content, null, 2);
 
 		if (!options.expanded) {
-			return new Text(theme.fg("text", invocation), 0, 0);
+			const border = "─".repeat(invocation.length + 2);
+			return new Text(
+				[
+					theme.fg("muted", `╭${border}╮`),
+					theme.fg("muted", "│ ") + theme.fg("text", invocation) + theme.fg("muted", " │"),
+					theme.fg("muted", `╰${border}╯`),
+				].join("\n"),
+				0,
+				0,
+			);
 		}
 
 		return new Text(`${theme.fg("toolTitle", invocation)}\n\n${content}`, 0, 0);
