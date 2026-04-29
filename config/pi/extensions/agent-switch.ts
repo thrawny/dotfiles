@@ -110,7 +110,11 @@ export default function (pi: ExtensionAPI) {
 		}
 	}
 
-	pi.on("session_start", async (_event, ctx) => {
+	pi.on("session_start", async (event, ctx) => {
+		const previousSessionId = sessionIdFromFile(event.previousSessionFile);
+		if (previousSessionId) {
+			track(ctx, "session-end", previousSessionId);
+		}
 		track(ctx, "session-start");
 	});
 
@@ -122,21 +126,6 @@ export default function (pi: ExtensionAPI) {
 		track(ctx, "stop");
 	});
 
-	pi.on("session_switch", async (event, ctx) => {
-		const previousSessionId = sessionIdFromFile(event.previousSessionFile);
-		if (previousSessionId) {
-			track(ctx, "session-end", previousSessionId);
-		}
-		track(ctx, "session-start");
-	});
-
-	pi.on("session_fork", async (event, ctx) => {
-		const previousSessionId = sessionIdFromFile(event.previousSessionFile);
-		if (previousSessionId) {
-			track(ctx, "session-end", previousSessionId);
-		}
-		track(ctx, "session-start");
-	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
 		track(ctx, "session-end");

@@ -266,6 +266,14 @@ let
       ];
       hotkey-overlay.title = "Voice Input Cancel";
     };
+    "Super+Shift+P" = {
+      action.spawn = [
+        "wayvoice"
+        "cancel"
+      ];
+      hotkey-overlay.title = "Voice Input Cancel";
+      repeat = false;
+    };
 
     "Print".action.screenshot = [ ];
     "Ctrl+Print".action.screenshot-screen = [ ];
