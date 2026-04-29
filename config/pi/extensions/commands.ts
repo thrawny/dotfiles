@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { UserMessageComponent, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { Text } from "@mariozechner/pi-tui";
 
 interface CommandFile {
@@ -88,16 +88,7 @@ export default function (pi: ExtensionAPI) {
 		const content = typeof message.content === "string" ? message.content : JSON.stringify(message.content, null, 2);
 
 		if (!options.expanded) {
-			const border = "─".repeat(invocation.length + 2);
-			return new Text(
-				[
-					theme.fg("muted", `╭${border}╮`),
-					theme.fg("muted", "│ ") + theme.fg("text", invocation) + theme.fg("muted", " │"),
-					theme.fg("muted", `╰${border}╯`),
-				].join("\n"),
-				0,
-				0,
-			);
+			return new UserMessageComponent(invocation);
 		}
 
 		return new Text(`${theme.fg("toolTitle", invocation)}\n\n${content}`, 0, 0);
