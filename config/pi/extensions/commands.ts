@@ -82,15 +82,16 @@ function restoreState(pi: ExtensionAPI): void {
 
 export default function (pi: ExtensionAPI) {
 	pi.registerMessageRenderer("command-prompt", (message, options, theme) => {
-		const details = message.details as { commandName?: string } | undefined;
+		const details = message.details as { commandName?: string; invocation?: string } | undefined;
 		const commandName = details?.commandName ?? "command";
+		const invocation = details?.invocation ?? `/${commandName}`;
 		const content = typeof message.content === "string" ? message.content : JSON.stringify(message.content, null, 2);
 
 		if (!options.expanded) {
-			return new Text(theme.fg("muted", `/${commandName}`), 0, 0);
+			return new Text(theme.fg("text", invocation), 0, 0);
 		}
 
-		return new Text(`${theme.fg("toolTitle", `/${commandName}`)}\n\n${content}`, 0, 0);
+		return new Text(`${theme.fg("toolTitle", invocation)}\n\n${content}`, 0, 0);
 	});
 
 	const dir = commandsDir();
@@ -103,6 +104,7 @@ export default function (pi: ExtensionAPI) {
 			description: command.description,
 			getArgumentCompletions: () => null,
 			handler: async (args, ctx) => {
+				const invocation = `/${command.name}${args.trim() ? ` ${args.trim()}` : ""}`;
 				const expanded = expandShell(expandArguments(command.body, args), ctx.cwd);
 
 				pendingState = {
@@ -116,7 +118,7 @@ export default function (pi: ExtensionAPI) {
 						customType: "command-prompt",
 						content: expanded,
 						display: true,
-						details: { commandName: command.name },
+						details: { commandName: command.name, invocation },
 					},
 					{ triggerTurn: true },
 				);
