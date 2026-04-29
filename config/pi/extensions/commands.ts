@@ -87,7 +87,7 @@ export default function (pi: ExtensionAPI) {
 		const content = typeof message.content === "string" ? message.content : JSON.stringify(message.content, null, 2);
 
 		if (!options.expanded) {
-			return new Text(theme.fg("muted", `/${commandName} prompt injected — Ctrl+O to expand`), 0, 0);
+			return new Text(theme.fg("muted", `/${commandName}`), 0, 0);
 		}
 
 		return new Text(`${theme.fg("toolTitle", `/${commandName}`)}\n\n${content}`, 0, 0);
