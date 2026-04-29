@@ -3,7 +3,6 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { UserMessageComponent, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Text } from "@mariozechner/pi-tui";
 
 interface CommandFile {
 	name: string;
@@ -91,7 +90,7 @@ export default function (pi: ExtensionAPI) {
 			return new UserMessageComponent(invocation);
 		}
 
-		return new Text(`${theme.fg("toolTitle", invocation)}\n\n${content}`, 0, 0);
+		return new UserMessageComponent(`${invocation}\n\n${content}`);
 	});
 
 	const dir = commandsDir();
