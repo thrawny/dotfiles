@@ -149,6 +149,7 @@ in
 
         ".pi/agent/AGENTS.md".source = configSource "pi/AGENTS-GLOBAL.md";
         ".pi/agent/prompts".source = configSource "pi/prompts";
+        ".pi/agent/commands".source = configSource "pi/commands";
         ".pi/agent/themes".source = configSource "pi/themes";
         ".pi/agent/claude-bridge.json".source = configSource "pi/claude-bridge.json";
         ".pi/agent/pi-vcc-config.json".source = configSource "pi/pi-vcc-config.json";

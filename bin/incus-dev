@@ -549,16 +549,23 @@ copy_file_if_missing() {
 
 copy_dir() {
   local container="$1" user="$2" src="$3" dest="$4"
+  local dest_parent
 
   [[ -d "$src" ]] || return 0
 
-  incus exec "$container" -- mkdir -p "$(dirname "$dest")"
-  tar -C "$(dirname "$src")" -cf - -- "$(basename "$src")" \
-    | incus exec "$container" -- tar -C "$(dirname "$dest")" -xf -
+  dest_parent="$(dirname "$dest")"
+  incus exec "$container" -- mkdir -p "$dest_parent"
 
   if [[ "$user" != "root" ]]; then
     local owner_spec
     owner_spec="$(container_owner_spec "$container" "$user")"
+    incus exec "$container" -- chown "$owner_spec" "$dest_parent"
+  fi
+
+  tar -C "$(dirname "$src")" -cf - -- "$(basename "$src")" \
+    | incus exec "$container" -- tar -C "$dest_parent" -xf -
+
+  if [[ "$user" != "root" ]]; then
     incus exec "$container" -- chown -R "$owner_spec" "$dest"
   fi
 }
