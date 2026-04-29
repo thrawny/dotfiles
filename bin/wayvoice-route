@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if agent-switch focused 2>/dev/null | jq -e '.agent == "pi"' >/dev/null 2>&1; then
+  exec wtype -M ctrl -k space -m ctrl
+fi
+
+exec wayvoice toggle

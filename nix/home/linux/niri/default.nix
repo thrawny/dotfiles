@@ -247,16 +247,14 @@ let
   utilityBinds = {
     "Mod+R" = {
       action.spawn = [
-        "wayvoice"
-        "toggle"
+        "wayvoice-route"
       ];
       hotkey-overlay.title = "Voice Input Toggle";
       repeat = false;
     };
     "Super+P" = {
       action.spawn = [
-        "wayvoice"
-        "toggle"
+        "wayvoice-route"
       ];
       hotkey-overlay.title = "Voice Input Toggle";
       repeat = false;

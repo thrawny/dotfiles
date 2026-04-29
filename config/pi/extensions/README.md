@@ -11,6 +11,48 @@ Examples:
 Current custom extensions include:
 - `loop/` — session-local recurring loop tool, enabled per session by `/loop ...`
 - `show-active-tools.ts` — `/show-active-tools` for debugging active tool state
+- `wayvoice.ts` — `ctrl+space` and `/voice` integration for inserting wayvoice transcripts into the Pi editor
+
+## wayvoice integration
+
+`wayvoice.ts` talks to the wayvoice daemon over its Unix socket:
+
+```text
+${XDG_RUNTIME_DIR:-/tmp}/wayvoice.sock
+```
+
+Override with environment variables:
+
+- `PI_WAYVOICE_SOCKET` — socket path
+- `PI_WAYVOICE_SHORTCUT` — Pi shortcut, default `ctrl+space`
+
+On trigger, the extension checks `status`. If idle, it sends a JSON `toggle` request with overrides. If already recording/transcribing, it sends a plain stop `{"cmd":"toggle"}` request.
+
+Request shape:
+
+```ts
+{
+  cmd: "toggle",
+  overrides: {
+    prompt: string,
+    extra_keywords: string[],
+    replacements: Record<string, string>,
+    inject_mode: "stdout"
+  }
+}
+```
+
+Response shape:
+
+```ts
+{
+  status?: string,
+  text?: string,
+  error?: string
+}
+```
+
+If `text` is present, the extension inserts it with `ctx.ui.pasteToEditor()`.
 
 ## Agent Switch integration
 

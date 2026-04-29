@@ -25,16 +25,14 @@ _: {
               press = [
                 {
                   launch = [
-                    "wayvoice"
-                    "toggle"
+                    "wayvoice-route"
                   ];
                 }
               ];
               release = [
                 {
                   launch = [
-                    "wayvoice"
-                    "toggle"
+                    "wayvoice-route"
                   ];
                 }
               ];
