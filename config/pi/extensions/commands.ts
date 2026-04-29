@@ -56,6 +56,7 @@ function parseThinking(value: string | undefined): CommandFile["thinking"] | und
 function expandArguments(template: string, args: string): string {
 	const parts = args.trim() ? args.trim().split(/\s+/) : [];
 	return template
+		.replace(/\{\{#if ARGUMENTS\}\}([\s\S]*?)\{\{\/if\}\}/g, args.trim() ? "$1" : "")
 		.replace(/\$ARGUMENTS/g, args)
 		.replace(/\$@/g, args)
 		.replace(/\$(\d+)/g, (_match, index: string) => parts[Number(index) - 1] ?? "");

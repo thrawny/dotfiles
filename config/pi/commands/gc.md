@@ -8,11 +8,12 @@ description: Create a git commit
 - Current git diff (staged and unstaged changes): !`git diff HEAD`
 - Current branch: !`git branch --show-current`
 - Recent commits: !`git log --oneline -10`
-- User commit instruction: $ARGUMENTS
 
 ## Your task
 
-Create a single git commit for only the changes you have been working on in this session.
+{{#if ARGUMENTS}}User commit instruction: $ARGUMENTS
+
+{{/if}}Create a single git commit for only the changes you have been working on in this session.
 
 Do not stage unrelated worktree changes, even if they appear in the status or diff. Use the conversation context to identify your changes. If the user supplied explicit commit instructions, follow them instead; for example, `all`, `--all`, or `-a` means include every changed file, and explicit paths/scopes mean include matching files.
 
