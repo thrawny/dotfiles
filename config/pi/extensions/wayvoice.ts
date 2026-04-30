@@ -296,7 +296,10 @@ async function toggleVoice(pi: ExtensionAPI, ctx: ExtensionContext): Promise<voi
 		debug(`built request: ${requestSummary(request)}`);
 		const response = await callWayvoice(request);
 		debug(`parsed response: ${JSON.stringify(response)}`);
-		if (response.error) throw new Error(response.error);
+		if (response.error) {
+			ctx.ui.notify(`wayvoice ${response.error.toLowerCase()}`, "info");
+			return;
+		}
 
 		if (response.text?.trim()) {
 			const transcript = response.text.trim();
@@ -312,7 +315,7 @@ async function toggleVoice(pi: ExtensionAPI, ctx: ExtensionContext): Promise<voi
 			return;
 		}
 
-		if (response.status) ctx.ui.notify(`wayvoice: ${response.status}`, "info");
+		if (response.status && response.status !== "recording") ctx.ui.notify(`wayvoice: ${response.status}`, "info");
 	} finally {
 		inFlight = false;
 		ctx.ui.setStatus("wayvoice", undefined);
