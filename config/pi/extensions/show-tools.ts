@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
-	pi.registerCommand("show-active-tools", {
+	pi.registerCommand("show-tools", {
 		description: "Show all Pi tools and whether each one is active",
 		handler: async (_args, ctx) => {
 			const active = new Set(pi.getActiveTools());
