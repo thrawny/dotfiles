@@ -8,10 +8,11 @@ import {
 	UserMessageComponent,
 } from "@mariozechner/pi-coding-agent";
 
-interface CommandFile {
+export interface CommandFile {
 	name: string;
 	description?: string;
 	argumentHint?: string;
+	defaultArguments?: string;
 	model?: string;
 	thinking?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 	body: string;
@@ -32,7 +33,7 @@ function commandsDir(): string {
 	return path.resolve(extensionDir(), "..", "commands");
 }
 
-function parseCommandFile(filePath: string): CommandFile {
+export function parseCommandFile(filePath: string): CommandFile {
 	const name = path.basename(filePath, ".md");
 	const text = readFileSync(filePath, "utf8");
 	const match = text.match(/^---\n([\s\S]*?)\n---\n?/);
@@ -43,6 +44,7 @@ function parseCommandFile(filePath: string): CommandFile {
 		name,
 		description: frontmatterValue(frontmatter, "description"),
 		argumentHint: frontmatterValue(frontmatter, "argument-hint"),
+		defaultArguments: frontmatterValue(frontmatter, "default-arguments"),
 		model: frontmatterValue(frontmatter, "model"),
 		thinking: parseThinking(frontmatterValue(frontmatter, "thinking")),
 		body,
@@ -73,7 +75,14 @@ function parseThinking(
 	throw new Error(`Invalid thinking level: ${value}`);
 }
 
-function expandArguments(template: string, args: string): string {
+export function effectiveArguments(
+	args: string,
+	defaultArguments?: string,
+): string {
+	return args.trim() ? args : (defaultArguments ?? "");
+}
+
+export function expandArguments(template: string, args: string): string {
 	const parts = args.trim() ? args.trim().split(/\s+/) : [];
 	return template
 		.replace(
@@ -86,6 +95,20 @@ function expandArguments(template: string, args: string): string {
 			/\$(\d+)/g,
 			(_match, index: string) => parts[Number(index) - 1] ?? "",
 		);
+}
+
+export function expandCommandFile(
+	filePath: string,
+	args: string,
+	cwd: string,
+): { command: CommandFile; effectiveArgs: string; expanded: string } {
+	const command = parseCommandFile(filePath);
+	const effectiveArgs = effectiveArguments(args, command.defaultArguments);
+	return {
+		command,
+		effectiveArgs,
+		expanded: expandShell(expandArguments(command.body, effectiveArgs), cwd),
+	};
 }
 
 function expandShell(template: string, cwd: string): string {
@@ -145,17 +168,15 @@ export default function (pi: ExtensionAPI) {
 	for (const file of readdirSync(dir).filter((entry) =>
 		entry.endsWith(".md"),
 	)) {
-		const command = parseCommandFile(path.join(dir, file));
+		const commandPath = path.join(dir, file);
+		const command = parseCommandFile(commandPath);
 
 		pi.registerCommand(command.name, {
 			description: command.description,
 			getArgumentCompletions: () => null,
 			handler: async (args, ctx) => {
 				const invocation = `/${command.name}${args.trim() ? ` ${args.trim()}` : ""}`;
-				const expanded = expandShell(
-					expandArguments(command.body, args),
-					ctx.cwd,
-				);
+				const { expanded } = expandCommandFile(commandPath, args, ctx.cwd);
 
 				pendingState = {
 					previousModel: command.model ? ctx.model : undefined,

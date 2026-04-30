@@ -17,8 +17,9 @@ ai: (nix::ai)
 
 # Check and typecheck Pi config/extensions
 pi:
-    biome check --write config/pi/extensions
+    biome check --write config/pi/extensions config/pi/tests
     pnpm --dir config/pi/extensions run typecheck
+    pnpm --dir config/pi/extensions test
 
 # Update all flake inputs and switch
 update: (nix::update)

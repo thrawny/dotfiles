@@ -1,6 +1,6 @@
-
 ---
 description: Monitor the current branch PR and fix issues; optional arg: `now` or wait seconds
+default-arguments: now
 ---
 
 ## Context
@@ -21,12 +21,11 @@ Based on the above context, monitor the PR associated with the current branch an
 
 2. **Accept wait time parameter**:
 
-   - The first argument is `$1`
-   - Default to `now` if no argument is provided
-   - Treat `now` as `0` seconds and begin checks immediately (e.g., `/prcheck now`)
-   - Allow the user to specify a custom wait time in seconds (e.g., `/prcheck 120`)
-   - If the argument is neither `now` nor a valid number of seconds, explain the valid options and fall back to `now`
-   - Start by waiting the resolved time, then do the first round of checks
+   - Use `$1` as the requested wait time.
+   - Treat `now` as `0` seconds and begin checks immediately (e.g., `/prcheck now`).
+   - Allow the user to specify a custom wait time in seconds (e.g., `/prcheck 120`).
+   - If the argument is neither `now` nor a valid number of seconds, explain the valid options and fall back to `now`.
+   - Start by waiting the resolved time, then do the first round of checks.
 
 3. **Enter monitoring loop**:
 
