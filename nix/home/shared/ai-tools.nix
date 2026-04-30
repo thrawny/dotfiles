@@ -39,9 +39,7 @@ let
       )
     else
       [ ];
-  linuxOnlySkills = [
-    "skill-eval"
-  ];
+  linuxOnlySkills = [ ];
   codexExcluded = linuxOnlySkills ++ [
     "brave-search"
     "skill-creator"

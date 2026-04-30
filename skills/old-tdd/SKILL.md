@@ -1,9 +1,9 @@
 ---
-name: tdd
+name: old-tdd
 description: Drive work through a test-driven development loop with explicit RED-GREEN-REFACTOR phases. Use when the user asks for TDD, test-first development, red-green-refactor, a failing test first, integration-style boundary tests, or stepwise checkpoints between test writing, implementation, and refactoring.
 ---
 
-# tdd
+# old-tdd
 
 Use TDD as an interactive workflow: plan the next behavior, write one failing test, make it pass with minimal code, then refactor only after GREEN.
 
