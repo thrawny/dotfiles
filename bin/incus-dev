@@ -414,7 +414,10 @@ generate_tailscale_authkey() {
 setup_tailscale() {
   local container="$1" authkey="$2"
 
-  [[ -n "$authkey" ]] || return 0
+  if [[ -z "$authkey" ]]; then
+    incus exec "$container" -- systemctl disable --now tailscaled.service >/dev/null 2>&1 || true
+    return 0
+  fi
 
   incus exec "$container" -- systemctl enable --now tailscaled.service
   incus exec "$container" -- tailscale up --auth-key "$authkey"
@@ -503,7 +506,7 @@ ensure_dirs() {
 wait_for_systemd() {
   local container="$1"
 
-  while ! incus exec "$container" -- systemctl list-units >/dev/null 2>&1; do
+  while ! incus exec "$container" -- sh -lc 'systemctl list-units >/dev/null && loginctl list-users >/dev/null' >/dev/null 2>&1; do
     sleep 0.5
   done
 }
@@ -516,13 +519,21 @@ setup_user_systemd() {
   incus exec "$container" -- loginctl enable-linger "$user"
   incus exec "$container" -- systemctl start "user@$uid.service"
 
-  incus exec "$container" -- env \
+  wait_for_user_systemd "$container" "$user" "$home" "$uid"
+}
+
+wait_for_user_systemd() {
+  local container="$1" user="$2" home="$3" uid="$4"
+
+  while ! incus exec "$container" -- env \
     HOME="$home" \
     USER="$user" \
     LOGNAME="$user" \
     XDG_RUNTIME_DIR="/run/user/$uid" \
     DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
-    runuser -u "$user" -- systemctl --user daemon-reload
+    runuser -u "$user" -- systemctl --user daemon-reload >/dev/null 2>&1; do
+    sleep 0.5
+  done
 }
 
 copy_file() {
