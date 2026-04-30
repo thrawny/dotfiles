@@ -71,7 +71,9 @@ function textResult(
 
 function syncScheduleToolActivation() {
 	if (!piRef) return;
-	const active = piRef.getActiveTools().filter((name) => name !== SCHEDULE_TOOL);
+	const active = piRef
+		.getActiveTools()
+		.filter((name) => name !== SCHEDULE_TOOL);
 	if (!scheduleEnabled) {
 		piRef.setActiveTools(active);
 		return;
@@ -147,8 +149,12 @@ function formatModelOverride(
 }
 
 function scheduleMessage(schedule: Schedule): string {
-	const kind = schedule.type === "once" ? "one-shot schedule" : "automatic loop";
-	const timing = schedule.type === "once" ? "once" : `every ${formatInterval(schedule.everyMs)}`;
+	const kind =
+		schedule.type === "once" ? "one-shot schedule" : "automatic loop";
+	const timing =
+		schedule.type === "once"
+			? "once"
+			: `every ${formatInterval(schedule.everyMs)}`;
 	return [`[${kind} #${schedule.id}; ${timing}]`, schedule.prompt].join("\n\n");
 }
 
@@ -170,11 +176,16 @@ function scheduleToDetails(schedule: Schedule) {
 
 function scheduleSummary(schedule: Schedule): string {
 	const basis = schedule.lastRunAt ?? schedule.createdAt;
-	const dueIn = formatRelative(Math.max(0, basis + schedule.everyMs - Date.now()));
+	const dueIn = formatRelative(
+		Math.max(0, basis + schedule.everyMs - Date.now()),
+	);
 	const lastRun = schedule.lastRunAt
 		? `${formatRelative(Date.now() - schedule.lastRunAt)} ago`
 		: "never";
-	const timing = schedule.type === "once" ? `once · due ${dueIn}` : `every ${formatInterval(schedule.everyMs)} · next ${dueIn}`;
+	const timing =
+		schedule.type === "once"
+			? `once · due ${dueIn}`
+			: `every ${formatInterval(schedule.everyMs)} · next ${dueIn}`;
 	return `#${schedule.id} ${timing} · last ${lastRun}${formatModelOverride(schedule.modelOverride, currentCtx?.model?.id)} · ${schedule.prompt}`;
 }
 
@@ -192,7 +203,8 @@ function clearSchedule(schedule: Schedule) {
 	else clearInterval(schedule.timer);
 	schedules.delete(schedule.id);
 	if (activeScheduleRunId === schedule.id) activeScheduleRunId = null;
-	if (activeScheduleToolTargetId === schedule.id) activeScheduleToolTargetId = null;
+	if (activeScheduleToolTargetId === schedule.id)
+		activeScheduleToolTargetId = null;
 }
 
 function clearAllSchedules() {
@@ -206,7 +218,9 @@ function clearAllSchedules() {
 }
 
 function parseScheduleIdFromPrompt(prompt: string): number | null {
-	const match = prompt.match(/^\[(?:automatic loop|one-shot schedule) #(\d+); [^\]]+\]/);
+	const match = prompt.match(
+		/^\[(?:automatic loop|one-shot schedule) #(\d+); [^\]]+\]/,
+	);
 	if (!match) return null;
 	const id = Number.parseInt(match[1], 10);
 	return Number.isFinite(id) ? id : null;
@@ -237,7 +251,10 @@ async function findModel(ctx: ExtensionContext, query: string) {
 	return null;
 }
 
-async function applyScheduleOverride(schedule: Schedule, ctx: ExtensionContext) {
+async function applyScheduleOverride(
+	schedule: Schedule,
+	ctx: ExtensionContext,
+) {
 	if (!schedule.modelOverride || !piRef) return;
 
 	activeScheduleRestore = {
@@ -365,7 +382,11 @@ export default function (pi: ExtensionAPI) {
 		await restoreAfterScheduleRun(ctx);
 	});
 
-	function forwardScheduleRequest(input: string, ctx: ExtensionContext, prefix: string) {
+	function forwardScheduleRequest(
+		input: string,
+		ctx: ExtensionContext,
+		prefix: string,
+	) {
 		scheduleEnabled = true;
 		syncScheduleToolActivation();
 		ctx.ui.notify("Schedule tool enabled for this session", "info");
@@ -386,7 +407,11 @@ export default function (pi: ExtensionAPI) {
 				);
 				return;
 			}
-			forwardScheduleRequest(input, ctx, "Use the schedule tool for this request");
+			forwardScheduleRequest(
+				input,
+				ctx,
+				"Use the schedule tool for this request",
+			);
 		},
 	});
 
@@ -402,7 +427,11 @@ export default function (pi: ExtensionAPI) {
 				);
 				return;
 			}
-			forwardScheduleRequest(input, ctx, "Use the schedule tool to create a recurring loop for this request");
+			forwardScheduleRequest(
+				input,
+				ctx,
+				"Use the schedule tool to create a recurring loop for this request",
+			);
 		},
 	});
 
@@ -482,7 +511,8 @@ export default function (pi: ExtensionAPI) {
 
 			if (!action) {
 				const prompt = params.prompt?.trim() ?? "";
-				if (!prompt) return textResult("Schedule prompt must not be empty.", {}, true);
+				if (!prompt)
+					return textResult("Schedule prompt must not be empty.", {}, true);
 
 				const type = params.type ?? (params.delay ? "once" : "interval");
 				const timing = type === "once" ? params.delay : params.interval;
@@ -501,7 +531,10 @@ export default function (pi: ExtensionAPI) {
 					return textResult("Schedule duration must be positive.", {}, true);
 				}
 
-				const modelOverride = toModelOverride(params.model, params.thinkingLevel);
+				const modelOverride = toModelOverride(
+					params.model,
+					params.thinkingLevel,
+				);
 				const schedule: Schedule = {
 					id: nextScheduleId++,
 					type,
@@ -516,7 +549,10 @@ export default function (pi: ExtensionAPI) {
 
 				schedules.set(schedule.id, schedule);
 				const started = type === "once" ? "Scheduled" : "Started loop";
-				const timingText = type === "once" ? `in ${formatInterval(everyMs)}` : `every ${formatInterval(everyMs)}`;
+				const timingText =
+					type === "once"
+						? `in ${formatInterval(everyMs)}`
+						: `every ${formatInterval(everyMs)}`;
 				return textResult(
 					`${started} #${schedule.id} ${timingText}${formatModelOverride(schedule.modelOverride, ctx.model?.id)}: ${schedule.prompt}`,
 					{
@@ -537,24 +573,43 @@ export default function (pi: ExtensionAPI) {
 
 			if (action === "stop") {
 				if (scheduleId === undefined) {
-					return textResult("scheduleId is required for action 'stop'.", { action }, true);
+					return textResult(
+						"scheduleId is required for action 'stop'.",
+						{ action },
+						true,
+					);
 				}
 				const schedule = schedules.get(scheduleId);
 				if (!schedule) {
-					return textResult(`Schedule #${scheduleId} not found.`, { action, scheduleId }, true);
+					return textResult(
+						`Schedule #${scheduleId} not found.`,
+						{ action, scheduleId },
+						true,
+					);
 				}
 
 				clearSchedule(schedule);
-				return textResult(`Stopped schedule #${schedule.id}.`, { action, scheduleId: schedule.id });
+				return textResult(`Stopped schedule #${schedule.id}.`, {
+					action,
+					scheduleId: schedule.id,
+				});
 			}
 
 			if (action === "run_now") {
 				if (scheduleId === undefined) {
-					return textResult("scheduleId is required for action 'run_now'.", { action }, true);
+					return textResult(
+						"scheduleId is required for action 'run_now'.",
+						{ action },
+						true,
+					);
 				}
 				const schedule = schedules.get(scheduleId);
 				if (!schedule) {
-					return textResult(`Schedule #${scheduleId} not found.`, { action, scheduleId }, true);
+					return textResult(
+						`Schedule #${scheduleId} not found.`,
+						{ action, scheduleId },
+						true,
+					);
 				}
 
 				const result = triggerSchedule(schedule.id);
@@ -567,7 +622,11 @@ export default function (pi: ExtensionAPI) {
 				}
 
 				if (result === "missing") {
-					return textResult(`Schedule #${scheduleId} not found.`, { action, scheduleId }, true);
+					return textResult(
+						`Schedule #${scheduleId} not found.`,
+						{ action, scheduleId },
+						true,
+					);
 				}
 
 				return textResult(`Triggered schedule #${schedule.id}.`, {
@@ -580,21 +639,32 @@ export default function (pi: ExtensionAPI) {
 			if (action === "stop_all") {
 				const count = schedules.size;
 				clearAllSchedules();
-				return textResult(`Stopped ${count} schedule${count === 1 ? "" : "s"}.`, {
-					action,
-					count,
-				});
+				return textResult(
+					`Stopped ${count} schedule${count === 1 ? "" : "s"}.`,
+					{
+						action,
+						count,
+					},
+				);
 			}
 
 			if (action === "complete") {
 				if (activeScheduleToolTargetId === null) {
-					return textResult("No active recurring loop run to complete.", { action, completed: false }, true);
+					return textResult(
+						"No active recurring loop run to complete.",
+						{ action, completed: false },
+						true,
+					);
 				}
 
 				const schedule = schedules.get(activeScheduleToolTargetId);
 				if (!schedule) {
 					activeScheduleToolTargetId = null;
-					return textResult("Schedule already stopped.", { action, completed: false }, true);
+					return textResult(
+						"Schedule already stopped.",
+						{ action, completed: false },
+						true,
+					);
 				}
 
 				const reason = params.reason?.trim();

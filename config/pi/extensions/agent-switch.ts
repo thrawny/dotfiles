@@ -126,7 +126,6 @@ export default function (pi: ExtensionAPI) {
 		track(ctx, "stop");
 	});
 
-
 	pi.on("session_shutdown", async (_event, ctx) => {
 		track(ctx, "session-end");
 	});

@@ -139,7 +139,10 @@ function install(
 				const activeCtx = getCurrentCtx();
 				const branch = footerData.getGitBranch();
 				const sessionName = activeCtx
-					? safe(() => activeCtx.sessionManager.getSessionName()?.trim(), undefined)
+					? safe(
+							() => activeCtx.sessionManager.getSessionName()?.trim(),
+							undefined,
+						)
 					: undefined;
 				const changes = getGitChanges();
 				const runtimeBadge = getRuntimeBadge();
@@ -197,11 +200,11 @@ function install(
 
 				const left = `${fgTrue(segmentSpecs[0].bg)}${START_CAP}${reset()}${segments.join("")}`;
 
-				const model = activeCtx ? safe(() => activeCtx.model, undefined) : undefined;
+				const model = activeCtx
+					? safe(() => activeCtx.model, undefined)
+					: undefined;
 				const thinking = activeCtx ? safe(getThinkingLevel, "off") : "off";
-				let rightText = model
-					? `${model.provider}/${model.id}`
-					: "no-model";
+				let rightText = model ? `${model.provider}/${model.id}` : "no-model";
 				if (model?.reasoning) {
 					rightText =
 						thinking === "off"
@@ -245,7 +248,11 @@ export default function (pi: ExtensionAPI) {
 
 	const apply = (ctx: ExtensionContext) => {
 		currentCtx = ctx;
-		install(ctx, () => currentCtx, () => pi.getThinkingLevel());
+		install(
+			ctx,
+			() => currentCtx,
+			() => pi.getThinkingLevel(),
+		);
 	};
 
 	pi.on("session_start", async (_event, ctx) => {

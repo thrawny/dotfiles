@@ -234,14 +234,14 @@ function renderRules(rules: Rule[]): string {
 	return blocks.join("\n\n");
 }
 
-export default function claudeRulesExtension(pi: ExtensionAPI) {
+export default function rulesExtension(pi: ExtensionAPI) {
 	let rules: Rule[] = [];
 	let appliedRuleNames = new Set<string>();
 
 	pi.on("session_start", async (_event, ctx) => {
 		const dirs = [
-			path.join(ctx.cwd, ".claude", "rules"),
-			path.join(process.env.HOME || "", ".claude", "rules"),
+			path.join(ctx.cwd, ".pi", "rules"),
+			path.join(process.env.HOME || "", ".pi", "agent", "rules"),
 		];
 
 		const seen = new Set<string>();
@@ -258,7 +258,7 @@ export default function claudeRulesExtension(pi: ExtensionAPI) {
 		rules = loaded;
 		appliedRuleNames = new Set<string>();
 		if (rules.length > 0) {
-			ctx.ui.notify(`Loaded ${rules.length} Claude rule(s) for Pi`, "info");
+			ctx.ui.notify(`Loaded ${rules.length} rule(s) for Pi`, "info");
 		}
 	});
 
@@ -285,10 +285,10 @@ export default function claudeRulesExtension(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("rules", {
-		description: "Show loaded Claude rule files",
+		description: "Show loaded rule files",
 		handler: async (_args, ctx) => {
 			if (rules.length === 0) {
-				ctx.ui.notify("No Claude rules loaded", "warning");
+				ctx.ui.notify("No rules loaded", "warning");
 				return;
 			}
 			const list = rules

@@ -2,9 +2,12 @@ import { appendFileSync, mkdirSync } from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
-import { completeSimple } from "@mariozechner/pi-ai";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
-import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
+import { completeSimple } from "@mariozechner/pi-ai";
+import type {
+	ExtensionAPI,
+	ExtensionContext,
+} from "@mariozechner/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 
 const DEFAULT_SHORTCUT = "ctrl+space";
@@ -38,7 +41,10 @@ interface WayvoiceResponse {
 }
 
 function socketPath(): string {
-	return process.env.PI_WAYVOICE_SOCKET || path.join(process.env.XDG_RUNTIME_DIR || os.tmpdir(), "wayvoice.sock");
+	return (
+		process.env.PI_WAYVOICE_SOCKET ||
+		path.join(process.env.XDG_RUNTIME_DIR || os.tmpdir(), "wayvoice.sock")
+	);
 }
 
 function isDebug(): boolean {
@@ -50,7 +56,11 @@ function debug(message: string): void {
 }
 
 function logPath(): string {
-	return path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"), "pi", "wayvoice.log");
+	return path.join(
+		process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"),
+		"pi",
+		"wayvoice.log",
+	);
 }
 
 function log(message: string): void {
@@ -66,10 +76,14 @@ function logError(message: string): void {
 
 let assumedRecording = false;
 
-async function callWayvoice(request: WayvoiceRequest): Promise<WayvoiceResponse> {
+async function callWayvoice(
+	request: WayvoiceRequest,
+): Promise<WayvoiceResponse> {
 	const starting = !assumedRecording;
 	const line = starting ? `start-json ${JSON.stringify(request)}` : "stop-json";
-	debug(`socket request: ${starting ? `start-json ${requestSummary(request)}` : line}`);
+	debug(
+		`socket request: ${starting ? `start-json ${requestSummary(request)}` : line}`,
+	);
 	const output = await sendSocketLine(line);
 	debug(`socket response: ${JSON.stringify(output)}`);
 
@@ -78,8 +92,12 @@ async function callWayvoice(request: WayvoiceRequest): Promise<WayvoiceResponse>
 
 	if (!output) return {};
 
-	if (["recording", "transcribing", "busy", "idle", "cancelled"].includes(output)) return { status: output };
-	if (output.startsWith("{") && output.endsWith("}")) return JSON.parse(output) as WayvoiceResponse;
+	if (
+		["recording", "transcribing", "busy", "idle", "cancelled"].includes(output)
+	)
+		return { status: output };
+	if (output.startsWith("{") && output.endsWith("}"))
+		return JSON.parse(output) as WayvoiceResponse;
 	return { status: "done", text: output };
 }
 
@@ -108,7 +126,9 @@ async function sendSocketLine(line: string): Promise<string> {
 	});
 }
 
-function contentText(content: string | Array<{ type: string; text?: string; thinking?: string }>): string {
+function contentText(
+	content: string | Array<{ type: string; text?: string; thinking?: string }>,
+): string {
 	if (typeof content === "string") return content;
 	return content
 		.filter((block) => block.type === "text" || block.type === "thinking")
@@ -125,20 +145,36 @@ function recentPromptContext(ctx: ExtensionContext): string {
 	let users = 0;
 	let assistants = 0;
 	const branch = ctx.sessionManager.getBranch() as Array<{
-		message?: { role: string; content: string | Array<{ type: string; text?: string; thinking?: string }> };
+		message?: {
+			role: string;
+			content:
+				| string
+				| Array<{ type: string; text?: string; thinking?: string }>;
+		};
 	}>;
 
 	for (const entry of [...branch].reverse()) {
 		const message = entry.message;
 		if (!message) continue;
 		if (message.role === "user" && users < RECENT_USER_MESSAGES) {
-			selected.push(`User: ${truncateText(contentText(message.content), MAX_USER_MESSAGE_CHARS)}`);
+			selected.push(
+				`User: ${truncateText(contentText(message.content), MAX_USER_MESSAGE_CHARS)}`,
+			);
 			users++;
-		} else if (message.role === "assistant" && assistants < RECENT_ASSISTANT_MESSAGES) {
-			selected.push(`Assistant: ${truncateText(contentText(message.content), MAX_ASSISTANT_MESSAGE_CHARS)}`);
+		} else if (
+			message.role === "assistant" &&
+			assistants < RECENT_ASSISTANT_MESSAGES
+		) {
+			selected.push(
+				`Assistant: ${truncateText(contentText(message.content), MAX_ASSISTANT_MESSAGE_CHARS)}`,
+			);
 			assistants++;
 		}
-		if (users >= RECENT_USER_MESSAGES && assistants >= RECENT_ASSISTANT_MESSAGES) break;
+		if (
+			users >= RECENT_USER_MESSAGES &&
+			assistants >= RECENT_ASSISTANT_MESSAGES
+		)
+			break;
 	}
 
 	return selected.reverse().join("\n\n");
@@ -150,7 +186,9 @@ function truncatePrompt(prompt: string): string {
 
 function showDebugWidget(ctx: ExtensionContext, message: string): void {
 	if (!isDebug()) return;
-	ctx.ui.setWidget("wayvoice-keywords", [message], { placement: "belowEditor" });
+	ctx.ui.setWidget("wayvoice-keywords", [message], {
+		placement: "belowEditor",
+	});
 	setTimeout(() => ctx.ui.setWidget("wayvoice-keywords", undefined), 8_000);
 }
 
@@ -185,13 +223,21 @@ function buildRequest(ctx: ExtensionContext): WayvoiceRequest {
 function keywordContext(ctx: ExtensionContext): string {
 	const lines: string[] = [];
 	const branch = ctx.sessionManager.getBranch() as Array<{
-		message?: { role: string; content: string | Array<{ type: string; text?: string; thinking?: string }> };
+		message?: {
+			role: string;
+			content:
+				| string
+				| Array<{ type: string; text?: string; thinking?: string }>;
+		};
 	}>;
 
 	for (const entry of [...branch].reverse()) {
 		const message = entry.message;
-		if (!message || (message.role !== "user" && message.role !== "assistant")) continue;
-		lines.push(`${message.role}: ${truncateText(contentText(message.content), 400)}`);
+		if (!message || (message.role !== "user" && message.role !== "assistant"))
+			continue;
+		lines.push(
+			`${message.role}: ${truncateText(contentText(message.content), 400)}`,
+		);
 		if (lines.length >= KEYWORD_CONTEXT_MESSAGES) break;
 	}
 
@@ -207,27 +253,51 @@ function assistantText(message: AssistantMessage): string {
 		})
 		.join("\n")
 		.trim();
-	if (!text) throw new Error(`empty keyword response: ${JSON.stringify(message)}`);
+	if (!text)
+		throw new Error(`empty keyword response: ${JSON.stringify(message)}`);
 	return text;
 }
 
 function parseKeywords(text: string): string[] {
 	const json = text.match(/\{[\s\S]*\}/)?.[0];
-	if (!json) throw new Error(`keyword response was not JSON: ${JSON.stringify(text)}`);
+	if (!json)
+		throw new Error(`keyword response was not JSON: ${JSON.stringify(text)}`);
 	const parsed = JSON.parse(json) as { keywords: unknown };
-	if (!Array.isArray(parsed.keywords)) throw new Error(`keyword response did not include keywords array: ${json}`);
+	if (!Array.isArray(parsed.keywords))
+		throw new Error(`keyword response did not include keywords array: ${json}`);
 	return parsed.keywords
 		.filter((keyword): keyword is string => typeof keyword === "string")
 		.map((keyword) => keyword.trim())
-		.filter((keyword) => keyword.length >= 2 && keyword.length <= 60 && !keyword.includes("/") && !keyword.match(/\.[a-z0-9]{1,6}$/i))
-		.filter((keyword) => !["debug flag", "typecheck", "reload", "temperature", "openai-codex-responses", "wayvoice_debug_inject"].includes(keyword.toLowerCase()))
+		.filter(
+			(keyword) =>
+				keyword.length >= 2 &&
+				keyword.length <= 60 &&
+				!keyword.includes("/") &&
+				!keyword.match(/\.[a-z0-9]{1,6}$/i),
+		)
+		.filter(
+			(keyword) =>
+				![
+					"debug flag",
+					"typecheck",
+					"reload",
+					"temperature",
+					"openai-codex-responses",
+					"wayvoice_debug_inject",
+				].includes(keyword.toLowerCase()),
+		)
 		.slice(0, MAX_DYNAMIC_KEYWORDS);
 }
 
 function mergeKeywords(previous: string[], extracted: string[]): string[] {
 	const merged = [...previous];
 	for (const keyword of extracted) {
-		if (!merged.some((existing) => existing.toLowerCase() === keyword.toLowerCase())) merged.push(keyword);
+		if (
+			!merged.some(
+				(existing) => existing.toLowerCase() === keyword.toLowerCase(),
+			)
+		)
+			merged.push(keyword);
 	}
 	return merged.slice(0, MAX_DYNAMIC_KEYWORDS);
 }
@@ -245,7 +315,11 @@ function addDebugMessage(pi: ExtensionAPI, content: string): void {
 	);
 }
 
-async function updateDynamicKeywords(pi: ExtensionAPI, ctx: ExtensionContext, transcript: string): Promise<void> {
+async function updateDynamicKeywords(
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+	transcript: string,
+): Promise<void> {
 	if (!ctx.model) throw new Error("no current model");
 	const auth = await ctx.modelRegistry.getApiKeyAndHeaders(ctx.model);
 	if (!auth.ok) throw new Error(auth.error);
@@ -254,7 +328,7 @@ async function updateDynamicKeywords(pi: ExtensionAPI, ctx: ExtensionContext, tr
 		{
 			systemPrompt: [
 				"Extract spoken technical vocabulary that would help future speech-to-text dictation.",
-				"Return JSON only: {\"keywords\":[\"term\"]}.",
+				'Return JSON only: {"keywords":["term"]}.',
 				"Include project/tool/product names, acronyms, commands, and uncommon technical terms likely to be spoken aloud.",
 				"Exclude filenames, file paths, ids, hashes, generic prose, and normal English words.",
 			].join("\n"),
@@ -266,9 +340,17 @@ async function updateDynamicKeywords(pi: ExtensionAPI, ctx: ExtensionContext, tr
 				},
 			],
 		},
-		{ apiKey: auth.apiKey, headers: auth.headers, reasoning: "minimal", maxTokens: 200 },
+		{
+			apiKey: auth.apiKey,
+			headers: auth.headers,
+			reasoning: "minimal",
+			maxTokens: 200,
+		},
 	);
-	const nextKeywords = mergeKeywords(dynamicKeywords, parseKeywords(assistantText(keywordResponse)));
+	const nextKeywords = mergeKeywords(
+		dynamicKeywords,
+		parseKeywords(assistantText(keywordResponse)),
+	);
 	if (JSON.stringify(nextKeywords) === JSON.stringify(dynamicKeywords)) {
 		const message = `wayvoice keywords unchanged: ${dynamicKeywords.join(", ") || "none"}`;
 		showDebugWidget(ctx, message);
@@ -284,7 +366,10 @@ async function updateDynamicKeywords(pi: ExtensionAPI, ctx: ExtensionContext, tr
 	addDebugMessage(pi, message);
 }
 
-async function toggleVoice(pi: ExtensionAPI, ctx: ExtensionContext): Promise<void> {
+async function toggleVoice(
+	pi: ExtensionAPI,
+	ctx: ExtensionContext,
+): Promise<void> {
 	const now = Date.now();
 	if (inFlight || now - lastTriggerAt < TRIGGER_DEBOUNCE_MS) return;
 	inFlight = true;
@@ -306,7 +391,9 @@ async function toggleVoice(pi: ExtensionAPI, ctx: ExtensionContext): Promise<voi
 			ctx.ui.pasteToEditor(transcript);
 			showDebugWidget(ctx, "wayvoice: updating keywords…");
 			void updateDynamicKeywords(pi, ctx, transcript).catch((error) => {
-				logError(`keyword update failed: ${error instanceof Error ? error.stack || error.message : String(error)}`);
+				logError(
+					`keyword update failed: ${error instanceof Error ? error.stack || error.message : String(error)}`,
+				);
 				const message = `wayvoice keyword update failed: ${error}`;
 				showDebugWidget(ctx, message);
 				addDebugMessage(pi, message);
@@ -315,7 +402,8 @@ async function toggleVoice(pi: ExtensionAPI, ctx: ExtensionContext): Promise<voi
 			return;
 		}
 
-		if (response.status && response.status !== "recording") ctx.ui.notify(`wayvoice: ${response.status}`, "info");
+		if (response.status && response.status !== "recording")
+			ctx.ui.notify(`wayvoice: ${response.status}`, "info");
 	} finally {
 		inFlight = false;
 		ctx.ui.setStatus("wayvoice", undefined);
@@ -323,10 +411,13 @@ async function toggleVoice(pi: ExtensionAPI, ctx: ExtensionContext): Promise<voi
 }
 
 export default function (pi: ExtensionAPI) {
-	pi.registerShortcut((process.env.PI_WAYVOICE_SHORTCUT || DEFAULT_SHORTCUT) as never, {
-		description: "Toggle wayvoice dictation into Pi",
-		handler: async (ctx) => toggleVoice(pi, ctx),
-	});
+	pi.registerShortcut(
+		(process.env.PI_WAYVOICE_SHORTCUT || DEFAULT_SHORTCUT) as never,
+		{
+			description: "Toggle wayvoice dictation into Pi",
+			handler: async (ctx) => toggleVoice(pi, ctx),
+		},
+	);
 
 	pi.registerCommand("voice", {
 		description: "Toggle wayvoice dictation into the Pi editor",
@@ -336,7 +427,11 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("voice-keywords", {
 		description: "Show current wayvoice dynamic keywords",
 		handler: async (_args, ctx) => {
-			ctx.ui.setWidget("wayvoice-keywords", [`wayvoice keywords: ${dynamicKeywords.join(", ") || "none"}`], { placement: "belowEditor" });
+			ctx.ui.setWidget(
+				"wayvoice-keywords",
+				[`wayvoice keywords: ${dynamicKeywords.join(", ") || "none"}`],
+				{ placement: "belowEditor" },
+			);
 			setTimeout(() => ctx.ui.setWidget("wayvoice-keywords", undefined), 8_000);
 		},
 	});
@@ -345,24 +440,38 @@ export default function (pi: ExtensionAPI) {
 		pi.registerCommand("voice-log", {
 			description: "Show wayvoice extension log path",
 			handler: async (_args, ctx) => {
-				ctx.ui.setWidget("wayvoice-keywords", [`wayvoice log: ${logPath()}`], { placement: "belowEditor" });
-				setTimeout(() => ctx.ui.setWidget("wayvoice-keywords", undefined), 8_000);
+				ctx.ui.setWidget("wayvoice-keywords", [`wayvoice log: ${logPath()}`], {
+					placement: "belowEditor",
+				});
+				setTimeout(
+					() => ctx.ui.setWidget("wayvoice-keywords", undefined),
+					8_000,
+				);
 			},
 		});
 
 		pi.registerTool({
 			name: "wayvoice_debug_inject",
 			label: "Wayvoice Debug Inject",
-			description: "Debug wayvoice keyword extraction by pretending a transcript was inserted into the Pi editor.",
+			description:
+				"Debug wayvoice keyword extraction by pretending a transcript was inserted into the Pi editor.",
 			parameters: Type.Object({
-				transcript: Type.String({ description: "Mock transcript text to insert and feed to keyword extraction" }),
+				transcript: Type.String({
+					description:
+						"Mock transcript text to insert and feed to keyword extraction",
+				}),
 			}),
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				ctx.ui.pasteToEditor(params.transcript);
 				showDebugWidget(ctx, "wayvoice debug: updating keywords…");
 				await updateDynamicKeywords(pi, ctx, params.transcript);
 				return {
-					content: [{ type: "text", text: `Inserted mock transcript and updated keywords: ${dynamicKeywords.join(", ") || "none"}` }],
+					content: [
+						{
+							type: "text",
+							text: `Inserted mock transcript and updated keywords: ${dynamicKeywords.join(", ") || "none"}`,
+						},
+					],
 					details: { keywords: dynamicKeywords },
 				};
 			},
