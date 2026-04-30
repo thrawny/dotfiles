@@ -234,14 +234,25 @@ function renderRules(rules: Rule[]): string {
 	return blocks.join("\n\n");
 }
 
+function existingDir(primary: string, fallback: string): string {
+	return fs.existsSync(primary) ? primary : fallback;
+}
+
 export default function rulesExtension(pi: ExtensionAPI) {
 	let rules: Rule[] = [];
 	let appliedRuleNames = new Set<string>();
 
 	pi.on("session_start", async (_event, ctx) => {
+		const home = process.env.HOME || "";
 		const dirs = [
-			path.join(ctx.cwd, ".pi", "rules"),
-			path.join(process.env.HOME || "", ".pi", "agent", "rules"),
+			existingDir(
+				path.join(ctx.cwd, ".pi", "rules"),
+				path.join(ctx.cwd, ".claude", "rules"),
+			),
+			existingDir(
+				path.join(home, ".pi", "agent", "rules"),
+				path.join(home, ".claude", "rules"),
+			),
 		];
 
 		const seen = new Set<string>();
