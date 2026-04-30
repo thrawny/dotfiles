@@ -19,6 +19,9 @@ let
   configSource =
     rel: if repoBacked then config.lib.file.mkOutOfStoreSymlink (configPath rel) else configPath rel;
   skillsRoot = if repoBacked then ../../../skills else containerAssets.skills;
+  rulesRoot = if repoBacked then ../../../rules else containerAssets.rules;
+  rulesSource =
+    if repoBacked then config.lib.file.mkOutOfStoreSymlink (toString rulesRoot) else rulesRoot;
   codexSkillsRoot = if repoBacked then ../../../config/codex/skills else configPath "codex/skills";
   sharedSkillNames = lib.filter (name: !builtins.elem name excludedSharedSkills) (
     builtins.attrNames (
@@ -148,6 +151,7 @@ in
         ".codex/AGENTS.md".source = configSource "codex/AGENTS-GLOBAL.md";
 
         ".pi/agent/AGENTS.md".source = configSource "pi/AGENTS-GLOBAL.md";
+        ".pi/agent/rules".source = rulesSource;
         ".pi/agent/prompts".source = configSource "pi/prompts";
         ".pi/agent/commands".source = configSource "pi/commands";
         ".pi/agent/themes".source = configSource "pi/themes";
@@ -156,7 +160,7 @@ in
 
         ".claude/commands".source = configSource "claude/commands";
         ".claude/agents".source = configSource "claude/agents";
-        ".claude/rules".source = configSource "claude/rules";
+        ".claude/rules".source = rulesSource;
         ".claude/CLAUDE.md".source = configSource "claude/CLAUDE-GLOBAL.md";
         ".claude/.keep".text = "";
       }
