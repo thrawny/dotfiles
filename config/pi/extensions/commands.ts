@@ -2,17 +2,23 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { UserMessageComponent, type ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { Api, Model } from "@mariozechner/pi-ai";
+import {
+	type ExtensionAPI,
+	UserMessageComponent,
+} from "@mariozechner/pi-coding-agent";
 
 interface CommandFile {
 	name: string;
 	description?: string;
 	argumentHint?: string;
+	model?: string;
 	thinking?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
 	body: string;
 }
 
 interface PendingState {
+	previousModel?: Model<Api>;
 	previousThinking?: ReturnType<ExtensionAPI["getThinkingLevel"]>;
 }
 
@@ -37,33 +43,55 @@ function parseCommandFile(filePath: string): CommandFile {
 		name,
 		description: frontmatterValue(frontmatter, "description"),
 		argumentHint: frontmatterValue(frontmatter, "argument-hint"),
+		model: frontmatterValue(frontmatter, "model"),
 		thinking: parseThinking(frontmatterValue(frontmatter, "thinking")),
 		body,
 	};
 }
 
-function frontmatterValue(frontmatter: string, key: string): string | undefined {
-	const line = frontmatter.split("\n").find((item) => item.trim().startsWith(`${key}:`));
-	return line?.slice(line.indexOf(":") + 1).trim().replace(/^['"]|['"]$/g, "") || undefined;
+function frontmatterValue(
+	frontmatter: string,
+	key: string,
+): string | undefined {
+	const line = frontmatter
+		.split("\n")
+		.find((item) => item.trim().startsWith(`${key}:`));
+	return (
+		line
+			?.slice(line.indexOf(":") + 1)
+			.trim()
+			.replace(/^['"]|['"]$/g, "") || undefined
+	);
 }
 
-function parseThinking(value: string | undefined): CommandFile["thinking"] | undefined {
+function parseThinking(
+	value: string | undefined,
+): CommandFile["thinking"] | undefined {
 	if (!value) return undefined;
-	if (["off", "minimal", "low", "medium", "high", "xhigh"].includes(value)) return value as CommandFile["thinking"];
+	if (["off", "minimal", "low", "medium", "high", "xhigh"].includes(value))
+		return value as CommandFile["thinking"];
 	throw new Error(`Invalid thinking level: ${value}`);
 }
 
 function expandArguments(template: string, args: string): string {
 	const parts = args.trim() ? args.trim().split(/\s+/) : [];
 	return template
-		.replace(/\{\{#if ARGUMENTS\}\}([\s\S]*?)\{\{\/if\}\}/g, args.trim() ? "$1" : "")
+		.replace(
+			/\{\{#if ARGUMENTS\}\}([\s\S]*?)\{\{\/if\}\}/g,
+			args.trim() ? "$1" : "",
+		)
 		.replace(/\$ARGUMENTS/g, args)
 		.replace(/\$@/g, args)
-		.replace(/\$(\d+)/g, (_match, index: string) => parts[Number(index) - 1] ?? "");
+		.replace(
+			/\$(\d+)/g,
+			(_match, index: string) => parts[Number(index) - 1] ?? "",
+		);
 }
 
 function expandShell(template: string, cwd: string): string {
-	return template.replace(/!`([^`]+)`/g, (_match, command: string) => shell(cwd, command));
+	return template.replace(/!`([^`]+)`/g, (_match, command: string) =>
+		shell(cwd, command),
+	);
 }
 
 function shell(cwd: string, command: string): string {
@@ -74,18 +102,35 @@ function shell(cwd: string, command: string): string {
 	}).trim();
 }
 
-function restoreState(pi: ExtensionAPI): void {
+function parseModel(value: string): { provider: string; modelId: string } {
+	const separator = value.indexOf("/");
+	if (separator <= 0 || separator === value.length - 1)
+		throw new Error(`Invalid model override: ${value}`);
+	return {
+		provider: value.slice(0, separator),
+		modelId: value.slice(separator + 1),
+	};
+}
+
+async function restoreState(pi: ExtensionAPI): Promise<void> {
 	if (!pendingState) return;
-	if (pendingState.previousThinking) pi.setThinkingLevel(pendingState.previousThinking);
+	if (pendingState.previousModel) await pi.setModel(pendingState.previousModel);
+	if (pendingState.previousThinking)
+		pi.setThinkingLevel(pendingState.previousThinking);
 	pendingState = undefined;
 }
 
 export default function (pi: ExtensionAPI) {
-	pi.registerMessageRenderer("command-prompt", (message, options, theme) => {
-		const details = message.details as { commandName?: string; invocation?: string } | undefined;
+	pi.registerMessageRenderer("command-prompt", (message, options, _theme) => {
+		const details = message.details as
+			| { commandName?: string; invocation?: string }
+			| undefined;
 		const commandName = details?.commandName ?? "command";
 		const invocation = details?.invocation ?? `/${commandName}`;
-		const content = typeof message.content === "string" ? message.content : JSON.stringify(message.content, null, 2);
+		const content =
+			typeof message.content === "string"
+				? message.content
+				: JSON.stringify(message.content, null, 2);
 
 		if (!options.expanded) {
 			return new UserMessageComponent(invocation);
@@ -97,7 +142,9 @@ export default function (pi: ExtensionAPI) {
 	const dir = commandsDir();
 	if (!existsSync(dir)) return;
 
-	for (const file of readdirSync(dir).filter((entry) => entry.endsWith(".md"))) {
+	for (const file of readdirSync(dir).filter((entry) =>
+		entry.endsWith(".md"),
+	)) {
 		const command = parseCommandFile(path.join(dir, file));
 
 		pi.registerCommand(command.name, {
@@ -105,12 +152,25 @@ export default function (pi: ExtensionAPI) {
 			getArgumentCompletions: () => null,
 			handler: async (args, ctx) => {
 				const invocation = `/${command.name}${args.trim() ? ` ${args.trim()}` : ""}`;
-				const expanded = expandShell(expandArguments(command.body, args), ctx.cwd);
+				const expanded = expandShell(
+					expandArguments(command.body, args),
+					ctx.cwd,
+				);
 
 				pendingState = {
-					previousThinking: command.thinking ? pi.getThinkingLevel() : undefined,
+					previousModel: command.model ? ctx.model : undefined,
+					previousThinking: command.thinking
+						? pi.getThinkingLevel()
+						: undefined,
 				};
 
+				if (command.model) {
+					const { provider, modelId } = parseModel(command.model);
+					const model = ctx.modelRegistry.find(provider, modelId);
+					if (!model)
+						throw new Error(`Unknown model override: ${command.model}`);
+					await pi.setModel(model);
+				}
 				if (command.thinking) pi.setThinkingLevel(command.thinking);
 
 				pi.sendMessage(
@@ -127,6 +187,6 @@ export default function (pi: ExtensionAPI) {
 	}
 
 	pi.on("agent_end", async () => {
-		restoreState(pi);
+		await restoreState(pi);
 	});
 }

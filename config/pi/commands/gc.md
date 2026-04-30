@@ -1,5 +1,6 @@
 ---
 description: Create a git commit
+thinking: off
 ---
 
 ## Context
