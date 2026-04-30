@@ -103,6 +103,30 @@
     # Fingerprint reader (Synaptics on Z13 Gen 2)
     fprintd.enable = true; # sudo/login get fprintAuth automatically
 
+    pipewire.wireplumber.extraConfig."51-disable-unused-audio" = {
+      "monitor.alsa.rules" = [
+        # Unplugged analog/stereo microphone; keep the digital microphone.
+        {
+          matches = [
+            {
+              "node.name" = "alsa_input.pci-0000_c3_00.6.HiFi__Mic2__source";
+            }
+          ];
+          actions.update-props."node.disabled" = true;
+        }
+
+        # AMD GPU HDMI/DisplayPort audio outputs.
+        {
+          matches = [
+            {
+              "device.name" = "alsa_card.pci-0000_c3_00.1";
+            }
+          ];
+          actions.update-props."device.disabled" = true;
+        }
+      ];
+    };
+
     # ZeroTier VPN
     zerotierone.enable = true;
   };
