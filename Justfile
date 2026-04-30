@@ -15,6 +15,11 @@ switch: (nix::switch)
 # Update AI tool flake inputs and switch
 ai: (nix::ai)
 
+# Check and typecheck Pi config/extensions
+pi:
+    biome check --write config/pi/extensions
+    pnpm --dir config/pi/extensions run typecheck
+
 # Update all flake inputs and switch
 update: (nix::update)
 
@@ -48,17 +53,11 @@ lint-python:
 # === Type checking ===
 
 # Typecheck all
-typecheck: typecheck-python typecheck-pi-extensions
+typecheck: typecheck-python
 
 # Typecheck Python code
 typecheck-python:
     basedpyright
-
-# Typecheck Pi TypeScript extensions
-# Uses latest TypeScript from config/pi/extensions/package.json
-typecheck-pi-extensions:
-    pnpm --dir config/pi/extensions install
-    pnpm --dir config/pi/extensions run typecheck
 
 # === Tests ===
 
@@ -73,8 +72,8 @@ test-nvim:
 
 # === Combined workflows ===
 
-# Format, lint, and evaluate current host
-check: fmt lint (nix::eval)
+# Format, lint, evaluate current host, and check Pi extensions
+check: fmt lint pi (nix::eval)
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint (nix::eval-all)
