@@ -60,21 +60,8 @@ main() {
   # shellcheck disable=SC2064
   trap "rm -rf '$staging_dir'" EXIT
 
-  echo "Scanning for git repos in container '$container'..."
-  local -a repo_paths=()
-  mapfile -t repo_paths < <(find_git_repos "$container" "$home")
-
-  if [[ ${#repo_paths[@]} -gt 0 ]]; then
-    mkdir -p "$staging_dir/repos"
-    for repo_path in "${repo_paths[@]}"; do
-      archive_repo "$container" "$repo_path" "$staging_dir/repos"
-    done
-  else
-    echo "No git repos found."
-  fi
-
-  echo "Extracting session transcripts..."
-  extract_sessions "$container" "$user" "$home" "$staging_dir"
+  echo "Archiving home directory from container '$container'..."
+  archive_home "$container" "$home" "$staging_dir"
 
   mkdir -p "$archive_dir"
   local archive_path="$archive_dir/${archive_name}.tar.gz"
@@ -100,8 +87,7 @@ usage() {
   cat <<'EOF'
 Usage: incus-cleanup [options] [container]
 
-Archives code state and session transcripts from an Incus container,
-then deletes it.
+Archives the user's home directory from an Incus container, then deletes it.
 
 Arguments:
   container     Container name (default: headless)
@@ -112,9 +98,9 @@ Options:
   --user USER   Container user (default: thrawny)
 
 The archive contains:
-  repos/       Full working-tree copies of each git repo found, including .git,
-               untracked files, and git-ignored files
-  sessions/    Claude, Codex, and Pi session data
+  home/        Full copy of the container user's home directory, excluding known
+               large generated directories: ~/.local/share/nvim, node_modules,
+               and .venv directories
 
 Examples:
   incus-cleanup headless
@@ -123,76 +109,24 @@ Examples:
 EOF
 }
 
-find_git_repos() {
-  local container="$1" home="$2"
+archive_home() {
+  local container="$1" home="$2" staging_dir="$3"
 
-  incus exec "$container" -- find "$home" \
-    -maxdepth 5 \
-    -name .git \
-    -type d \
-    2>/dev/null \
-    | sed 's|/\.git$||'
+  mkdir -p "$staging_dir/home"
+
+  incus exec "$container" -- tar \
+    --exclude="$(basename "$home")/.local/share/nvim" \
+    --exclude='*/node_modules' \
+    --exclude='*/node_modules/*' \
+    --exclude='*/.venv' \
+    --exclude='*/.venv/*' \
+    -C "$(dirname "$home")" \
+    -cf - \
+    -- "$(basename "$home")" \
+    | tar -C "$staging_dir/home" --strip-components=1 -xf -
+
+  echo "  Copied $home, excluding ~/.local/share/nvim, node_modules, and .venv."
 }
 
-archive_repo() {
-  local container="$1" repo_path="$2" dest_dir="$3"
-
-  local repo_slug="${repo_path#/}"
-  repo_slug="${repo_slug//\//_}"
-  local repo_dir="$dest_dir/$repo_slug"
-  mkdir -p "$repo_dir"
-
-  echo "  Archiving full repo: $repo_path"
-
-  incus exec "$container" -- tar -C "$(dirname "$repo_path")" -cf - -- "$(basename "$repo_path")" \
-    | tar -C "$repo_dir" --strip-components=1 -xf -
-
-  echo "    Copied working tree, including .git and ignored files."
-}
-
-extract_sessions() {
-  local container="$1" user="$2" home="$3" staging_dir="$4"
-  local sessions_dir="$staging_dir/sessions"
-
-  # Claude sessions
-  if incus exec "$container" -- test -d "$home/.claude/projects"; then
-    mkdir -p "$sessions_dir/claude"
-    pull_dir "$container" "$home/.claude/projects" "$sessions_dir/claude/projects"
-    pull_dir "$container" "$home/.claude/sessions" "$sessions_dir/claude/sessions"
-  fi
-
-  # Codex sessions
-  if incus exec "$container" -- test -d "$home/.codex/sessions"; then
-    mkdir -p "$sessions_dir/codex"
-    pull_dir "$container" "$home/.codex/sessions" "$sessions_dir/codex/sessions"
-    # Metadata files
-    for f in session_index.jsonl history.jsonl; do
-      if incus exec "$container" -- test -f "$home/.codex/$f"; then
-        incus file pull "$container$home/.codex/$f" "$sessions_dir/codex/$f"
-      fi
-    done
-  fi
-
-  # Pi sessions
-  if incus exec "$container" -- test -d "$home/.pi/agent/sessions"; then
-    mkdir -p "$sessions_dir/pi"
-    pull_dir "$container" "$home/.pi/agent/sessions" "$sessions_dir/pi/sessions"
-  fi
-
-  if [[ -d "$sessions_dir" && -n "$(ls -A "$sessions_dir" 2>/dev/null)" ]]; then
-    echo "  Extracted sessions."
-  else
-    echo "  No sessions found."
-  fi
-}
-
-pull_dir() {
-  local container="$1" src="$2" dest="$3"
-
-  incus exec "$container" -- test -d "$src" || return 0
-  mkdir -p "$dest"
-  incus exec "$container" -- tar -C "$(dirname "$src")" -cf - -- "$(basename "$src")" \
-    | tar -C "$(dirname "$dest")" -xf -
-}
 
 main "$@"
