@@ -135,6 +135,9 @@
 
   virtualisation.incus = {
     enable = true;
+    # Work around nixpkgs option default currently evaluating to null
+    # while the option type requires a boolean.
+    bucketSupport = false;
     preseed = {
       networks = [
         {
