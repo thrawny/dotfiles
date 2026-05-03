@@ -9,6 +9,13 @@
         after_sleep_cmd = "${dotfiles}/bin/dpms-on";
       };
       listener = [
+        # Safety net: if the laptop is closed and unplugged, suspend even when
+        # an idle inhibitor (e.g. caffeine/video call) was accidentally left on.
+        {
+          timeout = 60;
+          ignore_inhibit = true;
+          on-timeout = "${dotfiles}/bin/suspend-if-lid-closed-on-battery";
+        }
         {
           timeout = 300;
           on-timeout = "loginctl lock-session";

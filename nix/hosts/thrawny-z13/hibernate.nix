@@ -61,7 +61,7 @@ in
       enable = true;
       percentageLow = 20;
       percentageCritical = 10;
-      percentageAction = 5;
+      percentageAction = 10;
       criticalPowerAction = "Hibernate";
     };
   };
