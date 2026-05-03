@@ -4,6 +4,7 @@
   configSource,
   homeSource,
   lib,
+  pkgs,
   ...
 }:
 {
@@ -18,9 +19,5 @@
     '';
   };
 
-  programs.neovim = {
-    enable = true;
-    withRuby = false;
-    withPython3 = false;
-  };
+  home.packages = [ pkgs.neovim ];
 }
