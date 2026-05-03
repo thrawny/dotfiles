@@ -5,9 +5,9 @@ description: Sync example and live config files (Claude, Codex, Pi)
 
 ## Context
 
-Pre-commit hook output: !`config/git/hooks/pre-commit`
+Pre-commit hook output: !`scripts/pre-commit`
 
-Pre-commit hook source (defines ignore filters): @config/git/hooks/pre-commit
+Pre-commit hook source (defines ignore filters): @scripts/pre-commit
 
 ## Your task
 
