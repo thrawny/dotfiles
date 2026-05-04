@@ -699,19 +699,17 @@ def sync_secrets(container: str, user: str, home: str, github_token: str) -> Non
         check=False,
     )
     if cp.returncode == 0:
-        existing = "\n".join(
-            l
-            for l in cp.stdout.splitlines()
-            if not re.match(
-                r"^(export\s+)?(TELEGRAM_(NOTIFICATION_)?(BOT_TOKEN|CHAT_ID)|GITHUB_TOKEN)=",
-                l,
-            )
-        )
+        existing = cp.stdout
     lines = [l for l in existing.splitlines() if l]
-    if github_token:
+    existing_keys = set()
+    for line in lines:
+        match = re.match(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=", line)
+        if match:
+            existing_keys.add(match.group(1))
+    if github_token and "GITHUB_TOKEN" not in existing_keys:
         lines.append(f"GITHUB_TOKEN={shell_quote(github_token)}")
     for k, v in keys.items():
-        if v:
+        if v and k not in existing_keys:
             lines.append(f"{k}={shell_quote(v)}")
     with tempfile.NamedTemporaryFile("w", delete=False) as f:
         f.write("\n".join(lines) + "\n")
