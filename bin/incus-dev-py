@@ -933,7 +933,7 @@ def prepare(container: str, a: Args, home: str) -> None:
         f"{home}/.pi/agent/auth.json",
         f"{home}/.codex/auth.json",
     ]
-    run(["incus", "info", container])
+    run(["incus", "info", container], capture=True)
     ensure_dirs(container, a.user, home)
     setup_user_systemd(container, a.user, home)
     for src, dest in zip(host_files, dest_files):
