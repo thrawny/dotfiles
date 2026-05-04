@@ -73,8 +73,11 @@ test-nvim:
 
 # === Combined workflows ===
 
-# Format, lint, evaluate current host, and check Pi extensions
-check: fmt lint typecheck pi (nix::eval)
+# Format, lint, typecheck, evaluate current host, and check Pi extensions
+check: fmt check-parallel
+
+[parallel]
+check-parallel: lint typecheck pi (nix::eval)
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint (nix::eval-all)

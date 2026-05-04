@@ -4,7 +4,7 @@ version = "0.0.0"
 requires-python = ">=3.13"
 
 [tool.basedpyright]
-include = [".", "bin/incus-dev-py", "bin/kpf", "bin/notify", "bin/notify-sound"]
+include = [".", "bin/incus-dev-py", "bin/kpf", "bin/notify", "bin/notify-sound", "bin/run-if-changed"]
 exclude = [
   ".venv",
   "venv",
@@ -25,7 +25,7 @@ reportUnusedCallResult = false
 reportImplicitOverride = false
 
 [tool.ruff]
-extend-include = ["bin/incus-dev-py", "bin/kpf", "bin/notify", "bin/notify-sound"]
+extend-include = ["bin/incus-dev-py", "bin/kpf", "bin/notify", "bin/notify-sound", "bin/run-if-changed"]
 
 [tool.ruff.lint]
 select = ["I"]

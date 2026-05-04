@@ -97,16 +97,24 @@ diff:
     sudo nixos-rebuild build --flake ".#$host" && nvd diff /run/current-system result
 
 # Evaluate config without building (auto-detects NixOS vs Home Manager)
-eval:
+eval force="--force=false":
     #!/usr/bin/env bash
     set -euo pipefail
     host=$(hostname | sed 's/\.local$//')
     if [ -f /etc/NIXOS ]; then
         echo "Evaluating NixOS config for $host..."
-        nix eval ".#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null
+        run-if-changed --name "nix-eval-$host" "{{force}}" \
+            --include 'flake.nix' \
+            --include 'flake.lock' \
+            --include '**/*.nix' \
+            -- nix eval ".#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null
     else
         echo "Evaluating Home Manager config for $host..."
-        nix eval ".#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null
+        run-if-changed --name "home-eval-$host" "{{force}}" \
+            --include 'flake.nix' \
+            --include 'flake.lock' \
+            --include '**/*.nix' \
+            -- nix eval ".#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null
     fi
     echo "Config is valid"
 

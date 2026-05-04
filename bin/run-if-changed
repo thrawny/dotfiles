@@ -1,0 +1,164 @@
+#!/usr/bin/env python3
+# vim: set filetype=python:
+# pyright: basic
+
+from __future__ import annotations
+
+import argparse
+import fnmatch
+import hashlib
+import json
+import subprocess
+import sys
+from pathlib import Path
+from typing import Any
+
+CACHE_VERSION = 1
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run a command only when selected input files or command arguments changed."
+    )
+    parser.add_argument("--name", required=True, help="cache/stamp name")
+    parser.add_argument(
+        "--include",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="input file glob to hash; may be repeated",
+    )
+    parser.add_argument(
+        "--exclude",
+        action="append",
+        default=[],
+        metavar="GLOB",
+        help="input file glob to exclude from hashing; may be repeated",
+    )
+    parser.add_argument(
+        "--stamp-dir",
+        default=str(Path.home() / ".cache" / "run-if-changed"),
+        help="directory for stamp files (default: ~/.cache/run-if-changed)",
+    )
+    parser.add_argument(
+        "--force",
+        choices=("true", "false"),
+        default="false",
+        help="run even when unchanged (default: false)",
+    )
+    parser.add_argument("--verbose", action="store_true", help="print cache details")
+    parser.add_argument("command", nargs=argparse.REMAINDER, help="command after --")
+    ns = parser.parse_args(argv)
+    if ns.command and ns.command[0] == "--":
+        ns.command = ns.command[1:]
+    if not ns.command:
+        parser.error("missing command; pass it after --")
+    if not ns.include:
+        parser.error("at least one --include glob is required")
+    return ns
+
+
+def project_root() -> Path:
+    return Path.cwd().resolve()
+
+
+def is_excluded(path: Path, patterns: list[str]) -> bool:
+    text = path.as_posix()
+    return any(fnmatch.fnmatch(text, pattern) for pattern in patterns)
+
+
+def collect_files(root: Path, includes: list[str], excludes: list[str]) -> list[Path]:
+    files: set[Path] = set()
+    for pattern in includes:
+        matches = list(root.glob(pattern))
+        if not matches:
+            raise SystemExit(f"run-if-changed: include matched no files: {pattern}")
+        for path in matches:
+            if path.is_file():
+                rel = path.resolve().relative_to(root)
+                if not is_excluded(rel, excludes):
+                    files.add(rel)
+    return sorted(files, key=lambda p: p.as_posix())
+
+
+def digest_inputs(root: Path, files: list[Path], command: list[str]) -> str:
+    digest = hashlib.sha256()
+    digest.update(f"run-if-changed-v{CACHE_VERSION}\0".encode())
+    digest.update(root.as_posix().encode())
+    digest.update(b"\0command\0")
+    for arg in command:
+        digest.update(arg.encode())
+        digest.update(b"\0")
+    digest.update(b"files\0")
+    for rel in files:
+        path = root / rel
+        digest.update(rel.as_posix().encode())
+        digest.update(b"\0")
+        digest.update(hashlib.sha256(path.read_bytes()).digest())
+        digest.update(b"\0")
+    return digest.hexdigest()
+
+
+def stamp_path(root: Path, stamp_dir: str, name: str) -> Path:
+    safe = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in name)
+    stamp_root = Path(stamp_dir).expanduser()
+    if not stamp_root.is_absolute():
+        stamp_root = root / stamp_root
+    return stamp_root / f"{safe}.json"
+
+
+def load_stamp(path: Path) -> dict[str, Any] | None:
+    try:
+        data: Any = json.loads(path.read_text())
+        if not isinstance(data, dict):
+            return None
+        key: Any = data.get("key")
+        return {"key": key} if isinstance(key, str) else None
+    except FileNotFoundError:
+        return None
+    except Exception:
+        return None
+
+
+def write_stamp(path: Path, *, key: str, files: list[Path], command: list[str]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    data = {
+        "version": CACHE_VERSION,
+        "key": key,
+        "files": [file.as_posix() for file in files],
+        "command": command,
+    }
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2) + "\n")
+    tmp.replace(path)
+
+
+def main(argv: list[str]) -> int:
+    ns = parse_args(argv)
+    root = project_root()
+    files = collect_files(root, ns.include, ns.exclude)
+    key = digest_inputs(root, files, ns.command)
+    stamp = stamp_path(root, ns.stamp_dir, ns.name)
+    previous = load_stamp(stamp)
+    force = ns.force == "true"
+
+    if not force and previous and previous.get("key") == key:
+        print(f"run-if-changed: {ns.name} unchanged, skipping")
+        if ns.verbose:
+            print(f"run-if-changed: stamp {stamp}")
+            print(f"run-if-changed: {len(files)} input files")
+        return 0
+
+    if ns.verbose:
+        reason = "forced" if force else "changed" if previous else "no previous stamp"
+        print(f"run-if-changed: {ns.name} running ({reason})")
+        print(f"run-if-changed: {len(files)} input files")
+
+    result = subprocess.run(ns.command)
+    if result.returncode == 0:
+        write_stamp(stamp, key=key, files=files, command=ns.command)
+    return result.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))
