@@ -20,10 +20,10 @@ return {
     -- Disable formatting for YAML files (Prettier doesn't support custom sequence indentation)
     opts.formatters_by_ft.yaml = {}
 
-    -- Use biome for JSON (autoformat disabled via autocmds.lua)
-    opts.formatters_by_ft.json = { "biome" }
-    opts.formatters_by_ft.jsonc = { "biome" }
-    opts.formatters.biome = {
+    -- Use biome check --write so editor formatting matches `just pi`
+    opts.formatters_by_ft.json = { "biome-check" }
+    opts.formatters_by_ft.jsonc = { "biome-check" }
+    opts.formatters["biome-check"] = {
       require_cwd = false,
     }
 

@@ -162,7 +162,7 @@ function install(
 					ctxFg = COLORS.white;
 					ctxBg = COLORS.darkRed;
 					warn = "\uf0e7 ";
-				} else if (percent >= 67) {
+				} else if (percent >= 80) {
 					warn = "\uf071 ";
 				}
 
