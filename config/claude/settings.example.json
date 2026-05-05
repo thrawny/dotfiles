@@ -127,5 +127,6 @@
     "skill-creator@claude-plugins-official": true
   },
   "plansDirectory": ".claude/plans",
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "includeCoAuthoredBy": false
 }
