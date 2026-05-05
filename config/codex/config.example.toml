@@ -1,12 +1,15 @@
 editor = "cursor"
 sandbox_mode = "workspace-write"
-model = "gpt-5.4"
+model = "gpt-5.5"
 model_reasoning_effort = "high"
+model_reasoning_summary = "none"
+model_verbosity = "low"
 tool_output_token_limit = 25000
-# Leave room for native compaction near the 272–273k context window.
-# Formula: 273000 - (tool_output_token_limit + 15000)
-# With tool_output_token_limit=25000 ⇒ 273000 - (25000 + 15000) = 233000
-model_auto_compact_token_limit = 233000
+# GPT-5.5 in Codex is advertised as 400k total context with 128k max output.
+# That leaves about 272k tokens for input/history before output reservation.
+# Keep auto-compaction below that practical input/history budget.
+model_context_window = 400000
+model_auto_compact_token_limit = 258000
 personality = "pragmatic"
 suppress_unstable_features_warning = true
 web_search = "live"
@@ -25,15 +28,26 @@ theme = "monokai-extended"
 # args = ["mcp-nixos"]
 
 [features]
-ghost_commit = false
-unified_exec = true
+apps = true
 apply_patch_freeform = true
-skills = true
-shell_snapshot = true
-voice_transcription = true
-multi_agent = true
+browser_use = true
+codex_git_commit = false
 codex_hooks = true
+computer_use = true
+enable_request_compression = true
+fast_mode = true
 goals = true
+image_generation = true
+in_app_browser = true
+multi_agent = true
+personality = true
+shell_snapshot = true
+shell_tool = true
+skill_mcp_dependency_install = true
+tool_search = true
+tool_suggest = true
+unified_exec = true
+workspace_dependencies = true
 
 [sandbox_workspace_write]
 writable_roots = ["/home/thrawny/.cache", "/home/thrawny/.npm"]
