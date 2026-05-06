@@ -1,0 +1,441 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# ///
+# vim: set filetype=python:
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import uuid
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+
+@dataclass
+class Args:
+    target: str
+    cwd: Path
+    session: Path
+    prompt: str
+    user: str
+    dry_run: bool
+    no_clipboard: bool
+
+
+def run(
+    args: list[str],
+    *,
+    cwd: Path | None = None,
+    stdin=None,
+    capture: bool = False,
+    check: bool = True,
+) -> subprocess.CompletedProcess:
+    cp = subprocess.run(
+        args,
+        cwd=cwd,
+        stdin=stdin,
+        text=False if stdin is not None else True,
+        capture_output=capture,
+        check=False,
+    )
+    if check and cp.returncode != 0:
+        if capture:
+            if cp.stdout:
+                sys.stdout.write(
+                    cp.stdout if isinstance(cp.stdout, str) else cp.stdout.decode()
+                )
+            if cp.stderr:
+                sys.stderr.write(
+                    cp.stderr if isinstance(cp.stderr, str) else cp.stderr.decode()
+                )
+        raise SystemExit(cp.returncode)
+    return cp
+
+
+def out(args: list[str], *, cwd: Path | None = None, check: bool = True) -> str:
+    cp = run(args, cwd=cwd, capture=True, check=check)
+    return (
+        cp.stdout.strip() if isinstance(cp.stdout, str) else cp.stdout.decode().strip()
+    )
+
+
+def repo_root(cwd: Path) -> Path:
+    root = out(["git", "rev-parse", "--show-toplevel"], cwd=cwd, check=False)
+    return Path(root).resolve() if root else cwd.resolve()
+
+
+def sanitize_container_name(value: str) -> str:
+    name = re.sub(r"[^a-z0-9_.-]+", "-", value.lower()).strip("-")
+    return name or "workspace"
+
+
+def infer_target(root: Path) -> str:
+    return zmx_session_name(root)
+
+
+def user_home(user: str) -> str:
+    return "/root" if user == "root" else f"/home/{user}"
+
+
+def pi_slug(path: Path) -> str:
+    return "--" + str(path).strip("/").replace("/", "-") + "--"
+
+
+def unquote_prompt(value: str) -> str:
+    trimmed = value.strip()
+    if len(trimmed) >= 2 and trimmed[0] == trimmed[-1] and trimmed[0] in ("'", '"'):
+        try:
+            parsed = shlex.split(trimmed)
+        except ValueError:
+            return trimmed[1:-1]
+        if len(parsed) == 1:
+            return parsed[0]
+    return trimmed
+
+
+def parse_args(argv: list[str]) -> Args:
+    parser = argparse.ArgumentParser(
+        prog="pi-teleport",
+        description="Prepare the current Pi session to continue in an Incus container.",
+    )
+    parser.add_argument("--target", dest="target_flag", default="")
+    parser.add_argument("--cwd", type=Path, default=Path.cwd())
+    parser.add_argument("--session", type=Path, required=True)
+    parser.add_argument("--prompt", default="")
+    parser.add_argument("--user", default="thrawny")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--no-clipboard", action="store_true")
+    ns = parser.parse_args(argv)
+
+    cwd = ns.cwd.expanduser().resolve()
+    root = repo_root(cwd)
+    target = ns.target_flag or infer_target(root)
+    return Args(
+        target=target,
+        cwd=cwd,
+        session=ns.session.expanduser().resolve(),
+        prompt=unquote_prompt(ns.prompt),
+        user=ns.user,
+        dry_run=ns.dry_run,
+        no_clipboard=ns.no_clipboard,
+    )
+
+
+def ensure_container(args: Args, root: Path) -> None:
+    cmd = [
+        str(Path(__file__).resolve().with_name("incus-dev-py")),
+        args.target,
+        "--path",
+        str(root),
+        "--no-sessions",
+    ]
+    if args.dry_run:
+        print("+ " + " ".join(shlex.quote(part) for part in cmd))
+        return
+    run(cmd)
+
+
+def incus_shell(container: str, user: str, command: str, *, capture: bool = False):
+    home = user_home(user)
+    if user == "root":
+        cmd = [
+            "incus",
+            "exec",
+            container,
+            "--",
+            "env",
+            f"HOME={home}",
+            "USER=root",
+            "LOGNAME=root",
+            "sh",
+            "-lc",
+            command,
+        ]
+    else:
+        cmd = [
+            "incus",
+            "exec",
+            container,
+            "--",
+            "env",
+            f"HOME={home}",
+            f"USER={user}",
+            f"LOGNAME={user}",
+            "runuser",
+            "-u",
+            user,
+            "--",
+            "sh",
+            "-lc",
+            command,
+        ]
+    return run(cmd, capture=capture)
+
+
+def owner(container: str, user: str) -> str:
+    group = out(["incus", "exec", container, "--", "id", "-gn", user])
+    return f"{user}:{group}"
+
+
+def dirty_files(root: Path) -> tuple[list[str], list[str]]:
+    changed_raw = out(
+        ["git", "diff", "--name-only", "--diff-filter=ACMRT", "-z", "HEAD"],
+        cwd=root,
+    )
+    untracked_raw = out(["git", "ls-files", "-o", "--exclude-standard", "-z"], cwd=root)
+    deleted_raw = out(
+        ["git", "diff", "--name-only", "--diff-filter=D", "-z", "HEAD"],
+        cwd=root,
+    )
+    modified = sorted(
+        {item for item in (changed_raw + "\0" + untracked_raw).split("\0") if item}
+    )
+    deleted = [item for item in deleted_raw.split("\0") if item]
+    return modified, deleted
+
+
+def sync_dirty_state(container: str, user: str, root: Path, dry_run: bool) -> None:
+    modified, deleted = dirty_files(root)
+    if not modified and not deleted:
+        print("Dirty state: none")
+        return
+
+    print(
+        f"Dirty state: {len(modified)} copied, {len(deleted)} deleted"
+        if not dry_run
+        else f"Dirty state: would copy {len(modified)}, delete {len(deleted)}"
+    )
+    if dry_run:
+        return
+
+    incus_shell(container, user, f"mkdir -p {shlex.quote(str(root))}")
+    if modified:
+        with tempfile.TemporaryFile() as f:
+            with tarfile.open(fileobj=f, mode="w") as archive:
+                for rel in modified:
+                    path = root / rel
+                    if path.exists():
+                        archive.add(path, arcname=rel)
+            f.seek(0)
+            run(
+                [
+                    "incus",
+                    "exec",
+                    container,
+                    "--",
+                    "runuser",
+                    "-u",
+                    user,
+                    "--",
+                    "tar",
+                    "-C",
+                    str(root),
+                    "-xf",
+                    "-",
+                ],
+                stdin=f,
+            )
+    for rel in deleted:
+        incus_shell(container, user, f"rm -f -- {shlex.quote(str(root / rel))}")
+
+
+def clone_session(src: Path, root: Path) -> tuple[Path, str]:
+    lines = src.read_text(encoding="utf-8").splitlines()
+    if not lines:
+        raise SystemExit(f"Empty Pi session file: {src}")
+
+    header = json.loads(lines[0])
+    old_id = str(header.get("id") or src.stem)
+    new_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    file_ts = now_iso.replace(":", "-").replace(".", "-")
+    session_name = (
+        f"teleport-{root.name}-{old_id.split('-')[0][:8]}-{now.date().isoformat()}"
+    )
+
+    header["id"] = new_id
+    header["timestamp"] = now_iso
+    header["parentSession"] = str(src)
+
+    last_entry_id: str | None = None
+    for line in lines[1:]:
+        try:
+            entry: dict[str, Any] = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("type") != "session" and entry.get("id"):
+            last_entry_id = str(entry["id"])
+
+    out_lines = [json.dumps(header, separators=(",", ":"), ensure_ascii=False)]
+    out_lines.extend(lines[1:])
+    if last_entry_id:
+        out_lines.append(
+            json.dumps(
+                {
+                    "type": "session_info",
+                    "id": uuid.uuid4().hex[:8],
+                    "parentId": last_entry_id,
+                    "timestamp": now_iso,
+                    "name": session_name,
+                },
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
+        )
+
+    dest_name = f"{file_ts}_{new_id}.jsonl"
+    tmp = Path(tempfile.mkstemp(prefix="pi-teleport-", suffix=".jsonl")[1])
+    tmp.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    return tmp, dest_name
+
+
+def push_session(
+    container: str, user: str, root: Path, session: Path, dry_run: bool
+) -> str:
+    home = user_home(user)
+    remote_dir = f"{home}/.pi/agent/sessions/{pi_slug(root)}"
+    if dry_run:
+        remote_path = f"{remote_dir}/DRY-RUN.jsonl"
+        print(f"Session: would clone {session} to {container}:{remote_path}")
+        return remote_path
+
+    tmp, dest_name = clone_session(session, root)
+    remote_path = f"{remote_dir}/{dest_name}"
+    try:
+        incus_shell(container, user, f"mkdir -p {shlex.quote(remote_dir)}")
+        run(["incus", "file", "push", "-p", str(tmp), f"{container}{remote_path}"])
+        if user != "root":
+            run(
+                [
+                    "incus",
+                    "exec",
+                    container,
+                    "--",
+                    "chown",
+                    owner(container, user),
+                    remote_path,
+                ]
+            )
+    finally:
+        tmp.unlink(missing_ok=True)
+    print(f"Session: cloned to {container}:{remote_path}")
+    return remote_path
+
+
+def zmx_session_name(root: Path) -> str:
+    return sanitize_container_name(f"teleport-{root.name}")
+
+
+def command_for(
+    container: str, user: str, root: Path, remote_session: str, prompt: str
+) -> tuple[str, str]:
+    home = user_home(user)
+    zmx_session = zmx_session_name(root)
+    pi_cmd = ["pi", "--session", remote_session]
+    if prompt:
+        pi_cmd.append(prompt)
+    inner = f"cd {shlex.quote(str(root))} && " + shlex.join(
+        ["zmx", "a", zmx_session, *pi_cmd]
+    )
+    return " ".join(
+        shlex.quote(part)
+        for part in [
+            "incus",
+            "exec",
+            container,
+            "--",
+            "env",
+            f"HOME={home}",
+            f"USER={user}",
+            f"LOGNAME={user}",
+            "runuser",
+            "-u",
+            user,
+            "--",
+            "sh",
+            "-lc",
+            inner,
+        ]
+    ), zmx_session
+
+
+def copy_clipboard(text: str, disabled: bool) -> bool:
+    if disabled:
+        return False
+    tools = [["wl-copy"], ["pbcopy"], ["xclip", "-selection", "clipboard"]]
+    for tool in tools:
+        if not shutil_which(tool[0]):
+            continue
+        proc = subprocess.Popen(
+            tool,
+            stdin=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+        proc.communicate(text)
+        if proc.returncode != 0:
+            return False
+        time.sleep(0.2)
+        return clipboard_matches(text)
+    return False
+
+
+def clipboard_matches(text: str) -> bool:
+    for tool in (["wl-paste"], ["pbpaste"], ["xclip", "-selection", "clipboard", "-o"]):
+        if not shutil_which(tool[0]):
+            continue
+        cp = subprocess.run(tool, text=True, capture_output=True, check=False)
+        return cp.returncode == 0 and cp.stdout.removesuffix("\n") == text
+    return False
+
+
+def shutil_which(name: str) -> str | None:
+    from shutil import which
+
+    return which(name)
+
+
+def main(argv: list[str]) -> None:
+    args = parse_args(argv)
+    if not args.session.is_file():
+        raise SystemExit(f"Pi session file not found: {args.session}")
+    root = repo_root(args.cwd)
+    if os.getenv("INCUS_CONTAINER"):
+        print(
+            f"Warning: already inside {os.getenv('INCUS_CONTAINER')}; teleporting anyway."
+        )
+
+    print(f"Target: {args.target}")
+    print(f"Repo: {root}")
+    ensure_container(args, root)
+    sync_dirty_state(args.target, args.user, root, args.dry_run)
+    remote_session = push_session(
+        args.target, args.user, root, args.session, args.dry_run
+    )
+    command, zmx_session = command_for(
+        args.target, args.user, root, remote_session, args.prompt
+    )
+    copied = copy_clipboard(command, args.no_clipboard or args.dry_run)
+    print("")
+    print(f"Zmx session: {zmx_session}")
+    print("Run this command to hand off into the container:")
+    print(command)
+    print("")
+    print("Clipboard: copied" if copied else "Clipboard: not copied")
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

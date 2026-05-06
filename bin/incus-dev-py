@@ -123,7 +123,9 @@ def parse_args(argv: list[str]) -> Args:
     )
     parser.add_argument("--repo-url", default="", help="GitHub repo URL to clone")
     parser.add_argument(
-        "--github-token", default="", help="GitHub PAT for git credential store"
+        "--github-token",
+        default=os.getenv("GITHUB_TOKEN", ""),
+        help="GitHub PAT for git credential store (defaults to GITHUB_TOKEN)",
     )
     parser.add_argument(
         "--no-sessions",
@@ -360,7 +362,7 @@ def launch(container: str, name: str, remote: str, user: str, home: str) -> None
         container,
         user,
         home,
-        f"printf %s\\n {shlex.quote('export INCUS_CONTAINER=' + shlex.quote(label))} > ~/.zsh.local",
+        f"printf '%s\\n' {shlex.quote('export INCUS_CONTAINER=' + shlex.quote(label))} > ~/.zsh.local",
     )
 
 
@@ -463,7 +465,9 @@ def push_file(
     dest_parent = str(Path(dest).parent)
     shell(container, user, user_home(user), f"mkdir -p {shlex.quote(dest_parent)}")
     if not missing_only:
-        run(["incus", "file", "delete", f"{container}{dest}"], capture=True, check=False)
+        run(
+            ["incus", "file", "delete", f"{container}{dest}"], capture=True, check=False
+        )
     run(["incus", "file", "push", "-p", str(src), f"{container}{dest}"])
     if user != "root":
         run(["incus", "exec", container, "--", "chown", owner(container, user), dest])
