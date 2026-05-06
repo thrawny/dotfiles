@@ -95,6 +95,7 @@ class Args:
     session_scope_explicit: bool = False
     tailscale_authkey: str = ""
     tailscale_ephemeral: bool = False
+    tailscale_ssh: bool = False
     hermes: bool = False
     extra_packages: list[str] = field(default_factory=list)
 
@@ -153,6 +154,11 @@ def parse_args(argv: list[str]) -> Args:
     parser.add_argument("--tailscale-authkey", default="")
     parser.add_argument("--tailscale-ephemeral", action="store_true")
     parser.add_argument(
+        "--tailscale-ssh",
+        action="store_true",
+        help="enable Tailscale SSH inside the container",
+    )
+    parser.add_argument(
         "--hermes",
         action="store_true",
         help="seed ~/.hermes/auth.json even if hermes is not installed",
@@ -189,6 +195,7 @@ def parse_args(argv: list[str]) -> Args:
         ),
         tailscale_authkey=ns.tailscale_authkey,
         tailscale_ephemeral=ns.tailscale_ephemeral,
+        tailscale_ssh=ns.tailscale_ssh,
         hermes=ns.hermes,
         extra_packages=packages,
     )
@@ -760,7 +767,7 @@ def tailscale_hostname(container: str) -> str:
     return safe or "incus-dev"
 
 
-def setup_tailscale(container: str, authkey: str) -> None:
+def setup_tailscale(container: str, authkey: str, tailscale_ssh: bool) -> None:
     if not authkey:
         run(
             [
@@ -789,20 +796,21 @@ def setup_tailscale(container: str, authkey: str) -> None:
                 "tailscaled.service",
             ]
         )
-        run(
-            [
-                "incus",
-                "exec",
-                container,
-                "--",
-                "tailscale",
-                "up",
-                "--auth-key",
-                authkey,
-                "--hostname",
-                tailscale_hostname(container),
-            ]
-        )
+        cmd = [
+            "incus",
+            "exec",
+            container,
+            "--",
+            "tailscale",
+            "up",
+            "--auth-key",
+            authkey,
+            "--hostname",
+            tailscale_hostname(container),
+        ]
+        if tailscale_ssh:
+            cmd.append("--ssh")
+        run(cmd)
 
 
 def ensure_repo_parent(container: str, user: str, repo_path: str) -> None:
@@ -1004,7 +1012,7 @@ def prepare(container: str, a: Args, home: str) -> None:
         sync_hermes_auth(container, a.user, home)
     setup_git_credentials(container, a.user, home, a.github_token)
     sync_secrets(container, a.user, home, a.github_token)
-    setup_tailscale(container, a.tailscale_authkey)
+    setup_tailscale(container, a.tailscale_authkey, a.tailscale_ssh)
     if a.repo_url:
         clone_repo(container, a.user, home, a.repo_url, a.repo_path)
     elif a.repo_path:
@@ -1074,6 +1082,8 @@ def main(argv: list[str]) -> None:
         a.session_scope = "none"
     if a.tailscale_ephemeral and not a.tailscale_authkey:
         a.tailscale_authkey = generate_tailscale_authkey()
+    if a.tailscale_ssh and not a.tailscale_authkey:
+        raise SystemExit("--tailscale-ssh requires --tailscale-authkey or --tailscale-ephemeral")
     prepare(target, a, home)
 
 
