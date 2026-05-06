@@ -404,7 +404,12 @@ in
     input = {
       mod-key = "Alt";
       warp-mouse-to-focus.enable = true;
-      focus-follows-mouse.enable = true;
+      focus-follows-mouse = {
+        enable = true;
+        # Prevent focus-follows-mouse from scrolling the tiling view when the
+        # pointer hits resize margins peeking out at monitor/window edges.
+        max-scroll-amount = "0%";
+      };
       mouse.accel-profile = "flat";
       keyboard = {
         xkb = {
