@@ -1,860 +1,1095 @@
-#!/usr/bin/env bash
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.11"
+# dependencies = ["pyjwt"]
+# ///
+# vim: set filetype=python:
 
-[[ "${TRACE:-}" ]] && set -x
-set -euo pipefail
-shopt -s nullglob
+# pyright: basic
+# pyright: reportMissingImports=false
 
-main() {
-  local container=""
-  local remote="local"
-  local user="thrawny"
-  local prepare=true
-  local mode="copy"
-  local github_token=""
-  local repo_url=""
-  local repo_path=""
-  local session_scope="repo"
-  local session_scope_explicit=false
-  local tailscale_authkey=""
-  local tailscale_ephemeral=false
-  local -a extra_packages=()
+from __future__ import annotations
 
-  while [[ $# -gt 0 ]]; do
-    case "$1" in
-      --remote)
-        remote="$2"
-        shift
-        ;;
-      --no-prepare)
-        prepare=false
-        ;;
-      --mount-rw)
-        mode="mount"
-        ;;
-      --copy)
-        mode="copy"
-        ;;
-      --no-sessions)
-        session_scope="none"
-        session_scope_explicit=true
-        ;;
-      --repo-sessions)
-        session_scope="repo"
-        session_scope_explicit=true
-        ;;
-      --all-sessions)
-        session_scope="all"
-        session_scope_explicit=true
-        ;;
-      --path)
-        repo_path="$(resolve_host_path "$2")"
-        shift
-        ;;
-      --user)
-        user="$2"
-        shift
-        ;;
-      --tailscale-authkey)
-        tailscale_authkey="$2"
-        shift
-        ;;
-      --tailscale-ephemeral)
-        tailscale_ephemeral=true
-        ;;
-      --help|-h)
-        usage
-        return 0
-        ;;
-      --)
-        shift
-        extra_packages=("$@")
-        break
-        ;;
-      https://github.com/*|git@github.com:*)
-        repo_url="$1"
-        ;;
-      *)
-        if [[ -z "$container" ]]; then
-          container="$1"
-        elif is_github_token "$1"; then
-          github_token="$1"
-        else
-          echo "Unexpected argument: $1" >&2
-          usage >&2
-          exit 1
-        fi
-        ;;
-    esac
-    shift
-  done
+import argparse
+import json
+import logging
+import os
+import re
+import shlex
+import subprocess
+import sys
+import tarfile
+import tempfile
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 
-  if [[ -z "$container" ]]; then
-    usage >&2
-    exit 1
-  fi
+import jwt
 
-  parse_container_arg "$container"
-  container="$PARSED_CONTAINER"
-  remote="$PARSED_REMOTE"
+DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
+HOME = Path.home()
+logger = logging.getLogger("incus-dev")
 
-  local home
-  home="$(user_home "$user")"
 
-  local target_container
-  target_container="$(container_ref "$container" "$remote")"
+def run(
+    args: list[str],
+    *,
+    stdin=None,
+    capture: bool = False,
+    check: bool = True,
+    env: dict[str, str] | None = None,
+) -> subprocess.CompletedProcess:
+    logger.debug("+ %s", " ".join(shlex.quote(a) for a in args))
+    try:
+        return subprocess.run(
+            args,
+            stdin=stdin,
+            text=False if stdin is not None else True,
+            capture_output=capture,
+            check=check,
+            env=env,
+        )
+    except subprocess.CalledProcessError as exc:
+        if capture:
+            if exc.stdout:
+                sys.stdout.write(
+                    exc.stdout
+                    if isinstance(exc.stdout, str)
+                    else exc.stdout.decode(errors="replace")
+                )
+            if exc.stderr:
+                sys.stderr.write(
+                    exc.stderr
+                    if isinstance(exc.stderr, str)
+                    else exc.stderr.decode(errors="replace")
+                )
+        raise SystemExit(exc.returncode) from exc
 
-  if container_exists "$target_container"; then
-    echo "Using existing Incus container '$target_container'."
-    ensure_container_started "$target_container"
-    wait_for_user_shell "$target_container" "$user" "$home"
-  else
-    local repo_root
-    repo_root="$(script_repo_root)"
 
-    local image_path
-    image_path="$(build_headless_image "$repo_root")"
-    sync_headless_image "$remote" "$image_path"
-    launch_container "$target_container" "$container" "$remote" "$user" "$home"
-  fi
+def out(args: list[str], *, check: bool = True) -> str:
+    cp = run(args, capture=True, check=check)
+    return (
+        cp.stdout.strip() if isinstance(cp.stdout, str) else cp.stdout.decode().strip()
+    )
 
-  if [[ "$prepare" != true ]]; then
-    echo "Container '$target_container' is ready."
-    return 0
-  fi
 
-  if [[ -z "$repo_path" ]]; then
-    repo_path="$(current_repo_path_or_empty)"
-  fi
+def out_streaming_stderr(args: list[str]) -> str:
+    logger.debug("+ %s", " ".join(shlex.quote(a) for a in args))
+    cp = subprocess.run(args, stdout=subprocess.PIPE, text=True)
+    if cp.returncode != 0:
+        raise SystemExit(cp.returncode)
+    return cp.stdout.strip()
 
-  if [[ -n "$repo_path" && -z "$repo_url" ]]; then
-    repo_url="$(normalize_repo_url "$(detect_repo_url "$repo_path")")"
-  else
-    repo_url="$(normalize_repo_url "$repo_url")"
-  fi
 
-  if [[ "$session_scope" == "repo" && -z "$repo_path" ]]; then
-    if [[ "$session_scope_explicit" == true ]]; then
-      echo "Repo-scoped sessions require a repo path. Run from inside the repo or pass --path." >&2
-      exit 1
-    fi
-    session_scope="none"
-  fi
+@dataclass
+class Args:
+    container_arg: str
+    remote: str = "local"
+    user: str = "thrawny"
+    prepare: bool = True
+    github_token: str = ""
+    repo_url: str = ""
+    repo_path: str = ""
+    session_scope: str = "repo"
+    session_scope_explicit: bool = False
+    tailscale_authkey: str = ""
+    tailscale_ephemeral: bool = False
+    tailscale_ssh: bool = False
+    hermes: bool = False
+    extra_packages: list[str] = field(default_factory=list)
 
-  if [[ "$tailscale_ephemeral" == true && -z "$tailscale_authkey" ]]; then
-    tailscale_authkey="$(generate_tailscale_authkey)"
-  fi
 
-  prepare_container \
-    "$target_container" \
-    "$user" \
-    "$home" \
-    "$mode" \
-    "$github_token" \
-    "$repo_url" \
-    "$repo_path" \
-    "$session_scope" \
-    "$tailscale_authkey" \
-    "${extra_packages[@]}"
-}
+def parse_args(argv: list[str]) -> Args:
+    parser = argparse.ArgumentParser(
+        prog="incus-dev",
+        description="Build/sync the headless image, launch an Incus container, and optionally prepare it.",
+    )
+    parser.epilog = (
+        "Packages may be installed with: incus-dev NAME [options] -- ripgrep jq"
+    )
+    parser.add_argument("container", metavar="name|remote:name")
+    parser.add_argument("--remote", default="local")
+    parser.add_argument(
+        "--no-prepare",
+        action="store_true",
+        help="launch only; skip credentials, repo, sessions, packages",
+    )
+    parser.add_argument(
+        "--path",
+        dest="repo_path",
+        type=resolve_host_path,
+        default="",
+        help="mirror this absolute local repo path inside the container",
+    )
+    parser.add_argument("--repo-url", default="", help="GitHub repo URL to clone")
+    parser.add_argument(
+        "--github-token",
+        default=os.getenv("GITHUB_TOKEN", ""),
+        help="GitHub PAT for git credential store (defaults to GITHUB_TOKEN)",
+    )
+    parser.add_argument(
+        "--no-sessions",
+        dest="session_scope",
+        action="store_const",
+        const="none",
+        help="skip copying agent session state",
+    )
+    parser.add_argument(
+        "--repo-sessions",
+        dest="session_scope",
+        action="store_const",
+        const="repo",
+        help="copy sessions for the current repo",
+    )
+    parser.add_argument(
+        "--all-sessions",
+        dest="session_scope",
+        action="store_const",
+        const="all",
+        help="copy all Claude/Codex/Pi sessions",
+    )
+    parser.set_defaults(session_scope="repo")
+    parser.add_argument("--user", default="thrawny")
+    parser.add_argument("--tailscale-authkey", default="")
+    parser.add_argument("--tailscale-ephemeral", action="store_true")
+    parser.add_argument(
+        "--tailscale-ssh",
+        action="store_true",
+        help="enable Tailscale SSH inside the container",
+    )
+    parser.add_argument(
+        "--hermes",
+        action="store_true",
+        help="seed ~/.hermes/auth.json even if hermes is not installed",
+    )
 
-usage() {
-  cat <<'EOF'
-Usage: incus-dev <name|remote:name> [options] [github-token] [repo-url] [-- packages...]
+    if "--" in argv:
+        sep = argv.index("--")
+        parse_argv = argv[:sep]
+        packages = argv[sep + 1 :]
+    else:
+        parse_argv = argv
+        packages: list[str] = []
 
-Builds the headless image, uploads it when the target remote is stale,
-launches the container, and optionally prepares it.
+    ns = parser.parse_args(parse_argv)
 
-Arguments:
-  name          Container name, or remote:name
-  github-token  Optional GitHub PAT for git credential store
-  repo-url      Optional GitHub repo URL to clone
-  packages      Nixpkgs packages to install via nix profile (after --)
+    container = ns.container
+    remote = ns.remote
+    if ":" in container:
+        remote, container = container.split(":", 1)
+        if not remote or not container:
+            parser.error(f"invalid container name: {ns.container}")
 
-Options:
-  --no-prepare      Launch only; skip credentials, repo, sessions, packages
-  --copy            Copy credentials into container (default)
-  --mount-rw        Bind-mount credentials from host
-  --path PATH       Mirror this absolute local repo path inside the container
-  --no-sessions     Skip copying agent session state
-  --repo-sessions   Copy Claude/Codex/Pi sessions for the current repo
-  --all-sessions    Copy all Claude/Codex/Pi sessions
-  --user USER       Container user (default: thrawny)
-  --tailscale-authkey KEY
-                    Join Tailscale using this auth key
-  --tailscale-ephemeral
-                    Generate and use an ephemeral devbox auth key
+    return Args(
+        container_arg=container,
+        remote=remote,
+        user=ns.user,
+        prepare=not ns.no_prepare,
+        github_token=ns.github_token,
+        repo_url=ns.repo_url,
+        repo_path=ns.repo_path,
+        session_scope=ns.session_scope,
+        session_scope_explicit=any(
+            x in argv for x in ("--no-sessions", "--repo-sessions", "--all-sessions")
+        ),
+        tailscale_authkey=ns.tailscale_authkey,
+        tailscale_ephemeral=ns.tailscale_ephemeral,
+        tailscale_ssh=ns.tailscale_ssh,
+        hermes=ns.hermes,
+        extra_packages=packages,
+    )
 
-If run inside a git repo, preparation clones that repo into the same absolute
-path in the container and copies repo-scoped sessions by default.
 
-Examples:
-  incus-dev kf1-go
-  incus-dev local:kf1-go
-  incus-dev kanel-devbox:kf1-go
-  incus-dev kf1-go --no-prepare
-  incus-dev kf1-go --path /home/thrawny/dotfiles
-  incus-dev kf1-go --tailscale-ephemeral --no-sessions
-  incus-dev kf1-go github_pat_xxx https://github.com/org/repo -- mosquitto upx
-EOF
-}
+def script_repo_root() -> Path:
+    return Path(__file__).resolve().parent.parent
 
-script_repo_root() {
-  local script_path
-  script_path="$(readlink -f "${BASH_SOURCE[0]}")"
-  dirname "$(dirname "$script_path")"
-}
 
-parse_container_arg() {
-  local value="$1"
+def user_home(user: str) -> str:
+    return "/root" if user == "root" else f"/home/{user}"
 
-  PARSED_REMOTE="local"
-  PARSED_CONTAINER="$value"
 
-  if [[ "$value" == *:* ]]; then
-    PARSED_REMOTE="${value%%:*}"
-    PARSED_CONTAINER="${value#*:}"
-  fi
+def cref(name: str, remote: str) -> str:
+    return f"{remote + ':' if remote else ''}{name}"
 
-  if [[ -z "$PARSED_REMOTE" || -z "$PARSED_CONTAINER" ]]; then
-    echo "Invalid container name: $value" >&2
-    exit 1
-  fi
-}
 
-user_home() {
-  local user="$1"
+def container_exists(container: str) -> bool:
+    return run(["incus", "info", container], capture=True, check=False).returncode == 0
 
-  if [[ "$user" == "root" ]]; then
-    printf '/root\n'
-  else
-    printf '/home/%s\n' "$user"
-  fi
-}
 
-container_ref() {
-  local container="$1" remote="$2"
-  printf '%s%s\n' "${remote:+$remote:}" "$container"
-}
+def ensure_started(container: str) -> None:
+    if (
+        run(
+            ["incus", "exec", container, "--", "true"], capture=True, check=False
+        ).returncode
+        != 0
+    ):
+        cp = run(["incus", "start", container], capture=True, check=False)
+        if (
+            cp.returncode != 0
+            and "already running" not in ((cp.stderr or "") + (cp.stdout or "")).lower()
+        ):
+            cp.check_returncode()
 
-container_exists() {
-  local container="$1"
-  incus info "$container" >/dev/null 2>&1
-}
 
-ensure_container_started() {
-  local container="$1"
+def shell(
+    container: str,
+    user: str,
+    home: str,
+    command: str,
+    *,
+    capture: bool = False,
+    check: bool = True,
+):
+    if user == "root":
+        args = [
+            "incus",
+            "exec",
+            container,
+            "--",
+            "env",
+            f"HOME={home}",
+            "USER=root",
+            "LOGNAME=root",
+            "sh",
+            "-lc",
+            command,
+        ]
+    else:
+        args = [
+            "incus",
+            "exec",
+            container,
+            "--",
+            "env",
+            f"HOME={home}",
+            f"USER={user}",
+            f"LOGNAME={user}",
+            "runuser",
+            "-u",
+            user,
+            "--",
+            "sh",
+            "-lc",
+            command,
+        ]
+    return run(args, capture=capture, check=check)
 
-  if incus exec "$container" -- true >/dev/null 2>&1; then
-    return 0
-  fi
 
-  incus start "$container" >/dev/null
-}
+def wait_user_shell(container: str, user: str, home: str) -> None:
+    import time
 
-remote_ref() {
-  local remote="$1"
-  printf '%s:\n' "$remote"
-}
+    while (
+        shell(container, user, home, "true", capture=True, check=False).returncode != 0
+    ):
+        time.sleep(0.5)
 
-build_headless_image() {
-  local repo_root="$1"
 
-  nix build "$repo_root/nix#nixosConfigurations.headless.config.system.build.images.incus" \
-    --no-link \
-    --print-out-paths
-}
+def build_headless_image(repo_root: Path) -> str:
+    return out_streaming_stderr(
+        [
+            "nix",
+            "build",
+            f"{repo_root}/nix#nixosConfigurations.headless.config.system.build.images.incus",
+            "--no-link",
+            "--print-out-paths",
+        ]
+    )
 
-image_property() {
-  local image_ref="$1" key="$2"
 
-  incus image show "$image_ref" 2>/dev/null | awk -v key="$key:" '
-    /^properties:/ { in_props = 1; next }
-    in_props && /^[^[:space:]]/ { in_props = 0 }
-    in_props {
-      sub(/^[[:space:]]+/, "", $0)
-      if (index($0, key) == 1) {
-        sub("^" key "[[:space:]]*", "", $0)
-        print
-        exit
-      }
+def image_property(image_ref: str, key: str) -> str:
+    cp = run(["incus", "image", "show", image_ref], capture=True, check=False)
+    if cp.returncode != 0:
+        return ""
+    in_props = False
+    for line in cp.stdout.splitlines():
+        if line == "properties:":
+            in_props = True
+            continue
+        if in_props and line and not line[0].isspace():
+            in_props = False
+        if in_props:
+            s = line.strip()
+            if s.startswith(key + ":"):
+                return s.split(":", 1)[1].strip()
+    return ""
+
+
+def sync_image(remote: str, image_path: str) -> None:
+    ref = cref("headless", remote)
+    if image_property(ref, "nix_store_path") == image_path:
+        logger.info("Image '%s' already up to date.", ref)
+        return
+    logger.info("Importing headless image to '%s'.", remote)
+    run(
+        [
+            "incus",
+            "image",
+            "import",
+            f"{image_path}/metadata.tar.xz",
+            f"{image_path}/rootfs.tar.zst",
+            f"{remote}:",
+            f"nix_store_path={image_path}",
+            "--alias",
+            "headless",
+            "--reuse",
+        ]
+    )
+
+
+def launch(container: str, name: str, remote: str, user: str, home: str) -> None:
+    run(
+        [
+            "incus",
+            "init",
+            cref("headless", remote),
+            container,
+            "-c",
+            "security.nesting=true",
+            "-c",
+            "raw.lxc=lxc.apparmor.profile=unconfined",
+        ]
+    )
+    run(
+        [
+            "incus",
+            "config",
+            "device",
+            "add",
+            container,
+            "tun",
+            "unix-char",
+            "path=/dev/net/tun",
+        ]
+    )
+    run(["incus", "start", container])
+    wait_user_shell(container, user, home)
+    label = f"incus:{remote}:{name}"
+    shell(
+        container,
+        user,
+        home,
+        f"printf '%s\\n' {shlex.quote('export INCUS_CONTAINER=' + shlex.quote(label))} > ~/.zsh.local",
+    )
+
+
+def resolve_host_path(path: str) -> str:
+    p = Path(path).expanduser()
+    if not p.is_dir():
+        raise SystemExit(f"Path does not exist or is not a directory: {path}")
+    return str(p.resolve())
+
+
+def current_repo() -> str:
+    return out(["git", "rev-parse", "--show-toplevel"], check=False)
+
+
+def normalize_repo_url(url: str) -> str:
+    return (
+        "https://github.com/" + url.removeprefix("git@github.com:")
+        if url.startswith("git@github.com:")
+        else url
+    )
+
+
+def owner(container: str, user: str) -> str:
+    return f"{user}:{out(['incus', 'exec', container, '--', 'id', '-gn', user])}"
+
+
+def ensure_dirs(container: str, user: str, home: str) -> None:
+    dirs = [f"{home}/.claude", f"{home}/.pi/agent", f"{home}/.codex", f"{home}/.hermes"]
+    shell(container, user, home, "mkdir -p " + " ".join(shlex.quote(d) for d in dirs))
+
+
+def setup_user_systemd(container: str, user: str, home: str) -> None:
+    import time
+
+    while (
+        run(
+            [
+                "incus",
+                "exec",
+                container,
+                "--",
+                "sh",
+                "-lc",
+                "systemctl list-units >/dev/null && loginctl list-users >/dev/null",
+            ],
+            capture=True,
+            check=False,
+        ).returncode
+        != 0
+    ):
+        time.sleep(0.5)
+    uid = out(["incus", "exec", container, "--", "id", "-u", user])
+    run(["incus", "exec", container, "--", "loginctl", "enable-linger", user])
+    run(["incus", "exec", container, "--", "systemctl", "start", f"user@{uid}.service"])
+    while (
+        run(
+            [
+                "incus",
+                "exec",
+                container,
+                "--",
+                "env",
+                f"HOME={home}",
+                f"USER={user}",
+                f"LOGNAME={user}",
+                f"XDG_RUNTIME_DIR=/run/user/{uid}",
+                f"DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/{uid}/bus",
+                "runuser",
+                "-u",
+                user,
+                "--",
+                "systemctl",
+                "--user",
+                "daemon-reload",
+            ],
+            capture=True,
+            check=False,
+        ).returncode
+        != 0
+    ):
+        time.sleep(0.5)
+
+
+def push_file(
+    container: str, user: str, src: Path, dest: str, missing_only: bool = False
+) -> None:
+    if (
+        missing_only
+        and shell(
+            container,
+            user,
+            user_home(user),
+            f"test -e {shlex.quote(dest)}",
+            capture=True,
+            check=False,
+        ).returncode
+        == 0
+    ):
+        return
+    dest_parent = str(Path(dest).parent)
+    shell(container, user, user_home(user), f"mkdir -p {shlex.quote(dest_parent)}")
+    if not missing_only:
+        run(
+            ["incus", "file", "delete", f"{container}{dest}"], capture=True, check=False
+        )
+    run(["incus", "file", "push", "-p", str(src), f"{container}{dest}"])
+    if user != "root":
+        run(["incus", "exec", container, "--", "chown", owner(container, user), dest])
+
+
+def copy_dir(
+    container: str, user: str, src: Path, dest: str, missing_only: bool = False
+) -> None:
+    if not src.is_dir():
+        return
+    if (
+        missing_only
+        and shell(
+            container,
+            user,
+            user_home(user),
+            f"test -e {shlex.quote(dest)}",
+            capture=True,
+            check=False,
+        ).returncode
+        == 0
+    ):
+        return
+    dest_parent = str(Path(dest).parent)
+    shell(container, user, user_home(user), f"mkdir -p {shlex.quote(dest_parent)}")
+    with tempfile.TemporaryFile() as f:
+        with tarfile.open(fileobj=f, mode="w") as t:
+            t.add(src, arcname=src.name)
+        f.seek(0)
+        if user == "root":
+            tar_cmd = [
+                "incus",
+                "exec",
+                container,
+                "--",
+                "tar",
+                "-C",
+                dest_parent,
+                "-xf",
+                "-",
+            ]
+        else:
+            tar_cmd = [
+                "incus",
+                "exec",
+                container,
+                "--",
+                "runuser",
+                "-u",
+                user,
+                "--",
+                "tar",
+                "-C",
+                dest_parent,
+                "-xf",
+                "-",
+            ]
+        run(tar_cmd, stdin=f)
+
+
+def token_expired(token: str | None, skew: int = 120) -> bool:
+    if not token:
+        return True
+    try:
+        claims = jwt.decode(
+            token, options={"verify_signature": False, "verify_exp": False}
+        )
+        exp = claims.get("exp")
+        return (
+            not isinstance(exp, (int, float))
+            or float(exp) <= __import__("time").time() + skew
+        )
+    except Exception:
+        return True
+
+
+def read_json(path: Path) -> dict | None:
+    try:
+        return json.loads(path.read_text())
+    except Exception:
+        return None
+
+
+def codex_source_from_host() -> tuple[dict, str | None] | None:
+    data = read_json(HOME / ".codex/auth.json") or {}
+    tokens = data.get("tokens")
+    if (
+        isinstance(tokens, dict)
+        and tokens.get("access_token")
+        and tokens.get("refresh_token")
+        and not token_expired(tokens.get("access_token"))
+    ):
+        return dict(tokens), data.get("last_refresh")
+
+    state = (read_json(HOME / ".pi/agent/auth.json") or {}).get("openai-codex")
+    if isinstance(state, dict):
+        access = state.get("access") or state.get("access_token")
+        refresh = state.get("refresh") or state.get("refresh_token")
+        if access and refresh and not token_expired(access):
+            tokens = {"access_token": access, "refresh_token": refresh}
+            account_id = state.get("accountId") or state.get("account_id")
+            if account_id:
+                tokens["account_id"] = account_id
+            return tokens, state.get("last_refresh")
+    return None
+
+
+def sync_hermes_auth(container: str, user: str, home: str) -> None:
+    cp = shell(
+        container,
+        user,
+        home,
+        f"cat {shlex.quote(f'{home}/.hermes/auth.json')}",
+        capture=True,
+        check=False,
+    )
+    raw_data: Any = (
+        json.loads(cp.stdout) if cp.returncode == 0 and cp.stdout.strip() else {}
+    )
+    data: dict[str, Any] = raw_data if isinstance(raw_data, dict) else {}
+    state = (
+        ((data.get("providers") or {}).get("openai-codex") or {})
+        if isinstance(data, dict)
+        else {}
+    )
+    tokens = state.get("tokens") if isinstance(state, dict) else {}
+    if isinstance(tokens, dict) and not token_expired(tokens.get("access_token")):
+        return
+
+    source = codex_source_from_host()
+    if source is None:
+        logger.warning(
+            "Hermes Codex auth is expired/missing, but no fresh Codex/Pi Codex auth source was found."
+        )
+        return
+
+    tokens, last_refresh = source
+    now = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    last_refresh = last_refresh or now
+    data.setdefault("version", 1)
+    providers = data.setdefault("providers", {})
+    if not isinstance(providers, dict):
+        providers = {}
+        data["providers"] = providers
+    providers["openai-codex"] = {
+        "tokens": tokens,
+        "last_refresh": last_refresh,
+        "auth_mode": "chatgpt",
     }
-  '
-}
-
-sync_headless_image() {
-  local remote="$1" image_path="$2"
-  local image_ref
-  image_ref="$(container_ref headless "$remote")"
-
-  local current_path
-  current_path="$(image_property "$image_ref" nix_store_path || true)"
-
-  if [[ "$current_path" == "$image_path" ]]; then
-    echo "Image '$image_ref' already up to date."
-    return 0
-  fi
-
-  echo "Importing headless image to '$remote'."
-  incus image import \
-    "$image_path/metadata.tar.xz" \
-    "$image_path/rootfs.tar.zst" \
-    "$(remote_ref "$remote")" \
-    nix_store_path="$image_path" \
-    --alias headless \
-    --reuse
-}
-
-launch_container() {
-  local target_container="$1" name="$2" remote="$3" user="$4" home="$5"
-  local image_ref
-  image_ref="$(container_ref headless "$remote")"
-
-  incus init "$image_ref" "$target_container" \
-    -c security.nesting=true \
-    -c raw.lxc='lxc.apparmor.profile=unconfined'
-  incus config device add "$target_container" tun unix-char path=/dev/net/tun
-  incus start "$target_container"
-
-  local label
-  label="incus:$remote:$name"
-  wait_for_user_shell "$target_container" "$user" "$home"
-  write_container_label "$target_container" "$user" "$home" "$label"
-}
-
-wait_for_user_shell() {
-  local container="$1" user="$2" home="$3"
-
-  while ! container_shell_as_user "$container" "$user" "$home" "true" >/dev/null 2>&1; do
-    sleep 0.5
-  done
-}
-
-write_container_label() {
-  local container="$1" user="$2" home="$3" label="$4"
-
-  incus exec "$container" -- env \
-    HOME="$home" \
-    USER="$user" \
-    LOGNAME="$user" \
-    INCUS_CONTAINER_VALUE="$label" \
-    runuser -u "$user" -- sh -lc 'printf "%s\n" "export INCUS_CONTAINER=\"$INCUS_CONTAINER_VALUE\"" > ~/.zsh.local'
-}
-
-prepare_container() {
-  local container="$1" user="$2" home="$3" mode="$4" github_token="$5" repo_url="$6" repo_path="$7" session_scope="$8" tailscale_authkey="$9"
-  shift 9
-  local -a extra_packages=("$@")
-
-  local -a host_files=(
-    "$HOME/.claude/.credentials.json"
-    "$HOME/.pi/agent/auth.json"
-    "$HOME/.codex/auth.json"
-  )
-  local -a dest_files=(
-    "$home/.claude/.credentials.json"
-    "$home/.pi/agent/auth.json"
-    "$home/.codex/auth.json"
-  )
-  local -a device_names=(
-    "claude-credentials"
-    "pi-auth"
-    "codex-auth"
-  )
-
-  incus info "$container" >/dev/null
-  ensure_dirs "$container" "$user" "$home"
-  setup_user_systemd "$container" "$user" "$home"
-
-  local i
-  for i in "${!host_files[@]}"; do
-    if [[ ! -f "${host_files[$i]}" ]]; then
-      echo "Missing host file: ${host_files[$i]}" >&2
-      exit 1
-    fi
-
-    if [[ "$mode" == "mount" ]]; then
-      mount_file "$container" "${device_names[$i]}" "${host_files[$i]}" "${dest_files[$i]}"
-    else
-      copy_file "$container" "$user" "${host_files[$i]}" "${dest_files[$i]}"
-    fi
-  done
-
-  setup_git_credentials "$container" "$user" "$home" "$github_token"
-  sync_container_secrets "$container" "$user" "$home" "$github_token"
-  setup_tailscale "$container" "$tailscale_authkey"
-
-  if [[ -n "$repo_url" ]]; then
-    clone_repo "$container" "$user" "$home" "$repo_url" "$repo_path"
-  elif [[ -n "$repo_path" ]]; then
-    ensure_repo_parent "$container" "$user" "$repo_path"
-    if ! incus exec "$container" -- test -d "$repo_path"; then
-      echo "Warning: repo path does not exist in container and no repo URL was supplied or detected: $repo_path" >&2
-    fi
-  fi
-
-  if [[ -n "$repo_path" ]]; then
-    set_repo_git_identity "$container" "$user" "$home" "$repo_path"
-  fi
-
-  if [[ "$session_scope" != "none" ]]; then
-    copy_sessions "$container" "$user" "$home" "$session_scope" "$repo_path"
-  fi
-
-  if [[ ${#extra_packages[@]} -gt 0 ]]; then
-    install_packages "$container" "$user" "$home" "${extra_packages[@]}"
-  fi
-
-  echo "Prepared Incus container '$container' for user '$user' via mode '$mode' (sessions: $session_scope)."
-}
-
-generate_tailscale_authkey() {
-  go run tailscale.com/cmd/get-authkey@latest -tags tag:devbox -ephemeral
-}
-
-setup_tailscale() {
-  local container="$1" authkey="$2"
-
-  if [[ -z "$authkey" ]]; then
-    incus exec "$container" -- systemctl disable --now tailscaled.service >/dev/null 2>&1 || true
-    return 0
-  fi
-
-  incus exec "$container" -- systemctl enable --now tailscaled.service
-  incus exec "$container" -- tailscale up --auth-key "$authkey"
-}
-
-is_github_token() {
-  case "$1" in
-    ghp_*|gho_*|ghu_*|ghs_*|ghr_*|github_pat_*|gh_pat_*)
-      return 0
-      ;;
-    *)
-      return 1
-      ;;
-  esac
-}
-
-resolve_host_path() {
-  local path="$1"
-
-  if [[ -z "$path" ]]; then
-    echo "Missing required path argument." >&2
-    exit 1
-  fi
-  if [[ ! -d "$path" ]]; then
-    echo "Path does not exist or is not a directory: $path" >&2
-    exit 1
-  fi
-
-  (cd "$path" && pwd -P)
-}
-
-current_repo_path_or_empty() {
-  git rev-parse --show-toplevel 2>/dev/null || true
-}
-
-detect_repo_url() {
-  local repo_path="$1"
-
-  [[ -n "$repo_path" ]] || return 0
-  git -C "$repo_path" remote get-url origin 2>/dev/null || true
-}
-
-normalize_repo_url() {
-  local url="$1"
-
-  case "$url" in
-    git@github.com:*)
-      printf 'https://github.com/%s\n' "${url#git@github.com:}"
-      ;;
-    *)
-      printf '%s\n' "$url"
-      ;;
-  esac
-}
-
-claude_project_slug() {
-  local repo_path="$1"
-  local trimmed="${repo_path#/}"
-  printf -- '-%s\n' "${trimmed//\//-}"
-}
-
-pi_session_slug() {
-  local repo_path="$1"
-  local trimmed="${repo_path#/}"
-  printf -- '--%s--\n' "${trimmed//\//-}"
-}
-
-ensure_dirs() {
-  local container="$1" user="$2" home="$3"
-
-  incus exec "$container" -- mkdir -p \
-    "$home/.claude" \
-    "$home/.pi/agent" \
-    "$home/.codex"
-
-  if [[ "$user" != "root" ]]; then
-    local owner_spec
-    owner_spec="$(container_owner_spec "$container" "$user")"
-    incus exec "$container" -- chown -R "$owner_spec" \
-      "$home/.claude" \
-      "$home/.pi" \
-      "$home/.codex"
-  fi
-}
-
-wait_for_systemd() {
-  local container="$1"
-
-  while ! incus exec "$container" -- sh -lc 'systemctl list-units >/dev/null && loginctl list-users >/dev/null' >/dev/null 2>&1; do
-    sleep 0.5
-  done
-}
-
-setup_user_systemd() {
-  local container="$1" user="$2" home="$3" uid
-
-  uid="$(incus exec "$container" -- id -u "$user")"
-  wait_for_systemd "$container"
-  incus exec "$container" -- loginctl enable-linger "$user"
-  incus exec "$container" -- systemctl start "user@$uid.service"
-
-  wait_for_user_systemd "$container" "$user" "$home" "$uid"
-}
-
-wait_for_user_systemd() {
-  local container="$1" user="$2" home="$3" uid="$4"
-
-  while ! incus exec "$container" -- env \
-    HOME="$home" \
-    USER="$user" \
-    LOGNAME="$user" \
-    XDG_RUNTIME_DIR="/run/user/$uid" \
-    DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/$uid/bus" \
-    runuser -u "$user" -- systemctl --user daemon-reload >/dev/null 2>&1; do
-    sleep 0.5
-  done
-}
-
-copy_file() {
-  local container="$1" user="$2" src="$3" dest="$4"
-
-  incus file push -p "$src" "$(container_file_target "$container" "$dest")"
-
-  if [[ "$user" != "root" ]]; then
-    local owner_spec
-    owner_spec="$(container_owner_spec "$container" "$user")"
-    incus exec "$container" -- chown "$owner_spec" "$dest"
-  fi
-}
-
-copy_file_if_missing() {
-  local container="$1" user="$2" src="$3" dest="$4"
-
-  if incus exec "$container" -- test -e "$dest"; then
-    return 0
-  fi
-
-  copy_file "$container" "$user" "$src" "$dest"
-}
-
-copy_dir() {
-  local container="$1" user="$2" src="$3" dest="$4"
-  local dest_parent
-
-  [[ -d "$src" ]] || return 0
-
-  dest_parent="$(dirname "$dest")"
-  incus exec "$container" -- mkdir -p "$dest_parent"
-
-  if [[ "$user" != "root" ]]; then
-    local owner_spec
-    owner_spec="$(container_owner_spec "$container" "$user")"
-    incus exec "$container" -- chown "$owner_spec" "$dest_parent"
-  fi
-
-  tar -C "$(dirname "$src")" -cf - -- "$(basename "$src")" \
-    | incus exec "$container" -- tar -C "$dest_parent" -xf -
-
-  if [[ "$user" != "root" ]]; then
-    incus exec "$container" -- chown -R "$owner_spec" "$dest"
-  fi
-}
-
-copy_dir_if_missing() {
-  local container="$1" user="$2" src="$3" dest="$4"
-
-  [[ -d "$src" ]] || return 0
-
-  if incus exec "$container" -- test -e "$dest"; then
-    return 0
-  fi
-
-  copy_dir "$container" "$user" "$src" "$dest"
-}
-
-container_owner_spec() {
-  local container="$1" user="$2" group
-  group="$(incus exec "$container" -- id -gn "$user")"
-  printf '%s:%s\n' "$user" "$group"
-}
-
-container_file_target() {
-  local container="$1" dest="$2"
-  printf '%s%s\n' "$container" "$dest"
-}
-
-container_shell_as_user() {
-  local container="$1" user="$2" home="$3" command="$4"
-
-  if [[ "$user" == "root" ]]; then
-    incus exec "$container" -- env HOME="$home" USER=root LOGNAME=root sh -lc "$command"
-  else
-    incus exec "$container" -- env HOME="$home" USER="$user" LOGNAME="$user" \
-      runuser -u "$user" -- sh -lc "$command"
-  fi
-}
-
-setup_git_credentials() {
-  local container="$1" user="$2" home="$3" token="$4"
-  local gitconfig_local="$home/.gitconfig.local"
-
-  if ! incus exec "$container" -- test -f "$gitconfig_local"; then
-    local tmpfile
-    tmpfile="$(mktemp)"
-    cat > "$tmpfile" <<'EOF'
-[credential]
-	helper = store
-EOF
-    copy_file "$container" "$user" "$tmpfile" "$gitconfig_local"
-    rm -f "$tmpfile"
-  fi
-
-  if [[ -n "$token" ]]; then
-    local tmpfile
-    tmpfile="$(mktemp)"
-    printf 'https://x-access-token:%s@github.com\n' "$token" > "$tmpfile"
-    copy_file "$container" "$user" "$tmpfile" "$home/.git-credentials"
-    rm -f "$tmpfile"
-    incus exec "$container" -- chmod 600 "$home/.git-credentials"
-  fi
-}
-
-sync_container_secrets() {
-  local container="$1" user="$2" home="$3" github_token="$4"
-
-  if [[ -z "${TELEGRAM_NOTIFICATION_BOT_TOKEN:-}" && -z "${TELEGRAM_NOTIFICATION_CHAT_ID:-}" && -z "$github_token" ]]; then
-    return 0
-  fi
-
-  local tmpfile
-  tmpfile="$(mktemp)"
-  {
-    if incus exec "$container" -- test -f "$home/.secrets"; then
-      incus exec "$container" -- cat "$home/.secrets" \
-        | grep -Ev '^(export[[:space:]]+)?(TELEGRAM_(NOTIFICATION_)?(BOT_TOKEN|CHAT_ID)|GITHUB_TOKEN)=' || true
-    fi
-    if [[ -n "$github_token" ]]; then
-      printf 'GITHUB_TOKEN=%s\n' "$(shell_quote "$github_token")"
-    fi
-    if [[ -n "${TELEGRAM_NOTIFICATION_BOT_TOKEN:-}" ]]; then
-      printf 'TELEGRAM_NOTIFICATION_BOT_TOKEN=%s\n' "$(shell_quote "$TELEGRAM_NOTIFICATION_BOT_TOKEN")"
-    fi
-    if [[ -n "${TELEGRAM_NOTIFICATION_CHAT_ID:-}" ]]; then
-      printf 'TELEGRAM_NOTIFICATION_CHAT_ID=%s\n' "$(shell_quote "$TELEGRAM_NOTIFICATION_CHAT_ID")"
-    fi
-  } > "$tmpfile"
-
-  copy_file "$container" "$user" "$tmpfile" "$home/.secrets"
-  rm -f "$tmpfile"
-  incus exec "$container" -- chmod 600 "$home/.secrets"
-
-  echo "Copied host secrets into $container:$home/.secrets."
-}
-
-shell_quote() {
-  local value="$1"
-  printf "'%s'" "${value//\'/\'\\\'\'}"
-}
-
-set_repo_git_identity() {
-  local container="$1" user="$2" home="$3" repo_path="$4"
-  local name email
-
-  name="${GIT_AUTHOR_NAME:-$(git config user.name 2>/dev/null || true)}"
-  email="${GIT_AUTHOR_EMAIL:-$(git config user.email 2>/dev/null || true)}"
-
-  [[ -n "$name" && -n "$email" ]] || return 0
-
-  if incus exec "$container" -- test -d "$repo_path/.git"; then
-    container_shell_as_user "$container" "$user" "$home" \
-      "git -C '$repo_path' config user.name '$name' && git -C '$repo_path' config user.email '$email'"
-    echo "Set git identity in $repo_path: $name <$email>"
-  fi
-}
-
-ensure_repo_parent() {
-  local container="$1" user="$2" repo_path="$3"
-
-  [[ -n "$repo_path" ]] || return 0
-
-  incus exec "$container" -- mkdir -p "$(dirname "$repo_path")"
-  if [[ "$user" != "root" ]]; then
-    incus exec "$container" -- chown "$(container_owner_spec "$container" "$user")" "$(dirname "$repo_path")"
-  fi
-}
-
-clone_repo() {
-  local container="$1" user="$2" home="$3" url="$4" repo_path="$5"
-  local repo_name dest_path
-
-  repo_name="$(basename "$url" .git)"
-  if [[ -n "$repo_path" ]]; then
-    dest_path="$repo_path"
-  else
-    dest_path="$home/code/$repo_name"
-  fi
-
-  if incus exec "$container" -- test -d "$dest_path"; then
-    echo "Repo already present: $dest_path"
-  else
-    ensure_repo_parent "$container" "$user" "$dest_path"
-    container_shell_as_user "$container" "$user" "$home" \
-      "git clone --depth 1 '$url' '$dest_path' && cd '$dest_path' && git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'"
-  fi
-}
-
-copy_sessions() {
-  local container="$1" user="$2" home="$3" scope="$4" repo_path="$5"
-
-  case "$scope" in
-    repo)
-      [[ -n "$repo_path" ]] || {
-        echo "Repo-scoped sessions require a repo path. Run from inside the repo or pass --path." >&2
-        exit 1
-      }
-      echo "Copying agent sessions for repo: $repo_path"
-      copy_repo_claude_sessions "$container" "$user" "$home" "$repo_path"
-      copy_repo_codex_sessions "$container" "$user" "$home" "$repo_path"
-      copy_repo_pi_sessions "$container" "$user" "$home" "$repo_path"
-      ;;
-    all)
-      echo "Copying all agent sessions."
-      copy_all_claude_sessions "$container" "$user" "$home"
-      copy_all_codex_sessions "$container" "$user" "$home"
-      copy_all_pi_sessions "$container" "$user" "$home"
-      ;;
-    *)
-      echo "Unknown session scope: $scope" >&2
-      exit 1
-      ;;
-  esac
-}
-
-copy_repo_claude_sessions() {
-  local container="$1" user="$2" home="$3" repo_path="$4"
-  local project_slug project_dir
-  local session_file session_id
-
-  project_slug="$(claude_project_slug "$repo_path")"
-  project_dir="$HOME/.claude/projects/$project_slug"
-
-  copy_dir_if_missing "$container" "$user" "$project_dir" "$home/.claude/projects/$project_slug"
-  copy_dir_if_missing "$container" "$user" "$HOME/.claude/sessions" "$home/.claude/sessions"
-
-  for session_file in "$project_dir"/*.jsonl; do
-    [[ -f "$session_file" ]] || continue
-    session_id="$(basename "$session_file" .jsonl)"
-    copy_dir_if_missing "$container" "$user" "$HOME/.claude/file-history/$session_id" "$home/.claude/file-history/$session_id"
-  done
-}
-
-copy_repo_codex_sessions() {
-  local container="$1" user="$2" home="$3" repo_path="$4"
-  local file relative metadata_file
-  local -a session_files=()
-
-  mapfile -t session_files < <(
-    rg -l --fixed-strings -g '*.jsonl' "\"cwd\":\"$repo_path\"" "$HOME/.codex/sessions" 2>/dev/null || true
-  )
-
-  for file in "${session_files[@]}"; do
-    relative="${file#"$HOME/.codex/sessions/"}"
-    copy_file_if_missing "$container" "$user" "$file" "$home/.codex/sessions/$relative"
-  done
-
-  for metadata_file in \
-    "$HOME/.codex/session_index.jsonl" \
-    "$HOME/.codex/history.jsonl" \
-    "$HOME"/.codex/state_*.sqlite* \
-    "$HOME"/.codex/logs_*.sqlite*
-  do
-    [[ -f "$metadata_file" ]] || continue
-    copy_file_if_missing "$container" "$user" "$metadata_file" "$home/.codex/$(basename "$metadata_file")"
-  done
-}
-
-copy_repo_pi_sessions() {
-  local container="$1" user="$2" home="$3" repo_path="$4"
-  local slug
-
-  slug="$(pi_session_slug "$repo_path")"
-  copy_dir_if_missing "$container" "$user" "$HOME/.pi/agent/sessions/$slug" "$home/.pi/agent/sessions/$slug"
-}
-
-copy_all_claude_sessions() {
-  local container="$1" user="$2" home="$3"
-
-  copy_dir_if_missing "$container" "$user" "$HOME/.claude/projects" "$home/.claude/projects"
-  copy_dir_if_missing "$container" "$user" "$HOME/.claude/file-history" "$home/.claude/file-history"
-  copy_dir_if_missing "$container" "$user" "$HOME/.claude/session-env" "$home/.claude/session-env"
-  copy_dir_if_missing "$container" "$user" "$HOME/.claude/shell-snapshots" "$home/.claude/shell-snapshots"
-  copy_dir_if_missing "$container" "$user" "$HOME/.claude/sessions" "$home/.claude/sessions"
-}
-
-copy_all_codex_sessions() {
-  local container="$1" user="$2" home="$3"
-  local metadata_file
-
-  copy_dir_if_missing "$container" "$user" "$HOME/.codex/sessions" "$home/.codex/sessions"
-  for metadata_file in \
-    "$HOME/.codex/session_index.jsonl" \
-    "$HOME/.codex/history.jsonl" \
-    "$HOME"/.codex/state_*.sqlite* \
-    "$HOME"/.codex/logs_*.sqlite*
-  do
-    [[ -f "$metadata_file" ]] || continue
-    copy_file_if_missing "$container" "$user" "$metadata_file" "$home/.codex/$(basename "$metadata_file")"
-  done
-}
-
-copy_all_pi_sessions() {
-  local container="$1" user="$2" home="$3"
-
-  copy_dir_if_missing "$container" "$user" "$HOME/.pi/agent/sessions" "$home/.pi/agent/sessions"
-}
-
-install_packages() {
-  local container="$1" user="$2" home="$3"
-  shift 3
-  local -a pkgs=()
-  local pkg
-
-  for pkg in "$@"; do
-    pkgs+=("nixpkgs#${pkg}")
-  done
-
-  echo "Installing packages: $*"
-  container_shell_as_user "$container" "$user" "$home" "nix profile add ${pkgs[*]}"
-}
-
-mount_file() {
-  local container="$1" device_name="$2" src="$3" dest="$4"
-
-  incus config device remove "$container" "$device_name" >/dev/null 2>&1 || true
-  incus config device add "$container" "$device_name" disk \
-    source="$src" \
-    path="$dest"
-}
-
-main "$@"
+    data["active_provider"] = "openai-codex"
+    data["updated_at"] = now
+    credential_pool = data.setdefault("credential_pool", {})
+    if not isinstance(credential_pool, dict):
+        credential_pool = {}
+        data["credential_pool"] = credential_pool
+    entries = credential_pool.setdefault("openai-codex", [])
+    if not isinstance(entries, list):
+        entries = []
+        credential_pool["openai-codex"] = entries
+    entry = next(
+        (
+            e
+            for e in entries
+            if isinstance(e, dict) and e.get("source") == "device_code"
+        ),
+        None,
+    )
+    if entry is None:
+        entry = {
+            "id": "device_code",
+            "label": "device_code",
+            "auth_type": "oauth",
+            "priority": 0,
+            "source": "device_code",
+            "request_count": 0,
+        }
+        entries.insert(0, entry)
+    entry.update(
+        {
+            "access_token": tokens["access_token"],
+            "refresh_token": tokens["refresh_token"],
+            "base_url": DEFAULT_CODEX_BASE_URL,
+            "last_refresh": last_refresh,
+        }
+    )
+    for key in (
+        "last_status",
+        "last_status_at",
+        "last_error_code",
+        "last_error_reason",
+        "last_error_message",
+        "last_error_reset_at",
+    ):
+        entry.setdefault(key, None)
+
+    with tempfile.NamedTemporaryFile("w", delete=False) as f:
+        json.dump(data, f, indent=2)
+        f.write("\n")
+        tmp = Path(f.name)
+    push_file(container, user, tmp, f"{home}/.hermes/auth.json")
+    tmp.unlink()
+    shell(
+        container, user, home, f"chmod 600 {shlex.quote(f'{home}/.hermes/auth.json')}"
+    )
+    logger.info("Updated Hermes openai-codex auth from Codex/Pi auth state.")
+
+
+def setup_git_credentials(container: str, user: str, home: str, token: str) -> None:
+    if (
+        shell(
+            container,
+            user,
+            home,
+            f"test -f {shlex.quote(f'{home}/.gitconfig.local')}",
+            capture=True,
+            check=False,
+        ).returncode
+        != 0
+    ):
+        with tempfile.NamedTemporaryFile("w", delete=False) as f:
+            f.write("[credential]\n\thelper = store\n")
+            tmp = Path(f.name)
+        push_file(container, user, tmp, f"{home}/.gitconfig.local")
+        tmp.unlink()
+    if token:
+        with tempfile.NamedTemporaryFile("w", delete=False) as f:
+            f.write(f"https://x-access-token:{token}@github.com\n")
+            tmp = Path(f.name)
+        push_file(container, user, tmp, f"{home}/.git-credentials")
+        tmp.unlink()
+        shell(
+            container,
+            user,
+            home,
+            f"chmod 600 {shlex.quote(f'{home}/.git-credentials')}",
+        )
+
+
+def shell_quote(v: str) -> str:
+    return shlex.quote(v)
+
+
+def sync_secrets(container: str, user: str, home: str, github_token: str) -> None:
+    keys = {
+        "TELEGRAM_NOTIFICATION_BOT_TOKEN": os.getenv(
+            "TELEGRAM_NOTIFICATION_BOT_TOKEN", ""
+        ),
+        "TELEGRAM_NOTIFICATION_CHAT_ID": os.getenv("TELEGRAM_NOTIFICATION_CHAT_ID", ""),
+    }
+    if not github_token and not any(keys.values()):
+        return
+    existing = ""
+    cp = shell(
+        container,
+        user,
+        home,
+        f"cat {shlex.quote(f'{home}/.secrets')}",
+        capture=True,
+        check=False,
+    )
+    if cp.returncode == 0:
+        existing = cp.stdout
+    lines = [
+        l
+        for l in existing.splitlines()
+        if l and not (github_token and re.match(r"^(?:export\s+)?GITHUB_TOKEN=", l))
+    ]
+    existing_keys = set()
+    for line in lines:
+        match = re.match(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=", line)
+        if match:
+            existing_keys.add(match.group(1))
+    if github_token:
+        lines.append(f"GITHUB_TOKEN={shell_quote(github_token)}")
+    for k, v in keys.items():
+        if v and k not in existing_keys:
+            lines.append(f"{k}={shell_quote(v)}")
+    with tempfile.NamedTemporaryFile("w", delete=False) as f:
+        f.write("\n".join(lines) + "\n")
+        tmp = Path(f.name)
+    push_file(container, user, tmp, f"{home}/.secrets")
+    tmp.unlink()
+    shell(container, user, home, f"chmod 600 {shlex.quote(f'{home}/.secrets')}")
+    logger.info("Copied host secrets into %s:%s/.secrets.", container, home)
+
+
+def tailscale_hostname(container: str) -> str:
+    bare = container.split(":", 1)[1] if ":" in container else container
+    safe = "".join(
+        ch if ch.isalnum() or ch == "-" else "-" for ch in bare.lower()
+    ).strip("-")
+    return safe or "incus-dev"
+
+
+def setup_tailscale(container: str, authkey: str, tailscale_ssh: bool) -> None:
+    if not authkey:
+        run(
+            [
+                "incus",
+                "exec",
+                container,
+                "--",
+                "systemctl",
+                "disable",
+                "--now",
+                "tailscaled.service",
+            ],
+            capture=True,
+            check=False,
+        )
+    else:
+        run(
+            [
+                "incus",
+                "exec",
+                container,
+                "--",
+                "systemctl",
+                "enable",
+                "--now",
+                "tailscaled.service",
+            ]
+        )
+        cmd = [
+            "incus",
+            "exec",
+            container,
+            "--",
+            "tailscale",
+            "up",
+            "--auth-key",
+            authkey,
+            "--hostname",
+            tailscale_hostname(container),
+        ]
+        if tailscale_ssh:
+            cmd.append("--ssh")
+        run(cmd)
+
+
+def ensure_repo_parent(container: str, user: str, repo_path: str) -> None:
+    parent = str(Path(repo_path).parent)
+    shell(container, user, user_home(user), f"mkdir -p {shlex.quote(parent)}")
+
+
+def clone_repo(container: str, user: str, home: str, url: str, repo_path: str) -> None:
+    dest = repo_path or f"{home}/code/{Path(url.removesuffix('.git')).name}"
+    if (
+        shell(
+            container,
+            user,
+            home,
+            f"test -d {shlex.quote(dest)}",
+            capture=True,
+            check=False,
+        ).returncode
+        == 0
+    ):
+        logger.info("Repo already present: %s", dest)
+        return
+    ensure_repo_parent(container, user, dest)
+    shell(
+        container,
+        user,
+        home,
+        f"git clone --depth 1 {shlex.quote(url)} {shlex.quote(dest)} && cd {shlex.quote(dest)} && git config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'",
+    )
+
+
+def set_git_identity(container: str, user: str, home: str, repo_path: str) -> None:
+    name = os.getenv("GIT_AUTHOR_NAME") or out(
+        ["git", "config", "user.name"], check=False
+    )
+    email = os.getenv("GIT_AUTHOR_EMAIL") or out(
+        ["git", "config", "user.email"], check=False
+    )
+    if (
+        name
+        and email
+        and shell(
+            container,
+            user,
+            home,
+            f"test -d {shlex.quote(f'{repo_path}/.git')}",
+            capture=True,
+            check=False,
+        ).returncode
+        == 0
+    ):
+        shell(
+            container,
+            user,
+            home,
+            f"git -C {shlex.quote(repo_path)} config user.name {shlex.quote(name)} && git -C {shlex.quote(repo_path)} config user.email {shlex.quote(email)}",
+        )
+        logger.info("Set git identity in %s: %s <%s>", repo_path, name, email)
+
+
+def claude_slug(p: str) -> str:
+    return "-" + p.strip("/").replace("/", "-")
+
+
+def pi_slug(p: str) -> str:
+    return "--" + p.strip("/").replace("/", "-") + "--"
+
+
+def copy_sessions(
+    container: str, user: str, home: str, scope: str, repo_path: str
+) -> None:
+    if scope == "none":
+        return
+    if scope == "repo":
+        if not repo_path:
+            raise SystemExit(
+                "Repo-scoped sessions require a repo path. Run from inside the repo or pass --path."
+            )
+        logger.info("Copying agent sessions for repo: %s", repo_path)
+        slug = claude_slug(repo_path)
+        project = HOME / ".claude/projects" / slug
+        copy_dir(container, user, project, f"{home}/.claude/projects/{slug}", True)
+        copy_dir(
+            container, user, HOME / ".claude/sessions", f"{home}/.claude/sessions", True
+        )
+        for f in project.glob("*.jsonl"):
+            copy_dir(
+                container,
+                user,
+                HOME / ".claude/file-history" / f.stem,
+                f"{home}/.claude/file-history/{f.stem}",
+                True,
+            )
+        codex_sessions = HOME / ".codex/sessions"
+        if codex_sessions.is_dir():
+            for f in codex_sessions.rglob("*.jsonl"):
+                try:
+                    if f'"cwd":"{repo_path}"' in f.read_text(errors="ignore"):
+                        push_file(
+                            container,
+                            user,
+                            f,
+                            f"{home}/.codex/sessions/{f.relative_to(codex_sessions)}",
+                            True,
+                        )
+                except Exception:
+                    pass
+        copy_dir(
+            container,
+            user,
+            HOME / ".pi/agent/sessions" / pi_slug(repo_path),
+            f"{home}/.pi/agent/sessions/{pi_slug(repo_path)}",
+            True,
+        )
+    elif scope == "all":
+        logger.info("Copying all agent sessions.")
+        for d in [
+            "projects",
+            "file-history",
+            "session-env",
+            "shell-snapshots",
+            "sessions",
+        ]:
+            copy_dir(container, user, HOME / ".claude" / d, f"{home}/.claude/{d}", True)
+        copy_dir(
+            container, user, HOME / ".codex/sessions", f"{home}/.codex/sessions", True
+        )
+        copy_dir(
+            container,
+            user,
+            HOME / ".pi/agent/sessions",
+            f"{home}/.pi/agent/sessions",
+            True,
+        )
+    for pattern in [
+        "session_index.jsonl",
+        "history.jsonl",
+        "state_*.sqlite*",
+        "logs_*.sqlite*",
+    ]:
+        for f in (HOME / ".codex").glob(pattern):
+            push_file(container, user, f, f"{home}/.codex/{f.name}", True)
+
+
+def install_packages(container: str, user: str, home: str, pkgs: list[str]) -> None:
+    if pkgs:
+        logger.info("Installing packages: %s", " ".join(pkgs))
+        shell(
+            container,
+            user,
+            home,
+            "nix profile add " + " ".join(shlex.quote("nixpkgs#" + p) for p in pkgs),
+        )
+
+
+def generate_tailscale_authkey() -> str:
+    return out(
+        [
+            "go",
+            "run",
+            "tailscale.com/cmd/get-authkey@latest",
+            "-tags",
+            "tag:devbox",
+            "-ephemeral",
+        ]
+    )
+
+
+def prepare(container: str, a: Args, home: str) -> None:
+    host_files = [
+        HOME / ".claude/.credentials.json",
+        HOME / ".pi/agent/auth.json",
+        HOME / ".codex/auth.json",
+    ]
+    dest_files = [
+        f"{home}/.claude/.credentials.json",
+        f"{home}/.pi/agent/auth.json",
+        f"{home}/.codex/auth.json",
+    ]
+    run(["incus", "info", container], capture=True)
+    ensure_dirs(container, a.user, home)
+    setup_user_systemd(container, a.user, home)
+    for src, dest in zip(host_files, dest_files):
+        if not src.is_file():
+            raise SystemExit(f"Missing host file: {src}")
+        push_file(container, a.user, src, dest)
+    if (
+        a.hermes
+        or shell(
+            container,
+            a.user,
+            home,
+            "command -v hermes >/dev/null 2>&1",
+            capture=True,
+            check=False,
+        ).returncode
+        == 0
+    ):
+        sync_hermes_auth(container, a.user, home)
+    setup_git_credentials(container, a.user, home, a.github_token)
+    sync_secrets(container, a.user, home, a.github_token)
+    setup_tailscale(container, a.tailscale_authkey, a.tailscale_ssh)
+    if a.repo_url:
+        clone_repo(container, a.user, home, a.repo_url, a.repo_path)
+    elif a.repo_path:
+        ensure_repo_parent(container, a.user, a.repo_path)
+        if (
+            shell(
+                container,
+                a.user,
+                home,
+                f"test -d {shlex.quote(a.repo_path)}",
+                capture=True,
+                check=False,
+            ).returncode
+            != 0
+        ):
+            logger.warning(
+                "Repo path does not exist in container and no repo URL was supplied or detected: %s",
+                a.repo_path,
+            )
+    if a.repo_path:
+        set_git_identity(container, a.user, home, a.repo_path)
+    copy_sessions(container, a.user, home, a.session_scope, a.repo_path)
+    install_packages(container, a.user, home, a.extra_packages)
+    logger.info(
+        "Prepared Incus container '%s' for user '%s' (sessions: %s).",
+        container,
+        a.user,
+        a.session_scope,
+    )
+
+
+def configure_logging() -> None:
+    level_name = os.getenv("LOG_LEVEL", "INFO").upper()
+    level = getattr(logging, level_name, logging.INFO)
+    logging.basicConfig(level=level, format="%(message)s")
+
+
+def main(argv: list[str]) -> None:
+    configure_logging()
+    a = parse_args(argv)
+    home = user_home(a.user)
+    target = cref(a.container_arg, a.remote)
+    if container_exists(target):
+        logger.info("Using existing Incus container '%s'.", target)
+        ensure_started(target)
+        wait_user_shell(target, a.user, home)
+    else:
+        image = build_headless_image(script_repo_root())
+        sync_image(a.remote, image)
+        launch(target, a.container_arg, a.remote, a.user, home)
+    if not a.prepare:
+        logger.info("Container '%s' is ready.", target)
+        return
+    if not a.repo_path:
+        a.repo_path = current_repo()
+    if a.repo_path and not a.repo_url:
+        a.repo_url = normalize_repo_url(
+            out(["git", "-C", a.repo_path, "remote", "get-url", "origin"], check=False)
+        )
+    else:
+        a.repo_url = normalize_repo_url(a.repo_url)
+    if a.session_scope == "repo" and not a.repo_path:
+        if a.session_scope_explicit:
+            raise SystemExit(
+                "Repo-scoped sessions require a repo path. Run from inside the repo or pass --path."
+            )
+        a.session_scope = "none"
+    if a.tailscale_ephemeral and not a.tailscale_authkey:
+        a.tailscale_authkey = generate_tailscale_authkey()
+    if a.tailscale_ssh and not a.tailscale_authkey:
+        raise SystemExit(
+            "--tailscale-ssh requires --tailscale-authkey or --tailscale-ephemeral"
+        )
+    prepare(target, a, home)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

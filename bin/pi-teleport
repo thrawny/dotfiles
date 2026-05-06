@@ -135,7 +135,7 @@ def parse_args(argv: list[str]) -> Args:
 
 def ensure_container(args: Args, root: Path) -> None:
     cmd = [
-        str(Path(__file__).resolve().with_name("incus-dev-py")),
+        str(Path(__file__).resolve().with_name("incus-dev")),
         args.target,
         "--path",
         str(root),

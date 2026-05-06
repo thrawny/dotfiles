@@ -47,6 +47,9 @@ in
   networking.hostName = "headless";
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
+  fonts.fontconfig.enable = true;
+  fonts.packages = [ pkgs.dejavu_fonts ];
+
   nix.settings.sandbox = false;
 
   systemd.services.headless-nvim-restore = {
