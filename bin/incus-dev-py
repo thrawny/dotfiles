@@ -41,14 +41,30 @@ def run(
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess:
     logger.debug("+ %s", " ".join(shlex.quote(a) for a in args))
-    return subprocess.run(
-        args,
-        stdin=stdin,
-        text=False if stdin is not None else True,
-        capture_output=capture,
-        check=check,
-        env=env,
-    )
+    try:
+        return subprocess.run(
+            args,
+            stdin=stdin,
+            text=False if stdin is not None else True,
+            capture_output=capture,
+            check=check,
+            env=env,
+        )
+    except subprocess.CalledProcessError as exc:
+        if capture:
+            if exc.stdout:
+                sys.stdout.write(
+                    exc.stdout
+                    if isinstance(exc.stdout, str)
+                    else exc.stdout.decode(errors="replace")
+                )
+            if exc.stderr:
+                sys.stderr.write(
+                    exc.stderr
+                    if isinstance(exc.stderr, str)
+                    else exc.stderr.decode(errors="replace")
+                )
+        raise SystemExit(exc.returncode) from exc
 
 
 def out(args: list[str], *, check: bool = True) -> str:
@@ -56,6 +72,14 @@ def out(args: list[str], *, check: bool = True) -> str:
     return (
         cp.stdout.strip() if isinstance(cp.stdout, str) else cp.stdout.decode().strip()
     )
+
+
+def out_streaming_stderr(args: list[str]) -> str:
+    logger.debug("+ %s", " ".join(shlex.quote(a) for a in args))
+    cp = subprocess.run(args, stdout=subprocess.PIPE, text=True)
+    if cp.returncode != 0:
+        raise SystemExit(cp.returncode)
+    return cp.stdout.strip()
 
 
 @dataclass
@@ -253,7 +277,7 @@ def wait_user_shell(container: str, user: str, home: str) -> None:
 
 
 def build_headless_image(repo_root: Path) -> str:
-    return out(
+    return out_streaming_stderr(
         [
             "nix",
             "build",

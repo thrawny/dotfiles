@@ -86,6 +86,7 @@ in
       ];
 
       networking.useDHCP = lib.mkDefault true;
+      networking.resolvconf.enable = lib.mkForce false;
       services.tailscale.enable = lib.mkForce true;
       services.resolved.enable = lib.mkForce false;
       environment.etc."resolv.conf".text = lib.mkForce ''
