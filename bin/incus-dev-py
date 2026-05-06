@@ -462,7 +462,9 @@ def push_file(
         return
     dest_parent = str(Path(dest).parent)
     shell(container, user, user_home(user), f"mkdir -p {shlex.quote(dest_parent)}")
-    run(["incus", "file", "push", str(src), f"{container}{dest}"])
+    if not missing_only:
+        run(["incus", "file", "delete", f"{container}{dest}"], capture=True, check=False)
+    run(["incus", "file", "push", "-p", str(src), f"{container}{dest}"])
     if user != "root":
         run(["incus", "exec", container, "--", "chown", owner(container, user), dest])
 
@@ -724,13 +726,17 @@ def sync_secrets(container: str, user: str, home: str, github_token: str) -> Non
     )
     if cp.returncode == 0:
         existing = cp.stdout
-    lines = [l for l in existing.splitlines() if l]
+    lines = [
+        l
+        for l in existing.splitlines()
+        if l and not (github_token and re.match(r"^(?:export\s+)?GITHUB_TOKEN=", l))
+    ]
     existing_keys = set()
     for line in lines:
         match = re.match(r"^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)=", line)
         if match:
             existing_keys.add(match.group(1))
-    if github_token and "GITHUB_TOKEN" not in existing_keys:
+    if github_token:
         lines.append(f"GITHUB_TOKEN={shell_quote(github_token)}")
     for k, v in keys.items():
         if v and k not in existing_keys:
