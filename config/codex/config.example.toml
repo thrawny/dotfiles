@@ -28,26 +28,11 @@ theme = "monokai-extended"
 # args = ["mcp-nixos"]
 
 [features]
-apps = true
+# Keep this block to intentional overrides. Most stable features are already on
+# by default and do not need to be pinned here.
 apply_patch_freeform = true
-browser_use = true
 codex_git_commit = false
-codex_hooks = true
-computer_use = true
-enable_request_compression = true
-fast_mode = true
 goals = true
-image_generation = true
-in_app_browser = true
-multi_agent = true
-personality = true
-shell_snapshot = true
-shell_tool = true
-skill_mcp_dependency_install = true
-tool_search = true
-tool_suggest = true
-unified_exec = true
-workspace_dependencies = true
 
 [sandbox_workspace_write]
 writable_roots = ["/home/thrawny/.cache", "/home/thrawny/.npm"]
