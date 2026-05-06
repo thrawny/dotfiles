@@ -754,6 +754,12 @@ def sync_secrets(container: str, user: str, home: str, github_token: str) -> Non
     logger.info("Copied host secrets into %s:%s/.secrets.", container, home)
 
 
+def tailscale_hostname(container: str) -> str:
+    bare = container.split(":", 1)[1] if ":" in container else container
+    safe = "".join(ch if ch.isalnum() or ch == "-" else "-" for ch in bare.lower()).strip("-")
+    return safe or "incus-dev"
+
+
 def setup_tailscale(container: str, authkey: str) -> None:
     if not authkey:
         run(
@@ -784,7 +790,18 @@ def setup_tailscale(container: str, authkey: str) -> None:
             ]
         )
         run(
-            ["incus", "exec", container, "--", "tailscale", "up", "--auth-key", authkey]
+            [
+                "incus",
+                "exec",
+                container,
+                "--",
+                "tailscale",
+                "up",
+                "--auth-key",
+                authkey,
+                "--hostname",
+                tailscale_hostname(container),
+            ]
         )
 
 
