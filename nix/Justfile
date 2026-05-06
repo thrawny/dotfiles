@@ -81,9 +81,45 @@ switch:
         home-manager switch -b bak --flake ".#$host"
     fi
 
-# Build on this machine and deploy/switch on a remote NixOS host
+# Build on this machine and deploy/switch on a remote NixOS host.
+# Falls back to `boot` automatically when NixOS refuses a live switch for
+# critical component changes such as dbus -> broker.
 deploy target:
-    nixos-rebuild switch --flake ".#{{target}}" --build-host "" --target-host "{{target}}" --sudo
+    #!/usr/bin/env bash
+    set -euo pipefail
+    log="$(mktemp)"
+    trap 'rm -f "$log"' EXIT
+
+    if nixos-rebuild switch --flake ".#{{target}}" --build-host "" --target-host "{{target}}" --sudo 2>&1 | tee "$log"; then
+        exit 0
+    fi
+
+    if grep -q "Pre-switch check 'switchInhibitors' failed" "$log"; then
+        echo ""
+        echo "NixOS refused to live-switch critical system components."
+        echo "Installing the same configuration for next boot instead..."
+        nixos-rebuild boot --flake ".#{{target}}" --build-host "" --target-host "{{target}}" --sudo
+        echo ""
+        echo "Installed next boot generation on {{target}}."
+        read -r -p "Reboot {{target}} now? [y/N] " reply
+        case "$reply" in
+            [yY]|[yY][eE][sS])
+                echo "Rebooting {{target}}..."
+                ssh {{target}} sudo reboot
+                ;;
+            *)
+                echo "Not rebooting. Reboot when ready with:"
+                echo "  ssh {{target}} sudo reboot"
+                ;;
+        esac
+        exit 0
+    fi
+
+    exit 1
+
+# Explicitly build on this machine and install a remote NixOS generation for next boot
+deploy-boot target:
+    nixos-rebuild boot --flake ".#{{target}}" --build-host "" --target-host "{{target}}" --sudo
 
 # Dry-run NixOS rebuild (NixOS only)
 dry:
