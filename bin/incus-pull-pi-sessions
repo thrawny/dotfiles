@@ -10,6 +10,7 @@ main() {
   local repo_path=""
   local dry_run=false
   local force=false
+  local agent="all"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -26,6 +27,19 @@ main() {
         ;;
       --force)
         force=true
+        ;;
+      --agent)
+        agent="$2"
+        shift
+        ;;
+      --pi)
+        agent="pi"
+        ;;
+      --codex)
+        agent="codex"
+        ;;
+      --all)
+        agent="all"
         ;;
       --help|-h)
         usage
@@ -57,54 +71,45 @@ main() {
     exit 1
   fi
 
-  local home slug remote_dir local_dir tmpdir
+  case "$agent" in
+    pi|codex|all) ;;
+    *) echo "Invalid --agent value: $agent (expected pi, codex, or all)" >&2; exit 1 ;;
+  esac
+
+  local home tmpdir
   home="$(user_home "$user")"
-  slug="$(pi_session_slug "$repo_path")"
-  remote_dir="$home/.pi/agent/sessions/$slug"
-  local_dir="$HOME/.pi/agent/sessions/$slug"
   tmpdir="$(mktemp -d)"
   trap 'rm -rf "${tmpdir:-}"' EXIT
 
   incus info "$container" >/dev/null
 
-  if ! incus exec "$container" -- test -d "$remote_dir"; then
-    echo "No remote Pi session directory: $container:$remote_dir"
-    return 0
-  fi
-
-  mkdir -p "$local_dir"
-
-  echo "Pulling Pi sessions from $container:$remote_dir"
-  echo "Merging into $local_dir"
   [[ "$dry_run" == true ]] && echo "Dry run: no files will be changed"
 
-  local -a remote_files=()
-  mapfile -t remote_files < <(
-    incus exec "$container" -- find "$remote_dir" -maxdepth 1 -type f -name '*.jsonl' -printf '%f\n' | sort
-  )
-
-  local name remote_tmp local_file
-  for name in "${remote_files[@]}"; do
-    remote_tmp="$tmpdir/$name"
-    local_file="$local_dir/$name"
-    incus file pull "$container$remote_dir/$name" "$remote_tmp" >/dev/null
-    merge_session_file "$container" "$remote_tmp" "$local_file" "$local_dir" "$dry_run" "$force"
-  done
+  if [[ "$agent" == "pi" || "$agent" == "all" ]]; then
+    pull_pi_sessions "$container" "$home" "$repo_path" "$tmpdir" "$dry_run" "$force"
+  fi
+  if [[ "$agent" == "codex" || "$agent" == "all" ]]; then
+    pull_codex_sessions "$container" "$home" "$repo_path" "$tmpdir" "$dry_run" "$force"
+  fi
 }
 
 usage() {
   cat <<'EOF'
 Usage: incus-pull-pi-sessions <container|remote:container> [options]
 
-Pull repo-scoped Pi session JSONL files from an Incus container back to the host.
-Remote sessions are imported as cloned local sessions with fresh session IDs and
-friendly names like remote-session-kf1-go-6fb4034e-2026-04-27. Identical remote
-files already present locally are skipped unless --force is used.
+Pull repo-scoped Pi and/or Codex session JSONL files from an Incus container back
+to the host. Remote sessions are imported as cloned local sessions with fresh
+session IDs and friendly names like remote-session-kf1-go-6fb4034e-2026-04-27.
+Identical remote files already present locally are skipped unless --force is used.
 
 Options:
   --path PATH    Repo path whose Pi session slug should be synced
                  (default: current git repo root)
   --user USER    Container user (default: thrawny)
+  --agent AGENT  Agent sessions to pull: pi, codex, or all (default: all)
+  --pi           Pull only Pi sessions
+  --codex        Pull only Codex sessions
+  --all          Pull Pi and Codex sessions (default)
   --dry-run, -n  Show what would happen without changing local files
   --force        Clone even when an identical local file already exists
   --help, -h     Show this help
@@ -148,8 +153,70 @@ pi_session_slug() {
   printf -- '--%s--\n' "${trimmed//\//-}"
 }
 
+pull_pi_sessions() {
+  local container="$1" home="$2" repo_path="$3" tmpdir="$4" dry_run="$5" force="$6"
+  local slug remote_dir local_dir
+  slug="$(pi_session_slug "$repo_path")"
+  remote_dir="$home/.pi/agent/sessions/$slug"
+  local_dir="$HOME/.pi/agent/sessions/$slug"
+
+  if ! incus exec "$container" -- test -d "$remote_dir"; then
+    echo "No remote Pi session directory: $container:$remote_dir"
+    return 0
+  fi
+
+  mkdir -p "$local_dir"
+  echo "Pulling Pi sessions from $container:$remote_dir"
+  echo "Merging into $local_dir"
+
+  local -a remote_files=()
+  mapfile -t remote_files < <(
+    incus exec "$container" -- find "$remote_dir" -maxdepth 1 -type f -name '*.jsonl' -printf '%f\n' | sort
+  )
+
+  local name remote_tmp local_file
+  for name in "${remote_files[@]}"; do
+    remote_tmp="$tmpdir/pi-$name"
+    local_file="$local_dir/$name"
+    incus file pull "$container$remote_dir/$name" "$remote_tmp" >/dev/null
+    merge_session_file "$container" "pi" "$remote_tmp" "$local_file" "$local_dir" "$dry_run" "$force"
+  done
+}
+
+pull_codex_sessions() {
+  local container="$1" home="$2" repo_path="$3" tmpdir="$4" dry_run="$5" force="$6"
+  local remote_root="$home/.codex/sessions"
+  local local_root="$HOME/.codex/sessions"
+
+  if ! incus exec "$container" -- test -d "$remote_root"; then
+    echo "No remote Codex session directory: $container:$remote_root"
+    return 0
+  fi
+
+  mkdir -p "$local_root"
+  echo "Pulling Codex sessions from $container:$remote_root for cwd $repo_path"
+  echo "Merging into $local_root"
+
+  local -a remote_files=()
+  mapfile -t remote_files < <(
+    incus exec "$container" -- sh -c 'find "$1" -type f -name "*.jsonl" -print0 | xargs -0 grep -l -F "\"cwd\":\"$2\"" 2>/dev/null | sort' sh "$remote_root" "$repo_path"
+  )
+
+  local remote_file rel name remote_tmp local_dir local_file
+  for remote_file in "${remote_files[@]}"; do
+    rel="${remote_file#$remote_root/}"
+    name="$(basename "$rel")"
+    remote_tmp="$tmpdir/codex-${name}"
+    local_dir="$local_root/$(dirname "$rel")"
+    local_file="$local_root/$rel"
+    mkdir -p "$local_dir"
+    incus file pull "$container$remote_file" "$remote_tmp" >/dev/null
+    merge_session_file "$container" "codex" "$remote_tmp" "$local_file" "$local_dir" "$dry_run" "$force"
+  done
+}
+
 merge_session_file() {
-  local container="$1" remote_file="$2" local_file="$3" local_dir="$4" dry_run="$5" force="$6"
+  local container="$1" agent="$2" remote_file="$3" local_file="$4" local_dir="$5" dry_run="$6" force="$7"
   local name
   name="$(basename "$local_file")"
 
@@ -158,15 +225,15 @@ merge_session_file() {
     return 0
   fi
 
-  echo "CLONE remote: $name"
+  echo "CLONE remote $agent: $name"
   if [[ "$dry_run" != true ]]; then
-    clone_remote_session "$container" "$remote_file" "$local_dir"
+    clone_remote_session "$container" "$agent" "$remote_file" "$local_dir"
   fi
 }
 
 clone_remote_session() {
-  local container="$1" remote_file="$2" local_dir="$3"
-  python3 - "$container" "$remote_file" "$local_dir" <<'PY'
+  local container="$1" agent="$2" remote_file="$3" local_dir="$4"
+  python3 - "$container" "$agent" "$remote_file" "$local_dir" <<'PY'
 import json
 import os
 import pathlib
@@ -175,14 +242,19 @@ import sys
 import uuid
 from datetime import datetime, timezone
 
-container, remote_file, local_dir = sys.argv[1:]
+container, agent, remote_file, local_dir = sys.argv[1:]
 path = pathlib.Path(remote_file)
 lines = path.read_text(encoding="utf-8").splitlines()
 if not lines:
     raise SystemExit(f"Empty session file: {remote_file}")
 
 header = json.loads(lines[0])
-old_id = str(header.get("id") or "unknown")
+if agent == "codex":
+    payload = header.setdefault("payload", {})
+    old_id = str(payload.get("id") or "unknown")
+else:
+    old_id = str(header.get("id") or "unknown")
+
 new_id = str(uuid.uuid4())
 now = datetime.now(timezone.utc)
 now_iso = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
@@ -194,31 +266,41 @@ old_short = old_id.split("-")[0][:8] if old_id != "unknown" else "unknown"
 date = now.date().isoformat()
 session_name = f"remote-session-{safe_container}-{old_short}-{date}"
 
-header["id"] = new_id
-header["timestamp"] = now_iso
-header["parentSession"] = str(path.name)
+if agent == "codex":
+    header["timestamp"] = now_iso
+    header["payload"]["id"] = new_id
+    header["payload"]["timestamp"] = now_iso
+    header["payload"]["parent_session"] = str(path.name)
+    out_lines = [json.dumps(header, separators=(",", ":"), ensure_ascii=False)]
+    out_lines.extend(lines[1:])
+    out_name = f"rollout-{now.strftime('%Y-%m-%dT%H-%M-%S')}-{new_id}.jsonl"
+else:
+    header["id"] = new_id
+    header["timestamp"] = now_iso
+    header["parentSession"] = str(path.name)
 
-last_entry_id = None
-for line in lines[1:]:
-    try:
-        entry = json.loads(line)
-    except json.JSONDecodeError:
-        continue
-    if entry.get("type") != "session" and entry.get("id"):
-        last_entry_id = entry["id"]
+    last_entry_id = None
+    for line in lines[1:]:
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("type") != "session" and entry.get("id"):
+            last_entry_id = entry["id"]
 
-out_lines = [json.dumps(header, separators=(",", ":"), ensure_ascii=False)]
-out_lines.extend(lines[1:])
-if last_entry_id:
-    out_lines.append(json.dumps({
-        "type": "session_info",
-        "id": uuid.uuid4().hex[:8],
-        "parentId": last_entry_id,
-        "timestamp": now_iso,
-        "name": session_name,
-    }, separators=(",", ":"), ensure_ascii=False))
+    out_lines = [json.dumps(header, separators=(",", ":"), ensure_ascii=False)]
+    out_lines.extend(lines[1:])
+    if last_entry_id:
+        out_lines.append(json.dumps({
+            "type": "session_info",
+            "id": uuid.uuid4().hex[:8],
+            "parentId": last_entry_id,
+            "timestamp": now_iso,
+            "name": session_name,
+        }, separators=(",", ":"), ensure_ascii=False))
+    out_name = f"{file_ts}_{new_id}.jsonl"
 
-out_path = pathlib.Path(local_dir) / f"{file_ts}_{new_id}.jsonl"
+out_path = pathlib.Path(local_dir) / out_name
 out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
 print(f"  wrote {out_path.name}")
 print(f"  name  {session_name}")
