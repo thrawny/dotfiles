@@ -1,0 +1,395 @@
+#!/usr/bin/env python3
+"""Pull repo-scoped Pi and Codex sessions from an Incus container."""
+
+from __future__ import annotations
+
+import argparse
+import filecmp
+import json
+import pathlib
+import re
+import subprocess
+import sys
+import tempfile
+import uuid
+from datetime import datetime, timezone
+
+HOME = pathlib.Path.home()
+
+
+def main() -> int:
+    args = parse_args()
+    repo_path = resolve_repo_path(args.path)
+    user_home_path = user_home(args.user)
+
+    run(["incus", "info", args.container], stdout=subprocess.DEVNULL)
+
+    if args.dry_run:
+        print("Dry run: no files will be changed")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        tmpdir = pathlib.Path(tmp)
+        if args.agent in {"pi", "all"}:
+            pull_pi_sessions(
+                args.container,
+                user_home_path,
+                repo_path,
+                tmpdir,
+                args.dry_run,
+                args.force,
+            )
+        if args.agent in {"codex", "all"}:
+            pull_codex_sessions(
+                args.container,
+                user_home_path,
+                repo_path,
+                tmpdir,
+                args.dry_run,
+                args.force,
+            )
+
+    return 0
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="incus-pull-sessions",
+        description=(
+            "Pull repo-scoped Pi and/or Codex session JSONL files from an Incus "
+            "container back to the host. Remote sessions are imported as cloned "
+            "local sessions with fresh session IDs."
+        ),
+    )
+    parser.add_argument(
+        "container", help="Incus container, optionally remote:container"
+    )
+    parser.add_argument(
+        "--path",
+        help="Repo path whose sessions should be synced (default: current git repo root)",
+    )
+    parser.add_argument(
+        "--user", default="thrawny", help="Container user (default: thrawny)"
+    )
+    parser.add_argument(
+        "--agent",
+        choices=("pi", "codex", "all"),
+        default="all",
+        help="Agent sessions to pull (default: all)",
+    )
+    parser.add_argument(
+        "--pi",
+        action="store_const",
+        const="pi",
+        dest="agent",
+        help="Pull only Pi sessions",
+    )
+    parser.add_argument(
+        "--codex",
+        action="store_const",
+        const="codex",
+        dest="agent",
+        help="Pull only Codex sessions",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_const",
+        const="all",
+        dest="agent",
+        help="Pull Pi and Codex sessions",
+    )
+    parser.add_argument(
+        "--dry-run",
+        "-n",
+        action="store_true",
+        help="Show what would happen without changing local files",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Clone even when an identical local file already exists",
+    )
+    return parser.parse_args()
+
+
+def resolve_repo_path(path: str | None) -> str:
+    if path:
+        repo_path = pathlib.Path(path).expanduser()
+        if not repo_path.is_dir():
+            raise SystemExit(f"Path does not exist or is not a directory: {path}")
+        return str(repo_path.resolve())
+
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        raise SystemExit(
+            "Could not detect repo path. Run from inside a git repo or pass --path."
+        )
+    return result.stdout.strip()
+
+
+def user_home(user: str) -> str:
+    return "/root" if user == "root" else f"/home/{user}"
+
+
+def pi_session_slug(repo_path: str) -> str:
+    return f"--{repo_path.lstrip('/').replace('/', '-')}--"
+
+
+def pull_pi_sessions(
+    container: str,
+    home: str,
+    repo_path: str,
+    tmpdir: pathlib.Path,
+    dry_run: bool,
+    force: bool,
+) -> None:
+    slug = pi_session_slug(repo_path)
+    remote_dir = f"{home}/.pi/agent/sessions/{slug}"
+    local_dir = HOME / ".pi/agent/sessions" / slug
+
+    if not remote_dir_exists(container, remote_dir):
+        print(f"No remote Pi session directory: {container}:{remote_dir}")
+        return
+
+    local_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Pulling Pi sessions from {container}:{remote_dir}")
+    print(f"Merging into {local_dir}")
+
+    result = run(
+        [
+            "incus",
+            "exec",
+            container,
+            "--",
+            "find",
+            remote_dir,
+            "-maxdepth",
+            "1",
+            "-type",
+            "f",
+            "-name",
+            "*.jsonl",
+            "-printf",
+            "%f\\n",
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+
+    for name in sorted(result.stdout.splitlines()):
+        remote_tmp = tmpdir / f"pi-{name}"
+        local_file = local_dir / name
+        pull_file(container, f"{remote_dir}/{name}", remote_tmp)
+        merge_session_file(
+            container, "pi", remote_tmp, local_file, local_dir, dry_run, force
+        )
+
+
+def pull_codex_sessions(
+    container: str,
+    home: str,
+    repo_path: str,
+    tmpdir: pathlib.Path,
+    dry_run: bool,
+    force: bool,
+) -> None:
+    remote_root = f"{home}/.codex/sessions"
+    local_root = HOME / ".codex/sessions"
+
+    if not remote_dir_exists(container, remote_root):
+        print(f"No remote Codex session directory: {container}:{remote_root}")
+        return
+
+    local_root.mkdir(parents=True, exist_ok=True)
+    print(f"Pulling Codex sessions from {container}:{remote_root} for cwd {repo_path}")
+    print(f"Merging into {local_root}")
+
+    result = run(
+        [
+            "incus",
+            "exec",
+            container,
+            "--",
+            "sh",
+            "-c",
+            'find "$1" -type f -name "*.jsonl" -print0 | xargs -0 grep -l -F "\\"cwd\\":\\"$2\\"" 2>/dev/null | sort',
+            "sh",
+            remote_root,
+            repo_path,
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+
+    for remote_file in result.stdout.splitlines():
+        rel = pathlib.PurePosixPath(remote_file.removeprefix(f"{remote_root}/"))
+        remote_tmp = tmpdir / f"codex-{rel.name}"
+        local_dir = local_root / pathlib.Path(*rel.parts[:-1])
+        local_file = local_root / pathlib.Path(*rel.parts)
+        local_dir.mkdir(parents=True, exist_ok=True)
+        pull_file(container, remote_file, remote_tmp)
+        merge_session_file(
+            container, "codex", remote_tmp, local_file, local_dir, dry_run, force
+        )
+
+
+def remote_dir_exists(container: str, remote_dir: str) -> bool:
+    result = subprocess.run(
+        ["incus", "exec", container, "--", "test", "-d", remote_dir],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        check=False,
+    )
+    return result.returncode == 0
+
+
+def pull_file(container: str, remote_file: str, local_file: pathlib.Path) -> None:
+    run(
+        ["incus", "file", "pull", f"{container}{remote_file}", str(local_file)],
+        stdout=subprocess.DEVNULL,
+    )
+
+
+def merge_session_file(
+    container: str,
+    agent: str,
+    remote_file: pathlib.Path,
+    local_file: pathlib.Path,
+    local_dir: pathlib.Path,
+    dry_run: bool,
+    force: bool,
+) -> None:
+    if (
+        local_file.exists()
+        and filecmp.cmp(remote_file, local_file, shallow=False)
+        and not force
+    ):
+        print(f"SKIP identical source already local: {local_file.name}")
+        return
+
+    print(f"CLONE remote {agent}: {local_file.name}")
+    if not dry_run:
+        clone_remote_session(container, agent, remote_file, local_dir)
+
+
+def clone_remote_session(
+    container: str, agent: str, remote_file: pathlib.Path, local_dir: pathlib.Path
+) -> None:
+    lines = remote_file.read_text(encoding="utf-8").splitlines()
+    if not lines:
+        raise SystemExit(f"Empty session file: {remote_file}")
+
+    header = json.loads(lines[0])
+    if agent == "codex":
+        payload = header.setdefault("payload", {})
+        old_id = str(payload.get("id") or "unknown")
+    else:
+        old_id = str(header.get("id") or "unknown")
+
+    new_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat(timespec="milliseconds").replace("+00:00", "Z")
+    session_name = remote_session_name(container, old_id, now)
+
+    if agent == "codex":
+        out_name, out_lines = clone_codex_session(
+            header, lines, remote_file.name, new_id, now, now_iso
+        )
+    else:
+        out_name, out_lines = clone_pi_session(
+            header, lines, remote_file.name, new_id, now_iso, session_name
+        )
+
+    out_path = local_dir / out_name
+    out_path.write_text("\n".join(out_lines) + "\n", encoding="utf-8")
+    print(f"  wrote {out_path.name}")
+    print(f"  name  {session_name}")
+
+
+def clone_codex_session(
+    header: dict,
+    lines: list[str],
+    source_name: str,
+    new_id: str,
+    now: datetime,
+    now_iso: str,
+) -> tuple[str, list[str]]:
+    header["timestamp"] = now_iso
+    header["payload"]["id"] = new_id
+    header["payload"]["timestamp"] = now_iso
+    header["payload"]["parent_session"] = source_name
+    out_lines = [
+        json.dumps(header, separators=(",", ":"), ensure_ascii=False),
+        *lines[1:],
+    ]
+    out_name = f"rollout-{now.strftime('%Y-%m-%dT%H-%M-%S')}-{new_id}.jsonl"
+    return out_name, out_lines
+
+
+def clone_pi_session(
+    header: dict,
+    lines: list[str],
+    source_name: str,
+    new_id: str,
+    now_iso: str,
+    session_name: str,
+) -> tuple[str, list[str]]:
+    header["id"] = new_id
+    header["timestamp"] = now_iso
+    header["parentSession"] = source_name
+
+    last_entry_id = None
+    for line in lines[1:]:
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if entry.get("type") != "session" and entry.get("id"):
+            last_entry_id = entry["id"]
+
+    out_lines = [
+        json.dumps(header, separators=(",", ":"), ensure_ascii=False),
+        *lines[1:],
+    ]
+    if last_entry_id:
+        out_lines.append(
+            json.dumps(
+                {
+                    "type": "session_info",
+                    "id": uuid.uuid4().hex[:8],
+                    "parentId": last_entry_id,
+                    "timestamp": now_iso,
+                    "name": session_name,
+                },
+                separators=(",", ":"),
+                ensure_ascii=False,
+            )
+        )
+
+    file_ts = now_iso.replace(":", "-").replace(".", "-")
+    return f"{file_ts}_{new_id}.jsonl", out_lines
+
+
+def remote_session_name(container: str, old_id: str, now: datetime) -> str:
+    container_name = container.split(":")[-1]
+    safe_container = (
+        re.sub(r"[^A-Za-z0-9_.-]+", "-", container_name).strip("-") or "container"
+    )
+    old_short = old_id.split("-")[0][:8] if old_id != "unknown" else "unknown"
+    return f"remote-session-{safe_container}-{old_short}-{now.date().isoformat()}"
+
+
+def run(command: list[str], **kwargs) -> subprocess.CompletedProcess:
+    try:
+        return subprocess.run(command, check=True, **kwargs)
+    except subprocess.CalledProcessError as exc:
+        raise SystemExit(exc.returncode) from exc
+
+
+if __name__ == "__main__":
+    sys.exit(main())
