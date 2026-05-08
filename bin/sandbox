@@ -5,6 +5,43 @@ set -euo pipefail
 sandbox() {
   local tmpfiles=() args=() extra=()
 
+  redact_file_as() {
+    local source="$1" target="$2" tmp
+    [[ -f "$source" ]] || return 0
+    tmp=$(mktemp)
+    sed 's/=.*/="REDACTED"/' "$source" > "$tmp"
+    args+=(--ro-bind "$tmp" "$target")
+    tmpfiles+=("$tmp")
+  }
+
+  redact_file() {
+    local f="$1"
+    redact_file_as "$f" "$f"
+  }
+
+  unset_env_names_from_file() {
+    local f="$1" line name
+    [[ -f "$f" ]] || return 0
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      if [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)= ]]; then
+        name="${BASH_REMATCH[2]}"
+        unset "$name"
+      fi
+    done < "$f"
+  }
+
+  load_env_file() {
+    local f="$1"
+    [[ -f "$f" ]] || return 0
+
+    # Shell fragments may set/export sandbox-specific values or unset host-only secrets.
+    set -a
+    # shellcheck source=/dev/null
+    source "$f"
+    set +a
+  }
+
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --) shift; break ;;
@@ -12,6 +49,14 @@ sandbox() {
       *) break ;;
     esac
   done
+
+  # Repository-local sandbox overrides. If present, remove any variables defined
+  # by .secrets from the inherited environment, then source .sandbox-secrets.
+  # This makes .sandbox-secrets a replacement for .secrets, not a partial merge.
+  if [[ -f "$PWD/.sandbox-secrets" ]]; then
+    unset_env_names_from_file "$PWD/.secrets"
+    load_env_file "$PWD/.sandbox-secrets"
+  fi
 
   # Writable paths (add more as needed)
   local writable=(
@@ -120,14 +165,20 @@ sandbox() {
     [[ -d "$d" ]] && args+=(--bind "$d" "$d")
   done
 
-  # Redact .secrets* files after writable binds so file-level mounts win.
+  # Redact secrets files after writable binds so file-level mounts win.
   while IFS= read -r -d '' f; do
-    local tmp
-    tmp=$(mktemp)
-    sed 's/=.*/="REDACTED"/' "$f" > "$tmp"
-    args+=(--ro-bind "$tmp" "$f")
-    tmpfiles+=("$tmp")
-  done < <(fd -H -g '.secrets*' ~ --type f -0 2>/dev/null)
+    redact_file "$f"
+  done < <(fd -H --no-ignore -g '.secrets*' ~ --type f -0 2>/dev/null)
+  while IFS= read -r -d '' f; do
+    redact_file "$f"
+  done < <(fd -H --no-ignore -g '.sandbox-secrets*' ~ --type f -0 2>/dev/null)
+
+  # Repository-local .sandbox-secrets overrides .secrets for the process
+  # environment, but both files stay readable-only-as-redacted in the sandbox.
+  if [[ -f "$PWD/.sandbox-secrets" ]]; then
+    redact_file_as "$PWD/.sandbox-secrets" "$PWD/.secrets"
+    redact_file "$PWD/.sandbox-secrets"
+  fi
 
   # Deny access to sensitive paths (applied after writable to override)
   local deny=(
@@ -152,6 +203,7 @@ sandbox() {
     [[ -d "$d" ]] && args+=(--tmpfs "$d")
   done
 
+  local bwrap_status=0
   bwrap \
     --ro-bind / / \
     --bind "${PWD}" "${PWD}" \
@@ -162,9 +214,10 @@ sandbox() {
     --setenv SANDBOX 1 \
     "${args[@]}" \
     "${extra[@]}" \
-    -- "$@"
+    -- "$@" || bwrap_status=$?
 
   rm -f "${tmpfiles[@]}"
+  return "$bwrap_status"
 }
 
 sandbox "$@"

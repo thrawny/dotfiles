@@ -23,7 +23,13 @@ in
     stdlib = ''
       dotenv_if_exists .env
       dotenv_if_exists .env.local
-      source_env_if_exists .envrc.local
+
+      if [[ -n "''${SANDBOX:-}" ]]; then
+          source_env_if_exists .envrc.sandbox
+      else
+          source_env_if_exists .envrc.local
+      fi
+
       dotenv_if_exists .secrets
 
       use_zmx() {

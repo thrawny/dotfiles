@@ -88,9 +88,12 @@ in
 
       # Environment/secrets
       ".envrc"
+      ".envrc.local"
+      ".envrc.sanbox"
       ".direnv"
       ".secrets"
       ".secrets*"
+      ".sandbox-secrets*"
       ".scrt"
       ".ssh"
       "*.local.json"
