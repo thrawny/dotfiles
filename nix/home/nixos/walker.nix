@@ -1,6 +1,12 @@
-{ walker, ... }:
+{
+  pkgs,
+  walker,
+  ...
+}:
 {
   imports = [ walker.homeManagerModules.default ];
+
+  home.packages = [ pkgs.gh ];
 
   programs.walker = {
     enable = true;
@@ -8,7 +14,139 @@
     config = {
       theme = "molokai";
       keybinds.quick_activate = [ ];
+      placeholders."menus:gh" = {
+        input = "Search GitHub repositories";
+        list = "No matching repositories";
+      };
+      providers = {
+        prefixes = [
+          {
+            provider = "menus:gh";
+            prefix = ",";
+          }
+        ];
+        actions."menus:gh" = [
+          {
+            action = "open";
+            label = "open";
+            default = true;
+            bind = "Return";
+          }
+          {
+            action = "copy";
+            label = "copy url";
+            bind = "ctrl c";
+          }
+          {
+            action = "clone";
+            label = "clone";
+            bind = "ctrl Return";
+          }
+        ];
+      };
     };
+
+    elephant.provider.menus.lua.gh = ''
+      Name = "gh"
+      NamePretty = "GitHub Repos"
+      Icon = "github"
+      Cache = false
+      FixedOrder = true
+      SearchPriority = { "keywords" }
+      HideFromProviderlist = false
+      Description = "Search GitHub repositories"
+
+      local gh = "${pkgs.gh}/bin/gh"
+      local xdg_open = "${pkgs.xdg-utils}/bin/xdg-open"
+      local wl_copy = "${pkgs.wl-clipboard}/bin/wl-copy"
+      local git = "${pkgs.git}/bin/git"
+      local mkdir = "${pkgs.coreutils}/bin/mkdir"
+
+      local function shell_quote(s)
+        return string.format("%q", tostring(s))
+      end
+
+      -- Elephant's menu provider re-scores non-empty queries and then sorts ties
+      -- alphabetically by Text. Score against identical per-entry keywords, then
+      -- use an invisible zero-width rank prefix to preserve gh's star ordering.
+      local function invisible_rank_prefix(rank)
+        local zero = "\226\128\139" -- U+200B zero-width space
+        local one = "\226\128\140" -- U+200C zero-width non-joiner
+        local bits = {}
+
+        for bit = 5, 0, -1 do
+          if math.floor(rank / (2 ^ bit)) % 2 == 0 then
+            table.insert(bits, zero)
+          else
+            table.insert(bits, one)
+          end
+        end
+
+        return table.concat(bits)
+      end
+
+      local function matches_query(full_name, query)
+        local haystack = full_name:lower()
+        local needle = query:lower()
+
+        -- Plain searches should match the repo name, not just the owner/org.
+        -- "elephant" should not match "running-elephant/datart".
+        if not needle:find("/", 1, true) then
+          haystack = haystack:match("[^/]+$") or haystack
+        end
+
+        for term in needle:gmatch("%S+") do
+          if not haystack:find(term, 1, true) then
+            return false
+          end
+        end
+
+        return true
+      end
+
+      function GetEntries(query)
+        local entries = {}
+
+        if query == nil or query == "" then
+          return entries
+        end
+
+        local cmd = gh .. " search repos " .. shell_quote(query) ..
+          " --match name --sort stars --order desc " ..
+          " --limit 20 --json fullName,description,url,stargazersCount " ..
+          " --jq '.[] | [.fullName, (.description // \"\"), .url, (.stargazersCount|tostring)] | @tsv'"
+
+        local handle = io.popen(cmd)
+        if not handle then
+          return entries
+        end
+
+        local rank = 0
+        for line in handle:lines() do
+          local full_name, description, url, stars = line:match("([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)")
+
+          if full_name ~= nil and url ~= nil and matches_query(full_name, query) then
+            rank = rank + 1
+            table.insert(entries, {
+              Text = invisible_rank_prefix(rank) .. full_name,
+              Subtext = "★ " .. (stars or "0") .. "  " .. (description or ""),
+              Value = url,
+              Icon = "github",
+              Keywords = { query },
+              Actions = {
+                open = xdg_open .. " %VALUE%",
+                copy = wl_copy .. " %VALUE%",
+                clone = mkdir .. " -p ~/code && " .. git .. " -C ~/code clone %VALUE%",
+              },
+            })
+          end
+        end
+
+        handle:close()
+        return entries
+      end
+    '';
+
     themes.molokai.style = ''
       @define-color window_bg_color #1c1c1c;
       @define-color accent_bg_color #f92672;
