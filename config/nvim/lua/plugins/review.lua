@@ -228,12 +228,7 @@ return {
               restore_review_buffers(lifecycle, tabpage)
               require("review").close()
             else
-              local status = vim.fn.system({ "git", "status", "--porcelain" })
-              if vim.v.shell_error == 0 and vim.trim(status) == "" then
-                vim.cmd("Review commits HEAD")
-              else
-                vim.cmd("Review")
-              end
+              vim.cmd("Review")
             end
           end,
           desc = "Review",
