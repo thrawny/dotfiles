@@ -93,7 +93,6 @@ in
       ".direnv"
       ".secrets"
       ".secrets*"
-      ".sandbox-secrets*"
       ".scrt"
       ".ssh"
       "*.local.json"

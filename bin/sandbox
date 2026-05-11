@@ -51,11 +51,11 @@ sandbox() {
   done
 
   # Repository-local sandbox overrides. If present, remove any variables defined
-  # by .secrets from the inherited environment, then source .sandbox-secrets.
-  # This makes .sandbox-secrets a replacement for .secrets, not a partial merge.
-  if [[ -f "$PWD/.sandbox-secrets" ]]; then
+  # by .secrets from the inherited environment, then source .secrets.sandbox.
+  # This makes .secrets.sandbox a replacement for .secrets, not a partial merge.
+  if [[ -f "$PWD/.secrets.sandbox" ]]; then
     unset_env_names_from_file "$PWD/.secrets"
-    load_env_file "$PWD/.sandbox-secrets"
+    load_env_file "$PWD/.secrets.sandbox"
   fi
 
   # Writable paths (add more as needed)
@@ -73,6 +73,7 @@ sandbox() {
     ~/dotfiles
     ~/code
     ~/.config
+    ~/.acpx
   )
   for d in "${writable[@]}"; do
     d="${d/#\~/$HOME}"
@@ -171,13 +172,13 @@ sandbox() {
   done < <(fd -H --no-ignore -g '.secrets*' ~ --type f -0 2>/dev/null)
   while IFS= read -r -d '' f; do
     redact_file "$f"
-  done < <(fd -H --no-ignore -g '.sandbox-secrets*' ~ --type f -0 2>/dev/null)
+  done < <(fd -H --no-ignore -g '.secrets.sandbox*' ~ --type f -0 2>/dev/null)
 
-  # Repository-local .sandbox-secrets overrides .secrets for the process
+  # Repository-local .secrets.sandbox overrides .secrets for the process
   # environment, but both files stay readable-only-as-redacted in the sandbox.
-  if [[ -f "$PWD/.sandbox-secrets" ]]; then
-    redact_file_as "$PWD/.sandbox-secrets" "$PWD/.secrets"
-    redact_file "$PWD/.sandbox-secrets"
+  if [[ -f "$PWD/.secrets.sandbox" ]]; then
+    redact_file_as "$PWD/.secrets.sandbox" "$PWD/.secrets"
+    redact_file "$PWD/.secrets.sandbox"
   fi
 
   # Deny access to sensitive paths (applied after writable to override)
