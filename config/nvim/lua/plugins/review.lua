@@ -11,6 +11,18 @@ else
   codediff_spec.branch = "tab-hunk-crossfile"
 end
 
+local review_dir = vim.fn.expand("~/code/review.nvim")
+local review_spec = {
+  name = "review.nvim",
+}
+
+if (vim.uv or vim.loop).fs_stat(review_dir) then
+  review_spec.dir = review_dir
+else
+  review_spec[1] = "thrawny/review.nvim"
+  review_spec.branch = "review-integration-options"
+end
+
 return {
   vim.tbl_extend("force", codediff_spec, {
     config = function(_, opts)
@@ -178,8 +190,7 @@ return {
     },
   }),
 
-  {
-    "georgeguimaraes/review.nvim",
+  vim.tbl_extend("force", review_spec, {
     dependencies = {
       codediff_plugin_name,
       "MunifTanjim/nui.nvim",
@@ -187,36 +198,6 @@ return {
     cmd = { "Review" },
     config = function(_, opts)
       require("review").setup(opts)
-      require("config.review_monkeypatch").apply()
-
-      -- review.nvim defers focus to the modified pane after session creation.
-      -- That races with codediff's sidebar setup and can yank focus back out of
-      -- the file explorer/history panel while the user is trying to navigate it.
-      local hooks = require("review.hooks")
-      hooks._focus_modified_pane = function(lifecycle, tabpage)
-        local sess = lifecycle.get_session(tabpage)
-        if not sess or not sess.modified_win or not vim.api.nvim_win_is_valid(sess.modified_win) then
-          return
-        end
-
-        local current_win = vim.api.nvim_get_current_win()
-        local cur_cfg = vim.api.nvim_win_get_config(current_win)
-        if cur_cfg.relative ~= "" then
-          return
-        end
-
-        local explorer = lifecycle.get_explorer(tabpage)
-        if
-          explorer
-          and explorer.winid
-          and vim.api.nvim_win_is_valid(explorer.winid)
-          and current_win == explorer.winid
-        then
-          return
-        end
-
-        vim.api.nvim_set_current_win(sess.modified_win)
-      end
     end,
     keys = function()
       local function restore_review_buffers(lifecycle, tabpage)
@@ -291,8 +272,17 @@ return {
         next_file = false,
         prev_file = false,
       },
+      codediff = {
+        focus_modified_pane = false,
+      },
+      popup = {
+        show_type_selector = false,
+      },
+      export = {
+        format = "compact",
+      },
     },
-  },
+  }),
 
   -- Remap {/} to hunk navigation in normal buffers (gitsigns)
   {
