@@ -87,8 +87,46 @@ end, {})
 -- Terminal toggle with Alt+; is defined in lua/plugins/ui.lua (snacks.nvim keys spec)
 
 -- Copy file reference to clipboard for Claude Code
-vim.keymap.set("n", "<Leader>at", function()
+local function current_file_ref_path()
   local file = vim.fn.expand("%:.")
+  if file ~= "" and vim.bo.buftype ~= "nofile" and not file:match("^codediff://") then
+    return file
+  end
+
+  local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
+  if not ok then
+    return file
+  end
+
+  local session = lifecycle.get_session(vim.api.nvim_get_current_tabpage())
+  if not session then
+    return file
+  end
+
+  local current_buf = vim.api.nvim_get_current_buf()
+  local path
+  if current_buf == session.original_bufnr then
+    path = session.original_path
+  elseif current_buf == session.modified_bufnr then
+    path = session.modified_path
+  elseif session.explorer and current_buf == session.explorer.bufnr then
+    path = session.explorer.current_file_path or session.modified_path or session.original_path
+  else
+    path = session.modified_path or session.original_path
+  end
+
+  if not path or path == "" then
+    return file
+  end
+
+  if session.git_root and path:sub(1, #session.git_root + 1) == session.git_root .. "/" then
+    return path:sub(#session.git_root + 2)
+  end
+  return path
+end
+
+vim.keymap.set("n", "<Leader>at", function()
+  local file = current_file_ref_path()
   local line = vim.fn.line(".")
   local ref = "@" .. file .. " (line " .. line .. ")"
   vim.fn.setreg("+", ref)
@@ -96,7 +134,7 @@ vim.keymap.set("n", "<Leader>at", function()
 end, { desc = "Copy @file (line) to clipboard" })
 
 vim.keymap.set("v", "<Leader>at", function()
-  local file = vim.fn.expand("%:.")
+  local file = current_file_ref_path()
   local start_line = vim.fn.line("v")
   local end_line = vim.fn.line(".")
   if start_line > end_line then
