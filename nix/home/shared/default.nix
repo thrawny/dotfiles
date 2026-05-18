@@ -7,6 +7,7 @@
   imports = [
     # Shared cross-platform modules
     ./home-base.nix
+    ./agent-skills.nix
     ./ai-tools.nix
     ./packages/core.nix
     ./packages/workstation.nix

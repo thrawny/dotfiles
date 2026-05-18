@@ -23,7 +23,7 @@ Nix Home Manager uses `mkOutOfStoreSymlink` for tracked mutable config and store
 - `config/nvim` -> `~/.config/nvim`
 - `config/codex/` -> tracked files under `~/.codex/`, `config/claude/` -> `~/.claude/`, `config/pi/` -> `~/.pi/agent/`
 - Each folder in `skills/` -> immutable store-backed `~/.claude/skills/<skill>`, `~/.pi/agent/skills/<skill>`, and `~/.codex/skills/<skill>` according to the per-agent selection in `nix/home/shared/ai-tools.nix`
-- Each folder in `config/codex/skills/` -> immutable store-backed `~/.codex/skills/<skill>` only
+- Each folder in `config/codex/commands/` -> immutable store-backed `~/.codex/skills/<skill>` only
 
 Configs generated entirely by Nix (no files in `config/`): zsh, tmux, ghostty, direnv, starship etc.
 
@@ -36,7 +36,7 @@ Configs generated entirely by Nix (no files in `config/`): zsh, tmux, ghostty, d
 
 - Global commands/agents/settings -> `config/claude/`
 - Shared skills -> `skills/`
-- Codex-only skills -> `config/codex/skills/`
+- Codex slash-command replacement skills -> `config/codex/commands/`
 - Dotfiles-repo-specific -> `.claude/`
 
 ### Settings Files with Example/Live Pairs

@@ -13,6 +13,6 @@ This keeps agent-managed state (for example `.../skills/.system`) in each agent'
 
 Add each skill as `skills/<skill-name>/SKILL.md` (plus any references/scripts/assets).
 
-Codex-only skills live under `config/codex/skills/<skill-name>/SKILL.md` and are linked only to `~/.codex/skills/<skill-name>`.
+Codex slash-command replacement skills live under `config/codex/commands/<skill-name>/SKILL.md` and are linked only to `~/.codex/skills/<skill-name>`.
 
 External skills are pinned as flake inputs and wired in `nix/home/shared/ai-tools.nix`. Update them with `nix flake update --flake ./nix <input-name>`.

@@ -1,10 +1,7 @@
 {
   config,
-  agent-browser,
-  anthropic-skills,
   homeSource,
   lib,
-  mattpocock-skills,
   pkgs,
   ...
 }@args:
@@ -12,7 +9,6 @@ let
   hmLib = lib.hm;
   containerAssets = args.containerAssets or null;
   dotfiles = args.dotfiles or null;
-  excludedSharedSkills = args.excludedSharedSkills or [ ];
   enableCodexHooks = args.enableCodexHooks or true;
   enablePiExtensions = args.enablePiExtensions or true;
   repoBacked = homeSource == "repo";
@@ -21,98 +17,9 @@ let
     rel: if repoBacked then "${dotfiles}/config/${rel}" else containerAssets.config + "/${rel}";
   configSource =
     rel: if repoBacked then config.lib.file.mkOutOfStoreSymlink (configPath rel) else configPath rel;
-  skillsRoot = containerAssets.skills;
   rulesRoot = if repoBacked then ../../../rules else containerAssets.rules;
   rulesSource =
     if repoBacked then config.lib.file.mkOutOfStoreSymlink (toString rulesRoot) else rulesRoot;
-  codexSkillsRoot = containerAssets.config + "/codex/skills";
-  skillDirs =
-    root:
-    if builtins.pathExists root then
-      lib.filterAttrs (name: type: type == "directory" && !(lib.hasPrefix "." name)) (
-        builtins.readDir root
-      )
-    else
-      { };
-  skillEntries =
-    root: names:
-    lib.genAttrs names (name: {
-      source = root + "/${name}";
-    });
-  sharedSkillNames = lib.filter (name: !builtins.elem name excludedSharedSkills) (
-    builtins.attrNames (skillDirs skillsRoot)
-  );
-  codexOnlySkillNames = builtins.attrNames (skillDirs codexSkillsRoot);
-  claudeExcluded = [
-    "brave-search"
-    "frontend-design"
-    "skill-creator"
-  ];
-  codexExcluded = [
-    "brave-search"
-    "frontend-design"
-    "skill-creator"
-  ];
-  codexSharedSkillNames = lib.filter (name: !builtins.elem name codexExcluded) sharedSkillNames;
-  claudeSharedSkillNames = lib.filter (name: !builtins.elem name claudeExcluded) sharedSkillNames;
-  sharedSkillEntries = skillEntries skillsRoot sharedSkillNames;
-  codexOnlySkillEntries = skillEntries codexSkillsRoot codexOnlySkillNames;
-  agentBrowserSkillEntries = {
-    agent-browser = {
-      source = agent-browser + "/skills/agent-browser";
-    };
-  };
-  skillCreatorSkillEntries = {
-    skill-creator = {
-      source = anthropic-skills + "/skills/skill-creator";
-    };
-  };
-  anthropicSharedSkillEntries = {
-    frontend-design = {
-      source = anthropic-skills + "/skills/frontend-design";
-    };
-  };
-  mattpocockSkillEntries =
-    let
-      engineeringSkill = name: {
-        source = mattpocock-skills + "/skills/engineering/${name}";
-      };
-    in
-    {
-      grill-with-docs = engineeringSkill "grill-with-docs";
-      improve-codebase-architecture = engineeringSkill "improve-codebase-architecture";
-      tdd = engineeringSkill "tdd";
-    };
-  claudeSkillEntries =
-    lib.getAttrs claudeSharedSkillNames sharedSkillEntries
-    // agentBrowserSkillEntries
-    // anthropicSharedSkillEntries
-    // skillCreatorSkillEntries
-    // mattpocockSkillEntries;
-  codexSkillEntries =
-    lib.getAttrs codexSharedSkillNames sharedSkillEntries
-    // codexOnlySkillEntries
-    // agentBrowserSkillEntries
-    // anthropicSharedSkillEntries
-    // skillCreatorSkillEntries
-    // mattpocockSkillEntries;
-  piSkillEntries =
-    sharedSkillEntries
-    // agentBrowserSkillEntries
-    // anthropicSharedSkillEntries
-    // skillCreatorSkillEntries
-    // mattpocockSkillEntries;
-  skillFiles =
-    base: entries:
-    lib.listToAttrs (
-      lib.mapAttrsToList (
-        name: entry:
-        lib.nameValuePair "${base}/${name}" {
-          inherit (entry) source;
-          force = true;
-        }
-      ) entries
-    );
 
   seedExampleRepo =
     example: destination:
@@ -134,12 +41,6 @@ let
     '';
 in
 {
-  _module.args = {
-    inherit
-      skillFiles
-      ;
-  };
-
   home = {
     sessionVariables = {
       CLAUDE_CONFIG_DIR = "${config.home.homeDirectory}/.claude";
@@ -178,14 +79,10 @@ in
     };
 
     file =
-      skillFiles ".codex/skills" codexSkillEntries
-      // skillFiles ".claude/skills" claudeSkillEntries
-      // skillFiles ".pi/agent/skills" piSkillEntries
-      // lib.optionalAttrs enableCodexHooks {
+      lib.optionalAttrs enableCodexHooks {
         ".codex/hooks.json".source = configSource "codex/hooks.json";
       }
       // {
-        ".codex/prompts".source = configSource "codex/prompts";
         ".codex/AGENTS.md".source = configSource "codex/AGENTS-GLOBAL.md";
 
         ".pi/agent/AGENTS.md".source = configSource "pi/AGENTS-GLOBAL.md";
