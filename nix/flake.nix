@@ -28,6 +28,18 @@
     srvos.inputs.nixpkgs.follows = "nixpkgs";
     llm-agents.url = "github:numtide/llm-agents.nix";
     zmx.url = "github:thrawny/zmx-flake";
+    agent-browser = {
+      url = "github:vercel-labs/agent-browser";
+      flake = false;
+    };
+    mattpocock-skills = {
+      url = "github:mattpocock/skills";
+      flake = false;
+    };
+    anthropic-skills = {
+      url = "github:anthropics/skills";
+      flake = false;
+    };
   };
 
   outputs =
@@ -48,6 +60,9 @@
       srvos,
       llm-agents,
       zmx,
+      agent-browser,
+      mattpocock-skills,
+      anthropic-skills,
       ...
     }:
     let
@@ -55,6 +70,9 @@
       flakeArgs = {
         inherit
           llm-agents
+          agent-browser
+          anthropic-skills
+          mattpocock-skills
           nix-index-database
           zmx
           ;

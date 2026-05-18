@@ -1,5 +1,37 @@
 {
   "nodes": {
+    "agent-browser": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778716112,
+        "narHash": "sha256-DgHQRQXnaJ76pqehSASVEbCH/ch5b7z6u+U/1ro9O1Q=",
+        "owner": "vercel-labs",
+        "repo": "agent-browser",
+        "rev": "55f38f4d81981f0191c730005c419958c7d20605",
+        "type": "github"
+      },
+      "original": {
+        "owner": "vercel-labs",
+        "repo": "agent-browser",
+        "type": "github"
+      }
+    },
+    "anthropic-skills": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1779058037,
+        "narHash": "sha256-GytrPFxw1PC2B0MILR6eNa83qAmxcjvLPkJzHQXT93g=",
+        "owner": "anthropics",
+        "repo": "skills",
+        "rev": "6a5bb06904ab164a345e41c381fc9097954b83da",
+        "type": "github"
+      },
+      "original": {
+        "owner": "anthropics",
+        "repo": "skills",
+        "type": "github"
+      }
+    },
     "blueprint": {
       "inputs": {
         "nixpkgs": [
@@ -273,6 +305,22 @@
       "original": {
         "owner": "numtide",
         "repo": "llm-agents.nix",
+        "type": "github"
+      }
+    },
+    "mattpocock-skills": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778677518,
+        "narHash": "sha256-5Rr5BQe8bdQXWt/H6QjYpoM4X+GuWPK26rU2VSqTZVI=",
+        "owner": "mattpocock",
+        "repo": "skills",
+        "rev": "e74f0061bb67222181640effa98c675bdb2fdaa7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mattpocock",
+        "repo": "skills",
         "type": "github"
       }
     },
@@ -562,11 +610,14 @@
     },
     "root": {
       "inputs": {
+        "agent-browser": "agent-browser",
+        "anthropic-skills": "anthropic-skills",
         "disko": "disko",
         "elephant": "elephant",
         "helium-browser": "helium-browser",
         "home-manager": "home-manager",
         "llm-agents": "llm-agents",
+        "mattpocock-skills": "mattpocock-skills",
         "niri-flake": "niri-flake",
         "nix-index-database": "nix-index-database",
         "nixos-hardware": "nixos-hardware",

@@ -1,7 +1,10 @@
 {
   config,
+  agent-browser,
+  anthropic-skills,
   homeSource,
   lib,
+  mattpocock-skills,
   pkgs,
   ...
 }@args:
@@ -23,53 +26,92 @@ let
   rulesSource =
     if repoBacked then config.lib.file.mkOutOfStoreSymlink (toString rulesRoot) else rulesRoot;
   codexSkillsRoot = containerAssets.config + "/codex/skills";
-  sharedSkillNames = lib.filter (name: !builtins.elem name excludedSharedSkills) (
-    builtins.attrNames (
+  skillDirs =
+    root:
+    if builtins.pathExists root then
       lib.filterAttrs (name: type: type == "directory" && !(lib.hasPrefix "." name)) (
-        builtins.readDir skillsRoot
-      )
-    )
-  );
-  codexOnlySkillNames =
-    if builtins.pathExists codexSkillsRoot then
-      builtins.attrNames (
-        lib.filterAttrs (name: type: type == "directory" && !(lib.hasPrefix "." name)) (
-          builtins.readDir codexSkillsRoot
-        )
+        builtins.readDir root
       )
     else
-      [ ];
-  linuxOnlySkills = [ ];
-  codexExcluded = linuxOnlySkills ++ [
+      { };
+  skillEntries =
+    root: names:
+    lib.genAttrs names (name: {
+      source = root + "/${name}";
+    });
+  sharedSkillNames = lib.filter (name: !builtins.elem name excludedSharedSkills) (
+    builtins.attrNames (skillDirs skillsRoot)
+  );
+  codexOnlySkillNames = builtins.attrNames (skillDirs codexSkillsRoot);
+  claudeExcluded = [
     "brave-search"
+    "frontend-design"
     "skill-creator"
   ];
-  claudeExcluded = linuxOnlySkills ++ [
+  codexExcluded = [
     "brave-search"
+    "frontend-design"
     "skill-creator"
   ];
-  noLinuxOnly = lib.filter (name: !builtins.elem name linuxOnlySkills) sharedSkillNames;
   codexSharedSkillNames = lib.filter (name: !builtins.elem name codexExcluded) sharedSkillNames;
   claudeSharedSkillNames = lib.filter (name: !builtins.elem name claudeExcluded) sharedSkillNames;
+  sharedSkillEntries = skillEntries skillsRoot sharedSkillNames;
+  codexOnlySkillEntries = skillEntries codexSkillsRoot codexOnlySkillNames;
+  agentBrowserSkillEntries = {
+    agent-browser = {
+      source = agent-browser + "/skills/agent-browser";
+    };
+  };
+  skillCreatorSkillEntries = {
+    skill-creator = {
+      source = anthropic-skills + "/skills/skill-creator";
+    };
+  };
+  anthropicSharedSkillEntries = {
+    frontend-design = {
+      source = anthropic-skills + "/skills/frontend-design";
+    };
+  };
+  mattpocockSkillEntries =
+    let
+      engineeringSkill = name: {
+        source = mattpocock-skills + "/skills/engineering/${name}";
+      };
+    in
+    {
+      grill-with-docs = engineeringSkill "grill-with-docs";
+      improve-codebase-architecture = engineeringSkill "improve-codebase-architecture";
+      tdd = engineeringSkill "tdd";
+    };
+  claudeSkillEntries =
+    lib.getAttrs claudeSharedSkillNames sharedSkillEntries
+    // agentBrowserSkillEntries
+    // anthropicSharedSkillEntries
+    // skillCreatorSkillEntries
+    // mattpocockSkillEntries;
+  codexSkillEntries =
+    lib.getAttrs codexSharedSkillNames sharedSkillEntries
+    // codexOnlySkillEntries
+    // agentBrowserSkillEntries
+    // anthropicSharedSkillEntries
+    // skillCreatorSkillEntries
+    // mattpocockSkillEntries;
+  piSkillEntries =
+    sharedSkillEntries
+    // agentBrowserSkillEntries
+    // anthropicSharedSkillEntries
+    // skillCreatorSkillEntries
+    // mattpocockSkillEntries;
   skillFiles =
-    base: names:
+    base: entries:
     lib.listToAttrs (
-      map (
-        name:
+      lib.mapAttrsToList (
+        name: entry:
         lib.nameValuePair "${base}/${name}" {
-          source = skillsRoot + "/${name}";
+          inherit (entry) source;
+          force = true;
         }
-      ) names
-    );
-  codexSkillFiles =
-    base: names:
-    lib.listToAttrs (
-      map (
-        name:
-        lib.nameValuePair "${base}/${name}" {
-          source = codexSkillsRoot + "/${name}";
-        }
-      ) names
+      ) entries
     );
 
   seedExampleRepo =
@@ -94,7 +136,6 @@ in
 {
   _module.args = {
     inherit
-      linuxOnlySkills
       skillFiles
       ;
   };
@@ -137,10 +178,9 @@ in
     };
 
     file =
-      skillFiles ".codex/skills" codexSharedSkillNames
-      // codexSkillFiles ".codex/skills" codexOnlySkillNames
-      // skillFiles ".claude/skills" claudeSharedSkillNames
-      // skillFiles ".pi/agent/skills" noLinuxOnly
+      skillFiles ".codex/skills" codexSkillEntries
+      // skillFiles ".claude/skills" claudeSkillEntries
+      // skillFiles ".pi/agent/skills" piSkillEntries
       // lib.optionalAttrs enableCodexHooks {
         ".codex/hooks.json".source = configSource "codex/hooks.json";
       }
