@@ -7,6 +7,8 @@ Home Manager links each shared skill folder individually to:
 - `~/.claude/skills/<skill-name>`
 - `~/.codex/skills/<skill-name>` (except `skill-creator`, since Codex has a built-in one)
 
+Skill directories are store-backed and immutable after `just switch`. Edit the source files in this repo, then rebuild to apply changes.
+
 This keeps agent-managed state (for example `.../skills/.system`) in each agent's own config directory, not in this repo.
 
 Add each skill as `skills/<skill-name>/SKILL.md` (plus any references/scripts/assets).

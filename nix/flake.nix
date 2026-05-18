@@ -190,7 +190,12 @@
         }:
         home-manager.lib.homeManagerConfiguration {
           inherit pkgs modules;
-          extraSpecialArgs = extraSpecialArgs // flakeArgs;
+          extraSpecialArgs =
+            extraSpecialArgs
+            // flakeArgs
+            // {
+              containerAssets = storeHomeAssets;
+            };
         };
 
     in

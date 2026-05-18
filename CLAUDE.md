@@ -18,12 +18,12 @@ just lint         # Lint all
 
 ## Paths: Source to Target
 
-Nix Home Manager uses `mkOutOfStoreSymlink` to link tracked config into the home directory:
+Nix Home Manager uses `mkOutOfStoreSymlink` for tracked mutable config and store-backed links for immutable skill directories:
 
 - `config/nvim` -> `~/.config/nvim`
 - `config/codex/` -> tracked files under `~/.codex/`, `config/claude/` -> `~/.claude/`, `config/pi/` -> `~/.pi/agent/`
-- Each folder in `skills/` -> `~/.claude/skills/<skill>`, `~/.pi/agent/skills/<skill>`, and `~/.codex/skills/<skill>` (except `skill-creator` for Codex)
-- Each folder in `config/codex/skills/` -> `~/.codex/skills/<skill>` only
+- Each folder in `skills/` -> immutable store-backed `~/.claude/skills/<skill>`, `~/.pi/agent/skills/<skill>`, and `~/.codex/skills/<skill>` (except `skill-creator` for Codex)
+- Each folder in `config/codex/skills/` -> immutable store-backed `~/.codex/skills/<skill>` only
 
 Configs generated entirely by Nix (no files in `config/`): zsh, tmux, ghostty, direnv, starship etc.
 

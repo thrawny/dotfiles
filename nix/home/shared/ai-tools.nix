@@ -18,11 +18,11 @@ let
     rel: if repoBacked then "${dotfiles}/config/${rel}" else containerAssets.config + "/${rel}";
   configSource =
     rel: if repoBacked then config.lib.file.mkOutOfStoreSymlink (configPath rel) else configPath rel;
-  skillsRoot = if repoBacked then ../../../skills else containerAssets.skills;
+  skillsRoot = containerAssets.skills;
   rulesRoot = if repoBacked then ../../../rules else containerAssets.rules;
   rulesSource =
     if repoBacked then config.lib.file.mkOutOfStoreSymlink (toString rulesRoot) else rulesRoot;
-  codexSkillsRoot = if repoBacked then ../../../config/codex/skills else configPath "codex/skills";
+  codexSkillsRoot = containerAssets.config + "/codex/skills";
   sharedSkillNames = lib.filter (name: !builtins.elem name excludedSharedSkills) (
     builtins.attrNames (
       lib.filterAttrs (name: type: type == "directory" && !(lib.hasPrefix "." name)) (
