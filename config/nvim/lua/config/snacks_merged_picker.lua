@@ -13,6 +13,12 @@ M.exclude = {
   ".open-next",
 }
 
+local function expand_excludes(excludes)
+  return vim.tbl_map(function(exclude)
+    return "**/" .. exclude .. "/**"
+  end, excludes)
+end
+
 local function permutations(parts)
   if #parts == 1 then
     return { parts[1] }
@@ -68,7 +74,7 @@ function M.opts(overrides)
     live = true,
     hidden = true,
     ignored = true,
-    exclude = vim.deepcopy(M.exclude),
+    exclude = expand_excludes(M.exclude),
     multi = {
       {
         source = "files",
