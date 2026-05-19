@@ -280,6 +280,7 @@ let
     "Alt+Print".action.screenshot-window = [ ];
     "Super+Shift+3".action.screenshot-screen = [ ];
     "Super+Shift+4".action.screenshot = [ ];
+    "Super+Shift+5".action.screenshot-window = [ ];
   };
 
   mediaBinds = {
