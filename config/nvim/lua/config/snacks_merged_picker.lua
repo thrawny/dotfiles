@@ -1,14 +1,16 @@
 local M = {}
 
 M.exclude = {
-  "**/.git/**",
-  "**/node_modules/**",
-  "**/.venv/**",
-  "**/.ruff_cache/**",
-  "**/target/**",
-  "**/.direnv/**",
-  "**/.DS_Store",
-  "**/dbt/logs/**",
+  ".git",
+  "node_modules",
+  ".venv",
+  ".ruff_cache",
+  "target",
+  ".direnv",
+  ".DS_Store",
+  "dbt/logs",
+  ".next",
+  ".open-next",
 }
 
 local function permutations(parts)
