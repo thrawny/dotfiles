@@ -6,6 +6,7 @@ import {
 	effectiveArguments,
 	expandArguments,
 	expandCommandFile,
+	formatExpandedCommandDisplay,
 } from "../extensions/commands.ts";
 
 describe("command argument defaults", () => {
@@ -54,6 +55,21 @@ describe("command argument defaults", () => {
 				"conditional=yes: now",
 				`shell=cwd:${path.basename(dir)}`,
 			].join("\n"),
+		);
+	});
+});
+
+describe("command prompt display formatting", () => {
+	it("keeps expanded markdown raw for the custom renderer", () => {
+		expect(
+			formatExpandedCommandDisplay(
+				"/gc",
+				["Context", "", "  indented line", "```", "nested fence"].join("\n"),
+			),
+		).toBe(
+			["/gc", "", "Context", "", "  indented line", "```", "nested fence"].join(
+				"\n",
+			),
 		);
 	});
 });

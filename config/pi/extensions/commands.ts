@@ -7,6 +7,7 @@ import {
 	type ExtensionAPI,
 	UserMessageComponent,
 } from "@mariozechner/pi-coding-agent";
+import { Box, Text } from "@mariozechner/pi-tui";
 
 export interface CommandFile {
 	name: string;
@@ -111,6 +112,13 @@ export function expandCommandFile(
 	};
 }
 
+export function formatExpandedCommandDisplay(
+	invocation: string,
+	content: string,
+): string {
+	return `${invocation}\n\n${content}`;
+}
+
 function expandShell(template: string, cwd: string): string {
 	return template.replace(/!`([^`]+)`/g, (_match, command: string) =>
 		shell(cwd, command),
@@ -144,7 +152,7 @@ async function restoreState(pi: ExtensionAPI): Promise<void> {
 }
 
 export default function (pi: ExtensionAPI) {
-	pi.registerMessageRenderer("command-prompt", (message, options, _theme) => {
+	pi.registerMessageRenderer("command-prompt", (message, options, theme) => {
 		const details = message.details as
 			| { commandName?: string; invocation?: string }
 			| undefined;
@@ -159,7 +167,18 @@ export default function (pi: ExtensionAPI) {
 			return new UserMessageComponent(invocation);
 		}
 
-		return new UserMessageComponent(`${invocation}\n\n${content}`);
+		const box = new Box(1, 1, (text) => theme.bg("userMessageBg", text));
+		box.addChild(
+			new Text(
+				theme.fg(
+					"userMessageText",
+					formatExpandedCommandDisplay(invocation, content),
+				),
+				0,
+				0,
+			),
+		);
+		return box;
 	});
 
 	const dir = commandsDir();
