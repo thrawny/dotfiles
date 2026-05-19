@@ -45,6 +45,9 @@ in
 
   nix = {
     package = lib.mkDefault pkgs.nix;
+    extraOptions = ''
+      !include access-tokens.conf
+    '';
     settings = {
       experimental-features = [
         "nix-command"
@@ -63,6 +66,15 @@ in
 
   home = {
     stateVersion = "24.05";
+
+    activation.createNixAccessTokensFile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+      tokens_file="${config.xdg.configHome}/nix/access-tokens.conf"
+      if [ ! -e "$tokens_file" ]; then
+        install -d -m0700 "$(dirname "$tokens_file")"
+        : > "$tokens_file"
+        chmod 0600 "$tokens_file"
+      fi
+    '';
 
     sessionPath = [
       "$HOME/.cargo/bin"
