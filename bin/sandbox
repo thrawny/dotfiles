@@ -146,8 +146,24 @@ sandbox() {
       eval "$(ssh-agent -a "$SSH_AUTH_SOCK")" >/dev/null 2>&1
     fi
 
-    timeout 5 ssh-add "$key" </dev/null 2>/dev/null || true
-    export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -F /dev/null}"
+    if ! timeout 2 ssh-add -l >/dev/null 2>&1; then
+      if [[ -n "${SANDBOX_SSH_HOSTS:-}" ]]; then
+        local ssh_add_args=()
+        local known_hosts="${SANDBOX_SSH_KNOWN_HOSTS:-$HOME/.ssh/known_hosts}"
+        [[ -f "$known_hosts" ]] && ssh_add_args+=(-H "$known_hosts")
+        for host in $SANDBOX_SSH_HOSTS; do
+          ssh_add_args+=(-h "$host")
+        done
+        timeout 5 ssh-add "${ssh_add_args[@]}" "$key" </dev/null >/dev/null 2>&1
+      else
+        timeout 5 ssh-add "$key" </dev/null 2>/dev/null || true
+      fi
+    fi
+    if [[ -n "${SANDBOX_SSH_KNOWN_HOSTS:-}" ]]; then
+      export GIT_SSH_COMMAND="ssh -F /dev/null -o IdentityAgent=$SSH_AUTH_SOCK -o UserKnownHostsFile=$SANDBOX_SSH_KNOWN_HOSTS"
+    else
+      export GIT_SSH_COMMAND="ssh -F /dev/null -o IdentityAgent=$SSH_AUTH_SOCK"
+    fi
   fi
 
   # Forward SSH agent socket so git can authenticate without exposing ~/.ssh
