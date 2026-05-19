@@ -61,6 +61,16 @@ These are Bun scripts. Prefer direct execution via the shebang; do not invoke th
   - `py` - Past year
   - `YYYY-MM-DDtoYYYY-MM-DD` - Custom date range
 
+## Rate Limiting
+
+`search.js` includes a small cross-process rate limiter so parallel invocations wait instead of tripping Brave's per-second quota. It stores state under `~/.cache/brave-search/` by default.
+
+Environment override:
+
+```bash
+BRAVE_SEARCH_MIN_INTERVAL_MS=1100  # default
+```
+
 ## Extract Page Content
 
 ```bash

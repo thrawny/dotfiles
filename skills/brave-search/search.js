@@ -2,6 +2,8 @@
 // @ts-nocheck
 
 import { Readability } from "@mozilla/readability";
+import { mkdir, open, readFile, unlink, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
 import { DOMParser } from "linkedom";
 import TurndownService from "turndown";
 import { gfm } from "turndown-plugin-gfm";
@@ -61,6 +63,50 @@ if (!apiKey) {
 	process.exit(1);
 }
 
+const RATE_LIMIT_STATE = `${process.env.XDG_CACHE_HOME || `${process.env.HOME}/.cache`}/brave-search/rate-limit.json`;
+const RATE_LIMIT_LOCK = `${RATE_LIMIT_STATE}.lock`;
+const MIN_INTERVAL_MS = parseInt(process.env.BRAVE_SEARCH_MIN_INTERVAL_MS || "1100", 10);
+
+function sleep(ms) {
+	return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function acquireRateLimitLock() {
+	await mkdir(dirname(RATE_LIMIT_STATE), { recursive: true });
+	while (true) {
+		try {
+			return await open(RATE_LIMIT_LOCK, "wx");
+		} catch (error) {
+			if (error.code !== "EEXIST") throw error;
+			await sleep(50);
+		}
+	}
+}
+
+async function waitForBraveRateLimit() {
+	const lock = await acquireRateLimitLock();
+	try {
+		let lastRequestAt = 0;
+		try {
+			const state = JSON.parse(await readFile(RATE_LIMIT_STATE, "utf8"));
+			lastRequestAt = Number(state.lastRequestAt) || 0;
+		} catch {}
+
+		const now = Date.now();
+		const waitMs = Math.max(0, lastRequestAt + MIN_INTERVAL_MS - now);
+		if (waitMs > 0) await sleep(waitMs);
+
+		await writeFile(RATE_LIMIT_STATE, JSON.stringify({ lastRequestAt: Date.now() }), "utf8");
+	} finally {
+		await lock.close();
+		await unlink(RATE_LIMIT_LOCK).catch(() => {});
+	}
+}
+
+function isRateLimited(response, errorText) {
+	return response.status === 429 || errorText.includes("RATE_LIMITED") || errorText.includes('"rate_limited"');
+}
+
 async function fetchBraveResults(query, numResults, country, freshness) {
 	const params = new URLSearchParams({
 		q: query,
@@ -74,17 +120,25 @@ async function fetchBraveResults(query, numResults, country, freshness) {
 
 	const url = `https://api.search.brave.com/res/v1/web/search?${params.toString()}`;
 
-	const response = await fetch(url, {
-		headers: {
-			"Accept": "application/json",
-			"Accept-Encoding": "gzip",
-			"X-Subscription-Token": apiKey,
-		}
-	});
+	let response;
+	let errorText = "";
+	for (let attempt = 1; attempt <= 3; attempt++) {
+		await waitForBraveRateLimit();
+		response = await fetch(url, {
+			headers: {
+				"Accept": "application/json",
+				"Accept-Encoding": "gzip",
+				"X-Subscription-Token": apiKey,
+			}
+		});
 
-	if (!response.ok) {
-		const errorText = await response.text();
-		throw new Error(`HTTP ${response.status}: ${response.statusText}\n${errorText}`);
+		if (response.ok) break;
+
+		errorText = await response.text();
+		if (!isRateLimited(response, errorText) || attempt === 3) {
+			throw new Error(`HTTP ${response.status}: ${response.statusText}\n${errorText}`);
+		}
+		await sleep(MIN_INTERVAL_MS * attempt);
 	}
 
 	const data = await response.json();
