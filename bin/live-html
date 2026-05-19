@@ -1,0 +1,117 @@
+#!/usr/bin/env bun
+// @ts-nocheck
+
+import { open } from "glimpseui";
+import { watchFile, unwatchFile } from "node:fs";
+import { stat } from "node:fs/promises";
+import { basename, resolve } from "node:path";
+
+process.env.GLIMPSE_BACKEND = process.env.GLIMPSE_BACKEND || "chromium";
+
+function usage() {
+  console.error(`live-html — open an HTML file in Glimpse and reload it when the file changes
+
+Usage:
+  live-html [--title TITLE] FILE
+
+What it does:
+  - opens FILE in a Glimpse/Chromium preview window
+  - watches FILE for saves and reloads the window automatically
+  - exits and cleans up the watcher when the preview window closes
+
+Options:
+  --title TITLE  Override the window title (default: FILE basename)
+  -h, --help     Show this help
+
+Examples:
+  live-html lab/mockup.html
+  live-html --title "Auth plan" /tmp/auth-plan.html`);
+}
+
+const args = Bun.argv.slice(2);
+let title = null;
+let fileArg = null;
+
+for (let i = 0; i < args.length; i += 1) {
+  const arg = args[i];
+  switch (arg) {
+    case "-h":
+    case "--help":
+      usage();
+      process.exit(0);
+    case "--title":
+      title = args[++i];
+      break;
+    default:
+      if (arg.startsWith("-")) {
+        console.error(`live-html: unknown option: ${arg}`);
+        usage();
+        process.exit(2);
+      }
+      if (fileArg) {
+        console.error(`live-html: unexpected argument: ${arg}`);
+        usage();
+        process.exit(2);
+      }
+      fileArg = arg;
+  }
+}
+
+if (!fileArg) {
+  usage();
+  process.exit(2);
+}
+
+const file = resolve(fileArg);
+try {
+  const s = await stat(file);
+  if (!s.isFile()) throw new Error("not a file");
+} catch (err) {
+  console.error(`live-html: cannot read ${file}: ${err.message}`);
+  process.exit(1);
+}
+
+title = title || basename(file);
+
+let loadedOnce = false;
+let timer = null;
+let closed = false;
+let reloads = 0;
+
+const win = open("", { title });
+
+function load(reason) {
+  if (closed) return;
+  reloads += 1;
+  console.log(`live-html: load ${reloads} (${reason}) ${file}`);
+  win.loadFile(file);
+}
+
+win.on("ready", () => {
+  if (loadedOnce) return;
+  loadedOnce = true;
+  load("ready");
+});
+
+win.on("closed", () => {
+  closed = true;
+  unwatchFile(file);
+  console.log("live-html: window closed");
+  process.exit(0);
+});
+
+win.on("error", (err) => {
+  console.error(`live-html: glimpse error: ${err.message}`);
+});
+
+watchFile(file, { interval: 250 }, (current, previous) => {
+  if (current.mtimeMs === previous.mtimeMs && current.size === previous.size) return;
+  clearTimeout(timer);
+  timer = setTimeout(() => load("changed"), 150);
+});
+
+process.on("SIGINT", () => win.close());
+process.on("SIGTERM", () => win.close());
+
+console.log(`live-html: watching ${file}`);
+await new Promise(() => {});
