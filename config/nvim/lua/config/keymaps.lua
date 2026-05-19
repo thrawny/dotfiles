@@ -33,7 +33,8 @@ vim.keymap.set({ "n", "x", "s", "o", "i", "c", "t" }, "<C-g>", "<Nop>", { desc =
 -- Force-stops LSP, reloads all buffers from disk, clears diagnostics, then restarts.
 -- This avoids the stale-buffer problem where LspRestart alone sends outdated content
 -- to the new gopls, putting it in an inconsistent state.
-vim.keymap.set("n", "<Leader>cR", function()
+local reload_workspace_key = "<Leader>W"
+local function reload_workspace()
   -- Force-stop all LSP clients (not just restart, to avoid race conditions)
   for _, client in ipairs(vim.lsp.get_clients()) do
     client:stop(true)
@@ -72,7 +73,27 @@ vim.keymap.set("n", "<Leader>cR", function()
     end
     vim.notify(msg)
   end, 300)
-end, { desc = "Reload workspace (buffers + LSP)" })
+end
+
+local reload_workspace_opts = { desc = "Reload workspace (buffers + LSP)", silent = true }
+vim.keymap.set("n", reload_workspace_key, reload_workspace, reload_workspace_opts)
+
+-- Some LSP/filetype plugins install buffer-local maps after startup. Buffer-local maps
+-- beat global maps, so re-assert this binding as buffer-local whenever entering a
+-- normal file buffer to keep plugin maps (for example rename-file maps) from taking it.
+vim.api.nvim_create_autocmd({ "BufEnter", "LspAttach" }, {
+  group = vim.api.nvim_create_augroup("ReloadWorkspaceKeymap", { clear = true }),
+  callback = function(args)
+    if vim.bo[args.buf].buftype == "" then
+      vim.keymap.set(
+        "n",
+        reload_workspace_key,
+        reload_workspace,
+        vim.tbl_extend("force", reload_workspace_opts, { buffer = args.buf })
+      )
+    end
+  end,
+})
 
 -- Toggle blink.cmp completion for current buffer
 vim.api.nvim_create_user_command("ToggleCompletion", function()
