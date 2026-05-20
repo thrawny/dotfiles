@@ -86,24 +86,47 @@ main() {
   local focused_output
   focused_output=$(niri msg -j workspaces | jq -r '.[] | select(.is_focused) | .output')
 
-  # Find the trailing empty workspace on this monitor (highest idx, unnamed, no windows)
-  local target_idx
-  target_idx=$(niri msg -j workspaces | jq \
-    "[.[] | select(.output == \"$focused_output\" and .name == null and .active_window_id == null) | .idx] | max")
+  # Prefer project workspaces before ad-hoc/numeric session workspaces on this monitor.
+  # agent-switch sessions are unnamed workspaces; numeric keybinds address them by idx.
+  local workspaces_json first_session_idx target_idx insert_before_idx=""
+  workspaces_json=$(niri msg -j workspaces)
+  first_session_idx=$(jq -r --arg output "$focused_output" \
+    '[.[] | select(.output == $output and (((.name // "") | test("^[0-9]")) or (.name == null and .active_window_id != null))) | .idx] | min // empty' \
+    <<<"$workspaces_json")
 
-  if [[ "$target_idx" == "null" || -z "$target_idx" ]]; then
-    # No empty workspace available — focus the last one and go down to create one
-    local last_idx
-    last_idx=$(niri msg -j workspaces | jq \
-      "[.[] | select(.output == \"$focused_output\") | .idx] | max")
-    niri msg action focus-workspace "$last_idx"
-    niri msg action focus-workspace-down
+  if [[ -n "$first_session_idx" ]]; then
+    # Reuse the closest empty workspace before sessions start.
+    target_idx=$(jq -r --arg output "$focused_output" --argjson before "$first_session_idx" \
+      '[.[] | select(.output == $output and .idx < $before and .name == null and .active_window_id == null) | .idx] | max // empty' \
+      <<<"$workspaces_json")
   else
-    niri msg action focus-workspace "$target_idx"
+    # Otherwise use the trailing empty workspace on this monitor.
+    target_idx=$(jq -r --arg output "$focused_output" \
+      '[.[] | select(.output == $output and .name == null and .active_window_id == null) | .idx] | max // empty' \
+      <<<"$workspaces_json")
   fi
 
-  # Name the workspace and spawn a terminal
+  if [[ -n "$target_idx" ]]; then
+    niri msg action focus-workspace "$target_idx"
+  else
+    # No empty workspace available in the right place — create one at the end.
+    local last_idx
+    last_idx=$(jq -r --arg output "$focused_output" \
+      '[.[] | select(.output == $output) | .idx] | max' \
+      <<<"$workspaces_json")
+    niri msg action focus-workspace "$last_idx"
+    niri msg action focus-workspace-down
+
+    if [[ -n "$first_session_idx" ]]; then
+      insert_before_idx="$first_session_idx"
+    fi
+  fi
+
+  # Name the workspace, optionally move it before sessions, and spawn a terminal.
   niri msg action set-workspace-name "$workspace_name"
+  if [[ -n "$insert_before_idx" ]]; then
+    niri msg action move-workspace-to-index "$insert_before_idx"
+  fi
   niri msg action spawn -- ghostty --working-directory="$project_dir"
 }
 
