@@ -11,7 +11,7 @@ error() {
 show_usage() {
   echo "Usage: niri-project [--name NAME] [directory]"
   echo ""
-  echo "Create a niri workspace for a project with a terminal."
+  echo "Create a niri workspace for a project with three terminals."
   echo "Workspace name is derived from the directory basename unless overridden."
   echo ""
   echo "Options:"
@@ -122,12 +122,15 @@ main() {
     fi
   fi
 
-  # Name the workspace, optionally move it before sessions, and spawn a terminal.
+  # Name the workspace, optionally move it before sessions, and spawn terminals.
   niri msg action set-workspace-name "$workspace_name"
   if [[ -n "$insert_before_idx" ]]; then
     niri msg action move-workspace-to-index "$insert_before_idx"
   fi
-  niri msg action spawn -- ghostty --working-directory="$project_dir"
+
+  for _ in 1 2 3; do
+    niri msg action spawn -- ghostty --working-directory="$project_dir"
+  done
 }
 
 main "$@"

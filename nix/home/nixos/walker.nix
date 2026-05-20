@@ -1,5 +1,6 @@
 {
   pkgs,
+  lib,
   walker,
   ...
 }:
@@ -19,7 +20,17 @@
         list = "No matching repositories";
       };
       providers = {
+        default = [
+          "desktopapplications"
+          "calc"
+          "websearch"
+        ];
+        empty = [ "desktopapplications" ];
         prefixes = [
+          {
+            provider = "providerlist";
+            prefix = "?";
+          }
           {
             provider = "menus:gh";
             prefix = ",";
@@ -45,6 +56,20 @@
         ];
       };
     };
+
+    elephant.providers = lib.mkForce [
+      "calc"
+      "clipboard"
+      "desktopapplications"
+      "files"
+      "menus"
+      "providerlist"
+      "runner"
+      "symbols"
+      "websearch"
+      "windows"
+      "niriactions"
+    ];
 
     elephant.provider.menus.lua.gh = ''
       Name = "gh"
@@ -104,25 +129,36 @@
         return true
       end
 
+      local cache = {}
+      local cache_ttl_seconds = 300
+
       function GetEntries(query)
         local entries = {}
 
-        if query == nil or query == "" then
+        if query == nil or query == "" or #query < 3 then
           return entries
+        end
+
+        local now = os.time()
+        local cached = cache[query]
+        if cached ~= nil and now - cached.time < cache_ttl_seconds then
+          return cached.entries
         end
 
         local cmd = gh .. " search repos " .. shell_quote(query) ..
           " --match name --sort stars --order desc " ..
           " --limit 20 --json fullName,description,url,stargazersCount " ..
-          " --jq '.[] | [.fullName, (.description // \"\"), .url, (.stargazersCount|tostring)] | @tsv'"
+          " --jq '.[] | [.fullName, (.description // \"\"), .url, (.stargazersCount|tostring)] | @tsv' 2>&1"
 
         local handle = io.popen(cmd)
         if not handle then
           return entries
         end
 
+        local output = {}
         local rank = 0
         for line in handle:lines() do
+          table.insert(output, line)
           local full_name, description, url, stars = line:match("([^\t]*)\t([^\t]*)\t([^\t]*)\t([^\t]*)")
 
           if full_name ~= nil and url ~= nil and matches_query(full_name, query) then
@@ -143,6 +179,17 @@
         end
 
         handle:close()
+
+        if #entries == 0 and #output > 0 then
+          table.insert(entries, {
+            Text = "GitHub search returned no matching repos",
+            Subtext = table.concat(output, "  "):sub(1, 240),
+            Icon = "dialog-warning",
+            Keywords = { query },
+          })
+        end
+
+        cache[query] = { time = now, entries = entries }
         return entries
       end
     '';
