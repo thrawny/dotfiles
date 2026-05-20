@@ -85,13 +85,13 @@ sandbox() {
     args+=(--tmpfs "/run/user/${UID}")
     args+=(
       --ro-bind-try
-      "/run/user/${UID}/agent-switch.sock"
-      "/run/user/${UID}/agent-switch.sock"
+      "/run/user/${UID}/agent-switch"
+      "/run/user/${UID}/agent-switch"
     )
     args+=(
       --ro-bind-try
-      "/run/user/${UID}/wayvoice.sock"
-      "/run/user/${UID}/wayvoice.sock"
+      "/run/user/${UID}/wayvoice"
+      "/run/user/${UID}/wayvoice"
     )
 
     # Expose Wayland socket so wl-paste (used by pi/claude for image paste) works
