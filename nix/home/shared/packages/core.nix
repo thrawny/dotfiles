@@ -33,6 +33,7 @@
     starship
     gcc
     lsof
+    actionlint
 
     # Git
     gh
