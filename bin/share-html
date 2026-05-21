@@ -176,8 +176,7 @@ if (!uploadToken) {
   process.exit(1);
 }
 
-const wranglerCommand = await resolveWranglerCommand();
-const proc = Bun.spawn([...wranglerCommand, ...wranglerArgs], {
+const proc = Bun.spawn(["wrangler", ...wranglerArgs], {
   env: {
     ...process.env,
     CLOUDFLARE_ACCOUNT_ID: accountId,
@@ -191,21 +190,6 @@ if (exitCode !== 0) process.exit(exitCode);
 
 console.log("");
 console.log(url);
-
-async function resolveWranglerCommand() {
-  if (await commandExists("wrangler")) return ["wrangler"];
-  if (await commandExists("nix")) return ["nix", "shell", "nixpkgs#wrangler", "-c", "wrangler"];
-  console.error("share-html: wrangler is not in PATH, and nix is unavailable for fallback");
-  process.exit(1);
-}
-
-async function commandExists(command) {
-  const proc = Bun.spawn(["bash", "-lc", `command -v ${command}`], {
-    stdout: "ignore",
-    stderr: "ignore",
-  });
-  return (await proc.exited) === 0;
-}
 
 function firstEnv(...names) {
   for (const name of names) {
