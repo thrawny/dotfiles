@@ -11,7 +11,7 @@ const DEFAULT_DOMAIN = "https://drops.thrawny.dev";
 const DEFAULT_ACCOUNT_ID = "053b91944af4c6ed8e0d259e2e36e051";
 
 function usage() {
-  console.error(`share-html — publish a static HTML file to drops.thrawny.dev
+  console.log(`share-html — publish a static HTML file to drops.thrawny.dev
 
 Usage:
   share-html [--slug SLUG] [--token TOKEN] [--bucket BUCKET] [--domain URL] [--account-id ID] [--dry-run] FILE

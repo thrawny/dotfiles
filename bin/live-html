@@ -9,7 +9,7 @@ import { basename, resolve } from "node:path";
 process.env.GLIMPSE_BACKEND = process.env.GLIMPSE_BACKEND || "chromium";
 
 function usage() {
-  console.error(`live-html — open an HTML file in Glimpse and reload it when the file changes
+  console.log(`live-html — open an HTML file in Glimpse and reload it when the file changes
 
 Usage:
   live-html [--title TITLE] FILE
