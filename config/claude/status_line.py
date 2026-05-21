@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Claude Code status line with powerline styling and nerd font symbols."""
 
+# pyright: basic
+
 import json
 import os
 import subprocess
