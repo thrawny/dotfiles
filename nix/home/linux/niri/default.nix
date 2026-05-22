@@ -616,6 +616,10 @@ in
           { app-id = "^nm-connection-editor$"; }
           { app-id = "^org\\.pulseaudio\\.pavucontrol$"; }
           { app-id = "^xdg-desktop-portal"; }
+          {
+            app-id = "^Slack$";
+            title = "^(Slack - Huddle Preview|Huddle:)";
+          }
           { app-id = "zoom"; }
           { app-id = "^com\\.thrawny\\.agent-switch$"; }
           { title = "^niri-project-picker$"; }
