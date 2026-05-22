@@ -43,7 +43,7 @@
 
     # Languages
     nodejs_24
-    (python313.withPackages (
+    (python314.withPackages (
       ps: with ps; [
         requests
       ]
