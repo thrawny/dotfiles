@@ -39,5 +39,6 @@ vim.filetype.add({
   },
   pattern = {
     ["%.env[%w_.-]*"] = "sh",
+    ["%.secrets[%w_.-]*"] = "sh",
   },
 })
