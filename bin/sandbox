@@ -42,6 +42,13 @@ sandbox() {
     set +a
   }
 
+  incus_vm_ipv4() {
+    local vm="$1"
+    incus list "$vm" --format=json 2>/dev/null \
+      | jq -r '.[0].state.network // {} | to_entries[] | select(.key != "lo" and .key != "docker0") | .value.addresses[]? | select(.family == "inet") | .address' \
+      | head -n1
+  }
+
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --) shift; break ;;
@@ -79,6 +86,20 @@ sandbox() {
     d="${d/#\~/$HOME}"
     [[ -e "$d" ]] && args+=(--bind "$d" "$d")
   done
+
+  # Prefer the disposable Docker daemon in the Incus VM over exposing the host
+  # Docker socket. Testcontainers needs TESTCONTAINERS_HOST_OVERRIDE because the
+  # published container ports are reachable at the VM address, not localhost.
+  if [[ -z "${DOCKER_HOST:-}" ]]; then
+    docker_vm="${SANDBOX_DOCKER_VM:-sandbox-docker}"
+    if command -v incus >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
+      docker_vm_ip="$(incus_vm_ipv4 "$docker_vm")"
+      if [[ -n "$docker_vm_ip" ]]; then
+        export DOCKER_HOST="tcp://${docker_vm_ip}:2375"
+        export TESTCONTAINERS_HOST_OVERRIDE="${TESTCONTAINERS_HOST_OVERRIDE:-$docker_vm_ip}"
+      fi
+    fi
+  fi
 
   # Hide host runtime sockets and give the sandbox its own empty runtime dir.
   if [[ -d "/run/user/${UID}" ]]; then
@@ -198,12 +219,15 @@ sandbox() {
   fi
 
   # Deny access to sensitive paths (applied after writable to override)
+  # /var/run/docker.sock is the host Docker daemon; sandboxed Docker commands
+  # should use DOCKER_HOST for the disposable Incus VM instead.
   local deny=(
     ~/.ssh
     ~/.gnupg
     ~/.aws
     ~/.config/gh
     ~/.kube
+    /var/run/docker.sock
   )
   for d in "${deny[@]}"; do
     d="${d/#\~/$HOME}"
