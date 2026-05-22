@@ -77,6 +77,14 @@ return {
       },
     },
     opts = {
+      styles = {
+        dashboard = {
+          wo = {
+            -- Use the main editor background instead of snacks.nvim's dashboard background.
+            winhighlight = "Normal:Normal,NormalFloat:Normal",
+          },
+        },
+      },
       picker = {
         hidden = true, -- Show hidden files by default
         ignored = true, -- Show gitignored files by default
