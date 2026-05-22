@@ -610,8 +610,6 @@ in
       }
       {
         matches = [
-          { app-id = "^gnome-calculator$"; }
-          { app-id = "^galculator$"; }
           { app-id = "blueman-manager"; }
           { app-id = "^nm-connection-editor$"; }
           { app-id = "^org\\.pulseaudio\\.pavucontrol$"; }
@@ -620,7 +618,6 @@ in
             app-id = "^Slack$";
             title = "^(Slack - Huddle Preview|Huddle:)";
           }
-          { app-id = "zoom"; }
           { app-id = "^com\\.thrawny\\.agent-switch$"; }
           { title = "^niri-project-picker$"; }
           { app-id = "^spotify$"; }
