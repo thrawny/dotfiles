@@ -13,6 +13,7 @@ return {
           return {
             -- Set backgrounds for normal windows and terminals to match theme
             Normal = { fg = c.base.white, bg = bg },
+            NormalNC = { fg = c.base.white, bg = bg },
             NormalFloat = { fg = c.base.white, bg = bg },
             Terminal = { bg = bg },
             TerminalNC = { bg = bg },
