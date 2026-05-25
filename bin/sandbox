@@ -71,7 +71,7 @@ sandbox() {
     ~/go
     ~/.cargo
     ~/.local
-    ~/.bun/install/cache
+    ~/.bun
     ~/.codex
     ~/.claude
     ~/.pi
@@ -81,6 +81,7 @@ sandbox() {
     ~/code
     ~/.config
     ~/.acpx
+    ~/.plannotator
   )
   for d in "${writable[@]}"; do
     d="${d/#\~/$HOME}"
