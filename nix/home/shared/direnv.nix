@@ -28,9 +28,8 @@ in
           source_env_if_exists .envrc.sandbox
       else
           source_env_if_exists .envrc.local
+          dotenv_if_exists .secrets
       fi
-
-      dotenv_if_exists .secrets
 
       use_zmx() {
           local project_name dir_name
