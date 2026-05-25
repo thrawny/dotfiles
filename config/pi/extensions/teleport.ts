@@ -3,15 +3,15 @@ import path from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
-} from "@mariozechner/pi-coding-agent";
-import { DynamicBorder } from "@mariozechner/pi-coding-agent";
+} from "@earendil-works/pi-coding-agent";
+import { DynamicBorder } from "@earendil-works/pi-coding-agent";
 
 type TeleportTheme = {
 	fg(color: "accent" | "border" | "muted", text: string): string;
 	bg(color: "customMessageBg", text: string): string;
 };
 
-import { Box, type Component, Container, Text } from "@mariozechner/pi-tui";
+import { Box, type Component, Container, Text } from "@earendil-works/pi-tui";
 
 type TeleportState = {
 	status: string;

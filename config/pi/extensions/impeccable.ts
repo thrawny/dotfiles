@@ -4,8 +4,8 @@ import {
 	type ExtensionAPI,
 	type ExtensionCommandContext,
 	UserMessageComponent,
-} from "@mariozechner/pi-coding-agent";
-import { type AutocompleteItem, Box, Text } from "@mariozechner/pi-tui";
+} from "@earendil-works/pi-coding-agent";
+import { type AutocompleteItem, Box, Text } from "@earendil-works/pi-tui";
 
 interface CommandMetadata {
 	description?: string;
