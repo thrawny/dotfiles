@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+import os
+import re
+import sys
+from pathlib import Path
+from typing import NoReturn
+
+# pyright: basic
+
+SECRET_NAME_RE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\+?=")
+ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
+REDACT_NAME_PARTS = ("API_KEY", "API_TOKEN", "TOKEN", "SECRET")
+
+
+def find_real_env() -> str:
+    current = Path(sys.argv[0]).resolve()
+
+    for directory in os.environ.get("PATH", "").split(os.pathsep):
+        if not directory:
+            continue
+
+        candidate = Path(directory) / "env"
+        try:
+            if candidate.resolve() == current:
+                continue
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
+        except OSError:
+            continue
+
+    for fallback in ("/run/current-system/sw/bin/env", "/usr/bin/env", "/bin/env"):
+        candidate = Path(fallback)
+        try:
+            if candidate.resolve() == current:
+                continue
+            if candidate.is_file() and os.access(candidate, os.X_OK):
+                return str(candidate)
+        except OSError:
+            continue
+
+    print("env: could not find real env binary", file=sys.stderr)
+    sys.exit(127)
+
+
+def exec_real_env() -> NoReturn:
+    real_env = find_real_env()
+    os.execv(real_env, [real_env, *sys.argv[1:]])
+
+
+def parse_print_request(argv: list[str]):
+    null_output = False
+    ignore_environment = False
+    unset_names: list[str] = []
+    assignments: dict[str, str] = {}
+    parsing_options = True
+    index = 0
+
+    while index < len(argv):
+        arg = argv[index]
+
+        if parsing_options and arg == "--":
+            parsing_options = False
+            index += 1
+            continue
+
+        if parsing_options:
+            if arg in ("-0", "--null"):
+                null_output = True
+                index += 1
+                continue
+            if arg in ("-i", "--ignore-environment", "-"):
+                ignore_environment = True
+                index += 1
+                continue
+            if arg in ("-u", "--unset"):
+                if index + 1 >= len(argv):
+                    return None
+                unset_names.append(argv[index + 1])
+                index += 2
+                continue
+            if arg.startswith("--unset="):
+                unset_names.append(arg.split("=", 1)[1])
+                index += 1
+                continue
+            if arg.startswith("-"):
+                return None
+
+        if ASSIGNMENT_RE.match(arg):
+            name, value = arg.split("=", 1)
+            assignments[name] = value
+            index += 1
+            continue
+
+        return None
+
+    return null_output, ignore_environment, unset_names, assignments
+
+
+def secret_files() -> list[Path]:
+    names = (".secrets", ".secrets.sandbox")
+    dirs: list[Path] = []
+
+    dirs.append(Path.home())
+
+    cwd = Path.cwd()
+    dirs.append(cwd)
+    dirs.extend(cwd.parents)
+
+    seen: set[Path] = set()
+    files: list[Path] = []
+    for directory in dirs:
+        for name in names:
+            path = directory / name
+            if path in seen:
+                continue
+            seen.add(path)
+            files.append(path)
+    return files
+
+
+def secret_names_from_files() -> set[str]:
+    names: set[str] = set()
+
+    for path in secret_files():
+        try:
+            with path.open("r", encoding="utf-8", errors="replace") as handle:
+                for line in handle:
+                    match = SECRET_NAME_RE.match(line)
+                    if match:
+                        names.add(match.group(1))
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+
+    return names
+
+
+def should_redact(name: str, secret_names: set[str]) -> bool:
+    upper_name = name.upper()
+    return name in secret_names or any(part in upper_name for part in REDACT_NAME_PARTS)
+
+
+def redact(value: str) -> str:
+    if value == "":
+        return "REDACTED_EMPTY"
+    if len(value) <= 4:
+        return "REDACTED_PRESENT"
+    return f"REDACTED_{value[-4:]}"
+
+
+def main() -> None:
+    if os.environ.get("SANDBOX") != "1":
+        exec_real_env()
+
+    request = parse_print_request(sys.argv[1:])
+    if request is None:
+        exec_real_env()
+
+    null_output, ignore_environment, unset_names, assignments = request
+    env = {} if ignore_environment else dict(os.environ)
+    for name in unset_names:
+        env.pop(name, None)
+    env.update(assignments)
+
+    secret_names = secret_names_from_files()
+    separator = "\0" if null_output else "\n"
+
+    for name, value in env.items():
+        if should_redact(name, secret_names):
+            value = redact(value)
+        sys.stdout.write(f"{name}={value}{separator}")
+
+
+if __name__ == "__main__":
+    main()

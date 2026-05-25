@@ -245,6 +245,9 @@ sandbox() {
     [[ -d "$d" ]] && args+=(--tmpfs "$d")
   done
 
+  local sandbox_bin_dir
+  sandbox_bin_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
   local bwrap_status=0
   bwrap \
     --ro-bind / / \
@@ -254,6 +257,7 @@ sandbox() {
     --proc /proc \
     --die-with-parent \
     --setenv SANDBOX 1 \
+    --setenv PATH "$sandbox_bin_dir:$PATH" \
     "${args[@]}" \
     "${extra[@]}" \
     -- "$@" || bwrap_status=$?
