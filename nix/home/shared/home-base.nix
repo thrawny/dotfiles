@@ -78,6 +78,7 @@ in
 
     sessionPath = [
       "$HOME/.cargo/bin"
+      "$HOME/.bun/bin"
       "$HOME/.local/share/nix-wrappers/bin"
       "$HOME/.npm-global/bin"
       "$HOME/.local/share/pnpm"
