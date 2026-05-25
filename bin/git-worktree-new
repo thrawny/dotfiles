@@ -19,19 +19,19 @@ if [[ ! -d "$wt_dir" ]]; then
   else
     git worktree add -b "$branch" "$wt_dir" "$@"
   fi
-
-  while IFS= read -r -d '' src; do
-    f="${src#"${root}/"}"
-    mkdir -p "$(dirname "${wt_dir}/${f}")"
-    cp "${src}" "${wt_dir}/${f}"
-  done < <(fd -H -0 -t f -E .git '^\.(envrc|secrets)' "$root")
-
-  for f in .env.local .claude/settings.local.json; do
-    if [[ -f "${root}/${f}" ]]; then
-      mkdir -p "$(dirname "${wt_dir}/${f}")"
-      cp "${root}/${f}" "${wt_dir}/${f}"
-    fi
-  done
 fi
+
+while IFS= read -r -d '' src; do
+  f="${src#"${root}/"}"
+  mkdir -p "$(dirname "${wt_dir}/${f}")"
+  cp "${src}" "${wt_dir}/${f}"
+done < <(fd -H -I -0 -t f -E .git '^\.(env|env\..*|envrc|envrc\..*|secrets.*)$' "$root")
+
+for f in .claude/settings.local.json; do
+  if [[ -f "${root}/${f}" ]]; then
+    mkdir -p "$(dirname "${wt_dir}/${f}")"
+    cp "${root}/${f}" "${wt_dir}/${f}"
+  fi
+done
 
 niri-project "$wt_dir"
