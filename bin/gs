@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE:-}" ]] && set -x
+set -euo pipefail
+
+if [[ $# -gt 0 ]]; then
+  exec git switch "$@"
+fi
+
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+  echo "gs: not in a git repository" >&2
+  exit 1
+fi
+
+if ! command -v fzf >/dev/null 2>&1; then
+  echo "gs: fzf is not installed" >&2
+  exit 1
+fi
+
+branch=$(
+  git for-each-ref \
+    --sort=-committerdate \
+    --format='%(refname:short)' \
+    refs/heads refs/remotes |
+    grep -vE '(^|/)HEAD$' |
+    fzf \
+      --height 50% \
+      --layout=reverse \
+      --border \
+      --prompt='git switch> ' \
+      --preview='git log --oneline --decorate --graph --color=always -20 {}'
+) || exit 0
+
+[[ -z "$branch" ]] && exit 0
+
+if git show-ref --verify --quiet "refs/heads/$branch"; then
+  exec git switch "$branch"
+fi
+
+if [[ "$branch" == */* ]] && git show-ref --verify --quiet "refs/remotes/$branch"; then
+  local_branch=${branch#*/}
+
+  if git show-ref --verify --quiet "refs/heads/$local_branch"; then
+    exec git switch "$local_branch"
+  fi
+
+  exec git switch --track "$branch"
+fi
+
+exec git switch "$branch"
