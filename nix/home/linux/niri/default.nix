@@ -493,7 +493,12 @@ in
           "wl-paste --watch cliphist store &"
         ];
       }
-      { command = [ "ghostty" ]; }
+      {
+        command = [
+          "ghostty"
+          "+new-window"
+        ];
+      }
       {
         command = [
           "zen-beta"
