@@ -266,6 +266,7 @@
       pkgs.teams-for-linux
       pkgs.terraform
       pkgs.hcloud
+      pkgs.wrangler
     ];
   };
 }
