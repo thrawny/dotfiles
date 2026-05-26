@@ -45,7 +45,7 @@ sandbox() {
   incus_vm_ipv4() {
     local vm="$1"
     incus list "$vm" --format=json 2>/dev/null \
-      | jq -r '.[0].state.network // {} | to_entries[] | select(.key != "lo" and .key != "docker0") | .value.addresses[]? | select(.family == "inet") | .address' \
+      | jq -r '.[0].state.network // {} | to_entries[] | select(.key != "lo" and .key != "docker0" and (.key | startswith("br-") | not) and (.key | startswith("veth") | not)) | .value.addresses[]? | select(.family == "inet") | .address' \
       | head -n1
   }
 
@@ -222,6 +222,8 @@ sandbox() {
   # Deny access to sensitive paths (applied after writable to override)
   # /var/run/docker.sock is the host Docker daemon; sandboxed Docker commands
   # should use DOCKER_HOST for the disposable Incus VM instead.
+  # Incus is used by this wrapper before entering bwrap to discover the Docker
+  # VM address, but must not be usable from inside the sandbox.
   local deny=(
     ~/.ssh
     ~/.gnupg
@@ -229,6 +231,10 @@ sandbox() {
     ~/.config/gh
     ~/.kube
     /var/run/docker.sock
+    ~/.config/incus
+    /var/lib/incus
+    /run/incus
+    /var/snap/lxd/common/lxd
   )
   for d in "${deny[@]}"; do
     d="${d/#\~/$HOME}"
