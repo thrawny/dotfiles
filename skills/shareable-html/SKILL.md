@@ -26,6 +26,7 @@ Every shareable HTML artifact should include content-specific metadata in the `<
 <meta property="og:type" content="website" />
 <meta property="og:title" content="Human-readable artifact title" />
 <meta property="og:description" content="One concise sentence describing the artifact." />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2317150f'/%3E%3Cpath d='M32 8C22 20 16 29 16 39a16 16 0 0 0 32 0C48 29 42 20 32 8Z' fill='%2373c7ff'/%3E%3Cpath d='M25 42c5 4 13 3 17-3' fill='none' stroke='%23f5f0df' stroke-width='4' stroke-linecap='round' opacity='.85'/%3E%3C/svg%3E" />
 ```
 
 Guidance:
@@ -34,6 +35,7 @@ Guidance:
 - Describe what the viewer will get, not implementation details.
 - Do not include `og:url` unless the final public share URL is already known. The uploader/CLI can add or override deployment-specific URLs.
 - `og:image` is not needed at this time for basic link previews.
+- Include a favicon. Prefer an inline SVG/data URI favicon so the artifact stays self-contained and does not need companion files.
 
 ## Slack unfurl expectations
 
