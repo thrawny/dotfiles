@@ -1,6 +1,9 @@
 # Dotfiles task runner
 # Run `just` to see all available recipes
 
+mod nix
+mod nvim "config/nvim"
+
 headless := if env("DISPLAY", "") != "" { "false" } else if env("WAYLAND_DISPLAY", "") != "" { "false" } else if os() == "macos" { "false" } else { "true" }
 
 # Default recipe - list all recipes
@@ -10,10 +13,10 @@ default:
 # === Shortcuts ===
 
 # Switch nix configuration
-switch: (nix::switch)
+switch: nix::switch
 
 # Update AI tool flake inputs and switch
-ai: (nix::ai)
+ai: nix::ai
 
 # Check and typecheck Pi config/extensions
 pi:
@@ -22,13 +25,12 @@ pi:
     pnpm --dir config/pi test
 
 # Update all flake inputs and switch
-update: (nix::update)
-
+update: nix::update
 
 # === Formatters ===
 
 # Format all
-fmt: (nix::fmt) fmt-lua fmt-python
+fmt: nix::fmt fmt-lua fmt-python
 
 # Format Lua files
 fmt-lua:
@@ -41,7 +43,7 @@ fmt-python:
 # === Linters ===
 
 # Lint all
-lint: (nix::lint) lint-lua lint-python
+lint: nix::lint lint-lua lint-python
 
 # Lint Lua files (TODO: fix selene config for neovim globals)
 lint-lua:
@@ -77,23 +79,10 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi (nix::eval)
+check-parallel: lint typecheck pi nix::eval
 
 # Format, lint, and evaluate all hosts
-check-all: fmt lint (nix::eval-all)
+check-all: fmt lint nix::eval-all
 
 # CI: lint, typecheck, format, and test
 ci: fmt lint typecheck test
-
-# === Setup ===
-
-# Configure git hooks for this repo
-setup-hooks:
-    git config core.hooksPath scripts
-    chmod +x scripts/pre-commit
-    @echo "Configured core.hooksPath to scripts/"
-
-# === Submodules ===
-
-mod nix
-mod nvim "config/nvim"

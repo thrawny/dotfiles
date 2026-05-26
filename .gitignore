@@ -4,18 +4,11 @@ config/nvim/undo/*
 config/nvim/backup/*
 config/nvim/swap/*
 
-config/k9s/clusters/*
-config/k9s/aliases.yaml
-
-config/lazygit/state.yml
-
 config/codex/config.toml
 
 config/claude/settings.json
 
 config/pi/settings.json
-
-config/niri/dms/colors.kdl
 
 result
 

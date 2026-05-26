@@ -9,8 +9,14 @@ Examples:
 - `my-extension/index.ts`
 
 Current custom extensions include:
-- `loop/` — session-local recurring loop tool, enabled per session by `/loop ...`
-- `show-active-tools.ts` — `/show-active-tools` for debugging active tool state
+- `agent-switch.ts` — forwards Pi lifecycle events to `agent-switch track`
+- `commands.ts` — loads repository/global Markdown commands
+- `impeccable.ts` — integrates impeccable command metadata when available
+- `rules.ts` — loads Markdown rule files as project guidance
+- `schedule/` — scheduling extension entrypoint
+- `show-tools.ts` — `/show-tools` for debugging active tool state
+- `status-line.ts` — custom status line integration
+- `teleport.ts` — Pi session teleport helpers
 - `wayvoice.ts` — `ctrl+space` and `/voice` integration for inserting wayvoice transcripts into the Pi editor
 
 ## wayvoice integration

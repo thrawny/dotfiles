@@ -3,4 +3,4 @@ default:
 
 # Run deterministic ranking harness for the Snacks merged file+grep picker
 picker-harness query="ghostty" top="20":
-    ./scripts/test-snacks-merged-picker {{query}} {{top}}
+    ./scripts/test-snacks-merged-picker {{ query }} {{ top }}

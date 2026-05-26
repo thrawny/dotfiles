@@ -16,9 +16,9 @@ My dotfiles and system configuration, declaratively managed with Nix.
 
 ```
 nix/      # NixOS & Home Manager modules
-config/   # Configs for things not managed by nix
-bin/      # Scripts and utilities
-rust/     # Custom Rust tools
+config/   # Tool configs linked or seeded by Nix
+bin/      # Scripts and utilities added to PATH
+skills/   # Local agent skills linked into Claude, Pi, and Codex
 ```
 
 ## Usage

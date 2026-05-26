@@ -26,4 +26,4 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 
 ## Host-Specific Packages
 
-Global packages go in `home/shared/packages.nix`. Host-specific packages go in `hosts/<hostname>/home.nix` and are wired into `flake.nix` via the `modules` list.
+Global packages go in `home/shared/packages/core.nix`, `workstation.nix`, `cloud.nix`, and `ai.nix`. Host-specific packages are wired into `flake.nix` via each host's Home Manager modules.
