@@ -51,6 +51,17 @@ Prefer:
 - progressive enhancement only when interactivity is valuable
 - no network calls from the artifact unless explicitly requested
 
+## File location
+
+Put generated shareable HTML artifacts in `./lab/` by default. This directory is always gitignored and is the expected scratch space for agent-created previews, infographics, reports, and mockups.
+
+Use a descriptive filename:
+
+```txt
+lab/sinexcel-modbus-infographic.html
+lab/r2-s3-share-html-deck.html
+```
+
 ## Publishing workflow
 
 When asked to publish/share an HTML artifact, use the `share-html` CLI from the dotfiles repo if available:
