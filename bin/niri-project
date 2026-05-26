@@ -129,7 +129,7 @@ main() {
   fi
 
   for _ in 1 2 3; do
-    niri msg action spawn -- ghostty --working-directory="$project_dir"
+    niri msg action spawn -- ghostty +new-window --working-directory="$project_dir"
   done
 }
 
