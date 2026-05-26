@@ -9,6 +9,12 @@ Use this skill when creating standalone HTML files that may be shared with `shar
 
 The goal is a file that works well both as a direct browser page and as a shared link preview.
 
+## Design prerequisite
+
+Before creating or editing the HTML file, load and follow the `frontend-design` skill. Shareable artifacts should be visually intentional, not just technically valid.
+
+Use the frontend-design guidance to choose a clear aesthetic direction, typography, layout, color system, and visual rhythm before writing the HTML/CSS.
+
 ## Required `<head>` metadata
 
 Every shareable HTML artifact should include content-specific metadata in the `<head>`:
