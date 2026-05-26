@@ -102,6 +102,12 @@ sandbox() {
     fi
   fi
 
+  # Keep Docker CLI/buildx state writable without exposing host Docker config.
+  if [[ -n "${DOCKER_HOST:-}" ]]; then
+    export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.cache/sandbox/docker}"
+    mkdir -p "$DOCKER_CONFIG"
+  fi
+
   # Hide host runtime sockets and give the sandbox its own empty runtime dir.
   if [[ -d "/run/user/${UID}" ]]; then
     args+=(--tmpfs "/run/user/${UID}")
