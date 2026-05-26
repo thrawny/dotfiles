@@ -98,9 +98,10 @@ Options:
   --user USER   Container user (default: thrawny)
 
 The archive contains:
-  home/        Full copy of the container user's home directory, excluding known
-               large generated directories: ~/.local/share/nvim, node_modules,
-               and .venv directories
+  home/        Copy of the container user's home directory, excluding known
+               large generated/cache directories such as ~/.cache, ~/go,
+               Bun/Cargo/npm/pnpm caches, node_modules, Cargo target dirs,
+               .direnv, and .venv directories
 
 Examples:
   incus-cleanup headless
@@ -111,21 +112,35 @@ EOF
 
 archive_home() {
   local container="$1" home="$2" staging_dir="$3"
+  local home_name
+  home_name="$(basename "$home")"
 
   mkdir -p "$staging_dir/home"
 
   incus exec "$container" -- tar \
-    --exclude="$(basename "$home")/.local/share/nvim" \
+    --exclude="$home_name/.cache" \
+    --exclude="$home_name/go" \
+    --exclude="$home_name/.local/share/nvim" \
+    --exclude="$home_name/.cargo/registry" \
+    --exclude="$home_name/.cargo/git" \
+    --exclude="$home_name/.npm" \
+    --exclude="$home_name/.npm-global" \
+    --exclude="$home_name/.bun/install/cache" \
+    --exclude="$home_name/.local/share/pnpm/store" \
     --exclude='*/node_modules' \
     --exclude='*/node_modules/*' \
     --exclude='*/.venv' \
     --exclude='*/.venv/*' \
+    --exclude='*/.direnv' \
+    --exclude='*/.direnv/*' \
+    --exclude='*/target' \
+    --exclude='*/target/*' \
     -C "$(dirname "$home")" \
     -cf - \
-    -- "$(basename "$home")" \
+    -- "$home_name" \
     | tar -C "$staging_dir/home" --strip-components=1 -xf -
 
-  echo "  Copied $home, excluding ~/.local/share/nvim, node_modules, and .venv."
+  echo "  Copied $home, excluding known generated/cache directories."
 }
 
 
