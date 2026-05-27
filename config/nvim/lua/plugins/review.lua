@@ -245,6 +245,7 @@ return {
         },
         { "<leader>rm", "<cmd>Review commits main HEAD<cr>", desc = "Review main..HEAD" },
         { "<leader>rc", "<cmd>Review commits<cr>", desc = "Review commits" },
+        { "<leader>rp", "<cmd>Review pr<cr>", desc = "Review GitHub PR" },
         {
           "<leader>re",
           export_review_to_clipboard_only,
