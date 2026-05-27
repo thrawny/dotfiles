@@ -211,6 +211,15 @@ function install(
 							? `${rightText} • thinking off`
 							: `${rightText} • ${thinking}`;
 				}
+				const extensionStatuses = [
+					...footerData.getExtensionStatuses().values(),
+				]
+					.map((status) => status.trim())
+					.filter((status) => status.length > 0);
+				if (extensionStatuses.length > 0) {
+					rightText = `${rightText} • ${extensionStatuses.join(" • ")}`;
+				}
+
 				const right = `\x1b[2m${rightText}\x1b[0m`;
 
 				const leftWidth = visibleWidth(left);
