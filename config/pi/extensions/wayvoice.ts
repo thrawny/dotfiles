@@ -11,18 +11,15 @@ import type {
 import { Type } from "@sinclair/typebox";
 
 const DEFAULT_SHORTCUT = "ctrl+space";
-const MAX_PROMPT_CHARS = 600;
-const MAX_USER_MESSAGE_CHARS = 180;
-const MAX_ASSISTANT_MESSAGE_CHARS = 120;
-const RECENT_USER_MESSAGES = 2;
-const RECENT_ASSISTANT_MESSAGES = 2;
 const KEYWORD_CONTEXT_MESSAGES = 20;
 const MAX_DYNAMIC_KEYWORDS = 20;
+const MAX_DYNAMIC_FRAGMENTS = 12;
 const TRIGGER_DEBOUNCE_MS = 750;
 
 let inFlight = false;
 let lastTriggerAt = 0;
 let dynamicKeywords: string[] = [];
+let dynamicFragments: string[] = [];
 
 interface WayvoiceRequest {
 	cmd: "toggle";
@@ -40,11 +37,20 @@ interface WayvoiceResponse {
 	error?: string;
 }
 
+function runtimeDir(): string {
+	return process.env.XDG_RUNTIME_DIR || os.tmpdir();
+}
+
+function socketPaths(): string[] {
+	if (process.env.PI_WAYVOICE_SOCKET) return [process.env.PI_WAYVOICE_SOCKET];
+	return [
+		path.join(runtimeDir(), "wayvoice", "wayvoice.sock"),
+		path.join(runtimeDir(), "wayvoice.sock"),
+	];
+}
+
 function socketPath(): string {
-	return (
-		process.env.PI_WAYVOICE_SOCKET ||
-		path.join(process.env.XDG_RUNTIME_DIR || os.tmpdir(), "wayvoice.sock")
-	);
+	return socketPaths()[0];
 }
 
 function isDebug(): boolean {
@@ -101,9 +107,44 @@ async function callWayvoice(
 	return { status: "done", text: output };
 }
 
+function isEnoent(error: unknown): boolean {
+	return (
+		typeof error === "object" &&
+		error !== null &&
+		"code" in error &&
+		(error as { code?: unknown }).code === "ENOENT"
+	);
+}
+
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
 async function sendSocketLine(line: string): Promise<string> {
+	const paths = socketPaths();
+	const failures: string[] = [];
+	for (const [index, currentSocketPath] of paths.entries()) {
+		try {
+			return await sendSocketLineToPath(currentSocketPath, line);
+		} catch (error) {
+			failures.push(`${currentSocketPath}: ${errorMessage(error)}`);
+			if (isEnoent(error) && index < paths.length - 1) continue;
+			if (failures.length > 1)
+				throw new Error(
+					`could not connect to wayvoice (${failures.join("; ")})`,
+				);
+			throw error;
+		}
+	}
+	throw new Error(`could not connect to wayvoice (${failures.join("; ")})`);
+}
+
+async function sendSocketLineToPath(
+	currentSocketPath: string,
+	line: string,
+): Promise<string> {
 	return new Promise((resolve, reject) => {
-		const socket = net.createConnection(socketPath());
+		const socket = net.createConnection(currentSocketPath);
 		let output = "";
 		const timer = setTimeout(() => {
 			socket.destroy();
@@ -140,50 +181,6 @@ function truncateText(text: string, maxChars: number): string {
 	return text.length <= maxChars ? text : text.slice(0, maxChars).trimEnd();
 }
 
-function recentPromptContext(ctx: ExtensionContext): string {
-	const selected: string[] = [];
-	let users = 0;
-	let assistants = 0;
-	const branch = ctx.sessionManager.getBranch() as Array<{
-		message?: {
-			role: string;
-			content:
-				| string
-				| Array<{ type: string; text?: string; thinking?: string }>;
-		};
-	}>;
-
-	for (const entry of [...branch].reverse()) {
-		const message = entry.message;
-		if (!message) continue;
-		if (message.role === "user" && users < RECENT_USER_MESSAGES) {
-			selected.push(
-				`User: ${truncateText(contentText(message.content), MAX_USER_MESSAGE_CHARS)}`,
-			);
-			users++;
-		} else if (
-			message.role === "assistant" &&
-			assistants < RECENT_ASSISTANT_MESSAGES
-		) {
-			selected.push(
-				`Assistant: ${truncateText(contentText(message.content), MAX_ASSISTANT_MESSAGE_CHARS)}`,
-			);
-			assistants++;
-		}
-		if (
-			users >= RECENT_USER_MESSAGES &&
-			assistants >= RECENT_ASSISTANT_MESSAGES
-		)
-			break;
-	}
-
-	return selected.reverse().join("\n\n");
-}
-
-function truncatePrompt(prompt: string): string {
-	return truncateText(prompt, MAX_PROMPT_CHARS);
-}
-
 function showDebugWidget(ctx: ExtensionContext, message: string): void {
 	if (!isDebug()) return;
 	ctx.ui.setWidget("wayvoice-keywords", [message], {
@@ -205,17 +202,18 @@ function requestSummary(request: WayvoiceRequest): string {
 	});
 }
 
-function buildRequest(ctx: ExtensionContext): WayvoiceRequest {
-	const context = recentPromptContext(ctx);
-	const prompt = context || `User: ${path.basename(ctx.cwd)}`;
+function promptHints(): string[] {
+	return [...dynamicKeywords, ...dynamicFragments];
+}
 
+function buildRequest(_ctx: ExtensionContext): WayvoiceRequest {
 	return {
 		cmd: "toggle",
 		overrides: {
 			inject_mode: "stdout",
 			use_default_keywords: false,
-			extra_keywords: dynamicKeywords,
-			prompt: truncatePrompt(prompt),
+			extra_keywords: promptHints(),
+			prompt: "",
 		},
 	};
 }
@@ -233,11 +231,8 @@ function keywordContext(ctx: ExtensionContext): string {
 
 	for (const entry of [...branch].reverse()) {
 		const message = entry.message;
-		if (!message || (message.role !== "user" && message.role !== "assistant"))
-			continue;
-		lines.push(
-			`${message.role}: ${truncateText(contentText(message.content), 400)}`,
-		);
+		if (!message || message.role !== "user") continue;
+		lines.push(`user: ${truncateText(contentText(message.content), 400)}`);
 		if (lines.length >= KEYWORD_CONTEXT_MESSAGES) break;
 	}
 
@@ -258,48 +253,97 @@ function assistantText(message: AssistantMessage): string {
 	return text;
 }
 
-function parseKeywords(text: string): string[] {
+interface PromptHints {
+	keywords: string[];
+	fragments: string[];
+}
+
+function parsePromptHints(text: string): PromptHints {
 	const json = text.match(/\{[\s\S]*\}/)?.[0];
 	if (!json)
 		throw new Error(`keyword response was not JSON: ${JSON.stringify(text)}`);
-	const parsed = JSON.parse(json) as { keywords: unknown };
+	const parsed = JSON.parse(json) as { keywords: unknown; fragments?: unknown };
 	if (!Array.isArray(parsed.keywords))
 		throw new Error(`keyword response did not include keywords array: ${json}`);
-	return parsed.keywords
-		.filter((keyword): keyword is string => typeof keyword === "string")
-		.map((keyword) => keyword.trim())
-		.filter(
-			(keyword) =>
-				keyword.length >= 2 &&
-				keyword.length <= 60 &&
-				!keyword.includes("/") &&
-				!keyword.match(/\.[a-z0-9]{1,6}$/i),
-		)
-		.filter(
-			(keyword) =>
-				![
-					"debug flag",
-					"typecheck",
-					"reload",
-					"temperature",
-					"openai-codex-responses",
-					"wayvoice_debug_inject",
-				].includes(keyword.toLowerCase()),
-		)
-		.slice(0, MAX_DYNAMIC_KEYWORDS);
+
+	return {
+		keywords: cleanKeywords(parsed.keywords).slice(0, MAX_DYNAMIC_KEYWORDS),
+		fragments: cleanFragments(parsed.fragments ?? []).slice(
+			0,
+			MAX_DYNAMIC_FRAGMENTS,
+		),
+	};
 }
 
-function mergeKeywords(previous: string[], extracted: string[]): string[] {
+function cleanKeywords(values: unknown): string[] {
+	if (!Array.isArray(values)) return [];
+	return values
+		.filter((keyword): keyword is string => typeof keyword === "string")
+		.map((keyword) => keyword.trim())
+		.filter(isCleanKeyword)
+		.filter((keyword) => !isBlockedHint(keyword));
+}
+
+function cleanFragments(values: unknown): string[] {
+	if (!Array.isArray(values)) return [];
+	return values
+		.filter((fragment): fragment is string => typeof fragment === "string")
+		.map((fragment) => fragment.trim())
+		.filter(isCleanFragment)
+		.filter((fragment) => !isBlockedHint(fragment));
+}
+
+function isCleanKeyword(keyword: string): boolean {
+	return (
+		keyword.length >= 2 &&
+		keyword.length <= 60 &&
+		!hasUnsafePromptChars(keyword) &&
+		!keyword.includes("/") &&
+		!keyword.match(/\.[a-z0-9]{1,6}$/i)
+	);
+}
+
+function isCleanFragment(fragment: string): boolean {
+	const words = fragment.split(/\s+/).filter(Boolean);
+	return (
+		fragment.length >= 6 &&
+		fragment.length <= 80 &&
+		words.length >= 2 &&
+		words.length <= 6 &&
+		!hasUnsafePromptChars(fragment) &&
+		!fragment.includes("/") &&
+		!fragment.match(/\.[a-z0-9]{1,6}$/i)
+	);
+}
+
+function hasUnsafePromptChars(value: string): boolean {
+	return /[\n\r{}[\]`"<>]/.test(value);
+}
+
+function isBlockedHint(value: string): boolean {
+	return [
+		"debug flag",
+		"typecheck",
+		"reload",
+		"temperature",
+		"openai-codex-responses",
+		"wayvoice_debug_inject",
+	].includes(value.toLowerCase());
+}
+
+function mergeHints(
+	previous: string[],
+	extracted: string[],
+	limit: number,
+): string[] {
 	const merged = [...previous];
-	for (const keyword of extracted) {
+	for (const hint of extracted) {
 		if (
-			!merged.some(
-				(existing) => existing.toLowerCase() === keyword.toLowerCase(),
-			)
+			!merged.some((existing) => existing.toLowerCase() === hint.toLowerCase())
 		)
-			merged.push(keyword);
+			merged.push(hint);
 	}
-	return merged.slice(0, MAX_DYNAMIC_KEYWORDS);
+	return merged.slice(0, limit);
 }
 
 function addDebugMessage(pi: ExtensionAPI, content: string): void {
@@ -327,15 +371,16 @@ async function updateDynamicKeywords(
 		ctx.model,
 		{
 			systemPrompt: [
-				"Extract spoken technical vocabulary that would help future speech-to-text dictation.",
-				'Return JSON only: {"keywords":["term"]}.',
-				"Include project/tool/product names, acronyms, commands, and uncommon technical terms likely to be spoken aloud.",
-				"Exclude filenames, file paths, ids, hashes, generic prose, and normal English words.",
+				"Extract prompt hints that help future Whisper-style speech-to-text dictation.",
+				'Return JSON only: {"keywords":["term"],"fragments":["short phrase"]}.',
+				"keywords: project/tool/product names, acronyms, commands, and uncommon technical terms likely to be spoken aloud.",
+				"fragments: short 2-6 word domain fragments likely to be spoken, such as 'transcript logs' or 'eval suite'.",
+				"Use the latest transcript and recent user context; do not copy assistant prose, JSON, markdown, tool output, file paths, ids, hashes, or generic prose.",
 			].join("\n"),
 			messages: [
 				{
 					role: "user",
-					content: `Latest transcript:\n${transcript}\n\nRecent context:\n${keywordContext(ctx)}\n\nCurrent keywords:\n${dynamicKeywords.join(", ")}`,
+					content: `Latest transcript:\n${transcript}\n\nRecent user context:\n${keywordContext(ctx)}\n\nCurrent keywords:\n${dynamicKeywords.join(", ")}\n\nCurrent fragments:\n${dynamicFragments.join(". ")}`,
 					timestamp: Date.now(),
 				},
 			],
@@ -344,24 +389,37 @@ async function updateDynamicKeywords(
 			apiKey: auth.apiKey,
 			headers: auth.headers,
 			reasoning: "minimal",
-			maxTokens: 200,
+			maxTokens: 260,
 		},
 	);
-	const nextKeywords = mergeKeywords(
+	const hints = parsePromptHints(assistantText(keywordResponse));
+	const nextKeywords = mergeHints(
 		dynamicKeywords,
-		parseKeywords(assistantText(keywordResponse)),
+		hints.keywords,
+		MAX_DYNAMIC_KEYWORDS,
 	);
-	if (JSON.stringify(nextKeywords) === JSON.stringify(dynamicKeywords)) {
-		const message = `wayvoice keywords unchanged: ${dynamicKeywords.join(", ") || "none"}`;
+	const nextFragments = mergeHints(
+		dynamicFragments,
+		hints.fragments,
+		MAX_DYNAMIC_FRAGMENTS,
+	);
+	if (
+		JSON.stringify(nextKeywords) === JSON.stringify(dynamicKeywords) &&
+		JSON.stringify(nextFragments) === JSON.stringify(dynamicFragments)
+	) {
+		const message = `wayvoice hints unchanged: ${promptHints().join(", ") || "none"}`;
 		showDebugWidget(ctx, message);
 		addDebugMessage(pi, message);
 		return;
 	}
 	dynamicKeywords = nextKeywords;
+	dynamicFragments = nextFragments;
 	debug(`dynamic keywords: ${JSON.stringify(dynamicKeywords)}`);
-	if (isDebug()) log(`keywords updated: ${JSON.stringify(dynamicKeywords)}`);
-	const keywordList = dynamicKeywords.join(", ");
-	const message = `wayvoice keywords: ${keywordList || "none"}`;
+	debug(`dynamic fragments: ${JSON.stringify(dynamicFragments)}`);
+	log(
+		`hints updated: ${JSON.stringify({ keywords: dynamicKeywords, fragments: dynamicFragments })}`,
+	);
+	const message = `wayvoice hints: ${promptHints().join(", ") || "none"}`;
 	showDebugWidget(ctx, message);
 	addDebugMessage(pi, message);
 }
@@ -425,11 +483,14 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("voice-keywords", {
-		description: "Show current wayvoice dynamic keywords",
+		description: "Show current wayvoice dynamic prompt hints",
 		handler: async (_args, ctx) => {
 			ctx.ui.setWidget(
 				"wayvoice-keywords",
-				[`wayvoice keywords: ${dynamicKeywords.join(", ") || "none"}`],
+				[
+					`wayvoice keywords: ${dynamicKeywords.join(", ") || "none"}`,
+					`wayvoice fragments: ${dynamicFragments.join(", ") || "none"}`,
+				],
 				{ placement: "belowEditor" },
 			);
 			setTimeout(() => ctx.ui.setWidget("wayvoice-keywords", undefined), 8_000);
@@ -454,25 +515,25 @@ export default function (pi: ExtensionAPI) {
 			name: "wayvoice_debug_inject",
 			label: "Wayvoice Debug Inject",
 			description:
-				"Debug wayvoice keyword extraction by pretending a transcript was inserted into the Pi editor.",
+				"Debug wayvoice prompt hint extraction by pretending a transcript was inserted into the Pi editor.",
 			parameters: Type.Object({
 				transcript: Type.String({
 					description:
-						"Mock transcript text to insert and feed to keyword extraction",
+						"Mock transcript text to insert and feed to prompt hint extraction",
 				}),
 			}),
 			async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 				ctx.ui.pasteToEditor(params.transcript);
-				showDebugWidget(ctx, "wayvoice debug: updating keywords…");
+				showDebugWidget(ctx, "wayvoice debug: updating prompt hints…");
 				await updateDynamicKeywords(pi, ctx, params.transcript);
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Inserted mock transcript and updated keywords: ${dynamicKeywords.join(", ") || "none"}`,
+							text: `Inserted mock transcript and updated hints: ${promptHints().join(", ") || "none"}`,
 						},
 					],
-					details: { keywords: dynamicKeywords },
+					details: { keywords: dynamicKeywords, fragments: dynamicFragments },
 				};
 			},
 		});
