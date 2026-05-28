@@ -75,6 +75,7 @@ sandbox() {
     ~/.codex
     ~/.claude
     ~/.pi
+    ~/.t3
     ~/.npm
     ~/.zsh_history
     ~/dotfiles
