@@ -124,6 +124,16 @@
           ];
           actions.update-props."device.disabled" = true;
         }
+
+        # ThinkPad USB-C Dock Gen 2 audio device; disables its analog output and mono input.
+        {
+          matches = [
+            {
+              "device.name" = "alsa_card.usb-Lenovo_ThinkPad_USB-C_Dock_Gen2_USB_Audio_000000000000-00";
+            }
+          ];
+          actions.update-props."device.disabled" = true;
+        }
       ];
     };
 
