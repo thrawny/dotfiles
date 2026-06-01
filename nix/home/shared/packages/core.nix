@@ -15,7 +15,7 @@
     coreutils
     gnugrep
     gnused
-    bash
+    bashInteractive
     curl
     wget
     procps

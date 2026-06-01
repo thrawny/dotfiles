@@ -9,6 +9,7 @@
     ./home-base.nix
     ./agent-skills.nix
     ./ai-tools.nix
+    ./bash.nix
     ./packages/core.nix
     ./packages/workstation.nix
     ./packages/cloud.nix

@@ -96,6 +96,8 @@ in
     environment.systemPackages = basePackages;
 
     programs = {
+      bash.promptInit = "";
+
       zsh = {
         enable = true;
         enableGlobalCompInit = false; # Home Manager handles compinit

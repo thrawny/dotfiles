@@ -271,6 +271,7 @@
             pkgs:
             pkgs.mkShell {
               packages = with pkgs; [
+                bashInteractive
                 pkg-config
                 nixd
                 nixfmt

@@ -13,6 +13,7 @@
   imports = [
     ../shared/home-base.nix
     ../shared/ai-tools.nix
+    ../shared/bash.nix
     ../shared/packages/core.nix
     ../shared/packages/ai.nix
     ../shared/btop.nix

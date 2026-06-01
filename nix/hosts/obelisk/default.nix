@@ -49,6 +49,7 @@ in
 
   home-manager.users.${username} = {
     imports = [
+      ../../home/shared/bash.nix
       ../../home/shared/zsh.nix
       ../../home/shared/git.nix
       ../../home/shared/starship.nix
