@@ -65,6 +65,38 @@ sandbox() {
     load_env_file "$PWD/.secrets.sandbox"
   fi
 
+  # Optionally expose a single AWS account by exporting short-lived, scoped
+  # credentials for one profile. ~/.aws stays denied below, so only these
+  # env-var creds reach the sandbox: the SSO token (which can mint creds for
+  # every account) never enters it, and the creds expire on their own.
+  # Set SANDBOX_AWS_PROFILE in the environment or a repo-local .secrets.sandbox.
+  if [[ -n "${SANDBOX_AWS_PROFILE:-}" ]]; then
+    case "$SANDBOX_AWS_PROFILE" in
+      *prod*|*production*)
+        echo "sandbox: refusing to expose production-looking profile: $SANDBOX_AWS_PROFILE" >&2
+        exit 1
+        ;;
+    esac
+    local aws_creds aws_region
+    if ! command -v aws >/dev/null 2>&1; then
+      echo "sandbox: SANDBOX_AWS_PROFILE set but aws CLI not found" >&2
+      exit 1
+    fi
+    if aws_creds=$(aws configure export-credentials \
+        --profile "$SANDBOX_AWS_PROFILE" --format env 2>/dev/null); then
+      unset AWS_PROFILE
+      eval "$aws_creds"
+      aws_region=$(aws configure get region --profile "$SANDBOX_AWS_PROFILE" 2>/dev/null || true)
+      if [[ -n "$aws_region" ]]; then
+        export AWS_REGION="$aws_region" AWS_DEFAULT_REGION="$aws_region"
+      fi
+    else
+      echo "sandbox: could not export AWS credentials for profile '$SANDBOX_AWS_PROFILE'" >&2
+      echo "sandbox: run 'aws sso login --profile $SANDBOX_AWS_PROFILE' on the host first" >&2
+      exit 1
+    fi
+  fi
+
   # Writable paths (add more as needed)
   local writable=(
     ~/.cache
