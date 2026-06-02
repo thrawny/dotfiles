@@ -23,8 +23,7 @@
     xremap-flake.url = "github:xremap/nix-flake";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
-    # Pin to PR #771: fix deprecated systemd.sleep.extraConfig for NixOS 26.05
-    srvos.url = "github:nix-community/srvos/752772adba542cab1162ad271f0b3d69adc59349";
+    srvos.url = "github:nix-community/srvos";
     srvos.inputs.nixpkgs.follows = "nixpkgs";
     llm-agents.url = "github:numtide/llm-agents.nix";
     zmx.url = "github:thrawny/zmx-flake";
