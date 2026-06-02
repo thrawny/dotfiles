@@ -23,6 +23,7 @@
     ./hypridle.nix
     ./btop.nix
     ./mako.nix
+    ./open-url.nix
     ./telegram.nix
     ./walker.nix
     ./waybar.nix

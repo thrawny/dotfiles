@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  echo "Usage: niri-open-url <url>" >&2
+}
+
+if [[ $# -lt 1 || -z "${1:-}" ]]; then
+  usage
+  exit 64
+fi
+
+url="$1"
+
+# This router is intended for URL schemes from xdg-open. If it gets used
+# outside niri or before jq is available, fall back to the normal Zen launch.
+if ! command -v niri >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+  exec zen-beta --new-tab "$url"
+fi
+
+workspace_json=$(niri msg -j workspaces 2>/dev/null || true)
+windows_json=$(niri msg -j windows 2>/dev/null || true)
+
+if [[ -z "$workspace_json" || -z "$windows_json" ]]; then
+  exec zen-beta --new-tab "$url"
+fi
+
+focused_workspace_id=$(jq -r '.[] | select(.is_focused) | .id' <<<"$workspace_json" | head -n1)
+
+focused_position=$(
+  jq -r --argjson workspace_id "${focused_workspace_id:-0}" '
+    map(select(.workspace_id == $workspace_id and .is_focused))
+    | (.[0].layout.pos_in_scrolling_layout // [0, 0])
+    | "\(.[0] // 0) \(.[1] // 0)"
+  ' <<<"$windows_json"
+)
+read -r focused_col focused_row <<<"$focused_position"
+
+browser_command() {
+  case "$1" in
+    helium) printf 'helium' ;;
+    zen | zen-beta) printf 'zen-beta' ;;
+    *) return 1 ;;
+  esac
+}
+
+open_in_window() {
+  local window_id="$1"
+  local app_id="$2"
+  local command
+
+  command=$(browser_command "$app_id") || return 1
+  niri msg action focus-window --id "$window_id" >/dev/null
+  sleep 0.2
+  exec "$command" --new-tab "$url"
+}
+
+nearest_browser=$(
+  jq -r \
+    --argjson workspace_id "${focused_workspace_id:-0}" \
+    --argjson focused_col "${focused_col:-0}" \
+    --argjson focused_row "${focused_row:-0}" '
+      def sq: . * .;
+      def browser: .app_id == "helium" or .app_id == "zen" or .app_id == "zen-beta";
+
+      map(
+        select(.workspace_id == $workspace_id and browser)
+        | .distance = (((.layout.pos_in_scrolling_layout[0] // 0) - $focused_col) | sq)
+                   + (((.layout.pos_in_scrolling_layout[1] // 0) - $focused_row) | sq)
+      )
+      | sort_by(.distance, .focus_timestamp.secs // 0, .id)
+      | .[0]
+      | if . == null then empty else "\(.id)\t\(.app_id)" end
+    ' <<<"$windows_json"
+)
+
+if [[ -n "$nearest_browser" ]]; then
+  IFS=$'\t' read -r window_id app_id <<<"$nearest_browser"
+  open_in_window "$window_id" "$app_id"
+fi
+
+# No browser in the current workspace: fall back to Zen in the named "web"
+# workspace. If no Zen window exists there, focus/create the web workspace and
+# let Zen open normally.
+web_workspace_id=$(jq -r '.[] | select(.name == "web") | .id' <<<"$workspace_json" | head -n1)
+
+if [[ -n "$web_workspace_id" ]]; then
+  web_zen=$(
+    jq -r --argjson workspace_id "$web_workspace_id" '
+      map(select(.workspace_id == $workspace_id and (.app_id == "zen" or .app_id == "zen-beta")))
+      | sort_by(.focus_timestamp.secs // 0, .id)
+      | last
+      | if . == null then empty else "\(.id)\t\(.app_id)" end
+    ' <<<"$windows_json"
+  )
+
+  if [[ -n "$web_zen" ]]; then
+    IFS=$'\t' read -r window_id app_id <<<"$web_zen"
+    open_in_window "$window_id" "$app_id"
+  fi
+
+  niri msg action focus-workspace web >/dev/null 2>&1 || true
+fi
+
+exec zen-beta --new-tab "$url"
