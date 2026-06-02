@@ -1,7 +1,17 @@
+{ pkgs, ... }:
 {
   # Hyprlock - same as upstream defaults but without the $LAYOUT label
   programs.hyprlock = {
     enable = true;
+    package = pkgs.hyprlock.overrideAttrs {
+      version = "0.9.3";
+      src = pkgs.fetchFromGitHub {
+        owner = "hyprwm";
+        repo = "hyprlock";
+        tag = "v0.9.3";
+        hash = "sha256-qxR0w0wC6Bv96C/Kzx3mL1bUS8ejwhIm7eVVR9AA88c=";
+      };
+    };
     settings = {
       "$font" = "Monospace";
 
