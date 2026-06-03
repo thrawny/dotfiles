@@ -2,7 +2,6 @@
 {
   programs.ghostty = {
     enable = true;
-    enableBashIntegration = false;
     # Only install package on Linux (macOS users install via Homebrew or direct download)
     package = if pkgs.stdenv.isLinux then pkgs.ghostty else null;
     settings = {

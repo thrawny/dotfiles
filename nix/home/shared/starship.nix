@@ -1,7 +1,6 @@
 _: {
   programs.starship = {
     enable = true;
-    enableBashIntegration = false;
     enableZshIntegration = true;
     settings = {
       format = "$username$hostname$directory$git_branch$git_state$git_status$git_metrics$env_var$kubernetes$docker_context$python$golang$nodejs$rust$terraform$cmd_duration$line_break$character";
