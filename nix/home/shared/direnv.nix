@@ -10,7 +10,7 @@ in
 {
   programs.direnv = {
     enable = true;
-    enableBashIntegration = true;
+    enableBashIntegration = false;
     enableZshIntegration = true;
     nix-direnv.enable = true;
     config.whitelist.prefix =

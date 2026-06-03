@@ -247,6 +247,7 @@
 
     fzf = {
       enable = true;
+      enableBashIntegration = false;
       enableZshIntegration = true;
       defaultOptions = [
         "--height 40%"
@@ -261,6 +262,7 @@
 
     zoxide = {
       enable = true;
+      enableBashIntegration = false;
       # Manual integration below - conditional based on CLAUDE env var
       enableZshIntegration = false;
     };

@@ -1,6 +1,7 @@
 _: {
   programs.lazygit = {
     enable = true;
+    enableBashIntegration = false;
     settings = {
       promptToReturnFromSubprocess = false;
       quitOnTopLevelReturn = true;
