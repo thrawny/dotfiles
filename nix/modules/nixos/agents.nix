@@ -10,6 +10,8 @@ let
   llmPkgs = llm-agents.packages.${system};
   openclaw = import ./openclaw.nix { inherit config lib pkgs; };
   hermes = import ./hermes.nix { inherit config lib pkgs; };
+  forgejoHost = "forgejo.${config.dotfiles.tailnetDomain}";
+  forgejoUrl = "https://${forgejoHost}";
   commonPath = [
     llmPkgs.claude-code
     llmPkgs.codex
@@ -85,6 +87,7 @@ let
           LOGNAME = user;
           XDG_RUNTIME_DIR = "/run/user/${toString uid}";
           DOCKER_HOST = "unix:///run/user/${toString uid}/podman/podman.sock";
+          FJ_FALLBACK_HOST = forgejoUrl;
         }
         // extraEnvironment;
         serviceConfig = {
@@ -106,6 +109,99 @@ let
         // extraServiceConfig
         // lib.optionalAttrs (execStartPre != [ ]) { ExecStartPre = execStartPre; };
       };
+    };
+
+  mkForgejoBootstrap =
+    {
+      agentName,
+      botUser,
+      botDisplayName,
+      botEmail,
+      workspace ? "/srv/agents/${agentName}/workspace",
+    }:
+    let
+      gitConfig = pkgs.writeText "${agentName}-gitconfig" ''
+        [user]
+            name = ${botDisplayName}
+            email = ${botEmail}
+
+        [credential "${forgejoUrl}"]
+            helper = store
+            username = ${botUser}
+
+        [init]
+            defaultBranch = main
+
+        [push]
+            default = simple
+
+        [url "${forgejoUrl}/"]
+            insteadOf = forgejo:
+      '';
+
+      forgejoGuide = pkgs.writeText "${agentName}-forgejo.md" ''
+        # Forgejo
+
+        Host: ${forgejoUrl}
+        User: ${botUser}
+
+        Git and fj auth are preconfigured from ~/.config/forgejo/token.
+
+        Useful commands:
+
+        - Create a repo for the current checkout: `fj repo create <repo> --private --remote forgejo`
+        - Add a Forgejo remote manually: `git remote add forgejo forgejo:<owner>/<repo>.git`
+        - Push a branch: `git push -u forgejo HEAD`
+        - Create a PR from a branch: `fj pr create --repo <owner>/<repo> --head <branch> --base main --autofill`
+        - Check auth: `fj whoami`
+      '';
+    in
+    pkgs.writeShellApplication {
+      name = "${agentName}-forgejo-bootstrap";
+      runtimeInputs = [
+        pkgs.coreutils
+        pkgs.jq
+      ];
+      text = ''
+        set -euo pipefail
+
+        agent_home="/srv/agents/${agentName}/home"
+        workspace=${lib.escapeShellArg workspace}
+        token_path="$agent_home/.config/forgejo/token"
+        fj_keys_dir="$agent_home/.local/share/forgejo-cli"
+        fj_keys_path="$fj_keys_dir/keys.json"
+        git_credentials="$agent_home/.git-credentials"
+
+        install -d -m 0750 -o ${agentName} -g ${agentName} "$agent_home"
+        install -d -m 0750 -o ${agentName} -g ${agentName} "$workspace"
+        install -d -m 0700 -o ${agentName} -g ${agentName} "$agent_home/.config/forgejo"
+        install -d -m 0700 -o ${agentName} -g ${agentName} "$fj_keys_dir"
+
+        install -m 0600 -o ${agentName} -g ${agentName} ${gitConfig} "$agent_home/.gitconfig"
+        install -m 0644 -o ${agentName} -g ${agentName} ${forgejoGuide} "$workspace/FORGEJO.md"
+
+        if [ -r "$token_path" ]; then
+          token="$(tr -d '\r\n' < "$token_path")"
+          if [ -n "$token" ]; then
+            keys_tmp="$(mktemp)"
+            jq -n \
+              --arg host ${lib.escapeShellArg forgejoHost} \
+              --arg name ${lib.escapeShellArg botUser} \
+              --arg token "$token" \
+              '{hosts: {($host): {type: "Application", name: $name, token: $token}}, aliases: {}, default_ssh: []}' \
+              > "$keys_tmp"
+            install -m 0600 -o ${agentName} -g ${agentName} "$keys_tmp" "$fj_keys_path"
+            rm -f "$keys_tmp"
+
+            credentials_tmp="$(mktemp)"
+            encoded_user="$(jq -rn --arg value ${lib.escapeShellArg botUser} '$value | @uri')"
+            encoded_token="$(jq -rn --arg value "$token" '$value | @uri')"
+            printf 'https://%s:%s@%s\n' "$encoded_user" "$encoded_token" ${lib.escapeShellArg forgejoHost} > "$credentials_tmp"
+            install -m 0600 -o ${agentName} -g ${agentName} "$credentials_tmp" "$git_credentials"
+            rm -f "$credentials_tmp"
+          fi
+        fi
+      '';
     };
 in
 lib.mkMerge [
@@ -166,7 +262,18 @@ lib.mkMerge [
     uid = 3101;
     package = llmPkgs.openclaw;
     command = "${llmPkgs.openclaw}/bin/openclaw gateway run --bind loopback --port 18789 --tailscale off --allow-unconfigured --force";
-    execStartPre = [ "+${openclaw.prepareConfig}/bin/openclaw-prepare-config" ];
+    execStartPre = [
+      "+${
+        mkForgejoBootstrap {
+          agentName = "openclaw";
+          botUser = "gestral-bot";
+          botDisplayName = "Gestral Vendor";
+          botEmail = "gestral-bot@obelisk.local";
+          workspace = openclaw.workspace;
+        }
+      }/bin/openclaw-forgejo-bootstrap"
+      "+${openclaw.prepareConfig}/bin/openclaw-prepare-config"
+    ];
   })
 
   (mkAgentService {
@@ -176,7 +283,18 @@ lib.mkMerge [
     command = "${llmPkgs.hermes-agent}/bin/hermes gateway run --replace --accept-hooks";
     environmentFile = hermes.envFile;
     extraEnvironment.HERMES_HOME = "${hermes.home}/.hermes";
-    execStartPre = [ "+${hermes.prepareConfig}/bin/hermes-prepare-config" ];
+    execStartPre = [
+      "+${
+        mkForgejoBootstrap {
+          agentName = "hermes";
+          botUser = "maelle-bot";
+          botDisplayName = "Maelle";
+          botEmail = "maelle-bot@obelisk.local";
+          workspace = hermes.workspace;
+        }
+      }/bin/hermes-forgejo-bootstrap"
+      "+${hermes.prepareConfig}/bin/hermes-prepare-config"
+    ];
     extraServiceConfig.TimeoutStopSec = 240;
   })
 ]
