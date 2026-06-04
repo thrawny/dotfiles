@@ -1,14 +1,19 @@
-{ pkgs, ... }:
+{
+  config,
+  pkgs,
+  ...
+}:
+let
+  inherit (config.dotfiles) username;
+in
 {
   environment.systemPackages = [ pkgs.docker-compose ];
-  virtualisation.containers.enable = true;
+
   virtualisation = {
+    containers.enable = true;
     docker.enable = true;
-    # podman = {
-    #   enable = true;
-    #   dockerCompat = true;
-    #   dockerSocket.enable = true;
-    #   defaultNetwork.settings.dns_enabled = true;
-    # };
+    podman.enable = false;
   };
+
+  users.users.${username}.autoSubUidGidRange = true;
 }

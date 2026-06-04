@@ -32,7 +32,6 @@ in
 {
   imports = [
     ../modules/nixos/headless.nix
-    ../modules/nixos/docker.nix
   ];
 
   home-manager.users.${username} = {

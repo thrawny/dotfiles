@@ -10,6 +10,8 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 - `thrawny-desktop` - Desktop (x86_64-linux)
 - `thrawny-server` - Headless server (x86_64-linux)
 - `obelisk` - Headless service server (Forgejo, PostgreSQL) (x86_64-linux)
+- `headless` / `headless-docker` - Incus image with nested Docker (x86_64-linux)
+- `headless-podman` - Incus image with rootless Podman and Docker CLI compatibility (x86_64-linux)
 
 **Home Manager standalone:**
 - `thrawnym1` - MacBook M1 (aarch64-darwin)

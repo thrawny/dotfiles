@@ -111,6 +111,7 @@
           specialArgs = {
             inherit
               self
+              llm-agents
               zen-browser
               walker
               nurPkgs
@@ -177,6 +178,7 @@
             # system.nix requires these even if headless HM doesn't use them
             inherit
               self
+              llm-agents
               zen-browser
               walker
               nurPkgs
@@ -260,6 +262,23 @@
           system = "x86_64-linux";
           modules = [
             ./images/headless.nix
+            ./modules/nixos/docker.nix
+          ];
+        };
+
+        headless-docker = mkHeadlessHost {
+          system = "x86_64-linux";
+          modules = [
+            ./images/headless.nix
+            ./modules/nixos/docker.nix
+          ];
+        };
+
+        headless-podman = mkHeadlessHost {
+          system = "x86_64-linux";
+          modules = [
+            ./images/headless.nix
+            ./modules/nixos/podman.nix
           ];
         };
       };

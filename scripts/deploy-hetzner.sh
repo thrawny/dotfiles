@@ -59,6 +59,11 @@ stage_tailscale_auth_key() {
     chmod 600 "$tmpdir/etc/tailscale/auth-key"
 }
 
+generate_tailscale_auth_key() {
+    local tag="$1"
+    go run tailscale.com/cmd/get-authkey@latest -tags "$tag"
+}
+
 if [[ $# -lt 1 ]]; then
     usage
 fi
@@ -85,10 +90,12 @@ git clone --depth 1 "$DOTFILES_REPO" "$tmpdir/home/$USERNAME/dotfiles"
 
 if [[ "$FLAKE_TARGET" == "obelisk" ]]; then
     echo ""
-    echo "==> Tailscale auth key (optional, used on first boot)"
-    echo "    Generate at: https://login.tailscale.com/admin/settings/keys"
-    read -rsp "    Paste Tailscale auth key (leave empty to skip): " TAILSCALE_AUTH_KEY
-    echo ""
+    echo "==> Generating Tailscale auth key for tag:server..."
+    if ! TAILSCALE_AUTH_KEY="$(generate_tailscale_auth_key tag:server)"; then
+        echo "WARNING: failed to generate tag:server auth key; continuing without Tailscale auth key." >&2
+        echo "         Check Tailscale ACL tagOwners for tag:server, then add /etc/tailscale/auth-key later." >&2
+        TAILSCALE_AUTH_KEY=""
+    fi
     stage_tailscale_auth_key "$TAILSCALE_AUTH_KEY"
     stage_user_password
 fi

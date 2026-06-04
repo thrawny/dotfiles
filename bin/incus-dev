@@ -97,6 +97,7 @@ class Args:
     tailscale_ephemeral: bool = False
     tailscale_ssh: bool = False
     hermes: bool = False
+    image_variant: str = "headless"
     extra_packages: list[str] = field(default_factory=list)
 
 
@@ -163,6 +164,12 @@ def parse_args(argv: list[str]) -> Args:
         action="store_true",
         help="seed ~/.hermes/auth.json even if hermes is not installed",
     )
+    parser.add_argument(
+        "--image-variant",
+        choices=["headless", "headless-docker", "headless-podman"],
+        default="headless",
+        help="NixOS image variant to build and launch (default: headless, nested Docker).",
+    )
 
     if "--" in argv:
         sep = argv.index("--")
@@ -197,6 +204,7 @@ def parse_args(argv: list[str]) -> Args:
         tailscale_ephemeral=ns.tailscale_ephemeral,
         tailscale_ssh=ns.tailscale_ssh,
         hermes=ns.hermes,
+        image_variant=ns.image_variant,
         extra_packages=packages,
     )
 
@@ -285,12 +293,12 @@ def wait_user_shell(container: str, user: str, home: str) -> None:
         time.sleep(0.5)
 
 
-def build_headless_image(repo_root: Path) -> str:
+def build_headless_image(repo_root: Path, variant: str) -> str:
     return out_streaming_stderr(
         [
             "nix",
             "build",
-            f"{repo_root}/nix#nixosConfigurations.headless.config.system.build.images.incus",
+            f"{repo_root}/nix#nixosConfigurations.{variant}.config.system.build.images.incus",
             "--no-link",
             "--print-out-paths",
         ]
@@ -315,12 +323,12 @@ def image_property(image_ref: str, key: str) -> str:
     return ""
 
 
-def sync_image(remote: str, image_path: str) -> None:
-    ref = cref("headless", remote)
+def sync_image(remote: str, alias: str, image_path: str) -> None:
+    ref = cref(alias, remote)
     if image_property(ref, "nix_store_path") == image_path:
         logger.info("Image '%s' already up to date.", ref)
         return
-    logger.info("Importing headless image to '%s'.", remote)
+    logger.info("Importing %s image to '%s'.", alias, remote)
     run(
         [
             "incus",
@@ -331,18 +339,20 @@ def sync_image(remote: str, image_path: str) -> None:
             f"{remote}:",
             f"nix_store_path={image_path}",
             "--alias",
-            "headless",
+            alias,
             "--reuse",
         ]
     )
 
 
-def launch(container: str, name: str, remote: str, user: str, home: str) -> None:
+def launch(
+    container: str, name: str, remote: str, image_alias: str, user: str, home: str
+) -> None:
     run(
         [
             "incus",
             "init",
-            cref("headless", remote),
+            cref(image_alias, remote),
             container,
             "-c",
             "security.nesting=true",
@@ -1062,9 +1072,9 @@ def main(argv: list[str]) -> None:
         ensure_started(target)
         wait_user_shell(target, a.user, home)
     else:
-        image = build_headless_image(script_repo_root())
-        sync_image(a.remote, image)
-        launch(target, a.container_arg, a.remote, a.user, home)
+        image = build_headless_image(script_repo_root(), a.image_variant)
+        sync_image(a.remote, a.image_variant, image)
+        launch(target, a.container_arg, a.remote, a.image_variant, a.user, home)
     if not a.prepare:
         logger.info("Container '%s' is ready.", target)
         return

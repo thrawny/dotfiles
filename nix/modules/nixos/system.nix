@@ -60,6 +60,12 @@ in
       default = null;
       description = "Email to render in ~/.gitconfig.local (optional).";
     };
+
+    tailnetDomain = lib.mkOption {
+      type = lib.types.str;
+      default = "tailf85bba.ts.net";
+      description = "MagicDNS tailnet domain used for Tailscale Services.";
+    };
   };
 
   config = {
