@@ -90,49 +90,91 @@ local function restore_dadbod_query_buffer(buf)
     return
   end
 
+  if vim.b[buf].dbui_db_key_name and vim.b[buf].db and vim.b[buf].db ~= "" then
+    return
+  end
+
   local save_path = vim.fn.stdpath("data") .. "/dadbod_ui"
   local tmp_path = save_path .. "/tmp"
 
   require("lazy").load({ plugins = { "vim-dadbod", "vim-dadbod-ui", "vim-dadbod-completion" } })
 
-  -- connections_list() triggers s:init() to load saved connections without opening the drawer
   local conn_by_name = {}
-  for _, c in ipairs(vim.fn["db_ui#connections_list"]()) do
-    conn_by_name[c.name] = c.name .. "_" .. c.source
+  local function add_conn(name, source, url)
+    if name and name ~= "" then
+      conn_by_name[name] = {
+        key = name .. "_" .. source,
+        url = url,
+      }
+    end
   end
 
-  local parent = vim.fn.fnamemodify(path, ":h")
-  local db_name
-
-  if vim.fn.fnamemodify(parent, ":h") == save_path then
-    db_name = vim.fn.fnamemodify(parent, ":t")
-  elseif parent == tmp_path then
-    local filename = vim.fn.fnamemodify(path, ":t")
-    for name in pairs(conn_by_name) do
-      if filename:find("^" .. vim.pesc(name) .. "%-") then
-        db_name = name
-        break
+  if type(vim.g.dbs) == "table" then
+    if vim.g.dbs[1] then
+      for _, db in ipairs(vim.g.dbs) do
+        add_conn(db.name, "g:dbs", db.url)
+      end
+    else
+      for name, url in pairs(vim.g.dbs) do
+        add_conn(name, "g:dbs", url)
       end
     end
   end
 
-  local key = db_name and conn_by_name[db_name]
-  if key then
-    local info = vim.fn["db_ui#get_conn_info"](key)
-    if info.conn and info.conn ~= "" then
-      vim.b[buf].dbui_db_key_name = key
-      vim.b[buf].db = info.conn
+  local parent = vim.fn.fnamemodify(path, ":h")
+
+  local function infer_db_name()
+    if parent == tmp_path then
+      local filename = vim.fn.fnamemodify(path, ":t")
+      local best
+      for name in pairs(conn_by_name) do
+        if filename:find("^" .. vim.pesc(name) .. "%-") and (not best or #name > #best) then
+          best = name
+        end
+      end
+      return best
+    elseif vim.fn.fnamemodify(parent, ":h") == save_path then
+      return vim.fn.fnamemodify(parent, ":t")
     end
   end
 
-  -- Set/re-trigger filetype so treesitter + dadbod ftplugin apply
+  local db_name = infer_db_name()
+  local conn = db_name and conn_by_name[db_name]
+
+  if not conn then
+    -- connections_list() triggers s:init() to load saved/file/env connections without opening the drawer.
+    -- Only call it when project-local g:dbs was not enough: URL functions may depend on env vars.
+    local ok, connections = pcall(vim.fn["db_ui#connections_list"])
+    if ok then
+      for _, c in ipairs(connections) do
+        add_conn(c.name, c.source, c.url)
+      end
+    end
+    db_name = db_name or infer_db_name()
+    conn = db_name and conn_by_name[db_name]
+  end
+
+  -- Set/re-trigger filetype so treesitter + dadbod ftplugin apply.
+  -- Do this before restoring dbui buffer vars: vim-dadbod-completion's
+  -- FileType hook tries to connect immediately when b:dbui_db_key_name is set.
   vim.api.nvim_buf_call(buf, function()
     if vim.bo.filetype ~= "sql" then
       vim.bo.filetype = "sql"
-    else
+    elseif not vim.b[buf].dbui_db_key_name then
       vim.cmd("doautocmd FileType sql")
     end
   end)
+
+  if conn then
+    local ok_url, url = true, conn.url
+    if type(url) == "function" then
+      ok_url, url = pcall(url)
+    end
+    if ok_url and url and url ~= "" then
+      vim.b[buf].dbui_db_key_name = conn.key
+      vim.b[buf].db = url
+    end
+  end
 end
 
 -- Wipe dadbod-ui special buffers before session save (they can't be restored properly)
