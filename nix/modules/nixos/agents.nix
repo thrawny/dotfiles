@@ -9,6 +9,7 @@ let
   inherit (pkgs.stdenv.hostPlatform) system;
   llmPkgs = llm-agents.packages.${system};
   openclaw = import ./openclaw.nix { inherit config lib pkgs; };
+  hermes = import ./hermes.nix { inherit config lib pkgs; };
   commonPath = [
     llmPkgs.claude-code
     llmPkgs.codex
@@ -57,6 +58,9 @@ let
       package,
       command,
       execStartPre ? [ ],
+      environmentFile ? "/srv/agents/${agentName}/env",
+      extraEnvironment ? { },
+      extraServiceConfig ? { },
     }:
     {
       systemd.services.${name} = {
@@ -79,12 +83,13 @@ let
           LOGNAME = user;
           XDG_RUNTIME_DIR = "/run/user/${toString uid}";
           DOCKER_HOST = "unix:///run/user/${toString uid}/podman/podman.sock";
-        };
+        }
+        // extraEnvironment;
         serviceConfig = {
           User = user;
           Group = user;
           WorkingDirectory = "/srv/agents/${agentName}/workspace";
-          EnvironmentFile = "-/srv/agents/${agentName}/env";
+          EnvironmentFile = "-${environmentFile}";
           ExecStart = command;
           Restart = "always";
           RestartSec = 10;
@@ -96,6 +101,7 @@ let
           ];
           TasksMax = 4096;
         }
+        // extraServiceConfig
         // lib.optionalAttrs (execStartPre != [ ]) { ExecStartPre = execStartPre; };
       };
     };
@@ -138,12 +144,6 @@ lib.mkMerge [
         wants = [ "openclaw.service" ];
         after = [ "openclaw.service" ];
       };
-
-      hermes = {
-        target = "http://127.0.0.1:9119";
-        wants = [ "hermes-dashboard.service" ];
-        after = [ "hermes-dashboard.service" ];
-      };
     };
   }
 
@@ -172,14 +172,9 @@ lib.mkMerge [
     uid = 3102;
     package = llmPkgs.hermes-agent;
     command = "${llmPkgs.hermes-agent}/bin/hermes gateway run --replace --accept-hooks";
-  })
-
-  (mkAgentService {
-    name = "hermes-dashboard";
-    agentName = "hermes";
-    uid = 3102;
-    user = "hermes";
-    package = llmPkgs.hermes-agent;
-    command = "${llmPkgs.hermes-agent}/bin/hermes dashboard --host 127.0.0.1 --port 9119 --no-open --skip-build";
+    environmentFile = hermes.envFile;
+    extraEnvironment.HERMES_HOME = "${hermes.home}/.hermes";
+    execStartPre = [ "+${hermes.prepareConfig}/bin/hermes-prepare-config" ];
+    extraServiceConfig.TimeoutStopSec = 240;
   })
 ]

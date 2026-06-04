@@ -56,6 +56,12 @@ in
 
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
+  environment.systemPackages = with pkgs; [
+    btop
+    ncurses
+    (lib.hiPrio ghostty.terminfo)
+  ];
+
   boot.loader.grub = {
     enable = true;
     efiSupport = true;

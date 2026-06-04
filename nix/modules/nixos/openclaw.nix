@@ -116,7 +116,7 @@ let
           channels = {
             "777231848123924561" = {
               enabled = true;
-              requireMention = false;
+              requireMention = true;
               users = [ "231780291440672768" ];
             };
             "1510629338264113252" = {
@@ -127,6 +127,12 @@ let
               autoThread = true;
               autoThreadName = "message";
               autoArchiveDuration = 1440;
+            };
+            "1512036786870685696" = {
+              enabled = true;
+              requireMention = false;
+              users = [ "231780291440672768" ];
+              includeThreadStarter = true;
             };
             "*" = {
               enabled = true;
