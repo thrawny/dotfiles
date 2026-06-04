@@ -18,6 +18,7 @@ let
     pkgs.bun
     pkgs.coreutils
     pkgs.fd
+    pkgs.forgejo-cli
     pkgs.gh
     pkgs.git
     pkgs.go

@@ -37,6 +37,7 @@
 
     # Git
     gh
+    forgejo-cli
     lazygit
     git
     git-lfs

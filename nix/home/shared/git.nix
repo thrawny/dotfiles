@@ -31,6 +31,11 @@ in
         editor = ''nvim -c 'autocmd VimLeave * call system("printf \\033c")' '';
       };
 
+      "credential \"https://forgejo.tailf85bba.ts.net\"" = {
+        helper = "store";
+        username = "thrawny";
+      };
+
       init.defaultBranch = "main";
       merge.conflictStyle = "zdiff3";
       rerere.enabled = true;
