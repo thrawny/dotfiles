@@ -38,6 +38,9 @@ let
     };
     canvasHost.enabled = false;
     tools = {
+      profile = "full";
+      fs.workspaceOnly = true;
+      exec.applyPatch.workspaceOnly = true;
       web.search = {
         enabled = true;
         openaiCodex = {
@@ -45,7 +48,6 @@ let
           mode = "cached";
         };
       };
-      allow = [ "group:web" ];
     };
     agents = {
       defaults = {

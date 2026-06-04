@@ -23,6 +23,7 @@ let
     pkgs.go
     pkgs.jq
     pkgs.nodejs
+    pkgs.nix
     pkgs.pnpm
     pkgs.podman
     pkgs.python3
