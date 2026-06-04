@@ -29,6 +29,7 @@
     ./waybar.nix
     ./zen-browser.nix
     ./gtk.nix
+    ./viewers.nix
   ];
 
   home = {
@@ -38,7 +39,7 @@
 
     packages = with pkgs; [
       vesktop # Discord client with Wayland screen sharing support
-      zathura # PDF viewer with vim keybindings and auto-reload
     ];
   };
+
 }
