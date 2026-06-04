@@ -8,6 +8,7 @@
 let
   inherit (pkgs.stdenv.hostPlatform) system;
   llmPkgs = llm-agents.packages.${system};
+  openclaw = import ./openclaw.nix { inherit config lib pkgs; };
   commonPath = [
     llmPkgs.claude-code
     llmPkgs.codex
@@ -55,6 +56,7 @@ let
       user ? agentName,
       package,
       command,
+      execStartPre ? [ ],
     }:
     {
       systemd.services.${name} = {
@@ -93,7 +95,8 @@ let
             "/srv/agents/${agentName}"
           ];
           TasksMax = 4096;
-        };
+        }
+        // lib.optionalAttrs (execStartPre != [ ]) { ExecStartPre = execStartPre; };
       };
     };
 in
@@ -121,6 +124,8 @@ lib.mkMerge [
       "d /srv/agents 0755 root root -"
       "d /srv/agents/openclaw 0750 openclaw openclaw -"
       "d /srv/agents/openclaw/home 0750 openclaw openclaw -"
+      "d /srv/agents/openclaw/home/.openclaw 0750 openclaw openclaw -"
+      "d /srv/agents/openclaw/home/.openclaw/secrets 0700 openclaw openclaw -"
       "d /srv/agents/openclaw/workspace 0750 openclaw openclaw -"
       "d /srv/agents/hermes 0750 hermes hermes -"
       "d /srv/agents/hermes/home 0750 hermes hermes -"
@@ -159,6 +164,7 @@ lib.mkMerge [
     uid = 3101;
     package = llmPkgs.openclaw;
     command = "${llmPkgs.openclaw}/bin/openclaw gateway run --bind loopback --port 18789 --tailscale off --allow-unconfigured --force";
+    execStartPre = [ "+${openclaw.prepareConfig}/bin/openclaw-prepare-config" ];
   })
 
   (mkAgentService {
