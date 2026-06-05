@@ -105,11 +105,25 @@ let
     meta.mainProgram = "t3";
   });
 
+  codexWithDirenv = pkgs.writeShellApplication {
+    name = "t3code-codex";
+    runtimeInputs = [
+      pkgs.direnv
+      llmPkgs.codex
+    ];
+    text = ''
+      set -euo pipefail
+
+      export DIRENV_LOG_FORMAT=
+      exec direnv exec "$PWD" ${lib.getExe llmPkgs.codex} "$@"
+    '';
+  };
+
   serverSettings = pkgs.writeText "t3code-settings.json" (
     builtins.toJSON {
       providers = {
         codex = {
-          binaryPath = "codex";
+          binaryPath = lib.getExe codexWithDirenv;
           homePath = codexHome;
         };
         claudeAgent.enabled = false;
@@ -174,7 +188,28 @@ let
       cd ${lib.escapeShellArg repos}
     fi
 
+    eval "$(${lib.getExe pkgs.direnv} hook zsh)"
     eval "$(${lib.getExe pkgs.starship} init zsh)"
+  '';
+
+  zshenv = pkgs.writeText "t3code-zshenv" ''
+    if [ -z "''${T3CODE_DIRENV_ZSHENV:-}" ] && command -v direnv >/dev/null 2>&1; then
+      export T3CODE_DIRENV_ZSHENV=1
+      export DIRENV_LOG_FORMAT="''${DIRENV_LOG_FORMAT-}"
+      eval "$(direnv export zsh 2>/dev/null || true)"
+      unset T3CODE_DIRENV_ZSHENV
+    fi
+  '';
+
+  direnvrc = pkgs.writeText "t3code-direnvrc" ''
+    source ${pkgs.nix-direnv}/share/nix-direnv/direnvrc
+    dotenv_if_exists .env
+    dotenv_if_exists .env.local
+    dotenv_if_exists .secrets
+  '';
+  direnvConfig = pkgs.writeText "t3code-direnv.toml" ''
+    [whitelist]
+    prefix = [${builtins.toJSON repos}]
   '';
 
   prepare = pkgs.writeShellApplication {
@@ -195,6 +230,7 @@ let
       install -d -m 0750 ${lib.escapeShellArg state}
       install -d -m 0700 ${lib.escapeShellArg codexHome}
       install -d -m 0750 ${lib.escapeShellArg "${codexHome}/skills"}
+      install -d -m 0750 ${lib.escapeShellArg "${home}/.config/direnv"}
       install -d -m 0700 ${lib.escapeShellArg "${home}/.config/forgejo"}
       install -d -m 0700 ${lib.escapeShellArg "${home}/.local/share/forgejo-cli"}
 
@@ -235,9 +271,10 @@ let
       fi
       settings_tmp="$(mktemp)"
       jq \
+        --arg codex_binary ${lib.escapeShellArg (lib.getExe codexWithDirenv)} \
         --arg codex_home ${lib.escapeShellArg codexHome} \
         '
-          .providers.codex.binaryPath = "codex"
+          .providers.codex.binaryPath = $codex_binary
           | .providers.codex.homePath = $codex_home
           | .providers.claudeAgent.enabled = false
           | .providers.cursor.enabled = false
@@ -251,6 +288,9 @@ let
       rm -f "$settings_tmp"
 
       install -m 0600 ${gitConfig} ${lib.escapeShellArg "${home}/.gitconfig"}
+      install -m 0644 ${direnvConfig} ${lib.escapeShellArg "${home}/.config/direnv/direnv.toml"}
+      install -m 0644 ${direnvrc} ${lib.escapeShellArg "${home}/.config/direnv/direnvrc"}
+      install -m 0644 ${zshenv} ${lib.escapeShellArg "${home}/.zshenv"}
       install -m 0644 ${zshrc} ${lib.escapeShellArg "${home}/.zshrc"}
       install -m 0644 ${forgejoGuide} ${lib.escapeShellArg "${repos}/FORGEJO.md"}
 
@@ -296,6 +336,9 @@ in
   };
 
   environment.systemPackages = [
+    pkgs.direnv
+    codexWithDirenv
+    pkgs.nix-direnv
     package
     pkgs.podman-compose
     prepare
@@ -324,14 +367,17 @@ in
     ];
     path = [
       package
+      codexWithDirenv
       llmPkgs.codex
       pkgs.bashInteractive
       pkgs.coreutils
+      pkgs.direnv
       pkgs.fd
       pkgs.forgejo-cli
       pkgs.git
       pkgs.jq
       pkgs.nodejs
+      pkgs.nix-direnv
       pkgs.nix
       pkgs.podman
       pkgs.python3
