@@ -50,8 +50,10 @@ in
     hostName = "obelisk";
     firewall = {
       enable = true;
-      allowedTCPPorts = [ 22 ];
       trustedInterfaces = [ "tailscale0" ];
+      extraCommands = ''
+        iptables -A nixos-fw -p tcp --dport 22 -s 84.216.114.142/32 -j nixos-fw-accept
+      '';
     };
   };
 
