@@ -624,6 +624,7 @@
         "nixpkgs-xwayland": "nixpkgs-xwayland",
         "nur": "nur",
         "srvos": "srvos",
+        "t3code": "t3code",
         "walker": "walker",
         "xremap-flake": "xremap-flake",
         "zen-browser": "zen-browser",
@@ -722,6 +723,22 @@
       "original": {
         "owner": "nix-systems",
         "repo": "default",
+        "type": "github"
+      }
+    },
+    "t3code": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1780555640,
+        "narHash": "sha256-jANUy4fgj35rtDdqwVhGx7JHaxBVnTEHbR1/+A6TzBI=",
+        "owner": "pingdotgg",
+        "repo": "t3code",
+        "rev": "a6edad19742869a1f3254292fd1b24e153b03901",
+        "type": "github"
+      },
+      "original": {
+        "owner": "pingdotgg",
+        "repo": "t3code",
         "type": "github"
       }
     },

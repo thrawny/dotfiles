@@ -26,6 +26,10 @@
     srvos.url = "github:nix-community/srvos";
     srvos.inputs.nixpkgs.follows = "nixpkgs";
     llm-agents.url = "github:numtide/llm-agents.nix";
+    t3code = {
+      url = "github:pingdotgg/t3code";
+      flake = false;
+    };
     zmx.url = "github:thrawny/zmx-flake";
     agent-browser = {
       url = "github:vercel-labs/agent-browser";
@@ -58,6 +62,7 @@
       disko,
       srvos,
       llm-agents,
+      t3code,
       zmx,
       agent-browser,
       mattpocock-skills,
@@ -66,16 +71,6 @@
     }:
     let
       inherit (nixpkgs) lib;
-      flakeArgs = {
-        inherit
-          llm-agents
-          agent-browser
-          anthropic-skills
-          mattpocock-skills
-          nix-index-database
-          zmx
-          ;
-      };
       storeHomeAssets = {
         config = builtins.path {
           path = ../config;
@@ -93,6 +88,24 @@
           path = ../bin;
           name = "dotfiles-bin";
         };
+      };
+      agentAssets = import ./lib/agent-skills.nix {
+        inherit
+          agent-browser
+          anthropic-skills
+          lib
+          mattpocock-skills
+          ;
+        containerAssets = storeHomeAssets;
+      };
+      flakeArgs = {
+        inherit
+          agentAssets
+          llm-agents
+          nix-index-database
+          zmx
+          ;
+        containerAssets = storeHomeAssets;
       };
 
       mkHost =
@@ -112,6 +125,8 @@
             inherit
               self
               llm-agents
+              agentAssets
+              t3code
               zen-browser
               walker
               nurPkgs
@@ -152,9 +167,7 @@
               ];
             }
             {
-              home-manager.extraSpecialArgs = flakeArgs // {
-                containerAssets = storeHomeAssets;
-              };
+              home-manager.extraSpecialArgs = flakeArgs;
             }
           ]
           ++ modules;
@@ -179,6 +192,8 @@
             inherit
               self
               llm-agents
+              agentAssets
+              t3code
               zen-browser
               walker
               nurPkgs
@@ -192,9 +207,7 @@
             disko.nixosModules.disko
             zmx.nixosModules.cache
             {
-              home-manager.extraSpecialArgs = flakeArgs // {
-                containerAssets = storeHomeAssets;
-              };
+              home-manager.extraSpecialArgs = flakeArgs;
             }
 
           ]
@@ -209,12 +222,7 @@
         }:
         home-manager.lib.homeManagerConfiguration {
           inherit pkgs modules;
-          extraSpecialArgs =
-            extraSpecialArgs
-            // flakeArgs
-            // {
-              containerAssets = storeHomeAssets;
-            };
+          extraSpecialArgs = extraSpecialArgs // flakeArgs;
         };
 
     in

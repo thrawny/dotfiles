@@ -31,7 +31,9 @@ let
     pkgs.podman
     pkgs.python3
     pkgs.ripgrep
+    pkgs.starship
     pkgs.uv
+    pkgs.zsh
   ];
 
   mkAgentUser =
@@ -50,6 +52,7 @@ let
         createHome = true;
         autoSubUidGidRange = true;
         linger = true;
+        shell = pkgs.zsh;
       };
     };
 
@@ -117,6 +120,8 @@ let
       botUser,
       botDisplayName,
       botEmail,
+      uid,
+      extraExports ? { },
       workspace ? "/srv/agents/${agentName}/workspace",
     }:
     let
@@ -155,6 +160,26 @@ let
         - Create a PR from a branch: `fj pr create --repo <owner>/<repo> --head <branch> --base main --autofill`
         - Check auth: `fj whoami`
       '';
+      zshExports = {
+        DOCKER_HOST = "unix:///run/user/${toString uid}/podman/podman.sock";
+        FJ_FALLBACK_HOST = forgejoUrl;
+        XDG_RUNTIME_DIR = "/run/user/${toString uid}";
+      }
+      // extraExports;
+      exportLines = lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (name: value: "export ${name}=${lib.escapeShellArg value}") zshExports
+      );
+      zshrc = pkgs.writeText "${agentName}-zshrc" ''
+        export PATH=/run/current-system/sw/bin:$PATH
+        export COLORTERM=truecolor
+        ${exportLines}
+
+        if [ -d ${lib.escapeShellArg workspace} ]; then
+          cd ${lib.escapeShellArg workspace}
+        fi
+
+        eval "$(${lib.getExe pkgs.starship} init zsh)"
+      '';
     in
     pkgs.writeShellApplication {
       name = "${agentName}-forgejo-bootstrap";
@@ -178,6 +203,7 @@ let
         install -d -m 0700 -o ${agentName} -g ${agentName} "$fj_keys_dir"
 
         install -m 0600 -o ${agentName} -g ${agentName} ${gitConfig} "$agent_home/.gitconfig"
+        install -m 0644 -o ${agentName} -g ${agentName} ${zshrc} "$agent_home/.zshrc"
         install -m 0644 -o ${agentName} -g ${agentName} ${forgejoGuide} "$workspace/FORGEJO.md"
 
         if [ -r "$token_path" ]; then
@@ -269,6 +295,7 @@ lib.mkMerge [
           botUser = "gestral-bot";
           botDisplayName = "Gestral Vendor";
           botEmail = "gestral-bot@obelisk.local";
+          uid = 3101;
           workspace = openclaw.workspace;
         }
       }/bin/openclaw-forgejo-bootstrap"
@@ -290,6 +317,8 @@ lib.mkMerge [
           botUser = "maelle-bot";
           botDisplayName = "Maelle";
           botEmail = "maelle-bot@obelisk.local";
+          uid = 3102;
+          extraExports.HERMES_HOME = "${hermes.home}/.hermes";
           workspace = hermes.workspace;
         }
       }/bin/hermes-forgejo-bootstrap"

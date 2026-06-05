@@ -35,7 +35,7 @@ let
 
     discord = {
       require_mention = true;
-      thread_require_mention = true;
+      thread_require_mention = false;
       auto_thread = true;
       reactions = true;
       allowed_channels = [
@@ -104,7 +104,7 @@ in
       set_env_var DISCORD_FREE_RESPONSE_CHANNELS 1512036755673448579
       set_env_var DISCORD_ALLOW_ALL_USERS false
       set_env_var DISCORD_REQUIRE_MENTION true
-      set_env_var DISCORD_THREAD_REQUIRE_MENTION true
+      set_env_var DISCORD_THREAD_REQUIRE_MENTION false
 
       chown hermes:hermes "$env_path"
       chmod 0600 "$env_path"

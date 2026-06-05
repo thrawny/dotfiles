@@ -13,6 +13,7 @@ in
     ../../modules/nixos/tailscale-serve.nix
     ../../modules/nixos/forgejo.nix
     ../../modules/nixos/agents.nix
+    ../../modules/nixos/t3code.nix
     ./hardware-configuration.nix
     ./disko.nix
   ];

@@ -29,3 +29,9 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 ## Host-Specific Packages
 
 Global packages go in `home/shared/packages/core.nix`, `workstation.nix`, `cloud.nix`, and `ai.nix`. Host-specific packages are wired into `flake.nix` via each host's Home Manager modules.
+
+## After Changes
+
+- Run `nixfmt` on edited Nix files.
+- For non-trivial Nix changes, run `just check` from the repo root to format, lint, and evaluate.
+- After larger NixOS changes on a NixOS host, run `just -f nix/Justfile diff` from the repo root to compare the build against `/run/current-system` with `nvd`.
