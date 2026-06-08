@@ -7,7 +7,7 @@ usage() {
     echo "Upload Claude/Codex/Pi auth files to a remote host."
     echo ""
     echo "Example:"
-    echo "  $0 thrawny-server"
+    echo "  $0 obelisk"
     exit 1
 }
 

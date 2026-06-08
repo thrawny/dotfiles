@@ -296,7 +296,7 @@ lib.mkMerge [
           botDisplayName = "Gestral Vendor";
           botEmail = "gestral-bot@obelisk.local";
           uid = 3101;
-          workspace = openclaw.workspace;
+          inherit (openclaw) workspace;
         }
       }/bin/openclaw-forgejo-bootstrap"
       "+${openclaw.prepareConfig}/bin/openclaw-prepare-config"
@@ -319,7 +319,7 @@ lib.mkMerge [
           botEmail = "maelle-bot@obelisk.local";
           uid = 3102;
           extraExports.HERMES_HOME = "${hermes.home}/.hermes";
-          workspace = hermes.workspace;
+          inherit (hermes) workspace;
         }
       }/bin/hermes-forgejo-bootstrap"
       "+${hermes.prepareConfig}/bin/hermes-prepare-config"

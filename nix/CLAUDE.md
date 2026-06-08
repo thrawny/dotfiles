@@ -5,10 +5,8 @@ Flake-based configuration for NixOS systems and standalone Home Manager.
 ## Flake Targets
 
 **NixOS systems:**
-- `thinkpad` - ThinkPad T14 Gen 1 (i5-10310U, 16GB RAM, 256GB NVMe, FHD) (x86_64-linux)
 - `thrawny-z13` - ThinkPad Z13 Gen 2 (Ryzen 7 PRO 7840U, 64GB RAM, 2TB NVMe, 2.8K OLED, 4G) (x86_64-linux)
 - `thrawny-desktop` - Desktop (x86_64-linux)
-- `thrawny-server` - Headless server (x86_64-linux)
 - `obelisk` - Headless service server (Forgejo, PostgreSQL) (x86_64-linux)
 - `headless` / `headless-docker` - Incus image with nested Docker (x86_64-linux)
 - `headless-podman` - Incus image with rootless Podman and Docker CLI compatibility (x86_64-linux)

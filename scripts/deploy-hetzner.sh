@@ -6,7 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-FLAKE_TARGET="${2:-thrawny-server}"
+FLAKE_TARGET="${2:-obelisk}"
 DOTFILES_REPO="https://github.com/thrawny/dotfiles.git"
 USERNAME="thrawny"
 TAILSCALE_AUTH_KEY=""
@@ -16,11 +16,10 @@ usage() {
     echo ""
     echo "Arguments:"
     echo "  target-host   SSH target (e.g., root@157.90.168.158)"
-    echo "  flake-target  NixOS flake target (default: thrawny-server)"
+    echo "  flake-target  NixOS flake target (default: obelisk)"
     echo ""
     echo "Example:"
     echo "  $0 root@157.90.168.158"
-    echo "  $0 root@157.90.168.158 thrawny-server"
     echo "  $0 root@157.90.168.158 obelisk"
     exit 1
 }

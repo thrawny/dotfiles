@@ -228,14 +228,6 @@
     in
     {
       nixosConfigurations = {
-        thinkpad = mkHost {
-          system = "x86_64-linux";
-          modules = [
-            nixos-hardware.nixosModules.lenovo-thinkpad-t14-intel-gen1
-            ./hosts/thinkpad/default.nix
-          ];
-        };
-
         thrawny-z13 = mkHost {
           system = "x86_64-linux";
           modules = [
@@ -249,13 +241,6 @@
           modules = [
             nixos-hardware.nixosModules.common-cpu-amd
             ./hosts/desktop/default.nix
-          ];
-        };
-
-        thrawny-server = mkHeadlessHost {
-          system = "x86_64-linux";
-          modules = [
-            ./hosts/thrawny-server/default.nix
           ];
         };
 
