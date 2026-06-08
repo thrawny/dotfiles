@@ -111,11 +111,16 @@ in
     packages = with pkgs; [
       inter
       noto-fonts
+      noto-fonts-cjk-sans
+      noto-fonts-cjk-serif
       noto-fonts-color-emoji
       nerd-fonts.caskaydia-mono
     ];
     fontconfig = {
-      defaultFonts.sansSerif = [ "Inter" ];
+      defaultFonts.sansSerif = [
+        "Inter"
+        "Noto Sans CJK KR"
+      ];
       localConf = ''
         <?xml version="1.0"?>
         <!DOCTYPE fontconfig SYSTEM "urn:fontconfig:fonts.dtd">
