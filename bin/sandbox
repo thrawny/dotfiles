@@ -57,9 +57,13 @@ sandbox() {
     esac
   done
 
-  # Repository-local sandbox overrides. If present, remove any variables defined
-  # by .secrets from the inherited environment, then source .secrets.sandbox.
-  # This makes .secrets.sandbox a replacement for .secrets, not a partial merge.
+  # Repository-local sandbox overrides. Remove variables defined by files that
+  # are intentionally outside-sandbox only from the inherited environment, then
+  # source sandbox-specific replacements when present.
+  unset_env_names_from_file "$PWD/.envrc.local"
+  load_env_file "$PWD/.envrc.sandbox"
+
+  # If present, .secrets.sandbox is a replacement for .secrets, not a partial merge.
   if [[ -f "$PWD/.secrets.sandbox" ]]; then
     unset_env_names_from_file "$PWD/.secrets"
     load_env_file "$PWD/.secrets.sandbox"
