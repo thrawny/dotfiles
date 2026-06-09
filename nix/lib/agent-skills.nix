@@ -54,6 +54,7 @@ let
     agent-browser.source = agent-browser + "/skills/agent-browser";
     frontend-design.source = anthropic-skills + "/skills/frontend-design";
     skill-creator.source = anthropic-skills + "/skills/skill-creator";
+    teach.source = mattpocock-skills + "/skills/productivity/teach";
     grill-with-docs.source = mattpocock-skills + "/skills/engineering/grill-with-docs";
     improve-codebase-architecture.source =
       mattpocock-skills + "/skills/engineering/improve-codebase-architecture";
