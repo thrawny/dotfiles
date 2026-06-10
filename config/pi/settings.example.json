@@ -14,7 +14,7 @@
     "npm:@sting8k/pi-vcc",
     "npm:pi-subdir-context",
     "git:github.com/PurpleMyst/pi-goal",
-    "npm:@diegopetrucci/pi-openai-fast"
+    "npm:@howaboua/pi-codex-conversion"
   ],
   "lastChangelogVersion": "0.75.4",
   "hideThinkingBlock": true

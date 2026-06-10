@@ -68,6 +68,39 @@ function truncate(text: string, maxLen = 20): string {
 	return `${text.slice(0, maxLen - 1)}…`;
 }
 
+function stripAnsi(text: string): string {
+	return text.replace(
+		new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, "g"),
+		"",
+	);
+}
+
+export function normalizeExtensionStatuses(
+	statuses: Iterable<string>,
+): string[] {
+	let hasFast = false;
+	const normalized: string[] = [];
+
+	for (const status of statuses) {
+		const parts = status
+			.split("•")
+			.map((part) => part.trim())
+			.filter((part) => part.length > 0);
+
+		const keptParts = parts.filter((part) => {
+			if (stripAnsi(part).trim().toLowerCase() !== "fast") return true;
+			hasFast = true;
+			return false;
+		});
+
+		if (keptParts.length > 0) {
+			normalized.push(keptParts.join(" • "));
+		}
+	}
+
+	return hasFast ? ["fast", ...normalized] : normalized;
+}
+
 function envFlagSet(name: string): boolean {
 	const value = process.env[name];
 	if (!value) return false;
@@ -211,11 +244,9 @@ function install(
 							? `${rightText} • thinking off`
 							: `${rightText} • ${thinking}`;
 				}
-				const extensionStatuses = [
-					...footerData.getExtensionStatuses().values(),
-				]
-					.map((status) => status.trim())
-					.filter((status) => status.length > 0);
+				const extensionStatuses = normalizeExtensionStatuses(
+					footerData.getExtensionStatuses().values(),
+				);
 				if (extensionStatuses.length > 0) {
 					rightText = `${rightText} • ${extensionStatuses.join(" • ")}`;
 				}
