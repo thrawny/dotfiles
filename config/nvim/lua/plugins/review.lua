@@ -202,7 +202,11 @@ return {
           function()
             local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
             local tabpage = vim.api.nvim_get_current_tabpage()
-            if ok and lifecycle.get_session(tabpage) and require("codediff.review.hooks").get_current_tabpage() == tabpage then
+            if
+              ok
+              and lifecycle.get_session(tabpage)
+              and require("codediff.review.hooks").get_current_tabpage() == tabpage
+            then
               restore_review_buffers(lifecycle, tabpage)
               require("codediff.review").close({ preview = true })
             else
