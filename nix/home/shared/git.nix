@@ -26,7 +26,7 @@ in
       };
 
       core = {
-        pager = "less -F -X";
+        pager = "hunk pager";
         autocrlf = "input";
         editor = ''nvim -c 'autocmd VimLeave * call system("printf \\033c")' '';
       };

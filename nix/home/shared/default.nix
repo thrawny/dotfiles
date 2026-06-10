@@ -19,6 +19,7 @@
     ./direnv.nix
     ./git.nix
     ./ghostty.nix
+    ./hunk.nix
     ./k9s.nix
     ./lazygit.nix
     ./npm.nix

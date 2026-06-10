@@ -7,6 +7,8 @@
     nixpkgs-xwayland.url = "github:NixOS/nixpkgs/b60793b86201040d9dee019a05089a9150d08b5b";
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
+    hunk.url = "github:modem-dev/hunk";
+    hunk.inputs.nixpkgs.follows = "nixpkgs";
     nix-index-database.url = "github:Mic92/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
     nixos-hardware.url = "github:NixOS/nixos-hardware";
@@ -50,6 +52,7 @@
       self,
       nixpkgs,
       home-manager,
+      hunk,
       nix-index-database,
       nixos-hardware,
       nur,
@@ -101,6 +104,7 @@
       flakeArgs = {
         inherit
           agentAssets
+          hunk
           llm-agents
           nix-index-database
           zmx
