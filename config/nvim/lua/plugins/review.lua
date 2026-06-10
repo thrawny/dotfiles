@@ -8,25 +8,34 @@ if (vim.uv or vim.loop).fs_stat(codediff_dir) then
   codediff_spec.dir = codediff_dir
 else
   codediff_spec[1] = "thrawny/codediff.nvim"
-  codediff_spec.branch = "tab-hunk-crossfile"
+  codediff_spec.branch = "main"
 end
 
-local review_dir = vim.fn.expand("~/code/review.nvim")
-local review_spec = {
-  name = "review.nvim",
+local review_opts = {
+  keymaps = {
+    next_file = false,
+    prev_file = false,
+  },
+  codediff = {
+    focus_modified_pane = false,
+  },
+  popup = {
+    show_type_selector = false,
+  },
+  export = {
+    format = "compact",
+  },
 }
-
-if (vim.uv or vim.loop).fs_stat(review_dir) then
-  review_spec.dir = review_dir
-else
-  review_spec[1] = "thrawny/review.nvim"
-  review_spec.branch = "review-integration-options"
-end
 
 return {
   vim.tbl_extend("force", codediff_spec, {
+    dependencies = {
+      "MunifTanjim/nui.nvim",
+    },
+    cmd = { "CodeDiff", "CodeReview", "Review" },
     config = function(_, opts)
       require("codediff").setup(opts)
+      require("codediff.review").setup(review_opts)
     end,
     init = function()
       -- Custom tabline: show "Review" for codediff tabs
@@ -167,6 +176,66 @@ return {
         end,
       })
     end,
+    keys = function()
+      local function restore_review_buffers(lifecycle, tabpage)
+        local orig_buf, mod_buf = lifecycle.get_buffers(tabpage)
+        for _, buf in ipairs({ orig_buf, mod_buf }) do
+          if buf and vim.api.nvim_buf_is_valid(buf) then
+            vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
+            vim.api.nvim_set_option_value("readonly", false, { buf = buf })
+          end
+        end
+      end
+
+      local function export_review_to_clipboard_only()
+        local review = require("codediff.review")
+        if review.count() == 0 then
+          vim.notify("No comments to export", vim.log.levels.WARN, { title = "codediff.review" })
+          return
+        end
+        require("codediff.review.export").to_clipboard(false)
+      end
+
+      return {
+        {
+          "<leader>rr",
+          function()
+            local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
+            local tabpage = vim.api.nvim_get_current_tabpage()
+            if ok and lifecycle.get_session(tabpage) and require("codediff.review.hooks").get_current_tabpage() == tabpage then
+              restore_review_buffers(lifecycle, tabpage)
+              require("codediff.review").close({ preview = true })
+            else
+              vim.cmd("Review")
+            end
+          end,
+          desc = "Review",
+        },
+        { "<leader>rm", "<cmd>Review commits main HEAD<cr>", desc = "Review main..HEAD" },
+        { "<leader>rc", "<cmd>Review commits<cr>", desc = "Review commits" },
+        { "<leader>rp", "<cmd>Review pr<cr>", desc = "Review GitHub PR" },
+        {
+          "<leader>re",
+          export_review_to_clipboard_only,
+          desc = "Review export",
+        },
+        {
+          "<leader>rx",
+          function()
+            local review = require("codediff.review")
+            local lifecycle = require("codediff.ui.lifecycle")
+            local tabpage = vim.api.nvim_get_current_tabpage()
+            export_review_to_clipboard_only()
+            restore_review_buffers(lifecycle, tabpage)
+            review.clear()
+            vim.cmd("tabclose")
+            require("codediff.review.hooks").on_session_closed()
+            require("codediff.review.storage").clear_revisions()
+          end,
+          desc = "Review close + clear",
+        },
+      }
+    end,
     opts = {
       highlights = {
         line_insert = "#004466",
@@ -186,101 +255,6 @@ return {
           next_file = "<C-n>",
           prev_file = "<C-p>",
         },
-      },
-    },
-  }),
-
-  vim.tbl_extend("force", review_spec, {
-    dependencies = {
-      codediff_plugin_name,
-      "MunifTanjim/nui.nvim",
-    },
-    cmd = { "Review" },
-    config = function(_, opts)
-      require("review").setup(opts)
-    end,
-    keys = function()
-      local function restore_review_buffers(lifecycle, tabpage)
-        local orig_buf, mod_buf = lifecycle.get_buffers(tabpage)
-        for _, buf in ipairs({ orig_buf, mod_buf }) do
-          if buf and vim.api.nvim_buf_is_valid(buf) then
-            vim.api.nvim_set_option_value("modifiable", true, { buf = buf })
-            vim.api.nvim_set_option_value("readonly", false, { buf = buf })
-          end
-        end
-      end
-
-      local function export_review_to_clipboard_only()
-        local store = require("review.store")
-        local count = store.count()
-        if count == 0 then
-          vim.notify("No comments to export", vim.log.levels.WARN, { title = "review.nvim" })
-          return
-        end
-
-        local markdown = require("review.export").generate_markdown()
-        vim.fn.setreg("+", markdown)
-        vim.fn.setreg("*", markdown)
-        vim.notify(
-          string.format("Exported %d comment(s) to clipboard", count),
-          vim.log.levels.INFO,
-          { title = "review.nvim" }
-        )
-      end
-
-      return {
-        {
-          "<leader>rr",
-          function()
-            local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
-            local tabpage = vim.api.nvim_get_current_tabpage()
-            if ok and lifecycle.get_session(tabpage) then
-              restore_review_buffers(lifecycle, tabpage)
-              require("review").close()
-            else
-              vim.cmd("Review")
-            end
-          end,
-          desc = "Review",
-        },
-        { "<leader>rm", "<cmd>Review commits main HEAD<cr>", desc = "Review main..HEAD" },
-        { "<leader>rc", "<cmd>Review commits<cr>", desc = "Review commits" },
-        { "<leader>rp", "<cmd>Review pr<cr>", desc = "Review GitHub PR" },
-        {
-          "<leader>re",
-          export_review_to_clipboard_only,
-          desc = "Review export",
-        },
-        {
-          "<leader>rx",
-          function()
-            local review = require("review")
-            local lifecycle = require("codediff.ui.lifecycle")
-            local tabpage = vim.api.nvim_get_current_tabpage()
-            export_review_to_clipboard_only()
-            restore_review_buffers(lifecycle, tabpage)
-            review.clear()
-            vim.cmd("tabclose")
-            require("review.hooks").on_session_closed()
-            require("review.storage").clear_revisions()
-          end,
-          desc = "Review close + clear",
-        },
-      }
-    end,
-    opts = {
-      keymaps = {
-        next_file = false,
-        prev_file = false,
-      },
-      codediff = {
-        focus_modified_pane = false,
-      },
-      popup = {
-        show_type_selector = false,
-      },
-      export = {
-        format = "compact",
       },
     },
   }),
