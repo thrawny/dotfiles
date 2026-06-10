@@ -168,13 +168,6 @@ sandbox() {
       )
     fi
 
-    # Expose D-Bus session socket so notify-send works
-    args+=(
-      --ro-bind-try
-      "/run/user/${UID}/bus"
-      "/run/user/${UID}/bus"
-    )
-
     # Expose PipeWire/PulseAudio socket so paplay (notification sounds) works
     args+=(
       --ro-bind-try
