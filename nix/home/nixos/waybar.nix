@@ -15,6 +15,7 @@ let
     * {
       font-family: "CaskaydiaMono Nerd Font", "JetBrains Mono", sans-serif;
       font-size: 13px;
+      font-weight: 700;
       color: @waybar-fg;
     }
 
@@ -41,6 +42,7 @@ let
     #custom-caffeine.activated {
       color: @waybar-accent;
     }
+
 
     #workspaces {
       padding: 3px 5px;
