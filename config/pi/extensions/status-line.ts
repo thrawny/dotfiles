@@ -129,22 +129,54 @@ function getRuntimeBadge(): { text: string; fg: string; bg: string } | null {
 	return null;
 }
 
-function getGitChanges(): { added: number; removed: number } | null {
+const GIT_CHANGES_CACHE_TTL_MS = 5_000;
+let gitChangesCache:
+	| {
+			cwd: string;
+			checkedAt: number;
+			value: { added: number; removed: number } | null;
+	  }
+	| undefined;
+
+function getGitChanges(cwd: string): { added: number; removed: number } | null {
+	const now = Date.now();
+	if (
+		gitChangesCache &&
+		gitChangesCache.cwd === cwd &&
+		now - gitChangesCache.checkedAt < GIT_CHANGES_CACHE_TTL_MS
+	) {
+		return gitChangesCache.value;
+	}
+
 	try {
 		const out = execFileSync("git", ["diff", "--shortstat"], {
+			cwd,
 			encoding: "utf8",
-			timeout: 250,
+			timeout: 100,
 			stdio: ["ignore", "pipe", "ignore"],
 		}).trim();
-		if (!out) return { added: 0, removed: 0 };
+		if (!out) {
+			gitChangesCache = {
+				cwd,
+				checkedAt: now,
+				value: { added: 0, removed: 0 },
+			};
+			return gitChangesCache.value;
+		}
 
 		const addMatch = out.match(/(\d+) insertion/);
 		const delMatch = out.match(/(\d+) deletion/);
-		return {
-			added: addMatch ? Number.parseInt(addMatch[1], 10) : 0,
-			removed: delMatch ? Number.parseInt(delMatch[1], 10) : 0,
+		gitChangesCache = {
+			cwd,
+			checkedAt: now,
+			value: {
+				added: addMatch ? Number.parseInt(addMatch[1], 10) : 0,
+				removed: delMatch ? Number.parseInt(delMatch[1], 10) : 0,
+			},
 		};
+		return gitChangesCache.value;
 	} catch {
+		gitChangesCache = { cwd, checkedAt: now, value: null };
 		return null;
 	}
 }
@@ -177,7 +209,7 @@ function install(
 							undefined,
 						)
 					: undefined;
-				const changes = getGitChanges();
+				const changes = getGitChanges(activeCtx?.cwd ?? process.cwd());
 				const runtimeBadge = getRuntimeBadge();
 				const usage = activeCtx
 					? safe(() => activeCtx.getContextUsage(), undefined)
