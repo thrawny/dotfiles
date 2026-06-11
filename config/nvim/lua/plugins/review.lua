@@ -170,8 +170,6 @@ return {
             lifecycle.set_tab_keymap(tabpage, "n", "<Tab>", nav.next_hunk_or_file, { desc = "Next hunk or file" })
             lifecycle.set_tab_keymap(tabpage, "n", "<C-i>", nav.next_hunk_or_file, { desc = "Next hunk or file" })
             lifecycle.set_tab_keymap(tabpage, "n", "<S-Tab>", nav.prev_hunk_or_file, { desc = "Prev hunk or file" })
-
-            require("config.review_lsp_proxy").apply(tabpage)
           end)
         end,
       })
