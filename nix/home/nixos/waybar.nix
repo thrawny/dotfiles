@@ -3,11 +3,13 @@ let
   homeDir = config.home.homeDirectory;
   # Shared style for both configs
   sharedStyle = ''
-    @define-color waybar-bg rgba(28, 28, 28, 0.3);
-    @define-color waybar-border #3a3a3a;
-    @define-color waybar-fg #f0f0f0;
-    @define-color waybar-muted #808080;
-    @define-color waybar-accent #66d9ef;
+    @define-color waybar-bg rgba(18, 20, 24, 0.68);
+    @define-color waybar-surface rgba(38, 42, 49, 0.62);
+    @define-color waybar-border rgba(136, 150, 160, 0.18);
+    @define-color waybar-fg #e8e6df;
+    @define-color waybar-muted #9aa0a6;
+    @define-color waybar-accent #f92672;
+    @define-color waybar-accent-2 #ff5c8a;
     @define-color waybar-warning #f92672;
 
     * {
@@ -17,7 +19,7 @@ let
     }
 
     window#waybar {
-      background-color: @waybar-bg;
+      background: linear-gradient(90deg, rgba(18, 20, 24, 0.76), rgba(26, 28, 33, 0.58));
       border-bottom: 1px solid @waybar-border;
     }
 
@@ -40,18 +42,52 @@ let
       color: @waybar-accent;
     }
 
+    #workspaces {
+      padding: 3px 5px;
+    }
+
     #workspaces button {
-      border-bottom: 3px solid transparent;
-      padding: 0 4px;
+      min-height: 0;
+      margin: 0 1px;
+      padding: 1px 7px;
+      border: 1px solid transparent;
+      border-radius: 999px;
       background: transparent;
       color: @waybar-muted;
+      font-weight: 700;
+      transition: all 180ms ease;
+    }
+
+    #workspaces button:hover {
+      background: @waybar-surface;
+      border-color: rgba(232, 230, 223, 0.12);
+      color: @waybar-fg;
     }
 
     /* Niri */
-    #workspaces button.focused {
-      color: @waybar-accent;
-      background: rgba(100, 114, 125, 0.5);
-      border-bottom: 3px solid @waybar-accent;
+    #workspaces button.focused,
+    #workspaces button.active {
+      color: #050505;
+      background: linear-gradient(135deg, @waybar-accent, @waybar-accent-2);
+      border-color: rgba(249, 38, 114, 0.34);
+      box-shadow: 0 0 8px rgba(249, 38, 114, 0.18);
+    }
+
+    #workspaces button.focused *,
+    #workspaces button.active * {
+      color: #050505;
+      text-shadow: none;
+    }
+
+    #workspaces button.focused:hover *,
+    #workspaces button.active:hover * {
+      color: #050505;
+    }
+
+    #workspaces button.urgent {
+      color: #111318;
+      background: @waybar-warning;
+      border-color: rgba(255, 255, 255, 0.24);
     }
 
     #battery.warning,
@@ -196,6 +232,15 @@ in
       height = 26;
       "modules-left" = [ "niri/workspaces" ];
       "modules-center" = [ "niri/window" ];
+      "niri/workspaces" = {
+        format = "{icon} {value}";
+        "format-icons" = {
+          main = "󰧨";
+          web = "󰖟";
+          dotfiles = "󰚩";
+          default = "";
+        };
+      };
       "modules-right" = [
         "custom/quotabar"
         "custom/caffeine"
