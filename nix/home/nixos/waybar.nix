@@ -9,7 +9,7 @@ let
     @define-color waybar-fg #e8e6df;
     @define-color waybar-muted #9aa0a6;
     @define-color waybar-accent #f92672;
-    @define-color waybar-accent-2 #ff5c8a;
+    @define-color waybar-accent-2 #fd971f;
     @define-color waybar-warning #f92672;
 
     * {
@@ -68,7 +68,7 @@ let
     #workspaces button.focused,
     #workspaces button.active {
       color: #050505;
-      background: linear-gradient(135deg, @waybar-accent, @waybar-accent-2);
+      background: linear-gradient(110deg, @waybar-accent 0%, @waybar-accent 42%, @waybar-accent-2 100%);
       border-color: rgba(249, 38, 114, 0.34);
       box-shadow: 0 0 8px rgba(249, 38, 114, 0.18);
     }
