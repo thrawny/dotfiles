@@ -25,7 +25,6 @@ let
     fastfetch
     gnome-themes-extra
     keyd
-    libnotify
     networkmanagerapplet
     pamixer
     pavucontrol

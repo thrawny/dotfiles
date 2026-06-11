@@ -4,7 +4,7 @@
 output=$(niri msg outputs | grep -B0 'LG Electronics 27GL850' | head -1 | sed 's/Output "\(.*\)" (.*/\1/')
 
 if [[ -z "$output" ]]; then
-  notify "LG monitor not found"
+  echo "LG monitor not found" >&2
   exit 1
 fi
 

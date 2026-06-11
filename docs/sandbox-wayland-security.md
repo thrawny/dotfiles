@@ -118,11 +118,11 @@ needs no proxy.)
 The Wayland question surfaced two neighbors worth a look — niri's own security
 note says sandboxing "must also remove IPC socket access and restrict D-Bus":
 
-- **D-Bus session bus** (`--ro-bind-try /run/user/$UID/bus`, for `notify-send`).
+- **D-Bus session bus** (`--ro-bind-try /run/user/$UID/bus`, for desktop portals and host services).
   The session bus can reach host services and, depending on what's on the bus,
   launch host apps / open files — a known escape surface. Consider a filtering
-  proxy (`xdg-dbus-proxy`, the Flatpak model) that allows only the notification
-  interface, or drop it and use a different notify path.
+  proxy (`xdg-dbus-proxy`, the Flatpak model) that allows only required
+  interfaces, or drop it.
 - **PipeWire** (`--ro-bind-try /run/user/$UID/pipewire-0`). Grants audio and,
   via portals, potentially screen capture. Lower priority than Wayland but it's
   another capture channel.
