@@ -1,4 +1,7 @@
 import { execFileSync } from "node:child_process";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import type {
 	ExtensionAPI,
 	ExtensionContext,
@@ -106,6 +109,24 @@ function envFlagSet(name: string): boolean {
 	if (!value) return false;
 	const normalized = value.trim().toLowerCase();
 	return normalized !== "0" && normalized !== "false";
+}
+
+export function isCodexFastEnabled(
+	configPath = join(homedir(), ".pi", "agent", "pi-codex-conversion.json"),
+): boolean {
+	try {
+		if (!existsSync(configPath)) return false;
+		const config = JSON.parse(readFileSync(configPath, "utf8")) as unknown;
+		if (!config || typeof config !== "object") return false;
+		const openai = (config as { openai?: unknown }).openai;
+		return Boolean(
+			openai &&
+				typeof openai === "object" &&
+				(openai as { fast?: unknown }).fast === true,
+		);
+	} catch {
+		return false;
+	}
 }
 
 function getRuntimeBadge(): { text: string; fg: string; bg: string } | null {
@@ -279,6 +300,9 @@ function install(
 				const extensionStatuses = normalizeExtensionStatuses(
 					footerData.getExtensionStatuses().values(),
 				);
+				if (isCodexFastEnabled() && !extensionStatuses.includes("fast")) {
+					extensionStatuses.unshift("fast");
+				}
 				if (extensionStatuses.length > 0) {
 					rightText = `${rightText} • ${extensionStatuses.join(" • ")}`;
 				}
