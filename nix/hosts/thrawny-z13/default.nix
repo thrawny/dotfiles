@@ -272,6 +272,7 @@
     home.packages = [
       pkgs.element-desktop
       pkgs.google-chrome
+      pkgs.obs-studio
       pkgs.slack
       pkgs.teams-for-linux
       pkgs.terraform
