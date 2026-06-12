@@ -16,7 +16,10 @@ Write `handoff.md` with:
 1. **Next goal**: What the next session should accomplish (from argument or inferred)
 2. **Context**: Only information relevant to achieving that goal — decisions made, approaches tried, current state
 3. **Files**: List of files to read, with specific line ranges if relevant
-4. **Immediate action**: The first concrete step to take
+4. **Skills**: Skills the next session should invoke, if any (e.g. zmx for dev servers)
+5. **Immediate action**: The first concrete step to take
+
+Don't duplicate content already captured in other artifacts (plans, commits, diffs, issues) — reference them by path or URL instead.
 
 Keep it focused. Exclude anything not relevant to the next goal. Target ~1000 tokens max.
 
