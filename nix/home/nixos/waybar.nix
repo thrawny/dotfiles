@@ -105,15 +105,30 @@ let
       padding-right: 12px;
     }
 
-    #custom-quotabar {
-      padding: 0 8px;
+    #custom-quotabar-claude,
+    #custom-quotabar-codex {
+      background-repeat: no-repeat;
+      background-position: 8px center;
+      background-size: 14px 14px;
+      padding: 0 8px 0 28px;
     }
 
-    #custom-quotabar.warning {
+    /* Icons are written by `quotabar waybar` on first run */
+    #custom-quotabar-claude {
+      background-image: url("${homeDir}/.local/share/quotabar/claude.svg");
+    }
+
+    #custom-quotabar-codex {
+      background-image: url("${homeDir}/.local/share/quotabar/openai.svg");
+    }
+
+    #custom-quotabar-claude.warning,
+    #custom-quotabar-codex.warning {
       color: #e6db74;
     }
 
-    #custom-quotabar.critical {
+    #custom-quotabar-claude.critical,
+    #custom-quotabar-codex.critical {
       color: @waybar-warning;
     }
   '';
@@ -201,8 +216,15 @@ let
 
     tray.spacing = 8;
 
-    "custom/quotabar" = {
-      exec = "${homeDir}/.cargo/bin/quotabar waybar";
+    "custom/quotabar-claude" = {
+      exec = "${homeDir}/.cargo/bin/quotabar waybar --provider claude";
+      return-type = "json";
+      interval = 60;
+      on-click = "${homeDir}/.cargo/bin/quotabar popup";
+    };
+
+    "custom/quotabar-codex" = {
+      exec = "${homeDir}/.cargo/bin/quotabar waybar --provider codex";
       return-type = "json";
       interval = 60;
       on-click = "${homeDir}/.cargo/bin/quotabar popup";
@@ -244,7 +266,8 @@ in
         };
       };
       "modules-right" = [
-        "custom/quotabar"
+        "custom/quotabar-claude"
+        "custom/quotabar-codex"
         "custom/caffeine"
         "niri/language"
         "tray"
