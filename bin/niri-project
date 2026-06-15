@@ -9,14 +9,15 @@ error() {
 }
 
 show_usage() {
-  echo "Usage: niri-project [--name NAME] [directory]"
+  echo "Usage: niri-project [--name NAME] [--terminals COUNT] [directory]"
   echo ""
-  echo "Create a niri workspace for a project with three terminals."
+  echo "Create a niri workspace for a project with terminals."
   echo "Workspace name is derived from the directory basename unless overridden."
   echo ""
   echo "Options:"
-  echo "  --name NAME  Override the workspace name"
-  echo "  -h, --help   Show this help"
+  echo "  --name NAME        Override the workspace name"
+  echo "  --terminals COUNT  Number of terminals to spawn (default: 3)"
+  echo "  -h, --help         Show this help"
   echo ""
   echo "Arguments:"
   echo "  directory    Project directory (default: current directory)"
@@ -25,11 +26,13 @@ show_usage() {
   echo "  niri-project                     # Use current directory"
   echo "  niri-project ~/code/myapp        # Use specified directory"
   echo "  niri-project --name foo          # Override workspace name"
+  echo "  niri-project --terminals 1 ~/code/myapp"
   echo "  niri-project --name foo ~/code/myapp"
 }
 
 main() {
   local workspace_name=""
+  local terminals=3
   local project_dir="$PWD"
 
   while [[ $# -gt 0 ]]; do
@@ -41,6 +44,12 @@ main() {
       --name)
         [[ $# -ge 2 ]] || error "Missing value for --name"
         workspace_name="$2"
+        shift 2
+        ;;
+      --terminals)
+        [[ $# -ge 2 ]] || error "Missing value for --terminals"
+        [[ "$2" =~ ^[0-9]+$ ]] || error "--terminals must be a non-negative integer"
+        terminals="$2"
         shift 2
         ;;
       --)
@@ -128,7 +137,7 @@ main() {
     niri msg action move-workspace-to-index "$insert_before_idx"
   fi
 
-  for _ in 1 2 3; do
+  for ((i = 0; i < terminals; i++)); do
     niri msg action spawn -- ghostty +new-window --working-directory="$project_dir"
   done
 }

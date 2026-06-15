@@ -34,4 +34,4 @@ for f in .claude/settings.local.json; do
   fi
 done
 
-niri-project "$wt_dir"
+niri-project --terminals 1 "$wt_dir"
