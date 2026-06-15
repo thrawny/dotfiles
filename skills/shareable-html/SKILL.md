@@ -5,9 +5,9 @@ description: Create static HTML artifacts that are meant to be shared via live-h
 
 # Shareable HTML Artifacts
 
-Use this skill when creating standalone HTML files that may be shared with `share-html`, previewed with `live-html`, or pasted into Slack.
+Use this skill when creating standalone HTML files that may be previewed with `live-html`, pasted into Slack, or shared with `share-html` only when the user explicitly asks to publish/share/upload it.
 
-The goal is a file that works well both as a direct browser page and as a shared link preview.
+The goal is a local HTML file that works well as a direct browser page and is ready for shared link previews if the user later asks to publish it. Do not upload to drops or any public sharing destination by default.
 
 ## Design prerequisite
 
@@ -72,7 +72,11 @@ lab/r2-s3-share-html-deck.html
 
 ## Publishing workflow
 
-When asked to publish/share an HTML artifact, use the `share-html` CLI from the dotfiles repo if available:
+Default to local-only output. Creating or editing a shareable HTML artifact does **not** imply publishing it.
+
+Only upload to drops or run a real `share-html` publish when the user explicitly asks to publish, share, upload, create a public link, or send it to drops.
+
+When explicitly asked to publish/share an HTML artifact, use the `share-html` CLI from the dotfiles repo if available:
 
 ```bash
 share-html path/to/artifact.html
@@ -80,7 +84,7 @@ share-html path/to/artifact.html
 
 It uploads the file and prints the public share URL.
 
-If the artifact is not ready for publishing yet, use:
+If you want to validate publish readiness without uploading, or the user asks for a check/preview rather than a public link, use:
 
 ```bash
 share-html --dry-run path/to/artifact.html
