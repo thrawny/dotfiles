@@ -1,23 +1,6 @@
+local ignored_patterns = require("config.ignored_patterns")
+
 local M = {}
-
-M.exclude = {
-  ".git",
-  "node_modules",
-  ".venv",
-  ".ruff_cache",
-  "target",
-  ".direnv",
-  ".DS_Store",
-  "dbt/logs",
-  ".next",
-  ".open-next",
-}
-
-local function expand_excludes(excludes)
-  return vim.tbl_map(function(exclude)
-    return "**/" .. exclude .. "/**"
-  end, excludes)
-end
 
 local function permutations(parts)
   if #parts == 1 then
@@ -74,7 +57,7 @@ function M.opts(overrides)
     live = true,
     hidden = true,
     ignored = true,
-    exclude = expand_excludes(M.exclude),
+    exclude = ignored_patterns.snacks_exclude_globs(),
     multi = {
       {
         source = "files",

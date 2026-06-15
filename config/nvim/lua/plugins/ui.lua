@@ -1,3 +1,4 @@
+local ignored_patterns = require("config.ignored_patterns")
 local merged_picker = require("config.snacks_merged_picker")
 
 local function git_output(args, cwd)
@@ -178,7 +179,7 @@ return {
       picker = {
         hidden = true, -- Show hidden files by default
         ignored = true, -- Show gitignored files by default
-        exclude = { ".DS_Store" },
+        exclude = ignored_patterns.snacks_exclude_globs(),
         win = {
           input = {
             keys = {
