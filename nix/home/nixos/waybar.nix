@@ -1,6 +1,13 @@
-{ config, ... }:
+{ config, pkgs, ... }:
 let
   homeDir = config.home.homeDirectory;
+
+  quotabarSessionOnly =
+    provider:
+    pkgs.writeShellScript "quotabar-${provider}-waybar-session-only" ''
+      set -euo pipefail
+      ${homeDir}/.cargo/bin/quotabar waybar --provider ${provider} | ${pkgs.jq}/bin/jq -c '.text |= split(" ")[0]'
+    '';
   # Shared style for both configs
   sharedStyle = ''
     @define-color waybar-bg rgba(18, 20, 24, 0.68);
@@ -113,6 +120,34 @@ let
       padding: 0 8px 0 28px;
     }
 
+    window#waybar.compact * {
+      font-size: 12px;
+    }
+
+    window#waybar.compact #clock,
+    window#waybar.compact #battery,
+    window#waybar.compact #network,
+    window#waybar.compact #wireplumber,
+    window#waybar.compact #custom-caffeine {
+      padding: 0 5px;
+    }
+
+    window#waybar.compact #workspaces {
+      padding: 1px 2px;
+    }
+
+    window#waybar.compact #workspaces button {
+      margin: 0;
+      padding: 1px 3px;
+    }
+
+    window#waybar.compact #custom-quotabar-claude,
+    window#waybar.compact #custom-quotabar-codex {
+      background-position: 5px center;
+      background-size: 11px 11px;
+      padding: 0 5px 0 18px;
+    }
+
     /* Icons are written by `quotabar waybar` on first run */
     #custom-quotabar-claude {
       background-image: url("${homeDir}/.local/share/quotabar/claude.svg");
@@ -132,6 +167,16 @@ let
       color: @waybar-warning;
     }
   '';
+
+  compactQuotabarModules = {
+    "custom/quotabar-claude" = sharedModules."custom/quotabar-claude" // {
+      exec = "${quotabarSessionOnly "claude"}";
+    };
+
+    "custom/quotabar-codex" = sharedModules."custom/quotabar-codex" // {
+      exec = "${quotabarSessionOnly "codex"}";
+    };
+  };
 
   # Shared modules (work on both compositors)
   sharedModules = {
@@ -238,6 +283,102 @@ let
       on-click = "${homeDir}/dotfiles/bin/caffeine toggle";
     };
   };
+
+  standardNiriBar = sharedModules // {
+    layer = "top";
+    position = "top";
+    height = 26;
+    output = [
+      "!eDP-1"
+      "*"
+    ];
+    "modules-left" = [ "niri/workspaces" ];
+    "modules-center" = [ "niri/window" ];
+    "niri/workspaces" = {
+      format = "{icon} {value}";
+      "format-icons" = {
+        main = "󰧨";
+        web = "󰖟";
+        dotfiles = "󰚩";
+        default = "";
+      };
+    };
+    "modules-right" = [
+      "custom/quotabar-claude"
+      "custom/quotabar-codex"
+      "custom/caffeine"
+      "niri/language"
+      "tray"
+      "network"
+      "wireplumber"
+      "battery"
+      "clock"
+    ];
+
+    "niri/window" = {
+      format = "{app_id} - {title}";
+      max-length = 80;
+      tooltip = false;
+      rewrite = {
+        "com.mitchellh.ghostty - (.*)" = "Ghostty - $1";
+        "zen - (.*)" = "Zen Browser - $1";
+        "org.gnome.(.*) - (.*)" = "$1 - $2";
+        "firefox - (.*)" = "Firefox - $1";
+        "Spotify - (.*)" = "Spotify - $1";
+        "slack - (.*)" = "Slack - $1";
+        "1password - (.*)" = "1Password - $1";
+      };
+    };
+
+    "niri/language" = {
+      format = "{}";
+      "format-en" = "AU";
+      "format-sv" = "SE";
+      "on-click" = "niri msg action switch-layout next";
+    };
+  };
+
+  compactNiriBar = (sharedModules // compactQuotabarModules) // {
+    layer = "top";
+    position = "top";
+    height = 24;
+    name = "compact";
+    output = "eDP-1";
+    "modules-left" = [ "niri/workspaces" ];
+    "modules-center" = [ ];
+    "modules-right" = [
+      "custom/quotabar-claude"
+      "custom/quotabar-codex"
+      "custom/caffeine"
+      "network"
+      "wireplumber"
+      "battery"
+      "clock"
+    ];
+
+    "niri/workspaces" = {
+      format = "{icon} {value}";
+      "format-icons" = {
+        main = "󰧨";
+        web = "󰖟";
+        dotfiles = "󰚩";
+        default = "";
+      };
+    };
+
+    clock = sharedModules.clock // {
+      format = "{:%H:%M}";
+      "format-alt" = "{:%a %d}";
+    };
+
+    battery = sharedModules.battery // {
+      format = "{icon}{capacity}%";
+      "format-charging" = "{icon}{capacity}%";
+      "format-not-charging" = "{icon}{capacity}%";
+      "format-plugged" = "{icon}{capacity}%";
+      "format-full" = "󰂅{capacity}%";
+    };
+  };
 in
 {
   programs.waybar = {
@@ -247,59 +388,11 @@ in
     style = sharedStyle;
   };
 
-  # Niri-specific config file
-  xdg.configFile."waybar/config-niri".text = builtins.toJSON (
-    sharedModules
-    // {
-      layer = "top";
-      position = "top";
-      height = 26;
-      "modules-left" = [ "niri/workspaces" ];
-      "modules-center" = [ "niri/window" ];
-      "niri/workspaces" = {
-        format = "{icon} {value}";
-        "format-icons" = {
-          main = "󰧨";
-          web = "󰖟";
-          dotfiles = "󰚩";
-          default = "";
-        };
-      };
-      "modules-right" = [
-        "custom/quotabar-claude"
-        "custom/quotabar-codex"
-        "custom/caffeine"
-        "niri/language"
-        "tray"
-        "network"
-        "wireplumber"
-        "battery"
-        "clock"
-      ];
-
-      "niri/window" = {
-        format = "{app_id} - {title}";
-        max-length = 80;
-        tooltip = false;
-        rewrite = {
-          "com.mitchellh.ghostty - (.*)" = "Ghostty - $1";
-          "zen - (.*)" = "Zen Browser - $1";
-          "org.gnome.(.*) - (.*)" = "$1 - $2";
-          "firefox - (.*)" = "Firefox - $1";
-          "Spotify - (.*)" = "Spotify - $1";
-          "slack - (.*)" = "Slack - $1";
-          "1password - (.*)" = "1Password - $1";
-        };
-      };
-
-      "niri/language" = {
-        format = "{}";
-        "format-en" = "AU";
-        "format-sv" = "SE";
-        "on-click" = "niri msg action switch-layout next";
-      };
-    }
-  );
+  # Niri-specific multi-output config: compact on the laptop panel, full elsewhere.
+  xdg.configFile."waybar/config-niri".text = builtins.toJSON [
+    standardNiriBar
+    compactNiriBar
+  ];
 
   xdg.configFile."waybar/style-niri.css".text = sharedStyle;
 }
