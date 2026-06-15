@@ -12,17 +12,28 @@ fi
 
 url="$1"
 
-# This router is intended for URL schemes from xdg-open. If it gets used
-# outside niri or before jq is available, fall back to the normal Zen launch.
-if ! command -v niri >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+# When the niri session isn't reachable — launched from a sandbox without the
+# niri socket, or before niri/jq are available — we can't find or focus a
+# window. Remoting into the running Zen would hit its profile lock (Zen's
+# remoting rides the DBus session bus in $XDG_RUNTIME_DIR, which a sandbox
+# hides), so open a fresh Helium window instead: its singleton IPC lives under
+# $HOME and stays reachable, avoiding the collision.
+open_detached() {
+  if command -v helium >/dev/null 2>&1; then
+    exec helium --new-window "$url"
+  fi
   exec zen-beta --new-tab "$url"
+}
+
+if ! command -v niri >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+  open_detached
 fi
 
 workspace_json=$(niri msg -j workspaces 2>/dev/null || true)
 windows_json=$(niri msg -j windows 2>/dev/null || true)
 
 if [[ -z "$workspace_json" || -z "$windows_json" ]]; then
-  exec zen-beta --new-tab "$url"
+  open_detached
 fi
 
 focused_workspace_id=$(jq -r '.[] | select(.is_focused) | .id' <<<"$workspace_json" | head -n1)
