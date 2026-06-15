@@ -1,43 +1,38 @@
 #!/usr/bin/env bun
 // @ts-nocheck
 
-import { randomBytes } from "node:crypto";
-import { existsSync } from "node:fs";
-import { readFile, stat } from "node:fs/promises";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { basename, extname, resolve } from "node:path";
 
-const DEFAULT_BUCKET = "live-html-shares";
-const DEFAULT_DOMAIN = "https://drops.thrawny.dev";
-const DEFAULT_ACCOUNT_ID = "053b91944af4c6ed8e0d259e2e36e051";
+const DEFAULT_URL = "https://drops.lakebed.app";
+const TEXT_CHUNK_CHARS = 700_000;
+const BASE64_CHUNK_BYTES = 540_000; // multiple of 3 for clean base64 boundaries
+const SINGLE_POST_MAX_CHARS = 700_000;
 
 function usage() {
-  console.log(`share-html — publish a static HTML file to drops.thrawny.dev
+  console.log(`share-html — publish a static HTML file to Drops (${DEFAULT_URL})
 
 Usage:
-  share-html [--slug SLUG] [--token TOKEN] [--bucket BUCKET] [--domain URL] [--account-id ID] [--dry-run] FILE
-  share-html --update SHARE FILE
-  share-html --list
+  share-html [--slug SLUG] [--title TITLE] [--token TOKEN] [--url URL] [--base64] [--dry-run] FILE
 
 What it does:
-  - generates a short random bearer-link token
-  - derives a human-readable slug from the HTML <title> or filename
-  - uploads FILE to Cloudflare R2 as s/<token>/<slug>/index.html
-  - prints the public drops URL
+  - publishes FILE to the Drops app as a public bearer-link page
+  - derives the title from the HTML <title> and a slug from it (or the filename)
+  - prints the public Drops URL: <url>/s/<token>/<slug>/
+  - viewers can select text on the page and leave inline comment threads
+  - large files are uploaded in chunks automatically
 
 Options:
-  --slug SLUG      Override slug
-  --token TOKEN    Override random token
-  --bucket BUCKET  R2 bucket (default: ${DEFAULT_BUCKET})
-  --domain URL     Public base URL (default: ${DEFAULT_DOMAIN})
-  --account-id ID  Cloudflare account ID (default: CLOUDFLARE_DROPS_ACCOUNT_ID, CLOUDFLARE_ACCOUNT_ID, then ${DEFAULT_ACCOUNT_ID})
-  --update SHARE   Re-upload FILE to an existing share. SHARE may be a full URL, /s/token/slug/, or token/slug
-  --list           List existing shared HTML URLs from R2
-  --dry-run        Print what would be uploaded without calling wrangler
-  -h, --help       Show this help
+  --slug SLUG    Override slug (default: from <title>, else filename)
+  --title TITLE  Override title (default: from the HTML <title>)
+  --token TOKEN  Use a specific bearer token (>=6 URL-safe chars; default: server-generated)
+  --url URL      Drops base URL (default: \$DROPS_URL or ${DEFAULT_URL})
+  --base64       Byte-safe chunked upload for very large or unusual files
+  --dry-run      Print what would be uploaded without publishing
+  -h, --help     Show this help
 
 Environment:
-  CLOUDFLARE_DROPS_UPLOAD_TOKEN is used for the upload if set.
-  Otherwise share-html falls back to CLOUDFLARE_API_TOKEN.
+  DROPS_URL overrides the default Drops base URL.
 
 Examples:
   share-html lab/report.html
@@ -45,14 +40,12 @@ Examples:
 }
 
 const args = Bun.argv.slice(2);
-let bucket = DEFAULT_BUCKET;
-let domain = DEFAULT_DOMAIN;
-let accountId = firstEnv("CLOUDFLARE_DROPS_ACCOUNT_ID", "CLOUDFLARE_ACCOUNT_ID") ?? DEFAULT_ACCOUNT_ID;
+let baseUrl = process.env.DROPS_URL || DEFAULT_URL;
 let slug = null;
+let title = null;
 let token = null;
+let useBase64 = false;
 let dryRun = false;
-let listOnly = false;
-let updateShare = null;
 let fileArg = null;
 
 for (let i = 0; i < args.length; i += 1) {
@@ -62,29 +55,24 @@ for (let i = 0; i < args.length; i += 1) {
     case "--help":
       usage();
       process.exit(0);
-    case "--bucket":
-      bucket = requireValue(args, ++i, arg);
-      break;
+    case "--url":
     case "--domain":
-      domain = requireValue(args, ++i, arg);
-      break;
-    case "--account-id":
-      accountId = requireValue(args, ++i, arg);
+      baseUrl = requireValue(args, ++i, arg);
       break;
     case "--slug":
       slug = requireValue(args, ++i, arg);
       break;
+    case "--title":
+      title = requireValue(args, ++i, arg);
+      break;
     case "--token":
       token = requireValue(args, ++i, arg);
       break;
+    case "--base64":
+      useBase64 = true;
+      break;
     case "--dry-run":
       dryRun = true;
-      break;
-    case "--list":
-      listOnly = true;
-      break;
-    case "--update":
-      updateShare = requireValue(args, ++i, arg);
       break;
     default:
       if (arg.startsWith("-")) {
@@ -101,16 +89,6 @@ for (let i = 0; i < args.length; i += 1) {
   }
 }
 
-if (listOnly) {
-  if (fileArg || updateShare) {
-    console.error("share-html: --list cannot be combined with a file or --update");
-    usage();
-    process.exit(2);
-  }
-  await listShares({ bucket, domain, accountId });
-  process.exit(0);
-}
-
 if (!fileArg) {
   usage();
   process.exit(2);
@@ -118,135 +96,110 @@ if (!fileArg) {
 
 const file = resolve(fileArg);
 try {
-  const s = await stat(file);
-  if (!s.isFile()) throw new Error("not a file");
+  if (!statSync(file).isFile()) throw new Error("not a file");
 } catch (err) {
   console.error(`share-html: cannot read ${file}: ${err.message}`);
   process.exit(1);
 }
-
 if (!existsSync(file)) {
   console.error(`share-html: file does not exist: ${file}`);
   process.exit(1);
 }
 
-if (updateShare) {
-  const parsed = parseShare(updateShare);
-  token = parsed.token;
-  slug = parsed.slug;
-} else {
-  slug = slugify(slug ?? (await titleFromHtml(file)) ?? basename(file, extname(file)));
-  token = token ?? randomToken();
-}
-domain = domain.replace(/\/+$/, "");
+baseUrl = baseUrl.replace(/\/+$/, "");
 
+if (token && !/^[a-zA-Z0-9_-]{6,}$/.test(token)) {
+  console.error("share-html: --token must be at least 6 URL-safe characters: A-Z a-z 0-9 _ -");
+  process.exit(1);
+}
+
+const html = readFileSync(file, "utf8");
+if (!html.trim()) {
+  console.error(`share-html: ${file} is empty`);
+  process.exit(1);
+}
+if (!title) title = titleFromHtml(html);
+if (!slug) slug = slugify(title ?? basename(file, extname(file)));
 if (!slug) {
-  console.error("share-html: slug is empty after normalization");
-  process.exit(1);
-}
-if (!/^[a-zA-Z0-9_-]{6,}$/.test(token)) {
-  console.error("share-html: token must be at least 6 URL-safe characters: A-Z a-z 0-9 _ -");
+  console.error("share-html: slug is empty after normalization; pass --slug");
   process.exit(1);
 }
 
-const key = `s/${token}/${slug}/index.html`;
-const objectPath = `${bucket}/${key}`;
-const url = `${domain}/s/${token}/${slug}/`;
-const wranglerArgs = [
-  "r2",
-  "object",
-  "put",
-  objectPath,
-  "--remote",
-  "--file",
-  file,
-  "--content-type",
-  "text/html; charset=utf-8",
-];
+const chunked = useBase64 || html.length > SINGLE_POST_MAX_CHARS;
 
-console.log(`file: ${file}`);
-console.log(`r2:   ${objectPath}`);
-console.log(`url:  ${url}`);
+console.log(`file:  ${file}`);
+console.log(`drops: ${baseUrl}`);
+console.log(`slug:  ${slug}`);
+if (title) console.log(`title: ${title}`);
+console.log(`mode:  ${chunked ? (useBase64 ? "chunked (base64)" : "chunked (text)") : "single"}`);
 
 if (dryRun) process.exit(0);
 
-const uploadToken = firstEnv("CLOUDFLARE_DROPS_UPLOAD_TOKEN", "CLOUDFLARE_API_TOKEN");
-if (!uploadToken) {
-  console.error("share-html: set CLOUDFLARE_DROPS_UPLOAD_TOKEN or CLOUDFLARE_API_TOKEN for R2 upload access");
-  process.exit(1);
+const result = chunked ? await uploadChunked() : await uploadSingle();
+const path =
+  result.path || (result.url ? new URL(result.url).pathname : null);
+if (!path) {
+  fail(`upload did not return a path: ${JSON.stringify(result)}`);
 }
-
-const proc = Bun.spawn(["wrangler", ...wranglerArgs], {
-  env: {
-    ...process.env,
-    CLOUDFLARE_ACCOUNT_ID: accountId,
-    CLOUDFLARE_API_TOKEN: uploadToken,
-  },
-  stdout: "inherit",
-  stderr: "inherit",
-});
-const exitCode = await proc.exited;
-if (exitCode !== 0) process.exit(exitCode);
 
 console.log("");
-console.log(url);
+console.log(`${baseUrl}${path}`);
 
-function firstEnv(...names) {
-  for (const name of names) {
-    const value = process.env[name];
-    if (value) return value;
-  }
-  return null;
+async function uploadSingle() {
+  const body = { html, slug };
+  if (title) body.title = title;
+  if (token) body.token = token;
+  return postJson(`${baseUrl}/api/drops`, body);
 }
 
-async function listShares({ bucket, domain, accountId }) {
-  const uploadToken = firstEnv("CLOUDFLARE_DROPS_UPLOAD_TOKEN", "CLOUDFLARE_API_TOKEN");
-  if (!uploadToken) {
-    console.error("share-html: set CLOUDFLARE_DROPS_UPLOAD_TOKEN or CLOUDFLARE_API_TOKEN for R2 list access");
-    process.exit(1);
+async function uploadChunked() {
+  const startBody = { encoding: useBase64 ? "base64" : "text", slug };
+  if (title) startBody.title = title;
+  if (token) startBody.token = token;
+
+  const start = await postJson(`${baseUrl}/api/drop-uploads`, startBody);
+  const uploadId = start.uploadId;
+  if (!uploadId) {
+    fail(`upload did not return an uploadId: ${JSON.stringify(start)}`);
   }
 
-  const baseUrl = `https://api.cloudflare.com/client/v4/accounts/${accountId}/r2/buckets/${bucket}/objects`;
-  let cursor = null;
-  let found = 0;
-  do {
-    const url = new URL(baseUrl);
-    url.searchParams.set("per_page", "1000");
-    if (cursor) url.searchParams.set("cursor", cursor);
-    const res = await fetch(url, { headers: { Authorization: `Bearer ${uploadToken}` } });
-    const body = await res.json();
-    if (!body.success) {
-      console.error(`share-html: failed to list R2 objects: ${JSON.stringify(body.errors)}`);
-      process.exit(1);
+  if (useBase64) {
+    const bytes = readFileSync(file);
+    for (let offset = 0, index = 0; offset < bytes.length; offset += BASE64_CHUNK_BYTES, index += 1) {
+      const end = Math.min(offset + BASE64_CHUNK_BYTES, bytes.length);
+      const chunk = bytes.subarray(offset, end).toString("base64");
+      await postJson(`${baseUrl}/api/drop-upload-chunks`, { chunk, index, uploadId });
+      progress(end, bytes.length);
     }
-    for (const object of body.result ?? []) {
-      const match = object.key.match(/^s\/([^/]+)\/([^/]+)\/index\.html$/);
-      if (!match) continue;
-      found += 1;
-      console.log(`${domain.replace(/\/+$/, "")}/s/${match[1]}/${match[2]}/`);
+  } else {
+    for (let offset = 0, index = 0; offset < html.length; offset += TEXT_CHUNK_CHARS, index += 1) {
+      const end = Math.min(offset + TEXT_CHUNK_CHARS, html.length);
+      const chunk = html.slice(offset, end);
+      await postJson(`${baseUrl}/api/drop-upload-chunks`, { chunk, index, uploadId });
+      progress(end, html.length);
     }
-    cursor = body.result_info?.cursor ?? null;
-  } while (cursor);
+  }
 
-  if (found === 0) console.log("share-html: no shares found");
+  return postJson(`${baseUrl}/api/drop-upload-finish`, { uploadId });
 }
 
-function parseShare(share) {
-  let path = share.trim();
+async function postJson(url, body) {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const raw = await response.text();
+  let payload = null;
   try {
-    if (/^https?:\/\//i.test(path)) path = new URL(path).pathname;
-  } catch (err) {
-    console.error(`share-html: invalid share URL: ${share}`);
-    process.exit(2);
+    payload = raw ? JSON.parse(raw) : null;
+  } catch {
+    payload = { body: raw };
   }
-  path = path.replace(/^\/+|\/+$/g, "");
-  if (path.startsWith("s/")) path = path.slice(2);
-  const parts = path.split("/");
-  if (parts.length !== 2 || !parts[0] || !parts[1]) {
-    console.error("share-html: --update expects a full URL, /s/token/slug/, or token/slug");
-    process.exit(2);
+  if (!response.ok) {
+    fail(`${url} failed with ${response.status}: ${JSON.stringify(payload)}`);
   }
-  return { token: parts[0], slug: slugify(parts[1]) };
+  return payload;
 }
 
 function requireValue(args, index, option) {
@@ -258,11 +211,10 @@ function requireValue(args, index, option) {
   return value;
 }
 
-async function titleFromHtml(file) {
-  const html = await readFile(file, "utf8");
-  const match = html.slice(0, 200_000).match(/<title[^>]*>([\s\S]*?)<\/title>/i);
+function titleFromHtml(text) {
+  const match = text.slice(0, 200_000).match(/<title[^>]*>([\s\S]*?)<\/title>/i);
   if (!match) return null;
-  return decodeHtml(match[1].replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim());
+  return decodeHtml(match[1].replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim()) || null;
 }
 
 function decodeHtml(text) {
@@ -278,7 +230,7 @@ function decodeHtml(text) {
 function slugify(text) {
   return text
     .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "")
@@ -286,6 +238,12 @@ function slugify(text) {
     .replace(/-+$/g, "");
 }
 
-function randomToken() {
-  return randomBytes(9).toString("base64url");
+function progress(sent, total) {
+  const percent = total === 0 ? 100 : Math.floor((sent / total) * 100);
+  process.stderr.write(`\ruploaded ${percent}%`);
+}
+
+function fail(message) {
+  console.error(`share-html: ${message}`);
+  process.exit(1);
 }

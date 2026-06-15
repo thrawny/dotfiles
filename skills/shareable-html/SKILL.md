@@ -67,7 +67,7 @@ Use a descriptive filename:
 
 ```txt
 lab/sinexcel-modbus-infographic.html
-lab/r2-s3-share-html-deck.html
+lab/share-html-drops-deck.html
 ```
 
 ## Publishing workflow
@@ -82,7 +82,11 @@ When explicitly asked to publish/share an HTML artifact, use the `share-html` CL
 share-html path/to/artifact.html
 ```
 
-It uploads the file and prints the public share URL.
+It publishes the file to the Drops app (`https://drops.lakebed.app` by default) and prints the public share URL in the form `https://drops.lakebed.app/s/<token>/<slug>/`. No auth or token is required — the link itself is the bearer credential. Large files are uploaded in chunks automatically.
+
+The slug defaults to the HTML `<title>` (falling back to the filename); override it with `--slug`. Point at a different Drops deploy with `--url` or the `DROPS_URL` env var.
+
+A published drop is more than a static page: viewers can select text in the rendered HTML and leave inline comment threads, so prefer it for review/feedback artifacts.
 
 If you want to validate publish readiness without uploading, or the user asks for a check/preview rather than a public link, use:
 
