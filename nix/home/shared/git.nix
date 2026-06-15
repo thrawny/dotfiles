@@ -139,6 +139,9 @@ in
       "/progress.md"
       "/handoff.md"
       ".lazy.lua"
+
+      # agent browser
+      "dogfood-output"
     ];
   };
 }
