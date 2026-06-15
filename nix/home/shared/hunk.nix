@@ -4,7 +4,7 @@
 
   programs.hunk = {
     enable = true;
-    enableGitIntegration = true;
+    enableGitIntegration = false;
     settings = {
       theme = "custom";
       mode = "auto";

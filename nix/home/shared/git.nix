@@ -25,8 +25,10 @@ in
         useForceIfIncludes = true;
       };
 
+      pager.diff = "hunk pager";
+
       core = {
-        pager = "hunk pager";
+        pager = "less -F -X";
         autocrlf = "input";
         editor = ''nvim -c 'autocmd VimLeave * call system("printf \\033c")' '';
       };
