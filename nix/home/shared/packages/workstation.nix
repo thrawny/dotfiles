@@ -11,7 +11,7 @@
     typescript-language-server
     terraform-ls
     yaml-language-server
-    vscode-langservers-extracted
+    vscode-json-languageserver
     nixd
 
     # Editor formatters/linters
