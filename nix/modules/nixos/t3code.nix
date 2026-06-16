@@ -37,65 +37,60 @@ let
     '') codexSkills
   );
 
-  package = pkgs.stdenv.mkDerivation (finalAttrs: {
-    pname = "t3code";
-    version = "main-${lib.substring 0 7 (t3code.rev or "unknown")}";
-    src = t3code;
+  packageJson = lib.importJSON ./t3code-package.json;
+  packageJsonForNpm = builtins.removeAttrs packageJson [ "overrides" ];
+  packageLockJson = lib.importJSON ./t3code-package-lock.json;
 
-    pnpmDeps = pkgs.fetchPnpmDeps {
-      inherit (finalAttrs) pname version src;
-      fetcherVersion = 3;
-      hash = "sha256-5zNPGij5DNJv42B0vaKQ2PHrKFVLxTOjJYOfAkCujqI=";
+  package = pkgs.buildNpmPackage rec {
+    pname = "t3code";
+    version = "0.0.27";
+    nodejs = pkgs.nodejs_24;
+
+    src = pkgs.fetchurl {
+      url = "https://registry.npmjs.org/t3/-/t3-${version}.tgz";
+      hash = "sha512-quBdb42BXXKXxyfqIFEnvCYrMndzw92JbAoIPkDZr2aiGfRyLT+nyvDjcJjK2IHSO9ZczEmda1Fx8spBIEX/HA==";
     };
 
-    nativeBuildInputs = [
-      pkgs.gcc
-      pkgs.git
-      pkgs.gnumake
-      pkgs.node-gyp
-      pkgs.nodejs
-      pkgs.pnpm
-      pkgs.pnpmConfigHook
-      pkgs.python3
-      pkgs.makeWrapper
-    ];
+    sourceRoot = "package";
+    npmDeps = pkgs.importNpmLock {
+      package = packageJsonForNpm;
+      packageLock = packageLockJson;
+      fetcherOpts = {
+        "node_modules/@effect/platform-node" = { name = "platform-node.tgz"; };
+        "node_modules/@effect/platform-node-shared" = { name = "platform-node-shared.tgz"; };
+        "node_modules/@effect/sql-sqlite-bun" = { name = "sql-sqlite-bun.tgz"; };
+        "node_modules/effect" = { name = "effect.tgz"; };
+      };
+    };
+    npmConfigHook = pkgs.importNpmLock.npmConfigHook;
+    dontNpmBuild = true;
 
-    SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+    nativeBuildInputs = [ pkgs.makeWrapper ];
 
-    buildPhase = ''
-      runHook preBuild
-
-      pushd node_modules/.pnpm/node-pty@1.1.0/node_modules/node-pty
-      node scripts/prebuild.js || node-gyp rebuild --nodedir=${pkgs.nodejs}
-      node scripts/post-install.js
-      test -f build/Release/pty.node
-      popd
-
-      pnpm exec vp config
-      pnpm --filter @t3tools/web run build
-      node apps/server/scripts/cli.ts build
-      test -f apps/server/dist/bin.mjs
-      test -f apps/server/dist/client/index.html
-
-      runHook postBuild
+    postPatch = ''
+      cp ${./t3code-package.json} package.json
+      cp ${./t3code-package-lock.json} package-lock.json
+      node -e '
+        const fs = require("fs");
+        const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+        delete pkg.overrides;
+        fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
+      '
     '';
 
     installPhase = ''
       runHook preInstall
 
-      install -d "$out/lib/t3code"
-      cp -R apps/server/dist "$out/lib/t3code/dist"
-      cp -R apps packages scripts oxlint-plugin-t3code "$out/lib/t3code/"
-      cp -R node_modules "$out/lib/t3code/node_modules"
-      printf '{"type":"module"}\n' > "$out/lib/t3code/package.json"
+      install -d "$out/lib/t3code" "$out/bin"
+      cp -R . "$out/lib/t3code/"
 
-      makeWrapper ${lib.getExe pkgs.nodejs} "$out/bin/t3" \
-        --add-flags "$out/lib/t3code/apps/server/dist/bin.mjs" \
+      makeWrapper ${lib.getExe pkgs.nodejs_24} "$out/bin/t3" \
+        --add-flags "$out/lib/t3code/dist/bin.mjs" \
         --prefix PATH : ${
           lib.makeBinPath [
             llmPkgs.codex
             pkgs.git
-            pkgs.nodejs
+            pkgs.nodejs_24
           ]
         }
 
@@ -103,7 +98,7 @@ let
     '';
 
     meta.mainProgram = "t3";
-  });
+  };
 
   codexWithDirenv = pkgs.writeShellApplication {
     name = "t3code-codex";
