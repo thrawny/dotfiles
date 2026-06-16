@@ -93,6 +93,20 @@ let
       color: #050505;
     }
 
+    /* On multi-monitor niri, every visible workspace is "active".
+       Keep non-focused active workspaces visible without making them look selected. */
+    #workspaces button.active:not(.focused) {
+      color: @waybar-accent-2;
+      background: rgba(253, 151, 31, 0.14);
+      border-color: rgba(253, 151, 31, 0.24);
+      box-shadow: none;
+    }
+
+    #workspaces button.active:not(.focused) *,
+    #workspaces button.active:not(.focused):hover * {
+      color: @waybar-accent-2;
+    }
+
     #workspaces button.urgent {
       color: #111318;
       background: @waybar-warning;
