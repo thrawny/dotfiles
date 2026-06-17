@@ -1,4 +1,10 @@
-import { appendFileSync, mkdirSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import {
+	appendFileSync,
+	mkdirSync,
+	readFileSync,
+	writeFileSync,
+} from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -20,6 +26,7 @@ let inFlight = false;
 let lastTriggerAt = 0;
 let dynamicKeywords: string[] = [];
 let dynamicFragments: string[] = [];
+let pendingTranscript: PendingTranscript | undefined;
 
 interface WayvoiceRequest {
 	cmd: "toggle";
@@ -35,6 +42,20 @@ interface WayvoiceResponse {
 	status?: string;
 	text?: string;
 	error?: string;
+}
+
+interface PendingTranscript {
+	id: string;
+	transcript: string;
+	request: WayvoiceRequest;
+	cwd: string;
+	sessionFile?: string;
+	insertedAt: string;
+}
+
+interface HintState {
+	keywords: string[];
+	fragments: string[];
 }
 
 function runtimeDir(): string {
@@ -61,12 +82,24 @@ function debug(message: string): void {
 	if (isDebug()) console.error(`[pi-wayvoice] ${message}`);
 }
 
-function logPath(): string {
+function cachePath(name: string): string {
 	return path.join(
 		process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"),
 		"pi",
-		"wayvoice.log",
+		name,
 	);
+}
+
+function logPath(): string {
+	return cachePath("wayvoice.log");
+}
+
+function transcriptLogPath(): string {
+	return cachePath("wayvoice-transcripts.jsonl");
+}
+
+function hintStatePath(): string {
+	return cachePath("wayvoice-hints.json");
 }
 
 function log(message: string): void {
@@ -76,8 +109,47 @@ function log(message: string): void {
 	appendFileSync(logPath(), line);
 }
 
+function logTranscriptEvent(event: Record<string, unknown>): void {
+	mkdirSync(path.dirname(transcriptLogPath()), { recursive: true });
+	appendFileSync(
+		transcriptLogPath(),
+		`${JSON.stringify({ ts: new Date().toISOString(), ...event })}\n`,
+	);
+}
+
 function logError(message: string): void {
 	log(`ERROR ${message}`);
+}
+
+function loadHintState(): void {
+	try {
+		const parsed = JSON.parse(
+			readFileSync(hintStatePath(), "utf8"),
+		) as Partial<HintState>;
+		dynamicKeywords = cleanKeywords(parsed.keywords ?? []).slice(
+			0,
+			MAX_DYNAMIC_KEYWORDS,
+		);
+		dynamicFragments = cleanFragments(parsed.fragments ?? []).slice(
+			0,
+			MAX_DYNAMIC_FRAGMENTS,
+		);
+		log(
+			`hints loaded: ${JSON.stringify({ keywords: dynamicKeywords, fragments: dynamicFragments })}`,
+		);
+	} catch (error) {
+		if ((error as { code?: unknown }).code !== "ENOENT") {
+			logError(`failed to load hint state: ${errorMessage(error)}`);
+		}
+	}
+}
+
+function saveHintState(): void {
+	mkdirSync(path.dirname(hintStatePath()), { recursive: true });
+	writeFileSync(
+		hintStatePath(),
+		`${JSON.stringify({ keywords: dynamicKeywords, fragments: dynamicFragments }, null, "\t")}\n`,
+	);
 }
 
 let assumedRecording = false;
@@ -206,6 +278,54 @@ function promptHints(): string[] {
 	return [...dynamicKeywords, ...dynamicFragments];
 }
 
+function sessionFile(ctx: ExtensionContext): string | undefined {
+	return ctx.sessionManager.getSessionFile() ?? undefined;
+}
+
+function normalizedWords(text: string): string[] {
+	return text
+		.toLowerCase()
+		.replace(/[^\p{L}\p{N}]+/gu, " ")
+		.trim()
+		.split(/\s+/)
+		.filter(Boolean);
+}
+
+function editDistance<T>(left: T[], right: T[]): number {
+	const previous = Array.from(
+		{ length: right.length + 1 },
+		(_, index) => index,
+	);
+	const current = new Array<number>(right.length + 1);
+	for (let i = 0; i < left.length; i++) {
+		current[0] = i + 1;
+		for (let j = 0; j < right.length; j++) {
+			const substitution = previous[j] + (left[i] === right[j] ? 0 : 1);
+			const insertion = current[j] + 1;
+			const deletion = previous[j + 1] + 1;
+			current[j + 1] = Math.min(substitution, insertion, deletion);
+		}
+		for (let j = 0; j < previous.length; j++) previous[j] = current[j];
+	}
+	return previous[right.length];
+}
+
+function correctionStats(transcript: string, finalText: string) {
+	const transcriptWords = normalizedWords(transcript);
+	const finalWords = normalizedWords(finalText);
+	const wordDistance = editDistance(transcriptWords, finalWords);
+	const transcriptChars = [...transcript.toLowerCase().replace(/\s+/g, "")];
+	const finalChars = [...finalText.toLowerCase().replace(/\s+/g, "")];
+	const charDistance = editDistance(transcriptChars, finalChars);
+	return {
+		edited: transcript.trim() !== finalText.trim(),
+		word_distance: wordDistance,
+		word_error_rate: wordDistance / Math.max(transcriptWords.length, 1),
+		char_distance: charDistance,
+		char_error_rate: charDistance / Math.max(transcriptChars.length, 1),
+	};
+}
+
 function buildRequest(_ctx: ExtensionContext): WayvoiceRequest {
 	return {
 		cmd: "toggle",
@@ -231,7 +351,7 @@ function keywordContext(ctx: ExtensionContext): string {
 
 	for (const entry of [...branch].reverse()) {
 		const message = entry.message;
-		if (!message || message.role !== "user") continue;
+		if (message?.role !== "user") continue;
 		lines.push(`user: ${truncateText(contentText(message.content), 400)}`);
 		if (lines.length >= KEYWORD_CONTEXT_MESSAGES) break;
 	}
@@ -414,6 +534,7 @@ async function updateDynamicKeywords(
 	}
 	dynamicKeywords = nextKeywords;
 	dynamicFragments = nextFragments;
+	saveHintState();
 	debug(`dynamic keywords: ${JSON.stringify(dynamicKeywords)}`);
 	debug(`dynamic fragments: ${JSON.stringify(dynamicFragments)}`);
 	log(
@@ -447,6 +568,26 @@ async function toggleVoice(
 		if (response.text?.trim()) {
 			const transcript = response.text.trim();
 			ctx.ui.pasteToEditor(transcript);
+			const insertedAt = new Date().toISOString();
+			pendingTranscript = {
+				id: randomUUID(),
+				transcript,
+				request,
+				cwd: ctx.cwd,
+				sessionFile: sessionFile(ctx),
+				insertedAt,
+			};
+			logTranscriptEvent({
+				event: "voice_inserted",
+				id: pendingTranscript.id,
+				cwd: pendingTranscript.cwd,
+				session_file: pendingTranscript.sessionFile,
+				inserted_at: insertedAt,
+				transcript,
+				request: request.overrides,
+				keywords: dynamicKeywords,
+				fragments: dynamicFragments,
+			});
 			showDebugWidget(ctx, "wayvoice: updating keywords…");
 			void updateDynamicKeywords(pi, ctx, transcript).catch((error) => {
 				logError(
@@ -469,6 +610,8 @@ async function toggleVoice(
 }
 
 export default function (pi: ExtensionAPI) {
+	loadHintState();
+
 	pi.registerShortcut(
 		(process.env.PI_WAYVOICE_SHORTCUT || DEFAULT_SHORTCUT) as never,
 		{
@@ -480,6 +623,27 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("voice", {
 		description: "Toggle wayvoice dictation into the Pi editor",
 		handler: async (_args, ctx) => toggleVoice(pi, ctx),
+	});
+
+	pi.on("input", async (event, ctx) => {
+		if (!pendingTranscript || event.source === "extension") {
+			return { action: "continue" };
+		}
+		const pending = pendingTranscript;
+		pendingTranscript = undefined;
+		const stats = correctionStats(pending.transcript, event.text);
+		logTranscriptEvent({
+			event: "voice_submitted",
+			id: pending.id,
+			cwd: ctx.cwd,
+			session_file: sessionFile(ctx),
+			inserted_at: pending.insertedAt,
+			submitted_at: new Date().toISOString(),
+			transcript: pending.transcript,
+			final_text: event.text,
+			...stats,
+		});
+		return { action: "continue" };
 	});
 
 	pi.registerCommand("voice-keywords", {
