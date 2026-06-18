@@ -118,6 +118,115 @@ let
       };
     };
 
+  mkHermesDashboardAuthBootstrap =
+    let
+      passwordHashScript = pkgs.writeText "hermes-dashboard-password-hash.py" ''
+        import base64
+        import hashlib
+        import secrets
+
+        password = secrets.token_urlsafe(24)
+        n = 2**14
+        r = 8
+        p = 1
+        salt = secrets.token_bytes(16)
+        digest = hashlib.scrypt(
+            password.encode("utf-8"),
+            salt=salt,
+            n=n,
+            r=r,
+            p=p,
+            dklen=32,
+            maxmem=0,
+        )
+        print(password)
+        print(
+            "scrypt$"
+            + str(n)
+            + "$"
+            + str(r)
+            + "$"
+            + str(p)
+            + "$"
+            + base64.b64encode(salt).decode()
+            + "$"
+            + base64.b64encode(digest).decode()
+        )
+      '';
+    in
+    pkgs.writeShellApplication {
+      name = "hermes-dashboard-auth-bootstrap";
+      runtimeInputs = [
+        pkgs.coreutils
+        pkgs.gnugrep
+        pkgs.python3
+      ];
+      text = ''
+        set -euo pipefail
+
+        hermes_dir=${lib.escapeShellArg "${hermes.home}/.hermes"}
+        env_path=${lib.escapeShellArg hermes.envFile}
+        password_path="$hermes_dir/dashboard-password"
+
+        install -d -m 0750 -o hermes -g hermes "$hermes_dir"
+        if [ ! -e "$env_path" ]; then
+          install -m 0600 -o hermes -g hermes /dev/null "$env_path"
+        fi
+
+        set_env_var() {
+          key="$1"
+          value="$2"
+          tmp="$(mktemp)"
+          grep -v "^$key=" "$env_path" > "$tmp" || true
+          printf '%s=%s\n' "$key" "$value" >> "$tmp"
+          install -m 0600 -o hermes -g hermes "$tmp" "$env_path"
+          rm -f "$tmp"
+        }
+
+        ensure_env_var() {
+          key="$1"
+          value="$2"
+          if ! grep -q "^$key=" "$env_path"; then
+            set_env_var "$key" "$value"
+          fi
+        }
+
+        ensure_env_var HERMES_DASHBOARD_BASIC_AUTH_USERNAME admin
+
+        needs_password=false
+        if ! grep -Eq '^(HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH|HERMES_DASHBOARD_BASIC_AUTH_PASSWORD)=' "$env_path"; then
+          needs_password=true
+        elif [ ! -f "$password_path" ] && ! grep -q '^HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=' "$env_path"; then
+          needs_password=true
+        fi
+
+        if [ "$needs_password" = true ]; then
+          mapfile -t generated < <(python3 ${passwordHashScript})
+          password="''${generated[0]}"
+          password_hash="''${generated[1]}"
+
+          set_env_var HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH "$password_hash"
+
+          password_tmp="$(mktemp)"
+          printf '%s\n' "$password" > "$password_tmp"
+          install -m 0600 -o root -g root "$password_tmp" "$password_path"
+          rm -f "$password_tmp"
+        fi
+
+        if ! grep -q '^HERMES_DASHBOARD_BASIC_AUTH_SECRET=' "$env_path"; then
+          secret="$(python3 - <<'PY'
+        import secrets
+        print(secrets.token_urlsafe(48))
+        PY
+        )"
+          set_env_var HERMES_DASHBOARD_BASIC_AUTH_SECRET "$secret"
+        fi
+
+        chown hermes:hermes "$env_path"
+        chmod 0600 "$env_path"
+      '';
+    };
+
   mkForgejoBootstrap =
     {
       agentName,
@@ -249,7 +358,6 @@ lib.mkMerge [
     };
 
     environment.systemPackages = [
-      llmPkgs.hermes-agent
       llmPkgs.openclaw
       zmxPkg
       pkgs.podman-compose
@@ -264,8 +372,6 @@ lib.mkMerge [
       "d /srv/agents/openclaw/home/.openclaw/secrets 0700 openclaw openclaw -"
       "d /srv/agents/openclaw/workspace 0750 openclaw openclaw -"
       "d /srv/agents/hermes 0750 hermes hermes -"
-      "d /srv/agents/hermes/home 0750 hermes hermes -"
-      "d /srv/agents/hermes/workspace 0750 hermes hermes -"
     ];
 
     services.tailscaleServe.services = {
@@ -273,6 +379,12 @@ lib.mkMerge [
         target = "http://127.0.0.1:18789";
         wants = [ "openclaw.service" ];
         after = [ "openclaw.service" ];
+      };
+      hermes-dashboard = {
+        serviceName = "svc:hermes";
+        target = "http://127.0.0.1:9119";
+        wants = [ "hermes-dashboard.service" ];
+        after = [ "hermes-dashboard.service" ];
       };
     };
   }
@@ -309,27 +421,142 @@ lib.mkMerge [
     ];
   })
 
-  (mkAgentService {
-    name = "hermes";
-    uid = 3102;
-    package = llmPkgs.hermes-agent;
-    command = "${llmPkgs.hermes-agent}/bin/hermes gateway run --replace --accept-hooks";
-    environmentFile = hermes.envFile;
-    extraEnvironment.HERMES_HOME = "${hermes.home}/.hermes";
-    execStartPre = [
-      "+${
-        mkForgejoBootstrap {
-          agentName = "hermes";
-          botUser = "maelle-bot";
-          botDisplayName = "Maelle";
-          botEmail = "maelle-bot@obelisk.local";
-          uid = 3102;
-          extraExports.HERMES_HOME = "${hermes.home}/.hermes";
-          inherit (hermes) workspace;
-        }
-      }/bin/hermes-forgejo-bootstrap"
-      "+${hermes.prepareConfig}/bin/hermes-prepare-config"
-    ];
-    extraServiceConfig.TimeoutStopSec = 240;
-  })
+  {
+    services.hermes-agent = {
+      enable = true;
+      createUser = false;
+      user = "hermes";
+      group = "hermes";
+      stateDir = hermes.home;
+      workingDirectory = hermes.workspace;
+      addToSystemPackages = true;
+      extraArgs = [
+        "run"
+        "--replace"
+        "--accept-hooks"
+      ];
+      extraDependencyGroups = [ "messaging" ];
+      extraPackages = commonPath;
+      restartSec = 10;
+      settings = {
+        plugins.enabled = [ "discord" ];
+
+        model = {
+          provider = "openai-codex";
+          default = "gpt-5.5";
+        };
+
+        terminal = {
+          backend = "local";
+          working_dir = hermes.workspace;
+          cwd = hermes.workspace;
+        };
+
+        agent.restart_drain_timeout = 60;
+
+        discord = {
+          require_mention = true;
+          thread_require_mention = false;
+          auto_thread = true;
+          reactions = true;
+          allowed_channels = [
+            "777231848123924561"
+            "1510629338264113252"
+            "1512036755673448579"
+          ];
+          free_response_channels = [ "1512036755673448579" ];
+          history_backfill = true;
+          history_backfill_limit = 50;
+          allow_mentions = {
+            everyone = false;
+            roles = false;
+            users = true;
+            replied_user = true;
+          };
+        };
+      };
+    };
+
+    systemd.services.hermes-dashboard = {
+      description = "Hermes Agent web dashboard";
+      wantedBy = [ "multi-user.target" ];
+      wants = [
+        "network-online.target"
+        "hermes-agent.service"
+      ];
+      after = [
+        "network-online.target"
+        "hermes-agent.service"
+      ];
+      path = [
+        config.services.hermes-agent.package
+        pkgs.bash
+        pkgs.coreutils
+      ]
+      ++ commonPath;
+      environment = {
+        HOME = hermes.home;
+        HERMES_HOME = "${hermes.home}/.hermes";
+        HERMES_MANAGED = "true";
+        USER = "hermes";
+        LOGNAME = "hermes";
+        XDG_RUNTIME_DIR = "/run/user/3102";
+      };
+      serviceConfig = {
+        User = "hermes";
+        Group = "hermes";
+        WorkingDirectory = hermes.workspace;
+        ExecStartPre = "+${mkHermesDashboardAuthBootstrap}/bin/hermes-dashboard-auth-bootstrap";
+        ExecStart = "${config.services.hermes-agent.package}/bin/hermes dashboard --no-open --host 0.0.0.0 --port 9119 --skip-build";
+        Restart = "always";
+        RestartSec = 10;
+        UMask = "0007";
+        NoNewPrivileges = true;
+        ProtectSystem = "strict";
+        ProtectHome = false;
+        ReadWritePaths = [
+          hermes.home
+          hermes.workspace
+          "/run/user/3102"
+        ];
+        PrivateTmp = true;
+        TasksMax = 1024;
+      };
+    };
+
+    systemd.services.hermes-agent = {
+      wants = [
+        "linger-users.service"
+        "user@3102.service"
+      ];
+      after = [
+        "linger-users.service"
+        "user@3102.service"
+      ];
+      environment = {
+        USER = "hermes";
+        LOGNAME = "hermes";
+        XDG_RUNTIME_DIR = "/run/user/3102";
+        DOCKER_HOST = "unix:///run/user/3102/podman/podman.sock";
+        FJ_FALLBACK_HOST = forgejoUrl;
+      };
+      serviceConfig = {
+        ExecStartPre = "+${
+          mkForgejoBootstrap {
+            agentName = "hermes";
+            botUser = "maelle-bot";
+            botDisplayName = "Maelle";
+            botEmail = "maelle-bot@obelisk.local";
+            uid = 3102;
+            extraExports.HERMES_HOME = "${hermes.home}/.hermes";
+            inherit (hermes) workspace;
+          }
+        }/bin/hermes-forgejo-bootstrap";
+        ReadWritePaths = lib.mkAfter [ "/run/user/3102" ];
+        UnsetEnvironment = [ "MESSAGING_CWD" ];
+        TasksMax = 4096;
+        TimeoutStopSec = 240;
+      };
+    };
+  }
 ]

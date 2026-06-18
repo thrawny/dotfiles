@@ -28,6 +28,7 @@
     srvos.url = "github:nix-community/srvos";
     srvos.inputs.nixpkgs.follows = "nixpkgs";
     llm-agents.url = "github:numtide/llm-agents.nix";
+    hermes-agent.url = "github:NousResearch/hermes-agent";
     thrawny-pkgs = {
       url = "path:/home/thrawny/code/nix-pkgs";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -65,6 +66,7 @@
       disko,
       srvos,
       llm-agents,
+      hermes-agent,
       thrawny-pkgs,
       zmx,
       agent-browser,
@@ -129,6 +131,7 @@
             inherit
               self
               llm-agents
+              hermes-agent
               agentAssets
               thrawny-pkgs
               zen-browser
@@ -196,6 +199,7 @@
             inherit
               self
               llm-agents
+              hermes-agent
               agentAssets
               thrawny-pkgs
               zen-browser
@@ -211,6 +215,7 @@
             home-manager.nixosModules.home-manager
             disko.nixosModules.disko
             zmx.nixosModules.cache
+            hermes-agent.nixosModules.default
             {
               home-manager.extraSpecialArgs = flakeArgs;
             }
