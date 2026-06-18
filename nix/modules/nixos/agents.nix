@@ -16,6 +16,7 @@ let
     llmPkgs.claude-code
     llmPkgs.codex
     llmPkgs.pi
+    llmPkgs.agent-browser
     pkgs.bashInteractive
     pkgs.bun
     pkgs.coreutils
@@ -199,6 +200,7 @@ let
 
         install -d -m 0750 -o ${agentName} -g ${agentName} "$agent_home"
         install -d -m 0750 -o ${agentName} -g ${agentName} "$workspace"
+        install -d -m 0700 -o ${agentName} -g ${agentName} "$agent_home/.config"
         install -d -m 0700 -o ${agentName} -g ${agentName} "$agent_home/.config/forgejo"
         install -d -m 0700 -o ${agentName} -g ${agentName} "$fj_keys_dir"
 

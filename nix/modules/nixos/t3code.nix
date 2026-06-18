@@ -20,6 +20,7 @@ let
   forgejoHost = "forgejo.${config.dotfiles.tailnetDomain}";
   forgejoUrl = "https://${forgejoHost}";
   forgejoUser = "thrawny";
+  gitIgnores = import ../../lib/git-ignore.nix;
 
   codexConfig = pkgs.runCommand "t3code-codex-config.toml" { } ''
     cat ${lib.escapeShellArg (toString agentAssets.codexFiles.config)} > "$out"
@@ -56,10 +57,18 @@ let
       package = packageJsonForNpm;
       packageLock = packageLockJson;
       fetcherOpts = {
-        "node_modules/@effect/platform-node" = { name = "platform-node.tgz"; };
-        "node_modules/@effect/platform-node-shared" = { name = "platform-node-shared.tgz"; };
-        "node_modules/@effect/sql-sqlite-bun" = { name = "sql-sqlite-bun.tgz"; };
-        "node_modules/effect" = { name = "effect.tgz"; };
+        "node_modules/@effect/platform-node" = {
+          name = "platform-node.tgz";
+        };
+        "node_modules/@effect/platform-node-shared" = {
+          name = "platform-node-shared.tgz";
+        };
+        "node_modules/@effect/sql-sqlite-bun" = {
+          name = "sql-sqlite-bun.tgz";
+        };
+        "node_modules/effect" = {
+          name = "effect.tgz";
+        };
       };
     };
     npmConfigHook = pkgs.importNpmLock.npmConfigHook;
@@ -138,6 +147,9 @@ let
         name = Jonas Lergell
         email = jonas@lergell.se
 
+    [core]
+        excludesFile = ${home}/.config/git/ignore
+
     [credential "${forgejoUrl}"]
         helper = store
         username = ${forgejoUser}
@@ -151,6 +163,8 @@ let
     [url "${forgejoUrl}/"]
         insteadOf = forgejo:
   '';
+
+  gitIgnore = pkgs.writeText "t3code-global-gitignore" (lib.concatStringsSep "\n" gitIgnores + "\n");
 
   forgejoGuide = pkgs.writeText "t3code-forgejo.md" ''
     # Forgejo
@@ -226,6 +240,7 @@ let
       install -d -m 0700 ${lib.escapeShellArg codexHome}
       install -d -m 0750 ${lib.escapeShellArg "${codexHome}/skills"}
       install -d -m 0750 ${lib.escapeShellArg "${home}/.config/direnv"}
+      install -d -m 0750 ${lib.escapeShellArg "${home}/.config/git"}
       install -d -m 0700 ${lib.escapeShellArg "${home}/.config/forgejo"}
       install -d -m 0700 ${lib.escapeShellArg "${home}/.local/share/forgejo-cli"}
 
@@ -283,6 +298,7 @@ let
       rm -f "$settings_tmp"
 
       install -m 0600 ${gitConfig} ${lib.escapeShellArg "${home}/.gitconfig"}
+      install -m 0644 ${gitIgnore} ${lib.escapeShellArg "${home}/.config/git/ignore"}
       install -m 0644 ${direnvConfig} ${lib.escapeShellArg "${home}/.config/direnv/direnv.toml"}
       install -m 0644 ${direnvrc} ${lib.escapeShellArg "${home}/.config/direnv/direnvrc"}
       install -m 0644 ${zshenv} ${lib.escapeShellArg "${home}/.zshenv"}
@@ -330,9 +346,15 @@ in
     shell = pkgs.zsh;
   };
 
+  fonts = {
+    fontconfig.enable = true;
+    packages = [ pkgs.dejavu_fonts ];
+  };
+
   environment.systemPackages = [
     pkgs.direnv
     codexWithDirenv
+    llmPkgs.agent-browser
     pkgs.nix-direnv
     package
     pkgs.podman-compose
@@ -363,6 +385,7 @@ in
     path = [
       package
       codexWithDirenv
+      llmPkgs.agent-browser
       llmPkgs.codex
       pkgs.bashInteractive
       pkgs.coreutils
