@@ -109,6 +109,7 @@
           hunk
           llm-agents
           nix-index-database
+          thrawny-pkgs
           zmx
           ;
         containerAssets = storeHomeAssets;

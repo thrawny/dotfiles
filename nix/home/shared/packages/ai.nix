@@ -2,12 +2,14 @@
   pkgs,
   lib,
   llm-agents,
+  thrawny-pkgs,
   ...
 }:
 let
   inherit (pkgs.stdenv) isLinux;
   inherit (pkgs.stdenv.hostPlatform) system;
   llmPkgs = llm-agents.packages.${system};
+  thrawnyPkgs = thrawny-pkgs.packages.${system};
   acpx = pkgs.writeShellScriptBin "acpx" ''
     npm_acpx="$HOME/.npm-global/bin/acpx"
 
@@ -29,6 +31,7 @@ in
     llmPkgs.codex
     llmPkgs.pi
     pkgs.agent-browser
+    thrawnyPkgs.firecrawl-cli
   ]
   ++ lib.optionals isLinux [
     pkgs.bubblewrap
