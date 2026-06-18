@@ -3,18 +3,36 @@
   "defaultModel": "gpt-5.5",
   "defaultThinkingLevel": "high",
   "theme": "monokai-pi",
+  "diffTheme": "subtle",
+  "diffView": "unified",
+  "diffColors": {
+    "bgAdd": "#004466",
+    "bgDel": "#660100",
+    "bgAddHighlight": "#0077b3",
+    "bgDelHighlight": "#b30100",
+    "bgGutterAdd": "#003355",
+    "bgGutterDel": "#440100",
+    "bgEmpty": "#222222",
+    "fgAdd": "#5ad4e6",
+    "fgDel": "#ff6666",
+    "fgDim": "#78747d",
+    "fgLnum": "#78747d",
+    "fgRule": "#5f5b63",
+    "fgStripe": "#34313a",
+    "fgSafeMuted": "#c8c3cf",
+    "shikiTheme": "monokai"
+  },
   "shellPath": "/run/current-system/sw/bin/zsh",
   "enabledModels": [
-    "anthropic/claude-opus-4-7",
-    "fireworks/accounts/fireworks/models/kimi-k2p6",
-    "fireworks/accounts/fireworks/models/glm-5p1",
     "openai-codex/gpt-5.5"
   ],
   "packages": [
     "npm:@sting8k/pi-vcc",
     "npm:pi-subdir-context",
     "git:github.com/PurpleMyst/pi-goal",
-    "npm:@howaboua/pi-codex-conversion"
+    "npm:@diegopetrucci/pi-openai-fast",
+    "/home/thrawny/code/pi-codex-web-run",
+    "/home/thrawny/code/pi-diff"
   ],
   "lastChangelogVersion": "0.75.4",
   "hideThinkingBlock": true
