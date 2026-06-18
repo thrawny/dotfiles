@@ -69,6 +69,28 @@ sandbox() {
     load_env_file "$PWD/.secrets.sandbox"
   fi
 
+  # If the current environment points at a kubeconfig with a sibling
+  # sandbox-config, use that inside the sandbox. The sandbox kubeconfig should
+  # avoid profile-based AWS exec auth and use env-var AWS credentials instead.
+  if [[ -n "${KUBECONFIG:-}" ]]; then
+    IFS=: read -r -a kubeconfigs <<< "$KUBECONFIG"
+    local sandbox_kubeconfigs=() kubeconfig sandbox_kubeconfig
+    for kubeconfig in "${kubeconfigs[@]}"; do
+      sandbox_kubeconfig="$(dirname "$kubeconfig")/sandbox-config"
+      if [[ -f "$sandbox_kubeconfig" ]]; then
+        sandbox_kubeconfigs+=("$sandbox_kubeconfig")
+      else
+        sandbox_kubeconfigs+=("$kubeconfig")
+      fi
+    done
+    local IFS=:
+    export KUBECONFIG="${sandbox_kubeconfigs[*]}"
+  fi
+
+  # AWS inside the sandbox should use env-var credentials only. A profile name
+  # can make aws/kubectl try to read blocked host config files instead.
+  unset AWS_PROFILE
+
   # Optionally expose a single AWS account by exporting short-lived, scoped
   # credentials for one profile. ~/.aws stays denied below, so only these
   # env-var creds reach the sandbox: the SSO token (which can mint creds for
@@ -88,7 +110,6 @@ sandbox() {
     fi
     if aws_creds=$(aws configure export-credentials \
         --profile "$SANDBOX_AWS_PROFILE" --format env 2>/dev/null); then
-      unset AWS_PROFILE
       eval "$aws_creds"
       aws_region=$(aws configure get region --profile "$SANDBOX_AWS_PROFILE" 2>/dev/null || true)
       if [[ -n "$aws_region" ]]; then
