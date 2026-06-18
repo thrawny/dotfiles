@@ -108,9 +108,9 @@ let
     }
 
     #workspaces button.urgent {
-      color: #111318;
-      background: @waybar-warning;
-      border-color: rgba(255, 255, 255, 0.24);
+      color: #f7f1ff;
+      background: #004466;
+      border-color: transparent;
     }
 
     #battery.warning,
