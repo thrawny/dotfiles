@@ -3,6 +3,8 @@
 	"private": true,
 	"type": "module",
 	"scripts": {
+		"format": "oxfmt --write extensions tests",
+		"lint": "oxlint extensions tests --fix",
 		"test": "vitest run tests",
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
@@ -14,6 +16,8 @@
 	},
 	"devDependencies": {
 		"@types/node": "latest",
+		"oxfmt": "latest",
+		"oxlint": "latest",
 		"typescript": "latest",
 		"vitest": "latest"
 	}

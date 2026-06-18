@@ -20,11 +20,13 @@ gotestsum ./...
 
 ### Python
 
+Prefer Ruff for Python validation and formatting; Ruff is enough for routine syntax/parse checks and avoids writing `__pycache__` files.
+
 ```bash
 ruff check --fix <files> && ruff format <files>
 ```
 
-Pre-existing type errors can be ignored.
+Do not run `python -m py_compile` or `compileall` as a routine validation step. Only use them if explicitly requested or investigating interpreter-specific bytecode behavior. Pre-existing type errors can be ignored.
 
 ### Rust
 

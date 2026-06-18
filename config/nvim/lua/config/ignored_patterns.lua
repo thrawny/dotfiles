@@ -3,6 +3,7 @@ local M = {}
 local ignored = {
   { path = ".git", kind = "dir" },
   { path = "node_modules", kind = "dir" },
+  { path = "__pycache__", kind = "dir" },
   { path = ".venv", kind = "dir" },
   { path = ".ruff_cache", kind = "dir" },
   { path = "target", kind = "dir" },
@@ -25,12 +26,16 @@ function M.fzf_lua_file_ignore_patterns()
 end
 
 function M.snacks_exclude_globs()
-  return vim.tbl_map(function(item)
+  local globs = {}
+  for _, item in ipairs(ignored) do
     if item.kind == "file" then
-      return "**/" .. item.path
+      table.insert(globs, "**/" .. item.path)
+    else
+      table.insert(globs, "**/" .. item.path)
+      table.insert(globs, "**/" .. item.path .. "/**")
     end
-    return "**/" .. item.path .. "/**"
-  end, ignored)
+  end
+  return globs
 end
 
 return M

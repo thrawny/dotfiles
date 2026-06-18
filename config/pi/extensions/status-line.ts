@@ -121,8 +121,8 @@ export function isCodexFastEnabled(
 		const openai = (config as { openai?: unknown }).openai;
 		return Boolean(
 			openai &&
-				typeof openai === "object" &&
-				(openai as { fast?: unknown }).fast === true,
+			typeof openai === "object" &&
+			(openai as { fast?: unknown }).fast === true,
 		);
 	} catch {
 		return false;

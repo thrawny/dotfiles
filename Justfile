@@ -20,7 +20,8 @@ ai: nix::ai
 
 # Check and typecheck Pi config/extensions
 pi:
-    biome check --write config/pi/extensions config/pi/tests
+    pnpm --dir config/pi run lint
+    pnpm --dir config/pi run format
     pnpm --dir config/pi run typecheck
     pnpm --dir config/pi test
 

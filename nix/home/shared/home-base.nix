@@ -93,6 +93,7 @@ in
     sessionVariables = {
       FZF_CTRL_R_OPTS = "--bind esc:print-query --bind ctrl-c:print-query";
       PYTHONDONTWRITEBYTECODE = "1";
+      PYTHONPYCACHEPREFIX = "${config.xdg.cacheHome}/python-pycache";
       PYTHONUNBUFFERED = "1";
       GOPATH = "$HOME/go";
       PNPM_HOME = "$HOME/.local/share/pnpm";

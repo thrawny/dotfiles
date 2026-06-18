@@ -296,7 +296,7 @@ function editDistance<T>(left: T[], right: T[]): number {
 		{ length: right.length + 1 },
 		(_, index) => index,
 	);
-	const current = new Array<number>(right.length + 1);
+	const current = Array.from({ length: right.length + 1 }, () => 0);
 	for (let i = 0; i < left.length; i++) {
 		current[0] = i + 1;
 		for (let j = 0; j < right.length; j++) {
