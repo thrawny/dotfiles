@@ -5,11 +5,13 @@
   pkgs,
   llm-agents,
   t3code,
+  zmx,
   ...
 }:
 let
   inherit (pkgs.stdenv.hostPlatform) system;
   llmPkgs = llm-agents.packages.${system};
+  zmxPkg = zmx.packages.${system}.zmx-main;
 
   uid = 3103;
   home = "/srv/t3code";
@@ -360,6 +362,7 @@ in
     pkgs.podman-compose
     prepare
     pkgs.starship
+    zmxPkg
     pkgs.zsh
   ];
 
@@ -402,6 +405,7 @@ in
       pkgs.ripgrep
       pkgs.starship
       pkgs.uv
+      zmxPkg
       pkgs.zsh
     ];
     environment = {

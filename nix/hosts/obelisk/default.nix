@@ -77,6 +77,7 @@ in
       ../../home/shared/zsh.nix
       ../../home/shared/git.nix
       ../../home/shared/starship.nix
+      ../../home/shared/zmx.nix
     ];
 
     programs.home-manager.enable = true;

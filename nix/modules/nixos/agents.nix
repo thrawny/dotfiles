@@ -3,11 +3,13 @@
   lib,
   pkgs,
   llm-agents,
+  zmx,
   ...
 }:
 let
   inherit (pkgs.stdenv.hostPlatform) system;
   llmPkgs = llm-agents.packages.${system};
+  zmxPkg = zmx.packages.${system}.zmx-main;
   openclaw = import ./openclaw.nix { inherit config lib pkgs; };
   hermes = import ./hermes.nix { inherit config lib pkgs; };
   forgejoHost = "forgejo.${config.dotfiles.tailnetDomain}";
@@ -17,6 +19,7 @@ let
     llmPkgs.codex
     llmPkgs.pi
     llmPkgs.agent-browser
+    zmxPkg
     pkgs.bashInteractive
     pkgs.bun
     pkgs.coreutils
@@ -248,6 +251,7 @@ lib.mkMerge [
     environment.systemPackages = [
       llmPkgs.hermes-agent
       llmPkgs.openclaw
+      zmxPkg
       pkgs.podman-compose
     ]
     ++ commonPath;

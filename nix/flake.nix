@@ -202,6 +202,7 @@
               walker
               nurPkgs
               xremap-flake
+              zmx
               ;
           };
           modules = [
