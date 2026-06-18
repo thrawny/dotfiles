@@ -735,7 +735,7 @@
         "nixpkgs-xwayland": "nixpkgs-xwayland",
         "nur": "nur",
         "srvos": "srvos",
-        "t3code": "t3code",
+        "thrawny-pkgs": "thrawny-pkgs",
         "walker": "walker",
         "xremap-flake": "xremap-flake",
         "zen-browser": "zen-browser",
@@ -852,20 +852,21 @@
         "type": "github"
       }
     },
-    "t3code": {
-      "flake": false,
+    "thrawny-pkgs": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
       "locked": {
-        "lastModified": 1780888907,
-        "narHash": "sha256-VviFp2VBTsKppt4PPzQXX6nEg/4T6fFjOtlX3GMKhbk=",
-        "owner": "pingdotgg",
-        "repo": "t3code",
-        "rev": "0e4a43519fe4fa85ce60aa8d6d53c067e56d2fca",
-        "type": "github"
+        "lastModified": 1781804575,
+        "narHash": "sha256-ksQdhOTFZQcwNWfCMyRfayNfK8TgMZ+ZIOnC/65saQM=",
+        "path": "/home/thrawny/code/nix-pkgs",
+        "type": "path"
       },
       "original": {
-        "owner": "pingdotgg",
-        "repo": "t3code",
-        "type": "github"
+        "path": "/home/thrawny/code/nix-pkgs",
+        "type": "path"
       }
     },
     "treefmt-nix": {

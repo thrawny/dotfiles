@@ -28,9 +28,9 @@
     srvos.url = "github:nix-community/srvos";
     srvos.inputs.nixpkgs.follows = "nixpkgs";
     llm-agents.url = "github:numtide/llm-agents.nix";
-    t3code = {
-      url = "github:pingdotgg/t3code";
-      flake = false;
+    thrawny-pkgs = {
+      url = "path:/home/thrawny/code/nix-pkgs";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
     zmx.url = "github:thrawny/zmx-flake";
     agent-browser = {
@@ -65,7 +65,7 @@
       disko,
       srvos,
       llm-agents,
-      t3code,
+      thrawny-pkgs,
       zmx,
       agent-browser,
       mattpocock-skills,
@@ -130,7 +130,7 @@
               self
               llm-agents
               agentAssets
-              t3code
+              thrawny-pkgs
               zen-browser
               walker
               nurPkgs
@@ -197,7 +197,7 @@
               self
               llm-agents
               agentAssets
-              t3code
+              thrawny-pkgs
               zen-browser
               walker
               nurPkgs

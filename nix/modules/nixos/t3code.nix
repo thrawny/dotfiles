@@ -4,7 +4,7 @@
   lib,
   pkgs,
   llm-agents,
-  t3code,
+  thrawny-pkgs,
   zmx,
   ...
 }:
@@ -40,76 +40,7 @@ let
     '') codexSkills
   );
 
-  packageJson = lib.importJSON ./t3code-package.json;
-  packageJsonForNpm = builtins.removeAttrs packageJson [ "overrides" ];
-  packageLockJson = lib.importJSON ./t3code-package-lock.json;
-
-  package = pkgs.buildNpmPackage rec {
-    pname = "t3code";
-    version = "0.0.27";
-    nodejs = pkgs.nodejs_24;
-
-    src = pkgs.fetchurl {
-      url = "https://registry.npmjs.org/t3/-/t3-${version}.tgz";
-      hash = "sha512-quBdb42BXXKXxyfqIFEnvCYrMndzw92JbAoIPkDZr2aiGfRyLT+nyvDjcJjK2IHSO9ZczEmda1Fx8spBIEX/HA==";
-    };
-
-    sourceRoot = "package";
-    npmDeps = pkgs.importNpmLock {
-      package = packageJsonForNpm;
-      packageLock = packageLockJson;
-      fetcherOpts = {
-        "node_modules/@effect/platform-node" = {
-          name = "platform-node.tgz";
-        };
-        "node_modules/@effect/platform-node-shared" = {
-          name = "platform-node-shared.tgz";
-        };
-        "node_modules/@effect/sql-sqlite-bun" = {
-          name = "sql-sqlite-bun.tgz";
-        };
-        "node_modules/effect" = {
-          name = "effect.tgz";
-        };
-      };
-    };
-    npmConfigHook = pkgs.importNpmLock.npmConfigHook;
-    dontNpmBuild = true;
-
-    nativeBuildInputs = [ pkgs.makeWrapper ];
-
-    postPatch = ''
-      cp ${./t3code-package.json} package.json
-      cp ${./t3code-package-lock.json} package-lock.json
-      node -e '
-        const fs = require("fs");
-        const pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
-        delete pkg.overrides;
-        fs.writeFileSync("package.json", JSON.stringify(pkg, null, 2) + "\n");
-      '
-    '';
-
-    installPhase = ''
-      runHook preInstall
-
-      install -d "$out/lib/t3code" "$out/bin"
-      cp -R . "$out/lib/t3code/"
-
-      makeWrapper ${lib.getExe pkgs.nodejs_24} "$out/bin/t3" \
-        --add-flags "$out/lib/t3code/dist/bin.mjs" \
-        --prefix PATH : ${
-          lib.makeBinPath [
-            llmPkgs.codex
-            pkgs.git
-            pkgs.nodejs_24
-          ]
-        }
-
-      runHook postInstall
-    '';
-
-    meta.mainProgram = "t3";
-  };
+  package = thrawny-pkgs.packages.${system}.t3code;
 
   codexWithDirenv = pkgs.writeShellApplication {
     name = "t3code-codex";
