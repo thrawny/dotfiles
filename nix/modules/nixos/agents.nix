@@ -446,6 +446,16 @@ lib.mkMerge [
           default = "gpt-5.5";
         };
 
+        image_gen = {
+          provider = "openai-codex";
+          openai-codex.model = "gpt-image-2-medium";
+        };
+
+        compression = {
+          threshold = 0.85;
+          codex_gpt55_autoraise = false;
+        };
+
         terminal = {
           backend = "local";
           working_dir = hermes.workspace;
