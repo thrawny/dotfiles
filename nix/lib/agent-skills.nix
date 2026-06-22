@@ -9,6 +9,7 @@
 let
   configRoot = containerAssets.config;
   skillsRoot = containerAssets.skills;
+  agentInstructions = import ./agent-instructions.nix;
   codexCommandsRoot = configRoot + "/codex/commands";
 
   agents = [
@@ -75,7 +76,7 @@ rec {
     ;
 
   codexFiles = {
-    agents = configRoot + "/codex/AGENTS-GLOBAL.md";
+    agents = builtins.toFile "codex-AGENTS.md" agentInstructions.codexGlobal;
     config =
       if builtins.pathExists (configRoot + "/codex/config.toml") then
         configRoot + "/codex/config.toml"

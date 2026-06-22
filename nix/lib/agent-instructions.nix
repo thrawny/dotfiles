@@ -1,0 +1,91 @@
+rec {
+  ephemeralTools = ''
+    ## Ephemeral tools
+
+    If a needed tool/library is missing, prefer reproducible one-offs over ad hoc scripts or global installs.
+
+    Prefer `, <cmd> ...` for one-off CLI tools by executable name.
+    Examples: `, magick in.png out.jpg`, `, tesseract in.png stdout`.
+
+    Use `nix shell nixpkgs#<pkg> -c <cmd> ...` when you need an explicit package, multiple tools, or comma fails.
+    Use `nix run` only when the package's default app is exactly the command you need.
+
+    For PDF-to-Markdown extraction, prefer `pymupdf4llm`.
+
+    Use `uv run --with <pkg> python ...` for Python libs not available in the current environment.
+    Examples: `uv run --with pillow python image.py`, `uv run --with pandas --with openpyxl python sheet.py`.
+    PDF example: `import pymupdf4llm; print(pymupdf4llm.to_markdown("document.pdf"))`.
+  '';
+
+  claudeGlobal = ''
+    # Global Claude Code Instructions
+
+    ${ephemeralTools}
+  '';
+
+  codexGlobal = ''
+    # Global Codex Instructions
+
+    ${ephemeralTools}
+    ## Code Quality Tools
+
+    After editing files, run the appropriate formatting/linting tools. These are fallback defaults when a project has no specific instructions.
+
+    ### Go
+
+    Always follow `modernize` diagnostics when editing Go code. Apply suggested modernizations to use current Go idioms and language features.
+
+    ```bash
+    golangci-lint fmt --enable golines <files>
+    ```
+
+    Prefer `gotestsum` over `go test` for running tests:
+
+    ```bash
+    gotestsum ./...
+    ```
+
+    ### Python
+
+    Prefer Ruff for Python validation and formatting; Ruff is enough for routine syntax/parse checks and avoids writing `__pycache__` files.
+
+    ```bash
+    ruff check --fix <files> && ruff format <files>
+    ```
+
+    Do not run `python -m py_compile` or `compileall` as a routine validation step. Only use them if explicitly requested or investigating interpreter-specific bytecode behavior. Pre-existing type errors can be ignored.
+
+    ### Rust
+
+    ```bash
+    cargo fmt
+    ```
+
+    ### TypeScript/JavaScript
+
+    ```bash
+    biome check --write <files>
+    ```
+
+    For type checking, prefer project task runners (for example `just typecheck`).
+    If no task runner recipe exists, run:
+
+    ```bash
+    tsc --noEmit
+    ```
+
+    ### Nix
+
+    ```bash
+    nixfmt <files>
+    ```
+  '';
+
+  piGlobal = ''
+    # Global Pi Instructions
+
+    Prefer `fd` over `find` for file discovery when available; it is faster, respects ignore files by default, and has friendlier syntax.
+
+    ${ephemeralTools}
+  '';
+}

@@ -35,6 +35,10 @@
     lsof
     actionlint
 
+    # Document / image tools
+    poppler_utils
+    imagemagick
+
     # Git
     gh
     forgejo-cli
@@ -47,6 +51,8 @@
     (python314.withPackages (
       ps: with ps; [
         requests
+        pillow
+        pymupdf4llm
       ]
     ))
     uv

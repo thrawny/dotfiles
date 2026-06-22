@@ -20,6 +20,7 @@ let
   rulesRoot = if repoBacked then ../../../rules else containerAssets.rules;
   rulesSource =
     if repoBacked then config.lib.file.mkOutOfStoreSymlink (toString rulesRoot) else rulesRoot;
+  agentInstructions = import ../../lib/agent-instructions.nix;
 
   seedExampleRepo =
     example: destination:
@@ -83,9 +84,9 @@ in
         ".codex/hooks.json".source = configSource "codex/hooks.json";
       }
       // {
-        ".codex/AGENTS.md".source = configSource "codex/AGENTS-GLOBAL.md";
+        ".codex/AGENTS.md".text = agentInstructions.codexGlobal;
 
-        ".pi/agent/AGENTS.md".source = configSource "pi/AGENTS-GLOBAL.md";
+        ".pi/agent/AGENTS.md".text = agentInstructions.piGlobal;
         ".pi/agent/rules".source = rulesSource;
         ".pi/agent/prompts".source = configSource "pi/prompts";
         ".pi/agent/commands".source = configSource "pi/commands";
@@ -96,7 +97,7 @@ in
         ".claude/commands".source = configSource "claude/commands";
         ".claude/agents".source = configSource "claude/agents";
         ".claude/rules".source = rulesSource;
-        ".claude/CLAUDE.md".source = configSource "claude/CLAUDE-GLOBAL.md";
+        ".claude/CLAUDE.md".text = agentInstructions.claudeGlobal;
         ".claude/.keep".text = "";
       }
       // lib.optionalAttrs enablePiExtensions {
