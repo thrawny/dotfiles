@@ -310,7 +310,6 @@
           x86_64-linux.default = mkDevShell nixpkgs.legacyPackages.x86_64-linux;
           aarch64-linux.default = mkDevShell nixpkgs.legacyPackages.aarch64-linux;
           aarch64-darwin.default = mkDevShell nixpkgs.legacyPackages.aarch64-darwin;
-          x86_64-darwin.default = mkDevShell nixpkgs.legacyPackages.x86_64-darwin;
         };
 
       formatter =
@@ -332,7 +331,6 @@
           x86_64-linux = mkFormatter nixpkgs.legacyPackages.x86_64-linux;
           aarch64-linux = mkFormatter nixpkgs.legacyPackages.aarch64-linux;
           aarch64-darwin = mkFormatter nixpkgs.legacyPackages.aarch64-darwin;
-          x86_64-darwin = mkFormatter nixpkgs.legacyPackages.x86_64-darwin;
         };
 
       homeConfigurations = {

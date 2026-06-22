@@ -36,7 +36,7 @@
     actionlint
 
     # Document / image tools
-    poppler_utils
+    poppler-utils
     imagemagick
 
     # Git
