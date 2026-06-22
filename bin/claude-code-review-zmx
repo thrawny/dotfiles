@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""Run Claude Code /code-review in a zmx session and extract JSON results.
+
+This is intentionally a deterministic wrapper around an interactive Claude session:
+- starts a fresh zmx session
+- runs `claude --permission-mode auto /code-review <instructions>`
+- polls zmx history until completion / idle prompt / timeout
+- attempts to parse a marked JSON block, then fenced JSON, then the last JSON array/object
+- falls back to dumping the last assistant-ish message when parsing fails
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import time
+from dataclasses import dataclass
+from typing import Any
+
+ANSI_RE = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]")
+DEFAULT_INSTRUCTIONS = """Review only the previous commit (HEAD~1..HEAD).
+Return the code-review JSON results only.
+Do not modify files, do not post comments, do not run fixes.
+At the end, print exactly:
+BEGIN_CODE_REVIEW_JSON
+<valid JSON array>
+END_CODE_REVIEW_JSON
+""".strip()
+
+
+@dataclass
+class ParseResult:
+    data: Any | None
+    source: str | None
+    error: str | None = None
+
+
+def run(cmd: list[str], *, check: bool = False, timeout: int | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=check, timeout=timeout)
+
+
+def zmx_history(session: str, *, vt: bool = False) -> str:
+    cmd = ["zmx", "history", session]
+    if vt:
+        cmd.append("--vt")
+    proc = run(cmd)
+    return proc.stdout + proc.stderr
+
+
+def strip_ansi(text: str) -> str:
+    return ANSI_RE.sub("", text).replace("\r", "")
+
+
+def fix_wrapped_json(s: str) -> str:
+    """Join terminal-hard-wrapped newlines that occur inside JSON strings."""
+    out: list[str] = []
+    in_str = False
+    escaped = False
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == '"' and not escaped:
+            in_str = not in_str
+            out.append(c)
+        elif c == "\n" and in_str and not escaped:
+            j = i + 1
+            while j < len(s) and s[j] == " ":
+                j += 1
+            out.append(" ")
+            i = j - 1
+        else:
+            out.append(c)
+
+        if in_str and c == "\\" and not escaped:
+            escaped = True
+        else:
+            escaped = False
+        i += 1
+    return "".join(out).strip()
+
+
+def try_json(candidate: str) -> Any | None:
+    candidate = fix_wrapped_json(candidate.strip())
+    if not candidate:
+        return None
+    try:
+        return json.loads(candidate)
+    except json.JSONDecodeError:
+        return None
+
+
+def balanced_json_candidates(text: str) -> list[str]:
+    """Return balanced top-level []/{} candidates, in occurrence order."""
+    candidates: list[str] = []
+    for opener, closer in (("[", "]"), ("{", "}")):
+        starts = [m.start() for m in re.finditer(re.escape(opener), text)]
+        for start in starts:
+            depth = 0
+            in_str = False
+            escaped = False
+            for i in range(start, len(text)):
+                c = text[i]
+                if c == '"' and not escaped:
+                    in_str = not in_str
+                elif not in_str:
+                    if c == opener:
+                        depth += 1
+                    elif c == closer:
+                        depth -= 1
+                        if depth == 0:
+                            candidates.append(text[start : i + 1])
+                            break
+
+                if in_str and c == "\\" and not escaped:
+                    escaped = True
+                else:
+                    escaped = False
+    return candidates
+
+
+def parse_review_json(raw_history: str) -> ParseResult:
+    text = strip_ansi(raw_history)
+
+    markers = re.findall(r"BEGIN_CODE_REVIEW_JSON\s*(.*?)\s*END_CODE_REVIEW_JSON", text, re.S)
+    for marker_body in reversed(markers):
+        data = try_json(marker_body)
+        if data is not None:
+            return ParseResult(data, "BEGIN_CODE_REVIEW_JSON")
+
+    for m in reversed(list(re.finditer(r"```(?:json)?\s*(.*?)\s*```", text, re.S | re.I))):
+        data = try_json(m.group(1))
+        if data is not None:
+            return ParseResult(data, "fenced-json")
+
+    # Prefer the final pretty-printed review array, often introduced as an indented line: "  [".
+    for anchor in ("\n  [", "\n["):
+        start = text.rfind(anchor)
+        if start != -1:
+            for cand in balanced_json_candidates(text[start:]):
+                data = try_json(cand)
+                if data is not None:
+                    return ParseResult(data, "last-array")
+
+    for cand in reversed(balanced_json_candidates(text)):
+        data = try_json(cand)
+        if data is not None:
+            return ParseResult(data, "balanced-json")
+
+    return ParseResult(None, None, "no valid JSON found")
+
+
+def fallback_message(raw_history: str, max_chars: int) -> str:
+    text = strip_ansi(raw_history).strip()
+    # Drop huge env preamble if present; keep the final Claude output area.
+    idx = max(text.rfind("Here is the final review."), text.rfind("Code Review"), text.rfind("BEGIN_CODE_REVIEW_JSON"))
+    if idx != -1:
+        text = text[idx:]
+    if len(text) > max_chars:
+        text = text[-max_chars:]
+    return text
+
+
+def is_done(history: str) -> bool:
+    if "ZMX_TASK_COMPLETED:" in history:
+        return True
+    if "END_CODE_REVIEW_JSON" in history:
+        return True
+    # Claude Code stays interactive after a slash command, so the shell sentinel often
+    # never prints. Treat the completed-answer footer as a fallback completion signal.
+    if "Crunched for" in history and "❯" in history:
+        return True
+    if "Want me to apply fixes" in history and "❯" in history:
+        return True
+    return False
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Run Claude Code /code-review via zmx and parse JSON output")
+    parser.add_argument("instructions", nargs="*", help="Additional/freeform instructions. Defaults to previous commit review.")
+    parser.add_argument("--session", default="claude-review", help="zmx session name (default: claude-review)")
+    parser.add_argument("--timeout", type=int, default=1800, help="seconds to wait (default: 1800)")
+    parser.add_argument("--poll", type=int, default=10, help="poll interval seconds (default: 10)")
+    parser.add_argument("--keep-session", action="store_true", help="do not kill an existing session before starting")
+    parser.add_argument("--fallback-chars", type=int, default=12000, help="fallback text chars to dump on parse failure")
+    parser.add_argument("--raw-fallback", action="store_true", help="always print fallback text instead of parsed JSON")
+    args = parser.parse_args()
+
+    instructions = " ".join(args.instructions).strip() or DEFAULT_INSTRUCTIONS
+    if "BEGIN_CODE_REVIEW_JSON" not in instructions:
+        instructions = instructions.rstrip() + "\n\nAt the end, print exactly:\nBEGIN_CODE_REVIEW_JSON\n<valid JSON array>\nEND_CODE_REVIEW_JSON"
+
+    if not args.keep_session:
+        run(["zmx", "kill", args.session])
+
+    with tempfile.NamedTemporaryFile("w", encoding="utf-8", delete=False, prefix="claude-review-", suffix=".txt") as f:
+        f.write(instructions)
+        prompt_file = f.name
+
+    shell = 'claude --permission-mode auto /code-review "$(cat "$1")"; echo ZMX_TASK_COMPLETED:$?'
+    try:
+        start = run(["zmx", "run", args.session, "sh", "-lc", shell, "sh", prompt_file])
+        if start.returncode not in (0,):
+            print(start.stdout, end="", file=sys.stderr)
+            print(start.stderr, end="", file=sys.stderr)
+            return start.returncode
+
+        deadline = time.time() + args.timeout
+        last_status_at = 0.0
+        while time.time() < deadline:
+            hist = zmx_history(args.session)
+            if is_done(hist):
+                break
+            now = time.time()
+            if now - last_status_at > 60:
+                print(f"waiting for zmx session {args.session}...", file=sys.stderr)
+                last_status_at = now
+            time.sleep(args.poll)
+        else:
+            print(f"timed out waiting for zmx session {args.session}", file=sys.stderr)
+
+        raw = zmx_history(args.session, vt=True)
+        if args.raw_fallback:
+            print(fallback_message(raw, args.fallback_chars))
+            return 0
+
+        parsed = parse_review_json(raw)
+        if parsed.data is not None:
+            print(json.dumps(parsed.data, ensure_ascii=False, indent=2))
+            print(f"parsed_source={parsed.source}", file=sys.stderr)
+            return 0
+
+        print(f"failed_to_parse_json={parsed.error}; dumping fallback", file=sys.stderr)
+        print(fallback_message(raw, args.fallback_chars))
+        return 2
+    finally:
+        try:
+            os.unlink(prompt_file)
+        except FileNotFoundError:
+            pass
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
