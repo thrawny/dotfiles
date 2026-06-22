@@ -1,13 +1,7 @@
-{ config, pkgs, ... }:
+{ config, ... }:
 let
   homeDir = config.home.homeDirectory;
 
-  quotabarSessionOnly =
-    provider:
-    pkgs.writeShellScript "quotabar-${provider}-waybar-session-only" ''
-      set -euo pipefail
-      ${homeDir}/.cargo/bin/quotabar waybar --provider ${provider} | ${pkgs.jq}/bin/jq -c '.text |= split(" ")[0]'
-    '';
   # Shared style for both configs
   sharedStyle = ''
     @define-color waybar-bg rgba(18, 20, 24, 0.68);
@@ -182,16 +176,6 @@ let
     }
   '';
 
-  compactQuotabarModules = {
-    "custom/quotabar-claude" = sharedModules."custom/quotabar-claude" // {
-      exec = "${quotabarSessionOnly "claude"}";
-    };
-
-    "custom/quotabar-codex" = sharedModules."custom/quotabar-codex" // {
-      exec = "${quotabarSessionOnly "codex"}";
-    };
-  };
-
   # Shared modules (work on both compositors)
   sharedModules = {
     clock = {
@@ -352,7 +336,7 @@ let
     };
   };
 
-  compactNiriBar = (sharedModules // compactQuotabarModules) // {
+  compactNiriBar = sharedModules // {
     layer = "top";
     position = "top";
     height = 24;
@@ -378,11 +362,6 @@ let
         dotfiles = "󰚩";
         default = "";
       };
-    };
-
-    clock = sharedModules.clock // {
-      format = "{:%H:%M}";
-      "format-alt" = "{:%a %d}";
     };
 
     battery = sharedModules.battery // {
