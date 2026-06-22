@@ -51,15 +51,7 @@ async function issues() {
   }
 }
 
-async function start(issueId: string) {
-  if (!issueId) {
-    console.error("Usage: linear start <issue-id>");
-    console.error("Example: linear start T-123");
-    process.exit(1);
-  }
-
-  const me = await client.viewer;
-
+function parseIssueId(issueId: string) {
   // Parse identifier (e.g., T-123 -> team key "T", number 123)
   const match = issueId.match(/^([A-Za-z]+)-(\d+)$/);
   if (!match) {
@@ -67,13 +59,18 @@ async function start(issueId: string) {
     console.error("Expected format: TEAM-123 (e.g., T-123)");
     process.exit(1);
   }
-  const [, teamKey, numberStr] = match;
+
+  return { teamKey: match[1], number: parseInt(match[2], 10) };
+}
+
+async function findIssue(issueId: string) {
+  const { teamKey, number } = parseIssueId(issueId);
 
   // Find the issue by team key and number
   const issues = await client.issues({
     filter: {
       team: { key: { eqIgnoreCase: teamKey } },
-      number: { eq: parseInt(numberStr, 10) },
+      number: { eq: number },
     },
     first: 1,
   });
@@ -82,6 +79,49 @@ async function start(issueId: string) {
     console.error(`Issue not found: ${issueId}`);
     process.exit(1);
   }
+
+  return issue;
+}
+
+async function getIssue(issueId: string) {
+  if (!issueId) {
+    console.error("Usage: linear issue get <issue-id>");
+    console.error("Example: linear issue get T-123");
+    process.exit(1);
+  }
+
+  const issue = await findIssue(issueId);
+  const [team, state, assignee, project, labels] = await Promise.all([
+    issue.team,
+    issue.state,
+    issue.assignee,
+    issue.project,
+    issue.labels(),
+  ]);
+
+  console.log(`${team?.key ?? "?"}-${issue.number}: ${issue.title}`);
+  console.log(`State: ${state?.name ?? "?"}`);
+  console.log(`Assignee: ${assignee?.name ?? "Unassigned"}`);
+  if (project) console.log(`Project: ${project.name}`);
+  if (labels.nodes.length) {
+    console.log(`Labels: ${labels.nodes.map((label) => label.name).join(", ")}`);
+  }
+  if (issue.priorityLabel) console.log(`Priority: ${issue.priorityLabel}`);
+  console.log(`Branch: ${issue.branchName}`);
+  console.log(`URL: ${issue.url}`);
+  console.log("");
+  console.log(issue.description || "No description");
+}
+
+async function start(issueId: string) {
+  if (!issueId) {
+    console.error("Usage: linear start <issue-id>");
+    console.error("Example: linear start T-123");
+    process.exit(1);
+  }
+
+  const me = await client.viewer;
+  const issue = await findIssue(issueId);
 
   // Get the team's "started" workflow state (In Progress)
   const team = await issue.team;
@@ -111,9 +151,32 @@ async function start(issueId: string) {
   console.log(`Branch: ${issue.branchName}`);
 }
 
+async function issue(command: string, args: string[]) {
+  switch (command) {
+    case "list":
+      await issues();
+      break;
+    case "get":
+      await getIssue(args[0]);
+      break;
+    case "start":
+      await start(args[0]);
+      break;
+    default:
+      console.log("Usage: linear issue <command> [args]");
+      console.log("Commands:");
+      console.log("  list         - List your issues and unassigned project issues");
+      console.log("  get <id>     - Show issue details");
+      console.log("  start <id>   - Self-assign issue and set to In Progress");
+  }
+}
+
 const command = process.argv[2] ?? "issues";
 
 switch (command) {
+  case "issue":
+    await issue(process.argv[3], process.argv.slice(4));
+    break;
   case "issues":
     await issues();
     break;
@@ -123,8 +186,7 @@ switch (command) {
   default:
     console.log("Usage: linear <command> [args]");
     console.log("Commands:");
-    console.log(
-      "  issues       - List your issues and unassigned project issues",
-    );
-    console.log("  start <id>   - Self-assign issue and set to In Progress");
+    console.log("  issue <command>  - Manage issues");
+    console.log("  issues           - Alias for issue list");
+    console.log("  start <id>       - Self-assign issue and set to In Progress");
 }
