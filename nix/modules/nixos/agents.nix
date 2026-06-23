@@ -439,7 +439,10 @@ lib.mkMerge [
       extraPackages = commonPath;
       restartSec = 10;
       settings = {
-        plugins.enabled = [ "discord" ];
+        plugins.enabled = [
+          "discord"
+          "telegram"
+        ];
 
         model = {
           provider = "openai-codex";
@@ -483,6 +486,12 @@ lib.mkMerge [
             users = true;
             replied_user = true;
           };
+        };
+
+        telegram = {
+          require_mention = true;
+          exclusive_bot_mentions = true;
+          group_allowed_chats = [ "-1003968451169" ];
         };
       };
     };
