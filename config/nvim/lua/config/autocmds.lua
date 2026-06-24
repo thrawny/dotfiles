@@ -219,6 +219,15 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "BufEnter" }, {
   desc = "Restore dadbod-ui query buffer context on buffer open/enter",
 })
 
+-- Detect nested SSH config files like ~/.ssh/kanel/config
+vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
+  pattern = "*/.ssh/*/config",
+  callback = function()
+    vim.bo.filetype = "sshconfig"
+  end,
+  desc = "Set sshconfig filetype for nested SSH config files",
+})
+
 -- Detect bun shebang and set filetype to typescript
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   pattern = "*",
