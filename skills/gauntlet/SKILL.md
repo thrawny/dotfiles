@@ -1,0 +1,70 @@
+---
+name: gauntlet
+description: Run Claude and Codex code reviews in parallel over the current changes, dedupe the findings, then fix the major ones (verifying each first) and summarize. Use when the user wants a thorough, cross-checked review-and-fix from both engines rather than just one.
+---
+
+# Gauntlet
+
+Run the current diff through a gauntlet of two independent reviewers — Claude's `/code-review` and Codex's `review` — at the same time, merge their findings, **fix the major issues by default**, and summarize. Issues that **both** engines flag are the highest-confidence ones.
+
+The parallel launch is handled by the bundled `scripts/gauntlet-review` launcher; this skill owns the judgment around it.
+
+Default behavior: fix major findings (high severity / Codex P1–P2). Minor and declined findings are reported, not fixed. If the user asks for report-only, do steps 1–3 and skip the fixing.
+
+## 1. Build a context brief (this is what cuts false positives)
+
+Reviewers given only a raw diff flag intentional choices as bugs. Write a short brief covering:
+
+- **Intent** — what this change does and why.
+- **Original task / goal** it serves.
+- **Deliberate choices** reviewers should NOT flag (intentional tradeoffs, accepted limitations).
+- **Out of scope** — areas not to comment on (pre-existing code, unrelated files).
+
+Derive it from the conversation, the task, commit messages, or the PR description. If the intent is genuinely unclear, ask the user one question rather than guessing — a wrong brief produces wrong findings. The script passes this brief verbatim to both engines and adds a standard precision-over-recall instruction itself.
+
+## 2. Run both reviewers
+
+The launcher is bundled at `scripts/gauntlet-review` in this skill's directory. Invoke it by its full path (substitute this skill's directory for `<skill-dir>`):
+
+```bash
+bash <skill-dir>/scripts/gauntlet-review "<your context brief>"
+```
+
+- Scope is auto-detected: the current branch's diff against `main`, or uncommitted changes when on `main`. Override with `--base <branch>`, `--uncommitted`, or `--commit <sha>` (before the brief). For a long brief, pipe it on stdin with a trailing `-`.
+- It runs both engines in parallel and prints two delimited blocks — `===== CLAUDE REVIEW (exit N) =====` and `===== CODEX REVIEW (exit N) =====` — plus a Codex log tail if Codex failed. **Reviews take minutes; allow a generous Bash timeout (up to 10 min / 600000 ms).**
+- If a block shows a non-zero exit, note that engine failed and continue with the other's findings.
+
+## 3. Dedupe
+
+Merge the two blocks into one set of unique issues:
+
+- Two findings are the **same issue** when they point at the same file and overlapping location *and* describe the same root cause — even if worded or scored differently. Merge them.
+- For each unique issue, record who raised it: `claude`, `codex`, or **both**.
+- **Agreement is a confidence signal** — issues both engines flag are most likely real; surface them first.
+- Codex scores P1/P2/P3, Claude scores high/medium/low — normalize to one scale (high/medium/low); on conflict take the higher.
+
+## 4. Fix the major issues (default)
+
+For each finding that is **major** (high severity / Codex P1–P2):
+
+1. **Verify it against the real code first** — open the file and adjacent code and confirm the bug is real, in scope, and not already handled. This verification is the main false-positive guard; the context brief is the other.
+2. If it holds up, fix it. If it's a false positive, intentional per the brief, or out of scope, **decline it** and record why — do not blindly apply findings.
+3. Keep fixes surgical: address the finding, don't expand scope or refactor unrelated code.
+
+**Stop and ask the user instead of fixing** when a fix would change the change's intended contract, balloon the diff well past its original scope, or when two findings prescribe conflicting fixes. Autofix is for clear, contained corrections — not redesigns.
+
+**Prove the fixes are safe.** After fixing, run the project's tests / checks (e.g. `just check`, the test suite, or the relevant build/lint). If a fix breaks something, revert it and report rather than piling on more changes. Don't re-run the reviewers just to produce a cleaner summary.
+
+Commit the fixes with `/gc`; **do not push** unless the user asks. Leave **minor** findings (medium/low, Codex P3) as a reported list — don't fix them unless the user asks.
+
+## 5. Summarize
+
+Present one unified report, highest severity first:
+
+| Severity | Location | Issue | Flagged by | Status |
+|----------|----------|-------|------------|--------|
+| high | `path:line` | one-line description | both | fixed |
+| high | `path:line` | … | codex | declined (false positive: …) |
+| medium | `path:line` | … | claude | reported |
+
+Close with a one-line tally: total unique findings, how many both engines agreed on, how many were fixed vs declined vs left as minor, and whether either engine failed to run.

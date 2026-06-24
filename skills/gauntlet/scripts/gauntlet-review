@@ -1,0 +1,108 @@
+#!/usr/bin/env bash
+# gauntlet-review — run Claude and Codex code reviews in parallel over the same
+# scope and print both raw findings in delimited sections.
+#
+# Mechanical launcher only: the caller (the `gauntlet` skill) supplies the
+# context brief and does all the judgment — dedupe, verify, fix, summarize.
+#
+# Usage:
+#   gauntlet-review [--base <branch> | --uncommitted | --commit <sha>] [brief]
+#   ... | gauntlet-review --uncommitted -      # read brief from stdin
+#
+# Scope defaults to the current branch vs main (--uncommitted when on main).
+# The brief is extra review context passed verbatim to both engines; omit it or
+# pass '-' to read from stdin (empty is allowed). Exits 0 if at least one engine
+# produced a result, non-zero only if both failed.
+#
+# Testable with stubs: put fake `claude`/`codex` earlier on PATH.
+set -euo pipefail
+
+usage() {
+  cat >&2 <<'EOF'
+Usage: gauntlet-review [--base <branch> | --uncommitted | --commit <sha>] [brief]
+
+Runs Claude (/code-review) and Codex (review) over the same scope in parallel
+and prints both raw findings in delimited sections. The caller supplies the
+brief and does the dedupe/verify/fix/summarize.
+EOF
+  exit "${1:-0}"
+}
+
+scope=""
+scope_set=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --base) scope="--base $2"; scope_set=1; shift 2 ;;
+    --uncommitted) scope="--uncommitted"; scope_set=1; shift ;;
+    --commit) scope="--commit $2"; scope_set=1; shift 2 ;;
+    -h | --help) usage 0 ;;
+    --) shift; break ;;
+    -) break ;; # stdin marker for the brief; handled below
+    -*) echo "gauntlet-review: unknown option: $1" >&2; usage 1 ;;
+    *) break ;;
+  esac
+done
+
+# Auto-detect scope when none was given.
+if [[ "$scope_set" -eq 0 ]]; then
+  branch="$(git rev-parse --abbrev-ref HEAD)"
+  if [[ "$branch" == "main" ]]; then scope="--uncommitted"; else scope="--base main"; fi
+fi
+
+# Brief: remaining arg, else stdin (when piped), else empty.
+if [[ $# -gt 0 && "$1" != "-" ]]; then
+  brief="$*"
+elif [[ ! -t 0 ]]; then
+  brief="$(cat)"
+else
+  brief=""
+fi
+
+# Translate the codex scope into a /code-review instruction for Claude.
+case "$scope" in
+  --uncommitted) claude_scope="Review the uncommitted changes in the working tree." ;;
+  "--base "*) base="${scope#--base }"; claude_scope="Review the diff of this branch against ${base} (the ${base}...HEAD range)." ;;
+  "--commit "*) sha="${scope#--commit }"; claude_scope="Review only the changes introduced by commit ${sha} (the ${sha}~1..${sha} diff)." ;;
+esac
+
+focus="Treat the context/brief above as intended behavior — do not flag intentional choices, pre-existing code, style, or speculative edge cases. Report only real correctness bugs and clear issues introduced by this change. Prefer precision over recall."
+
+claude_prompt="/code-review ${claude_scope}
+
+${brief}
+
+${focus}
+Report findings only: do NOT edit, comment, fix, or commit. For each finding output a line 'file:line — SEVERITY — one-line description', SEVERITY in high/medium/low."
+
+codex_prompt="${brief}
+
+${focus}"
+
+claude_out="$(mktemp)"
+codex_out="$(mktemp)"
+codex_log="$(mktemp)"
+trap 'rm -f "$claude_out" "$codex_out" "$codex_log"' EXIT
+
+# Claude reviewer — prints findings to stdout, then exits.
+claude -p --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
+claude_pid=$!
+
+# Codex reviewer — writes its final answer to $codex_out; progress to $codex_log.
+# shellcheck disable=SC2086  # $scope must word-split into separate flags.
+codex exec --ephemeral --color never -o "$codex_out" review $scope "$codex_prompt" >"$codex_log" 2>&1 &
+codex_pid=$!
+
+if wait "$claude_pid"; then claude_status=0; else claude_status=$?; fi
+if wait "$codex_pid"; then codex_status=0; else codex_status=$?; fi
+
+printf '===== CLAUDE REVIEW (exit %s) =====\n' "$claude_status"
+cat "$claude_out"
+printf '\n===== CODEX REVIEW (exit %s) =====\n' "$codex_status"
+cat "$codex_out"
+if [[ "$codex_status" -ne 0 ]]; then
+  printf '\n----- codex log tail -----\n'
+  tail -40 "$codex_log"
+fi
+
+# Succeed if at least one engine produced a result.
+[[ "$claude_status" -eq 0 || "$codex_status" -eq 0 ]]
