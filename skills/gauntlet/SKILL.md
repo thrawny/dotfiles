@@ -30,9 +30,9 @@ The launcher is bundled at `scripts/gauntlet-review` in this skill's directory. 
 bash <skill-dir>/scripts/gauntlet-review "<your context brief>"
 ```
 
-- Scope is auto-detected: the current branch's diff against `main`, or uncommitted changes when on `main`. Override with `--base <branch>`, `--uncommitted`, or `--commit <sha>` (before the brief). For a long brief, pipe it on stdin with a trailing `-`.
-- It runs both engines in parallel and prints two delimited blocks — `===== CLAUDE REVIEW (exit N) =====` and `===== CODEX REVIEW (exit N) =====` — plus a Codex log tail if Codex failed. **Reviews take minutes; allow a generous Bash timeout (up to 10 min / 600000 ms).**
-- If a block shows a non-zero exit, note that engine failed and continue with the other's findings.
+- Scope is auto-detected: the current branch's diff against the repo's default branch, or uncommitted changes when already on it. Override with `--base <branch>`, `--uncommitted`, or `--commit <sha>` (before the brief). For a long brief, pipe it on stdin with a trailing `-`.
+- It runs both engines in parallel and prints two delimited blocks labeled with each engine's state — `===== CLAUDE REVIEW [ok] =====` and `===== CODEX REVIEW [ok] =====`. **Reviews take minutes; allow a generous Bash timeout (up to 10 min / 600000 ms).**
+- **Graceful degradation:** if an engine is unauthenticated or out of usage/quota, its block is labeled `[unavailable: …]` and the script prints a `NOTE: degraded to a single reviewer …` line, succeeding on the engine that worked. Proceed with the available findings and tell the user which engine was skipped and why. With only one reviewer there's no cross-engine agreement signal, so lean harder on per-finding verification (step 4.1). If both are unavailable the script prints `ERROR:` and exits non-zero — report that and stop.
 
 ## 3. Dedupe
 

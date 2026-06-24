@@ -11,8 +11,11 @@
 #
 # Scope defaults to the current branch vs main (--uncommitted when on main).
 # The brief is extra review context passed verbatim to both engines; omit it or
-# pass '-' to read from stdin (empty is allowed). Exits 0 if at least one engine
-# produced a result, non-zero only if both failed.
+# pass '-' to read from stdin (empty is allowed).
+#
+# Graceful degradation: if one engine is unauthenticated or out of usage/quota,
+# the script continues with the other and labels why. Exits 0 if at least one
+# engine produced a result, non-zero only if both failed.
 #
 # Testable with stubs: put fake `claude`/`codex` earlier on PATH.
 set -euo pipefail
@@ -43,10 +46,14 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Auto-detect scope when none was given.
+# Auto-detect scope when none was given: current branch vs the repo's default
+# branch, or uncommitted changes when already on the default branch.
 if [[ "$scope_set" -eq 0 ]]; then
   branch="$(git rev-parse --abbrev-ref HEAD)"
-  if [[ "$branch" == "main" ]]; then scope="--uncommitted"; else scope="--base main"; fi
+  default_branch="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+  default_branch="${default_branch#origin/}"
+  default_branch="${default_branch:-main}"
+  if [[ "$branch" == "$default_branch" ]]; then scope="--uncommitted"; else scope="--base $default_branch"; fi
 fi
 
 # Brief: remaining arg, else stdin (when piped), else empty.
@@ -58,23 +65,27 @@ else
   brief=""
 fi
 
-# Translate the codex scope into a /code-review instruction for Claude.
+# Describe the scope as prose. Both engines get it this way: Codex's review
+# rejects a custom prompt alongside its --base/--uncommitted/--commit flags, so
+# we let it (agentically) compute the diff from these instructions instead.
 case "$scope" in
-  --uncommitted) claude_scope="Review the uncommitted changes in the working tree." ;;
-  "--base "*) base="${scope#--base }"; claude_scope="Review the diff of this branch against ${base} (the ${base}...HEAD range)." ;;
-  "--commit "*) sha="${scope#--commit }"; claude_scope="Review only the changes introduced by commit ${sha} (the ${sha}~1..${sha} diff)." ;;
+  --uncommitted) scope_desc="Review the uncommitted changes in the working tree (staged, unstaged, and untracked)." ;;
+  "--base "*) base="${scope#--base }"; scope_desc="Review the changes on this branch relative to ${base}: the diff from 'git diff ${base}...HEAD'." ;;
+  "--commit "*) sha="${scope#--commit }"; scope_desc="Review only the changes introduced by commit ${sha}: 'git diff ${sha}~1..${sha}'." ;;
 esac
 
 focus="Treat the context/brief above as intended behavior — do not flag intentional choices, pre-existing code, style, or speculative edge cases. Report only real correctness bugs and clear issues introduced by this change. Prefer precision over recall."
 
-claude_prompt="/code-review ${claude_scope}
+claude_prompt="/code-review ${scope_desc}
 
 ${brief}
 
 ${focus}
 Report findings only: do NOT edit, comment, fix, or commit. For each finding output a line 'file:line — SEVERITY — one-line description', SEVERITY in high/medium/low."
 
-codex_prompt="${brief}
+codex_prompt="${scope_desc}
+
+${brief}
 
 ${focus}"
 
@@ -87,22 +98,59 @@ trap 'rm -f "$claude_out" "$codex_out" "$codex_log"' EXIT
 claude -p --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
 claude_pid=$!
 
-# Codex reviewer — writes its final answer to $codex_out; progress to $codex_log.
-# shellcheck disable=SC2086  # $scope must word-split into separate flags.
-codex exec --ephemeral --color never -o "$codex_out" review $scope "$codex_prompt" >"$codex_log" 2>&1 &
+# Codex reviewer — scope is in the prompt (see above); high reasoning effort for
+# a thorough review; writes its final answer to $codex_out, progress to $codex_log.
+codex exec --ephemeral --color never -c model_reasoning_effort="high" -o "$codex_out" review "$codex_prompt" >"$codex_log" 2>&1 &
 codex_pid=$!
 
 if wait "$claude_pid"; then claude_status=0; else claude_status=$?; fi
 if wait "$codex_pid"; then codex_status=0; else codex_status=$?; fi
 
-printf '===== CLAUDE REVIEW (exit %s) =====\n' "$claude_status"
-cat "$claude_out"
-printf '\n===== CODEX REVIEW (exit %s) =====\n' "$codex_status"
-cat "$codex_out"
-if [[ "$codex_status" -ne 0 ]]; then
+# Classify a non-zero engine result so we can degrade gracefully and say why.
+classify() {
+  local status="$1" file="$2" txt
+  [[ "$status" -eq 0 ]] && { echo "ok"; return; }
+  txt="$(tr '[:upper:]' '[:lower:]' <"$file" 2>/dev/null || true)"
+  case "$txt" in
+    *"not logged in"* | *"log in"* | *"please login"* | *login* | *authenticat* | *unauthorized* | *"401"* | *"invalid api key"* | *"no credentials"* | *"logged out"* | *"session expired"*)
+      echo "unavailable: not authenticated" ;;
+    *"usage limit"* | *"rate limit"* | *"429"* | *quota* | *"ran out"* | *"out of credit"* | *credit* | *insufficient* | *"limit reached"* | *"too many requests"* | *upgrade*)
+      echo "unavailable: usage/quota exhausted" ;;
+    *)
+      echo "failed (exit $status)" ;;
+  esac
+}
+
+claude_state="$(classify "$claude_status" "$claude_out")"
+codex_state="$(classify "$codex_status" "$codex_log")"
+
+ok_count=0
+[[ "$claude_status" -eq 0 ]] && ok_count=$((ok_count + 1))
+[[ "$codex_status" -eq 0 ]] && ok_count=$((ok_count + 1))
+
+# Graceful degradation: continue on whichever engine(s) succeeded; say why if one dropped.
+if [[ "$ok_count" -eq 1 ]]; then
+  if [[ "$claude_status" -eq 0 ]]; then
+    printf 'NOTE: degraded to a single reviewer — codex %s. Proceeding with Claude only.\n\n' "$codex_state"
+  else
+    printf 'NOTE: degraded to a single reviewer — claude %s. Proceeding with Codex only.\n\n' "$claude_state"
+  fi
+elif [[ "$ok_count" -eq 0 ]]; then
+  printf 'ERROR: no reviewer produced results — claude %s; codex %s\n' "$claude_state" "$codex_state" >&2
+fi
+
+printf '===== CLAUDE REVIEW [%s] =====\n' "$claude_state"
+if [[ "$claude_status" -eq 0 ]]; then cat "$claude_out"; else tail -40 "$claude_out"; fi
+printf '\n===== CODEX REVIEW [%s] =====\n' "$codex_state"
+if [[ "$codex_status" -eq 0 ]]; then
+  cat "$codex_out"
+else
+  # On failure, show codex's answer file if it wrote anything, plus the log tail
+  # (codex diagnostics usually land on stderr -> $codex_log, but not always).
+  if [[ -s "$codex_out" ]]; then cat "$codex_out"; fi
   printf '\n----- codex log tail -----\n'
   tail -40 "$codex_log"
 fi
 
-# Succeed if at least one engine produced a result.
-[[ "$claude_status" -eq 0 || "$codex_status" -eq 0 ]]
+# Succeed if at least one engine produced a result; degrade gracefully otherwise.
+[[ "$ok_count" -ge 1 ]]
