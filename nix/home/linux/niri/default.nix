@@ -615,6 +615,20 @@ in
       }
       {
         matches = [
+          {
+            app-id = "^com\\.mitchellh\\.ghostty$";
+            title = "^btop\\+\\+$";
+          }
+          { app-id = "^org\\.telegram\\.desktop$"; }
+          { app-id = "^Slack$"; }
+          { app-id = "^teams-for-linux$"; }
+          { app-id = "^vesktop$"; }
+          { app-id = "^discord$"; }
+        ];
+        open-on-workspace = "main";
+      }
+      {
+        matches = [
           { app-id = "blueman-manager"; }
           { app-id = "^nm-connection-editor$"; }
           { app-id = "^org\\.pulseaudio\\.pavucontrol$"; }
