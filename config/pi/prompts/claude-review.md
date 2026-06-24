@@ -10,7 +10,7 @@ If the user names a scope (a branch, a commit range, specific files), review tha
 
 ## Run the review
 
-Use `claude -p` — it prints the review to stdout and exits on its own, so there's no session, polling, or `zmx` to manage. It bills against the Claude subscription as long as `ANTHROPIC_API_KEY` is unset, so don't set it.
+Use `claude -p` — it prints the review to stdout and exits on its own, so there's no session, polling, or `zmx` to manage.
 
 ```bash
 claude -p --permission-mode auto \
