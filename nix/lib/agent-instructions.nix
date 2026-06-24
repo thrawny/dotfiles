@@ -17,16 +17,25 @@ rec {
     PDF example: `import pymupdf4llm; print(pymupdf4llm.to_markdown("document.pdf"))`.
   '';
 
+  shellPortability = ''
+    ## Shell portability
+
+    Do not assign to a shell variable named `status`. In zsh, `status` is a read-only special parameter equivalent to `$?`.
+    Use `exit_code`, `cmd_status`, or a command-specific name such as `review_status` instead.
+  '';
+
   claudeGlobal = ''
     # Global Claude Code Instructions
 
     ${ephemeralTools}
+    ${shellPortability}
   '';
 
   codexGlobal = ''
     # Global Codex Instructions
 
     ${ephemeralTools}
+    ${shellPortability}
     ## Code Quality Tools
 
     After editing files, run the appropriate formatting/linting tools. These are fallback defaults when a project has no specific instructions.
@@ -87,5 +96,6 @@ rec {
     Prefer `fd` over `find` for file discovery when available; it is faster, respects ignore files by default, and has friendlier syntax.
 
     ${ephemeralTools}
+    ${shellPortability}
   '';
 }
