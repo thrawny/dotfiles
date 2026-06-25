@@ -689,7 +689,7 @@ in
     enable = true;
     settings.any = {
       path = "${config.home.homeDirectory}/dotfiles/assets";
-      sorting = "random";
+      sorting = "ascending";
       duration = "1h";
     };
   };
