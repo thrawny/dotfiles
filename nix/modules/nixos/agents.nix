@@ -31,7 +31,7 @@ let
     pkgs.jq
     pkgs.nodejs
     pkgs.nix
-    pkgs.pnpm
+    pkgs.pnpm_11
     pkgs.podman
     pkgs.python3
     pkgs.ripgrep

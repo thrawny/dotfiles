@@ -75,11 +75,7 @@ in
     # Set timezone
     time.timeZone = "Europe/Stockholm";
 
-    nixpkgs.config = {
-      allowUnfree = true;
-      # Required by vesktop's build inputs in current nixpkgs.
-      permittedInsecurePackages = [ "pnpm-10.29.2" ];
-    };
+    nixpkgs.config.allowUnfree = true;
 
     nix.settings = {
       trusted-users = [ username ];

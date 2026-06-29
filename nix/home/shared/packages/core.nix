@@ -65,7 +65,7 @@
     rustfmt
     clippy
     bun
-    pnpm
+    pnpm_11
     biome
   ];
 }
