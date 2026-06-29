@@ -7,19 +7,36 @@ from typing import NoReturn
 
 # pyright: basic
 
-SECRET_NAME_RE = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*\+?=")
 ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
-REDACT_NAME_PARTS = ("API_KEY", "API_TOKEN", "TOKEN", "SECRET")
+REDACT_NAME_PARTS = (
+    "API_KEY",
+    "API_TOKEN",
+    "AUTH",
+    "CREDENTIAL",
+    "DATABASE_URL",
+    "DB_URL",
+    "KEY",
+    "PASSWORD",
+    "PRIVATE",
+    "SECRET",
+    "TOKEN",
+)
+ALWAYS_REDACT_NAMES = {
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "SANDBOX_REDACT_ENV_NAMES",
+}
 
 
-def find_real_env() -> str:
+def find_real_binary(name: str) -> str:
     current = Path(sys.argv[0]).resolve()
 
     for directory in os.environ.get("PATH", "").split(os.pathsep):
         if not directory:
             continue
 
-        candidate = Path(directory) / "env"
+        candidate = Path(directory) / name
         try:
             if candidate.resolve() == current:
                 continue
@@ -28,8 +45,8 @@ def find_real_env() -> str:
         except OSError:
             continue
 
-    for fallback in ("/run/current-system/sw/bin/env", "/usr/bin/env", "/bin/env"):
-        candidate = Path(fallback)
+    for directory in ("/run/current-system/sw/bin", "/usr/bin", "/bin"):
+        candidate = Path(directory) / name
         try:
             if candidate.resolve() == current:
                 continue
@@ -38,16 +55,16 @@ def find_real_env() -> str:
         except OSError:
             continue
 
-    print("env: could not find real env binary", file=sys.stderr)
+    print(f"{name}: could not find real {name} binary", file=sys.stderr)
     sys.exit(127)
 
 
-def exec_real_env() -> NoReturn:
-    real_env = find_real_env()
-    os.execv(real_env, [real_env, *sys.argv[1:]])
+def exec_real_binary(name: str) -> NoReturn:
+    real_binary = find_real_binary(name)
+    os.execv(real_binary, [real_binary, *sys.argv[1:]])
 
 
-def parse_print_request(argv: list[str]):
+def parse_env_print_request(argv: list[str]):
     null_output = False
     ignore_environment = False
     unset_names: list[str] = []
@@ -96,43 +113,34 @@ def parse_print_request(argv: list[str]):
     return null_output, ignore_environment, unset_names, assignments
 
 
-def secret_files() -> list[Path]:
-    names = (".secrets", ".secrets.sandbox")
-    dirs: list[Path] = []
+def parse_printenv_request(argv: list[str]):
+    null_output = False
+    names: list[str] = []
+    parsing_options = True
 
-    dirs.append(Path.home())
+    for arg in argv:
+        if parsing_options and arg == "--":
+            parsing_options = False
+            continue
 
-    cwd = Path.cwd()
-    dirs.append(cwd)
-    dirs.extend(cwd.parents)
-
-    seen: set[Path] = set()
-    files: list[Path] = []
-    for directory in dirs:
-        for name in names:
-            path = directory / name
-            if path in seen:
+        if parsing_options:
+            if arg in ("-0", "--null"):
+                null_output = True
                 continue
-            seen.add(path)
-            files.append(path)
-    return files
+            if arg.startswith("-"):
+                return None
+
+        names.append(arg)
+
+    return null_output, names
 
 
-def secret_names_from_files() -> set[str]:
-    names: set[str] = set()
-
-    for path in secret_files():
-        try:
-            with path.open("r", encoding="utf-8", errors="replace") as handle:
-                for line in handle:
-                    match = SECRET_NAME_RE.match(line)
-                    if match:
-                        names.add(match.group(1))
-        except FileNotFoundError:
-            pass
-        except OSError:
-            pass
-
+def secret_names_from_environment() -> set[str]:
+    names = set(ALWAYS_REDACT_NAMES)
+    raw_names = os.environ.get("SANDBOX_REDACT_ENV_NAMES", "")
+    for name in re.split(r"[\s,]+", raw_names):
+        if name:
+            names.add(name)
     return names
 
 
@@ -149,13 +157,19 @@ def redact(value: str) -> str:
     return f"REDACTED_{value[-4:]}"
 
 
-def main() -> None:
-    if os.environ.get("SANDBOX") != "1":
-        exec_real_env()
+def redacted_value(name: str, value: str, secret_names: set[str]) -> str:
+    if should_redact(name, secret_names):
+        return redact(value)
+    return value
 
-    request = parse_print_request(sys.argv[1:])
+
+def run_env() -> None:
+    if os.environ.get("SANDBOX") != "1":
+        exec_real_binary("env")
+
+    request = parse_env_print_request(sys.argv[1:])
     if request is None:
-        exec_real_env()
+        exec_real_binary("env")
 
     null_output, ignore_environment, unset_names, assignments = request
     env = {} if ignore_environment else dict(os.environ)
@@ -163,13 +177,53 @@ def main() -> None:
         env.pop(name, None)
     env.update(assignments)
 
-    secret_names = secret_names_from_files()
+    secret_names = secret_names_from_environment()
     separator = "\0" if null_output else "\n"
 
     for name, value in env.items():
-        if should_redact(name, secret_names):
-            value = redact(value)
-        sys.stdout.write(f"{name}={value}{separator}")
+        sys.stdout.write(
+            f"{name}={redacted_value(name, value, secret_names)}{separator}"
+        )
+
+
+def run_printenv() -> None:
+    if os.environ.get("SANDBOX") != "1":
+        exec_real_binary("printenv")
+
+    request = parse_printenv_request(sys.argv[1:])
+    if request is None:
+        exec_real_binary("printenv")
+
+    null_output, names = request
+    env = dict(os.environ)
+    secret_names = secret_names_from_environment()
+    separator = "\0" if null_output else "\n"
+
+    if not names:
+        for name, value in env.items():
+            sys.stdout.write(
+                f"{name}={redacted_value(name, value, secret_names)}{separator}"
+            )
+        return
+
+    missing = False
+    for name in names:
+        value = env.get(name)
+        if value is None:
+            missing = True
+            continue
+        sys.stdout.write(f"{redacted_value(name, value, secret_names)}{separator}")
+
+    if missing:
+        sys.exit(1)
+
+
+def main() -> None:
+    program_name = Path(sys.argv[0]).name
+    if program_name == "printenv":
+        run_printenv()
+    else:
+        run_env()
 
 
 if __name__ == "__main__":

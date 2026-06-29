@@ -31,7 +31,7 @@ rec {
     ## Sandbox
 
     - When `SANDBOX=1`, host secrets/configs are intentionally unavailable; do not try to bypass the sandbox.
-    - Never read, source, or edit `.secrets*` files inside the sandbox; they are masked as `/dev/null`, so use only already-exported environment variables.
+    - Never read, source, or edit `.secrets*`; they are masked as `/dev/null`. Use targeted `printenv VAR` checks; `env`/`printenv` are sandbox-redacted.
     - Docker commands should use the sandbox-provided `DOCKER_HOST`; do not access `/var/run/docker.sock`.
   '';
 

@@ -16,16 +16,24 @@ sandbox() {
     mask_file_as "$f" "$f"
   }
 
-  unset_env_names_from_file() {
-    local f="$1" line name
+  env_names_from_file() {
+    local f="$1" line
     [[ -f "$f" ]] || return 0
 
     while IFS= read -r line || [[ -n "$line" ]]; do
-      if [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)= ]]; then
-        name="${BASH_REMATCH[2]}"
-        unset "$name"
+      if [[ "$line" =~ ^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)[[:space:]]*[+]?= ]]; then
+        printf '%s\n' "${BASH_REMATCH[2]}"
       fi
     done < "$f"
+  }
+
+  unset_env_names_from_file() {
+    local f="$1" name
+    [[ -f "$f" ]] || return 0
+
+    while IFS= read -r name; do
+      unset "$name"
+    done < <(env_names_from_file "$f")
   }
 
   load_env_file() {
@@ -257,6 +265,12 @@ sandbox() {
   for d in ~/work/*/code ~/work/*/.direnv ~/work/*/bin; do
     [[ -d "$d" ]] && args+=(--bind "$d" "$d")
   done
+
+  export SANDBOX_REDACT_ENV_NAMES="$({
+    while IFS= read -r -d '' f; do
+      env_names_from_file "$f"
+    done < <(fd -H --no-ignore -g '.secrets*' ~ --type f -0 2>/dev/null)
+  } | sort -u | tr '\n' ' ')"
 
   # Mask secrets files after writable binds so file-level mounts win. Using
   # /dev/null avoids placeholder values that agents may mistake for credentials.
