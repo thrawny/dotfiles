@@ -14,6 +14,9 @@ rec {
 
     Use `uv run --with <pkg> python ...` for Python libs not available in the current environment.
     Examples: `uv run --with pillow python image.py`, `uv run --with pandas --with openpyxl python sheet.py`.
+
+    For inline heredoc Python scripts that make HTTP requests, prefer `requests` via `uv run --with requests python` over Python stdlib modules like `urllib.request` or `http.client`.
+
     PDF example: `import pymupdf4llm; print(pymupdf4llm.to_markdown("document.pdf"))`.
   '';
 
