@@ -3,20 +3,17 @@
 set -euo pipefail
 
 sandbox() {
-  local tmpfiles=() args=() extra=()
+  local args=() extra=()
 
-  redact_file_as() {
-    local source="$1" target="$2" tmp
+  mask_file_as() {
+    local source="$1" target="$2"
     [[ -f "$source" ]] || return 0
-    tmp=$(mktemp)
-    sed 's/=.*/="REDACTED"/' "$source" > "$tmp"
-    args+=(--ro-bind "$tmp" "$target")
-    tmpfiles+=("$tmp")
+    args+=(--ro-bind /dev/null "$target")
   }
 
-  redact_file() {
+  mask_file() {
     local f="$1"
-    redact_file_as "$f" "$f"
+    mask_file_as "$f" "$f"
   }
 
   unset_env_names_from_file() {
@@ -261,19 +258,20 @@ sandbox() {
     [[ -d "$d" ]] && args+=(--bind "$d" "$d")
   done
 
-  # Redact secrets files after writable binds so file-level mounts win.
+  # Mask secrets files after writable binds so file-level mounts win. Using
+  # /dev/null avoids placeholder values that agents may mistake for credentials.
   while IFS= read -r -d '' f; do
-    redact_file "$f"
+    mask_file "$f"
   done < <(fd -H --no-ignore -g '.secrets*' ~ --type f -0 2>/dev/null)
   while IFS= read -r -d '' f; do
-    redact_file "$f"
+    mask_file "$f"
   done < <(fd -H --no-ignore -g '.secrets.sandbox*' ~ --type f -0 2>/dev/null)
 
   # Repository-local .secrets.sandbox overrides .secrets for the process
-  # environment, but both files stay readable-only-as-redacted in the sandbox.
+  # environment, but both files are masked inside the sandbox.
   if [[ -f "$PWD/.secrets.sandbox" ]]; then
-    redact_file_as "$PWD/.secrets.sandbox" "$PWD/.secrets"
-    redact_file "$PWD/.secrets.sandbox"
+    mask_file_as "$PWD/.secrets.sandbox" "$PWD/.secrets"
+    mask_file "$PWD/.secrets.sandbox"
   fi
 
   # Deny access to sensitive paths (applied after writable to override)
@@ -325,7 +323,6 @@ sandbox() {
     "${extra[@]}" \
     -- "$@" || bwrap_status=$?
 
-  rm -f "${tmpfiles[@]}"
   return "$bwrap_status"
 }
 

@@ -27,11 +27,20 @@ rec {
     Use `exit_code`, `cmd_status`, or a command-specific name such as `review_status` instead.
   '';
 
+  sandbox = ''
+    ## Sandbox
+
+    - When `SANDBOX=1`, host secrets/configs are intentionally unavailable; do not try to bypass the sandbox.
+    - Never read, source, or edit `.secrets*` files inside the sandbox; they are masked as `/dev/null`, so use only already-exported environment variables.
+    - Docker commands should use the sandbox-provided `DOCKER_HOST`; do not access `/var/run/docker.sock`.
+  '';
+
   claudeGlobal = ''
     # Global Claude Code Instructions
 
     ${ephemeralTools}
     ${shellPortability}
+    ${sandbox}
   '';
 
   codexGlobal = ''
@@ -39,6 +48,7 @@ rec {
 
     ${ephemeralTools}
     ${shellPortability}
+    ${sandbox}
     ## Code Quality Tools
 
     After editing files, run the appropriate formatting/linting tools. These are fallback defaults when a project has no specific instructions.
@@ -100,5 +110,6 @@ rec {
 
     ${ephemeralTools}
     ${shellPortability}
+    ${sandbox}
   '';
 }
