@@ -200,8 +200,13 @@ ai:
     set -euo pipefail
 
     get_version() {
+        if ! command -v "$1" >/dev/null 2>&1; then
+            echo "not installed"
+            return
+        fi
+
         local v
-        v=$("$1" --version 2>/dev/null | head -1)
+        v=$("$1" --version 2>/dev/null | head -1 || true)
         echo "${v:-not installed}"
     }
 
@@ -209,6 +214,8 @@ ai:
         claude_bin=claude
     elif command -v claude-node &>/dev/null; then
         claude_bin=claude-node
+    else
+        claude_bin=claude
     fi
 
     old_claude=$(get_version "$claude_bin")
@@ -253,10 +260,33 @@ ai:
     git add flake.lock
     git commit -m "chore(nix): update AI flake inputs" -- flake.lock
 
-# Update all flake inputs and switch
-update:
+# Update all flake inputs with AI tool version report and switch
+full-update:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    get_version() {
+        if ! command -v "$1" >/dev/null 2>&1; then
+            echo "not installed"
+            return
+        fi
+
+        local v
+        v=$("$1" --version 2>/dev/null | head -1 || true)
+        echo "${v:-not installed}"
+    }
+
+    if command -v claude &>/dev/null; then
+        claude_bin=claude
+    elif command -v claude-node &>/dev/null; then
+        claude_bin=claude-node
+    else
+        claude_bin=claude
+    fi
+
+    old_claude=$(get_version "$claude_bin")
+    old_codex=$(get_version codex)
+    old_pi=$(get_version pi)
 
     nix flake update
 
@@ -267,8 +297,34 @@ update:
 
     just switch
 
+    new_claude=$(get_version "$claude_bin")
+    new_codex=$(get_version codex)
+    new_pi=$(get_version pi)
+
+    changed=false
+    echo ""
+    echo "==> Version changes:"
+    if [ "$old_claude" != "$new_claude" ]; then
+        echo "  claude: $old_claude -> $new_claude"
+        changed=true
+    fi
+    if [ "$old_codex" != "$new_codex" ]; then
+        echo "  codex: $old_codex -> $new_codex"
+        changed=true
+    fi
+    if [ "$old_pi" != "$new_pi" ]; then
+        echo "  pi: $old_pi -> $new_pi"
+        changed=true
+    fi
+    if [ "$changed" = false ]; then
+        echo "  (no AI tool version changes detected)"
+    fi
+
     git add flake.lock
     git commit -m "chore(nix): update flake inputs" -- flake.lock
+
+# Update all flake inputs and switch
+update: full-update
 
 # Clean up old generations (keeps last 6) and optimize store
 clean:

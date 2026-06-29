@@ -18,6 +18,9 @@ switch: nix::switch
 # Update AI tool flake inputs and switch
 ai: nix::ai
 
+# Update all flake inputs with AI tool version report and switch
+full-update: nix::full-update
+
 # Check and typecheck Pi config/extensions
 pi:
     pnpm --dir config/pi run lint
