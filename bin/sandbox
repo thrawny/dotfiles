@@ -16,6 +16,14 @@ sandbox() {
     mask_file_as "$f" "$f"
   }
 
+  keep_secret_file_readable() {
+    local f="$1" sandbox_env_dir
+    for sandbox_env_dir in "${sandbox_env_dirs[@]}"; do
+      [[ "$f" == "$sandbox_env_dir/.secrets.sandbox" ]] && return 0
+    done
+    return 1
+  }
+
   env_names_from_file() {
     local f="$1" line
     [[ -f "$f" ]] || return 0
@@ -62,17 +70,27 @@ sandbox() {
     esac
   done
 
-  # Repository-local sandbox overrides. Remove variables defined by files that
-  # are intentionally outside-sandbox only from the inherited environment, then
-  # source sandbox-specific replacements when present.
-  unset_env_names_from_file "$PWD/.envrc.local"
-  load_env_file "$PWD/.envrc.sandbox"
-
-  # If present, .secrets.sandbox is a replacement for .secrets, not a partial merge.
-  if [[ -f "$PWD/.secrets.sandbox" ]]; then
-    unset_env_names_from_file "$PWD/.secrets"
-    load_env_file "$PWD/.secrets.sandbox"
+  local sandbox_root_dir resolved_sandbox_root_dir
+  sandbox_root_dir="${SANDBOX_ROOT_DIR:-$PWD}"
+  if resolved_sandbox_root_dir="$(realpath -m "$sandbox_root_dir" 2>/dev/null)"; then
+    sandbox_root_dir="$resolved_sandbox_root_dir"
   fi
+  export SANDBOX_ROOT_DIR="$sandbox_root_dir"
+
+  local sandbox_env_dirs=("$sandbox_root_dir") sandbox_env_dir
+  if [[ "$sandbox_root_dir" != "$PWD" ]]; then
+    sandbox_env_dirs+=("$PWD")
+  fi
+
+  # Sandbox overrides are anchored at SANDBOX_ROOT_DIR, with PWD-local files
+  # also supported for narrower per-project overrides. .secrets is always
+  # removed from the inherited environment; .secrets.sandbox is loaded if present.
+  for sandbox_env_dir in "${sandbox_env_dirs[@]}"; do
+    unset_env_names_from_file "$sandbox_env_dir/.envrc.local"
+    load_env_file "$sandbox_env_dir/.envrc.sandbox"
+    unset_env_names_from_file "$sandbox_env_dir/.secrets"
+    load_env_file "$sandbox_env_dir/.secrets.sandbox"
+  done
 
   # If the current environment points at a kubeconfig with a sibling
   # sandbox-config, use that inside the sandbox. The sandbox kubeconfig should
@@ -274,19 +292,17 @@ sandbox() {
 
   # Mask secrets files after writable binds so file-level mounts win. Using
   # /dev/null avoids placeholder values that agents may mistake for credentials.
+  # Keep SANDBOX_ROOT_DIR/PWD .secrets.sandbox readable so direnv reloads inside
+  # zmx can re-apply sandbox-safe overrides after nix-direnv cache restores.
   while IFS= read -r -d '' f; do
-    mask_file "$f"
+    keep_secret_file_readable "$f" || mask_file "$f"
   done < <(fd -H --no-ignore -g '.secrets*' ~ --type f -0 2>/dev/null)
-  while IFS= read -r -d '' f; do
-    mask_file "$f"
-  done < <(fd -H --no-ignore -g '.secrets.sandbox*' ~ --type f -0 2>/dev/null)
 
-  # Repository-local .secrets.sandbox overrides .secrets for the process
-  # environment, but both files are masked inside the sandbox.
-  if [[ -f "$PWD/.secrets.sandbox" ]]; then
-    mask_file_as "$PWD/.secrets.sandbox" "$PWD/.secrets"
-    mask_file "$PWD/.secrets.sandbox"
-  fi
+  # Root/PWD .secrets values have already been removed from the process
+  # environment; keep those files masked inside the sandbox.
+  for sandbox_env_dir in "${sandbox_env_dirs[@]}"; do
+    mask_file "$sandbox_env_dir/.secrets"
+  done
 
   # Deny access to sensitive paths (applied after writable to override)
   # /var/run/docker.sock is the host Docker daemon; sandboxed Docker commands
