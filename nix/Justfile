@@ -406,8 +406,21 @@ fmt:
 
 # Lint Nix files
 lint:
-    statix check .
-    deadnix --fail --exclude '**/hardware-configuration.nix' .
+    #!/usr/bin/env bash
+    set -euo pipefail
+    root="$(git rev-parse --show-toplevel)"
+    mapfile -d '' nix_files < <(
+        git -C "$root" ls-files -z 'nix/*.nix' 'nix/**/*.nix' \
+            | grep -zv '/hardware-configuration\.nix$'
+    )
+    if [ "${#nix_files[@]}" -eq 0 ]; then
+        echo "No tracked Nix files found"
+        exit 0
+    fi
+    for file in "${nix_files[@]}"; do
+        statix check --config "$root" "$root/$file"
+    done
+    deadnix --fail "${nix_files[@]/#/$root/}"
 
 # Format, lint, and evaluate current host
 check: fmt lint eval
