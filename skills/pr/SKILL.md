@@ -1,9 +1,9 @@
 ---
-name: prcheck
-description: Create, update, monitor, and fix the current branch pull request until it is ready. Use when the user says `/prcheck` or `/pr`, asks to open/create/update/check/monitor a PR, fix PR checks, address review feedback, or keep a PR green.
+name: pr
+description: Create, update, monitor, and fix the current branch pull request until it is ready. Use when the user says `/pr`, asks to open/create/update/check/monitor a PR, fix PR checks, address review feedback, or keep a PR green.
 ---
 
-# prcheck
+# pr
 
 Create or monitor the pull request associated with the current branch and address issues until it is ready to merge, while respecting any narrower instructions from the user.
 
@@ -30,6 +30,7 @@ Create or monitor the pull request associated with the current branch and addres
 6. Address actionable issues.
    - Fix failing checks by reading logs, identifying root causes, editing code, and running appropriate local validation.
    - Address review comments and requested changes that apply to the PR.
+   - Resolve, close, or mark fixed review comments and threads as handled after the fix is pushed, when the platform supports it.
    - Resolve merge conflicts when it is safe and within the user's requested scope.
    - Push fixes when the PR branch needs remote updates.
 7. Repeat until the PR is ready or blocked.
@@ -56,7 +57,7 @@ When Codex has reacted to the pull request with eyes, treat that as an active Co
 - Monitor the pull request until Codex posts its review result.
 - If Codex reports issues, address them, push fixes, resolve or mark the fixed Codex issues as handled when the platform supports it, and continue monitoring.
 - Repeat the review/fix/monitor cycle until Codex gives a thumbs up or otherwise indicates there are no remaining issues.
-- This is the default behavior for `prcheck`, but explicit user instructions still win. If the user asks for a narrower check, a status-only pass, or no code changes, follow that instead.
+- This is the default behavior for `pr`, but explicit user instructions still win. If the user asks for a narrower check, a status-only pass, or no code changes, follow that instead.
 
 ## Guardrails
 
