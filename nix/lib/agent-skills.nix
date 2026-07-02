@@ -82,6 +82,7 @@ rec {
       else
         configRoot + "/codex/config.example.toml";
     hooks = configRoot + "/codex/hooks.json";
+    hooksDir = configRoot + "/codex/hooks";
   };
 
   skillEntriesFor =

@@ -205,6 +205,7 @@ let
       link_store_path ${lib.escapeShellArg "${codexHome}/AGENTS.md"} ${lib.escapeShellArg (toString agentAssets.codexFiles.agents)}
       link_store_path ${lib.escapeShellArg "${codexHome}/config.toml"} ${lib.escapeShellArg (toString codexConfig)}
       link_store_path ${lib.escapeShellArg "${codexHome}/hooks.json"} ${lib.escapeShellArg (toString agentAssets.codexFiles.hooks)}
+      link_store_path ${lib.escapeShellArg "${codexHome}/hooks"} ${lib.escapeShellArg (toString agentAssets.codexFiles.hooksDir)}
       ${codexSkillLinks}
 
       settings_path=${lib.escapeShellArg "${state}/userdata/settings.json"}

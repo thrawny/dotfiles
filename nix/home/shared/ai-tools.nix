@@ -82,6 +82,7 @@ in
     file =
       lib.optionalAttrs enableCodexHooks {
         ".codex/hooks.json".source = configSource "codex/hooks.json";
+        ".codex/hooks".source = configSource "codex/hooks";
       }
       // {
         ".codex/AGENTS.md".text = agentInstructions.codexGlobal;

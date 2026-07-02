@@ -12,6 +12,7 @@ Examples:
 Current custom extensions include:
 
 - `agent-switch.ts` — forwards Pi lifecycle events to `agent-switch track`
+- `agents-local.ts` — loads private `AGENTS.local.md` files from the current git worktree
 - `commands.ts` — loads repository/global Markdown commands
 - `impeccable.ts` — integrates impeccable command metadata when available
 - `rules.ts` — loads Markdown rule files as project guidance
@@ -20,6 +21,12 @@ Current custom extensions include:
 - `status-line.ts` — custom status line integration
 - `teleport.ts` — Pi session teleport helpers
 - `wayvoice.ts` — `ctrl+space` and `/voice` integration for inserting wayvoice transcripts into the Pi editor
+
+## Local repository instructions
+
+Pi officially loads `AGENTS.md`/`CLAUDE.md` context files. For private machine-local notes, `agents-local.ts` adds support for untracked `AGENTS.local.md` files from the current git worktree root down to the current directory. If a directory has no `AGENTS.local.md`, it falls back to `CLAUDE.local.md`. Reload Pi with `/reload` after editing one.
+
+Official alternatives are `.pi/APPEND_SYSTEM.md` or `.pi/SYSTEM.md`, but those are project Pi resources rather than an `AGENTS.local.md`/`CLAUDE.local.md` convention.
 
 ## wayvoice integration
 

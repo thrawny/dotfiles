@@ -8,6 +8,11 @@
             "type": "command",
             "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-start --agent codex; fi'",
             "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "sh -lc 'if command -v node >/dev/null 2>&1 && [ -r \"$HOME/.codex/hooks/agents-local.mjs\" ]; then exec node \"$HOME/.codex/hooks/agents-local.mjs\"; fi'",
+            "timeout": 5
           }
         ]
       }
