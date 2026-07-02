@@ -83,13 +83,19 @@ sandbox() {
   fi
 
   # Sandbox overrides are anchored at SANDBOX_ROOT_DIR, with PWD-local files
-  # also supported for narrower per-project overrides. .secrets is always
-  # removed from the inherited environment; .secrets.sandbox is loaded if present.
+  # also supported for narrower per-project overrides. When a repo provides a
+  # sandbox-specific secrets file, .secrets values are removed and the sandbox
+  # file is loaded. If only .secrets exists, load it so repo-local env still
+  # reaches the sandbox while the file itself remains masked below.
   for sandbox_env_dir in "${sandbox_env_dirs[@]}"; do
     unset_env_names_from_file "$sandbox_env_dir/.envrc.local"
     load_env_file "$sandbox_env_dir/.envrc.sandbox"
-    unset_env_names_from_file "$sandbox_env_dir/.secrets"
-    load_env_file "$sandbox_env_dir/.secrets.sandbox"
+    if [[ -f "$sandbox_env_dir/.secrets.sandbox" ]]; then
+      unset_env_names_from_file "$sandbox_env_dir/.secrets"
+      load_env_file "$sandbox_env_dir/.secrets.sandbox"
+    else
+      load_env_file "$sandbox_env_dir/.secrets"
+    fi
   done
 
   # If the current environment points at a kubeconfig with a sibling
@@ -298,8 +304,8 @@ sandbox() {
     keep_secret_file_readable "$f" || mask_file "$f"
   done < <(fd -H --no-ignore -g '.secrets*' ~ --type f -0 2>/dev/null)
 
-  # Root/PWD .secrets values have already been removed from the process
-  # environment; keep those files masked inside the sandbox.
+  # Keep Root/PWD .secrets files masked inside the sandbox even when their
+  # values were loaded into the process environment above.
   for sandbox_env_dir in "${sandbox_env_dirs[@]}"; do
     mask_file "$sandbox_env_dir/.secrets"
   done
