@@ -45,7 +45,7 @@ let
     skill;
 
   localSkillOverrides = {
-    brave-search.agents = [ "pi" ];
+    pi-reload-runtime.agents = [ "pi" ];
   };
   localSharedSkills = lib.mapAttrs (name: skill: skill // (localSkillOverrides.${name} or { })) (
     discoveredSkills skillsRoot
