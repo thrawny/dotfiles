@@ -194,17 +194,31 @@ return {
         require("codediff.review.export").to_clipboard(false)
       end
 
+      local function current_review_session()
+        local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
+        if not ok then
+          return nil, nil
+        end
+
+        local tabpage = vim.api.nvim_get_current_tabpage()
+        if not lifecycle.get_session(tabpage) then
+          return nil, nil
+        end
+
+        local hooks_ok, hooks = pcall(require, "codediff.review.hooks")
+        if not hooks_ok or hooks.get_current_tabpage() ~= tabpage then
+          return nil, nil
+        end
+
+        return lifecycle, tabpage
+      end
+
       return {
         {
           "<leader>rr",
           function()
-            local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
-            local tabpage = vim.api.nvim_get_current_tabpage()
-            if
-              ok
-              and lifecycle.get_session(tabpage)
-              and require("codediff.review.hooks").get_current_tabpage() == tabpage
-            then
+            local lifecycle, tabpage = current_review_session()
+            if lifecycle then
               restore_review_buffers(lifecycle, tabpage)
               require("codediff.review").close({ preview = true })
             else
@@ -224,13 +238,18 @@ return {
         {
           "<leader>rx",
           function()
+            local lifecycle, tabpage = current_review_session()
+            if not lifecycle then
+              return
+            end
+
             local review = require("codediff.review")
-            local lifecycle = require("codediff.ui.lifecycle")
-            local tabpage = vim.api.nvim_get_current_tabpage()
             export_review_to_clipboard_only()
             restore_review_buffers(lifecycle, tabpage)
             review.clear()
-            vim.cmd("tabclose")
+            if #vim.api.nvim_list_tabpages() > 1 then
+              pcall(vim.cmd, "tabclose")
+            end
             require("codediff.review.hooks").on_session_closed()
             require("codediff.review.storage").clear_revisions()
           end,
