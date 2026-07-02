@@ -95,7 +95,7 @@ codex_log="$(mktemp)"
 trap 'rm -f "$claude_out" "$codex_out" "$codex_log"' EXIT
 
 # Claude reviewer — prints findings to stdout, then exits.
-claude -p --no-session-persistence --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
+claude -p --model claude-opus-4-8 --no-session-persistence --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
 claude_pid=$!
 
 # Codex reviewer — scope is in the prompt (see above); high reasoning effort for
