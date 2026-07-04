@@ -188,12 +188,6 @@
             fi
           }
 
-          function pick() {
-            local selected
-            selected="$(command agent-history pick "$@" --print)" || return
-            [[ -n "$selected" ]] && print -z -- "$selected"
-          }
-
           function al() {
             profile=''${AWS_PROFILE:-default}
             aws sso login --profile $profile
