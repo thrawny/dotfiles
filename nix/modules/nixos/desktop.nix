@@ -40,6 +40,18 @@ let
           [ "--enable-features=WaylandWindowDecorations" ]
           [ "--enable-features=WaylandWindowDecorations,WebRTCPipeWireCapturer" ]
           old.installPhase;
+
+      nativeBuildInputs = (old.nativeBuildInputs or [ ]) ++ [ pkgs.makeWrapper ];
+
+      # Chromium keeps its ProcessSingleton socket under $TMPDIR. The sandbox
+      # gives /tmp a private tmpfs, so sandboxed `helium --new-window` cannot
+      # reach the host Helium socket and falls into the "profile in use" path.
+      # ~/.cache is bound wholesale into the sandbox; pinning TMPDIR there makes
+      # the socket reachable and keeps working across Helium restarts.
+      postFixup = (old.postFixup or "") + ''
+        wrapProgram $out/bin/helium \
+          --run 'export TMPDIR="$HOME/.cache/helium"; mkdir -p "$TMPDIR"'
+      '';
     }))
   ];
 in

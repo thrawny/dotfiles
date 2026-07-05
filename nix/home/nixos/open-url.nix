@@ -21,6 +21,8 @@ in
     mimeType = [
       "x-scheme-handler/http"
       "x-scheme-handler/https"
+      "text/html"
+      "application/xhtml+xml"
     ];
     settings.NoDisplay = "true";
   };
@@ -30,6 +32,8 @@ in
     defaultApplications = {
       "x-scheme-handler/http" = [ "niri-open-url.desktop" ];
       "x-scheme-handler/https" = [ "niri-open-url.desktop" ];
+      "text/html" = [ "niri-open-url.desktop" ];
+      "application/xhtml+xml" = [ "niri-open-url.desktop" ];
     };
   };
 }
