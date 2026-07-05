@@ -66,6 +66,9 @@ in
 
       seedClaudeSettings = hmLib.dag.entryBefore [ "linkGeneration" ] ''
         dest_path=${lib.escapeShellArg "${config.home.homeDirectory}/.claude/settings.json"}
+        if [ -L "$dest_path" ]; then
+          rm "$dest_path"
+        fi
         if [ ! -s "$dest_path" ]; then
           install -d -m0755 "$(dirname "$dest_path")"
           ${pkgs.jq}/bin/jq '
