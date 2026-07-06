@@ -162,7 +162,7 @@
                 })
                 # Use the current pnpm 10 with the git-dependency CVE fixes for vesktop.
                 (final: prev: {
-                  vesktop = prev.vesktop.override { pnpm_10 = final.pnpm_10; };
+                  vesktop = prev.vesktop.override { inherit (final) pnpm_10; };
                 })
                 # Pin spotify to 1.2.74 (close button broken with minimize-to-tray since 1.2.79)
                 (_: prev: {

@@ -4,9 +4,4 @@ set -euo pipefail
 lid_state="$(grep -h -o 'open\|closed' /proc/acpi/button/lid/*/state 2>/dev/null | head -1 || true)"
 [[ "$lid_state" == "closed" ]] || exit 0
 
-# Consider the machine on AC if any mains/USB-C power supply reports online=1.
-if grep -q '^1$' /sys/class/power_supply/{AC,ACAD,ADP,AC0,ACAD0,ADP0}*/online 2>/dev/null; then
-  exit 0
-fi
-
 systemctl suspend
