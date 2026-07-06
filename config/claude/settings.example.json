@@ -115,15 +115,6 @@
     "command": "python3 ~/dotfiles/config/claude/status_line.py",
     "padding": 0
   },
-  "enabledPlugins": {
-    "ast-grep@ast-grep-marketplace": true,
-    "gopls-lsp@claude-plugins-official": true,
-    "lua-lsp@claude-plugins-official": false,
-    "pyright-lsp@claude-plugins-official": true,
-    "typescript-lsp@claude-plugins-official": true,
-    "rust-analyzer-lsp@claude-plugins-official": true,
-    "skill-creator@claude-plugins-official": true
-  },
   "plansDirectory": ".claude/plans",
   "skipDangerousModePermissionPrompt": true,
   "includeCoAuthoredBy": false
