@@ -1,2 +1,9 @@
 #!/bin/sh
-rm -f handoff.md
+set -eu
+
+git_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
+  echo "remove-handoff: not inside a git worktree" >&2
+  exit 1
+}
+
+rm -f -- "$git_root/handoff.md"
