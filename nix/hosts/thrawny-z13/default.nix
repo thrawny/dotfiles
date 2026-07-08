@@ -4,6 +4,60 @@
   pkgs,
   ...
 }:
+let
+  niriLidOutputDebounced = pkgs.writeShellScriptBin "niri-lid-output-debounced" ''
+    set -euo pipefail
+
+    delay="''${1:-3}"
+    retry_seconds=15
+    ${pkgs.coreutils}/bin/sleep "$delay"
+
+    lock_path="''${XDG_RUNTIME_DIR:-/tmp}/niri-lid-output.lock"
+    exec 9>"$lock_path"
+    ${pkgs.util-linux}/bin/flock 9
+
+    lid_state="$(${pkgs.gnugrep}/bin/grep -h -o 'open\|closed' /proc/acpi/button/lid/*/state 2>/dev/null | ${pkgs.coreutils}/bin/head -1 || true)"
+    case "$lid_state" in
+      open) desired_state=on ;;
+      closed) desired_state=off ;;
+      *)
+        echo "niri-lid-output: no lid state found"
+        exit 0
+        ;;
+    esac
+
+    current_state() {
+      ${config.programs.niri.package}/bin/niri msg -j outputs 2>/dev/null \
+        | ${pkgs.jq}/bin/jq -r '.[] | select(.name == "eDP-1") | if has("current_mode") then "on" else "off" end' 2>/dev/null \
+        | ${pkgs.coreutils}/bin/head -1
+    }
+
+    deadline=$(($(${pkgs.coreutils}/bin/date +%s) + retry_seconds))
+    while true; do
+      state="$(current_state || true)"
+      if [[ "$state" == "$desired_state" ]]; then
+        echo "niri-lid-output: eDP-1 already $desired_state (lid=$lid_state)"
+        exit 0
+      fi
+
+      echo "niri-lid-output: applying eDP-1 $desired_state (lid=$lid_state, was=''${state:-unknown})"
+      ${config.programs.niri.package}/bin/niri msg output eDP-1 "$desired_state" >/dev/null 2>&1 || true
+
+      state="$(current_state || true)"
+      if [[ "$state" == "$desired_state" ]]; then
+        echo "niri-lid-output: eDP-1 now $desired_state"
+        exit 0
+      fi
+
+      if [[ "$(${pkgs.coreutils}/bin/date +%s)" -ge "$deadline" ]]; then
+        echo "niri-lid-output: failed to set eDP-1 $desired_state (last state=''${state:-unknown})" >&2
+        exit 1
+      fi
+
+      ${pkgs.coreutils}/bin/sleep 1
+    done
+  '';
+in
 {
   imports = [
     ../../modules/nixos/default.nix
@@ -215,6 +269,31 @@
     programs.ghostty.settings.font-size = 11;
 
     programs.niri.settings = {
+      # Let the debounced lid event handler below control eDP-1 instead of
+      # niri's immediate lid-close handling, which can see close/open/close
+      # sensor bounce and crash GTK/Wayland clients.
+      debug.keep-laptop-panel-on-when-lid-is-closed = true;
+
+      "switch-events" = {
+        lid-close.action.spawn = [
+          "${niriLidOutputDebounced}/bin/niri-lid-output-debounced"
+          "3"
+        ];
+        lid-open.action.spawn = [
+          "${niriLidOutputDebounced}/bin/niri-lid-output-debounced"
+          "3"
+        ];
+      };
+
+      spawn-at-startup = lib.mkAfter [
+        {
+          command = [
+            "${niriLidOutputDebounced}/bin/niri-lid-output-debounced"
+            "0"
+          ];
+        }
+      ];
+
       outputs = {
         # Laptop screen - centered below work ultrawide
         "eDP-1" = {
@@ -270,6 +349,7 @@
     };
 
     home.packages = [
+      niriLidOutputDebounced
       pkgs.element-desktop
       pkgs.google-chrome
       pkgs.obs-studio

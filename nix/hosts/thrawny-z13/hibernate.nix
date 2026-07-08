@@ -1,43 +1,8 @@
 {
-  config,
   lib,
   pkgs,
   ...
 }:
-let
-  inherit (config.dotfiles) username;
-
-  niriLidOutput = pkgs.writeShellScript "niri-lid-output" ''
-    set -euo pipefail
-
-    lid_state="$(${pkgs.gnugrep}/bin/grep -h -o 'open\|closed' /proc/acpi/button/lid/*/state | ${pkgs.coreutils}/bin/head -1 || true)"
-    case "$lid_state" in
-      open) output_state=on ;;
-      closed) output_state=off ;;
-      *) exit 0 ;;
-    esac
-
-    uid="$(${pkgs.coreutils}/bin/id -u ${username})"
-    runtime_dir="/run/user/$uid"
-
-    niri_socket=""
-    for socket in "$runtime_dir"/niri.*.sock; do
-      [[ -S "$socket" ]] || continue
-      niri_socket="$socket"
-      break
-    done
-
-    echo "apply lid=$lid_state output=$output_state runtime=$runtime_dir socket=$niri_socket"
-
-    [[ -n "$niri_socket" ]] || exit 1
-
-    exec ${pkgs.util-linux}/bin/runuser -u ${username} -- \
-      ${pkgs.coreutils}/bin/env \
-        XDG_RUNTIME_DIR="$runtime_dir" \
-        NIRI_SOCKET="$niri_socket" \
-        ${config.programs.niri.package}/bin/niri msg output eDP-1 "$output_state"
-  '';
-in
 {
   boot = {
     extraModprobeConfig = lib.mkAfter ''
@@ -81,35 +46,6 @@ in
   # mt7921e fails to restore reliably from hibernate on some systems.
   # Unload it before sleep and reprobe it after wake to avoid the broken
   # PCIe resume path entirely.
-  systemd.services.niri-lid-output = {
-    description = "Sync niri laptop output with lid state";
-    wantedBy = [ "multi-user.target" ];
-    serviceConfig = {
-      Restart = "always";
-      RestartSec = 1;
-      ExecStart = pkgs.writeShellScript "niri-lid-output-watch" ''
-        set -euo pipefail
-
-        last_applied=""
-        while true; do
-          lid_state="$(${pkgs.gnugrep}/bin/grep -h -o 'open\|closed' /proc/acpi/button/lid/*/state | ${pkgs.coreutils}/bin/head -1 || true)"
-
-          if [[ -n "$lid_state" && "$lid_state" != "$last_applied" ]]; then
-            echo "lid state changed: $lid_state"
-            if ${niriLidOutput}; then
-              last_applied="$lid_state"
-            else
-              echo "failed to apply lid state: $lid_state"
-              sleep 5
-            fi
-          fi
-
-          sleep 1
-        done
-      '';
-    };
-  };
-
   systemd.services.mt7921e-sleep = {
     description = "Remove mt7921e before sleep";
     wantedBy = [ "sleep.target" ];
