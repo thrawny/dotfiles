@@ -24,12 +24,14 @@ in
       dotenv_if_exists .env
       dotenv_if_exists .env.local
 
-      if [[ -n "''${SANDBOX:-}" ]]; then
-          source_env_if_exists .envrc.sandbox
-      else
-          source_env_if_exists .envrc.local
-          dotenv_if_exists .secrets
-      fi
+      source_local_envrc() {
+          if [[ -n "''${SANDBOX:-}" ]]; then
+              source_env_if_exists .envrc.sandbox
+          else
+              source_env_if_exists .envrc.local
+              dotenv_if_exists .secrets
+          fi
+      }
 
       use_zmx() {
           local project_name dir_name

@@ -11,15 +11,27 @@ sandbox() {
     args+=(--ro-bind /dev/null "$target")
   }
 
-  mask_file() {
+  resolved_file_path() {
     local f="$1"
-    mask_file_as "$f" "$f"
+    [[ -e "$f" || -L "$f" ]] || return 1
+    realpath "$f" 2>/dev/null || printf '%s\n' "$f"
+  }
+
+  mask_file() {
+    local f="$1" target
+    [[ -f "$f" ]] || return 0
+    target="$(resolved_file_path "$f")" || return 0
+    mask_file_as "$f" "$target"
   }
 
   keep_secret_file_readable() {
-    local f="$1" sandbox_env_dir
+    local f="$1" sandbox_env_dir readable_file resolved_f resolved_readable
+    resolved_f="$(resolved_file_path "$f")" || resolved_f="$f"
     for sandbox_env_dir in "${sandbox_env_dirs[@]}"; do
-      [[ "$f" == "$sandbox_env_dir/.secrets.sandbox" ]] && return 0
+      readable_file="$sandbox_env_dir/.secrets.sandbox"
+      [[ "$f" == "$readable_file" ]] && return 0
+      resolved_readable="$(resolved_file_path "$readable_file")" || continue
+      [[ "$resolved_f" == "$resolved_readable" ]] && return 0
     done
     return 1
   }
@@ -127,7 +139,7 @@ sandbox() {
   # Set SANDBOX_AWS_PROFILE in the environment or a repo-local .secrets.sandbox.
   if [[ -n "${SANDBOX_AWS_PROFILE:-}" ]]; then
     case "$SANDBOX_AWS_PROFILE" in
-      *prod*|*production*)
+      *prod*)
         echo "sandbox: refusing to expose production-looking profile: $SANDBOX_AWS_PROFILE" >&2
         exit 1
         ;;
@@ -290,11 +302,12 @@ sandbox() {
     [[ -d "$d" ]] && args+=(--bind "$d" "$d")
   done
 
-  export SANDBOX_REDACT_ENV_NAMES="$({
+  SANDBOX_REDACT_ENV_NAMES="$({
     while IFS= read -r -d '' f; do
       env_names_from_file "$f"
     done < <(fd -H --no-ignore -g '.secrets*' ~ --type f -0 2>/dev/null)
   } | sort -u | tr '\n' ' ')"
+  export SANDBOX_REDACT_ENV_NAMES
 
   # Mask secrets files after writable binds so file-level mounts win. Using
   # /dev/null avoids placeholder values that agents may mistake for credentials.
