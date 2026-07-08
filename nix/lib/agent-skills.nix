@@ -45,6 +45,7 @@ let
     skill;
 
   localSkillOverrides = {
+    codex-delegate.agents = [ "claude" ];
     pi-reload-runtime.agents = [ "pi" ];
   };
   localSharedSkills = lib.mapAttrs (name: skill: skill // (localSkillOverrides.${name} or { })) (
