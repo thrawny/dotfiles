@@ -14,7 +14,7 @@ in
 {
   xdg.desktopEntries.niri-open-url = {
     name = "Niri URL Router";
-    comment = "Open URLs in the nearest Zen or Helium window";
+    comment = "Open URLs in the nearest Helium window, falling back to web workspace";
     exec = "${niriOpenUrl} %u";
     terminal = false;
     type = "Application";

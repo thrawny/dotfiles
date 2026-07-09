@@ -14,15 +14,9 @@ url="$1"
 
 # When the niri session isn't reachable — launched from a sandbox without the
 # niri socket, or before niri/jq are available — we can't find or focus a
-# window. Remoting into the running Zen would hit its profile lock (Zen's
-# remoting rides the DBus session bus in $XDG_RUNTIME_DIR, which a sandbox
-# hides), so open a fresh Helium window instead: its singleton IPC lives under
-# $HOME and stays reachable, avoiding the collision.
+# window. Open a fresh Helium window instead.
 open_detached() {
-  if command -v helium >/dev/null 2>&1; then
-    exec helium --new-window "$url"
-  fi
-  exec zen-beta --new-tab "$url"
+  exec helium --new-window "$url"
 }
 
 if ! command -v niri >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
@@ -47,23 +41,12 @@ focused_position=$(
 )
 read -r focused_col focused_row <<<"$focused_position"
 
-browser_command() {
-  case "$1" in
-    helium) printf 'helium' ;;
-    zen | zen-beta) printf 'zen-beta' ;;
-    *) return 1 ;;
-  esac
-}
-
 open_in_window() {
   local window_id="$1"
-  local app_id="$2"
-  local command
 
-  command=$(browser_command "$app_id") || return 1
   niri msg action focus-window --id "$window_id" >/dev/null
   sleep 0.2
-  exec "$command" --new-tab "$url"
+  exec helium --new-tab "$url"
 }
 
 nearest_browser=$(
@@ -72,45 +55,41 @@ nearest_browser=$(
     --argjson focused_col "${focused_col:-0}" \
     --argjson focused_row "${focused_row:-0}" '
       def sq: . * .;
-      def browser: .app_id == "helium" or .app_id == "zen" or .app_id == "zen-beta";
-
       map(
-        select(.workspace_id == $workspace_id and browser)
+        select(.workspace_id == $workspace_id and .app_id == "helium")
         | .distance = (((.layout.pos_in_scrolling_layout[0] // 0) - $focused_col) | sq)
                    + (((.layout.pos_in_scrolling_layout[1] // 0) - $focused_row) | sq)
       )
       | sort_by(.distance, .focus_timestamp.secs // 0, .id)
       | .[0]
-      | if . == null then empty else "\(.id)\t\(.app_id)" end
+      | .id // empty
     ' <<<"$windows_json"
 )
 
 if [[ -n "$nearest_browser" ]]; then
-  IFS=$'\t' read -r window_id app_id <<<"$nearest_browser"
-  open_in_window "$window_id" "$app_id"
+  open_in_window "$nearest_browser"
 fi
 
-# No browser in the current workspace: fall back to Zen in the named "web"
-# workspace. If no Zen window exists there, focus/create the web workspace and
-# let Zen open normally.
+# No Helium window in the current workspace: fall back to Helium in the named
+# "web" workspace. If no Helium window exists there, focus/create the web
+# workspace and open a fresh Helium window.
 web_workspace_id=$(jq -r '.[] | select(.name == "web") | .id' <<<"$workspace_json" | head -n1)
 
 if [[ -n "$web_workspace_id" ]]; then
-  web_zen=$(
+  web_helium=$(
     jq -r --argjson workspace_id "$web_workspace_id" '
-      map(select(.workspace_id == $workspace_id and (.app_id == "zen" or .app_id == "zen-beta")))
+      map(select(.workspace_id == $workspace_id and .app_id == "helium"))
       | sort_by(.focus_timestamp.secs // 0, .id)
       | last
-      | if . == null then empty else "\(.id)\t\(.app_id)" end
+      | .id // empty
     ' <<<"$windows_json"
   )
 
-  if [[ -n "$web_zen" ]]; then
-    IFS=$'\t' read -r window_id app_id <<<"$web_zen"
-    open_in_window "$window_id" "$app_id"
+  if [[ -n "$web_helium" ]]; then
+    open_in_window "$web_helium"
   fi
 
   niri msg action focus-workspace web >/dev/null 2>&1 || true
 fi
 
-exec zen-beta --new-tab "$url"
+exec helium --new-window "$url"

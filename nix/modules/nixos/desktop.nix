@@ -51,6 +51,9 @@ let
       postFixup = (old.postFixup or "") + ''
         wrapProgram $out/bin/helium \
           --run 'export TMPDIR="$HOME/.cache/helium"; mkdir -p "$TMPDIR"'
+
+        substituteInPlace $out/share/applications/helium.desktop \
+          --replace-fail 'Exec=helium %U' 'Exec=helium --new-window %U'
       '';
     }))
   ];
