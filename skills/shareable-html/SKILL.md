@@ -30,9 +30,6 @@ Every shareable HTML artifact should include content-specific metadata in the `<
 ```
 
 Guidance:
-- Make the title specific, not generic: `Sinexcel Modbus Infographic`, not `Report`.
-- Keep descriptions under roughly 160 characters.
-- Describe what the viewer will get, not implementation details.
 - Do not include `og:url` unless the final public share URL is already known. The uploader/CLI can add or override deployment-specific URLs.
 - `og:image` is not needed at this time for basic link previews.
 - Include a favicon. Prefer an inline SVG/data URI favicon so the artifact stays self-contained and does not need companion files.
@@ -63,36 +60,23 @@ Prefer:
 
 Put generated shareable HTML artifacts in `./lab/` by default. This directory is always gitignored and is the expected scratch space for agent-created previews, infographics, reports, and mockups.
 
-Use a descriptive filename:
-
-```txt
-lab/sinexcel-modbus-infographic.html
-lab/share-html-drops-deck.html
-```
-
 ## Publishing workflow
 
 Default to local-only output. Creating or editing a shareable HTML artifact does **not** imply publishing it.
 
 Only upload to drops or run a real `share-html` publish when the user explicitly asks to publish, share, upload, create a public link, or send it to drops.
 
-When explicitly asked to publish/share an HTML artifact, use the `share-html` CLI from the dotfiles repo if available:
+When explicitly asked to publish/share an HTML artifact, use the `share-html` CLI available in path.
 
 ```bash
 share-html path/to/artifact.html
 ```
 
-It publishes the file to the Drops app (`https://drops.lakebed.app` by default) and prints the public share URL in the form `https://drops.lakebed.app/s/<token>/<slug>/`. No auth or token is required — the link itself is the bearer credential. Large files are uploaded in chunks automatically.
+It publishes the file to the drops app and prints the public share URL back.
 
 The slug defaults to the HTML `<title>` (falling back to the filename); override it with `--slug`. Point at a different Drops deploy with `--url` or the `DROPS_URL` env var.
 
 A published drop is more than a static page: viewers can select text in the rendered HTML and leave inline comment threads, so prefer it for review/feedback artifacts.
-
-If you want to validate publish readiness without uploading, or the user asks for a check/preview rather than a public link, use:
-
-```bash
-share-html --dry-run path/to/artifact.html
-```
 
 ## Checklist before sharing
 
