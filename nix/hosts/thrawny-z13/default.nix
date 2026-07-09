@@ -230,8 +230,8 @@ in
       debug.keep-laptop-panel-on-when-lid-is-closed = true;
 
       "switch-events" = {
-        lid-close.action.spawn = niriLidOutputSync ++ [ "3" ];
-        lid-open.action.spawn = niriLidOutputSync ++ [ "3" ];
+        lid-close.action.spawn = niriLidOutputSync ++ [ "2" ];
+        lid-open.action.spawn = niriLidOutputSync ++ [ "0.5" ];
       };
 
       spawn-at-startup = lib.mkAfter [
