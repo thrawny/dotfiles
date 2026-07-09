@@ -43,7 +43,7 @@ Merge the two blocks into one set of unique issues:
 - **Agreement is a confidence signal** — issues both engines flag are most likely real; surface them first.
 - Codex scores P1/P2/P3, Claude scores high/medium/low — normalize to one scale (high/medium/low); on conflict take the higher.
 
-## 4. Fix the major issues (default)
+## 4. Fix the major issues
 
 For each finding that is **major** (high severity / Codex P1–P2):
 
@@ -53,9 +53,7 @@ For each finding that is **major** (high severity / Codex P1–P2):
 
 **Stop and ask the user instead of fixing** when a fix would change the change's intended contract, balloon the diff well past its original scope, or when two findings prescribe conflicting fixes. Autofix is for clear, contained corrections — not redesigns.
 
-**Prove the fixes are safe.** After fixing, run the project's tests / checks (e.g. `just check`, the test suite, or the relevant build/lint). If a fix breaks something, revert it and report rather than piling on more changes. Don't re-run the reviewers just to produce a cleaner summary.
-
-Commit the fixes with `/gc`; **do not push** unless the user asks. Leave **minor** findings (medium/low, Codex P3) as a reported list — don't fix them unless the user asks.
+Commit the fixes. Leave **minor** findings (medium/low, Codex P3) as a reported list — don't fix them unless the user asks.
 
 ## 5. Summarize
 
