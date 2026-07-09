@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+"""Sync niri's internal laptop output with the physical lid state."""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import glob
+import json
+import os
+import stat
+import subprocess
+import sys
+import syslog
+import time
+from pathlib import Path
+from typing import Any
+
+LOG_TAG = "niri-lid-output"
+DEFAULT_OUTPUT = "eDP-1"
+
+
+class NiriError(RuntimeError):
+    pass
+
+
+def log(message: str, priority: int = syslog.LOG_NOTICE) -> None:
+    line = f"{LOG_TAG}: {message}"
+    print(line, flush=True)
+    try:
+        syslog.openlog(LOG_TAG)
+        syslog.syslog(priority, message)
+    except OSError:
+        pass
+
+
+def read_lid_state() -> str | None:
+    for state_file in glob.glob("/proc/acpi/button/lid/*/state"):
+        try:
+            text = Path(state_file).read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+
+        if "open" in text:
+            return "open"
+        if "closed" in text:
+            return "closed"
+
+    return None
+
+
+def runtime_dir() -> str:
+    return os.environ.get("XDG_RUNTIME_DIR") or f"/run/user/{os.getuid()}"
+
+
+def discover_niri_socket(xdg_runtime_dir: str) -> str | None:
+    for candidate in sorted(glob.glob(os.path.join(xdg_runtime_dir, "niri.*.sock"))):
+        try:
+            mode = os.stat(candidate).st_mode
+        except OSError:
+            continue
+        if stat.S_ISSOCK(mode):
+            return candidate
+    return None
+
+
+def niri_env() -> dict[str, str]:
+    env = os.environ.copy()
+    env["XDG_RUNTIME_DIR"] = runtime_dir()
+
+    socket_path = env.get("NIRI_SOCKET")
+    if not socket_path or not Path(socket_path).exists():
+        discovered = discover_niri_socket(env["XDG_RUNTIME_DIR"])
+        if discovered:
+            env["NIRI_SOCKET"] = discovered
+        else:
+            env.pop("NIRI_SOCKET", None)
+
+    return env
+
+
+def run_niri(niri: str, args: list[str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [niri, "msg", *args],
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=niri_env(),
+    )
+
+
+def load_outputs(niri: str) -> Any:
+    proc = run_niri(niri, ["-j", "outputs"])
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip()
+        raise NiriError(detail or f"niri msg outputs exited {proc.returncode}")
+
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise NiriError(f"invalid niri outputs JSON: {exc}") from exc
+
+
+def find_output(outputs: Any, output_name: str) -> dict[str, Any] | None:
+    if isinstance(outputs, dict):
+        output = outputs.get(output_name)
+        return output if isinstance(output, dict) else None
+
+    if isinstance(outputs, list):
+        for output in outputs:
+            if isinstance(output, dict) and output.get("name") == output_name:
+                return output
+
+    return None
+
+
+def output_state_from_outputs(outputs: Any, output_name: str) -> str:
+    output = find_output(outputs, output_name)
+    if output is None:
+        return "missing"
+
+    # niri IPC defines both as optional: current_mode is None when disabled,
+    # and logical is None when the output is not mapped (for example disabled).
+    # Do not use key existence; JSON may contain current_mode: null.
+    if output.get("current_mode") is not None and output.get("logical") is not None:
+        return "on"
+
+    return "off"
+
+
+def output_state(niri: str, output_name: str) -> str:
+    return output_state_from_outputs(load_outputs(niri), output_name)
+
+
+def apply_output_state(niri: str, output_name: str, desired_state: str) -> None:
+    proc = run_niri(niri, ["output", output_name, desired_state])
+    if proc.returncode != 0:
+        detail = (proc.stderr or proc.stdout).strip()
+        raise NiriError(detail or f"niri msg output exited {proc.returncode}")
+
+
+def state_satisfies(state: str, desired_state: str) -> bool:
+    if desired_state == "on":
+        return state == "on"
+    return state in {"off", "missing"}
+
+
+def lock_file():
+    xdg_runtime_dir = runtime_dir()
+    Path(xdg_runtime_dir).mkdir(parents=True, exist_ok=True)
+    handle = open(os.path.join(xdg_runtime_dir, "niri-lid-output.lock"), "w", encoding="utf-8")
+    fcntl.flock(handle, fcntl.LOCK_EX)
+    return handle
+
+
+def sync_output(args: argparse.Namespace) -> int:
+    if args.delay > 0:
+        time.sleep(args.delay)
+
+    with lock_file():
+        lid_state = read_lid_state()
+        if lid_state is None:
+            log("no lid state found", syslog.LOG_WARNING)
+            return 0
+
+        desired_state = "on" if lid_state == "open" else "off"
+        retry_seconds = args.open_retry_seconds if desired_state == "on" else args.closed_retry_seconds
+        deadline = time.monotonic() + retry_seconds
+        attempt = 0
+        applied = False
+
+        while True:
+            attempt += 1
+            try:
+                state = output_state(args.niri, args.output)
+            except NiriError as exc:
+                state = "unknown"
+                log(f"cannot read {args.output} state (attempt={attempt}): {exc}", syslog.LOG_WARNING)
+
+            if state_satisfies(state, desired_state):
+                verb = "now" if applied else "already"
+                log(f"{args.output} {verb} {desired_state} (lid={lid_state}, state={state})")
+                return 0
+
+            log(f"applying {args.output} {desired_state} (lid={lid_state}, was={state}, attempt={attempt})")
+            try:
+                apply_output_state(args.niri, args.output, desired_state)
+                applied = True
+            except NiriError as exc:
+                log(f"failed to apply {args.output} {desired_state} (attempt={attempt}): {exc}", syslog.LOG_WARNING)
+
+            try:
+                state = output_state(args.niri, args.output)
+            except NiriError as exc:
+                state = "unknown"
+                log(f"cannot verify {args.output} state (attempt={attempt}): {exc}", syslog.LOG_WARNING)
+
+            if state_satisfies(state, desired_state):
+                log(f"{args.output} now {desired_state} (lid={lid_state}, state={state})")
+                return 0
+
+            if time.monotonic() >= deadline:
+                log(
+                    f"failed to set {args.output} {desired_state} "
+                    f"(lid={lid_state}, last_state={state}, attempts={attempt})",
+                    syslog.LOG_ERR,
+                )
+                return 1
+
+            time.sleep(args.retry_interval)
+
+
+def parse_args(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("delay", nargs="?", type=float, default=3.0, help="seconds to wait before reading lid state")
+    parser.add_argument("--output", default=DEFAULT_OUTPUT, help="niri output name to sync")
+    parser.add_argument("--niri", default="niri", help="path to the niri executable")
+    parser.add_argument("--open-retry-seconds", type=float, default=45.0)
+    parser.add_argument("--closed-retry-seconds", type=float, default=15.0)
+    parser.add_argument("--retry-interval", type=float, default=1.0)
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    return sync_output(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
