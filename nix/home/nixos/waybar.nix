@@ -365,11 +365,12 @@ let
     };
 
     battery = sharedModules.battery // {
-      format = "{icon} {capacity}%";
-      "format-charging" = "{icon} {capacity}%";
-      "format-not-charging" = "{icon} {capacity}%";
-      "format-plugged" = "{icon} {capacity}%";
-      "format-full" = "󰂅 {capacity}%";
+      # A narrow no-break space keeps the compact charging glyph clear of the digits.
+      format = "{icon} {capacity}%";
+      "format-charging" = "{icon} {capacity}%";
+      "format-not-charging" = "{icon} {capacity}%";
+      "format-plugged" = "{icon} {capacity}%";
+      "format-full" = "󰂅 {capacity}%";
     };
   };
 in
