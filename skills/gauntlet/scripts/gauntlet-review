@@ -100,7 +100,7 @@ claude_pid=$!
 
 # Codex reviewer — scope is in the prompt (see above); high reasoning effort for
 # a thorough review; writes its final answer to $codex_out, progress to $codex_log.
-codex exec --ephemeral --color never -c model_reasoning_effort="high" -o "$codex_out" review "$codex_prompt" >"$codex_log" 2>&1 &
+codex exec --ephemeral --color never --model gpt-5.6-sol -c model_reasoning_effort="high" -o "$codex_out" review "$codex_prompt" >"$codex_log" 2>&1 &
 codex_pid=$!
 
 if wait "$claude_pid"; then claude_status=0; else claude_status=$?; fi
