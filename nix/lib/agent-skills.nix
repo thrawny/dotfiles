@@ -55,7 +55,7 @@ let
   externalSkills = {
     agent-browser.source = agent-browser + "/skills/agent-browser";
     frontend-design.source = anthropic-skills + "/skills/frontend-design";
-    skill-creator.source = anthropic-skills + "/skills/skill-creator";
+    writing-great-skills.source = mattpocock-skills + "/skills/productivity/writing-great-skills";
     teach.source = mattpocock-skills + "/skills/productivity/teach";
     improve-codebase-architecture.source =
       mattpocock-skills + "/skills/engineering/improve-codebase-architecture";
