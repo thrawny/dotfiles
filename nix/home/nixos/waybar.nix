@@ -136,8 +136,13 @@ let
     window#waybar.compact #battery,
     window#waybar.compact #network,
     window#waybar.compact #wireplumber,
-    window#waybar.compact #custom-caffeine {
+    window#waybar.compact #custom-caffeine,
+    window#waybar.compact #custom-tray-expander {
       padding: 0 5px;
+    }
+
+    window#waybar.compact #tray {
+      padding: 0 2px;
     }
 
     window#waybar.compact #workspaces {
@@ -348,11 +353,36 @@ let
       "custom/quotabar-claude"
       "custom/quotabar-codex"
       "custom/caffeine"
+      "group/tray"
       "network"
       "wireplumber"
       "battery"
       "clock"
     ];
+
+    "group/tray" = {
+      orientation = "inherit";
+      drawer = {
+        "transition-duration" = 200;
+        "transition-left-to-right" = false;
+        "click-to-reveal" = true;
+      };
+      modules = [
+        "custom/tray-expander"
+        "tray#compact"
+      ];
+    };
+
+    "custom/tray-expander" = {
+      format = "⋯";
+      tooltip = false;
+    };
+
+    "tray#compact" = {
+      "icon-size" = 14;
+      spacing = 2;
+      "show-passive-items" = false;
+    };
 
     "niri/workspaces" = {
       format = "{icon} {value}";
