@@ -101,8 +101,11 @@ describe("background bash", () => {
 		);
 
 		expect(result.content[0]?.text).toContain("Started background command");
+		expect(exec).toHaveBeenNthCalledWith(1, "zmx", ["list"], {
+			cwd: "/tmp",
+		});
 		expect(exec).toHaveBeenNthCalledWith(
-			1,
+			2,
 			"zmx",
 			[
 				"run",
@@ -115,7 +118,7 @@ describe("background bash", () => {
 			{ cwd: "/tmp" },
 		);
 		expect(exec).toHaveBeenNthCalledWith(
-			2,
+			3,
 			"zmx",
 			["wait", expect.stringMatching(/^pi-bg-/)],
 			expect.objectContaining({ cwd: "/tmp" }),
@@ -131,6 +134,45 @@ describe("background bash", () => {
 				display: true,
 			}),
 			{ deliverAs: "steer", triggerTurn: true },
+		);
+	});
+
+	it("prunes completed, unattached background sessions older than 12 hours", async () => {
+		const nowSeconds = Math.floor(Date.now() / 1000);
+		const old = nowSeconds - 13 * 60 * 60;
+		const recent = nowSeconds - 11 * 60 * 60;
+		const listOutput = [
+			`name=pi-bg-old\tpid=1\tclients=0\tcreated=1\tended=${old}\texit_code=0`,
+			`name=pi-bg-recent\tpid=2\tclients=0\tcreated=1\tended=${recent}\texit_code=0`,
+			`name=pi-bg-running\tpid=3\tclients=0\tcreated=1`,
+			`name=pi-bg-attached\tpid=4\tclients=1\tcreated=1\tended=${old}\texit_code=0`,
+			`name=unrelated\tpid=5\tclients=0\tcreated=1\tended=${old}\texit_code=0`,
+		].join("\n");
+		const exec = vi.fn(async (_command: string, args: string[]) =>
+			args[0] === "list" ? execResult({ stdout: listOutput }) : execResult(),
+		);
+		const { tool } = setupExtension(exec);
+
+		await tool.execute(
+			"call-prune",
+			{ command: "just check", background: true },
+			undefined,
+			undefined,
+			ctx,
+		);
+
+		expect(exec).toHaveBeenNthCalledWith(2, "zmx", ["kill", "pi-bg-old"], {
+			cwd: "/tmp",
+		});
+		expect(exec).not.toHaveBeenCalledWith(
+			"zmx",
+			expect.arrayContaining([
+				"pi-bg-recent",
+				"pi-bg-running",
+				"pi-bg-attached",
+				"unrelated",
+			]),
+			expect.anything(),
 		);
 	});
 
@@ -170,7 +212,7 @@ describe("background bash", () => {
 		);
 		await handlers.get("session_shutdown")?.({}, ctx);
 
-		const waitOptions = exec.mock.calls[1]?.[2] as ExecOptions;
+		const waitOptions = exec.mock.calls[2]?.[2] as ExecOptions;
 		expect(waitOptions.signal?.aborted).toBe(true);
 		finishWait?.(execResult());
 		await new Promise((resolve) => setTimeout(resolve, 0));

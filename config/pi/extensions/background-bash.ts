@@ -12,6 +12,7 @@ import { Type } from "@sinclair/typebox";
 const COMPLETION_MESSAGE_TYPE = "background-bash-finished";
 const FAILURE_OUTPUT_MAX_BYTES = 12 * 1024;
 const FAILURE_OUTPUT_MAX_LINES = 100;
+const SESSION_RETENTION_SECONDS = 12 * 60 * 60;
 
 const bashParameters = Type.Object({
 	command: Type.String({ description: "Bash command to execute" }),
@@ -71,6 +72,54 @@ function execFailure(result: ExecResult): string {
 		.filter(Boolean)
 		.join("\n")
 		.trim();
+}
+
+function staleBackgroundSessions(output: string, nowSeconds: number): string[] {
+	const cutoff = nowSeconds - SESSION_RETENTION_SECONDS;
+	const stale: string[] = [];
+
+	for (const line of output.split("\n")) {
+		const fields = new Map<string, string>();
+		for (const field of line.trim().split("\t")) {
+			const separator = field.indexOf("=");
+			if (separator > 0) {
+				fields.set(field.slice(0, separator), field.slice(separator + 1));
+			}
+		}
+
+		const name = fields.get("name");
+		const ended = Number(fields.get("ended"));
+		if (
+			name?.startsWith("pi-bg-") &&
+			fields.get("clients") === "0" &&
+			Number.isSafeInteger(ended) &&
+			ended <= cutoff
+		) {
+			stale.push(name);
+		}
+	}
+
+	return stale;
+}
+
+async function pruneOldBackgroundSessions(
+	pi: ExtensionAPI,
+	cwd: string,
+): Promise<void> {
+	try {
+		const list = await pi.exec("zmx", ["list"], { cwd });
+		if (list.code !== 0) return;
+
+		const stale = staleBackgroundSessions(
+			list.stdout,
+			Math.floor(Date.now() / 1000),
+		);
+		if (stale.length > 0) {
+			await pi.exec("zmx", ["kill", ...stale], { cwd });
+		}
+	} catch {
+		// Cleanup is opportunistic and must not prevent a new command from starting.
+	}
 }
 
 function completionContent(
@@ -212,6 +261,8 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 					"timeout is not supported with background=true; enforce the deadline in the command itself",
 				);
 			}
+
+			await pruneOldBackgroundSessions(pi, ctx.cwd);
 
 			const sessionName = backgroundSessionName(toolCallId, params.command);
 			const startedAt = Date.now();
