@@ -79,6 +79,15 @@ describe("background bash", () => {
 		expect(first).toMatch(/^pi-bg-just-call-reused-/);
 	});
 
+	it("names a piped shell script after the script instead of the input command", () => {
+		const command =
+			"cat <<'EOF' | bash /home/user/skills/gauntlet/scripts/gauntlet-review --uncommitted -\nreview brief\nEOF";
+
+		expect(backgroundSessionName("call-review", command)).toMatch(
+			/^pi-bg-gauntlet-call-review-/,
+		);
+	});
+
 	it("returns immediately and wakes the agent when the zmx task finishes", async () => {
 		let finishWait: ((result: ExecResult) => void) | undefined;
 		const waitResult = new Promise<ExecResult>((resolve) => {

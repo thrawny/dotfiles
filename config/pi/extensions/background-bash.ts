@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { basename } from "node:path";
 import {
 	createBashToolDefinition,
 	SettingsManager,
@@ -40,11 +41,56 @@ function slug(value: string, fallback: string, maxLength: number): string {
 	return normalized || fallback;
 }
 
+function unquoteShellWord(word: string): string {
+	if (
+		word.length >= 2 &&
+		((word.startsWith("'") && word.endsWith("'")) ||
+			(word.startsWith('"') && word.endsWith('"')))
+	) {
+		return word.slice(1, -1);
+	}
+	return word;
+}
+
+function backgroundCommandName(command: string): string {
+	const launchLine = command.trimStart().split("\n", 1)[0] ?? "";
+	const segments = launchLine.split(/\s*(?:\|\||&&|[|;])\s*/);
+
+	for (const segment of segments) {
+		const words = segment.match(/'[^']*'|"[^"]*"|\S+/g)?.map(unquoteShellWord);
+		if (!words || words.length < 2) continue;
+
+		const executable = basename(words[0] ?? "");
+		if (!["bash", "dash", "sh", "zsh"].includes(executable)) continue;
+
+		const args = words.slice(1);
+		if (args.includes("-c")) continue;
+		const script = args.find((argument) => !argument.startsWith("-"));
+		if (!script) continue;
+
+		const pathParts = script.split("/");
+		const skillsIndex = pathParts.lastIndexOf("skills");
+		const skillName = pathParts[skillsIndex + 1];
+		if (
+			skillsIndex >= 0 &&
+			skillName &&
+			pathParts[skillsIndex + 2] === "scripts"
+		) {
+			return slug(skillName, "task", 20);
+		}
+
+		const scriptName = basename(script).replace(/\.(?:ba|da|z)?sh$/i, "");
+		return slug(scriptName, "task", 20);
+	}
+
+	return slug(launchLine.split(/\s+/, 1)[0] ?? "", "task", 20);
+}
+
 export function backgroundSessionName(
 	toolCallId: string,
 	command: string,
 ): string {
-	const commandName = slug(command.split(/\s+/, 1)[0] ?? "", "task", 20);
+	const commandName = backgroundCommandName(command);
 	const normalizedCallId = toolCallId
 		.toLowerCase()
 		.replace(/[^a-z0-9]+/g, "-")
