@@ -1,7 +1,7 @@
 ---
 name: zero-tech-debt
 description: Rework a change as if the intended UX and architecture existed from day one, deleting compatibility cruft and accidental complexity.
-user-invocable: true
+disable-model-invocation: true
 ---
 
 # Zero Tech Debt

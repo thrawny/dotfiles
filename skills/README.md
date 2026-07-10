@@ -15,4 +15,4 @@ Add each skill as `skills/<skill-name>/SKILL.md` (plus any references/scripts/as
 
 Codex slash-command replacement skills live under `config/codex/commands/<skill-name>/SKILL.md` and are linked only to `~/.codex/skills/<skill-name>`.
 
-External skills are pinned as flake inputs and wired in `nix/home/shared/ai-tools.nix`. Update them with `nix flake update --flake ./nix <input-name>`.
+External skills are pinned as flake inputs and wired in `nix/lib/agent-skills.nix`. Update them with `nix flake update --flake ./nix <input-name>`.

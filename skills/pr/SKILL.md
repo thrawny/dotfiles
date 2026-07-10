@@ -1,62 +1,45 @@
 ---
 name: pr
-description: Create, update, monitor, and fix the current branch pull request through repeated review/fix/wait cycles until it is genuinely ready. Use when the user says `/pr`, asks to open/create/update/check/monitor a PR, fix PR checks, address review feedback, keep a PR green, or wait for agent reviewers such as Codex to finish. Do not stop after the first fix if reviewers or CI may still respond; keep iterating until terminal success or a real blocker.
+description: Drive a pull request to terminal readiness through a review-fix-monitor loop. Use when the user asks to create, update, check, or fix a PR; address review feedback; monitor CI or agent reviewers; or keep a PR green.
 ---
 
-# pr
+# Pull Request Loop
 
-Create or monitor the pull request associated with the current branch and address issues until it is ready to merge, while respecting any narrower instructions from the user.
+Create or resume the current branch's pull request, then keep looping until it is ready to merge or genuinely blocked. A narrower user request, such as status-only or one-pass review, takes precedence.
 
-The main failure mode this skill is meant to prevent is stopping after one review/fix pass. Treat PR work as a loop: inspect, wait when necessary, fix, push, then inspect again until the PR reaches a terminal state.
+## 1. Establish the PR
 
-## Workflow
+Inspect the branch, worktree, remote, and existing PR. Push task-related commits when needed; create a PR only when one does not already exist.
 
-1. Create the PR and branch
-   - If already on a branch that has a PR, treat this is as resuming previous work, push changes if any and start monitoring.
-2. Monitor
-   - CI checks like tests and docker builds.
-   - Incoming reviews from for example Codex.
-3. Address actionable issues.
-   - Fix failing checks by reading logs, identifying root causes, editing code, and running appropriate local validation.
-   - Address review comments and requested changes that apply to the PR.
-   - Resolve, close, or mark fixed review comments and threads as handled after the fix is pushed, when the platform supports it. This is part of the fix, not optional cleanup.
-   - Do not leave old actionable review comments open after you have fixed them. If a platform/tool allows thread resolution, resolve each handled thread before continuing to monitor.
-   - Resolve merge conflicts when it is safe and within the user's requested scope.
-   - Push fixes when the PR branch needs remote updates.
-4. Repeat until the PR is ready or blocked.
-   - Continue checking after each fix because CI and reviewers may produce new feedback after the push.
-   - After every push, comment resolution, or CI retry, re-check the pull request rather than assuming the previous issue list is complete.
-   - Do not send the final response immediately after one round of fixes unless the PR is already in a terminal success or blocked state.
-   - Treat unresolved review threads/comments as outstanding work even if the code has been changed. The PR is not ready while handled comments remain unresolved and resolvable.
-   - Stop only when checks are passing, the PR is mergeable, and there are no outstanding actionable review issues or unresolved handled threads, or when a real blocker requires user input.
+For a new PR, explain:
 
-## Initial PR Description
+- **Goal** — the user or engineering outcome.
+- **Reviewer focus** — likely correctness, regression, test, security, or data-loss risks.
+- **Deliberate choices** — accepted trade-offs, limitations, and scope boundaries reviewers should preserve.
 
-When creating the initial pull request, include explicit instructions for reviewers. The description should help human and agent reviewers focus on the intended risks and avoid relitigating deliberate choices.
+Omit ceremonial lists of successful local checks.
 
-Include:
+This step is complete when the current branch has an accurate PR and its remote state is current.
 
-- **Goal:** the user-facing or engineering goal that motivated the change.
-- **Reviewer focus:** the kinds of issues reviewers should look for, similar to a gauntlet/code-review pass: bugs, regressions, missing tests, security or data-loss risks, unclear behavior, and mismatches with the original goal.
-- **Deliberate choices reviewers should not flag:** intentional tradeoffs, accepted limitations, compatibility decisions, scope boundaries, or follow-up work that should not be treated as defects in this PR.
+## 2. Inspect every readiness signal
 
-Do not include:
-A list of checks you ran locally + green check marks.
+Check CI, mergeability, reviews, inline comments, unresolved threads, and active reviewer reactions. An eyes reaction from Codex means its review is still running; wait or poll until it posts a result.
 
-## Codex Review Monitoring
+This step is complete when every current blocker and actionable finding is accounted for.
 
-When Codex has reacted to the pull request with eyes, treat that as an active Codex review in progress. An eyes reaction means "Codex is still reviewing," not "there is nothing to do."
+## 3. Fix and close the loop
 
-- Monitor the pull request until Codex posts its review result.
-- If Codex reports issues, address them, push fixes, resolve or mark every fixed Codex issue/thread as handled when the platform supports it, and continue monitoring for Codex's next response.
-- Resolving fixed Codex comments is mandatory housekeeping: do it before claiming the issue is done or moving to the next monitoring cycle. If you cannot resolve a comment because of tool limitations, permissions, ambiguity, or because it is intentionally left open, say so explicitly and include the reason.
-- Repeat the review/fix/resolve/monitor cycle until Codex gives a thumbs up or otherwise clearly indicates there are no remaining issues.
-- Do not stop after fixing the first Codex batch. A push can trigger a new Codex pass, and that pass may surface additional issues.
-- If Codex is still pending after fixes are pushed, wait or poll again using the available tools instead of giving a final "done" summary.
-- This is the default behavior for `pr`, but explicit user instructions still win. If the user asks for a narrower check, a status-only pass, or no code changes, follow that instead.
+For each actionable issue:
 
-Before ending a Codex-monitored run, verify and mention one of these terminal states in the final response:
+1. Verify it against the code and intended scope.
+2. Apply a focused fix and run relevant validation.
+3. Commit and push the correction when the remote PR needs it.
+4. Resolve or mark the handled review thread as complete when the platform permits.
 
-- Codex gave a thumbs up or explicitly said there are no remaining issues, and all fixed/resolvable Codex comments or threads have been resolved/marked handled.
-- Codex review is blocked by an external/permission/flaky condition that needs user input, including any comments you could not resolve and why.
-- The user explicitly narrowed the task to a status-only or one-pass check.
+Report false positives or intentional choices with the reason. Surface tool, permission, ambiguity, or external failures that prevent resolving a thread.
+
+Every push, retry, or resolved comment invalidates the previous snapshot: return to step 2. A new push may trigger another Codex review, and that review belongs to the same loop.
+
+## Terminal criterion
+
+Finish only when checks pass, the PR is mergeable, no actionable review item or handled resolvable thread remains, and active reviewers have reached a final result. Otherwise continue monitoring or report the specific blocker requiring user input.
