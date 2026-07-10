@@ -1,7 +1,7 @@
 {
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-5.5",
-  "defaultThinkingLevel": "high",
+  "defaultModel": "gpt-5.6-sol",
+  "defaultThinkingLevel": "low",
   "theme": "monokai-pi",
   "diffTheme": "subtle",
   "diffView": "unified",
@@ -24,7 +24,10 @@
   },
   "shellPath": "/run/current-system/sw/bin/zsh",
   "enabledModels": [
-    "openai-codex/gpt-5.5"
+    "openai-codex/gpt-5.5",
+    "openai-codex/gpt-5.6-luna",
+    "openai-codex/gpt-5.6-sol",
+    "openai-codex/gpt-5.6-terra"
   ],
   "packages": [
     "npm:@sting8k/pi-vcc",
@@ -34,6 +37,6 @@
     "/home/thrawny/code/pi-codex-web-run",
     "/home/thrawny/code/pi-diff"
   ],
-  "lastChangelogVersion": "0.75.4",
+  "lastChangelogVersion": "0.80.6",
   "hideThinkingBlock": true
 }
