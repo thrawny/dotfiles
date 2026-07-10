@@ -365,11 +365,11 @@ let
     };
 
     battery = sharedModules.battery // {
-      format = "{icon}{capacity}%";
-      "format-charging" = "{icon}{capacity}%";
-      "format-not-charging" = "{icon}{capacity}%";
-      "format-plugged" = "{icon}{capacity}%";
-      "format-full" = "󰂅{capacity}%";
+      format = "{icon} {capacity}%";
+      "format-charging" = "{icon} {capacity}%";
+      "format-not-charging" = "{icon} {capacity}%";
+      "format-plugged" = "{icon} {capacity}%";
+      "format-full" = "󰂅 {capacity}%";
     };
   };
 in
