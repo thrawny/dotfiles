@@ -1,0 +1,207 @@
+import type {
+	ExecOptions,
+	ExecResult,
+	ExtensionAPI,
+	ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
+import { describe, expect, it, vi } from "vitest";
+import backgroundBashExtension, {
+	backgroundSessionName,
+} from "../extensions/background-bash.ts";
+
+type ToolResult = {
+	content: Array<{ type: "text"; text: string }>;
+};
+
+type RegisteredBashTool = {
+	parameters: {
+		properties?: Record<string, unknown>;
+	};
+	execute(
+		toolCallId: string,
+		params: { command: string; timeout?: number; background?: boolean },
+		signal: AbortSignal | undefined,
+		onUpdate: undefined,
+		ctx: ExtensionContext,
+	): Promise<ToolResult>;
+};
+
+type EventHandler = (
+	event: unknown,
+	ctx: ExtensionContext,
+) => Promise<void> | void;
+
+function execResult(overrides: Partial<ExecResult> = {}): ExecResult {
+	return {
+		stdout: "",
+		stderr: "",
+		code: 0,
+		killed: false,
+		...overrides,
+	};
+}
+
+function setupExtension(
+	exec: (
+		command: string,
+		args: string[],
+		options?: ExecOptions,
+	) => Promise<ExecResult>,
+) {
+	let tool: RegisteredBashTool | undefined;
+	const handlers = new Map<string, EventHandler>();
+	const sendMessage = vi.fn();
+	const pi = {
+		exec,
+		on(event: string, handler: EventHandler) {
+			handlers.set(event, handler);
+		},
+		registerTool(value: RegisteredBashTool) {
+			tool = value;
+		},
+		sendMessage,
+	} as unknown as ExtensionAPI;
+
+	backgroundBashExtension(pi);
+	if (!tool) throw new Error("bash tool was not registered");
+
+	return { handlers, sendMessage, tool };
+}
+
+const ctx = { cwd: "/tmp", mode: "tui" } as unknown as ExtensionContext;
+
+describe("background bash", () => {
+	it("generates a fresh zmx session name even when call IDs repeat", () => {
+		const first = backgroundSessionName("call-reused", "just check");
+		const second = backgroundSessionName("call-reused", "just check");
+
+		expect(first).not.toBe(second);
+		expect(first).toMatch(/^pi-bg-just-call-reused-/);
+	});
+
+	it("returns immediately and wakes the agent when the zmx task finishes", async () => {
+		let finishWait: ((result: ExecResult) => void) | undefined;
+		const waitResult = new Promise<ExecResult>((resolve) => {
+			finishWait = resolve;
+		});
+		const exec = vi.fn(
+			async (_command: string, args: string[], _options?: ExecOptions) =>
+				args[0] === "wait" ? waitResult : execResult(),
+		);
+
+		const { sendMessage, tool } = setupExtension(exec);
+
+		expect(tool.parameters.properties).toHaveProperty("background");
+		const result = await tool.execute(
+			"call-abc123",
+			{ command: "just check", background: true },
+			undefined,
+			undefined,
+			ctx,
+		);
+
+		expect(result.content[0]?.text).toContain("Started background command");
+		expect(exec).toHaveBeenNthCalledWith(
+			1,
+			"zmx",
+			[
+				"run",
+				expect.stringMatching(/^pi-bg-/),
+				"-d",
+				expect.any(String),
+				"-c",
+				"just check",
+			],
+			{ cwd: "/tmp" },
+		);
+		expect(exec).toHaveBeenNthCalledWith(
+			2,
+			"zmx",
+			["wait", expect.stringMatching(/^pi-bg-/)],
+			expect.objectContaining({ cwd: "/tmp" }),
+		);
+		expect(sendMessage).not.toHaveBeenCalled();
+
+		finishWait?.(execResult());
+		await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
+		expect(sendMessage).toHaveBeenCalledWith(
+			expect.objectContaining({
+				customType: "background-bash-finished",
+				content: expect.stringContaining("exit 0"),
+				display: true,
+			}),
+			{ deliverAs: "steer", triggerTurn: true },
+		);
+	});
+
+	it("preserves foreground bash behavior in the context working directory", async () => {
+		const exec = vi.fn(async () => execResult());
+		const { tool } = setupExtension(exec);
+
+		const result = await tool.execute(
+			"call-foreground",
+			{ command: "pwd" },
+			undefined,
+			undefined,
+			ctx,
+		);
+
+		expect(result.content[0]?.text.trim()).toBe("/tmp");
+		expect(exec).not.toHaveBeenCalled();
+	});
+
+	it("stops watching without killing zmx work when the Pi session closes", async () => {
+		let finishWait: ((result: ExecResult) => void) | undefined;
+		const waitResult = new Promise<ExecResult>((resolve) => {
+			finishWait = resolve;
+		});
+		const exec = vi.fn(
+			async (_command: string, args: string[], _options?: ExecOptions) =>
+				args[0] === "wait" ? waitResult : execResult(),
+		);
+		const { handlers, sendMessage, tool } = setupExtension(exec);
+
+		await tool.execute(
+			"call-shutdown",
+			{ command: "long-task", background: true },
+			undefined,
+			undefined,
+			ctx,
+		);
+		await handlers.get("session_shutdown")?.({}, ctx);
+
+		const waitOptions = exec.mock.calls[1]?.[2] as ExecOptions;
+		expect(waitOptions.signal?.aborted).toBe(true);
+		finishWait?.(execResult());
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		expect(sendMessage).not.toHaveBeenCalled();
+		expect(exec).not.toHaveBeenCalledWith(
+			"zmx",
+			expect.arrayContaining(["kill"]),
+			expect.anything(),
+		);
+	});
+
+	it("reports a failed background command with its recent output", async () => {
+		const exec = vi.fn(async (_command: string, args: string[]) =>
+			args[0] === "wait"
+				? execResult({ code: 7, stderr: "tests failed" })
+				: execResult(),
+		);
+		const { sendMessage, tool } = setupExtension(exec);
+
+		await tool.execute(
+			"call-failed",
+			{ command: "just test", background: true },
+			undefined,
+			undefined,
+			ctx,
+		);
+
+		await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
+		const message = sendMessage.mock.calls[0]?.[0] as { content: string };
+		expect(message.content).toContain("exit 7");
+		expect(message.content).toContain("tests failed");
+		expect(message.content).toContain("zmx history");
+	});
+});

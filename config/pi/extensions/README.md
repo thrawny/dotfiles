@@ -13,6 +13,7 @@ Current custom extensions include:
 
 - `agent-switch.ts` — forwards Pi lifecycle events to `agent-switch track`
 - `agents-local.ts` — loads private `AGENTS.local.md` files from the current git worktree
+- `background-bash.ts` — adds `background: true` to `bash` using zmx with completion wake-ups
 - `commands.ts` — loads repository/global Markdown commands
 - `impeccable.ts` — integrates impeccable command metadata when available
 - `rules.ts` — loads Markdown rule files as project guidance
