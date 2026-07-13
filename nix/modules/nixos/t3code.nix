@@ -70,7 +70,13 @@ let
       };
       textGenerationModelSelection = {
         instanceId = "codex";
-        model = "gpt-5.5";
+        model = "gpt-5.6-sol";
+        options = [
+          {
+            id = "reasoningEffort";
+            value = "low";
+          }
+        ];
       };
     }
   );
@@ -177,8 +183,12 @@ let
       install -d -m 0700 ${lib.escapeShellArg "${home}/.config/forgejo"}
       install -d -m 0700 ${lib.escapeShellArg "${home}/.local/share/forgejo-cli"}
 
-      if [ -d "$old_home/.codex" ] && [ ! -e ${lib.escapeShellArg "${codexHome}/auth.json"} ]; then
+      old_codex_auth="$old_home/.codex/auth.json"
+      codex_auth=${lib.escapeShellArg "${codexHome}/auth.json"}
+      if [ -d "$old_home/.codex" ] && [ ! -e "$codex_auth" ]; then
         cp -a "$old_home/.codex/." ${lib.escapeShellArg codexHome}
+      elif [ -e "$old_codex_auth" ] && [ "$old_codex_auth" -nt "$codex_auth" ]; then
+        install -m 0600 "$old_codex_auth" "$codex_auth"
       fi
       if [ -d "$old_home/.config/forgejo" ] && [ ! -e ${lib.escapeShellArg "${home}/.config/forgejo/token"} ]; then
         cp -a "$old_home/.config/forgejo/." ${lib.escapeShellArg "${home}/.config/forgejo"}
@@ -225,7 +235,8 @@ let
           | .providers.opencode.enabled = false
           | .providers.pi.enabled = false
           | .textGenerationModelSelection.instanceId = "codex"
-          | .textGenerationModelSelection.model = "gpt-5.5"
+          | .textGenerationModelSelection.model = "gpt-5.6-sol"
+          | .textGenerationModelSelection.options = [{"id": "reasoningEffort", "value": "low"}]
         ' \
         "$settings_path" > "$settings_tmp"
       install -m 0600 "$settings_tmp" "$settings_path"

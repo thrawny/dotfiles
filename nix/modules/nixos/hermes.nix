@@ -24,8 +24,10 @@ let
 
     model = {
       provider = "openai-codex";
-      default = "gpt-5.5";
+      default = "gpt-5.6-sol";
     };
+
+    agent.reasoning_effort = "low";
 
     terminal = {
       backend = "local";

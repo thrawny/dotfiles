@@ -10,8 +10,11 @@ let
   inherit (pkgs.stdenv.hostPlatform) system;
   llmPkgs = llm-agents.packages.${system};
   zmxPkg = zmx.packages.${system}.zmx-main;
-  openclaw = import ./openclaw.nix { inherit config lib pkgs; };
-  hermes = import ./hermes.nix { inherit config lib pkgs; };
+  openclaw = import ./openclaw.nix {
+    inherit config lib pkgs;
+    codexPackage = llmPkgs.codex;
+  };
+  hermes = import ./hermes.nix { inherit lib pkgs; };
   forgejoHost = "forgejo.${config.dotfiles.tailnetDomain}";
   forgejoUrl = "https://${forgejoHost}";
   commonPath = [
@@ -446,8 +449,10 @@ lib.mkMerge [
 
         model = {
           provider = "openai-codex";
-          default = "gpt-5.5";
+          default = "gpt-5.6-sol";
         };
+
+        agent.reasoning_effort = "low";
 
         image_gen = {
           provider = "openai-codex";

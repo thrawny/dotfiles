@@ -1,4 +1,5 @@
 {
+  codexPackage,
   config,
   lib,
   pkgs,
@@ -37,6 +38,14 @@ let
       ];
     };
     canvasHost.enabled = false;
+    models.providers.openai.models = [
+      {
+        id = "gpt-5.6-sol";
+        name = "GPT-5.6 Sol";
+        reasoning = true;
+        contextTokens = 272000;
+      }
+    ];
     tools = {
       profile = "full";
       fs.workspaceOnly = true;
@@ -52,7 +61,7 @@ let
     agents = {
       defaults = {
         model = {
-          primary = "openai/gpt-5.5";
+          primary = "openai/gpt-5.6-sol";
           fallbacks = [ ];
         };
         inherit workspace;
@@ -60,8 +69,8 @@ let
         timeoutSeconds = 900;
         thinkingDefault = "low";
         models = {
-          "openai/gpt-5.5" = { };
-          "openai-codex/gpt-5.5" = { };
+          "openai/gpt-5.6-sol" = { };
+          "openai-codex/gpt-5.6-sol" = { };
         };
       };
       list = [
@@ -69,7 +78,7 @@ let
           id = "main";
           default = true;
           model = {
-            primary = "openai/gpt-5.5";
+            primary = "openai/gpt-5.6-sol";
             fallbacks = [ ];
           };
           inherit workspace;
@@ -79,7 +88,10 @@ let
     plugins = {
       entries = {
         openai.enabled = true;
-        codex.enabled = true;
+        codex = {
+          enabled = true;
+          config.appServer.command = lib.getExe codexPackage;
+        };
         discord.enabled = true;
       };
       allow = [
@@ -212,6 +224,16 @@ in
           .channels.telegram.enabled = false
           | .plugins.allow |= map(select(. != "telegram"))
         '
+      fi
+
+      # OpenClaw uses this runtime-owned metadata to distinguish intentional
+      # config replacements from truncated writes and otherwise restores stale state.
+      if [ -r "$config_path" ]; then
+        next_tmp="$(mktemp)"
+        jq --slurpfile current "$config_path" \
+          '.meta = ($current[0].meta // .meta)' \
+          "$config_tmp" > "$next_tmp"
+        mv "$next_tmp" "$config_tmp"
       fi
 
       install -m 0600 -o openclaw -g openclaw "$config_tmp" "$config_path"
