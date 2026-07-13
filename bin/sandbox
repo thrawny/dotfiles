@@ -181,6 +181,7 @@ sandbox() {
     ~/.config
     ~/.acpx
     ~/.plannotator
+    ~/.npm-global
   )
   for d in "${writable[@]}"; do
     d="${d/#\~/$HOME}"
