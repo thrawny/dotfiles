@@ -12,6 +12,11 @@ fi
 
 url="$1"
 
+# This router focuses the destination itself. Forwarding activation metadata
+# inherited from a long-lived panel or layer-shell popup can make Chromium
+# defer ProcessSingleton requests until that popup releases focus.
+unset XDG_ACTIVATION_TOKEN DESKTOP_STARTUP_ID
+
 # When the niri session isn't reachable — launched from a sandbox without the
 # niri socket, or before niri/jq are available — we can't find or focus a
 # window. Open a fresh Helium window instead.
@@ -31,13 +36,21 @@ if [[ -z "$workspace_json" || -z "$windows_json" ]]; then
 fi
 
 focused_workspace_id=$(jq -r '.[] | select(.is_focused) | .id' <<<"$workspace_json" | head -n1)
+focused_window_id=$(
+  jq -r '.[] | select(.is_focused) | .active_window_id // empty' <<<"$workspace_json" | head -n1
+)
+if [[ -z "$focused_window_id" ]]; then
+  focused_window_id=$(jq -r '.[] | select(.is_focused) | .id' <<<"$windows_json" | head -n1)
+fi
 
 focused_position=$(
-  jq -r --argjson workspace_id "${focused_workspace_id:-0}" '
-    map(select(.workspace_id == $workspace_id and .is_focused))
-    | (.[0].layout.pos_in_scrolling_layout // [0, 0])
-    | "\(.[0] // 0) \(.[1] // 0)"
-  ' <<<"$windows_json"
+  jq -r \
+    --argjson workspace_id "${focused_workspace_id:-0}" \
+    --argjson focused_window_id "${focused_window_id:-0}" '
+      map(select(.workspace_id == $workspace_id and .id == $focused_window_id))
+      | (.[0].layout.pos_in_scrolling_layout // [0, 0])
+      | "\(.[0] // 0) \(.[1] // 0)"
+    ' <<<"$windows_json"
 )
 read -r focused_col focused_row <<<"$focused_position"
 
@@ -53,14 +66,22 @@ nearest_browser=$(
   jq -r \
     --argjson workspace_id "${focused_workspace_id:-0}" \
     --argjson focused_col "${focused_col:-0}" \
-    --argjson focused_row "${focused_row:-0}" '
+    --argjson focused_row "${focused_row:-0}" \
+    --argjson focused_window_id "${focused_window_id:-0}" '
       def sq: . * .;
       map(
         select(.workspace_id == $workspace_id and .app_id == "helium")
         | .distance = (((.layout.pos_in_scrolling_layout[0] // 0) - $focused_col) | sq)
                    + (((.layout.pos_in_scrolling_layout[1] // 0) - $focused_row) | sq)
       )
-      | sort_by(.distance, .focus_timestamp.secs // 0, .id)
+      # Stacked windows share a layout position, so prefer the active window
+      # when distances tie. Fall back to the most recently focused window.
+      | sort_by(
+          .distance,
+          (if .id == $focused_window_id then 0 else 1 end),
+          -(.focus_timestamp.secs // 0),
+          .id
+        )
       | .[0]
       | .id // empty
     ' <<<"$windows_json"
@@ -74,15 +95,23 @@ fi
 # "web" workspace. If no Helium window exists there, focus/create the web
 # workspace and open a fresh Helium window.
 web_workspace_id=$(jq -r '.[] | select(.name == "web") | .id' <<<"$workspace_json" | head -n1)
+web_active_window_id=$(
+  jq -r '.[] | select(.name == "web") | .active_window_id // 0' <<<"$workspace_json" | head -n1
+)
 
 if [[ -n "$web_workspace_id" ]]; then
   web_helium=$(
-    jq -r --argjson workspace_id "$web_workspace_id" '
-      map(select(.workspace_id == $workspace_id and .app_id == "helium"))
-      | sort_by(.focus_timestamp.secs // 0, .id)
-      | last
-      | .id // empty
-    ' <<<"$windows_json"
+    jq -r \
+      --argjson workspace_id "$web_workspace_id" \
+      --argjson active_window_id "${web_active_window_id:-0}" '
+        map(select(.workspace_id == $workspace_id and .app_id == "helium"))
+        | sort_by(
+            (if .id == $active_window_id then 0 else 1 end),
+            .id
+          )
+        | .[0]
+        | .id // empty
+      ' <<<"$windows_json"
   )
 
   if [[ -n "$web_helium" ]]; then
