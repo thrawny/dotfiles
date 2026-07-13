@@ -23,7 +23,9 @@ This step is complete when the current branch has an accurate PR and its remote 
 
 ## 2. Inspect every readiness signal
 
-Check CI, mergeability, reviews, inline comments, unresolved threads, and active reviewer reactions. An eyes reaction from Codex means its review is still running; wait or poll until it posts a result.
+Check CI, mergeability, reviews, inline comments, unresolved threads, and active reviewer reactions. An eyes reaction from Codex means its review is still running; a Codex comment or thumbs-up reaction means it finished.
+
+When checks or an AI reviewer are still running, launch `scripts/wait-for-pr-signals` with background Bash instead of writing an ad hoc polling loop. Pass the PR number when needed; the script otherwise infers the current branch's PR. AI reviewers are optional: the waiter allows a brief activation grace, waits while one is actively reviewing, and degrades rather than blocking forever if it is absent or unavailable. Script success means signals settled, not that checks passed or reviewers found nothing, so inspect the PR again after it wakes the agent.
 
 This step is complete when every current blocker and actionable finding is accounted for.
 

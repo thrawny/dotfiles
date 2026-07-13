@@ -1,0 +1,449 @@
+#!/usr/bin/env python3
+"""Wait for repository checks and the Codex reviewer to settle on a PR.
+
+This is a synchronization barrier, not a readiness verdict. A successful exit
+means the signals settled; checks may have failed and Codex may have findings.
+"""
+
+# pyright: basic
+
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
+from urllib.parse import urlparse
+
+CODEX_BOT = "chatgpt-codex-connector[bot]"
+FAILED_CHECK_CONCLUSIONS = {
+    "ACTION_REQUIRED",
+    "CANCELLED",
+    "FAILURE",
+    "STALE",
+    "STARTUP_FAILURE",
+    "TIMED_OUT",
+}
+
+
+class GhError(RuntimeError):
+    """A gh command failed or returned malformed JSON."""
+
+
+@dataclass(frozen=True)
+class PrSnapshot:
+    number: int
+    url: str
+    head_sha: str
+    checks_total: int
+    checks_pending: int
+    checks_failed: int
+
+
+@dataclass(frozen=True)
+class CodexSignals:
+    eyes: int
+    thumbs_up: int
+    reviews: int
+    inline_comments: int
+    issue_comments: int
+
+    @property
+    def final_artifacts(self) -> int:
+        return (
+            self.thumbs_up + self.reviews + self.inline_comments + self.issue_comments
+        )
+
+
+def duration(value: str) -> int:
+    """Parse seconds or an integer duration with an s/m/h suffix."""
+    units = {"s": 1, "m": 60, "h": 3600}
+    suffix = value[-1:] if value[-1:] in units else "s"
+    amount = value[:-1] if value[-1:] in units else value
+    if not amount.isdigit() or int(amount) <= 0:
+        raise argparse.ArgumentTypeError(
+            "must be a positive number of seconds or use an s/m/h suffix"
+        )
+    return int(amount) * units[suffix]
+
+
+def run_gh(*args: str) -> str:
+    result = subprocess.run(
+        ["gh", *args],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip()
+        raise GhError(message or f"gh exited {result.returncode}")
+    return result.stdout
+
+
+def run_gh_json(*args: str) -> Any:
+    output = run_gh(*args)
+    try:
+        return json.loads(output)
+    except json.JSONDecodeError as error:
+        raise GhError(f"gh returned malformed JSON: {error}") from error
+
+
+def check_bucket(check: dict[str, Any]) -> str:
+    if check.get("status") is not None:
+        if check["status"] != "COMPLETED":
+            return "pending"
+        if check.get("conclusion") in FAILED_CHECK_CONCLUSIONS:
+            return "failed"
+        return "complete"
+
+    state = check.get("state")
+    if state in {"EXPECTED", "PENDING"}:
+        return "pending"
+    if state in {"ERROR", "FAILURE"}:
+        return "failed"
+    return "complete"
+
+
+def pr_snapshot(selector: str | None, repo: str | None) -> PrSnapshot:
+    args = ["pr", "view"]
+    if selector:
+        args.append(selector)
+    if repo:
+        args.extend(("--repo", repo))
+    args.extend(("--json", "number,url,headRefOid,statusCheckRollup"))
+    data = run_gh_json(*args)
+
+    checks = data.get("statusCheckRollup") or []
+    buckets = [check_bucket(check) for check in checks]
+    try:
+        return PrSnapshot(
+            number=int(data["number"]),
+            url=str(data["url"]),
+            head_sha=str(data["headRefOid"]),
+            checks_total=len(checks),
+            checks_pending=buckets.count("pending"),
+            checks_failed=buckets.count("failed"),
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise GhError("gh returned incomplete pull request metadata") from error
+
+
+def repo_from_url(url: str) -> tuple[str, str]:
+    parsed = urlparse(url)
+    path = parsed.path.strip("/").split("/")
+    if not parsed.hostname or len(path) < 4 or path[2] != "pull":
+        raise GhError(f"cannot infer repository from PR URL: {url}")
+    return parsed.hostname, f"{path[0]}/{path[1]}"
+
+
+def api_json(host: str, endpoint: str, *, paginate: bool = False) -> Any:
+    args = ["api", "--hostname", host]
+    if paginate:
+        args.extend(("--paginate", "--slurp"))
+    args.append(endpoint)
+    return run_gh_json(*args)
+
+
+def paginated_items(host: str, endpoint: str) -> list[dict[str, Any]]:
+    pages = api_json(host, endpoint, paginate=True)
+    if not isinstance(pages, list):
+        raise GhError(f"unexpected API response for {endpoint}")
+
+    items: list[dict[str, Any]] = []
+    for page in pages:
+        if not isinstance(page, list):
+            raise GhError(f"unexpected paginated API response for {endpoint}")
+        items.extend(item for item in page if isinstance(item, dict))
+    return items
+
+
+def timestamp(value: str) -> datetime:
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise GhError(f"invalid GitHub timestamp: {value}") from error
+
+
+def head_timestamp(host: str, repo: str, head_sha: str) -> datetime:
+    data = api_json(host, f"repos/{repo}/commits/{head_sha}")
+    try:
+        return timestamp(data["commit"]["committer"]["date"])
+    except (KeyError, TypeError) as error:
+        raise GhError(f"commit {head_sha} has no committer timestamp") from error
+
+
+def is_current_artifact(
+    item: dict[str, Any], date_field: str, cutoff: datetime
+) -> bool:
+    user = item.get("user") or {}
+    if not isinstance(user, dict) or user.get("login") != CODEX_BOT:
+        return False
+    value = item.get(date_field)
+    return isinstance(value, str) and timestamp(value) >= cutoff
+
+
+def count_artifacts(
+    host: str,
+    endpoint: str,
+    date_field: str,
+    cutoff: datetime,
+) -> int:
+    return sum(
+        is_current_artifact(item, date_field, cutoff)
+        for item in paginated_items(host, endpoint)
+    )
+
+
+def codex_signals(
+    host: str, repo: str, pr_number: int, cutoff: datetime
+) -> CodexSignals:
+    reactions = [
+        item
+        for item in paginated_items(host, f"repos/{repo}/issues/{pr_number}/reactions")
+        if is_current_artifact(item, "created_at", cutoff)
+    ]
+    return CodexSignals(
+        eyes=sum(item.get("content") == "eyes" for item in reactions),
+        thumbs_up=sum(item.get("content") == "+1" for item in reactions),
+        reviews=count_artifacts(
+            host, f"repos/{repo}/pulls/{pr_number}/reviews", "submitted_at", cutoff
+        ),
+        inline_comments=count_artifacts(
+            host, f"repos/{repo}/pulls/{pr_number}/comments", "created_at", cutoff
+        ),
+        issue_comments=count_artifacts(
+            host, f"repos/{repo}/issues/{pr_number}/comments", "created_at", cutoff
+        ),
+    )
+
+
+def short_sha(value: str) -> str:
+    return value[:12]
+
+
+def print_snapshot(
+    elapsed: int, pr: PrSnapshot, codex: CodexSignals, reviewer_state: str
+) -> None:
+    print(
+        "snapshot"
+        f" elapsed={elapsed}s"
+        f" checks_total={pr.checks_total}"
+        f" checks_pending={pr.checks_pending}"
+        f" checks_failed={pr.checks_failed}"
+        f" codex_state={reviewer_state}"
+        f" codex_eyes={codex.eyes}"
+        f" codex_final={codex.final_artifacts}",
+        flush=True,
+    )
+
+
+def checks_ready(pr: PrSnapshot, checks_seen: bool, allow_no_checks: bool) -> bool:
+    return pr.checks_pending == 0 and (checks_seen or allow_no_checks)
+
+
+def reviewer_readiness(
+    signals: CodexSignals,
+    *,
+    now: float,
+    head_observed_at: float,
+    active_since: float | None,
+    activation_grace: int,
+    active_timeout: int,
+) -> tuple[bool, str]:
+    """Return whether an optional reviewer should still delay completion."""
+    if signals.final_artifacts > 0:
+        return True, "finished"
+    if signals.eyes > 0:
+        if active_since is not None and now - active_since >= active_timeout:
+            return True, "unavailable"
+        return False, "active"
+    if now - head_observed_at < activation_grace:
+        return False, "awaiting-activation"
+    return True, "inactive"
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Wait for repository checks and Codex review signals to settle."
+    )
+    parser.add_argument(
+        "pr",
+        nargs="?",
+        help="PR number, URL, or branch; defaults to the current branch's PR",
+    )
+    parser.add_argument("-R", "--repo", help="[HOST/]OWNER/REPO")
+    parser.add_argument(
+        "-i",
+        "--interval",
+        type=duration,
+        default=15,
+        help="poll interval (default: 15s)",
+    )
+    parser.add_argument(
+        "-t", "--timeout", type=duration, default=600, help="timeout (default: 10m)"
+    )
+    parser.add_argument(
+        "--allow-no-checks",
+        action="store_true",
+        help="do not require at least one repository check",
+    )
+    parser.add_argument(
+        "--reviewer-grace",
+        type=duration,
+        default=30,
+        help="time to allow an optional reviewer to activate (default: 30s)",
+    )
+    parser.add_argument(
+        "--reviewer-timeout",
+        type=duration,
+        default=600,
+        help="maximum time to wait for an active reviewer (default: 10m)",
+    )
+    return parser
+
+
+def wait(args: argparse.Namespace) -> int:
+    initial = pr_snapshot(args.pr, args.repo)
+    host, repo = repo_from_url(initial.url)
+    repo_spec = f"{host}/{repo}"
+    cutoff = head_timestamp(host, repo, initial.head_sha)
+
+    started = time.monotonic()
+    deadline = started + args.timeout
+    current = initial
+    checks_seen = initial.checks_total > 0
+    head_observed_at = started
+    reviewer_active_since: float | None = None
+    last_codex: CodexSignals | None = None
+    last_reviewer_state = "unknown"
+
+    print(
+        f"waiting pr=#{initial.number} repo={repo} head={short_sha(initial.head_sha)}"
+        f" interval={args.interval}s timeout={args.timeout}s"
+        f" reviewer_grace={args.reviewer_grace}s"
+        f" reviewer_timeout={args.reviewer_timeout}s"
+        f" require_checks={int(not args.allow_no_checks)}",
+        flush=True,
+    )
+
+    while True:
+        now = time.monotonic()
+        elapsed = int(now - started)
+        if now >= deadline:
+            codex = last_codex or CodexSignals(0, 0, 0, 0, 0)
+            if checks_ready(current, checks_seen, args.allow_no_checks):
+                print(
+                    f"settled pr=#{current.number} head={short_sha(current.head_sha)}"
+                    f" checks_total={current.checks_total}"
+                    f" checks_pending={current.checks_pending}"
+                    f" checks_failed={current.checks_failed}"
+                    " codex_state=unavailable"
+                    f" codex_eyes={codex.eyes} codex_final={codex.final_artifacts}",
+                    flush=True,
+                )
+                return 0
+            print(
+                f"timed out pr=#{current.number} head={short_sha(current.head_sha)}"
+                f" elapsed={elapsed}s checks_total={current.checks_total}"
+                f" checks_pending={current.checks_pending}"
+                f" checks_failed={current.checks_failed}"
+                f" codex_state={last_reviewer_state}"
+                f" codex_eyes={codex.eyes} codex_final={codex.final_artifacts}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
+
+        try:
+            refreshed = pr_snapshot(str(initial.number), repo_spec)
+            if refreshed.head_sha != current.head_sha:
+                new_cutoff = head_timestamp(host, repo, refreshed.head_sha)
+                print(
+                    f"head changed old={short_sha(current.head_sha)}"
+                    f" new={short_sha(refreshed.head_sha)}; resetting observed signals",
+                    flush=True,
+                )
+                cutoff = new_cutoff
+                checks_seen = False
+                head_observed_at = now
+                reviewer_active_since = None
+
+            current = refreshed
+            checks_seen = checks_seen or current.checks_total > 0
+            codex = codex_signals(host, repo, current.number, cutoff)
+            last_codex = codex
+            if codex.eyes > 0 and reviewer_active_since is None:
+                reviewer_active_since = now
+            reviewer_ready, reviewer_state = reviewer_readiness(
+                codex,
+                now=now,
+                head_observed_at=head_observed_at,
+                active_since=reviewer_active_since,
+                activation_grace=args.reviewer_grace,
+                active_timeout=args.reviewer_timeout,
+            )
+            last_reviewer_state = reviewer_state
+            print_snapshot(elapsed, current, codex, reviewer_state)
+
+            if (
+                checks_ready(current, checks_seen, args.allow_no_checks)
+                and reviewer_ready
+            ):
+                # Confirm the head once more before returning to narrow the race with a push.
+                confirmed = pr_snapshot(str(initial.number), repo_spec)
+                if confirmed.head_sha != current.head_sha:
+                    continue
+                checks_seen = checks_seen or confirmed.checks_total > 0
+                if not checks_ready(confirmed, checks_seen, args.allow_no_checks):
+                    current = confirmed
+                    continue
+                current = confirmed
+                print(
+                    f"settled pr=#{current.number} head={short_sha(current.head_sha)}"
+                    f" checks_total={current.checks_total}"
+                    f" checks_pending={current.checks_pending}"
+                    f" checks_failed={current.checks_failed}"
+                    f" codex_state={reviewer_state}"
+                    f" codex_eyes={codex.eyes}"
+                    f" codex_thumbs_up={codex.thumbs_up}"
+                    f" reviews={codex.reviews}"
+                    f" inline_comments={codex.inline_comments}"
+                    f" issue_comments={codex.issue_comments}",
+                    flush=True,
+                )
+                return 0
+        except GhError as error:
+            print(
+                f"warning: {error}; retrying in {args.interval}s",
+                file=sys.stderr,
+                flush=True,
+            )
+
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(args.interval, remaining))
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    if shutil.which("gh") is None:
+        print("wait-for-pr-signals: gh is required", file=sys.stderr)
+        return 1
+    try:
+        return wait(args)
+    except GhError as error:
+        print(f"wait-for-pr-signals: {error}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        print("wait-for-pr-signals: interrupted", file=sys.stderr)
+        return 130
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
