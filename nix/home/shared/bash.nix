@@ -16,9 +16,13 @@
 
           eval "$(${pkgs.direnv}/bin/direnv hook bash)"
 
-          if [[ $TERM != "dumb" ]]; then
+          if [[ -n "$QUIET_PROMPT" ]]; then
+            PS1=
+          elif [[ $TERM != "dumb" ]]; then
             eval "$(${pkgs.starship}/bin/starship init bash --print-full-init)"
           fi
+        elif [[ -n "$QUIET_PROMPT" ]]; then
+          PS1=
         else
           PS1='bash:\W \$ '
         fi

@@ -365,8 +365,17 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				? `${bash.commandPrefix}\n${params.command}`
 				: params.command;
 			const launch = await pi.exec(
-				"zmx",
-				["run", sessionName, "-d", bash.shellPath, "-c", command],
+				"env",
+				[
+					"QUIET_PROMPT=1",
+					"zmx",
+					"run",
+					sessionName,
+					"-d",
+					bash.shellPath,
+					"-c",
+					command,
+				],
 				{ cwd: ctx.cwd },
 			);
 			if (launch.code !== 0) {

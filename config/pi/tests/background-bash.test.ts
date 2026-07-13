@@ -118,8 +118,10 @@ describe("background bash", () => {
 		});
 		expect(exec).toHaveBeenNthCalledWith(
 			2,
-			"zmx",
+			"env",
 			[
+				"QUIET_PROMPT=1",
+				"zmx",
 				"run",
 				expect.stringMatching(/^pi-bg-/),
 				"-d",

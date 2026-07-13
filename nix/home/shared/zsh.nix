@@ -1,4 +1,5 @@
 {
+  config,
   pkgs,
   lib,
   ...
@@ -240,8 +241,17 @@
             unsetopt SHARE_HISTORY
           fi
         ''
+        ''
+          # Allow automation shells to retain interactive behavior without rendering prompts.
+          if [[ -n "$QUIET_PROMPT" ]]; then
+            PROMPT=
+            RPROMPT=
+          elif [[ "$TERM" != "dumb" ]]; then
+            eval "$(${lib.getExe config.programs.starship.package} init zsh)"
+          fi
+        ''
       ];
-      # Starship is configured separately in starship.nix
+      # Starship settings are configured separately in starship.nix.
       # Direnv is configured separately in direnv.nix
     };
 
