@@ -44,7 +44,7 @@ zmx run build -d make all
 zmx wait build
 ```
 
-Use `wait` for finite detached tasks; it returns their result and includes recent output for failures. For a long-running service, inspect startup through `history` or `tail` instead of waiting for it to exit.
+Use `wait` for finite tasks you detached manually; it returns their result and includes recent output for failures. Do not run `zmx wait` for a `pi-bg-*` session created by Pi's Bash tool with `background: true`: the harness already owns that wait and will wake the agent on completion. Continue independent work or end the turn instead. Use `history` only when diagnosing such a session after an early timeout wake-up or when the user explicitly asks to inspect it. For a long-running service, inspect startup through `history` or `tail` instead of waiting for it to exit.
 
 ## Observe sessions
 

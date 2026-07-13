@@ -340,6 +340,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			"Execute bash commands; set background=true for detached zmx execution with completion notification",
 		promptGuidelines: [
 			"Use bash with background=true for long-running finite commands when useful work can continue while they run; completion wakes the agent automatically, so do not poll or sleep waiting for them.",
+			"Never run zmx wait or zmx tail for a pi-bg-* session created by bash with background=true; the harness already waits for it. Continue independent work or end the turn instead.",
 			"For bash with background=true, timeout requests an early wake-up while leaving the zmx command running; use a shell-level deadline only when the process itself must stop.",
 			"Use foreground bash when its output is needed before continuing.",
 		],
@@ -394,7 +395,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 						type: "text",
 						text: [
 							`Started background command in zmx session ${sessionName}.`,
-							"Completion will notify the agent automatically.",
+							"Completion will notify the agent automatically; do not run zmx wait or zmx tail for this session.",
 							params.timeout === undefined
 								? undefined
 								: `If still running after ${params.timeout}s, the agent will be woken without stopping the command.`,

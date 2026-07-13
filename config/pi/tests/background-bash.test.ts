@@ -110,6 +110,9 @@ describe("background bash", () => {
 		);
 
 		expect(result.content[0]?.text).toContain("Started background command");
+		expect(result.content[0]?.text).toContain(
+			"do not run zmx wait or zmx tail",
+		);
 		expect(exec).toHaveBeenNthCalledWith(1, "zmx", ["list"], {
 			cwd: "/tmp",
 		});
