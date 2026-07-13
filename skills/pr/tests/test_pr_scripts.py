@@ -23,6 +23,7 @@ args = sys.argv[1:]
 head = "a" * 40
 no_checks = os.environ.get("FAKE_NO_CHECKS") == "1"
 no_signals = os.environ.get("FAKE_NO_SIGNALS") == "1"
+active_reviewer = os.environ.get("FAKE_ACTIVE_REVIEWER") == "1"
 
 if args[:2] == ["pr", "view"]:
     checks = [] if no_checks else [{
@@ -89,10 +90,10 @@ if args and args[0] == "api":
         if "/reactions?" in endpoint:
             items = [{
                 "user": {"login": "chatgpt-codex-connector[bot]"},
-                "content": "+1",
+                "content": "eyes" if active_reviewer else "+1",
                 "created_at": "2026-07-10T00:02:00Z",
             }]
-        elif "/reviews?" in endpoint:
+        elif "/reviews?" in endpoint and not active_reviewer:
             items = [{
                 "user": {"login": "chatgpt-codex-connector"},
                 "commit_id": head,
@@ -198,6 +199,23 @@ class PrScriptTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("checks_total=0", result.stdout)
         self.assertIn("codex_state=inactive", result.stdout)
+
+    def test_waiter_degrades_an_active_unavailable_reviewer(self) -> None:
+        env = self.env.copy()
+        env["FAKE_ACTIVE_REVIEWER"] = "1"
+        result = self.run_script(
+            "wait",
+            "12",
+            "--interval",
+            "1",
+            "--timeout",
+            "4",
+            "--reviewer-timeout",
+            "1",
+            env=env,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("codex_state=unavailable", result.stdout)
 
 
 if __name__ == "__main__":

@@ -61,6 +61,24 @@ class CheckSignal:
 
 
 @dataclass(frozen=True)
+class FailedCheckRun:
+    run_id: str
+    checks: tuple[CheckSignal, ...]
+    log_path: Path | None
+    excerpt: tuple[str, ...]
+    error: str | None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "runId": self.run_id,
+            "checks": [asdict(check) for check in self.checks],
+            "logPath": str(self.log_path) if self.log_path is not None else None,
+            "excerpt": list(self.excerpt),
+            "error": self.error,
+        }
+
+
+@dataclass(frozen=True)
 class PullRequest:
     number: int
     title: str
@@ -163,7 +181,7 @@ CODEX = ReviewerAdapter(
     name="codex",
     identities=frozenset({"chatgpt-codex-connector"}),
     active_reactions=frozenset({"eyes"}),
-    finished_reactions=frozenset({"+1", "thumbs_up"}),
+    finished_reactions=frozenset({"+1"}),
 )
 REVIEWER_ADAPTERS = (CODEX,)
 
@@ -788,17 +806,16 @@ def command_failed_checks(args: argparse.Namespace) -> int:
     )
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    run_checks: dict[str, list[dict[str, object]]] = {}
-    external: list[dict[str, object]] = []
+    run_checks: dict[str, list[CheckSignal]] = {}
+    external: list[CheckSignal] = []
     for check in failures:
-        data = asdict(check)
         run_id = actions_run_id(check.link, host, repo)
         if run_id is None:
-            external.append(data)
+            external.append(check)
         else:
-            run_checks.setdefault(run_id, []).append(data)
+            run_checks.setdefault(run_id, []).append(check)
 
-    runs: list[dict[str, object]] = []
+    runs: list[FailedCheckRun] = []
     for run_id, checks in run_checks.items():
         log_path = output_dir / f"run-{run_id}.log"
         error_message = ""
@@ -810,13 +827,13 @@ def command_failed_checks(args: argparse.Namespace) -> int:
         except GhError as error:
             error_message = str(error)
         runs.append(
-            {
-                "runId": run_id,
-                "checks": checks,
-                "logPath": str(log_path) if log_path.exists() else None,
-                "excerpt": excerpt_lines,
-                "error": error_message or None,
-            }
+            FailedCheckRun(
+                run_id=run_id,
+                checks=tuple(checks),
+                log_path=log_path if log_path.exists() else None,
+                excerpt=tuple(excerpt_lines),
+                error=error_message or None,
+            )
         )
 
     data = {
@@ -824,8 +841,8 @@ def command_failed_checks(args: argparse.Namespace) -> int:
         "head": pr.head_sha,
         "failedCount": len(failures),
         "outputDir": str(output_dir),
-        "runs": runs,
-        "externalChecks": external,
+        "runs": [run.to_dict() for run in runs],
+        "externalChecks": [asdict(check) for check in external],
     }
     if args.json:
         print(json.dumps(data, indent=2, sort_keys=True))
@@ -835,19 +852,19 @@ def command_failed_checks(args: argparse.Namespace) -> int:
         return 0
     print(f"PR #{pr.number}: {len(failures)} failed check(s); full logs: {output_dir}")
     for run in runs:
-        names = ", ".join(str(check["name"]) for check in run["checks"])
-        print(f"run {run['runId']}: {names}")
-        if run["error"]:
-            print(f"  unable to retrieve logs: {run['error']}")
+        names = ", ".join(check.name for check in run.checks)
+        print(f"run {run.run_id}: {names}")
+        if run.error:
+            print(f"  unable to retrieve logs: {run.error}")
             continue
-        print(f"  full log: {run['logPath']}")
+        print(f"  full log: {run.log_path}")
         print("  bounded excerpt:")
-        for line in run["excerpt"]:
+        for line in run.excerpt:
             print(f"    {line}")
     for check in external:
-        print(f"external check: {check['name']}")
-        if check["link"]:
-            print(f"  {check['link']}")
+        print(f"external check: {check.name}")
+        if check.link:
+            print(f"  {check.link}")
         print("  no GitHub Actions run log is available through gh run view")
     return 0
 
@@ -933,12 +950,12 @@ def command_wait(args: argparse.Namespace) -> int:
         for adapter in REVIEWER_ADAPTERS
     }
     last_states = {adapter.name: "unknown" for adapter in REVIEWER_ADAPTERS}
-    checks_grace = 0 if args.allow_no_checks else args.checks_grace
 
     print(
         f"waiting pr=#{initial.number} repo={repo} head={short_sha(initial.head_sha)}"
         f" interval={args.interval}s timeout={args.timeout}s"
-        f" checks_grace={checks_grace}s require_checks={int(args.require_checks)}"
+        f" checks_grace={args.checks_grace}s"
+        f" require_checks={int(args.require_checks)}"
         f" reviewer_grace={args.reviewer_grace}s"
         f" reviewer_timeout={args.reviewer_timeout}s",
         flush=True,
@@ -952,7 +969,7 @@ def command_wait(args: argparse.Namespace) -> int:
             now=now,
             head_observed_at=head_observed_at,
             checks_seen=checks_seen,
-            checks_grace=checks_grace,
+            checks_grace=args.checks_grace,
             require_checks=args.require_checks,
         )
         if now >= deadline:
@@ -1021,7 +1038,7 @@ def command_wait(args: argparse.Namespace) -> int:
                 now=now,
                 head_observed_at=head_observed_at,
                 checks_seen=checks_seen,
-                checks_grace=checks_grace,
+                checks_grace=args.checks_grace,
                 require_checks=args.require_checks,
             )
             if ready_checks and reviewers_ready:
@@ -1034,7 +1051,7 @@ def command_wait(args: argparse.Namespace) -> int:
                     now=time.monotonic(),
                     head_observed_at=head_observed_at,
                     checks_seen=checks_seen,
-                    checks_grace=checks_grace,
+                    checks_grace=args.checks_grace,
                     require_checks=args.require_checks,
                 ):
                     current = confirmed
@@ -1095,9 +1112,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_pr_arguments(wait_parser)
     wait_parser.add_argument("-i", "--interval", type=duration, default=15)
     wait_parser.add_argument("-t", "--timeout", type=duration, default=600)
-    check_mode = wait_parser.add_mutually_exclusive_group()
-    check_mode.add_argument("--allow-no-checks", action="store_true")
-    check_mode.add_argument("--require-checks", action="store_true")
+    wait_parser.add_argument("--require-checks", action="store_true")
     wait_parser.add_argument("--checks-grace", type=duration, default=30)
     wait_parser.add_argument("--reviewer-grace", type=duration, default=30)
     wait_parser.add_argument("--reviewer-timeout", type=duration, default=600)
