@@ -38,6 +38,7 @@ PENDING_CHECK_STATES = {
 REVIEWED_COMMIT_RE = re.compile(
     r"Reviewed commit:\s*[`*]?([0-9a-f]{7,40})", re.IGNORECASE
 )
+REVIEW_THREAD_ID_RE = re.compile(r"PRRT_[A-Za-z0-9_-]+")
 ERROR_RE = re.compile(
     r"\b(error|failed|failure|fatal|panic|exception|timed out|timeout|"
     r"not found|denied|undefined|mismatch|traceback)\b",
@@ -360,12 +361,13 @@ def artifact_is_current(
     user = item.get("user") or {}
     if not isinstance(user, dict) or not adapter.matches(user.get("login")):
         return False
-    commit_id = item.get("commit_id")
-    if isinstance(commit_id, str):
-        return sha_matches(commit_id, head_sha)
     body_commit = reviewed_commit(item.get("body"))
     if body_commit is not None:
         return sha_matches(body_commit, head_sha)
+    for field in ("original_commit_id", "commit_id"):
+        commit_id = item.get(field)
+        if isinstance(commit_id, str):
+            return sha_matches(commit_id, head_sha)
     value = item.get(date_field)
     return isinstance(value, str) and timestamp(value) >= cutoff
 
@@ -527,10 +529,10 @@ def short_sha(value: str) -> str:
 
 
 def reviewer_state(active: int, final: int) -> str:
-    if final > 0:
-        return "finished"
     if active > 0:
         return "active"
+    if final > 0:
+        return "finished"
     return "inactive"
 
 
@@ -758,6 +760,14 @@ def command_threads_list(args: argparse.Namespace) -> int:
 
 
 def command_threads_resolve(args: argparse.Namespace) -> int:
+    invalid = [
+        thread_id
+        for thread_id in args.thread_ids
+        if REVIEW_THREAD_ID_RE.fullmatch(thread_id) is None
+    ]
+    if invalid:
+        raise GhError(f"invalid review thread ID(s): {', '.join(invalid)}")
+
     host = host_from_repo(args.repo)
     failed: list[str] = []
     for thread_id in args.thread_ids:
@@ -896,12 +906,12 @@ def reviewer_readiness(
     activation_grace: int,
     active_timeout: int,
 ) -> ReviewerReadiness:
-    if signals.final_artifacts > 0:
-        return ReviewerReadiness(True, "finished")
     if signals.active_reactions > 0:
         if active_since is not None and now - active_since >= active_timeout:
             return ReviewerReadiness(True, "unavailable")
         return ReviewerReadiness(False, "active")
+    if signals.final_artifacts > 0:
+        return ReviewerReadiness(True, "finished")
     if now - head_observed_at < activation_grace:
         return ReviewerReadiness(False, "awaiting-activation")
     return ReviewerReadiness(True, "inactive")

@@ -7,7 +7,7 @@ description: Drive a pull request to terminal readiness through a review-fix-mon
 
 Create or resume the current branch's pull request, then keep looping until it is ready to merge or genuinely blocked. A narrower user request, such as status-only or one-pass review, takes precedence.
 
-Set `PR_SKILL_DIR` to the directory containing the exact `SKILL.md` loaded for this run. The helper path below is relative to that directory, never to the repository working directory. Invoke it as `"$PR_SKILL_DIR/scripts/pr" <subcommand>`.
+Use the `pr` command for bounded PR inspection, waiting, and thread maintenance.
 
 ## 1. Establish the PR
 
@@ -21,7 +21,7 @@ For a new PR, explain:
 
 Omit ceremonial lists of successful local checks. If behavior or scope changes later, update the PR title/body so reviewers do not evaluate a stale contract.
 
-Before expensive final validation or reviewer waits, check whether the branch is behind its base. Update it according to repository policy first; do not choose rebase versus merge when that policy or the user's intent is unclear. Re-run relevant validation after updating.
+Before expensive final validation or reviewer waits, check whether the branch is behind its base. If the snapshot already reports `behind-base`, do not start a waiter yet: update according to repository policy first, then re-run relevant validation. Do not choose rebase versus merge when that policy or the user's intent is unclear.
 
 This step is complete when the current branch has an accurate PR and its remote state is current.
 
@@ -30,7 +30,7 @@ This step is complete when the current branch has an accurate PR and its remote 
 Run `snapshot` instead of assembling large `gh pr view`, REST, and GraphQL payloads by hand:
 
 ```bash
-"$PR_SKILL_DIR/scripts/pr" snapshot [<pr>]
+pr snapshot [<pr>]
 ```
 
 Use `--json` only when structured output is useful. The snapshot separates:
@@ -45,7 +45,7 @@ Treat commit IDs, Codex's `Reviewed commit` marker, and GitHub's outdated state 
 If checks failed, retrieve bounded diagnostics with:
 
 ```bash
-"$PR_SKILL_DIR/scripts/pr" failed-checks [<pr>]
+pr failed-checks [<pr>]
 ```
 
 It saves complete GitHub Actions logs under `/tmp` and prints only bounded failure excerpts. External checks are reported with their links.
@@ -56,7 +56,7 @@ When checks or an AI reviewer are still running, launch the waiter with backgrou
 
 ```text
 bash({
-  command: "\"$PR_SKILL_DIR/scripts/pr\" wait [<pr>] --timeout 20m",
+  command: "pr wait [<pr>] --timeout 20m",
   timeout: 600,
   background: true
 })
@@ -75,7 +75,7 @@ The waiter:
 
 Use `--require-checks` only when the repository must publish at least one check. Script success means signals settled, not that checks passed or reviewers found nothing. Run `snapshot` again after it wakes the agent.
 
-Do not manually post `@codex review` after every push when the repository automatically reviews pushes. Trigger it only when repository behavior requires manual activation or Codex stayed inactive beyond the grace period and a new review is actually needed. Avoid duplicate review requests.
+Do not manually post `@codex review` after every push when the repository automatically reviews pushes. Trigger it only when repository behavior requires manual activation or Codex stayed inactive beyond the grace period and a new review is actually needed. After triggering a reviewer, launch `pr wait` directly; do not separately poll reactions. Avoid duplicate review requests.
 
 ## 4. Fix and close the loop
 
@@ -90,13 +90,13 @@ For each actionable issue:
 List bounded thread details and IDs with:
 
 ```bash
-"$PR_SKILL_DIR/scripts/pr" threads list [<pr>]
+pr threads list [<pr>]
 ```
 
 Resolve only threads whose disposition you have verified:
 
 ```bash
-"$PR_SKILL_DIR/scripts/pr" threads resolve <thread-id> [<thread-id> ...]
+pr threads resolve <thread-id> [<thread-id> ...]
 ```
 
 A reply such as “Fixed in …” does not resolve a GitHub thread. Resolve fixed findings, documented false positives, and intentional/deferred choices only when their disposition is complete. Leave genuine blockers and needs-human decisions unresolved. Surface permission or tool failures rather than claiming resolution.

@@ -9,8 +9,8 @@ import os
 import subprocess
 from pathlib import Path
 
-SKILL_ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = SKILL_ROOT / "scripts" / "pr"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SCRIPT = REPO_ROOT / "bin" / "pr"
 
 FAKE_GH = r"""#!/usr/bin/env python3
 import json
@@ -91,7 +91,7 @@ if args and args[0] == "api":
                 "content": "eyes" if active_reviewer else "+1",
                 "created_at": "2026-07-10T00:02:00Z",
             }]
-        elif "/reviews?" in endpoint and not active_reviewer:
+        elif "/reviews?" in endpoint:
             items = [{
                 "user": {"login": "chatgpt-codex-connector"},
                 "commit_id": head,
@@ -99,9 +99,17 @@ if args and args[0] == "api":
                 "body": "Reviewed commit: `aaaaaaaaaaaa`",
             }, {
                 "user": {"login": "chatgpt-codex-connector[bot]"},
-                "commit_id": "b" * 40,
+                "commit_id": head,
                 "submitted_at": "2026-07-10T00:03:00Z",
                 "body": "Reviewed commit: `bbbbbbbbbbbb`",
+            }]
+        elif "/pulls/" in endpoint and "/comments?" in endpoint:
+            items = [{
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+                "original_commit_id": "b" * 40,
+                "commit_id": head,
+                "created_at": "2026-07-10T00:03:00Z",
+                "body": "Old inline finding",
             }]
     print(json.dumps([items] if "--slurp" in args else items))
     raise SystemExit(0)
@@ -155,9 +163,18 @@ def test_threads_list_and_explicit_resolution(tmp_path: Path) -> None:
     assert listed.returncode == 0, listed.stderr
     assert json.loads(listed.stdout)["threads"][0]["id"] == "THREAD_1"
 
-    resolved = pr_harness.run("threads", "resolve", "THREAD_1")
+    resolved = pr_harness.run("threads", "resolve", "PRRT_THREAD_1")
     assert resolved.returncode == 0, resolved.stderr
-    assert "resolved THREAD_1" in resolved.stdout
+    assert "resolved PRRT_THREAD_1" in resolved.stdout
+
+
+def test_thread_resolution_rejects_all_arguments_before_mutating(
+    tmp_path: Path,
+) -> None:
+    result = PrHarness(tmp_path).run("threads", "resolve", "PRRT_THREAD_1", "12")
+    assert result.returncode != 0
+    assert result.stdout == ""
+    assert "invalid review thread ID(s): 12" in result.stderr
 
 
 def test_failed_check_logs_are_saved_and_excerpted(tmp_path: Path) -> None:
@@ -200,6 +217,19 @@ def test_waiter_accepts_no_checks_and_inactive_optional_reviewer(
     assert result.returncode == 0, result.stderr
     assert "checks_total=0" in result.stdout
     assert "codex_state=inactive" in result.stdout
+
+
+def test_active_reviewer_takes_precedence_over_final_artifacts(
+    tmp_path: Path,
+) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = pr_harness.env.copy()
+    env["FAKE_ACTIVE_REVIEWER"] = "1"
+    result = pr_harness.run("snapshot", "12", "--json", env=env)
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert data["reviewers"][0]["state"] == "active"
+    assert "codex-active" in data["readiness"]["machineBlockers"]
 
 
 def test_waiter_degrades_an_active_unavailable_reviewer(tmp_path: Path) -> None:
