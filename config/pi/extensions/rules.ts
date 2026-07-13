@@ -11,16 +11,6 @@ type Rule = {
 	pathHints: Set<string>;
 };
 
-const LANGUAGE_KEYWORDS: Record<string, string[]> = {
-	go: [" go ", " golang "],
-	py: [" python ", " pytest ", " ruff "],
-	rs: [" rust ", " cargo "],
-	ts: [" typescript ", " ts "],
-	tsx: [" react ", " tsx "],
-	js: [" javascript ", " node "],
-	jsx: [" react ", " jsx "],
-};
-
 function findMarkdownFiles(dir: string): string[] {
 	if (!fs.existsSync(dir)) return [];
 	const out: string[] = [];
@@ -179,49 +169,21 @@ function loadRule(filePath: string): Rule | null {
 	};
 }
 
-function promptMentionsExt(prompt: string, ext: string): boolean {
-	const normalized = ` ${prompt.toLowerCase()} `;
-	if (normalized.includes(`.${ext}`)) return true;
-	const keywords = LANGUAGE_KEYWORDS[ext] ?? [];
-	return keywords.some((k) => normalized.includes(k));
-}
+function pickRulesForRead(rules: Rule[], filePath: string): Rule[] {
+	const normalized = filePath.toLowerCase().replace(/\\/g, "/");
+	const ext = path.extname(normalized).slice(1);
 
-function promptMentionsPath(prompt: string, pathHint: string): boolean {
-	const normalizedHint = pathHint
-		.toLowerCase()
-		.replace(/\\/g, "/")
-		.replace(/^\.?\//, "")
-		.replace(/\/+$/, "");
-	if (!normalizedHint) return false;
-
-	const tokens = prompt
-		.toLowerCase()
-		.replace(/\\/g, "/")
-		.split(/[\s`'"(),:;]+/)
-		.filter(Boolean);
-
-	for (const token of tokens) {
-		const cleaned = token.replace(/^[@./]+/, "").replace(/[)\].,!?;:]+$/g, "");
-		if (!cleaned) continue;
-		if (cleaned === normalizedHint) return true;
-		if (cleaned.startsWith(`${normalizedHint}/`)) return true;
-	}
-
-	return false;
-}
-
-function pickRules(rules: Rule[], prompt: string): Rule[] {
 	return rules.filter((rule) => {
 		if (rule.alwaysApply) return true;
+		if (rule.exts.has(ext)) return true;
 
 		for (const pathHint of rule.pathHints) {
-			if (promptMentionsPath(prompt, pathHint)) return true;
+			if (normalized === pathHint || normalized.startsWith(`${pathHint}/`)) {
+				return true;
+			}
+			if (normalized.includes(`/${pathHint}/`)) return true;
 		}
 
-		if (rule.exts.size === 0) return false;
-		for (const ext of rule.exts) {
-			if (promptMentionsExt(prompt, ext)) return true;
-		}
 		return false;
 	});
 }
@@ -273,25 +235,32 @@ export default function rulesExtension(pi: ExtensionAPI) {
 		}
 	});
 
-	pi.on("before_agent_start", async (event, ctx) => {
-		if (rules.length === 0) return;
-		const matched = pickRules(rules, event.prompt);
-		if (matched.length === 0) return;
+	pi.on("tool_result", async (event, ctx) => {
+		if (rules.length === 0 || event.toolName !== "read") return;
+		const input = event.input as { path?: unknown };
+		if (typeof input.path !== "string") return;
 
-		const newlyApplied = matched.filter((r) => !appliedRuleNames.has(r.name));
+		const matched = pickRulesForRead(rules, input.path);
+		const newlyApplied = matched.filter(
+			(rule) => !appliedRuleNames.has(rule.name),
+		);
 		if (newlyApplied.length === 0) return;
 
 		for (const rule of newlyApplied) appliedRuleNames.add(rule.name);
 
 		if (ctx.hasUI) {
-			const names = newlyApplied.map((r) => r.name).join(", ");
+			const names = newlyApplied.map((rule) => rule.name).join(", ");
 			ctx.ui.notify(`Applied rule(s): ${names}`, "info");
 		}
 
 		return {
-			systemPrompt:
-				event.systemPrompt +
-				`\n\n## Task Rules\nFollow these rules for this task.\n\n${renderRules(newlyApplied)}\n`,
+			content: [
+				...event.content,
+				{
+					type: "text" as const,
+					text: `\n\n## Task Rules\nFollow these rules for this task.\n\n${renderRules(newlyApplied)}\n`,
+				},
+			],
 		};
 	});
 
