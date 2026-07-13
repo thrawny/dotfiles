@@ -53,6 +53,7 @@
         requests
         pillow
         pymupdf4llm
+        pytest
       ]
     ))
     uv
