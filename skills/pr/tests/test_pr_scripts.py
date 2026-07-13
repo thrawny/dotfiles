@@ -7,8 +7,6 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-import tempfile
-import unittest
 from pathlib import Path
 
 SKILL_ROOT = Path(__file__).resolve().parents[1]
@@ -113,20 +111,16 @@ raise SystemExit(2)
 """
 
 
-class PrScriptTests(unittest.TestCase):
-    def setUp(self) -> None:
-        self.temp = tempfile.TemporaryDirectory()
-        self.temp_path = Path(self.temp.name)
-        fake_gh = self.temp_path / "gh"
+class PrHarness:
+    def __init__(self, temp_path: Path) -> None:
+        self.temp_path = temp_path
+        fake_gh = temp_path / "gh"
         fake_gh.write_text(FAKE_GH)
         fake_gh.chmod(0o755)
         self.env = os.environ.copy()
-        self.env["PATH"] = f"{self.temp_path}:{self.env['PATH']}"
+        self.env["PATH"] = f"{temp_path}:{self.env['PATH']}"
 
-    def tearDown(self) -> None:
-        self.temp.cleanup()
-
-    def run_script(
+    def run(
         self, *args: str, env: dict[str, str] | None = None
     ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -134,89 +128,94 @@ class PrScriptTests(unittest.TestCase):
             check=False,
             capture_output=True,
             text=True,
-            env=env or self.env,
+            env=self.env if env is None else env,
         )
 
-    def test_snapshot_is_bounded_and_current_head_aware(self) -> None:
-        result = self.run_script("snapshot", "12", "--json")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        data = json.loads(result.stdout)
-        self.assertEqual(data["reviewers"][0]["state"], "finished")
-        self.assertEqual(data["reviewers"][0]["final_artifacts"], 2)
-        self.assertEqual(
-            [thread["id"] for thread in data["threads"]["currentUnresolved"]],
-            ["THREAD_1", "THREAD_2"],
-        )
-        self.assertEqual(
-            data["readiness"]["machineBlockers"],
-            ["failed-checks", "unresolved-threads"],
-        )
-        self.assertTrue(data["readiness"]["humanApprovalRequired"])
 
-    def test_threads_list_and_explicit_resolution(self) -> None:
-        listed = self.run_script("threads", "list", "12", "--json")
-        self.assertEqual(listed.returncode, 0, listed.stderr)
-        self.assertEqual(json.loads(listed.stdout)["threads"][0]["id"], "THREAD_1")
-
-        resolved = self.run_script("threads", "resolve", "THREAD_1")
-        self.assertEqual(resolved.returncode, 0, resolved.stderr)
-        self.assertIn("resolved THREAD_1", resolved.stdout)
-
-    def test_failed_check_logs_are_saved_and_excerpted(self) -> None:
-        output_dir = self.temp_path / "logs"
-        result = self.run_script(
-            "failed-checks",
-            "12",
-            "--output-dir",
-            str(output_dir),
-            "--json",
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        data = json.loads(result.stdout)
-        self.assertEqual(data["failedCount"], 1)
-        self.assertTrue(Path(data["runs"][0]["logPath"]).exists())
-        self.assertTrue(
-            any("widget mismatch" in line for line in data["runs"][0]["excerpt"])
-        )
-
-    def test_waiter_accepts_no_checks_and_inactive_optional_reviewer(self) -> None:
-        env = self.env.copy()
-        env["FAKE_NO_CHECKS"] = "1"
-        env["FAKE_NO_SIGNALS"] = "1"
-        result = self.run_script(
-            "wait",
-            "12",
-            "--interval",
-            "1",
-            "--timeout",
-            "4",
-            "--checks-grace",
-            "1",
-            "--reviewer-grace",
-            "1",
-            env=env,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("checks_total=0", result.stdout)
-        self.assertIn("codex_state=inactive", result.stdout)
-
-    def test_waiter_degrades_an_active_unavailable_reviewer(self) -> None:
-        env = self.env.copy()
-        env["FAKE_ACTIVE_REVIEWER"] = "1"
-        result = self.run_script(
-            "wait",
-            "12",
-            "--interval",
-            "1",
-            "--timeout",
-            "4",
-            "--reviewer-timeout",
-            "1",
-            env=env,
-        )
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("codex_state=unavailable", result.stdout)
+def test_snapshot_is_bounded_and_current_head_aware(tmp_path: Path) -> None:
+    result = PrHarness(tmp_path).run("snapshot", "12", "--json")
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert data["reviewers"][0]["state"] == "finished"
+    assert data["reviewers"][0]["final_artifacts"] == 2
+    assert [thread["id"] for thread in data["threads"]["currentUnresolved"]] == [
+        "THREAD_1",
+        "THREAD_2",
+    ]
+    assert data["readiness"]["machineBlockers"] == [
+        "failed-checks",
+        "unresolved-threads",
+    ]
+    assert data["readiness"]["humanApprovalRequired"]
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_threads_list_and_explicit_resolution(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    listed = pr_harness.run("threads", "list", "12", "--json")
+    assert listed.returncode == 0, listed.stderr
+    assert json.loads(listed.stdout)["threads"][0]["id"] == "THREAD_1"
+
+    resolved = pr_harness.run("threads", "resolve", "THREAD_1")
+    assert resolved.returncode == 0, resolved.stderr
+    assert "resolved THREAD_1" in resolved.stdout
+
+
+def test_failed_check_logs_are_saved_and_excerpted(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    output_dir = pr_harness.temp_path / "logs"
+    result = pr_harness.run(
+        "failed-checks",
+        "12",
+        "--output-dir",
+        str(output_dir),
+        "--json",
+    )
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert data["failedCount"] == 1
+    assert Path(data["runs"][0]["logPath"]).exists()
+    assert any("widget mismatch" in line for line in data["runs"][0]["excerpt"])
+
+
+def test_waiter_accepts_no_checks_and_inactive_optional_reviewer(
+    tmp_path: Path,
+) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = pr_harness.env.copy()
+    env["FAKE_NO_CHECKS"] = "1"
+    env["FAKE_NO_SIGNALS"] = "1"
+    result = pr_harness.run(
+        "wait",
+        "12",
+        "--interval",
+        "1",
+        "--timeout",
+        "4",
+        "--checks-grace",
+        "1",
+        "--reviewer-grace",
+        "1",
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "checks_total=0" in result.stdout
+    assert "codex_state=inactive" in result.stdout
+
+
+def test_waiter_degrades_an_active_unavailable_reviewer(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = pr_harness.env.copy()
+    env["FAKE_ACTIVE_REVIEWER"] = "1"
+    result = pr_harness.run(
+        "wait",
+        "12",
+        "--interval",
+        "1",
+        "--timeout",
+        "4",
+        "--reviewer-timeout",
+        "1",
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "codex_state=unavailable" in result.stdout
