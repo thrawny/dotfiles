@@ -1,0 +1,1155 @@
+#!/usr/bin/env python3
+"""Inspect, wait for, and maintain pull-request readiness signals."""
+
+# pyright: basic
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import shutil
+import subprocess
+import sys
+import time
+from dataclasses import asdict, dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+
+FAILED_CHECK_CONCLUSIONS = {
+    "ACTION_REQUIRED",
+    "CANCELLED",
+    "ERROR",
+    "FAILURE",
+    "STALE",
+    "STARTUP_FAILURE",
+    "TIMED_OUT",
+}
+PENDING_CHECK_STATES = {
+    "EXPECTED",
+    "IN_PROGRESS",
+    "PENDING",
+    "QUEUED",
+    "REQUESTED",
+    "WAITING",
+}
+REVIEWED_COMMIT_RE = re.compile(
+    r"Reviewed commit:\s*[`*]?([0-9a-f]{7,40})", re.IGNORECASE
+)
+ERROR_RE = re.compile(
+    r"\b(error|failed|failure|fatal|panic|exception|timed out|timeout|"
+    r"not found|denied|undefined|mismatch|traceback)\b",
+    re.IGNORECASE,
+)
+ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+
+
+class GhError(RuntimeError):
+    """A gh command failed or returned malformed data."""
+
+
+@dataclass(frozen=True)
+class CheckSignal:
+    name: str
+    bucket: str
+    status: str
+    conclusion: str
+    link: str
+    workflow: str
+
+
+@dataclass(frozen=True)
+class PullRequest:
+    number: int
+    title: str
+    url: str
+    state: str
+    head_sha: str
+    head_branch: str
+    base_branch: str
+    draft: bool
+    mergeable: str
+    merge_state: str
+    review_decision: str
+    checks: tuple[CheckSignal, ...]
+
+    @property
+    def checks_pending(self) -> tuple[CheckSignal, ...]:
+        return tuple(check for check in self.checks if check.bucket == "pending")
+
+    @property
+    def checks_failed(self) -> tuple[CheckSignal, ...]:
+        return tuple(check for check in self.checks if check.bucket == "failed")
+
+
+@dataclass(frozen=True)
+class ReviewerAdapter:
+    name: str
+    identities: frozenset[str]
+    active_reactions: frozenset[str]
+    finished_reactions: frozenset[str]
+
+    def matches(self, login: object) -> bool:
+        return isinstance(login, str) and normalize_login(login) in self.identities
+
+
+@dataclass(frozen=True)
+class ReviewerSignals:
+    name: str
+    active_reactions: int
+    finished_reactions: int
+    reviews: int
+    inline_comments: int
+    issue_comments: int
+
+    @property
+    def final_artifacts(self) -> int:
+        return (
+            self.finished_reactions
+            + self.reviews
+            + self.inline_comments
+            + self.issue_comments
+        )
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "name": self.name,
+            "active_reactions": self.active_reactions,
+            "finished_reactions": self.finished_reactions,
+            "reviews": self.reviews,
+            "inline_comments": self.inline_comments,
+            "issue_comments": self.issue_comments,
+            "final_artifacts": self.final_artifacts,
+        }
+
+
+@dataclass(frozen=True)
+class ReviewThread:
+    id: str
+    resolved: bool
+    outdated: bool
+    path: str
+    line: int | None
+    author: str
+    body: str
+    url: str
+    created_at: str
+
+    def to_dict(self, *, body_chars: int | None = None) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "resolved": self.resolved,
+            "outdated": self.outdated,
+            "path": self.path,
+            "line": self.line,
+            "author": self.author,
+            "body": excerpt(self.body, body_chars)
+            if body_chars is not None
+            else self.body,
+            "url": self.url,
+            "created_at": self.created_at,
+        }
+
+
+@dataclass(frozen=True)
+class ReviewerReadiness:
+    ready: bool
+    state: str
+
+
+CODEX = ReviewerAdapter(
+    name="codex",
+    identities=frozenset({"chatgpt-codex-connector"}),
+    active_reactions=frozenset({"eyes"}),
+    finished_reactions=frozenset({"+1", "thumbs_up"}),
+)
+REVIEWER_ADAPTERS = (CODEX,)
+
+
+def normalize_login(login: str) -> str:
+    """Normalize GitHub App REST/GraphQL login variants."""
+    return login.strip().lower().removesuffix("[bot]")
+
+
+def duration(value: str) -> int:
+    """Parse seconds or an integer duration with an s/m/h suffix."""
+    units = {"s": 1, "m": 60, "h": 3600}
+    suffix = value[-1:] if value[-1:] in units else "s"
+    amount = value[:-1] if value[-1:] in units else value
+    if not amount.isdigit() or int(amount) <= 0:
+        raise argparse.ArgumentTypeError(
+            "must be a positive number of seconds or use an s/m/h suffix"
+        )
+    return int(amount) * units[suffix]
+
+
+def run_gh(*args: str) -> str:
+    result = subprocess.run(
+        ["gh", *args],
+        check=False,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    if result.returncode != 0:
+        message = result.stderr.strip() or result.stdout.strip()
+        raise GhError(message or f"gh exited {result.returncode}")
+    return result.stdout
+
+
+def run_gh_json(*args: str) -> Any:
+    output = run_gh(*args)
+    try:
+        return json.loads(output)
+    except json.JSONDecodeError as error:
+        raise GhError(f"gh returned malformed JSON: {error}") from error
+
+
+def check_bucket(check: dict[str, Any]) -> str:
+    status = str(check.get("status") or check.get("state") or "").upper()
+    conclusion = str(check.get("conclusion") or check.get("state") or "").upper()
+    if status and status != "COMPLETED" and status in PENDING_CHECK_STATES:
+        return "pending"
+    if conclusion in FAILED_CHECK_CONCLUSIONS:
+        return "failed"
+    return "complete"
+
+
+def check_signal(check: dict[str, Any]) -> CheckSignal:
+    return CheckSignal(
+        name=str(check.get("name") or check.get("context") or "unnamed check"),
+        bucket=check_bucket(check),
+        status=str(check.get("status") or check.get("state") or ""),
+        conclusion=str(check.get("conclusion") or ""),
+        link=str(check.get("detailsUrl") or check.get("targetUrl") or ""),
+        workflow=str(check.get("workflowName") or ""),
+    )
+
+
+def get_pr(selector: str | None, repo: str | None) -> PullRequest:
+    args = ["pr", "view"]
+    if selector:
+        args.append(selector)
+    if repo:
+        args.extend(("--repo", repo))
+    args.extend(
+        (
+            "--json",
+            "number,title,url,state,headRefOid,headRefName,baseRefName,isDraft,"
+            "mergeable,mergeStateStatus,reviewDecision,statusCheckRollup",
+        )
+    )
+    data = run_gh_json(*args)
+    if not isinstance(data, dict):
+        raise GhError("gh returned malformed pull request metadata")
+    checks = data.get("statusCheckRollup") or []
+    if not isinstance(checks, list):
+        raise GhError("gh returned malformed check metadata")
+    try:
+        return PullRequest(
+            number=int(data["number"]),
+            title=str(data.get("title") or ""),
+            url=str(data["url"]),
+            state=str(data.get("state") or ""),
+            head_sha=str(data["headRefOid"]),
+            head_branch=str(data.get("headRefName") or ""),
+            base_branch=str(data.get("baseRefName") or ""),
+            draft=bool(data.get("isDraft")),
+            mergeable=str(data.get("mergeable") or "UNKNOWN"),
+            merge_state=str(data.get("mergeStateStatus") or "UNKNOWN"),
+            review_decision=str(data.get("reviewDecision") or ""),
+            checks=tuple(
+                check_signal(check) for check in checks if isinstance(check, dict)
+            ),
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise GhError("gh returned incomplete pull request metadata") from error
+
+
+def repo_from_url(url: str) -> tuple[str, str]:
+    parsed = urlparse(url)
+    path = parsed.path.strip("/").split("/")
+    if not parsed.hostname or len(path) < 4 or path[2] != "pull":
+        raise GhError(f"cannot infer repository from PR URL: {url}")
+    return parsed.hostname, f"{path[0]}/{path[1]}"
+
+
+def repo_spec(host: str, repo: str) -> str:
+    return f"{host}/{repo}"
+
+
+def api_json(host: str, endpoint: str, *, paginate: bool = False) -> Any:
+    args = ["api", "--hostname", host]
+    if paginate:
+        args.extend(("--paginate", "--slurp"))
+    args.append(endpoint)
+    return run_gh_json(*args)
+
+
+def paginated_items(host: str, endpoint: str) -> list[dict[str, Any]]:
+    separator = "&" if "?" in endpoint else "?"
+    pages = api_json(host, f"{endpoint}{separator}per_page=100", paginate=True)
+    if not isinstance(pages, list):
+        raise GhError(f"unexpected API response for {endpoint}")
+    items: list[dict[str, Any]] = []
+    for page in pages:
+        if not isinstance(page, list):
+            raise GhError(f"unexpected paginated API response for {endpoint}")
+        items.extend(item for item in page if isinstance(item, dict))
+    return items
+
+
+def timestamp(value: str) -> datetime:
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise GhError(f"invalid GitHub timestamp: {value}") from error
+
+
+def head_timestamp(host: str, repo: str, head_sha: str) -> datetime:
+    data = api_json(host, f"repos/{repo}/commits/{head_sha}")
+    try:
+        return timestamp(data["commit"]["committer"]["date"])
+    except (KeyError, TypeError) as error:
+        raise GhError(f"commit {head_sha} has no committer timestamp") from error
+
+
+def reviewed_commit(body: object) -> str | None:
+    if not isinstance(body, str):
+        return None
+    match = REVIEWED_COMMIT_RE.search(body)
+    return match.group(1).lower() if match else None
+
+
+def sha_matches(candidate: object, head_sha: str) -> bool:
+    if not isinstance(candidate, str) or len(candidate) < 7:
+        return False
+    candidate = candidate.lower()
+    head_sha = head_sha.lower()
+    return head_sha.startswith(candidate) or candidate.startswith(head_sha)
+
+
+def artifact_is_current(
+    item: dict[str, Any],
+    *,
+    adapter: ReviewerAdapter,
+    head_sha: str,
+    cutoff: datetime,
+    date_field: str,
+) -> bool:
+    user = item.get("user") or {}
+    if not isinstance(user, dict) or not adapter.matches(user.get("login")):
+        return False
+    commit_id = item.get("commit_id")
+    if isinstance(commit_id, str):
+        return sha_matches(commit_id, head_sha)
+    body_commit = reviewed_commit(item.get("body"))
+    if body_commit is not None:
+        return sha_matches(body_commit, head_sha)
+    value = item.get(date_field)
+    return isinstance(value, str) and timestamp(value) >= cutoff
+
+
+def reviewer_signals(
+    host: str,
+    repo: str,
+    pr_number: int,
+    head_sha: str,
+    cutoff: datetime,
+    adapter: ReviewerAdapter,
+) -> ReviewerSignals:
+    reactions = [
+        item
+        for item in paginated_items(host, f"repos/{repo}/issues/{pr_number}/reactions")
+        if artifact_is_current(
+            item,
+            adapter=adapter,
+            head_sha=head_sha,
+            cutoff=cutoff,
+            date_field="created_at",
+        )
+    ]
+
+    def count(endpoint: str, date_field: str) -> int:
+        return sum(
+            artifact_is_current(
+                item,
+                adapter=adapter,
+                head_sha=head_sha,
+                cutoff=cutoff,
+                date_field=date_field,
+            )
+            for item in paginated_items(host, endpoint)
+        )
+
+    return ReviewerSignals(
+        name=adapter.name,
+        active_reactions=sum(
+            str(item.get("content") or "").lower() in adapter.active_reactions
+            for item in reactions
+        ),
+        finished_reactions=sum(
+            str(item.get("content") or "").lower() in adapter.finished_reactions
+            for item in reactions
+        ),
+        reviews=count(f"repos/{repo}/pulls/{pr_number}/reviews", "submitted_at"),
+        inline_comments=count(f"repos/{repo}/pulls/{pr_number}/comments", "created_at"),
+        issue_comments=count(f"repos/{repo}/issues/{pr_number}/comments", "created_at"),
+    )
+
+
+def graphql_json(host: str, query: str, *fields: tuple[str, object]) -> Any:
+    args = ["api", "graphql", "--hostname", host, "-f", f"query={query}"]
+    for name, value in fields:
+        flag = "-F" if isinstance(value, int) else "-f"
+        args.extend((flag, f"{name}={value}"))
+    return run_gh_json(*args)
+
+
+REVIEW_THREADS_QUERY = """
+query($owner:String!, $repo:String!, $number:Int!, $cursor:String) {
+  repository(owner:$owner, name:$repo) {
+    pullRequest(number:$number) {
+      reviewThreads(first:100, after:$cursor) {
+        nodes {
+          id
+          isResolved
+          isOutdated
+          path
+          line
+          originalLine
+          comments(first:20) {
+            nodes { author { login } body url createdAt }
+          }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}
+"""
+
+
+def review_threads(host: str, repo: str, pr_number: int) -> list[ReviewThread]:
+    owner, name = repo.split("/", 1)
+    cursor: str | None = None
+    threads: list[ReviewThread] = []
+    while True:
+        fields: list[tuple[str, object]] = [
+            ("owner", owner),
+            ("repo", name),
+            ("number", pr_number),
+        ]
+        if cursor is not None:
+            fields.append(("cursor", cursor))
+        data = graphql_json(host, REVIEW_THREADS_QUERY, *fields)
+        try:
+            connection = data["data"]["repository"]["pullRequest"]["reviewThreads"]
+            nodes = connection["nodes"] or []
+            page_info = connection["pageInfo"]
+        except (KeyError, TypeError) as error:
+            raise GhError("GitHub returned malformed review-thread data") from error
+        for node in nodes:
+            if not isinstance(node, dict):
+                continue
+            comments = (node.get("comments") or {}).get("nodes") or []
+            first = comments[0] if comments and isinstance(comments[0], dict) else {}
+            author = first.get("author") or {}
+            threads.append(
+                ReviewThread(
+                    id=str(node.get("id") or ""),
+                    resolved=bool(node.get("isResolved")),
+                    outdated=bool(node.get("isOutdated")),
+                    path=str(node.get("path") or ""),
+                    line=node.get("line") or node.get("originalLine"),
+                    author=str(author.get("login") or "unknown"),
+                    body=str(first.get("body") or ""),
+                    url=str(first.get("url") or ""),
+                    created_at=str(first.get("createdAt") or ""),
+                )
+            )
+        if not page_info.get("hasNextPage"):
+            break
+        cursor_value = page_info.get("endCursor")
+        if not isinstance(cursor_value, str) or not cursor_value:
+            raise GhError("review-thread pagination did not return an end cursor")
+        cursor = cursor_value
+    return threads
+
+
+RESOLVE_THREAD_MUTATION = """
+mutation($threadId:ID!) {
+  resolveReviewThread(input:{threadId:$threadId}) {
+    thread { id isResolved }
+  }
+}
+"""
+
+
+def resolve_thread(host: str, thread_id: str) -> bool:
+    data = graphql_json(host, RESOLVE_THREAD_MUTATION, ("threadId", thread_id))
+    try:
+        thread = data["data"]["resolveReviewThread"]["thread"]
+        return thread["id"] == thread_id and bool(thread["isResolved"])
+    except (KeyError, TypeError) as error:
+        raise GhError(f"GitHub did not resolve thread {thread_id}") from error
+
+
+def excerpt(value: str, limit: int) -> str:
+    compact = " ".join(value.split())
+    if len(compact) <= limit:
+        return compact
+    return compact[: max(1, limit - 1)].rstrip() + "…"
+
+
+def short_sha(value: str) -> str:
+    return value[:12]
+
+
+def reviewer_state(active: int, final: int) -> str:
+    if final > 0:
+        return "finished"
+    if active > 0:
+        return "active"
+    return "inactive"
+
+
+def machine_blockers(
+    *,
+    state: str,
+    draft: bool,
+    mergeable: str,
+    merge_state: str,
+    review_decision: str,
+    failed_checks: int,
+    pending_checks: int,
+    unresolved_threads: int,
+    active_reviewers: tuple[str, ...],
+) -> list[str]:
+    blockers: list[str] = []
+    if state != "OPEN":
+        blockers.append(f"pr-{state.lower()}")
+    if draft:
+        blockers.append("draft")
+    if mergeable == "CONFLICTING" or merge_state == "DIRTY":
+        blockers.append("merge-conflicts")
+    elif mergeable != "MERGEABLE":
+        blockers.append("mergeability-unknown")
+    if merge_state == "BEHIND":
+        blockers.append("behind-base")
+    if failed_checks:
+        blockers.append("failed-checks")
+    if pending_checks:
+        blockers.append("pending-checks")
+    if review_decision == "CHANGES_REQUESTED":
+        blockers.append("changes-requested")
+    if unresolved_threads:
+        blockers.append("unresolved-threads")
+    blockers.extend(f"{name}-active" for name in active_reviewers)
+    return blockers
+
+
+def print_checks(label: str, checks: list[dict[str, object]]) -> None:
+    if not checks:
+        return
+    print(f"{label}:")
+    for check in checks:
+        suffix = f" — {check['link']}" if check["link"] else ""
+        print(f"  - {check['name']}{suffix}")
+
+
+def print_threads(label: str, threads: list[dict[str, object]]) -> None:
+    if not threads:
+        return
+    print(f"{label}:")
+    for thread in threads:
+        location = str(thread["path"])
+        if thread["line"] is not None:
+            location += f":{thread['line']}"
+        print(f"  - {thread['id']} {location} @{thread['author']}: {thread['body']}")
+        if thread["url"]:
+            print(f"    {thread['url']}")
+
+
+def command_snapshot(args: argparse.Namespace) -> int:
+    if args.body_chars <= 0 or args.max_threads <= 0:
+        raise GhError("--body-chars and --max-threads must be positive")
+    pr = get_pr(args.pr, args.repo)
+    host, repo = repo_from_url(pr.url)
+    cutoff = head_timestamp(host, repo, pr.head_sha)
+    threads = review_threads(host, repo, pr.number)
+    current_unresolved = [
+        thread for thread in threads if not thread.resolved and not thread.outdated
+    ]
+    stale_unresolved = [
+        thread for thread in threads if not thread.resolved and thread.outdated
+    ]
+    resolved = [thread for thread in threads if thread.resolved]
+
+    reviewers: list[dict[str, object]] = []
+    active_reviewers: list[str] = []
+    for adapter in REVIEWER_ADAPTERS:
+        signals = reviewer_signals(host, repo, pr.number, pr.head_sha, cutoff, adapter)
+        state = reviewer_state(signals.active_reactions, signals.final_artifacts)
+        if state == "active":
+            active_reviewers.append(adapter.name)
+        reviewers.append(signals.to_dict() | {"state": state})
+
+    failed_checks = [asdict(check) for check in pr.checks if check.bucket == "failed"]
+    pending_checks = [asdict(check) for check in pr.checks if check.bucket == "pending"]
+    complete_checks = [
+        asdict(check) for check in pr.checks if check.bucket == "complete"
+    ]
+    blockers = machine_blockers(
+        state=pr.state,
+        draft=pr.draft,
+        mergeable=pr.mergeable,
+        merge_state=pr.merge_state,
+        review_decision=pr.review_decision,
+        failed_checks=len(failed_checks),
+        pending_checks=len(pending_checks),
+        unresolved_threads=len(current_unresolved),
+        active_reviewers=tuple(active_reviewers),
+    )
+    human_approval = pr.review_decision == "REVIEW_REQUIRED"
+
+    def thread_dicts(values: list[ReviewThread]) -> list[dict[str, object]]:
+        return [
+            thread.to_dict(body_chars=args.body_chars)
+            for thread in values[: args.max_threads]
+        ]
+
+    data = {
+        "pr": {
+            "number": pr.number,
+            "title": pr.title,
+            "url": pr.url,
+            "state": pr.state,
+            "head": pr.head_sha,
+            "headBranch": pr.head_branch,
+            "baseBranch": pr.base_branch,
+            "draft": pr.draft,
+            "mergeable": pr.mergeable,
+            "mergeState": pr.merge_state,
+            "reviewDecision": pr.review_decision,
+        },
+        "checks": {
+            "total": len(pr.checks),
+            "complete": complete_checks,
+            "pending": pending_checks,
+            "failed": failed_checks,
+        },
+        "reviewers": reviewers,
+        "threads": {
+            "currentUnresolved": thread_dicts(current_unresolved),
+            "staleUnresolved": thread_dicts(stale_unresolved),
+            "resolvedCount": len(resolved),
+            "truncated": {
+                "currentUnresolved": max(0, len(current_unresolved) - args.max_threads),
+                "staleUnresolved": max(0, len(stale_unresolved) - args.max_threads),
+            },
+        },
+        "readiness": {
+            "machineState": "blocked" if blockers else "ready",
+            "machineBlockers": blockers,
+            "humanApprovalRequired": human_approval,
+        },
+    }
+    if args.json:
+        print(json.dumps(data, indent=2, sort_keys=True))
+        return 0
+
+    print(f"PR #{pr.number}: {pr.title}")
+    print(pr.url)
+    print(f"head: {short_sha(pr.head_sha)} ({pr.head_branch} -> {pr.base_branch})")
+    print(
+        f"checks: {len(complete_checks)} complete, {len(pending_checks)} pending,"
+        f" {len(failed_checks)} failed"
+    )
+    for reviewer in reviewers:
+        print(
+            f"{reviewer['name']}: {reviewer['state']}"
+            f" (active={reviewer['active_reactions']},"
+            f" final={reviewer['final_artifacts']})"
+        )
+    print(
+        f"threads: {len(current_unresolved)} unresolved current,"
+        f" {len(stale_unresolved)} unresolved stale, {len(resolved)} resolved"
+    )
+    print(f"merge: mergeable={pr.mergeable.lower()} state={pr.merge_state.lower()}")
+    print(f"human approval: {'required' if human_approval else 'not required'}")
+    print(f"machine state: {'blocked' if blockers else 'ready'}")
+    if blockers:
+        print(f"machine blockers: {', '.join(blockers)}")
+    print_checks("failed checks", failed_checks)
+    print_checks("pending checks", pending_checks)
+    print_threads("unresolved current threads", thread_dicts(current_unresolved))
+    print_threads("unresolved stale threads", thread_dicts(stale_unresolved))
+    return 0
+
+
+def host_from_repo(repo: str | None) -> str:
+    if not repo:
+        return "github.com"
+    parts = repo.split("/")
+    return parts[0] if len(parts) == 3 else "github.com"
+
+
+def command_threads_list(args: argparse.Namespace) -> int:
+    if args.body_chars <= 0:
+        raise GhError("--body-chars must be positive")
+    pr = get_pr(args.pr, args.repo)
+    host, repo = repo_from_url(pr.url)
+    threads = review_threads(host, repo, pr.number)
+    if not args.all:
+        threads = [thread for thread in threads if not thread.resolved]
+    if args.json:
+        print(
+            json.dumps(
+                {
+                    "pr": pr.number,
+                    "repo": repo,
+                    "threads": [
+                        thread.to_dict(body_chars=args.body_chars) for thread in threads
+                    ],
+                },
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    if not threads:
+        print(f"PR #{pr.number}: no {'review ' if args.all else 'unresolved '}threads")
+        return 0
+    print(f"PR #{pr.number}: {len(threads)} thread(s)")
+    for thread in threads:
+        status = "resolved" if thread.resolved else "unresolved"
+        freshness = "outdated" if thread.outdated else "current"
+        location = thread.path
+        if thread.line is not None:
+            location += f":{thread.line}"
+        print(
+            f"{thread.id} {status} {freshness} {location} @{thread.author}\n"
+            f"  {excerpt(thread.body, args.body_chars)}"
+        )
+        if thread.url:
+            print(f"  {thread.url}")
+    return 0
+
+
+def command_threads_resolve(args: argparse.Namespace) -> int:
+    host = host_from_repo(args.repo)
+    failed: list[str] = []
+    for thread_id in args.thread_ids:
+        if resolve_thread(host, thread_id):
+            print(f"resolved {thread_id}")
+        else:
+            failed.append(thread_id)
+    if failed:
+        print(f"failed to resolve: {', '.join(failed)}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def actions_run_id(link: str, host: str, repo: str) -> str | None:
+    parsed = urlparse(link)
+    expected_prefix = f"/{repo}/actions/runs/"
+    if parsed.hostname != host or not parsed.path.startswith(expected_prefix):
+        return None
+    run_id = parsed.path[len(expected_prefix) :].split("/", 1)[0]
+    return run_id if run_id.isdigit() else None
+
+
+def bounded_excerpt(log: str, max_lines: int) -> list[str]:
+    lines = ANSI_RE.sub("", log).splitlines()
+    selected: set[int] = set()
+    for index, line in enumerate(lines):
+        if ERROR_RE.search(line):
+            selected.update(range(max(0, index - 2), min(len(lines), index + 3)))
+            if len(selected) >= max_lines:
+                break
+    if not selected:
+        start = max(0, len(lines) - min(max_lines, 80))
+        selected.update(range(start, len(lines)))
+    return [f"{index + 1}: {lines[index]}" for index in sorted(selected)[:max_lines]]
+
+
+def command_failed_checks(args: argparse.Namespace) -> int:
+    if args.max_lines <= 0:
+        raise GhError("--max-lines must be positive")
+    pr = get_pr(args.pr, args.repo)
+    host, repo = repo_from_url(pr.url)
+    full_repo = repo_spec(host, repo)
+    failures = list(pr.checks_failed)
+    output_dir = args.output_dir or Path(
+        f"/tmp/pr-{pr.number}-failed-checks-{short_sha(pr.head_sha)}"
+    )
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    run_checks: dict[str, list[dict[str, object]]] = {}
+    external: list[dict[str, object]] = []
+    for check in failures:
+        data = asdict(check)
+        run_id = actions_run_id(check.link, host, repo)
+        if run_id is None:
+            external.append(data)
+        else:
+            run_checks.setdefault(run_id, []).append(data)
+
+    runs: list[dict[str, object]] = []
+    for run_id, checks in run_checks.items():
+        log_path = output_dir / f"run-{run_id}.log"
+        error_message = ""
+        excerpt_lines: list[str] = []
+        try:
+            log = run_gh("run", "view", run_id, "--repo", full_repo, "--log-failed")
+            log_path.write_text(log)
+            excerpt_lines = bounded_excerpt(log, args.max_lines)
+        except GhError as error:
+            error_message = str(error)
+        runs.append(
+            {
+                "runId": run_id,
+                "checks": checks,
+                "logPath": str(log_path) if log_path.exists() else None,
+                "excerpt": excerpt_lines,
+                "error": error_message or None,
+            }
+        )
+
+    data = {
+        "pr": pr.number,
+        "head": pr.head_sha,
+        "failedCount": len(failures),
+        "outputDir": str(output_dir),
+        "runs": runs,
+        "externalChecks": external,
+    }
+    if args.json:
+        print(json.dumps(data, indent=2, sort_keys=True))
+        return 0
+    if not failures:
+        print(f"PR #{pr.number}: no failed checks")
+        return 0
+    print(f"PR #{pr.number}: {len(failures)} failed check(s); full logs: {output_dir}")
+    for run in runs:
+        names = ", ".join(str(check["name"]) for check in run["checks"])
+        print(f"run {run['runId']}: {names}")
+        if run["error"]:
+            print(f"  unable to retrieve logs: {run['error']}")
+            continue
+        print(f"  full log: {run['logPath']}")
+        print("  bounded excerpt:")
+        for line in run["excerpt"]:
+            print(f"    {line}")
+    for check in external:
+        print(f"external check: {check['name']}")
+        if check["link"]:
+            print(f"  {check['link']}")
+        print("  no GitHub Actions run log is available through gh run view")
+    return 0
+
+
+def checks_ready(
+    pr: PullRequest,
+    *,
+    now: float,
+    head_observed_at: float,
+    checks_seen: bool,
+    checks_grace: int,
+    require_checks: bool,
+) -> bool:
+    if pr.checks_pending:
+        return False
+    if checks_seen:
+        return True
+    if require_checks:
+        return False
+    return now - head_observed_at >= checks_grace
+
+
+def reviewer_readiness(
+    signals: ReviewerSignals,
+    *,
+    now: float,
+    head_observed_at: float,
+    active_since: float | None,
+    activation_grace: int,
+    active_timeout: int,
+) -> ReviewerReadiness:
+    if signals.final_artifacts > 0:
+        return ReviewerReadiness(True, "finished")
+    if signals.active_reactions > 0:
+        if active_since is not None and now - active_since >= active_timeout:
+            return ReviewerReadiness(True, "unavailable")
+        return ReviewerReadiness(False, "active")
+    if now - head_observed_at < activation_grace:
+        return ReviewerReadiness(False, "awaiting-activation")
+    return ReviewerReadiness(True, "inactive")
+
+
+def print_wait_snapshot(
+    elapsed: int,
+    pr: PullRequest,
+    signals: dict[str, ReviewerSignals],
+    states: dict[str, str],
+) -> None:
+    parts = [
+        "snapshot",
+        f"elapsed={elapsed}s",
+        f"checks_total={len(pr.checks)}",
+        f"checks_pending={len(pr.checks_pending)}",
+        f"checks_failed={len(pr.checks_failed)}",
+    ]
+    for adapter in REVIEWER_ADAPTERS:
+        reviewer = signals[adapter.name]
+        parts.extend(
+            (
+                f"{adapter.name}_state={states[adapter.name]}",
+                f"{adapter.name}_active={reviewer.active_reactions}",
+                f"{adapter.name}_final={reviewer.final_artifacts}",
+            )
+        )
+    print(" ".join(parts), flush=True)
+
+
+def command_wait(args: argparse.Namespace) -> int:
+    initial = get_pr(args.pr, args.repo)
+    host, repo = repo_from_url(initial.url)
+    full_repo = repo_spec(host, repo)
+    cutoff = head_timestamp(host, repo, initial.head_sha)
+    started = time.monotonic()
+    deadline = started + args.timeout
+    current = initial
+    checks_seen = bool(initial.checks)
+    head_observed_at = started
+    active_since: dict[str, float | None] = {
+        adapter.name: None for adapter in REVIEWER_ADAPTERS
+    }
+    last_signals = {
+        adapter.name: ReviewerSignals(adapter.name, 0, 0, 0, 0, 0)
+        for adapter in REVIEWER_ADAPTERS
+    }
+    last_states = {adapter.name: "unknown" for adapter in REVIEWER_ADAPTERS}
+    checks_grace = 0 if args.allow_no_checks else args.checks_grace
+
+    print(
+        f"waiting pr=#{initial.number} repo={repo} head={short_sha(initial.head_sha)}"
+        f" interval={args.interval}s timeout={args.timeout}s"
+        f" checks_grace={checks_grace}s require_checks={int(args.require_checks)}"
+        f" reviewer_grace={args.reviewer_grace}s"
+        f" reviewer_timeout={args.reviewer_timeout}s",
+        flush=True,
+    )
+
+    while True:
+        now = time.monotonic()
+        elapsed = int(now - started)
+        ready_checks = checks_ready(
+            current,
+            now=now,
+            head_observed_at=head_observed_at,
+            checks_seen=checks_seen,
+            checks_grace=checks_grace,
+            require_checks=args.require_checks,
+        )
+        if now >= deadline:
+            if ready_checks:
+                reviewer_summary = " ".join(
+                    f"{name}_state=unavailable" for name in last_states
+                )
+                print(
+                    f"settled pr=#{current.number} head={short_sha(current.head_sha)}"
+                    f" checks_total={len(current.checks)}"
+                    f" checks_pending={len(current.checks_pending)}"
+                    f" checks_failed={len(current.checks_failed)} {reviewer_summary}",
+                    flush=True,
+                )
+                return 0
+            print(
+                f"timed out pr=#{current.number} head={short_sha(current.head_sha)}"
+                f" elapsed={elapsed}s checks_total={len(current.checks)}"
+                f" checks_pending={len(current.checks_pending)}"
+                f" checks_failed={len(current.checks_failed)}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
+
+        try:
+            refreshed = get_pr(str(initial.number), full_repo)
+            if refreshed.head_sha != current.head_sha:
+                cutoff = head_timestamp(host, repo, refreshed.head_sha)
+                print(
+                    f"head changed old={short_sha(current.head_sha)}"
+                    f" new={short_sha(refreshed.head_sha)}; resetting observed signals",
+                    flush=True,
+                )
+                checks_seen = False
+                head_observed_at = now
+                active_since = {adapter.name: None for adapter in REVIEWER_ADAPTERS}
+            current = refreshed
+            checks_seen = checks_seen or bool(current.checks)
+            reviewers_ready = True
+            for adapter in REVIEWER_ADAPTERS:
+                signals = reviewer_signals(
+                    host,
+                    repo,
+                    current.number,
+                    current.head_sha,
+                    cutoff,
+                    adapter,
+                )
+                last_signals[adapter.name] = signals
+                if signals.active_reactions > 0 and active_since[adapter.name] is None:
+                    active_since[adapter.name] = now
+                readiness = reviewer_readiness(
+                    signals,
+                    now=now,
+                    head_observed_at=head_observed_at,
+                    active_since=active_since[adapter.name],
+                    activation_grace=args.reviewer_grace,
+                    active_timeout=args.reviewer_timeout,
+                )
+                last_states[adapter.name] = readiness.state
+                reviewers_ready = reviewers_ready and readiness.ready
+            print_wait_snapshot(elapsed, current, last_signals, last_states)
+            ready_checks = checks_ready(
+                current,
+                now=now,
+                head_observed_at=head_observed_at,
+                checks_seen=checks_seen,
+                checks_grace=checks_grace,
+                require_checks=args.require_checks,
+            )
+            if ready_checks and reviewers_ready:
+                confirmed = get_pr(str(initial.number), full_repo)
+                if confirmed.head_sha != current.head_sha:
+                    continue
+                checks_seen = checks_seen or bool(confirmed.checks)
+                if not checks_ready(
+                    confirmed,
+                    now=time.monotonic(),
+                    head_observed_at=head_observed_at,
+                    checks_seen=checks_seen,
+                    checks_grace=checks_grace,
+                    require_checks=args.require_checks,
+                ):
+                    current = confirmed
+                    continue
+                current = confirmed
+                reviewer_summary = " ".join(
+                    f"{name}_state={last_states[name]}"
+                    f" {name}_active={last_signals[name].active_reactions}"
+                    f" {name}_final={last_signals[name].final_artifacts}"
+                    for name in last_states
+                )
+                print(
+                    f"settled pr=#{current.number} head={short_sha(current.head_sha)}"
+                    f" checks_total={len(current.checks)}"
+                    f" checks_pending={len(current.checks_pending)}"
+                    f" checks_failed={len(current.checks_failed)}"
+                    f" {reviewer_summary}",
+                    flush=True,
+                )
+                return 0
+        except GhError as error:
+            print(
+                f"warning: {error}; retrying in {args.interval}s",
+                file=sys.stderr,
+                flush=True,
+            )
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(args.interval, remaining))
+
+
+def add_pr_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "pr",
+        nargs="?",
+        help="PR number, URL, or branch; defaults to the current branch's PR",
+    )
+    parser.add_argument("-R", "--repo", help="[HOST/]OWNER/REPO")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        description="Inspect, wait for, and maintain pull-request readiness signals."
+    )
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    snapshot_parser = commands.add_parser(
+        "snapshot", help="print a concise current-head readiness snapshot"
+    )
+    add_pr_arguments(snapshot_parser)
+    snapshot_parser.add_argument("--json", action="store_true", help="emit JSON")
+    snapshot_parser.add_argument("--body-chars", type=int, default=240)
+    snapshot_parser.add_argument("--max-threads", type=int, default=20)
+
+    wait_parser = commands.add_parser(
+        "wait", help="wait for checks and optional AI reviewers to settle"
+    )
+    add_pr_arguments(wait_parser)
+    wait_parser.add_argument("-i", "--interval", type=duration, default=15)
+    wait_parser.add_argument("-t", "--timeout", type=duration, default=600)
+    check_mode = wait_parser.add_mutually_exclusive_group()
+    check_mode.add_argument("--allow-no-checks", action="store_true")
+    check_mode.add_argument("--require-checks", action="store_true")
+    wait_parser.add_argument("--checks-grace", type=duration, default=30)
+    wait_parser.add_argument("--reviewer-grace", type=duration, default=30)
+    wait_parser.add_argument("--reviewer-timeout", type=duration, default=600)
+
+    thread_parser = commands.add_parser("threads", help="manage review threads")
+    thread_commands = thread_parser.add_subparsers(dest="thread_command", required=True)
+    list_parser = thread_commands.add_parser("list", help="list review threads")
+    add_pr_arguments(list_parser)
+    list_parser.add_argument("--all", action="store_true")
+    list_parser.add_argument("--json", action="store_true")
+    list_parser.add_argument("--body-chars", type=int, default=300)
+    resolve_parser = thread_commands.add_parser(
+        "resolve", help="resolve explicitly supplied thread IDs"
+    )
+    resolve_parser.add_argument("thread_ids", nargs="+")
+    resolve_parser.add_argument("-R", "--repo", help="[HOST/]OWNER/REPO")
+
+    failed_parser = commands.add_parser(
+        "failed-checks", help="save full failed logs and print bounded excerpts"
+    )
+    add_pr_arguments(failed_parser)
+    failed_parser.add_argument("--output-dir", type=Path)
+    failed_parser.add_argument("--max-lines", type=int, default=160)
+    failed_parser.add_argument("--json", action="store_true")
+    return parser
+
+
+def main() -> int:
+    args = build_parser().parse_args()
+    if shutil.which("gh") is None:
+        print("pr: gh is required", file=sys.stderr)
+        return 1
+    try:
+        if args.command == "snapshot":
+            return command_snapshot(args)
+        if args.command == "wait":
+            return command_wait(args)
+        if args.command == "failed-checks":
+            return command_failed_checks(args)
+        if args.thread_command == "list":
+            return command_threads_list(args)
+        return command_threads_resolve(args)
+    except GhError as error:
+        print(f"pr: {error}", file=sys.stderr)
+        return 1
+    except OSError as error:
+        print(f"pr: {error}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        print("pr: interrupted", file=sys.stderr)
+        return 130
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

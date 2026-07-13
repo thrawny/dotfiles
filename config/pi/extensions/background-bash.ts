@@ -11,6 +11,7 @@ import {
 import { Type } from "@sinclair/typebox";
 
 const COMPLETION_MESSAGE_TYPE = "background-bash-finished";
+const TIMEOUT_MESSAGE_TYPE = "background-bash-timeout";
 const FAILURE_OUTPUT_MAX_BYTES = 12 * 1024;
 const FAILURE_OUTPUT_MAX_LINES = 100;
 const SESSION_RETENTION_SECONDS = 12 * 60 * 60;
@@ -19,8 +20,9 @@ const bashParameters = Type.Object({
 	command: Type.String({ description: "Bash command to execute" }),
 	timeout: Type.Optional(
 		Type.Number({
+			minimum: 1,
 			description:
-				"Timeout in seconds for foreground commands (optional, no default timeout)",
+				"Foreground: stop the command after this many seconds. Background: wake the agent after this many seconds if the command is still running, without stopping it.",
 		}),
 	),
 	background: Type.Optional(
@@ -168,6 +170,20 @@ async function pruneOldBackgroundSessions(
 	}
 }
 
+function timeoutContent(
+	sessionName: string,
+	command: string,
+	timeoutSeconds: number,
+): string {
+	return [
+		`⏳ Background command is still running after ${timeoutSeconds}s.`,
+		`Command: ${command}`,
+		`Zmx session: ${sessionName}`,
+		"The command was not stopped; completion will still notify the agent.",
+		`Inspect: zmx history ${sessionName} | tail -n 200`,
+	].join("\n");
+}
+
 function completionContent(
 	sessionName: string,
 	command: string,
@@ -215,12 +231,46 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 		cwd: string,
 		startedAt: number,
 		controller: AbortController,
+		timeoutSeconds?: number,
 	) {
+		let settled = false;
+		const timeoutHandle =
+			timeoutSeconds === undefined
+				? undefined
+				: setTimeout(() => {
+						if (settled || sessionClosed || controller.signal.aborted) return;
+						try {
+							pi.sendMessage(
+								{
+									customType: TIMEOUT_MESSAGE_TYPE,
+									content: timeoutContent(sessionName, command, timeoutSeconds),
+									display: true,
+									details: {
+										command,
+										cwd,
+										durationMs: Date.now() - startedAt,
+										sessionName,
+										stillRunning: true,
+										timeoutSeconds,
+									},
+								},
+								{ deliverAs: "steer", triggerTurn: true },
+							);
+						} catch {
+							// The session may have been replaced before the timer fired.
+						}
+					}, timeoutSeconds * 1000);
+		const clearWakeTimer = () => {
+			if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
+		};
+		controller.signal.addEventListener("abort", clearWakeTimer, { once: true });
+
 		try {
 			const result = await pi.exec("zmx", ["wait", sessionName], {
 				cwd,
 				signal: controller.signal,
 			});
+			settled = true;
 			if (sessionClosed || controller.signal.aborted) return;
 
 			pi.sendMessage(
@@ -265,6 +315,9 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				// The session may have been replaced between the active check and send.
 			}
 		} finally {
+			settled = true;
+			clearWakeTimer();
+			controller.signal.removeEventListener("abort", clearWakeTimer);
 			waitControllers.delete(controller);
 		}
 	}
@@ -282,11 +335,12 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		...foregroundBash,
 		description:
-			"Execute a bash command in the current working directory. Set background=true for long-running commands that can run concurrently with other work; background commands run in a detached zmx session and notify the agent on completion. Foreground output is truncated to the built-in limits. timeout is supported only for foreground commands.",
+			"Execute a bash command in the current working directory. Set background=true for long-running commands that can run concurrently with other work; background commands run in a detached zmx session and notify the agent on completion. Foreground output is truncated to the built-in limits. For background commands, timeout wakes the agent if the command is still running but does not stop it.",
 		promptSnippet:
 			"Execute bash commands; set background=true for detached zmx execution with completion notification",
 		promptGuidelines: [
 			"Use bash with background=true for long-running finite commands when useful work can continue while they run; completion wakes the agent automatically, so do not poll or sleep waiting for them.",
+			"For bash with background=true, timeout requests an early wake-up while leaving the zmx command running; use a shell-level deadline only when the process itself must stop.",
 			"Use foreground bash when its output is needed before continuing.",
 		],
 		parameters: bashParameters,
@@ -299,12 +353,6 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 					signal,
 					onUpdate,
 					ctx,
-				);
-			}
-
-			if (params.timeout !== undefined) {
-				throw new Error(
-					"timeout is not supported with background=true; enforce the deadline in the command itself",
 				);
 			}
 
@@ -337,6 +385,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				ctx.cwd,
 				startedAt,
 				controller,
+				params.timeout,
 			);
 
 			return {
@@ -346,8 +395,13 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 						text: [
 							`Started background command in zmx session ${sessionName}.`,
 							"Completion will notify the agent automatically.",
+							params.timeout === undefined
+								? undefined
+								: `If still running after ${params.timeout}s, the agent will be woken without stopping the command.`,
 							`Logs: zmx history ${sessionName} | tail -n 200`,
-						].join("\n"),
+						]
+							.filter(Boolean)
+							.join("\n"),
 					},
 				],
 				details: undefined,

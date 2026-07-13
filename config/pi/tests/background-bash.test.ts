@@ -146,6 +146,84 @@ describe("background bash", () => {
 		);
 	});
 
+	it("wakes on a background timeout without stopping the command", async () => {
+		vi.useFakeTimers();
+		try {
+			let finishWait: ((result: ExecResult) => void) | undefined;
+			const waitResult = new Promise<ExecResult>((resolve) => {
+				finishWait = resolve;
+			});
+			const exec = vi.fn(async (_command: string, args: string[]) =>
+				args[0] === "wait" ? waitResult : execResult(),
+			);
+			const { sendMessage, tool } = setupExtension(exec);
+
+			const result = await tool.execute(
+				"call-timeout",
+				{ command: "slow-check", background: true, timeout: 5 },
+				undefined,
+				undefined,
+				ctx,
+			);
+			expect(result.content[0]?.text).toContain(
+				"woken without stopping the command",
+			);
+
+			await vi.advanceTimersByTimeAsync(5_000);
+			expect(sendMessage).toHaveBeenCalledOnce();
+			expect(sendMessage).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					customType: "background-bash-timeout",
+					content: expect.stringContaining("was not stopped"),
+					details: expect.objectContaining({ stillRunning: true }),
+				}),
+				{ deliverAs: "steer", triggerTurn: true },
+			);
+
+			finishWait?.(execResult());
+			await vi.advanceTimersByTimeAsync(0);
+			expect(sendMessage).toHaveBeenCalledTimes(2);
+			expect(sendMessage).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					customType: "background-bash-finished",
+					content: expect.stringContaining("exit 0"),
+				}),
+				{ deliverAs: "steer", triggerTurn: true },
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("does not send a timeout wake-up after early completion", async () => {
+		vi.useFakeTimers();
+		try {
+			const exec = vi.fn(async () => execResult());
+			const { sendMessage, tool } = setupExtension(exec);
+
+			await tool.execute(
+				"call-early",
+				{ command: "quick-check", background: true, timeout: 5 },
+				undefined,
+				undefined,
+				ctx,
+			);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(sendMessage).toHaveBeenCalledOnce();
+			expect(sendMessage).toHaveBeenLastCalledWith(
+				expect.objectContaining({
+					customType: "background-bash-finished",
+				}),
+				{ deliverAs: "steer", triggerTurn: true },
+			);
+
+			await vi.advanceTimersByTimeAsync(5_000);
+			expect(sendMessage).toHaveBeenCalledOnce();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("prunes completed, unattached background sessions older than 12 hours", async () => {
 		const nowSeconds = Math.floor(Date.now() / 1000);
 		const old = nowSeconds - 13 * 60 * 60;
