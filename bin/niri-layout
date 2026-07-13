@@ -33,9 +33,10 @@ main() {
       niri-set-column-width 0.5
       ;;
     work)
-      # Everything except main on DP-1 (Philips ultrawide)
+      # Main on the laptop panel; everything else on DP-1 (Philips ultrawide)
       set_output_power eDP-1 on
       niri-move-workspaces DP-1 --except main
+      niri msg action move-workspace-to-monitor --reference main eDP-1
       niri-set-column-width 0.33333
       ;;
     *)
