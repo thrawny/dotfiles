@@ -12,8 +12,8 @@ import { Type } from "@sinclair/typebox";
 
 const COMPLETION_MESSAGE_TYPE = "background-bash-finished";
 const TIMEOUT_MESSAGE_TYPE = "background-bash-timeout";
-const FAILURE_OUTPUT_MAX_BYTES = 12 * 1024;
-const FAILURE_OUTPUT_MAX_LINES = 100;
+const OUTPUT_MAX_BYTES = 12 * 1024;
+const OUTPUT_MAX_LINES = 100;
 const SESSION_RETENTION_SECONDS = 12 * 60 * 60;
 
 const bashParameters = Type.Object({
@@ -170,25 +170,69 @@ async function pruneOldBackgroundSessions(
 	}
 }
 
+type OutputMarkers = { start: string; end: string };
+
+function outputMarkers(): OutputMarkers {
+	const id = randomUUID().replaceAll("-", "");
+	return {
+		start: `__PI_BG_OUTPUT_START_${id}__`,
+		end: `__PI_BG_OUTPUT_END_${id}__`,
+	};
+}
+
+function extractBackgroundOutput(
+	history: string,
+	markers: OutputMarkers,
+): string {
+	const lines = history.replaceAll("\r", "").split("\n");
+	const startIndex = lines.lastIndexOf(markers.start);
+	if (startIndex < 0) return "";
+	const endIndex = lines.findIndex(
+		(line, index) => index > startIndex && line.startsWith(`${markers.end}:`),
+	);
+	return lines
+		.slice(startIndex + 1, endIndex < 0 ? undefined : endIndex)
+		.join("\n")
+		.trimEnd();
+}
+
+function appendOutput(
+	lines: string[],
+	label: string,
+	output: string,
+	historyCommand: string,
+): void {
+	const tail = truncateTail(output, {
+		maxBytes: OUTPUT_MAX_BYTES,
+		maxLines: OUTPUT_MAX_LINES,
+	});
+	lines.push("", `${label}:`, tail.content || "(no output)");
+	if (tail.truncated) {
+		lines.push(`[Output truncated; use ${historyCommand} for full history.]`);
+	}
+}
+
 function timeoutContent(
 	sessionName: string,
-	command: string,
 	timeoutSeconds: number,
+	output: string,
 ): string {
-	return [
+	const historyCommand = `zmx history ${sessionName} | tail -n 200`;
+	const lines = [
 		`⏳ Background command is still running after ${timeoutSeconds}s.`,
-		`Command: ${command}`,
 		`Zmx session: ${sessionName}`,
 		"The command was not stopped; completion will still notify the agent.",
-		`Inspect: zmx history ${sessionName} | tail -n 200`,
-	].join("\n");
+		`Logs: ${historyCommand}`,
+	];
+	appendOutput(lines, "Output so far", output, historyCommand);
+	return lines.join("\n");
 }
 
 function completionContent(
 	sessionName: string,
-	command: string,
 	result: ExecResult,
 	durationMs: number,
+	output: string,
 ): string {
 	const duration = `${(durationMs / 1000).toFixed(1)}s`;
 	const historyCommand = `zmx history ${sessionName} | tail -n 200`;
@@ -196,27 +240,15 @@ function completionContent(
 		result.code === 0
 			? `✓ Background command finished (exit 0, ${duration})`
 			: `✗ Background command failed (exit ${result.code}, ${duration})`,
-		`Command: ${command}`,
 		`Zmx session: ${sessionName}`,
 		`Logs: ${historyCommand}`,
 	];
-
-	if (result.code !== 0) {
-		const output = execFailure(result);
-		if (output) {
-			const tail = truncateTail(output, {
-				maxBytes: FAILURE_OUTPUT_MAX_BYTES,
-				maxLines: FAILURE_OUTPUT_MAX_LINES,
-			});
-			lines.push("", "Last output:", tail.content);
-			if (tail.truncated) {
-				lines.push(
-					`[Output truncated; use ${historyCommand} for full history.]`,
-				);
-			}
-		}
-	}
-
+	appendOutput(
+		lines,
+		"Output",
+		output || (result.code === 0 ? "" : execFailure(result)),
+		historyCommand,
+	);
 	return lines.join("\n");
 }
 
@@ -225,12 +257,28 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 	const waitControllers = new Set<AbortController>();
 	let sessionClosed = false;
 
+	async function readOutput(
+		sessionName: string,
+		cwd: string,
+		markers: OutputMarkers,
+	): Promise<string> {
+		try {
+			const history = await pi.exec("zmx", ["history", sessionName], { cwd });
+			return history.code === 0
+				? extractBackgroundOutput(history.stdout, markers)
+				: "";
+		} catch {
+			return "";
+		}
+	}
+
 	async function watchCompletion(
 		sessionName: string,
 		command: string,
 		cwd: string,
 		startedAt: number,
 		controller: AbortController,
+		markers: OutputMarkers,
 		timeoutSeconds?: number,
 	) {
 		let settled = false;
@@ -238,27 +286,35 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			timeoutSeconds === undefined
 				? undefined
 				: setTimeout(() => {
-						if (settled || sessionClosed || controller.signal.aborted) return;
-						try {
-							pi.sendMessage(
-								{
-									customType: TIMEOUT_MESSAGE_TYPE,
-									content: timeoutContent(sessionName, command, timeoutSeconds),
-									display: true,
-									details: {
-										command,
-										cwd,
-										durationMs: Date.now() - startedAt,
-										sessionName,
-										stillRunning: true,
-										timeoutSeconds,
+						void (async () => {
+							if (settled || sessionClosed || controller.signal.aborted) return;
+							const output = await readOutput(sessionName, cwd, markers);
+							if (settled || sessionClosed || controller.signal.aborted) return;
+							try {
+								pi.sendMessage(
+									{
+										customType: TIMEOUT_MESSAGE_TYPE,
+										content: timeoutContent(
+											sessionName,
+											timeoutSeconds,
+											output,
+										),
+										display: true,
+										details: {
+											command,
+											cwd,
+											durationMs: Date.now() - startedAt,
+											sessionName,
+											stillRunning: true,
+											timeoutSeconds,
+										},
 									},
-								},
-								{ deliverAs: "steer", triggerTurn: true },
-							);
-						} catch {
-							// The session may have been replaced before the timer fired.
-						}
+									{ deliverAs: "steer", triggerTurn: true },
+								);
+							} catch {
+								// The session may have been replaced before the timer fired.
+							}
+						})();
 					}, timeoutSeconds * 1000);
 		const clearWakeTimer = () => {
 			if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
@@ -270,7 +326,9 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				cwd,
 				signal: controller.signal,
 			});
+			if (sessionClosed || controller.signal.aborted) return;
 			settled = true;
+			const output = await readOutput(sessionName, cwd, markers);
 			if (sessionClosed || controller.signal.aborted) return;
 
 			pi.sendMessage(
@@ -278,9 +336,9 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 					customType: COMPLETION_MESSAGE_TYPE,
 					content: completionContent(
 						sessionName,
-						command,
 						result,
 						Date.now() - startedAt,
+						output,
 					),
 					display: true,
 					details: {
@@ -364,6 +422,14 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			const command = bash.commandPrefix
 				? `${bash.commandPrefix}\n${params.command}`
 				: params.command;
+			const markers = outputMarkers();
+			const controlCommand = [
+				`printf '%s\\n' "$3"`,
+				`"$1" -c "$2"`,
+				"pi_bg_exit_code=$?",
+				`printf '\\n%s:%s\\n' "$4" "$pi_bg_exit_code"`,
+				`exit "$pi_bg_exit_code"`,
+			].join("\n");
 			const launch = await pi.exec(
 				"env",
 				[
@@ -374,7 +440,12 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 					"-d",
 					bash.shellPath,
 					"-c",
+					controlCommand,
+					"pi-bg-control",
+					bash.shellPath,
 					command,
+					markers.start,
+					markers.end,
 				],
 				{ cwd: ctx.cwd },
 			);
@@ -395,6 +466,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				ctx.cwd,
 				startedAt,
 				controller,
+				markers,
 				params.timeout,
 			);
 

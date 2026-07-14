@@ -88,14 +88,18 @@ describe("background bash", () => {
 		);
 	});
 
-	it("returns immediately and wakes the agent when the zmx task finishes", async () => {
+	it("returns immediately and wakes the agent with bounded command output", async () => {
 		let finishWait: ((result: ExecResult) => void) | undefined;
+		let historyOutput = "";
 		const waitResult = new Promise<ExecResult>((resolve) => {
 			finishWait = resolve;
 		});
 		const exec = vi.fn(
-			async (_command: string, args: string[], _options?: ExecOptions) =>
-				args[0] === "wait" ? waitResult : execResult(),
+			async (_command: string, args: string[], _options?: ExecOptions) => {
+				if (args[0] === "wait") return waitResult;
+				if (args[0] === "history") return execResult({ stdout: historyOutput });
+				return execResult();
+			},
 		);
 
 		const { sendMessage, tool } = setupExtension(exec);
@@ -127,7 +131,12 @@ describe("background bash", () => {
 				"-d",
 				expect.any(String),
 				"-c",
+				expect.stringContaining("pi_bg_exit_code"),
+				"pi-bg-control",
+				expect.any(String),
 				"just check",
+				expect.stringMatching(/^__PI_BG_OUTPUT_START_/),
+				expect.stringMatching(/^__PI_BG_OUTPUT_END_/),
 			],
 			{ cwd: "/tmp" },
 		);
@@ -139,16 +148,23 @@ describe("background bash", () => {
 		);
 		expect(sendMessage).not.toHaveBeenCalled();
 
+		const launchArgs = exec.mock.calls[1]?.[1] as string[];
+		const startMarker = launchArgs.at(-2) ?? "";
+		const endMarker = launchArgs.at(-1) ?? "";
+		historyOutput = [
+			"echoed command containing a very long heredoc",
+			startMarker,
+			"check output",
+			`${endMarker}:0`,
+		].join("\n");
+
 		finishWait?.(execResult());
 		await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
-		expect(sendMessage).toHaveBeenCalledWith(
-			expect.objectContaining({
-				customType: "background-bash-finished",
-				content: expect.stringContaining("exit 0"),
-				display: true,
-			}),
-			{ deliverAs: "steer", triggerTurn: true },
-		);
+		const message = sendMessage.mock.calls[0]?.[0] as { content: string };
+		expect(message.content).toContain("exit 0");
+		expect(message.content).toContain("Output:\ncheck output");
+		expect(message.content).not.toContain("Command:");
+		expect(message.content).not.toContain("echoed command");
 	});
 
 	it("wakes on a background timeout without stopping the command", async () => {
