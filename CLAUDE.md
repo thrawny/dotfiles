@@ -16,6 +16,10 @@ just lint         # Lint all
 
 **Prefer `just` over `cd`**: Always run `just` commands from the repo root instead of `cd`ing into subdirectories. If a needed command isn't available, add a `just` recipe rather than `cd`ing around.
 
+## Standalone Scripts
+
+For scripts of 50+ lines, default to a standalone executable in `bin/` rather than inlining the implementation in a Nix module. Nix should expose or configure the script, not contain its implementation.
+
 ## Paths: Source to Target
 
 Nix Home Manager uses `mkOutOfStoreSymlink` for tracked mutable config and store-backed links for immutable skill directories:

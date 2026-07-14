@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+"""List zmx sessions with completion details or running duration."""
+
+from __future__ import annotations
+
+import argparse
+import signal
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+from datetime import datetime
+
+
+@dataclass(frozen=True)
+class Session:
+    name: str
+    pid: int
+    created: int
+    ended: int | None
+    exit_code: str | None
+
+
+@dataclass(frozen=True)
+class ProcessInfo:
+    pgid: int
+    foreground_pgid: int
+    elapsed: int
+
+
+def parse_timestamp(fields: dict[str, str], key: str) -> int | None:
+    value = fields.get(key)
+    if value is None:
+        return None
+
+    try:
+        return int(value)
+    except ValueError as error:
+        raise ValueError(f"invalid {key} timestamp {value!r}") from error
+
+
+def parse_session(line: str) -> Session:
+    fields: dict[str, str] = {}
+    for item in line.split("\t"):
+        key, separator, value = item.strip().partition("=")
+        if separator:
+            fields[key] = value
+
+    name = fields.get("name")
+    if not name:
+        raise ValueError(f"missing session name in {line!r}")
+
+    try:
+        pid = int(fields["pid"])
+    except (KeyError, ValueError) as error:
+        raise ValueError(f"invalid process ID for session {name!r}") from error
+
+    created = parse_timestamp(fields, "created")
+    if created is None:
+        raise ValueError(f"missing creation timestamp for session {name!r}")
+
+    return Session(
+        name=name,
+        pid=pid,
+        created=created,
+        ended=parse_timestamp(fields, "ended"),
+        exit_code=fields.get("exit_code"),
+    )
+
+
+def parse_elapsed(value: str) -> int:
+    days = 0
+    if "-" in value:
+        day_text, value = value.split("-", 1)
+        days = int(day_text)
+
+    parts = [int(part) for part in value.split(":")]
+    if len(parts) == 2:
+        hours = 0
+        minutes, seconds = parts
+    elif len(parts) == 3:
+        hours, minutes, seconds = parts
+    else:
+        raise ValueError(f"invalid elapsed time {value!r}")
+
+    return days * 86_400 + hours * 3_600 + minutes * 60 + seconds
+
+
+def load_processes(pids: set[int]) -> dict[int, ProcessInfo]:
+    if not pids:
+        return {}
+
+    result = subprocess.run(
+        [
+            "ps",
+            "-o",
+            "pid=,pgid=,tpgid=,etime=",
+            "-p",
+            ",".join(str(pid) for pid in sorted(pids)),
+        ],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+
+    processes: dict[int, ProcessInfo] = {}
+    for line in result.stdout.splitlines():
+        try:
+            pid_text, pgid_text, foreground_text, elapsed_text = line.split()
+            processes[int(pid_text)] = ProcessInfo(
+                pgid=int(pgid_text),
+                foreground_pgid=int(foreground_text),
+                elapsed=parse_elapsed(elapsed_text),
+            )
+        except (ValueError, TypeError):
+            continue
+
+    return processes
+
+
+def running_durations(sessions: list[Session]) -> dict[int, int]:
+    session_processes = load_processes({session.pid for session in sessions})
+    foreground_pids = {
+        process.foreground_pgid
+        for process in session_processes.values()
+        if process.foreground_pgid > 0 and process.foreground_pgid != process.pgid
+    }
+    foreground_processes = load_processes(foreground_pids)
+
+    durations: dict[int, int] = {}
+    for session in sessions:
+        process = session_processes.get(session.pid)
+        if (
+            process is None
+            or process.foreground_pgid <= 0
+            or process.foreground_pgid == process.pgid
+        ):
+            continue
+
+        foreground = foreground_processes.get(process.foreground_pgid)
+        durations[session.pid] = (
+            foreground.elapsed
+            if foreground
+            else max(0, int(time.time()) - session.created)
+        )
+
+    return durations
+
+
+def format_duration(total_seconds: int) -> str:
+    total_seconds = max(0, total_seconds)
+    days, remainder = divmod(total_seconds, 86_400)
+    hours, remainder = divmod(remainder, 3_600)
+    minutes, seconds = divmod(remainder, 60)
+
+    parts: list[str] = []
+    if days:
+        parts.append(f"{days}d")
+    if hours or days:
+        parts.append(f"{hours}h")
+    if minutes or hours or days:
+        parts.append(f"{minutes}m")
+    parts.append(f"{seconds}s")
+    return " ".join(parts)
+
+
+def load_sessions() -> tuple[list[Session], int]:
+    try:
+        result = subprocess.run(
+            ["zmx", "list"],
+            capture_output=True,
+            check=False,
+            text=True,
+        )
+    except FileNotFoundError:
+        print("zmx is not installed", file=sys.stderr)
+        return [], 127
+
+    if result.returncode != 0:
+        message = result.stderr.strip() or "Failed to list zmx sessions"
+        print(message, file=sys.stderr)
+        return [], result.returncode
+
+    try:
+        sessions = [
+            parse_session(line) for line in result.stdout.splitlines() if line.strip()
+        ]
+    except ValueError as error:
+        print(f"Could not parse zmx output: {error}", file=sys.stderr)
+        return [], 1
+
+    return sessions, 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "-a",
+        "--all",
+        action="store_true",
+        help="include completed sessions",
+    )
+    args = parser.parse_args()
+
+    sessions, exit_code = load_sessions()
+    if exit_code:
+        return exit_code
+    if not sessions:
+        print("No zmx sessions")
+        return 0
+
+    now = int(time.time())
+    active_durations = running_durations(sessions)
+    if not args.all:
+        sessions = [
+            session
+            for session in sessions
+            if session.pid in active_durations or session.ended is None
+        ]
+        if not sessions:
+            print("No running zmx sessions")
+            return 0
+
+    name_width = max(36, *(len(session.name) for session in sessions))
+
+    for session in sessions:
+        active_duration = active_durations.get(session.pid)
+        if active_duration is not None or session.ended is None:
+            duration = (
+                active_duration
+                if active_duration is not None
+                else now - session.created
+            )
+            details = f"running for {format_duration(duration)}"
+        else:
+            ended_at = datetime.fromtimestamp(session.ended).strftime(
+                "%Y-%m-%d %H:%M:%S"
+            )
+            result = session.exit_code if session.exit_code is not None else "?"
+            details = f"exit {result} (ended at {ended_at})"
+
+        print(f"{session.name:<{name_width}} {details}")
+
+    return 0
+
+
+if __name__ == "__main__":
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    raise SystemExit(main())
