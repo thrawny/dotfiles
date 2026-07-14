@@ -335,14 +335,14 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		...foregroundBash,
 		description:
-			"Execute a bash command in the current working directory. Set background=true for long-running commands that can run concurrently with other work; background commands run in a detached zmx session and notify the agent on completion. Foreground output is truncated to the built-in limits. For background commands, timeout wakes the agent if the command is still running but does not stop it.",
+			"Execute a Bash command in the current working directory. Foreground commands return bounded output. Background commands run in a detached zmx session and notify on completion; their timeout requests an early wake without stopping the command.",
 		promptSnippet:
-			"Execute bash commands; set background=true for detached zmx execution with completion notification",
+			"Execute Bash commands, with detached background execution for asynchronous workflows",
 		promptGuidelines: [
-			"Use bash with background=true for long-running finite commands when useful work can continue while they run; completion wakes the agent automatically, so do not poll or sleep waiting for them.",
-			"Never run zmx wait or zmx tail for a pi-bg-* session created by bash with background=true; the harness already waits for it. Continue independent work or end the turn instead.",
-			"For bash with background=true, timeout requests an early wake-up while leaving the zmx command running; use a shell-level deadline only when the process itself must stop.",
-			"Use foreground bash when its output is needed before continuing.",
+			"Use foreground Bash by default, including for tests, checks, builds, linting, and formatting.",
+			"Use Bash with background=true only for intentionally asynchronous workflows such as PR waiters and Gauntlet reviews; do not use it merely to parallelize validation.",
+			"Background Bash already returns immediately and notifies on completion; omit timeout unless an early wake-up is genuinely useful.",
+			"Never run zmx wait or zmx tail for a pi-bg-* session created by Bash with background=true; the harness already waits for it. Continue independent work or end the turn instead.",
 		],
 		parameters: bashParameters,
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
