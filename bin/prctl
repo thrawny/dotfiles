@@ -1153,7 +1153,7 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = build_parser().parse_args()
     if shutil.which("gh") is None:
-        print("pr: gh is required", file=sys.stderr)
+        print("prctl: gh is required", file=sys.stderr)
         return 1
     try:
         if args.command == "snapshot":
@@ -1165,14 +1165,11 @@ def main() -> int:
         if args.thread_command == "list":
             return command_threads_list(args)
         return command_threads_resolve(args)
-    except GhError as error:
-        print(f"pr: {error}", file=sys.stderr)
-        return 1
-    except OSError as error:
-        print(f"pr: {error}", file=sys.stderr)
+    except (GhError, OSError) as error:
+        print(f"prctl: {error}", file=sys.stderr)
         return 1
     except KeyboardInterrupt:
-        print("pr: interrupted", file=sys.stderr)
+        print("prctl: interrupted", file=sys.stderr)
         return 130
 
 

@@ -10,7 +10,7 @@ import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-SCRIPT = REPO_ROOT / "bin" / "pr"
+SCRIPT = REPO_ROOT / "bin" / "prctl"
 
 FAKE_GH = r"""#!/usr/bin/env python3
 import json
