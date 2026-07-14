@@ -50,7 +50,7 @@ return {
           end,
           desc = "Review",
         },
-        { "<leader>rm", "<cmd>Review commits main HEAD<cr>", desc = "Review main..HEAD" },
+        { "<leader>rm", "<cmd>Review commits origin/main HEAD<cr>", desc = "Review origin/main..HEAD" },
         { "<leader>rc", "<cmd>Review commits<cr>", desc = "Review commits" },
         { "<leader>rp", "<cmd>Review pr<cr>", desc = "Review GitHub PR" },
         {
