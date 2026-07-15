@@ -17,6 +17,7 @@ const COLORS = {
 	white: "#ffffff",
 	black: "#000000",
 	darkRed: "#8b4a48",
+	pink: "#f92672",
 	yellow: "#ffd602",
 	blue: "#5f87d7",
 	green: "#87af87",
@@ -102,6 +103,23 @@ export function normalizeExtensionStatuses(
 	}
 
 	return hasFast ? ["fast", ...normalized] : normalized;
+}
+
+export function partitionExtensionStatuses(statuses: Iterable<string>): {
+	backgroundStatus?: string;
+	remaining: string[];
+} {
+	let backgroundStatus: string | undefined;
+	const remaining: string[] = [];
+	for (const status of normalizeExtensionStatuses(statuses)) {
+		const plain = stripAnsi(status).trim();
+		if (/^(?:[●]\s*)?bg\s+\d+$/i.test(plain)) {
+			backgroundStatus = plain;
+		} else {
+			remaining.push(status);
+		}
+	}
+	return { backgroundStatus, remaining };
 }
 
 function envFlagSet(name: string): boolean {
@@ -232,6 +250,13 @@ function install(
 					: undefined;
 				const changes = getGitChanges(activeCtx?.cwd ?? process.cwd());
 				const runtimeBadge = getRuntimeBadge();
+				const { backgroundStatus, remaining: extensionStatuses } =
+					partitionExtensionStatuses(
+						footerData.getExtensionStatuses().values(),
+					);
+				if (isCodexFastEnabled() && !extensionStatuses.includes("fast")) {
+					extensionStatuses.unshift("fast");
+				}
 				const usage = activeCtx
 					? safe(() => activeCtx.getContextUsage(), undefined)
 					: undefined;
@@ -280,6 +305,14 @@ function install(
 					segmentSpecs.push(runtimeBadge);
 				}
 
+				if (backgroundStatus) {
+					segmentSpecs.push({
+						text: backgroundStatus,
+						fg: COLORS.black,
+						bg: COLORS.pink,
+					});
+				}
+
 				const segments = segmentSpecs.map((part, index) =>
 					segment(part.text, part.fg, part.bg, segmentSpecs[index + 1]?.bg),
 				);
@@ -296,12 +329,6 @@ function install(
 						thinking === "off"
 							? `${rightText} • thinking off`
 							: `${rightText} • ${thinking}`;
-				}
-				const extensionStatuses = normalizeExtensionStatuses(
-					footerData.getExtensionStatuses().values(),
-				);
-				if (isCodexFastEnabled() && !extensionStatuses.includes("fast")) {
-					extensionStatuses.unshift("fast");
 				}
 				if (extensionStatuses.length > 0) {
 					rightText = `${rightText} • ${extensionStatuses.join(" • ")}`;

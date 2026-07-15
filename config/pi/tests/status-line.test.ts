@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
 	isCodexFastEnabled,
 	normalizeExtensionStatuses,
+	partitionExtensionStatuses,
 } from "../extensions/status-line.ts";
 
 describe("status line extension statuses", () => {
@@ -25,6 +26,15 @@ describe("status line extension statuses", () => {
 				"Codex adapter V: low • PATH mode • fast",
 			]),
 		).toEqual(["fast", "Codex adapter V: low • PATH mode"]);
+	});
+
+	it("promotes the background task count out of trailing statuses", () => {
+		expect(
+			partitionExtensionStatuses(["fast", "\x1b[32m bg 2\x1b[0m", "voice…"]),
+		).toEqual({
+			backgroundStatus: " bg 2",
+			remaining: ["fast", "voice…"],
+		});
 	});
 
 	it("reads fast from pi-codex-conversion config", () => {
