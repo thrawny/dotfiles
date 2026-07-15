@@ -4,7 +4,7 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import backgroundBashExtension, {
 	backgroundSessionName,
 } from "../extensions/background-bash.ts";
@@ -55,6 +55,7 @@ function setupExtension(
 	let tool: RegisteredBashTool | undefined;
 	const handlers = new Map<string, EventHandler>();
 	const sendMessage = vi.fn();
+	const appendEntry = vi.fn();
 	const pi = {
 		exec,
 		on(event: string, handler: EventHandler) {
@@ -63,18 +64,32 @@ function setupExtension(
 		registerTool(value: RegisteredBashTool) {
 			tool = value;
 		},
+		appendEntry,
 		sendMessage,
 	} as unknown as ExtensionAPI;
 
 	backgroundBashExtension(pi);
 	if (!tool) throw new Error("bash tool was not registered");
 
-	return { handlers, sendMessage, tool };
+	return { appendEntry, handlers, sendMessage, tool };
 }
 
-const ctx = { cwd: "/tmp", mode: "tui" } as unknown as ExtensionContext;
+const setStatus = vi.fn();
+const ctx = {
+	cwd: "/tmp",
+	mode: "tui",
+	ui: {
+		setStatus,
+		theme: { fg: (_color: string, text: string) => text },
+	},
+	sessionManager: { getBranch: () => [] },
+} as unknown as ExtensionContext;
 
 describe("background bash", () => {
+	beforeEach(() => {
+		setStatus.mockClear();
+	});
+
 	it("generates a fresh zmx session name even when call IDs repeat", () => {
 		const first = backgroundSessionName("call-reused", "just check");
 		const second = backgroundSessionName("call-reused", "just check");
@@ -106,7 +121,7 @@ describe("background bash", () => {
 			},
 		);
 
-		const { sendMessage, tool } = setupExtension(exec);
+		const { appendEntry, sendMessage, tool } = setupExtension(exec);
 
 		expect(tool.parameters.properties).toHaveProperty("background");
 		const result = await tool.execute(
@@ -156,6 +171,11 @@ describe("background bash", () => {
 			expect.objectContaining({ cwd: "/tmp" }),
 		);
 		expect(sendMessage).not.toHaveBeenCalled();
+		expect(appendEntry).toHaveBeenCalledWith(
+			"background-bash-task",
+			expect.objectContaining({ state: "running", command: "just check" }),
+		);
+		expect(setStatus).toHaveBeenLastCalledWith("background-bash", "● bg 1");
 
 		const launchArgs = exec.mock.calls[1]?.[1] as string[];
 		const startMarker = launchArgs.at(-2) ?? "";
@@ -174,6 +194,13 @@ describe("background bash", () => {
 		expect(message.content).toContain("Output:\ncheck output");
 		expect(message.content).not.toContain("Command:");
 		expect(message.content).not.toContain("echoed command");
+		await vi.waitFor(() =>
+			expect(setStatus).toHaveBeenLastCalledWith("background-bash", undefined),
+		);
+		expect(appendEntry).toHaveBeenLastCalledWith(
+			"background-bash-task",
+			expect.objectContaining({ state: "finished", command: "just check" }),
+		);
 	});
 
 	it("wakes on a background timeout without stopping the command", async () => {
@@ -186,7 +213,7 @@ describe("background bash", () => {
 			const exec = vi.fn(async (_command: string, args: string[]) =>
 				isQuietWait(args) ? waitResult : execResult(),
 			);
-			const { sendMessage, tool } = setupExtension(exec);
+			const { appendEntry, sendMessage, tool } = setupExtension(exec);
 
 			const result = await tool.execute(
 				"call-timeout",
@@ -208,6 +235,10 @@ describe("background bash", () => {
 					details: expect.objectContaining({ stillRunning: true }),
 				}),
 				{ deliverAs: "steer", triggerTurn: true },
+			);
+			expect(appendEntry).toHaveBeenLastCalledWith(
+				"background-bash-task",
+				expect.objectContaining({ state: "running", timeoutNotified: true }),
 			);
 
 			finishWait?.(execResult());
@@ -307,6 +338,55 @@ describe("background bash", () => {
 
 		expect(result.content[0]?.text.trim()).toBe("/tmp");
 		expect(exec).not.toHaveBeenCalled();
+	});
+
+	it("restores running task watchers from session state", async () => {
+		const sessionName = "pi-bg-restored-call-123";
+		const waitResult = new Promise<ExecResult>(() => {});
+		const exec = vi.fn(async (_command: string, args: string[]) => {
+			if (args[0] === "list") {
+				return execResult({
+					stdout: `name=${sessionName}\tpid=1\tclients=0\tcreated=1`,
+				});
+			}
+			return isQuietWait(args) ? waitResult : execResult();
+		});
+		const { appendEntry, handlers } = setupExtension(exec);
+		const restoredCtx = {
+			...ctx,
+			sessionManager: {
+				getBranch: () => [
+					{
+						type: "custom",
+						customType: "background-bash-task",
+						data: {
+							version: 1,
+							state: "running",
+							sessionName,
+							command: "prctl wait",
+							cwd: "/tmp",
+							startedAt: Date.now(),
+							shellPath: "bash",
+							markers: { start: "start", end: "end" },
+							timeoutNotified: false,
+						},
+					},
+				],
+			},
+		} as unknown as ExtensionContext;
+
+		await handlers.get("session_start")?.({}, restoredCtx);
+
+		expect(exec).toHaveBeenCalledWith("zmx", ["list"], { cwd: "/tmp" });
+		expect(exec).toHaveBeenCalledWith(
+			"bash",
+			["-c", 'exec zmx wait "$1" >/dev/null', "pi-bg-wait", sessionName],
+			expect.objectContaining({ cwd: "/tmp" }),
+		);
+		expect(setStatus).toHaveBeenLastCalledWith("background-bash", "● bg 1");
+		expect(appendEntry).not.toHaveBeenCalled();
+
+		await handlers.get("session_shutdown")?.({}, restoredCtx);
 	});
 
 	it("stops watching without killing zmx work when the Pi session closes", async () => {

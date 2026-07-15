@@ -7,11 +7,14 @@ import {
 	type BashToolOptions,
 	type ExecResult,
 	type ExtensionAPI,
+	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 
 const COMPLETION_MESSAGE_TYPE = "background-bash-finished";
 const TIMEOUT_MESSAGE_TYPE = "background-bash-timeout";
+const STATUS_ID = "background-bash";
+const TASK_ENTRY_TYPE = "background-bash-task";
 const OUTPUT_MAX_BYTES = 12 * 1024;
 const OUTPUT_MAX_LINES = 100;
 const SESSION_RETENTION_SECONDS = 12 * 60 * 60;
@@ -172,6 +175,77 @@ async function pruneOldBackgroundSessions(
 
 type OutputMarkers = { start: string; end: string };
 
+type BackgroundTask = {
+	version: 1;
+	state: "running" | "finished";
+	sessionName: string;
+	command: string;
+	cwd: string;
+	startedAt: number;
+	shellPath: string;
+	markers: OutputMarkers;
+	timeoutSeconds?: number;
+	timeoutNotified: boolean;
+};
+
+function backgroundTask(value: unknown): BackgroundTask | undefined {
+	if (typeof value !== "object" || value === null) return undefined;
+	const data = value as Record<string, unknown>;
+	const markers = data.markers;
+	if (
+		data.version !== 1 ||
+		(data.state !== "running" && data.state !== "finished") ||
+		typeof data.sessionName !== "string" ||
+		typeof data.command !== "string" ||
+		typeof data.cwd !== "string" ||
+		typeof data.startedAt !== "number" ||
+		!Number.isFinite(data.startedAt) ||
+		typeof data.shellPath !== "string" ||
+		typeof markers !== "object" ||
+		markers === null ||
+		typeof (markers as Record<string, unknown>).start !== "string" ||
+		typeof (markers as Record<string, unknown>).end !== "string" ||
+		(data.timeoutSeconds !== undefined &&
+			(typeof data.timeoutSeconds !== "number" ||
+				!Number.isFinite(data.timeoutSeconds)))
+	) {
+		return undefined;
+	}
+	return {
+		version: 1,
+		state: data.state,
+		sessionName: data.sessionName,
+		command: data.command,
+		cwd: data.cwd,
+		startedAt: data.startedAt,
+		shellPath: data.shellPath,
+		markers: markers as OutputMarkers,
+		timeoutSeconds: data.timeoutSeconds as number | undefined,
+		timeoutNotified: data.timeoutNotified === true,
+	};
+}
+
+function persistedRunningTasks(ctx: ExtensionContext): BackgroundTask[] {
+	const latest = new Map<string, BackgroundTask>();
+	for (const entry of ctx.sessionManager.getBranch()) {
+		if (entry.type !== "custom" || entry.customType !== TASK_ENTRY_TYPE)
+			continue;
+		const task = backgroundTask(entry.data);
+		if (task) latest.set(task.sessionName, task);
+	}
+	return [...latest.values()].filter((task) => task.state === "running");
+}
+
+function listedBackgroundSessions(output: string): Set<string> {
+	const sessions = new Set<string>();
+	for (const line of output.split("\n")) {
+		for (const field of line.trim().split("\t")) {
+			if (field.startsWith("name=pi-bg-")) sessions.add(field.slice(5));
+		}
+	}
+	return sessions;
+}
+
 function outputMarkers(): OutputMarkers {
 	const id = randomUUID().replaceAll("-", "");
 	return {
@@ -257,6 +331,16 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 	const waitControllers = new Set<AbortController>();
 	let sessionClosed = false;
 
+	function updateStatus(ctx: ExtensionContext): void {
+		const count = waitControllers.size;
+		const status =
+			count === 0
+				? undefined
+				: ctx.ui.theme.fg("accent", "●") +
+					ctx.ui.theme.fg("dim", ` bg ${count}`);
+		ctx.ui.setStatus(STATUS_ID, status);
+	}
+
 	async function readOutput(
 		sessionName: string,
 		cwd: string,
@@ -272,25 +356,44 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 		}
 	}
 
+	function persistTask(task: BackgroundTask): void {
+		try {
+			pi.appendEntry(TASK_ENTRY_TYPE, task);
+		} catch {
+			// Session replacement can invalidate the old extension between checks.
+		}
+	}
+
 	async function watchCompletion(
-		sessionName: string,
-		command: string,
-		cwd: string,
-		startedAt: number,
+		task: BackgroundTask,
 		controller: AbortController,
-		shellPath: string,
-		markers: OutputMarkers,
-		timeoutSeconds?: number,
+		ctx: ExtensionContext,
 	) {
+		const {
+			sessionName,
+			command,
+			cwd,
+			startedAt,
+			shellPath,
+			markers,
+			timeoutSeconds,
+		} = task;
 		let settled = false;
+		let timeoutNotified = task.timeoutNotified;
+		const timeoutDelay =
+			timeoutSeconds === undefined || timeoutNotified
+				? undefined
+				: Math.max(0, startedAt + timeoutSeconds * 1000 - Date.now());
 		const timeoutHandle =
-			timeoutSeconds === undefined
+			timeoutDelay === undefined || timeoutSeconds === undefined
 				? undefined
 				: setTimeout(() => {
 						void (async () => {
 							if (settled || sessionClosed || controller.signal.aborted) return;
 							const output = await readOutput(sessionName, cwd, markers);
 							if (settled || sessionClosed || controller.signal.aborted) return;
+							timeoutNotified = true;
+							persistTask({ ...task, timeoutNotified });
 							try {
 								pi.sendMessage(
 									{
@@ -316,7 +419,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 								// The session may have been replaced before the timer fired.
 							}
 						})();
-					}, timeoutSeconds * 1000);
+					}, timeoutDelay);
 		const clearWakeTimer = () => {
 			if (timeoutHandle !== undefined) clearTimeout(timeoutHandle);
 		};
@@ -336,6 +439,11 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			const output = await readOutput(sessionName, cwd, markers);
 			if (sessionClosed || controller.signal.aborted) return;
 
+			persistTask({
+				...task,
+				state: "finished",
+				timeoutNotified,
+			});
 			pi.sendMessage(
 				{
 					customType: COMPLETION_MESSAGE_TYPE,
@@ -382,17 +490,48 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			clearWakeTimer();
 			controller.signal.removeEventListener("abort", clearWakeTimer);
 			waitControllers.delete(controller);
+			if (!sessionClosed) updateStatus(ctx);
 		}
 	}
 
-	pi.on("session_start", async () => {
+	async function restoreBackgroundTasks(ctx: ExtensionContext): Promise<void> {
+		const tasks = persistedRunningTasks(ctx);
+		if (tasks.length === 0) {
+			updateStatus(ctx);
+			return;
+		}
+
+		let listed: Set<string> | undefined;
+		try {
+			const result = await pi.exec("zmx", ["list"], { cwd: ctx.cwd });
+			if (result.code === 0) listed = listedBackgroundSessions(result.stdout);
+		} catch {
+			// Fall back to zmx wait, which is also authoritative for each task.
+		}
+		if (sessionClosed) return;
+
+		for (const task of tasks) {
+			if (listed && !listed.has(task.sessionName)) {
+				persistTask({ ...task, state: "finished" });
+				continue;
+			}
+			const controller = new AbortController();
+			waitControllers.add(controller);
+			void watchCompletion(task, controller, ctx);
+		}
+		updateStatus(ctx);
+	}
+
+	pi.on("session_start", async (_event, ctx) => {
 		sessionClosed = false;
+		await restoreBackgroundTasks(ctx);
 	});
 
-	pi.on("session_shutdown", async () => {
+	pi.on("session_shutdown", async (_event, ctx) => {
 		sessionClosed = true;
 		for (const controller of waitControllers) controller.abort();
 		waitControllers.clear();
+		updateStatus(ctx);
 	});
 
 	pi.registerTool({
@@ -463,18 +602,23 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				);
 			}
 
+			const task: BackgroundTask = {
+				version: 1,
+				state: "running",
+				sessionName,
+				command: params.command,
+				cwd: ctx.cwd,
+				startedAt,
+				shellPath: bash.shellPath,
+				markers,
+				timeoutSeconds: params.timeout,
+				timeoutNotified: false,
+			};
+			persistTask(task);
 			const controller = new AbortController();
 			waitControllers.add(controller);
-			void watchCompletion(
-				sessionName,
-				params.command,
-				ctx.cwd,
-				startedAt,
-				controller,
-				bash.shellPath,
-				markers,
-				params.timeout,
-			);
+			updateStatus(ctx);
+			void watchCompletion(task, controller, ctx);
 
 			return {
 				content: [
