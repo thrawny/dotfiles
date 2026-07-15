@@ -175,8 +175,7 @@ describe("background bash", () => {
 			"background-bash-task",
 			expect.objectContaining({ state: "running", command: "just check" }),
 		);
-				expect(setStatus).toHaveBeenLastCalledWith("background-bash", " 1");
-
+		expect(setStatus).toHaveBeenLastCalledWith("background-bash", " 1");
 
 		const launchArgs = exec.mock.calls[1]?.[1] as string[];
 		const startMarker = launchArgs.at(-2) ?? "";
