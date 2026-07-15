@@ -1,14 +1,9 @@
 file_opener = "none"
 sandbox_mode = "workspace-write"
 model = "gpt-5.6-sol"
-model_reasoning_effort = "low"
+model_reasoning_effort = "high"
 model_reasoning_summary = "none"
 model_verbosity = "low"
-tool_output_token_limit = 25000
-# GPT-5.6-Sol exposes a 272k context window, of which Codex uses 95%.
-# Compact just below that 258.4k effective limit.
-model_context_window = 272000
-model_auto_compact_token_limit = 258000
 personality = "pragmatic"
 web_search = "live"
 
