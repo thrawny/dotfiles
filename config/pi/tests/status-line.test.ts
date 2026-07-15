@@ -30,9 +30,9 @@ describe("status line extension statuses", () => {
 
 	it("promotes the background task count out of trailing statuses", () => {
 		expect(
-			partitionExtensionStatuses(["fast", "\x1b[32m bg 2\x1b[0m", "voice…"]),
+			partitionExtensionStatuses(["fast", "\x1b[32m 2\x1b[0m", "voice…"]),
 		).toEqual({
-			backgroundStatus: " bg 2",
+			backgroundStatus: " 2",
 			remaining: ["fast", "voice…"],
 		});
 	});

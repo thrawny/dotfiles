@@ -175,7 +175,8 @@ describe("background bash", () => {
 			"background-bash-task",
 			expect.objectContaining({ state: "running", command: "just check" }),
 		);
-		expect(setStatus).toHaveBeenLastCalledWith("background-bash", " bg 1");
+				expect(setStatus).toHaveBeenLastCalledWith("background-bash", " 1");
+
 
 		const launchArgs = exec.mock.calls[1]?.[1] as string[];
 		const startMarker = launchArgs.at(-2) ?? "";
@@ -383,7 +384,7 @@ describe("background bash", () => {
 			["-c", 'exec zmx wait "$1" >/dev/null', "pi-bg-wait", sessionName],
 			expect.objectContaining({ cwd: "/tmp" }),
 		);
-		expect(setStatus).toHaveBeenLastCalledWith("background-bash", " bg 1");
+		expect(setStatus).toHaveBeenLastCalledWith("background-bash", " 1");
 		expect(appendEntry).not.toHaveBeenCalled();
 
 		await handlers.get("session_shutdown")?.({}, restoredCtx);

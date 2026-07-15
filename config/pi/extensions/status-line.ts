@@ -113,7 +113,7 @@ export function partitionExtensionStatuses(statuses: Iterable<string>): {
 	const remaining: string[] = [];
 	for (const status of normalizeExtensionStatuses(statuses)) {
 		const plain = stripAnsi(status).trim();
-		if (/^(?:[●]\s*)?bg\s+\d+$/i.test(plain)) {
+		if (/^(?:\s*\d+|(?:[●]\s*)?bg\s+\d+)$/i.test(plain)) {
 			backgroundStatus = plain;
 		} else {
 			remaining.push(status);

@@ -336,8 +336,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 		const status =
 			count === 0
 				? undefined
-				: ctx.ui.theme.fg("accent", "") +
-					ctx.ui.theme.fg("dim", ` bg ${count}`);
+				: ctx.ui.theme.fg("accent", "") + ctx.ui.theme.fg("dim", ` ${count}`);
 		ctx.ui.setStatus(STATUS_ID, status);
 	}
 
