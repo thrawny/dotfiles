@@ -1,0 +1,91 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Export short-lived AWS credentials for sandbox use, without exposing ~/.aws
+# or the SSO token to the sandbox. For each profile a creds JSON is cached
+# under ~/.cache/sandbox/aws/<root-slug>/ together with a generated AWS config
+# whose profiles resolve via credential_process. SDKs re-read the cache when
+# credentials expire, so re-running this on the host refreshes a live sandbox
+# session in place — no restart needed.
+#
+# Usage: sandbox-aws-refresh [name[=host-profile] ...]
+#   name          profile name as seen inside the sandbox
+#   host-profile  profile to export from on the host (defaults to name)
+# Falls back to $SANDBOX_AWS_PROFILES (space-separated specs). Prints the
+# generated config path on stdout. Must run on the host: inside the sandbox
+# ~/.aws and repo .aws dirs are masked, so credential export is impossible
+# by design.
+
+specs=("$@")
+if [[ ${#specs[@]} -eq 0 && -n "${SANDBOX_AWS_PROFILES:-}" ]]; then
+  read -r -a specs <<<"$SANDBOX_AWS_PROFILES"
+fi
+if [[ ${#specs[@]} -eq 0 ]]; then
+  echo "usage: sandbox-aws-refresh name[=host-profile] ..." >&2
+  echo "       (or set SANDBOX_AWS_PROFILES)" >&2
+  exit 1
+fi
+
+if [[ -n "${SANDBOX:-}" ]]; then
+  echo "sandbox-aws-refresh: must run on the host, not inside the sandbox" >&2
+  exit 1
+fi
+
+if ! command -v aws >/dev/null 2>&1; then
+  echo "sandbox-aws-refresh: aws CLI not found" >&2
+  exit 1
+fi
+
+root="${SANDBOX_ROOT_DIR:-$PWD}"
+if resolved_root="$(realpath -m "$root" 2>/dev/null)"; then
+  root="$resolved_root"
+fi
+slug="${root#/}"
+slug="${slug//\//-}"
+cache_dir="${SANDBOX_AWS_CACHE_DIR:-$HOME/.cache/sandbox/aws/$slug}"
+mkdir -p "$cache_dir"
+chmod 700 "$cache_dir"
+
+config_tmp="$(mktemp "$cache_dir/.config.XXXXXX")"
+cleanup() { rm -f "$config_tmp"; }
+trap cleanup EXIT
+
+for spec in "${specs[@]}"; do
+  name="${spec%%=*}"
+  host_profile="${spec#*=}"
+
+  creds_tmp="$(mktemp "$cache_dir/.${name}.XXXXXX")"
+  if ! aws configure export-credentials \
+    --profile "$host_profile" --format process >"$creds_tmp" 2>/dev/null; then
+    rm -f "$creds_tmp"
+    echo "sandbox-aws-refresh: could not export credentials for profile '$host_profile'" >&2
+    echo "sandbox-aws-refresh: run 'aws sso login --profile $host_profile' first" >&2
+    exit 1
+  fi
+  chmod 600 "$creds_tmp"
+  mv "$creds_tmp" "$cache_dir/$name.json"
+
+  region="$(aws configure get region --profile "$host_profile" 2>/dev/null || true)"
+  {
+    if [[ "$name" == "default" ]]; then
+      echo "[default]"
+    else
+      echo "[profile $name]"
+    fi
+    echo "credential_process = cat $cache_dir/$name.json"
+    [[ -n "$region" ]] && echo "region = $region"
+    echo
+  } >>"$config_tmp"
+
+  expiry=""
+  if command -v jq >/dev/null 2>&1; then
+    expiry="$(jq -r '.Expiration // empty' "$cache_dir/$name.json" 2>/dev/null || true)"
+  fi
+  echo "sandbox-aws-refresh: $name <- $host_profile${expiry:+ (expires $expiry)}" >&2
+done
+
+chmod 600 "$config_tmp"
+mv "$config_tmp" "$cache_dir/config"
+trap - EXIT
+
+printf '%s\n' "$cache_dir/config"

@@ -110,9 +110,12 @@ sandbox() {
     fi
   done
 
+  local sandbox_bin_dir
+  sandbox_bin_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+
   # If the current environment points at a kubeconfig with a sibling
-  # sandbox-config, use that inside the sandbox. The sandbox kubeconfig should
-  # avoid profile-based AWS exec auth and use env-var AWS credentials instead.
+  # sandbox-config, use that inside the sandbox. The sandbox kubeconfig can use
+  # profile-based exec auth against the sandbox profile names exposed below.
   if [[ -n "${KUBECONFIG:-}" ]]; then
     IFS=: read -r -a kubeconfigs <<< "$KUBECONFIG"
     local sandbox_kubeconfigs=() kubeconfig sandbox_kubeconfig
@@ -124,43 +127,29 @@ sandbox() {
         sandbox_kubeconfigs+=("$kubeconfig")
       fi
     done
-    local IFS=:
-    export KUBECONFIG="${sandbox_kubeconfigs[*]}"
+    KUBECONFIG="$(IFS=:; printf '%s' "${sandbox_kubeconfigs[*]}")"
+    export KUBECONFIG
   fi
 
-  # AWS inside the sandbox should use env-var credentials only. A profile name
-  # can make aws/kubectl try to read blocked host config files instead.
+  # Optionally expose AWS accounts by exporting short-lived credentials for the
+  # profiles in SANDBOX_AWS_PROFILES (specs like "staging prod=light", see
+  # sandbox-aws-refresh). ~/.aws stays denied below; the sandbox only sees a
+  # generated config whose profiles resolve via credential_process against
+  # cached creds files, so the SSO token (which can mint creds for every
+  # account) never enters it. Because the SDKs re-read the cache on expiry,
+  # re-running sandbox-aws-refresh on the host refreshes a live sandbox
+  # session without restarting it.
   unset AWS_PROFILE
-
-  # Optionally expose a single AWS account by exporting short-lived, scoped
-  # credentials for one profile. ~/.aws stays denied below, so only these
-  # env-var creds reach the sandbox: the SSO token (which can mint creds for
-  # every account) never enters it, and the creds expire on their own.
-  # Set SANDBOX_AWS_PROFILE in the environment or a repo-local .secrets.sandbox.
-  if [[ -n "${SANDBOX_AWS_PROFILE:-}" ]]; then
-    case "$SANDBOX_AWS_PROFILE" in
-      *prod*)
-        echo "sandbox: refusing to expose production-looking profile: $SANDBOX_AWS_PROFILE" >&2
-        exit 1
-        ;;
-    esac
-    local aws_creds aws_region
-    if ! command -v aws >/dev/null 2>&1; then
-      echo "sandbox: SANDBOX_AWS_PROFILE set but aws CLI not found" >&2
+  if [[ -n "${SANDBOX_AWS_PROFILES:-}" ]]; then
+    local aws_config_file aws_first_spec
+    if ! aws_config_file="$("$sandbox_bin_dir/sandbox-aws-refresh")"; then
       exit 1
     fi
-    if aws_creds=$(aws configure export-credentials \
-        --profile "$SANDBOX_AWS_PROFILE" --format env 2>/dev/null); then
-      eval "$aws_creds"
-      aws_region=$(aws configure get region --profile "$SANDBOX_AWS_PROFILE" 2>/dev/null || true)
-      if [[ -n "$aws_region" ]]; then
-        export AWS_REGION="$aws_region" AWS_DEFAULT_REGION="$aws_region"
-      fi
-    else
-      echo "sandbox: could not export AWS credentials for profile '$SANDBOX_AWS_PROFILE'" >&2
-      echo "sandbox: run 'aws sso login --profile $SANDBOX_AWS_PROFILE' on the host first" >&2
-      exit 1
-    fi
+    unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN
+    aws_first_spec="${SANDBOX_AWS_PROFILES%%[[:space:]]*}"
+    export AWS_CONFIG_FILE="$aws_config_file"
+    export AWS_SHARED_CREDENTIALS_FILE=/dev/null
+    export AWS_PROFILE="${aws_first_spec%%=*}"
   fi
 
   # Writable paths (add more as needed)
@@ -355,9 +344,6 @@ sandbox() {
   for d in ~/work/*/.aws; do
     [[ -d "$d" ]] && args+=(--tmpfs "$d")
   done
-
-  local sandbox_bin_dir
-  sandbox_bin_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
   local bwrap_status=0
   bwrap \
