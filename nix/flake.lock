@@ -996,8 +996,8 @@
         ]
       },
       "locked": {
-        "lastModified": 1783933869,
-        "narHash": "sha256-bB01EjF8QZtfWkhKl/s0kwYFT3RAe6L0i2RuDsHEd+g=",
+        "lastModified": 1784119897,
+        "narHash": "sha256-NMr3ylvnkWyvuwQcvTReXrAHc16fdaXG3NSYjCoSgCc=",
         "path": "/home/thrawny/code/nix-pkgs",
         "type": "path"
       },
