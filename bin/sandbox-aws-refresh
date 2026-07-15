@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Export short-lived AWS credentials for sandbox use, without exposing ~/.aws
 # or the SSO token to the sandbox. For each profile a creds JSON is cached
-# under ~/.cache/sandbox/aws/<root-slug>/ together with a generated AWS config
+# under $SANDBOX_ROOT_DIR/.direnv/aws/ together with a generated AWS config
 # whose profiles resolve via credential_process. SDKs re-read the cache when
 # credentials expire, so re-running this on the host refreshes a live sandbox
 # session in place — no restart needed.
@@ -40,9 +40,7 @@ root="${SANDBOX_ROOT_DIR:-$PWD}"
 if resolved_root="$(realpath -m "$root" 2>/dev/null)"; then
   root="$resolved_root"
 fi
-slug="${root#/}"
-slug="${slug//\//-}"
-cache_dir="${SANDBOX_AWS_CACHE_DIR:-$HOME/.cache/sandbox/aws/$slug}"
+cache_dir="${SANDBOX_AWS_CACHE_DIR:-$root/.direnv/aws}"
 mkdir -p "$cache_dir"
 chmod 700 "$cache_dir"
 

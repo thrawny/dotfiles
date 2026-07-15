@@ -139,6 +139,10 @@ sandbox() {
   # account) never enters it. Because the SDKs re-read the cache on expiry,
   # re-running sandbox-aws-refresh on the host refreshes a live sandbox
   # session without restarting it.
+  # A repo whose .envrc sets AWS_* vars outside the sandbox must also set them
+  # in its SANDBOX branch (pointing at $SANDBOX_ROOT_DIR/.direnv/aws/config):
+  # direnv reloads inside the sandbox first revert the recorded outside diff,
+  # which would otherwise clobber the values exported here.
   unset AWS_PROFILE
   if [[ -n "${SANDBOX_AWS_PROFILES:-}" ]]; then
     local aws_config_file aws_first_spec
