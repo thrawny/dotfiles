@@ -52,8 +52,20 @@ let
         wrapProgram $out/bin/helium \
           --run 'export TMPDIR="$HOME/.cache/helium"; mkdir -p "$TMPDIR"'
 
+        # Chromium ignores a remote --new-window request without a URL and only
+        # focuses an existing window. Supply about:blank only when the desktop
+        # entry was launched without a URL.
+        cat > $out/bin/helium-new-window <<EOF
+        #!${pkgs.runtimeShell}
+        if [ "\$#" -eq 0 ]; then
+          set -- about:blank
+        fi
+        exec "$out/bin/helium" --new-window "\$@"
+        EOF
+        chmod +x $out/bin/helium-new-window
+
         substituteInPlace $out/share/applications/helium.desktop \
-          --replace-fail 'Exec=helium %U' 'Exec=helium --new-window %U'
+          --replace-fail 'Exec=helium %U' 'Exec=helium-new-window %U'
       '';
     }))
   ];
