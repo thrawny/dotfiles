@@ -9,7 +9,6 @@ import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from datetime import datetime
 
 
 @dataclass(frozen=True)
@@ -164,6 +163,20 @@ def format_duration(total_seconds: int) -> str:
     return " ".join(parts)
 
 
+def format_age(total_seconds: int) -> str:
+    total_seconds = max(0, total_seconds)
+    for unit_seconds, singular, plural in (
+        (86_400, "day", "days"),
+        (3_600, "hr", "hrs"),
+        (60, "min", "mins"),
+    ):
+        if total_seconds >= unit_seconds:
+            value = total_seconds // unit_seconds
+            return f"{value} {singular if value == 1 else plural}"
+
+    return f"{total_seconds} {'sec' if total_seconds == 1 else 'secs'}"
+
+
 def load_sessions() -> tuple[list[Session], int]:
     try:
         result = subprocess.run(
@@ -221,6 +234,12 @@ def main() -> int:
             print("No running zmx sessions")
             return 0
 
+    sessions.sort(
+        key=lambda session: (
+            session.pid not in active_durations and session.ended is not None,
+            -(session.ended or 0),
+        )
+    )
     name_width = max(36, *(len(session.name) for session in sessions))
 
     for session in sessions:
@@ -233,11 +252,8 @@ def main() -> int:
             )
             details = f"running for {format_duration(duration)}"
         else:
-            ended_at = datetime.fromtimestamp(session.ended).strftime(
-                "%Y-%m-%d %H:%M:%S"
-            )
             result = session.exit_code if session.exit_code is not None else "?"
-            details = f"exit {result} (ended at {ended_at})"
+            details = f"exit {result} (ended {format_age(now - session.ended)} ago)"
 
         print(f"{session.name:<{name_width}} {details}")
 
