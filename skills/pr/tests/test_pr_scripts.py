@@ -244,8 +244,9 @@ def test_waiter_degrades_an_active_unavailable_reviewer(tmp_path: Path) -> None:
         "--timeout",
         "4",
         "--reviewer-timeout",
-        "1",
+        "2",
         env=env,
     )
     assert result.returncode == 0, result.stderr
     assert "codex_state=unavailable" in result.stdout
+    assert result.stdout.count("snapshot ") == 2

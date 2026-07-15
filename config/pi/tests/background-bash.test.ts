@@ -41,6 +41,10 @@ function execResult(overrides: Partial<ExecResult> = {}): ExecResult {
 	};
 }
 
+function isQuietWait(args: string[]): boolean {
+	return args[0] === "-c" && args[1]?.includes("zmx wait") === true;
+}
+
 function setupExtension(
 	exec: (
 		command: string,
@@ -96,7 +100,7 @@ describe("background bash", () => {
 		});
 		const exec = vi.fn(
 			async (_command: string, args: string[], _options?: ExecOptions) => {
-				if (args[0] === "wait") return waitResult;
+				if (isQuietWait(args)) return waitResult;
 				if (args[0] === "history") return execResult({ stdout: historyOutput });
 				return execResult();
 			},
@@ -142,8 +146,13 @@ describe("background bash", () => {
 		);
 		expect(exec).toHaveBeenNthCalledWith(
 			3,
-			"zmx",
-			["wait", expect.stringMatching(/^pi-bg-/)],
+			expect.any(String),
+			[
+				"-c",
+				'exec zmx wait "$1" >/dev/null',
+				"pi-bg-wait",
+				expect.stringMatching(/^pi-bg-/),
+			],
 			expect.objectContaining({ cwd: "/tmp" }),
 		);
 		expect(sendMessage).not.toHaveBeenCalled();
@@ -175,7 +184,7 @@ describe("background bash", () => {
 				finishWait = resolve;
 			});
 			const exec = vi.fn(async (_command: string, args: string[]) =>
-				args[0] === "wait" ? waitResult : execResult(),
+				isQuietWait(args) ? waitResult : execResult(),
 			);
 			const { sendMessage, tool } = setupExtension(exec);
 
@@ -307,7 +316,7 @@ describe("background bash", () => {
 		});
 		const exec = vi.fn(
 			async (_command: string, args: string[], _options?: ExecOptions) =>
-				args[0] === "wait" ? waitResult : execResult(),
+				isQuietWait(args) ? waitResult : execResult(),
 		);
 		const { handlers, sendMessage, tool } = setupExtension(exec);
 
@@ -334,7 +343,7 @@ describe("background bash", () => {
 
 	it("reports a failed background command with its recent output", async () => {
 		const exec = vi.fn(async (_command: string, args: string[]) =>
-			args[0] === "wait"
+			isQuietWait(args)
 				? execResult({ code: 7, stderr: "tests failed" })
 				: execResult(),
 		);

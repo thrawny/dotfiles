@@ -45,6 +45,7 @@ ERROR_RE = re.compile(
     re.IGNORECASE,
 )
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
+WAIT_HEARTBEAT_SECONDS = 5 * 60
 
 
 class GhError(RuntimeError):
@@ -917,12 +918,42 @@ def reviewer_readiness(
     return ReviewerReadiness(True, "inactive")
 
 
-def print_wait_snapshot(
+class WaitProgress:
+    def __init__(self) -> None:
+        self.interactive = sys.stdout.isatty()
+        self.line_open = False
+        self.last_key: tuple[object, ...] | None = None
+        self.last_emit_at: float | None = None
+
+    def update(self, text: str, key: tuple[object, ...], now: float) -> None:
+        if self.interactive:
+            sys.stdout.write(f"\r\x1b[2K{text}")
+            sys.stdout.flush()
+            self.line_open = True
+        elif (
+            key != self.last_key
+            or self.last_emit_at is None
+            or now - self.last_emit_at >= WAIT_HEARTBEAT_SECONDS
+        ):
+            print(text, flush=True)
+        else:
+            return
+        self.last_key = key
+        self.last_emit_at = now
+
+    def finish_line(self) -> None:
+        if self.line_open:
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+            self.line_open = False
+
+
+def wait_snapshot(
     elapsed: int,
     pr: PullRequest,
     signals: dict[str, ReviewerSignals],
     states: dict[str, str],
-) -> None:
+) -> tuple[str, tuple[object, ...]]:
     parts = [
         "snapshot",
         f"elapsed={elapsed}s",
@@ -930,16 +961,28 @@ def print_wait_snapshot(
         f"checks_pending={len(pr.checks_pending)}",
         f"checks_failed={len(pr.checks_failed)}",
     ]
+    reviewer_key: list[object] = []
     for adapter in REVIEWER_ADAPTERS:
         reviewer = signals[adapter.name]
+        state = states[adapter.name]
         parts.extend(
             (
-                f"{adapter.name}_state={states[adapter.name]}",
+                f"{adapter.name}_state={state}",
                 f"{adapter.name}_active={reviewer.active_reactions}",
                 f"{adapter.name}_final={reviewer.final_artifacts}",
             )
         )
-    print(" ".join(parts), flush=True)
+        reviewer_key.extend(
+            (adapter.name, state, reviewer.active_reactions, reviewer.final_artifacts)
+        )
+    key: tuple[object, ...] = (
+        pr.head_sha,
+        len(pr.checks),
+        len(pr.checks_pending),
+        len(pr.checks_failed),
+        *reviewer_key,
+    )
+    return " ".join(parts), key
 
 
 def command_wait(args: argparse.Namespace) -> int:
@@ -960,6 +1003,7 @@ def command_wait(args: argparse.Namespace) -> int:
         for adapter in REVIEWER_ADAPTERS
     }
     last_states = {adapter.name: "unknown" for adapter in REVIEWER_ADAPTERS}
+    progress = WaitProgress()
 
     print(
         f"waiting pr=#{initial.number} repo={repo} head={short_sha(initial.head_sha)}"
@@ -983,6 +1027,7 @@ def command_wait(args: argparse.Namespace) -> int:
             require_checks=args.require_checks,
         )
         if now >= deadline:
+            progress.finish_line()
             if ready_checks:
                 reviewer_summary = " ".join(
                     f"{name}_state=unavailable" for name in last_states
@@ -1009,6 +1054,7 @@ def command_wait(args: argparse.Namespace) -> int:
             refreshed = get_pr(str(initial.number), full_repo)
             if refreshed.head_sha != current.head_sha:
                 cutoff = head_timestamp(host, repo, refreshed.head_sha)
+                progress.finish_line()
                 print(
                     f"head changed old={short_sha(current.head_sha)}"
                     f" new={short_sha(refreshed.head_sha)}; resetting observed signals",
@@ -1042,7 +1088,10 @@ def command_wait(args: argparse.Namespace) -> int:
                 )
                 last_states[adapter.name] = readiness.state
                 reviewers_ready = reviewers_ready and readiness.ready
-            print_wait_snapshot(elapsed, current, last_signals, last_states)
+            snapshot, snapshot_key = wait_snapshot(
+                elapsed, current, last_signals, last_states
+            )
+            progress.update(snapshot, snapshot_key, now)
             ready_checks = checks_ready(
                 current,
                 now=now,
@@ -1073,6 +1122,7 @@ def command_wait(args: argparse.Namespace) -> int:
                     f" {name}_final={last_signals[name].final_artifacts}"
                     for name in last_states
                 )
+                progress.finish_line()
                 print(
                     f"settled pr=#{current.number} head={short_sha(current.head_sha)}"
                     f" checks_total={len(current.checks)}"
@@ -1083,6 +1133,7 @@ def command_wait(args: argparse.Namespace) -> int:
                 )
                 return 0
         except GhError as error:
+            progress.finish_line()
             print(
                 f"warning: {error}; retrying in {args.interval}s",
                 file=sys.stderr,

@@ -278,6 +278,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 		cwd: string,
 		startedAt: number,
 		controller: AbortController,
+		shellPath: string,
 		markers: OutputMarkers,
 		timeoutSeconds?: number,
 	) {
@@ -322,10 +323,14 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 		controller.signal.addEventListener("abort", clearWakeTimer, { once: true });
 
 		try {
-			const result = await pi.exec("zmx", ["wait", sessionName], {
-				cwd,
-				signal: controller.signal,
-			});
+			const result = await pi.exec(
+				shellPath,
+				["-c", 'exec zmx wait "$1" >/dev/null', "pi-bg-wait", sessionName],
+				{
+					cwd,
+					signal: controller.signal,
+				},
+			);
 			if (sessionClosed || controller.signal.aborted) return;
 			settled = true;
 			const output = await readOutput(sessionName, cwd, markers);
@@ -466,6 +471,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				ctx.cwd,
 				startedAt,
 				controller,
+				bash.shellPath,
 				markers,
 				params.timeout,
 			);
