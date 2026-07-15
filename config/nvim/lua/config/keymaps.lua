@@ -105,6 +105,28 @@ vim.api.nvim_create_user_command("ToggleCompletion", function()
   vim.notify("Completion " .. (vim.b.completion and "enabled" or "disabled"))
 end, {})
 
+local function copy_to_clipboard(label, value)
+  vim.fn.setreg("+", value)
+  vim.notify("Copied " .. label .. ": " .. value)
+end
+
+vim.api.nvim_create_user_command("CopyPid", function()
+  copy_to_clipboard("PID", tostring(vim.fn.getpid()))
+end, { desc = "Copy Neovim PID to clipboard" })
+
+vim.api.nvim_create_user_command("CopyBufferPath", function()
+  local path = vim.api.nvim_buf_get_name(0)
+  if path == "" then
+    vim.notify("Current buffer has no path", vim.log.levels.WARN)
+    return
+  end
+  copy_to_clipboard("buffer path", path)
+end, { desc = "Copy current buffer path to clipboard" })
+
+vim.api.nvim_create_user_command("CopyDiagnostics", function()
+  require("config.diagnostic_bundle").copy()
+end, { desc = "Copy Neovim diagnostic context to clipboard" })
+
 -- Terminal toggle with Alt+; is defined in lua/plugins/ui.lua (snacks.nvim keys spec)
 
 -- Copy file reference to clipboard for Claude Code
