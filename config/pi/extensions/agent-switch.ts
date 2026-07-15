@@ -118,11 +118,11 @@ export default function (pi: ExtensionAPI) {
 		track(ctx, "session-start");
 	});
 
-	pi.on("agent_start", async (_event, ctx) => {
+	pi.on("before_agent_start", async (_event, ctx) => {
 		track(ctx, "prompt-submit");
 	});
 
-	pi.on("agent_end", async (_event, ctx) => {
+	pi.on("agent_settled", async (_event, ctx) => {
 		track(ctx, "stop");
 	});
 

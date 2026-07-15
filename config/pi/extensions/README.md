@@ -85,8 +85,8 @@ If `text` is present, the extension inserts it with `ctx.ui.pasteToEditor()`.
 | --------------------------------- | ------------------------------------------- |
 | `session_start`                   | `session-start`                             |
 | `session_shutdown`                | `session-end`                               |
-| `agent_start`                     | `prompt-submit`                             |
-| `agent_end`                       | `stop`                                      |
+| `before_agent_start`              | `prompt-submit`                             |
+| `agent_settled`                   | `stop`                                      |
 | `session_switch` / `session_fork` | `session-end` (old) + `session-start` (new) |
 
 ### Minimal extension example
@@ -126,8 +126,10 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => track(ctx, "session-start"));
 	pi.on("session_shutdown", async (_event, ctx) => track(ctx, "session-end"));
-	pi.on("agent_start", async (_event, ctx) => track(ctx, "prompt-submit"));
-	pi.on("agent_end", async (_event, ctx) => track(ctx, "stop"));
+	pi.on("before_agent_start", async (_event, ctx) =>
+		track(ctx, "prompt-submit"),
+	);
+	pi.on("agent_settled", async (_event, ctx) => track(ctx, "stop"));
 }
 ```
 
