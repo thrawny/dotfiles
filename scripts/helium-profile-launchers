@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: helium-profile-launchers [--keep-generic] [--no-restart]
+       helium-profile-launchers --clean [--no-restart]
+
+Generate one local desktop entry per Helium profile. Profiles are read from
+Helium's Local State at runtime; generated entries are not stored in dotfiles.
+
+By default the generic helium.desktop entry is hidden in the application
+launcher. Use --keep-generic to leave it visible.
+EOF
+}
+
+hide_generic=true
+clean=false
+restart=true
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --keep-generic) hide_generic=false ;;
+    --clean) clean=true ;;
+    --no-restart) restart=false ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "helium-profile-launchers: unknown option: $1" >&2
+      usage >&2
+      exit 64
+      ;;
+  esac
+  shift
+done
+
+for command_name in jq sha256sum base64; do
+  if ! command -v "$command_name" >/dev/null 2>&1; then
+    echo "helium-profile-launchers: required command not found: $command_name" >&2
+    exit 1
+  fi
+done
+
+applications_dir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+user_data_dir="${HELIUM_USER_DATA_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/net.imput.helium}"
+local_state="$user_data_dir/Local State"
+marker="X-Helium-Profile-Launchers-Generated=true"
+mkdir -p "$applications_dir"
+
+restart_elephant() {
+  if [[ "$restart" == true ]] && command -v systemctl >/dev/null 2>&1; then
+    systemctl --user try-restart elephant.service >/dev/null 2>&1 || true
+  fi
+}
+
+remove_generated() {
+  local file
+  shopt -s nullglob
+  for file in "$applications_dir"/helium-profile-*.desktop "$applications_dir"/helium.desktop; do
+    if [[ -f "$file" ]] && grep -qxF "$marker" "$file"; then
+      rm -f "$file"
+    fi
+  done
+  shopt -u nullglob
+}
+
+if [[ "$clean" == true ]]; then
+  remove_generated
+  restart_elephant
+  echo "Removed generated Helium profile launchers from $applications_dir"
+  exit 0
+fi
+
+if [[ ! -r "$local_state" ]]; then
+  echo "helium-profile-launchers: Helium profile state not found: $local_state" >&2
+  exit 1
+fi
+if ! jq -e '.profile.info_cache | type == "object"' "$local_state" >/dev/null; then
+  echo "helium-profile-launchers: no profiles found in: $local_state" >&2
+  exit 1
+fi
+
+desktop_escape() {
+  local value="$1"
+  value=${value//$'\n'/ }
+  value=${value//$'\r'/ }
+  value=${value//\\/\\\\}
+  printf '%s' "$value"
+}
+
+exec_quote() {
+  local value="$1"
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//\$/\\\$}
+  value=${value//\`/\\\`}
+  printf '"%s"' "$value"
+}
+
+declare -A wanted=()
+profile_count=0
+while IFS=$'\t' read -r directory_b64 name_b64; do
+  profile_directory=$(printf '%s' "$directory_b64" | base64 --decode)
+  profile_name=$(printf '%s' "$name_b64" | base64 --decode)
+  profile_id=$(printf '%s' "$profile_directory" | sha256sum | cut -c1-16)
+  filename="helium-profile-$profile_id.desktop"
+  destination="$applications_dir/$filename"
+  wanted["$filename"]=1
+
+  name_value=$(desktop_escape "Helium — $profile_name")
+  profile_argument=$(exec_quote "--profile-directory=$profile_directory")
+  temporary=$(mktemp "$applications_dir/.${filename}.XXXXXX")
+  cat >"$temporary" <<EOF
+[Desktop Entry]
+Type=Application
+Name=$name_value
+GenericName=Web Browser
+Comment=Open a new Helium window using the $profile_name profile
+Exec=helium $profile_argument --new-window about:blank
+Icon=helium
+Terminal=false
+Categories=Network;WebBrowser;
+$marker
+EOF
+  chmod 600 "$temporary"
+  mv -f "$temporary" "$destination"
+  ((profile_count += 1))
+  printf 'Generated %s (%s)\n' "$name_value" "$profile_directory"
+done < <(
+  jq -r '
+    .profile.info_cache
+    | to_entries
+    | map(select(.value.is_omitted != true))
+    | sort_by((.value.name // .key) | ascii_downcase)
+    | .[]
+    | [(.key | @base64), ((.value.name // .key) | @base64)]
+    | @tsv
+  ' "$local_state"
+)
+
+if ((profile_count == 0)); then
+  echo "helium-profile-launchers: no visible profiles found in: $local_state" >&2
+  exit 1
+fi
+
+shopt -s nullglob
+for file in "$applications_dir"/helium-profile-*.desktop; do
+  filename=${file##*/}
+  if [[ -z "${wanted[$filename]:-}" ]] && grep -qxF "$marker" "$file"; then
+    rm -f "$file"
+  fi
+done
+shopt -u nullglob
+
+generic_override="$applications_dir/helium.desktop"
+if [[ "$hide_generic" == true ]]; then
+  if [[ -e "$generic_override" ]] && ! grep -qxF "$marker" "$generic_override"; then
+    echo "helium-profile-launchers: not replacing unmanaged $generic_override" >&2
+    echo "helium-profile-launchers: the generic Helium entry remains visible" >&2
+  else
+    temporary=$(mktemp "$applications_dir/.helium.desktop.XXXXXX")
+    cat >"$temporary" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Helium
+Hidden=true
+$marker
+EOF
+    chmod 600 "$temporary"
+    mv -f "$temporary" "$generic_override"
+  fi
+elif [[ -f "$generic_override" ]] && grep -qxF "$marker" "$generic_override"; then
+  rm -f "$generic_override"
+fi
+
+if command -v update-desktop-database >/dev/null 2>&1; then
+  update-desktop-database "$applications_dir" >/dev/null 2>&1 || true
+fi
+restart_elephant
+printf 'Generated %d Helium profile launcher(s) in %s\n' "$profile_count" "$applications_dir"
