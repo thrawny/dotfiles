@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "acpx-skills": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783968122,
+        "narHash": "sha256-IsWAyFQ7vTZA3ZQd4+NGAcnALzeEYFzEm01SYtqAot4=",
+        "owner": "openclaw",
+        "repo": "acpx",
+        "rev": "a518ea909eb91296b0d05c76345f1c8403ba830b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "openclaw",
+        "repo": "acpx",
+        "type": "github"
+      }
+    },
     "agent-browser": {
       "flake": false,
       "locked": {
@@ -855,6 +871,7 @@
     },
     "root": {
       "inputs": {
+        "acpx-skills": "acpx-skills",
         "agent-browser": "agent-browser",
         "anthropic-skills": "anthropic-skills",
         "disko": "disko",
@@ -996,7 +1013,7 @@
         ]
       },
       "locked": {
-        "lastModified": 1784119897,
+        "lastModified": 1784200231,
         "narHash": "sha256-NMr3ylvnkWyvuwQcvTReXrAHc16fdaXG3NSYjCoSgCc=",
         "path": "/home/thrawny/code/nix-pkgs",
         "type": "path"

@@ -33,6 +33,10 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     zmx.url = "github:thrawny/zmx-flake";
+    acpx-skills = {
+      url = "github:openclaw/acpx";
+      flake = false;
+    };
     agent-browser = {
       url = "github:vercel-labs/agent-browser";
       flake = false;
@@ -68,6 +72,7 @@
       hermes-agent,
       thrawny-pkgs,
       zmx,
+      acpx-skills,
       agent-browser,
       mattpocock-skills,
       anthropic-skills,
@@ -95,6 +100,7 @@
       };
       agentAssets = import ./lib/agent-skills.nix {
         inherit
+          acpx-skills
           agent-browser
           anthropic-skills
           lib

@@ -1,4 +1,5 @@
 {
+  acpx-skills,
   agent-browser,
   anthropic-skills,
   containerAssets,
@@ -52,6 +53,7 @@ let
   );
   codexSlashCommands = lib.mapAttrs (_: withAgents [ "codex" ]) (discoveredSkills codexCommandsRoot);
   externalSkills = {
+    acpx.source = acpx-skills + "/skills/acpx";
     agent-browser.source = agent-browser + "/skills/agent-browser";
     frontend-design.source = anthropic-skills + "/skills/frontend-design";
     writing-great-skills.source = mattpocock-skills + "/skills/productivity/writing-great-skills";
