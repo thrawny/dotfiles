@@ -97,6 +97,7 @@ in
         ".pi/agent/themes".source = configSource "pi/themes";
         ".pi/agent/claude-bridge.json".source = configSource "pi/claude-bridge.json";
         ".pi/agent/pi-vcc-config.json".source = configSource "pi/pi-vcc-config.json";
+        ".pi/agent/models.json".source = configSource "pi/models.json";
 
         ".claude/commands".source = configSource "claude/commands";
         ".claude/agents".source = configSource "claude/agents";
