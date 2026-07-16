@@ -1,3 +1,4 @@
+import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -6,6 +7,7 @@ import {
 	isCodexFastEnabled,
 	normalizeExtensionStatuses,
 	partitionExtensionStatuses,
+	resolveGitBranch,
 } from "../extensions/status-line.ts";
 
 describe("status line extension statuses", () => {
@@ -35,6 +37,23 @@ describe("status line extension statuses", () => {
 			backgroundStatus: " 2",
 			remaining: ["fast", "voice…"],
 		});
+	});
+
+	it("refreshes the branch directly from git metadata", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "pi-statusline-git-"));
+		try {
+			execFileSync("git", ["init", "--quiet", "--initial-branch", "first"], {
+				cwd: dir,
+			});
+			expect(await resolveGitBranch(dir)).toBe("first");
+
+			execFileSync("git", ["symbolic-ref", "HEAD", "refs/heads/second"], {
+				cwd: dir,
+			});
+			expect(await resolveGitBranch(dir)).toBe("second");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
 	});
 
 	it("reads fast from pi-codex-conversion config", () => {

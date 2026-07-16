@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -168,7 +168,30 @@ function getRuntimeBadge(): { text: string; fg: string; bg: string } | null {
 	return null;
 }
 
+const GIT_BRANCH_POLL_INTERVAL_MS = 2_000;
 const GIT_CHANGES_CACHE_TTL_MS = 5_000;
+
+/**
+ * Resolve HEAD without inspecting the worktree. This stays cheap in large repos
+ * and provides a polling fallback when Pi's git metadata watcher misses an event.
+ */
+export function resolveGitBranch(cwd: string): Promise<string | null> {
+	return new Promise((resolve) => {
+		execFile(
+			"git",
+			["--no-optional-locks", "symbolic-ref", "--quiet", "--short", "HEAD"],
+			{ cwd, encoding: "utf8", timeout: 1_000 },
+			(error, stdout) => {
+				if (error) {
+					resolve(error.code === 1 ? "detached" : null);
+					return;
+				}
+				resolve(stdout.trim() || null);
+			},
+		);
+	});
+}
+
 let gitChangesCache:
 	| {
 			cwd: string;
@@ -226,7 +249,38 @@ function install(
 	getThinkingLevel: () => string,
 ) {
 	ctx.ui.setFooter((tui, _theme, footerData) => {
-		const unsub = footerData.onBranchChange(() => tui.requestRender());
+		let branch = footerData.getGitBranch();
+		let branchPollInFlight = false;
+		let disposed = false;
+
+		const refreshBranch = () => {
+			if (disposed || branchPollInFlight) return;
+			branchPollInFlight = true;
+			const cwd = getCurrentCtx()?.cwd ?? process.cwd();
+			void resolveGitBranch(cwd)
+				.then((nextBranch) => {
+					// null means git was unavailable or cwd is not a repository. Keep
+					// FooterData's last known value rather than flickering on failures.
+					if (!disposed && nextBranch !== null && nextBranch !== branch) {
+						branch = nextBranch;
+						tui.requestRender();
+					}
+				})
+				.finally(() => {
+					branchPollInFlight = false;
+				});
+		};
+
+		const unsub = footerData.onBranchChange(() => {
+			branch = footerData.getGitBranch();
+			tui.requestRender();
+		});
+		const branchPollTimer = setInterval(
+			refreshBranch,
+			GIT_BRANCH_POLL_INTERVAL_MS,
+		);
+		branchPollTimer.unref();
+		refreshBranch();
 
 		const safe = <T>(fn: () => T, fallback: T): T => {
 			try {
@@ -237,11 +291,14 @@ function install(
 		};
 
 		return {
-			dispose: unsub,
+			dispose() {
+				disposed = true;
+				clearInterval(branchPollTimer);
+				unsub();
+			},
 			invalidate() {},
 			render(width: number): string[] {
 				const activeCtx = getCurrentCtx();
-				const branch = footerData.getGitBranch();
 				const sessionName = activeCtx
 					? safe(
 							() => activeCtx.sessionManager.getSessionName()?.trim(),
