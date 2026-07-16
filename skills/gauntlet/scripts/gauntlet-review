@@ -9,8 +9,9 @@
 #   gauntlet-review [--base <branch> | --uncommitted | --commit <sha>] [brief]
 #   ... | gauntlet-review --uncommitted -      # read brief from stdin
 #
-# Scope defaults to the current branch vs main (--uncommitted when on main).
-# The brief is extra review context passed verbatim to both engines; omit it or
+# Scope defaults to the current branch vs origin's default branch
+# (--uncommitted when on that branch). The brief is extra review context passed
+# verbatim to both engines; omit it or
 # pass '-' to read from stdin (empty is allowed).
 #
 # Graceful degradation: if one engine is unauthenticated or out of usage/quota,
@@ -46,14 +47,16 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Auto-detect scope when none was given: current branch vs the repo's default
-# branch, or uncommitted changes when already on the default branch.
+# Auto-detect scope when none was given: current branch vs origin's default
+# branch, or uncommitted changes when already on the corresponding local branch.
+# Compare against the remote-tracking ref so a stale local branch does not add
+# already-merged upstream changes to the review.
 if [[ "$scope_set" -eq 0 ]]; then
   branch="$(git rev-parse --abbrev-ref HEAD)"
-  default_branch="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
-  default_branch="${default_branch#origin/}"
-  default_branch="${default_branch:-main}"
-  if [[ "$branch" == "$default_branch" ]]; then scope="--uncommitted"; else scope="--base $default_branch"; fi
+  default_ref="$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
+  default_ref="${default_ref:-origin/main}"
+  default_branch="${default_ref#origin/}"
+  if [[ "$branch" == "$default_branch" ]]; then scope="--uncommitted"; else scope="--base $default_ref"; fi
 fi
 
 # Brief: remaining arg, else stdin (when piped), else empty.
