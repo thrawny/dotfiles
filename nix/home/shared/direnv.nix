@@ -33,6 +33,46 @@ in
           fi
       }
 
+      use_docker() {
+          local docker_vm docker_vm_ip docker_cache_dir docker_host_file
+
+          docker_vm="''${SANDBOX_DOCKER_VM:-sandbox-docker}"
+          docker_cache_dir="''${XDG_CACHE_HOME:-$HOME/.cache}/sandbox/docker"
+          docker_host_file="$docker_cache_dir/$docker_vm.host"
+
+          if [[ -n "''${SANDBOX:-}" ]]; then
+              if [[ ! -r "$docker_host_file" ]]; then
+                  log_error "No cached address for Docker VM '$docker_vm'; load this direnv outside the sandbox first."
+                  return 1
+              fi
+              docker_vm_ip="$(<"$docker_host_file")"
+          else
+              if ! has incus || ! has jq; then
+                  log_error "use docker requires incus and jq."
+                  return 1
+              fi
+
+              docker_vm_ip="$(
+                  incus list "$docker_vm" --format=json 2>/dev/null \
+                      | jq -r '.[0].state.network // {} | to_entries[] | select(.key != "lo" and .key != "docker0" and (.key | startswith("br-") | not) and (.key | startswith("veth") | not)) | .value.addresses[]? | select(.family == "inet") | .address' \
+                      | head -n1
+              )"
+              if [[ -z "$docker_vm_ip" ]]; then
+                  log_error "Docker VM '$docker_vm' is not running or has no IPv4 address."
+                  return 1
+              fi
+
+              mkdir -p "$docker_cache_dir"
+              printf '%s\n' "$docker_vm_ip" >"$docker_host_file"
+          fi
+
+          unset DOCKER_CONTEXT
+          export DOCKER_HOST="tcp://$docker_vm_ip:2375"
+          export DOCKER_CONFIG="$docker_cache_dir"
+          export TESTCONTAINERS_HOST_OVERRIDE="$docker_vm_ip"
+          mkdir -p "$DOCKER_CONFIG"
+      }
+
       use_zmx() {
           local project_name dir_name
 
