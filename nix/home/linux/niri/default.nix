@@ -501,9 +501,8 @@ in
       }
       {
         command = [
-          "zen-beta"
-          "--name"
-          "zen-beta"
+          "helium"
+          "--profile-directory=Default"
         ];
       }
       {
@@ -607,7 +606,7 @@ in
       {
         matches = [
           {
-            app-id = "^zen-beta$";
+            app-id = "^helium$";
             at-startup = true;
           }
         ];
