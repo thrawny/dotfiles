@@ -1,91 +1,70 @@
 ---
 name: codex-delegate
-description: Delegate a coding pass to Codex when the user explicitly asks to use or consult Codex. Use in Claude Code for requested implementation, refactoring, test-writing, CI fixes, or code exploration; Claude retains scoping, review, and verification.
+description: Delegate coding work to Codex through acpx when the user explicitly asks to use or consult Codex, while retaining scope, review, verification, and final judgment.
 ---
 
 # Codex Delegate
 
-Codex performs the requested pass; Claude owns the brief, boundaries, final judgment, verification, and user-facing result. Explicit user delegation is sufficient permission to start without asking again.
+Use the lightest delegation shape that gives Codex enough context and keeps the result independently reviewable.
 
-## 1. Write a bounded work order
+## Choose the lightest useful acpx shape
 
-Codex does not inherit the conversation. Create a run directory and put the work order in its prompt file:
-
-```bash
-RUN_DIR=$(mktemp -d)
-PROMPT_FILE="$RUN_DIR/prompt.md"
-```
-
-```md
-Goal:
-<concrete outcome>
-
-Repository:
-<absolute path>
-
-Relevant paths:
-- <path>
-
-Constraints:
-- <scope, style, compatibility, and dependency limits>
-
-Non-goals:
-- <work to avoid>
-
-Verification:
-- <exact checks, or why none exists>
-
-Report:
-- Summarize files changed and checks run.
-- Call out unfinished work and risks.
-```
-
-Resolve design, naming, API, and UX decisions before delegation. Keep secrets, private account access, browser work, releases, pushes, merges, and review of Codex's own output with Claude.
-
-This step is complete when Codex can execute without guessing the contract or scope.
-
-## 2. Run Codex in a workspace sandbox
+Use one-shot execution when the prompt is self-contained:
 
 ```bash
-REPORT_FILE="$RUN_DIR/report.md"
-EVENTS_FILE="$RUN_DIR/events.jsonl"
-THREAD_FILE="$RUN_DIR/thread-id"
-
-command codex exec \
-  --sandbox workspace-write \
-  --json \
-  -C <repo> \
-  -c model_reasoning_effort="high" \
-  -o "$REPORT_FILE" \
-  - <"$PROMPT_FILE" >"$EVENTS_FILE" 2>/dev/null
-
-jq -r 'select(.type == "thread.started") | .thread_id' "$EVENTS_FILE" \
-  | head -n 1 >"$THREAD_FILE"
-test -s "$THREAD_FILE"
+acpx --cwd <repo> codex exec '<prompt>'
 ```
 
-The workspace-write sandbox lets Codex edit the repository without granting unrestricted host access. The event stream records the exact thread for follow-ups while the `-o` file contains the concise final report. If execution or thread capture fails, inspect the event file and rerun without stderr suppression to diagnose it.
-
-Give every independent task its own run directory so reports, events, and thread IDs cannot collide. Add `--skip-git-repo-check` only when a non-git workspace is expected.
-
-## 3. Review the proposal
-
-Treat Codex's work like a contributor PR:
-
-1. Inspect `git status -sb` and the complete diff for changed files.
-2. Verify correctness, scope, repository style, and unintended effects.
-3. Run focused checks when practical.
-4. Correct issues directly or send one focused follow-up.
-
-For a follow-up, resume the captured thread explicitly:
+Use a named session when the work may need follow-ups:
 
 ```bash
-CODEX_THREAD_ID=$(<"$THREAD_FILE")
-command codex exec resume "$CODEX_THREAD_ID" \
-  -o "$REPORT_FILE" \
-  - <"$FOLLOWUP_FILE" 2>/dev/null
+acpx --cwd <repo> codex sessions ensure --name <task>
+acpx --cwd <repo> --approve-all codex -s <task> '<prompt>'
 ```
 
-Never use `resume --last`: another delegation or interactive Codex session may be newer. After two unproductive Codex rounds, take over or ask the user how to proceed.
+Pass `--file <path>` instead of inline text when the brief is long or worth preserving. Use the agent harness's background execution facility for long tasks; foreground is simpler when waiting is cheap. Keep the background task ID and acpx session name available so progress, follow-ups, and cancellation remain unambiguous.
 
-The delegation is complete when Claude has reviewed the diff, run or accounted for relevant checks, and can summarize what changed and any remaining risk.
+Let the configured Codex model stand unless the user wants an override. When `SANDBOX=1`, default to `--approve-all` (yolo): the host sandbox is already the isolation boundary, and nested approval friction adds little protection. Outside the sandbox, match permissions to intent:
+
+- implementation: `--approve-all` within a tightly scoped repository and brief
+- consultation or review: `--approve-reads`, optionally `--no-terminal`
+
+Consult the `acpx` skill for the full command, permission, session, and output reference.
+
+## Give Codex the missing context
+
+Codex does not inherit the conversation. Supply enough of the following to remove consequential guessing, without turning every delegation into a template-filling exercise:
+
+- the concrete outcome
+- relevant context and paths
+- decisions already made
+- scope boundaries and meaningful non-goals
+- repository conventions that are not readily discoverable
+- checks or runtime evidence expected
+
+For implementation work, normally ask Codex to summarize changes, checks, assumptions, and remaining risks, and leave committing outside the delegation. Keep secrets, private account access, releases, pushes, and merges outside the delegation unless the user explicitly assigns them.
+
+## Keep judgment outside the delegation
+
+Read Codex's report and treat its diff like a contributor PR. Inspect the complete change, compare it with the brief, and independently run or account for the checks that matter. Codex's report is evidence, not the verdict.
+
+Choose verification that exercises the behavior being claimed. Static checks suit static claims; runtime changes need evidence from the relevant runtime boundary. Verification may be delegated when useful, while failure triage and final judgment remain independent of Codex.
+
+## Continue or stop explicitly
+
+Send focused corrections through the same named session so Codex retains context:
+
+```bash
+acpx --cwd <repo> --approve-all codex -s <task> --file <follow-up.md>
+```
+
+When a session stops being productive, take over rather than preserving the delegation for its own sake.
+
+If the user says stop, cancel the active turn and close the session:
+
+```bash
+acpx --cwd <repo> codex cancel -s <task>
+acpx --cwd <repo> codex sessions close <task>
+```
+
+Close named sessions after the work is settled. In the user-facing result, distinguish Codex's contribution from the independent review and state what was verified, what was committed, and what risk remains.
