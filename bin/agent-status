@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Waybar custom module: agent-switch session states, aggregated by count.
+# Output: {text, tooltip, class} where class is the most urgent state present.
+set -euo pipefail
+
+if ! sessions=$(agent-switch list 2>/dev/null); then
+  echo '{"text": "", "tooltip": "agent-switch unavailable", "class": "unavailable"}'
+  exit 0
+fi
+
+jq -cn --argjson data "$sessions" '
+  def rank: {waiting: 0, responding: 1, idle: 2}[.state] // 3;
+  def icon: {waiting: "", responding: "", idle: ""}[.] // "?";
+
+  ($data.sessions // {} | to_entries | map(.value)) as $s
+  | ($s | map(select(.state == "waiting")) | length) as $waiting
+  | ($s | map(select(.state == "responding")) | length) as $responding
+  | ([
+      (if $waiting > 0 then "\("waiting" | icon) \($waiting)" else empty end),
+      (if $responding > 0 then "\("responding" | icon) \($responding)" else empty end)
+    ] | join("  ")) as $active
+  | (if $active != "" then $active
+     elif ($s | length) > 0 then "\("idle" | icon) \($s | length)"
+     else "" end) as $text
+  | ($s | sort_by(rank)
+        | map("\(.state | icon) \(.agent): \(.cwd // "?" | split("/") | last) (\(.state))")
+        | join("\n")) as $tooltip
+  | (if $waiting > 0 then "waiting"
+     elif $responding > 0 then "responding"
+     else "idle" end) as $class
+  | {text: $text, tooltip: $tooltip, class: $class}
+'

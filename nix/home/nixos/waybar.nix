@@ -32,8 +32,23 @@ let
     #tray,
     #workspaces,
     #custom-caffeine,
+    #custom-agent-status,
     #language {
       padding: 0 8px;
+    }
+
+    #custom-agent-status.waiting {
+      color: @waybar-accent;
+    }
+
+    /* State colors match agent-switch's molokai theme (themes.rs) */
+    #custom-agent-status.responding {
+      color: #a6e22e;
+    }
+
+    #custom-agent-status.idle,
+    #custom-agent-status.unavailable {
+      color: @waybar-muted;
     }
 
     #custom-caffeine.deactivated {
@@ -137,6 +152,7 @@ let
     window#waybar.compact #network,
     window#waybar.compact #wireplumber,
     window#waybar.compact #custom-caffeine,
+    window#waybar.compact #custom-agent-status,
     window#waybar.compact #custom-tray-expander {
       padding: 0 5px;
     }
@@ -278,6 +294,13 @@ let
       on-click = "${homeDir}/.cargo/bin/quotabar popup";
     };
 
+    "custom/agent-status" = {
+      exec = "${homeDir}/dotfiles/bin/agent-status";
+      return-type = "json";
+      interval = 2;
+      on-click = "agent-switch niri --toggle";
+    };
+
     "custom/caffeine" = {
       exec = "${homeDir}/dotfiles/bin/caffeine status";
       return-type = "json";
@@ -307,6 +330,7 @@ let
       };
     };
     "modules-right" = [
+      "custom/agent-status"
       "custom/quotabar-claude"
       "custom/quotabar-codex"
       "custom/caffeine"
@@ -350,6 +374,7 @@ let
     "modules-left" = [ "niri/workspaces" ];
     "modules-center" = [ ];
     "modules-right" = [
+      "custom/agent-status"
       "custom/quotabar-claude"
       "custom/quotabar-codex"
       "custom/caffeine"

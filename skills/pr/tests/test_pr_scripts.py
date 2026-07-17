@@ -301,7 +301,7 @@ def test_required_approval_wait_wakes_on_changes_requested(tmp_path: Path) -> No
         "wait",
         "12",
         "--require-approval-from",
-                "ReviewerOne",
+        "ReviewerOne",
         "--interval",
         "1",
         "--timeout",
@@ -320,7 +320,7 @@ def test_required_approval_wait_wakes_on_pr_closure(tmp_path: Path) -> None:
         "wait",
         "12",
         "--require-approval-from",
-                "ReviewerOne",
+        "ReviewerOne",
         env=env,
     )
     assert result.returncode == 0, result.stderr
@@ -337,7 +337,7 @@ def test_required_approval_wait_wakes_on_head_change(tmp_path: Path) -> None:
         "wait",
         "12",
         "--require-approval-from",
-                "ReviewerOne",
+        "ReviewerOne",
         "--interval",
         "1",
         "--timeout",
