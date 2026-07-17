@@ -1,6 +1,10 @@
-# Agent switcher (Rust GTK4 app)
+# Agent session overlay (agent-switch, Rust GTK4 app) + nirius (app-jump focus daemon)
 # Assumes agent-switch is available on PATH (e.g., ~/.cargo/bin)
-_: {
+# App jumping is bound as an xremap chord (Alt-a prefix) in ../xremap.nix
+{ pkgs, ... }:
+{
+  home.packages = [ pkgs.nirius ];
+
   programs.niri.settings = {
     spawn-at-startup = [
       {
@@ -9,17 +13,7 @@ _: {
           "niri"
         ];
       }
+      { command = [ "niriusd" ]; }
     ];
-
-    binds = {
-      "Mod+A" = {
-        action.spawn = [
-          "agent-switch"
-          "niri"
-          "--toggle"
-        ];
-        hotkey-overlay.title = "Agent Switcher";
-      };
-    };
   };
 }

@@ -51,6 +51,64 @@ _: {
           };
         }
         {
+          name = "App jump chord (Alt-a prefix)";
+          remap = {
+            "Alt-a" = {
+              remap = {
+                "a" = {
+                  launch = [
+                    "nirius"
+                    "focus"
+                    "--title"
+                    "k9s"
+                  ];
+                };
+                "s" = {
+                  launch = [
+                    "nirius"
+                    "focus"
+                    "--app-id"
+                    "(?i)slack"
+                  ];
+                };
+                "d" = {
+                  launch = [
+                    "nirius"
+                    "focus"
+                    "--title"
+                    "Microsoft Teams"
+                  ];
+                };
+                "b" = {
+                  launch = [
+                    "nirius"
+                    "focus"
+                    "--title"
+                    "btop"
+                  ];
+                };
+                "z" = {
+                  launch = [
+                    "nirius"
+                    "focus"
+                    "--title"
+                    "(?i)discord"
+                  ];
+                };
+                "t" = {
+                  launch = [
+                    "nirius"
+                    "focus"
+                    "--app-id"
+                    "org.telegram.desktop"
+                  ];
+                };
+              };
+              timeout_millis = 1000;
+            };
+          };
+        }
+        {
           name = "macOS-style shortcuts (exclude Ghostty)";
           application = {
             not = [
