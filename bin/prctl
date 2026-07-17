@@ -189,8 +189,8 @@ REVIEWER_ADAPTERS = (CODEX,)
 
 
 def normalize_login(login: str) -> str:
-    """Normalize GitHub App REST/GraphQL login variants."""
-    return login.strip().lower().removesuffix("[bot]")
+    """Normalize GitHub REST/GraphQL login variants."""
+    return login.strip().lower().removeprefix("@").removesuffix("[bot]")
 
 
 def duration(value: str) -> int:
@@ -371,6 +371,37 @@ def artifact_is_current(
             return sha_matches(commit_id, head_sha)
     value = item.get(date_field)
     return isinstance(value, str) and timestamp(value) >= cutoff
+
+
+def required_reviewer_decision(
+    host: str,
+    repo: str,
+    pr_number: int,
+    reviewer: str,
+) -> str | None:
+    """Return a reviewer's latest approval or changes-requested decision."""
+    latest_at: datetime | None = None
+    latest_state: str | None = None
+    reviewer_login = normalize_login(reviewer)
+    reviews = paginated_items(host, f"repos/{repo}/pulls/{pr_number}/reviews")
+    for review in reviews:
+        user = review.get("user") or {}
+        if not isinstance(user, dict):
+            continue
+        login = user.get("login")
+        if not isinstance(login, str) or normalize_login(login) != reviewer_login:
+            continue
+        state = str(review.get("state") or "").upper()
+        if state not in {"APPROVED", "CHANGES_REQUESTED"}:
+            continue
+        submitted_at = review.get("submitted_at")
+        if not isinstance(submitted_at, str):
+            continue
+        submitted = timestamp(submitted_at)
+        if latest_at is None or submitted >= latest_at:
+            latest_at = submitted
+            latest_state = state
+    return latest_state
 
 
 def reviewer_signals(
@@ -985,10 +1016,99 @@ def wait_snapshot(
     return " ".join(parts), key
 
 
+def command_wait_for_approval(
+    args: argparse.Namespace,
+    initial: PullRequest,
+    host: str,
+    repo: str,
+    full_repo: str,
+) -> int:
+    reviewer = args.require_approval_from
+    started = time.monotonic()
+    deadline = started + args.timeout
+    current = initial
+    progress = WaitProgress()
+
+    print(
+        f"waiting pr=#{initial.number} repo={repo} head={short_sha(initial.head_sha)}"
+        f" reviewer={reviewer} interval={args.interval}s timeout={args.timeout}s",
+        flush=True,
+    )
+
+    while True:
+        now = time.monotonic()
+        elapsed = int(now - started)
+        if current.state != "OPEN":
+            progress.finish_line()
+            print(
+                f"woke reason=pr-closed pr=#{current.number} state={current.state}"
+                f" head={short_sha(current.head_sha)} reviewer={reviewer}",
+                flush=True,
+            )
+            return 0
+        if current.head_sha != initial.head_sha:
+            progress.finish_line()
+            print(
+                f"woke reason=head-changed pr=#{current.number}"
+                f" old={short_sha(initial.head_sha)} new={short_sha(current.head_sha)}"
+                f" reviewer={reviewer}",
+                flush=True,
+            )
+            return 0
+        if now >= deadline:
+            progress.finish_line()
+            print(
+                f"timed out pr=#{current.number} head={short_sha(current.head_sha)}"
+                f" elapsed={elapsed}s reviewer={reviewer}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
+
+        try:
+            current = get_pr(str(initial.number), full_repo)
+            if current.state != "OPEN" or current.head_sha != initial.head_sha:
+                continue
+            decision = required_reviewer_decision(host, repo, current.number, reviewer)
+            review_state = decision.lower().replace("_", "-") if decision else "pending"
+            progress.update(
+                f"snapshot elapsed={elapsed}s pr_state={current.state}"
+                f" head={short_sha(current.head_sha)} reviewer={reviewer}"
+                f" review_state={review_state}",
+                (current.state, current.head_sha, review_state),
+                now,
+            )
+            if decision is not None:
+                confirmed = get_pr(str(initial.number), full_repo)
+                current = confirmed
+                if current.state != "OPEN" or current.head_sha != initial.head_sha:
+                    continue
+                reason = decision.lower().replace("_", "-")
+                progress.finish_line()
+                print(
+                    f"woke reason={reason} pr=#{current.number}"
+                    f" head={short_sha(current.head_sha)} reviewer={reviewer}",
+                    flush=True,
+                )
+                return 0
+        except GhError as error:
+            progress.finish_line()
+            print(
+                f"warning: {error}; retrying in {args.interval}s",
+                file=sys.stderr,
+                flush=True,
+            )
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(args.interval, remaining))
+
+
 def command_wait(args: argparse.Namespace) -> int:
     initial = get_pr(args.pr, args.repo)
     host, repo = repo_from_url(initial.url)
     full_repo = repo_spec(host, repo)
+    if args.require_approval_from is not None:
+        return command_wait_for_approval(args, initial, host, repo, full_repo)
     cutoff = head_timestamp(host, repo, initial.head_sha)
     started = time.monotonic()
     deadline = started + args.timeout
@@ -1174,6 +1294,14 @@ def build_parser() -> argparse.ArgumentParser:
     wait_parser.add_argument("-i", "--interval", type=duration, default=15)
     wait_parser.add_argument("-t", "--timeout", type=duration, default=600)
     wait_parser.add_argument("--require-checks", action="store_true")
+    wait_parser.add_argument(
+        "--require-approval-from",
+        metavar="LOGIN",
+        help=(
+            "wait for this reviewer's approval or changes request; also wakes on PR "
+            "closure or head change"
+        ),
+    )
     wait_parser.add_argument("--checks-grace", type=duration, default=30)
     wait_parser.add_argument("--reviewer-grace", type=duration, default=30)
     wait_parser.add_argument("--reviewer-timeout", type=duration, default=600)

@@ -75,6 +75,14 @@ The waiter:
 
 Use `--require-checks` only when the repository must publish at least one check. Script success means signals settled, not that checks passed or reviewers found nothing. Run `snapshot` again after it wakes the agent.
 
+Required human approval remains a terminal handoff by default. Only when the user explicitly wants to wait for a named human reviewer, use:
+
+```bash
+prctl wait 1010 --require-approval-from octocat --timeout 20m
+```
+
+This mode waits for that reviewer's latest approval or changes request instead of settling on machine and optional-AI signals. It also wakes on PR closure or head change; unlike the default waiter, a head change is terminal rather than resetting observations. Timeout exits nonzero. It only observes review state and never merges. Run `snapshot` again after any wake-up to inspect the resulting PR state.
+
 Do not manually post `@codex review` after every push when the repository automatically reviews pushes. Trigger it only when repository behavior requires manual activation or Codex stayed inactive beyond the grace period and a new review is actually needed. After triggering a reviewer, launch `prctl wait` directly; do not separately poll reactions. Avoid duplicate review requests.
 
 ## 4. Fix and close the loop

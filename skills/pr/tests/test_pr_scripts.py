@@ -22,8 +22,20 @@ head = "a" * 40
 no_checks = os.environ.get("FAKE_NO_CHECKS") == "1"
 no_signals = os.environ.get("FAKE_NO_SIGNALS") == "1"
 active_reviewer = os.environ.get("FAKE_ACTIVE_REVIEWER") == "1"
+human_review_state = os.environ.get("FAKE_HUMAN_REVIEW_STATE")
 
 if args[:2] == ["pr", "view"]:
+    current_head = head
+    counter_path = os.environ.get("FAKE_PR_VIEW_COUNTER")
+    if counter_path:
+        try:
+            view_count = int(open(counter_path).read())
+        except (FileNotFoundError, ValueError):
+            view_count = 0
+        with open(counter_path, "w") as counter:
+            counter.write(str(view_count + 1))
+        if os.environ.get("FAKE_HEAD_CHANGE_AFTER_INITIAL") == "1" and view_count > 0:
+            current_head = "c" * 40
     checks = [] if no_checks else [{
         "name": "test",
         "status": "COMPLETED",
@@ -35,8 +47,8 @@ if args[:2] == ["pr", "view"]:
         "number": 12,
         "title": "Improve widgets",
         "url": "https://github.com/acme/widgets/pull/12",
-        "state": "OPEN",
-        "headRefOid": head,
+        "state": os.environ.get("FAKE_PR_STATE", "OPEN"),
+        "headRefOid": current_head,
         "headRefName": "feature/widgets",
         "baseRefName": "main",
         "isDraft": False,
@@ -96,6 +108,7 @@ if args and args[0] == "api":
                 "user": {"login": "chatgpt-codex-connector"},
                 "commit_id": head,
                 "submitted_at": "2026-07-10T00:02:00Z",
+                "state": "APPROVED",
                 "body": "Reviewed commit: `aaaaaaaaaaaa`",
             }, {
                 "user": {"login": "chatgpt-codex-connector[bot]"},
@@ -111,6 +124,14 @@ if args and args[0] == "api":
                 "created_at": "2026-07-10T00:03:00Z",
                 "body": "Old inline finding",
             }]
+    if human_review_state and "/reviews?" in endpoint:
+        items.append({
+            "id": 99,
+            "user": {"login": "ReviewerOne"},
+            "commit_id": head,
+            "submitted_at": "2026-07-10T00:04:00Z",
+            "state": human_review_state,
+        })
     print(json.dumps([items] if "--slurp" in args else items))
     raise SystemExit(0)
 
@@ -250,3 +271,101 @@ def test_waiter_degrades_an_active_unavailable_reviewer(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "codex_state=unavailable" in result.stdout
     assert result.stdout.count("snapshot ") == 2
+
+
+def test_waiter_can_require_approval_from_a_specific_reviewer(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = pr_harness.env.copy()
+    env["FAKE_HUMAN_REVIEW_STATE"] = "APPROVED"
+    result = pr_harness.run(
+        "wait",
+        "12",
+        "--require-approval-from",
+        "reviewerone",
+        "--interval",
+        "1",
+        "--timeout",
+        "2",
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "reason=approved" in result.stdout
+    assert "reviewer=reviewerone" in result.stdout
+
+
+def test_required_approval_wait_wakes_on_changes_requested(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = pr_harness.env.copy()
+    env["FAKE_HUMAN_REVIEW_STATE"] = "CHANGES_REQUESTED"
+    result = pr_harness.run(
+        "wait",
+        "12",
+        "--require-approval-from",
+                "ReviewerOne",
+        "--interval",
+        "1",
+        "--timeout",
+        "2",
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "reason=changes-requested" in result.stdout
+
+
+def test_required_approval_wait_wakes_on_pr_closure(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = pr_harness.env.copy()
+    env["FAKE_PR_STATE"] = "CLOSED"
+    result = pr_harness.run(
+        "wait",
+        "12",
+        "--require-approval-from",
+                "ReviewerOne",
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "reason=pr-closed" in result.stdout
+    assert "state=CLOSED" in result.stdout
+
+
+def test_required_approval_wait_wakes_on_head_change(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = pr_harness.env.copy()
+    env["FAKE_PR_VIEW_COUNTER"] = str(tmp_path / "pr-view-count")
+    env["FAKE_HEAD_CHANGE_AFTER_INITIAL"] = "1"
+    result = pr_harness.run(
+        "wait",
+        "12",
+        "--require-approval-from",
+                "ReviewerOne",
+        "--interval",
+        "1",
+        "--timeout",
+        "2",
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "reason=head-changed" in result.stdout
+    assert "old=aaaaaaaaaaaa" in result.stdout
+    assert "new=cccccccccccc" in result.stdout
+
+
+def test_required_approval_wait_times_out_without_that_reviewers_decision(
+    tmp_path: Path,
+) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = pr_harness.env.copy()
+    result = pr_harness.run(
+        "wait",
+        "12",
+        "--require-approval-from",
+        "ReviewerOne",
+        "--interval",
+        "1",
+        "--timeout",
+        "1",
+        env=env,
+    )
+    assert result.returncode == 1
+    assert "timed out" in result.stderr
+    assert "reviewer=ReviewerOne" in result.stderr
