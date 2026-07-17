@@ -151,6 +151,7 @@ let
     window#waybar.compact #battery,
     window#waybar.compact #network,
     window#waybar.compact #wireplumber,
+    window#waybar.compact #language,
     window#waybar.compact #custom-caffeine,
     window#waybar.compact #custom-agent-status,
     window#waybar.compact #custom-tray-expander {
@@ -310,6 +311,13 @@ let
     };
   };
 
+  niriLanguage = {
+    format = "{}";
+    "format-en" = "AU";
+    "format-sv" = "SE";
+    "on-click" = "niri msg action switch-layout next";
+  };
+
   standardNiriBar = sharedModules // {
     layer = "top";
     position = "top";
@@ -357,12 +365,7 @@ let
       };
     };
 
-    "niri/language" = {
-      format = "{}";
-      "format-en" = "AU";
-      "format-sv" = "SE";
-      "on-click" = "niri msg action switch-layout next";
-    };
+    "niri/language" = niriLanguage;
   };
 
   compactNiriBar = sharedModules // {
@@ -378,6 +381,7 @@ let
       "custom/quotabar-claude"
       "custom/quotabar-codex"
       "custom/caffeine"
+      "niri/language"
       "group/tray"
       "network"
       "wireplumber"
@@ -418,6 +422,8 @@ let
         default = "";
       };
     };
+
+    "niri/language" = niriLanguage;
 
     battery = sharedModules.battery // {
       # A narrow no-break space keeps the compact charging glyph clear of the digits.
