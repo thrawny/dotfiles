@@ -1013,14 +1013,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1784200231,
-        "narHash": "sha256-NMr3ylvnkWyvuwQcvTReXrAHc16fdaXG3NSYjCoSgCc=",
-        "path": "/home/thrawny/code/nix-pkgs",
-        "type": "path"
+        "lastModified": 1784282196,
+        "narHash": "sha256-07PJmXZVVoT0X02Nr2a6No7olPN7siiVUnULSWgb4/E=",
+        "owner": "thrawny",
+        "repo": "nix-pkgs",
+        "rev": "01ab6d7cead50c530d36104435b903e8efa52660",
+        "type": "github"
       },
       "original": {
-        "path": "/home/thrawny/code/nix-pkgs",
-        "type": "path"
+        "owner": "thrawny",
+        "repo": "nix-pkgs",
+        "type": "github"
       }
     },
     "treefmt-nix": {

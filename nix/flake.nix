@@ -29,7 +29,7 @@
     llm-agents.url = "github:numtide/llm-agents.nix";
     hermes-agent.url = "github:NousResearch/hermes-agent";
     thrawny-pkgs = {
-      url = "path:/home/thrawny/code/nix-pkgs";
+      url = "github:thrawny/nix-pkgs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     zmx.url = "github:thrawny/zmx-flake";
