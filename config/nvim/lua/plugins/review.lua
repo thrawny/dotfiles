@@ -54,6 +54,25 @@ return {
         { "<leader>rc", "<cmd>Review commits<cr>", desc = "Review commits" },
         { "<leader>rp", "<cmd>Review pr<cr>", desc = "Review GitHub PR" },
         {
+          "<leader>rf",
+          function()
+            local _, _, session = require("codediff.review").current_session()
+            local current_buf = vim.api.nvim_get_current_buf()
+            if not session or (current_buf ~= session.original_bufnr and current_buf ~= session.modified_bufnr) then
+              vim.notify("Focus a review diff pane to open its file", vim.log.levels.WARN)
+              return
+            end
+
+            local mapping = vim.fn.maparg("gf", "n", false, true)
+            if type(mapping) ~= "table" or type(mapping.callback) ~= "function" then
+              vim.notify("The CodeDiff open-file mapping is unavailable", vim.log.levels.WARN)
+              return
+            end
+            mapping.callback()
+          end,
+          desc = "Review file in normal buffer",
+        },
+        {
           "<leader>re",
           function()
             require("codediff.review").export_clipboard({ preview = false })
@@ -81,6 +100,9 @@ return {
         winbar = {
           enabled = true,
         },
+      },
+      explorer = {
+        view_mode = "tree",
       },
       keymaps = {
         view = {
