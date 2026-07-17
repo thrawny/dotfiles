@@ -54,8 +54,7 @@ let
     "Mod+S" = {
       action.spawn = [
         "agent-switch"
-        "niri"
-        "--toggle-agents"
+        "toggle"
       ];
       hotkey-overlay.title = "Agent Sessions";
     };

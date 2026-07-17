@@ -10,7 +10,8 @@
       {
         command = [
           "agent-switch"
-          "niri"
+          "serve"
+          "--niri"
         ];
       }
       { command = [ "niriusd" ]; }
