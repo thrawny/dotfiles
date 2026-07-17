@@ -50,7 +50,13 @@ return {
           end,
           desc = "Review",
         },
-        { "<leader>rm", "<cmd>Review commits origin/main HEAD<cr>", desc = "Review origin/main..HEAD" },
+        {
+          "<leader>rm",
+          function()
+            require("codediff.review").open_merge_base("origin/main", "HEAD")
+          end,
+          desc = "Review branch changes",
+        },
         { "<leader>rc", "<cmd>Review commits<cr>", desc = "Review commits" },
         { "<leader>rp", "<cmd>Review pr<cr>", desc = "Review GitHub PR" },
         {
