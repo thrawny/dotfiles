@@ -298,7 +298,7 @@ let
     "modules-left" = [ "niri/workspaces" ];
     "modules-center" = [ "niri/window" ];
     "niri/workspaces" = {
-      format = "{icon} {value}";
+      format = "{icon} {index} {name}";
       "format-icons" = {
         main = "󰧨";
         web = "󰖟";
@@ -385,7 +385,7 @@ let
     };
 
     "niri/workspaces" = {
-      format = "{icon} {value}";
+      format = "{icon} {index} {name}";
       "format-icons" = {
         main = "󰧨";
         web = "󰖟";
