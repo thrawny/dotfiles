@@ -27,4 +27,4 @@ elif [[ $rc -ne 0 ]]; then
   exit 0
 fi
 
-[[ -n "${dir:-}" ]] && niri-project "$dir"
+[[ -n "${dir:-}" ]] && niri-project --terminals 1 "$dir"
