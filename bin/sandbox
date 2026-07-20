@@ -344,6 +344,31 @@ sandbox() {
     fi
   done
 
+  # Expose only the selected host keys at OpenSSH's default path. These binds
+  # are applied after the ~/.ssh tmpfs, so direct `ssh` works without exposing
+  # the host's SSH config, private keys, or complete known_hosts inventory.
+  # Disable UpdateHostKeys because the selected known_hosts file is read-only.
+  if [[ -n "${SANDBOX_SSH_KNOWN_HOSTS:-}" ]]; then
+    local sandbox_known_hosts="${SANDBOX_SSH_KNOWN_HOSTS/#\~/$HOME}"
+    local runtime_dir="${XDG_RUNTIME_DIR:-/run/user/${UID}}"
+    if [[ ! -s "$sandbox_known_hosts" ]]; then
+      echo "sandbox: SSH known-hosts file missing or empty: $sandbox_known_hosts" >&2
+      exit 1
+    fi
+    # Stable path with constant content: safe to share between concurrent
+    # sandboxes and cleaned up with the runtime dir at logout.
+    local sandbox_ssh_config_file="$runtime_dir/sandbox-ssh-config"
+    printf 'Host *\n    UpdateHostKeys no\n' > "$sandbox_ssh_config_file"
+    chmod 600 "$sandbox_ssh_config_file"
+    args+=(
+      # Root-owned system SSH config appears as nobody-owned in bwrap's user
+      # namespace and OpenSSH rejects it. Use only the minimal config above.
+      --tmpfs /etc/ssh
+      --ro-bind "$sandbox_known_hosts" "$HOME/.ssh/known_hosts"
+      --ro-bind "$sandbox_ssh_config_file" "$HOME/.ssh/config"
+    )
+  fi
+
   # Block nested .aws dirs in work projects
   for d in ~/work/*/.aws; do
     [[ -d "$d" ]] && args+=(--tmpfs "$d")
