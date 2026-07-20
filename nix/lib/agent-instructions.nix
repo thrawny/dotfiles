@@ -35,12 +35,21 @@ rec {
     - Docker commands should use the sandbox-provided `DOCKER_HOST`; do not access `/var/run/docker.sock`.
   '';
 
+  contextManagement = ''
+    ## Context management
+
+    When a task is underway and context is running low (approaching auto-compact), write `handoff.md` unprompted before continuing: next goal, decisions made and why, files touched, current state, immediate action.
+
+    When the conversation is summarized for compaction, always preserve: the current goal and immediate next action; decisions made and their reasoning; paths of files read or modified and commits created; test/gate results and unresolved errors; anything deliberately left running (dev servers, background agents, acpx sessions).
+  '';
+
   claudeGlobal = ''
     # Global Claude Code Instructions
 
     ${ephemeralTools}
     ${shellPortability}
     ${sandbox}
+    ${contextManagement}
   '';
 
   codexGlobal = ''
