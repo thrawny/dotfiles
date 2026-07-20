@@ -1,5 +1,6 @@
 {
   "env": {
+    "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "300000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "true",
     "CLAUDE_CODE_TMPDIR": "/tmp/claude",
     "USE_BUILTIN_RIPGREP": "0"
@@ -88,6 +89,7 @@
     "command": "python3 ~/dotfiles/config/claude/status_line.py",
     "padding": 0
   },
+  "autoCompactEnabled": true,
   "plansDirectory": ".claude/plans",
   "skipDangerousModePermissionPrompt": true,
   "includeCoAuthoredBy": false

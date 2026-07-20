@@ -9,7 +9,7 @@
 # after compaction.
 #
 # Env:
-#   CLAUDE_CODE_AUTO_COMPACT_WINDOW  token window to measure against (default 200000)
+#   CLAUDE_CODE_AUTO_COMPACT_WINDOW  token window to measure against (default 300000)
 #   CLAUDE_CONTEXT_WATERMARK_PCT     percentage to start warning at (default 70)
 set -uo pipefail
 
@@ -42,7 +42,7 @@ main() {
   ) || return 0
   [[ "$usage" =~ ^[0-9]+$ ]] || return 0
 
-  window=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-200000}
+  window=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-300000}
   warn_pct=${CLAUDE_CONTEXT_WATERMARK_PCT:-70}
   pct=$((usage * 100 / window))
   band=$((pct / 5))
