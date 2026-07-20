@@ -45,10 +45,12 @@ main() {
   window=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-300000}
   warn_pct=${CLAUDE_CONTEXT_WATERMARK_PCT:-70}
   pct=$((usage * 100 / window))
-  band=$((pct / 5))
+  band=$((pct / 10))
 
-  # Debounce: warn once per 5%-band per session. When usage drops (compaction
-  # happened), lower the stored band so the next climb warns again.
+  # Debounce: warn once per 10%-band per session, so a typical run gets one
+  # handoff write (~70%) and one refresh (~80%) before compaction. When usage
+  # drops (compaction happened), lower the stored band so the next climb
+  # warns again.
   state_dir=${TMPDIR:-/tmp}/claude-context-watermark
   mkdir -p "$state_dir" 2>/dev/null || return 0
   state_file=$state_dir/$session

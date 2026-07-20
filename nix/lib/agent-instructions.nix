@@ -40,7 +40,7 @@ rec {
 
     When a task is underway and context is running low (approaching auto-compact), write `handoff.md` unprompted before continuing: next goal, decisions made and why, files touched, current state, immediate action.
 
-    When the conversation is summarized for compaction, always preserve: the current goal and immediate next action; decisions made and their reasoning; paths of files read or modified and commits created; test/gate results and unresolved errors; anything deliberately left running (dev servers, background agents, acpx sessions).
+    When the conversation is summarized for compaction, always preserve: the current goal and immediate next action; decisions made and their reasoning; paths of files read or modified and commits created; test/gate results and unresolved errors; anything deliberately left running (dev servers, background agents, acpx sessions). Write the summary as terse bullets — the preserved facts only, no narrative or process recap; a session auto-handoff carrying detailed state is injected after compaction, so the summary does not need to be exhaustive.
   '';
 
   claudeGlobal = ''
