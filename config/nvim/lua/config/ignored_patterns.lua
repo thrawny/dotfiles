@@ -13,6 +13,7 @@ local ignored = {
   { path = ".next", kind = "dir" },
   { path = ".open-next", kind = "dir" },
   { path = ".DS_Store", kind = "file" },
+  { path = ".sst", kind = "file" },
 }
 
 function M.fzf_lua_file_ignore_patterns()
