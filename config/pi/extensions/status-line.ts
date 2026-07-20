@@ -1,4 +1,4 @@
-import { execFile, execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -153,106 +153,77 @@ function getRuntimeBadge(): string | null {
 	return null;
 }
 
-const GIT_BRANCH_POLL_INTERVAL_MS = 2_000;
-const GIT_STATUS_CACHE_TTL_MS = 5_000;
+const GIT_POLL_INTERVAL_MS = 2_000;
 
-/**
- * Resolve HEAD without inspecting the worktree. This stays cheap in large repos
- * and provides a polling fallback when Pi's git metadata watcher misses an event.
- */
-export function resolveGitBranch(cwd: string): Promise<string | null> {
-	return new Promise((resolve) => {
-		execFile(
-			"git",
-			["--no-optional-locks", "symbolic-ref", "--quiet", "--short", "HEAD"],
-			{ cwd, encoding: "utf8", timeout: 1_000 },
-			(error, stdout) => {
-				if (error) {
-					resolve(error.code === 1 ? "detached" : null);
-					return;
-				}
-				resolve(stdout.trim() || null);
-			},
-		);
-	});
+export interface GitInfo {
+	branch: string | null;
+	symbols: string;
 }
 
-let gitStatusCache:
-	| {
-			cwd: string;
-			checkedAt: number;
-			value: string;
-	  }
-	| undefined;
+/** Parse `git status --porcelain=v2 --branch` into branch + starship-style symbols. */
+export function parseGitStatusV2(out: string): GitInfo {
+	let branch: string | null = null;
+	let ahead = 0;
+	let behind = 0;
+	let conflicted = false;
+	let deleted = false;
+	let renamed = false;
+	let modified = false;
+	let staged = false;
+	let untracked = false;
 
-/** Starship-style status symbols (=✘»!+? and ahead/behind arrows). */
-function getGitStatusSymbols(cwd: string): string {
-	const now = Date.now();
-	if (
-		gitStatusCache &&
-		gitStatusCache.cwd === cwd &&
-		now - gitStatusCache.checkedAt < GIT_STATUS_CACHE_TTL_MS
-	) {
-		return gitStatusCache.value;
+	for (const line of out.split("\n")) {
+		if (line.startsWith("# branch.head ")) {
+			const head = line.slice("# branch.head ".length);
+			branch = head === "(detached)" ? "detached" : head;
+		} else if (line.startsWith("# branch.ab ")) {
+			const parts = line.split(" ");
+			ahead = Math.abs(Number.parseInt(parts[2], 10)) || 0;
+			behind = Math.abs(Number.parseInt(parts[3], 10)) || 0;
+		} else if (line.startsWith("1 ") || line.startsWith("2 ")) {
+			const xy = line.split(" ", 3)[1];
+			const x = xy[0];
+			const y = xy[1];
+			if (x === "R" || y === "R") renamed = true;
+			if (x === "D" || y === "D") deleted = true;
+			if (x !== "." && x !== "R" && x !== "D") staged = true;
+			if (y !== "." && y !== "R" && y !== "D") modified = true;
+		} else if (line.startsWith("u ")) {
+			conflicted = true;
+		} else if (line.startsWith("? ")) {
+			untracked = true;
+		}
 	}
 
 	let symbols = "";
-	try {
-		const out = execFileSync(
+	if (conflicted) symbols += "=";
+	if (deleted) symbols += "✘";
+	if (renamed) symbols += "»";
+	if (modified) symbols += "!";
+	if (staged) symbols += "+";
+	if (untracked) symbols += "?";
+	if (ahead && behind) symbols += "⇕";
+	else if (ahead) symbols += "⇡";
+	else if (behind) symbols += "⇣";
+
+	return { branch, symbols };
+}
+
+/**
+ * Async branch + dirty-state poll. Complements Pi's git metadata watcher
+ * (which only covers branch changes) and keeps git out of the render path.
+ */
+export function resolveGitInfo(cwd: string): Promise<GitInfo | null> {
+	return new Promise((resolve) => {
+		execFile(
 			"git",
 			["--no-optional-locks", "status", "--porcelain=v2", "--branch"],
-			{
-				cwd,
-				encoding: "utf8",
-				timeout: 200,
-				stdio: ["ignore", "pipe", "ignore"],
+			{ cwd, encoding: "utf8", timeout: 1_500, maxBuffer: 10 * 1024 * 1024 },
+			(error, stdout) => {
+				resolve(error ? null : parseGitStatusV2(stdout));
 			},
 		);
-
-		let ahead = 0;
-		let behind = 0;
-		let conflicted = false;
-		let deleted = false;
-		let renamed = false;
-		let modified = false;
-		let staged = false;
-		let untracked = false;
-
-		for (const line of out.split("\n")) {
-			if (line.startsWith("# branch.ab ")) {
-				const parts = line.split(" ");
-				ahead = Math.abs(Number.parseInt(parts[2], 10)) || 0;
-				behind = Math.abs(Number.parseInt(parts[3], 10)) || 0;
-			} else if (line.startsWith("1 ") || line.startsWith("2 ")) {
-				const xy = line.split(" ", 3)[1];
-				const x = xy[0];
-				const y = xy[1];
-				if (x === "R" || y === "R") renamed = true;
-				if (x === "D" || y === "D") deleted = true;
-				if (x !== "." && x !== "R" && x !== "D") staged = true;
-				if (y !== "." && y !== "R" && y !== "D") modified = true;
-			} else if (line.startsWith("u ")) {
-				conflicted = true;
-			} else if (line.startsWith("? ")) {
-				untracked = true;
-			}
-		}
-
-		if (conflicted) symbols += "=";
-		if (deleted) symbols += "✘";
-		if (renamed) symbols += "»";
-		if (modified) symbols += "!";
-		if (staged) symbols += "+";
-		if (untracked) symbols += "?";
-		if (ahead && behind) symbols += "⇕";
-		else if (ahead) symbols += "⇡";
-		else if (behind) symbols += "⇣";
-	} catch {
-		symbols = "";
-	}
-
-	gitStatusCache = { cwd, checkedAt: now, value: symbols };
-	return symbols;
+	});
 }
 
 function install(
@@ -262,24 +233,37 @@ function install(
 ) {
 	ctx.ui.setFooter((tui, _theme, footerData) => {
 		let branch = footerData.getGitBranch();
-		let branchPollInFlight = false;
+		let statusSymbols = "";
 		let disposed = false;
+		let gitPollTimer: ReturnType<typeof setTimeout> | undefined;
 
-		const refreshBranch = () => {
-			if (disposed || branchPollInFlight) return;
-			branchPollInFlight = true;
+		const runGitPoll = () => {
+			if (disposed) return;
 			const cwd = getCurrentCtx()?.cwd ?? process.cwd();
-			void resolveGitBranch(cwd)
-				.then((nextBranch) => {
+			const startedAt = Date.now();
+			void resolveGitInfo(cwd)
+				.then((info) => {
 					// null means git was unavailable or cwd is not a repository. Keep
-					// FooterData's last known value rather than flickering on failures.
-					if (!disposed && nextBranch !== null && nextBranch !== branch) {
+					// the last known values rather than flickering on failures.
+					if (disposed || !info) return;
+					const nextBranch = info.branch ?? branch;
+					if (nextBranch !== branch || info.symbols !== statusSymbols) {
 						branch = nextBranch;
+						statusSymbols = info.symbols;
 						tui.requestRender();
 					}
 				})
 				.finally(() => {
-					branchPollInFlight = false;
+					if (disposed) return;
+					// Back off proportionally in repos where status is slow, so
+					// polling never uses more than a sliver of a core: a 20ms
+					// status polls every 2s, a 1s status only every 20s.
+					const duration = Date.now() - startedAt;
+					gitPollTimer = setTimeout(
+						runGitPoll,
+						Math.max(GIT_POLL_INTERVAL_MS, duration * 20),
+					);
+					gitPollTimer.unref();
 				});
 		};
 
@@ -287,12 +271,7 @@ function install(
 			branch = footerData.getGitBranch();
 			tui.requestRender();
 		});
-		const branchPollTimer = setInterval(
-			refreshBranch,
-			GIT_BRANCH_POLL_INTERVAL_MS,
-		);
-		branchPollTimer.unref();
-		refreshBranch();
+		runGitPoll();
 
 		const safe = <T>(fn: () => T, fallback: T): T => {
 			try {
@@ -305,7 +284,7 @@ function install(
 		return {
 			dispose() {
 				disposed = true;
-				clearInterval(branchPollTimer);
+				if (gitPollTimer) clearTimeout(gitPollTimer);
 				unsub();
 			},
 			invalidate() {},
@@ -317,9 +296,6 @@ function install(
 							undefined,
 						)
 					: undefined;
-				const statusSymbols = getGitStatusSymbols(
-					activeCtx?.cwd ?? process.cwd(),
-				);
 				const runtimeBadge = getRuntimeBadge();
 				const { backgroundStatus, remaining: extensionStatuses } =
 					partitionExtensionStatuses(

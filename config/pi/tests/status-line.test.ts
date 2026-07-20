@@ -7,7 +7,7 @@ import {
 	isCodexFastEnabled,
 	normalizeExtensionStatuses,
 	partitionExtensionStatuses,
-	resolveGitBranch,
+	resolveGitInfo,
 } from "../extensions/status-line.ts";
 
 describe("status line extension statuses", () => {
@@ -39,18 +39,31 @@ describe("status line extension statuses", () => {
 		});
 	});
 
-	it("refreshes the branch directly from git metadata", async () => {
+	it("refreshes branch and dirty state directly from git", async () => {
 		const dir = mkdtempSync(join(tmpdir(), "pi-statusline-git-"));
 		try {
 			execFileSync("git", ["init", "--quiet", "--initial-branch", "first"], {
 				cwd: dir,
 			});
-			expect(await resolveGitBranch(dir)).toBe("first");
+			expect((await resolveGitInfo(dir))?.branch).toBe("first");
+			expect((await resolveGitInfo(dir))?.symbols).toBe("");
 
 			execFileSync("git", ["symbolic-ref", "HEAD", "refs/heads/second"], {
 				cwd: dir,
 			});
-			expect(await resolveGitBranch(dir)).toBe("second");
+			expect((await resolveGitInfo(dir))?.branch).toBe("second");
+
+			writeFileSync(join(dir, "untracked.txt"), "hi");
+			expect((await resolveGitInfo(dir))?.symbols).toBe("?");
+		} finally {
+			rmSync(dir, { recursive: true, force: true });
+		}
+	});
+
+	it("returns null outside a git repository", async () => {
+		const dir = mkdtempSync(join(tmpdir(), "pi-statusline-nogit-"));
+		try {
+			expect(await resolveGitInfo(dir)).toBeNull();
 		} finally {
 			rmSync(dir, { recursive: true, force: true });
 		}
