@@ -263,8 +263,8 @@
         "--border"
         "--info=inline"
       ];
-      fileWidgetOptions = [ "--preview 'bat --style=numbers --color=always --line-range :100 {}'" ];
-      changeDirWidgetCommand = "fd --type d --hidden --follow --exclude .git --exclude .venv --exclude node_modules";
+      fileWidget.options = [ "--preview 'bat --style=numbers --color=always --line-range :100 {}'" ];
+      changeDirWidget.command = "fd --type d --hidden --follow --exclude .git --exclude .venv --exclude node_modules";
       defaultCommand = "fd --type f --hidden --follow --exclude .git --exclude .venv --exclude node_modules";
     };
 

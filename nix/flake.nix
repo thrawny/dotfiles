@@ -8,6 +8,7 @@
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
     hunk.url = "github:modem-dev/hunk";
+    hunk.inputs.bun2nix.inputs.systems.follows = "linux-systems";
     nix-index-database.url = "github:Mic92/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
     nixos-hardware.url = "github:NixOS/nixos-hardware";
@@ -16,6 +17,7 @@
     zen-browser.inputs.nixpkgs.follows = "nixpkgs";
     helium-browser.url = "github:schembriaiden/helium-browser-nix-flake";
     helium-browser.inputs.nixpkgs.follows = "nixpkgs";
+    linux-systems.url = "github:nix-systems/default-linux";
     elephant.url = "github:abenz1267/elephant";
     walker.url = "github:abenz1267/walker";
     walker.inputs.elephant.follows = "elephant";
