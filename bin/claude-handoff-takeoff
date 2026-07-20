@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# SessionStart hook (matcher: compact): inject this session's auto-handoff.
+#
+# The companion PostToolUse hook (claude-context-watermark) has the model
+# write a session-scoped handoff before auto-compact fires. After compaction,
+# this hook injects that file's content directly into context and consumes
+# the file, so nothing stale survives. Files are keyed by session id, so a
+# handoff can never leak into another session.
+set -uo pipefail
+
+main() {
+  local input session dir file content
+
+  input=$(cat) || return 0
+  session=$(jq -r '.session_id // empty' <<<"$input" 2>/dev/null) || return 0
+  [[ -n "$session" && "$session" != */* ]] || return 0
+
+  dir=${XDG_STATE_HOME:-$HOME/.local/state}/claude/handoffs
+  [[ -d "$dir" ]] || return 0
+
+  # Prune handoffs from sessions that ended without ever compacting.
+  find "$dir" -maxdepth 1 -name '*.md' -mtime +7 -delete 2>/dev/null
+
+  file=$dir/$session.md
+  [[ -f "$file" ]] || return 0
+  content=$(cat "$file" 2>/dev/null) || return 0
+  rm -f "$file" 2>/dev/null
+  [[ -n "$content" ]] || return 0
+
+  jq -n --arg ctx "This session wrote an auto-handoff just before compaction; its content follows. Where it disagrees with the compaction summary, trust the handoff. Act on its immediate next action.
+
+---
+${content}" \
+    '{hookSpecificOutput: {hookEventName: "SessionStart", additionalContext: $ctx}}'
+}
+
+main
+exit 0

@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# PostToolUse hook: warn the model when context usage crosses a watermark.
+#
+# Reads the hook JSON on stdin, estimates current context occupancy from the
+# last assistant usage block in the session transcript, and injects an
+# additionalContext warning once per 5%-band above the watermark so the model
+# writes a session-scoped auto-handoff before auto-compact fires. The
+# companion SessionStart hook (claude-handoff-takeoff) injects that file back
+# after compaction.
+#
+# Env:
+#   CLAUDE_CODE_AUTO_COMPACT_WINDOW  token window to measure against (default 200000)
+#   CLAUDE_CONTEXT_WATERMARK_PCT     percentage to start warning at (default 70)
+set -uo pipefail
+
+main() {
+  local input transcript session usage window warn_pct pct band
+  local state_dir state_file last_band handoff_dir
+
+  input=$(cat) || return 0
+  transcript=$(jq -r '.transcript_path // empty' <<<"$input" 2>/dev/null) || return 0
+  session=$(jq -r '.session_id // empty' <<<"$input" 2>/dev/null) || return 0
+  [[ -f "$transcript" && -n "$session" && "$session" != */* ]] || return 0
+
+  # The last assistant message's usage block reflects the input size of the
+  # most recent API call, i.e. current context occupancy. Zero-usage blocks
+  # (compact boundaries, synthetic entries) are skipped.
+  usage=$(
+    tail -n 500 "$transcript" 2>/dev/null | jq -rs '
+      [ .[]
+        | select(.type == "assistant")
+        | .message.usage
+        | select(. != null and .input_tokens != null)
+        | (.input_tokens
+           + (.cache_read_input_tokens // 0)
+           + (.cache_creation_input_tokens // 0)
+           + (.output_tokens // 0))
+        | select(. > 0)
+      ]
+      | last // empty
+    ' 2>/dev/null
+  ) || return 0
+  [[ "$usage" =~ ^[0-9]+$ ]] || return 0
+
+  window=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-200000}
+  warn_pct=${CLAUDE_CONTEXT_WATERMARK_PCT:-70}
+  pct=$((usage * 100 / window))
+  band=$((pct / 5))
+
+  # Debounce: warn once per 5%-band per session. When usage drops (compaction
+  # happened), lower the stored band so the next climb warns again.
+  state_dir=${TMPDIR:-/tmp}/claude-context-watermark
+  mkdir -p "$state_dir" 2>/dev/null || return 0
+  state_file=$state_dir/$session
+  last_band=$(cat "$state_file" 2>/dev/null) || last_band=0
+  [[ "$last_band" =~ ^[0-9]+$ ]] || last_band=0
+  if ((band < last_band)); then
+    echo "$band" >"$state_file" 2>/dev/null
+    return 0
+  fi
+  ((pct >= warn_pct && band > last_band)) || return 0
+  echo "$band" >"$state_file" 2>/dev/null
+
+  handoff_dir=${XDG_STATE_HOME:-$HOME/.local/state}/claude/handoffs
+  jq -n --arg ctx "Context usage is at ~${pct}% of the ${window}-token auto-compact window. Write a session auto-handoff to ${handoff_dir}/${session}.md now (create the directory if needed), then continue the task. Include: the next goal; decisions made and why; paths of files touched; test/gate results and unresolved errors; anything deliberately left running (dev servers, background agents, acpx sessions); the immediate next action. Keep it under ~1000 tokens. This is separate from the manual handoff flow — do not touch any handoff.md in the repo." \
+    '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $ctx}}'
+}
+
+main
+exit 0

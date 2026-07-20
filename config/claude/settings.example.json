@@ -12,6 +12,16 @@
     "defaultMode": "auto"
   },
   "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "claude-context-watermark"
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
@@ -49,6 +59,15 @@
           {
             "type": "command",
             "command": "agent-switch track session-start --agent claude"
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "claude-handoff-takeoff"
           }
         ]
       }
