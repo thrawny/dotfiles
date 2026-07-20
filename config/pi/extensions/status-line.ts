@@ -8,19 +8,23 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 
-const START_CAP = "\ue0b6";
-const SEP = "\ue0b4";
-const END_CAP = "\ue0b4";
 const RESET = "\x1b[0m";
+const BOLD = "\x1b[1m";
+const DIM = "\x1b[2m";
 
-const COLORS = {
-	white: "#ffffff",
-	black: "#000000",
-	darkRed: "#8b4a48",
+const BRANCH_GLYPH = "";
+const BOLT = "";
+
+// Monokai
+const MK = {
+	cyan: "#66d9ef",
+	yellow: "#e6db74",
+	orange: "#fd971f",
+	red: "#f92672",
 	pink: "#f92672",
-	yellow: "#ffd602",
-	blue: "#5f87d7",
-	green: "#87af87",
+	gray: "#75715e",
+	lightGray: "#a59f85",
+	line: "#49483e",
 };
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -37,28 +41,16 @@ function fgTrue(hex: string): string {
 	return `\x1b[38;2;${r};${g};${b}m`;
 }
 
-function bgTrue(hex: string): string {
-	const [r, g, b] = hexToRgb(hex);
-	return `\x1b[48;2;${r};${g};${b}m`;
-}
+const DIVIDER = ` ${fgTrue(MK.line)}│${RESET} `;
 
-function reset(): string {
-	return RESET;
-}
-
-function segment(
-	text: string,
-	fg: string,
-	bg: string,
-	nextBg?: string,
-): string {
-	let out = `${fgTrue(fg)}${bgTrue(bg)} ${text} `;
-	if (nextBg) {
-		out += `${fgTrue(bg)}${bgTrue(nextBg)}${SEP}`;
-		return out;
+/** Shorten known model ids, e.g. "gpt-5.6-sol" → "Sol 5.6". */
+function modelDisplayName(id: string): string {
+	const match = id.match(/gpt-(\d+(?:\.\d+)?)-(sol|terra|luna)/);
+	if (match) {
+		const [, version, codename] = match;
+		return `${codename[0].toUpperCase()}${codename.slice(1)} ${version}`;
 	}
-	out += `${reset()}${fgTrue(bg)}${END_CAP}${reset()}`;
-	return out;
+	return id;
 }
 
 function formatTokens(tokens: number): string {
@@ -147,29 +139,21 @@ export function isCodexFastEnabled(
 	}
 }
 
-function getRuntimeBadge(): { text: string; fg: string; bg: string } | null {
+function getRuntimeBadge(): string | null {
 	if (envFlagSet("SANDBOX")) {
-		return {
-			text: "🫧",
-			fg: COLORS.white,
-			bg: COLORS.darkRed,
-		};
+		return "🫧";
 	}
 
 	const incusContainer = process.env.INCUS_CONTAINER?.trim();
 	if (incusContainer) {
-		return {
-			text: `🐳 ${incusContainer}`,
-			fg: COLORS.white,
-			bg: COLORS.blue,
-		};
+		return `🐳 ${fgTrue(MK.lightGray)}${incusContainer}${RESET}`;
 	}
 
 	return null;
 }
 
 const GIT_BRANCH_POLL_INTERVAL_MS = 2_000;
-const GIT_CHANGES_CACHE_TTL_MS = 5_000;
+const GIT_STATUS_CACHE_TTL_MS = 5_000;
 
 /**
  * Resolve HEAD without inspecting the worktree. This stays cheap in large repos
@@ -192,55 +176,82 @@ export function resolveGitBranch(cwd: string): Promise<string | null> {
 	});
 }
 
-let gitChangesCache:
+let gitStatusCache:
 	| {
 			cwd: string;
 			checkedAt: number;
-			value: { added: number; removed: number } | null;
+			value: string;
 	  }
 	| undefined;
 
-function getGitChanges(cwd: string): { added: number; removed: number } | null {
+/** Starship-style status symbols (=✘»!+? and ahead/behind arrows). */
+function getGitStatusSymbols(cwd: string): string {
 	const now = Date.now();
 	if (
-		gitChangesCache &&
-		gitChangesCache.cwd === cwd &&
-		now - gitChangesCache.checkedAt < GIT_CHANGES_CACHE_TTL_MS
+		gitStatusCache &&
+		gitStatusCache.cwd === cwd &&
+		now - gitStatusCache.checkedAt < GIT_STATUS_CACHE_TTL_MS
 	) {
-		return gitChangesCache.value;
+		return gitStatusCache.value;
 	}
 
+	let symbols = "";
 	try {
-		const out = execFileSync("git", ["diff", "--shortstat"], {
-			cwd,
-			encoding: "utf8",
-			timeout: 100,
-			stdio: ["ignore", "pipe", "ignore"],
-		}).trim();
-		if (!out) {
-			gitChangesCache = {
+		const out = execFileSync(
+			"git",
+			["--no-optional-locks", "status", "--porcelain=v2", "--branch"],
+			{
 				cwd,
-				checkedAt: now,
-				value: { added: 0, removed: 0 },
-			};
-			return gitChangesCache.value;
+				encoding: "utf8",
+				timeout: 200,
+				stdio: ["ignore", "pipe", "ignore"],
+			},
+		);
+
+		let ahead = 0;
+		let behind = 0;
+		let conflicted = false;
+		let deleted = false;
+		let renamed = false;
+		let modified = false;
+		let staged = false;
+		let untracked = false;
+
+		for (const line of out.split("\n")) {
+			if (line.startsWith("# branch.ab ")) {
+				const parts = line.split(" ");
+				ahead = Math.abs(Number.parseInt(parts[2], 10)) || 0;
+				behind = Math.abs(Number.parseInt(parts[3], 10)) || 0;
+			} else if (line.startsWith("1 ") || line.startsWith("2 ")) {
+				const xy = line.split(" ", 3)[1];
+				const x = xy[0];
+				const y = xy[1];
+				if (x === "R" || y === "R") renamed = true;
+				if (x === "D" || y === "D") deleted = true;
+				if (x !== "." && x !== "R" && x !== "D") staged = true;
+				if (y !== "." && y !== "R" && y !== "D") modified = true;
+			} else if (line.startsWith("u ")) {
+				conflicted = true;
+			} else if (line.startsWith("? ")) {
+				untracked = true;
+			}
 		}
 
-		const addMatch = out.match(/(\d+) insertion/);
-		const delMatch = out.match(/(\d+) deletion/);
-		gitChangesCache = {
-			cwd,
-			checkedAt: now,
-			value: {
-				added: addMatch ? Number.parseInt(addMatch[1], 10) : 0,
-				removed: delMatch ? Number.parseInt(delMatch[1], 10) : 0,
-			},
-		};
-		return gitChangesCache.value;
+		if (conflicted) symbols += "=";
+		if (deleted) symbols += "✘";
+		if (renamed) symbols += "»";
+		if (modified) symbols += "!";
+		if (staged) symbols += "+";
+		if (untracked) symbols += "?";
+		if (ahead && behind) symbols += "⇕";
+		else if (ahead) symbols += "⇡";
+		else if (behind) symbols += "⇣";
 	} catch {
-		gitChangesCache = { cwd, checkedAt: now, value: null };
-		return null;
+		symbols = "";
 	}
+
+	gitStatusCache = { cwd, checkedAt: now, value: symbols };
+	return symbols;
 }
 
 function install(
@@ -305,7 +316,9 @@ function install(
 							undefined,
 						)
 					: undefined;
-				const changes = getGitChanges(activeCtx?.cwd ?? process.cwd());
+				const statusSymbols = getGitStatusSymbols(
+					activeCtx?.cwd ?? process.cwd(),
+				);
 				const runtimeBadge = getRuntimeBadge();
 				const { backgroundStatus, remaining: extensionStatuses } =
 					partitionExtensionStatuses(
@@ -323,75 +336,55 @@ function install(
 				if (!Number.isFinite(percent)) percent = 0;
 				if (!Number.isFinite(tokens)) tokens = 0;
 
-				let ctxFg = COLORS.black;
-				let ctxBg = COLORS.yellow;
-				let warn = "";
+				const ctxText = `${formatTokens(Math.max(0, Math.round(tokens)))} ${percent.toFixed(0)}%`;
+				let ctxPart: string;
 				if (percent >= 90) {
-					ctxFg = COLORS.white;
-					ctxBg = COLORS.darkRed;
-					warn = "\uf0e7 ";
+					ctxPart = `${BOLD}${fgTrue(MK.red)}${BOLT} ${ctxText}${RESET}`;
 				} else if (percent >= 80) {
-					warn = "\uf071 ";
+					ctxPart = `${fgTrue(MK.orange)}${ctxText}${RESET}`;
+				} else {
+					ctxPart = `${fgTrue(MK.gray)}${ctxText}${RESET}`;
 				}
-
-				const segmentSpecs: Array<{ text: string; fg: string; bg: string }> = [
-					{
-						text: `${warn}${formatTokens(Math.max(0, Math.round(tokens)))} ${percent.toFixed(1)}%`,
-						fg: ctxFg,
-						bg: ctxBg,
-					},
-				];
-
-				if (branch) {
-					segmentSpecs.push({
-						text: `\ue0a0 ${truncate(branch)}`,
-						fg: COLORS.white,
-						bg: COLORS.blue,
-					});
-				}
-
-				if (changes) {
-					segmentSpecs.push({
-						text: `+${changes.added}, -${changes.removed}`,
-						fg: COLORS.black,
-						bg: COLORS.green,
-					});
-				}
-
-				if (runtimeBadge) {
-					segmentSpecs.push(runtimeBadge);
-				}
-
-				if (backgroundStatus) {
-					segmentSpecs.push({
-						text: backgroundStatus,
-						fg: COLORS.black,
-						bg: COLORS.pink,
-					});
-				}
-
-				const segments = segmentSpecs.map((part, index) =>
-					segment(part.text, part.fg, part.bg, segmentSpecs[index + 1]?.bg),
-				);
-
-				const left = `${fgTrue(segmentSpecs[0].bg)}${START_CAP}${reset()}${segments.join("")}`;
 
 				const model = activeCtx
 					? safe(() => activeCtx.model, undefined)
 					: undefined;
 				const thinking = activeCtx ? safe(getThinkingLevel, "off") : "off";
-				let rightText = model ? `${model.provider}/${model.id}` : "no-model";
-				if (model?.reasoning) {
-					rightText =
-						thinking === "off"
-							? `${rightText} • thinking off`
-							: `${rightText} • ${thinking}`;
-				}
-				if (extensionStatuses.length > 0) {
-					rightText = `${rightText} • ${extensionStatuses.join(" • ")}`;
+				const modelPart = model
+					? `${BOLD}${fgTrue(MK.cyan)}${modelDisplayName(model.id)}${RESET}`
+					: `${fgTrue(MK.gray)}no-model${RESET}`;
+
+				const parts: string[] = [modelPart, ctxPart];
+
+				if (branch) {
+					let gitPart = `${fgTrue(MK.yellow)}${BRANCH_GLYPH} ${truncate(branch, 32)}${RESET}`;
+					if (statusSymbols) {
+						gitPart += ` ${fgTrue(MK.orange)}${statusSymbols}${RESET}`;
+					}
+					parts.push(gitPart);
 				}
 
-				const right = `\x1b[2m${rightText}\x1b[0m`;
+				if (runtimeBadge) {
+					parts.push(runtimeBadge);
+				}
+
+				if (backgroundStatus) {
+					parts.push(`${fgTrue(MK.pink)}${backgroundStatus}${RESET}`);
+				}
+
+				const left = parts.join(DIVIDER);
+
+				const rightPieces: string[] = [];
+				if (model?.reasoning) {
+					rightPieces.push(thinking === "off" ? "thinking off" : thinking);
+				}
+				// Strip embedded ANSI so extension statuses can't override the
+				// uniform dim styling of the right side.
+				rightPieces.push(...extensionStatuses.map(stripAnsi));
+				const right =
+					rightPieces.length > 0
+						? `${DIM}${rightPieces.join(" • ")}${RESET}`
+						: "";
 
 				const leftWidth = visibleWidth(left);
 				const rightWidth = visibleWidth(right);
@@ -407,7 +400,9 @@ function install(
 							const rightPad = " ".repeat(
 								centerPad - Math.floor(centerPad / 2),
 							);
-							return [`${left}${leftPad}${renderedCenter}${rightPad}${right}`];
+							return [
+								`${left}${leftPad}${DIM}${renderedCenter}${RESET}${rightPad}${right}`,
+							];
 						}
 					}
 				}
@@ -445,7 +440,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("statusline", {
-		description: "Apply Claude-like powerline status footer",
+		description: "Apply minimal monokai status footer",
 		handler: async (_args, ctx) => {
 			apply(ctx);
 			ctx.ui.notify("Applied status line", "info");

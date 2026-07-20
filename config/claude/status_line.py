@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code status line with powerline styling and nerd font symbols."""
+"""Claude Code status line: minimal flat, monokai, starship-style git status."""
 
 # pyright: basic
 
@@ -8,110 +8,95 @@ import os
 import subprocess
 import sys
 
-# Powerline symbols (nerd font) - rounded style
-SEP = "\ue0b4"  # Rounded right arrow separator
-START_CAP = "\ue0b6"  # Rounded left cap
-END_CAP = "\ue0b4"  # Rounded right cap
+# Monokai
+CYAN = "66d9ef"
+YELLOW = "e6db74"
+ORANGE = "fd971f"
+RED = "f92672"
+GRAY = "75715e"
+LIGHT_GRAY = "a59f85"
+LINE = "49483e"
+
+RESET = "\033[0m"
+BOLD = "\033[1m"
+
+BRANCH_GLYPH = ""
+BOLT = ""
 
 
-def hex_to_rgb(hex_color: str) -> tuple[int, int, int]:
-    """Convert hex color to RGB tuple."""
-    return (
-        int(hex_color[0:2], 16),
-        int(hex_color[2:4], 16),
-        int(hex_color[4:6], 16),
-    )
-
-
-def fg_true(hex_color: str) -> str:
-    """True color foreground."""
-    r, g, b = hex_to_rgb(hex_color)
+def fg(hex_color: str) -> str:
+    r = int(hex_color[0:2], 16)
+    g = int(hex_color[2:4], 16)
+    b = int(hex_color[4:6], 16)
     return f"\033[38;2;{r};{g};{b}m"
 
 
-def bg_true(hex_color: str) -> str:
-    """True color background."""
-    r, g, b = hex_to_rgb(hex_color)
-    return f"\033[48;2;{r};{g};{b}m"
+DIVIDER = f" {fg(LINE)}│{RESET} "
 
 
-# Color scheme (fg_hex, bg_hex)
-WHITE = "ffffff"
-BLACK = "000000"
-RED = "ae605e"
-DARK_RED = "8b4a48"
-YELLOW = "ffd602"
-BLUE = "5f87d7"
-GREEN = "87af87"
-
-COLORS = {
-    "model": (WHITE, RED),
-    "tokens": (BLACK, YELLOW),
-    "percentage": (BLACK, YELLOW),
-    "percentage_warn": (BLACK, YELLOW),
-    "percentage_crit": (WHITE, DARK_RED),
-    "branch": (WHITE, BLUE),
-    "changes": (BLACK, GREEN),
-    "sandbox": (WHITE, DARK_RED),
-    "container": (WHITE, BLUE),
-}
-
-
-def reset() -> str:
-    return "\033[0m"
-
-
-def segment(text: str, fg_color: str, bg_color: str, next_bg: str | None = None) -> str:
-    """Create a powerline segment with rounded separator."""
-    result = f"{fg_true(fg_color)}{bg_true(bg_color)} {text} "
-    if next_bg:
-        result += f"{fg_true(bg_color)}{bg_true(next_bg)}{SEP}"
-    else:
-        # Last segment - use rounded end cap
-        result += f"{reset()}{fg_true(bg_color)}{END_CAP}{reset()}"
-    return result
-
-
-def get_git_branch() -> str | None:
-    """Get the current git branch name."""
+def get_git_info() -> tuple[str | None, str]:
+    """Return (branch, starship-style status symbols) from one porcelain call."""
     try:
         result = subprocess.run(
-            ["git", "symbolic-ref", "--short", "HEAD"],
+            ["git", "--no-optional-locks", "status", "--porcelain=v2", "--branch"],
             capture_output=True,
             text=True,
-            timeout=1,
+            timeout=2,
         )
-        if result.returncode == 0:
-            return result.stdout.strip()
-    except (
-        subprocess.TimeoutExpired,
-        subprocess.CalledProcessError,
-        FileNotFoundError,
-    ):
-        pass
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return (None, "")
+    if result.returncode != 0:
+        return (None, "")
 
-    # Fallback: read .git/HEAD directly
-    if os.path.exists(".git"):
-        try:
-            if os.path.isfile(".git"):
-                with open(".git") as f:
-                    gitdir_line = f.read().strip()
-                    if gitdir_line.startswith("gitdir: "):
-                        gitdir = gitdir_line[8:]
-                        head_file = os.path.join(gitdir, "HEAD")
-                        if os.path.exists(head_file):
-                            with open(head_file) as f:
-                                ref = f.read().strip()
-                                if ref.startswith("ref: refs/heads/"):
-                                    return ref.replace("ref: refs/heads/", "")
-            else:
-                with open(".git/HEAD") as f:
-                    ref = f.read().strip()
-                    if ref.startswith("ref: refs/heads/"):
-                        return ref.replace("ref: refs/heads/", "")
-        except OSError:
-            pass
-    return None
+    branch: str | None = None
+    ahead = behind = 0
+    conflicted = deleted = renamed = modified = staged = untracked = False
+
+    for line in result.stdout.splitlines():
+        if line.startswith("# branch.head "):
+            head = line[len("# branch.head ") :]
+            branch = None if head == "(detached)" else head
+        elif line.startswith("# branch.ab "):
+            parts = line.split()
+            ahead = int(parts[2])
+            behind = abs(int(parts[3]))
+        elif line.startswith(("1 ", "2 ")):
+            xy = line.split(" ", 2)[1]
+            x, y = xy[0], xy[1]
+            if x == "R" or y == "R":
+                renamed = True
+            if x == "D" or y == "D":
+                deleted = True
+            if x not in ".RD":
+                staged = True
+            if y not in ".RD":
+                modified = True
+        elif line.startswith("u "):
+            conflicted = True
+        elif line.startswith("? "):
+            untracked = True
+
+    symbols = ""
+    if conflicted:
+        symbols += "="
+    if deleted:
+        symbols += "✘"
+    if renamed:
+        symbols += "»"
+    if modified:
+        symbols += "!"
+    if staged:
+        symbols += "+"
+    if untracked:
+        symbols += "?"
+    if ahead and behind:
+        symbols += "⇕"
+    elif ahead:
+        symbols += "⇡"
+    elif behind:
+        symbols += "⇣"
+
+    return (branch, symbols)
 
 
 def env_flag_set(name: str) -> bool:
@@ -122,48 +107,16 @@ def env_flag_set(name: str) -> bool:
     return value.strip().lower() not in {"0", "false"}
 
 
-def get_runtime_badge() -> tuple[str, tuple[str, str]] | None:
-    """Return the badge text/colors for the current runtime environment."""
+def get_runtime_badge() -> str | None:
+    """Badge for the current runtime environment."""
     if env_flag_set("SANDBOX"):
-        return ("🫧", COLORS["sandbox"])
+        return "\U0001fae7"  # 🫧
 
     incus_container = os.getenv("INCUS_CONTAINER", "").strip()
     if incus_container:
-        return (f"🐳 {incus_container}", COLORS["container"])
+        return f"\U0001f433 {fg(LIGHT_GRAY)}{incus_container}{RESET}"  # 🐳 name
 
     return None
-
-
-def get_git_changes() -> tuple[int, int] | None:
-    """Get git changes as (added, removed) line counts."""
-    try:
-        result = subprocess.run(
-            ["git", "diff", "--shortstat"],
-            capture_output=True,
-            text=True,
-            timeout=2,
-        )
-        if result.returncode == 0 and result.stdout.strip():
-            output = result.stdout.strip()
-            added = removed = 0
-            if "insertion" in output:
-                for part in output.split(","):
-                    if "insertion" in part:
-                        added = int(part.split()[0])
-                    elif "deletion" in part:
-                        removed = int(part.split()[0])
-            elif "deletion" in output:
-                for part in output.split(","):
-                    if "deletion" in part:
-                        removed = int(part.split()[0])
-            return (added, removed)
-        return (0, 0)
-    except (
-        subprocess.TimeoutExpired,
-        subprocess.CalledProcessError,
-        FileNotFoundError,
-    ):
-        return None
 
 
 def format_tokens(tokens: int) -> str:
@@ -232,103 +185,43 @@ def get_context_from_transcript(
 def main() -> None:
     data = json.load(sys.stdin)
 
-    # Model name
     model = data.get("model", {}).get("display_name", "Claude")
     model = model.replace("Claude ", "")  # Shorten "Claude Opus 4.5" to "Opus 4.5"
 
-    # Context info (try new API first, fallback to transcript)
     window_size = data.get("context_window", {}).get("context_window_size", 200_000)
     context_info = get_context_from_input(data)
     if not context_info and "transcript_path" in data:
         context_info = get_context_from_transcript(data["transcript_path"], window_size)
 
-    # Git info
-    branch = get_git_branch()
-    changes = get_git_changes()
+    parts = [f"{BOLD}{fg(CYAN)}{model}{RESET}"]
 
-    # Build segments
-    segments = []
-
-    # Determine what segments we have and calculate context colors
-    has_branch = branch is not None
-    has_changes = changes is not None
-    runtime_badge = get_runtime_badge()
-    has_runtime_badge = runtime_badge is not None
-
-    # Calculate context colors and warning state based on usage percentage
-    ctx_colors: tuple[str, str] | None = None
-    ctx_warn_symbol = ""
     if context_info:
-        _, percentage = context_info
-        if percentage >= 90:
-            ctx_colors = COLORS["percentage_crit"]
-            ctx_warn_symbol = "\uf0e7 "  # nf-fa-bolt
-        elif percentage >= 67:  # ~100k tokens
-            ctx_colors = COLORS["percentage_warn"]
-            ctx_warn_symbol = "\uf071 "  # nf-fa-warning
-        else:
-            ctx_colors = COLORS["percentage"]
-
-    # Model segment
-    if ctx_colors:
-        next_bg = ctx_colors[1]
-    elif has_branch:
-        next_bg = COLORS["branch"][1]
-    elif has_changes:
-        next_bg = COLORS["changes"][1]
-    elif has_runtime_badge:
-        next_bg = runtime_badge[1][1]
-    else:
-        next_bg = None
-    segments.append(segment(model, *COLORS["model"], next_bg))
-
-    # Context segment (tokens + percentage)
-    if context_info and ctx_colors:
         tokens, percentage = context_info
-        token_str = format_tokens(tokens)
-
-        if has_branch:
-            next_bg = COLORS["branch"][1]
-        elif has_changes:
-            next_bg = COLORS["changes"][1]
-        elif has_runtime_badge:
-            next_bg = runtime_badge[1][1]
+        # Percentage is against the auto-compact window when one is configured,
+        # not the model's full context window.
+        compact_window = os.getenv("CLAUDE_CODE_AUTO_COMPACT_WINDOW", "")
+        if compact_window.isdigit() and int(compact_window) > 0:
+            percentage = min(100, tokens / int(compact_window) * 100)
+        text = f"{format_tokens(tokens)} {percentage:.0f}%"
+        if percentage >= 90:
+            parts.append(f"{BOLD}{fg(RED)}{BOLT} {text}{RESET}")
+        elif percentage >= 80:
+            parts.append(f"{fg(ORANGE)}{text}{RESET}")
         else:
-            next_bg = None
-        segments.append(
-            segment(
-                f"{ctx_warn_symbol}{token_str} {percentage:.1f}%",
-                ctx_colors[0],
-                ctx_colors[1],
-                next_bg,
-            )
-        )
+            parts.append(f"{fg(GRAY)}{text}{RESET}")
 
-    # Git branch segment
+    branch, symbols = get_git_info()
     if branch:
-        if has_changes:
-            next_bg = COLORS["changes"][1]
-        elif has_runtime_badge:
-            next_bg = runtime_badge[1][1]
-        else:
-            next_bg = None
-        segments.append(
-            segment(f"\ue0a0 {truncate(branch)}", *COLORS["branch"], next_bg)
-        )
+        git_part = f"{fg(YELLOW)}{BRANCH_GLYPH} {truncate(branch)}{RESET}"
+        if symbols:
+            git_part += f" {fg(ORANGE)}{symbols}{RESET}"
+        parts.append(git_part)
 
-    # Git changes segment
-    if changes:
-        added, removed = changes
-        next_bg = runtime_badge[1][1] if has_runtime_badge else None
-        segments.append(segment(f"+{added}, -{removed}", *COLORS["changes"], next_bg))
+    badge = get_runtime_badge()
+    if badge:
+        parts.append(badge)
 
-    if runtime_badge:
-        segments.append(segment(runtime_badge[0], *runtime_badge[1], None))
-
-    # Output with rounded start cap
-    output = f"{fg_true(COLORS['model'][1])}{START_CAP}{reset()}"
-    output += "".join(segments)
-    print(output)
+    print(DIVIDER.join(parts))
 
 
 if __name__ == "__main__":
