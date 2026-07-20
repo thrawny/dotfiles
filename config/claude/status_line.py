@@ -13,6 +13,7 @@ CYAN = "66d9ef"
 YELLOW = "e6db74"
 ORANGE = "fd971f"
 RED = "f92672"
+PURPLE = "ae81ff"
 GRAY = "75715e"
 LIGHT_GRAY = "a59f85"
 LINE = "49483e"
@@ -97,6 +98,22 @@ def get_git_info() -> tuple[str | None, str]:
         symbols += "⇣"
 
     return (branch, symbols)
+
+
+def get_repo_root() -> str | None:
+    """Git toplevel, so the label stays stable while the session cds around."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.strip() or None
 
 
 def env_flag_set(name: str) -> bool:
@@ -209,6 +226,10 @@ def main() -> None:
             parts.append(f"{fg(ORANGE)}{text}{RESET}")
         else:
             parts.append(f"{fg(GRAY)}{text}{RESET}")
+
+    cwd = get_repo_root() or data.get("workspace", {}).get("current_dir") or os.getcwd()
+    dirname = os.path.basename(cwd.rstrip("/")) or "/"
+    parts.append(f"{fg(PURPLE)}{truncate(dirname)}{RESET}")
 
     branch, symbols = get_git_info()
     if branch:

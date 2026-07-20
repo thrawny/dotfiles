@@ -22,6 +22,7 @@ const MK = {
 	orange: "#fd971f",
 	red: "#f92672",
 	pink: "#f92672",
+	purple: "#ae81ff",
 	gray: "#75715e",
 	lightGray: "#a59f85",
 	line: "#49483e",
@@ -355,6 +356,10 @@ function install(
 					: `${fgTrue(MK.gray)}no-model${RESET}`;
 
 				const parts: string[] = [modelPart, ctxPart];
+
+				const cwd = activeCtx?.cwd ?? process.cwd();
+				const dirname = cwd.replace(/\/+$/, "").split("/").pop() || "/";
+				parts.push(`${fgTrue(MK.purple)}${truncate(dirname)}${RESET}`);
 
 				if (branch) {
 					let gitPart = `${fgTrue(MK.yellow)}${BRANCH_GLYPH} ${truncate(branch, 32)}${RESET}`;
