@@ -3,7 +3,7 @@
 #
 # Reads the hook JSON on stdin, estimates current context occupancy from the
 # last assistant usage block in the session transcript, and injects an
-# additionalContext warning once per 5%-band above the watermark so the model
+# additionalContext warning once per 10%-band above the watermark so the model
 # writes a session-scoped auto-handoff before auto-compact fires. The
 # companion SessionStart hook (claude-handoff-takeoff) injects that file back
 # after compaction.
