@@ -18,6 +18,7 @@ in
     pkgs.agent-browser
     thrawnyPkgs.acpx
     thrawnyPkgs.firecrawl-cli
+    thrawnyPkgs.posthog-cli
   ]
   ++ pkgs.lib.optionals isLinux [
     pkgs.bubblewrap
