@@ -69,6 +69,14 @@ return {
     enabled = false,
   },
 
+  -- Show the complete path in the statusline instead of collapsing middle directories.
+  {
+    "nvim-lualine/lualine.nvim",
+    opts = function(_, opts)
+      opts.sections.lualine_c[4] = { LazyVim.lualine.pretty_path({ length = 0 }) }
+    end,
+  },
+
   -- Configure noice for LSP hover borders
   -- Disable cmdline treesitter highlighting (broken with nvim 0.11 query syntax)
   {
