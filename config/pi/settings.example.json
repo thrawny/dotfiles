@@ -30,7 +30,7 @@
     "openai-codex/gpt-5.6-terra"
   ],
   "packages": [
-    "npm:@sting8k/pi-vcc",
+    "git:github.com/algal/pi-openai-server-compaction",
     "npm:pi-subdir-context",
     "git:github.com/PurpleMyst/pi-goal",
     "npm:@diegopetrucci/pi-openai-fast",
