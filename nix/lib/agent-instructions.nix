@@ -35,6 +35,18 @@ rec {
     - Docker commands should use the sandbox-provided `DOCKER_HOST`; do not access `/var/run/docker.sock`.
   '';
 
+  backgroundTasks = ''
+    ## Background tasks and long-running processes
+
+    Run builds, tests, linters, and other gates in the foreground — their result decides your next step, so backgrounding them only adds latency and invites moving on without the verdict. Reserve background tasks for work that genuinely runs while you do something else: delegated agent turns (acpx/codex) and bounded readiness waits.
+
+    Only background commands that provably exit. The completion notification only fires on process exit, so a never-terminating background command hangs silently forever.
+
+    - Never background a persistent service or a supervisor/restart loop. Dev stacks and servers run in zmx (`zmx run -d`), which survives the session and is visible to other sessions. Inspect via `zmx history`; on observed failure restart once, never via a loop.
+    - Readiness waits must be bounded and must match failure output as well as the ready banner: `timeout 300 bash -c 'until <ready-or-failed>; do sleep 2; done'`, or use the Monitor tool, which enforces a timeout.
+    - Before ending a session or handing off, stop background tasks you started; anything deliberately left running must be named in the handoff.
+  '';
+
   contextManagement = ''
     ## Context management
 
@@ -47,6 +59,7 @@ rec {
     ${ephemeralTools}
     ${shellPortability}
     ${sandbox}
+    ${backgroundTasks}
     ${contextManagement}
   '';
 
