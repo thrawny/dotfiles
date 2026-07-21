@@ -541,6 +541,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			"Execute Bash commands, with detached background execution for asynchronous workflows",
 		promptGuidelines: [
 			"Use foreground Bash by default, including for tests, checks, builds, linting, and formatting.",
+			"Keep the main agent thread responsive: run long-running waits or monitoring commands with Bash background=true.",
 			"Use Bash with background=true only for intentionally asynchronous workflows such as PR waiters and Gauntlet reviews; do not use it merely to parallelize validation.",
 			"Background Bash already returns immediately and notifies on completion; omit timeout unless an early wake-up is genuinely useful.",
 			"Never run zmx wait or zmx tail for a pi-bg-* session created by Bash with background=true; the harness already waits for it. Continue independent work or end the turn instead.",

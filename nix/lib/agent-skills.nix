@@ -47,6 +47,11 @@ let
 
   localSkillOverrides = {
     codex-delegate.agents = [ "claude" ];
+    zmx.agents = [
+      "claude"
+      "codex"
+    ];
+    zmx-pi.agents = [ "pi" ];
   };
   localSharedSkills = lib.mapAttrs (name: skill: skill // (localSkillOverrides.${name} or { })) (
     discoveredSkills skillsRoot
