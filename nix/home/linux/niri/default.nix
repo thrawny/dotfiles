@@ -105,8 +105,12 @@ let
       hotkey-overlay.title = "Previous Window";
     };
     "Mod+Shift+M" = {
-      action.focus-workspace-previous = [ ];
-      hotkey-overlay.title = "Previous Workspace";
+      action.spawn = [
+        "nirius"
+        "focus-workspace-previous"
+      ];
+      hotkey-overlay.title = "Previous Settled Workspace";
+      repeat = false;
     };
     "Mod+N" = {
       action.focus-monitor-previous = [ ];
