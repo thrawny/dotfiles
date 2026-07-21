@@ -154,8 +154,14 @@ in
 
   # Desktop-specific home-manager overrides
   home-manager.users.thrawny =
-    { lib, ... }:
     {
+      lib,
+      pkgs,
+      ...
+    }:
+    {
+      home.packages = [ pkgs.google-chrome ];
+
       programs.ghostty.settings.font-size = lib.mkForce 12;
 
       # Desktop-specific Niri configuration
