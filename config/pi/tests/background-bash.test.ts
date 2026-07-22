@@ -324,13 +324,13 @@ describe("background bash", () => {
 		);
 	});
 
-	it("preserves foreground bash behavior in the context working directory", async () => {
+	it("preserves foreground bash behavior through the timeout boundary", async () => {
 		const exec = vi.fn(async () => execResult());
 		const { tool } = setupExtension(exec);
 
 		const result = await tool.execute(
 			"call-foreground",
-			{ command: "pwd" },
+			{ command: "pwd", timeout: 300 },
 			undefined,
 			undefined,
 			ctx,
@@ -338,6 +338,40 @@ describe("background bash", () => {
 
 		expect(result.content[0]?.text.trim()).toBe("/tmp");
 		expect(exec).not.toHaveBeenCalled();
+	});
+
+	it("automatically backgrounds foreground timeouts longer than five minutes", async () => {
+		const waitResult = new Promise<ExecResult>(() => {});
+		const exec = vi.fn(async (_command: string, args: string[]) =>
+			isQuietWait(args) ? waitResult : execResult(),
+		);
+		const { appendEntry, handlers, tool } = setupExtension(exec);
+
+		const result = await tool.execute(
+			"call-auto-background",
+			{ command: "gauntlet-review", timeout: 301 },
+			undefined,
+			undefined,
+			ctx,
+		);
+
+		expect(result.content[0]?.text).toContain(
+			"Automatically sent to the background",
+		);
+		expect(exec).toHaveBeenCalledWith(
+			"env",
+			expect.arrayContaining(["zmx", "run", "-d", "gauntlet-review"]),
+			{ cwd: "/tmp" },
+		);
+		expect(appendEntry).toHaveBeenCalledWith(
+			"background-bash-task",
+			expect.objectContaining({
+				command: "gauntlet-review",
+				timeoutSeconds: 301,
+			}),
+		);
+
+		await handlers.get("session_shutdown")?.({}, ctx);
 	});
 
 	it("restores running task watchers from session state", async () => {

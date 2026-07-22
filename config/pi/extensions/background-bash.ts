@@ -17,6 +17,7 @@ const STATUS_ID = "background-bash";
 const TASK_ENTRY_TYPE = "background-bash-task";
 const OUTPUT_MAX_BYTES = 12 * 1024;
 const OUTPUT_MAX_LINES = 100;
+const MAX_FOREGROUND_TIMEOUT_SECONDS = 5 * 60;
 const SESSION_RETENTION_SECONDS = 12 * 60 * 60;
 
 const bashParameters = Type.Object({
@@ -25,7 +26,7 @@ const bashParameters = Type.Object({
 		Type.Number({
 			minimum: 1,
 			description:
-				"Foreground: stop the command after this many seconds. Background: wake the agent after this many seconds if the command is still running, without stopping it.",
+				"Foreground: stop the command after this many seconds; requests above 300 seconds automatically run in the background. Background: wake the agent after this many seconds if the command is still running, without stopping it.",
 		}),
 	),
 	background: Type.Optional(
@@ -549,7 +550,11 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 		parameters: bashParameters,
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			const bash = configuredBash(ctx.cwd);
-			if (!params.background) {
+			const automaticallyBackgrounded =
+				params.background !== true &&
+				params.timeout !== undefined &&
+				params.timeout > MAX_FOREGROUND_TIMEOUT_SECONDS;
+			if (!params.background && !automaticallyBackgrounded) {
 				return bash.tool.execute(
 					toolCallId,
 					{ command: params.command, timeout: params.timeout },
@@ -626,6 +631,9 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 						type: "text",
 						text: [
 							`Started background command in zmx session ${sessionName}.`,
+							automaticallyBackgrounded
+								? `Automatically sent to the background because the requested ${params.timeout}s timeout exceeds the ${MAX_FOREGROUND_TIMEOUT_SECONDS}s foreground limit.`
+								: undefined,
 							"Completion will notify the agent automatically; do not run zmx wait or zmx tail for this session.",
 							params.timeout === undefined
 								? undefined
