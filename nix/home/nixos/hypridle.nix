@@ -9,13 +9,6 @@
         after_sleep_cmd = "${dotfiles}/bin/dpms-on";
       };
       listener = [
-        # Safety net: if the laptop is closed, suspend even when an idle
-        # inhibitor (e.g. caffeine/video call) was accidentally left on.
-        {
-          timeout = 60;
-          ignore_inhibit = true;
-          on-timeout = "${dotfiles}/bin/suspend-if-lid-closed-on-battery";
-        }
         {
           timeout = 300;
           on-timeout = "loginctl lock-session";
@@ -31,5 +24,25 @@
         }
       ];
     };
+  };
+
+  # This is deliberately a recurring timer rather than a hypridle listener:
+  # the final dock/display may be unplugged after the system is already idle.
+  systemd.user.services.closed-lid-suspend-safety = {
+    Unit.Description = "Suspend a closed, undocked laptop";
+    Service = {
+      Type = "oneshot";
+      ExecStart = "${dotfiles}/bin/suspend-if-lid-closed-on-battery";
+    };
+  };
+
+  systemd.user.timers.closed-lid-suspend-safety = {
+    Unit.Description = "Periodically check whether a closed laptop was undocked";
+    Timer = {
+      OnStartupSec = "5m";
+      OnUnitActiveSec = "5m";
+      Unit = "closed-lid-suspend-safety.service";
+    };
+    Install.WantedBy = [ "timers.target" ];
   };
 }

@@ -4,4 +4,16 @@ set -euo pipefail
 lid_state="$(grep -h -o 'open\|closed' /proc/acpi/button/lid/*/state 2>/dev/null | head -1 || true)"
 [[ "$lid_state" == "closed" ]] || exit 0
 
+# A closed lid with an external display attached is intentional clamshell mode.
+# Once the dock/displays are unplugged, no connected external DRM connector
+# remains and the safety-net suspend can proceed.
+for status_file in /sys/class/drm/card*-*/status; do
+  [[ -r "$status_file" ]] || continue
+  connector="$(basename "$(dirname "$status_file")")"
+  case "$connector" in
+    *-eDP-* | *-LVDS-* | *-DSI-*) continue ;;
+  esac
+  [[ "$(<"$status_file")" == "connected" ]] && exit 0
+done
+
 systemctl suspend
