@@ -113,6 +113,7 @@ _: {
           application = {
             not = [
               "com.mitchellh.ghostty"
+              "com.thrawny.GhosttyScratchpad"
               "Ghostty"
             ];
           };
