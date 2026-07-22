@@ -30,12 +30,14 @@ zmx history <pi-bg-session> | tail -n 200
 
 A managed task is correctly launched when the underlying command was started once and no second waiter was created.
 
+Use `zmx-list` to check session status: running sessions by default, `zmx-list --all` to include completed sessions and their exit status. Completed `pi-bg-*` sessions are retained for their logs; their presence does not mean anything is still running. A waiter or monitor that has exited is no longer monitoring anything — launch a new background command if the condition still matters.
+
 ## Persistent zmx sessions
 
 Start a service detached, then inspect enough history to verify startup:
 
 ```bash
-zmx list --short
+zmx-list
 zmx run <name> -d <command...>
 zmx history <name> | tail -n 200
 ```

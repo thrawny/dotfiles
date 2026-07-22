@@ -17,6 +17,7 @@ type RegisteredBashTool = {
 	parameters: {
 		properties?: Record<string, unknown>;
 	};
+	promptGuidelines?: string[];
 	execute(
 		toolCallId: string,
 		params: { command: string; timeout?: number; background?: boolean },
@@ -124,6 +125,12 @@ describe("background bash", () => {
 		const { appendEntry, sendMessage, tool } = setupExtension(exec);
 
 		expect(tool.parameters.properties).toHaveProperty("background");
+		expect(tool.promptGuidelines?.join("\n")).toContain(
+			"Check managed task status with zmx-list",
+		);
+		expect(tool.promptGuidelines?.join("\n")).toContain(
+			"when zero remain, nothing is left to wake the agent",
+		);
 		const result = await tool.execute(
 			"call-abc123",
 			{ command: "just check", background: true },
@@ -189,8 +196,16 @@ describe("background bash", () => {
 
 		finishWait?.(execResult());
 		await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
-		const message = sendMessage.mock.calls[0]?.[0] as { content: string };
+		const message = sendMessage.mock.calls[0]?.[0] as {
+			content: string;
+			details: { remainingTaskCount: number };
+		};
 		expect(message.content).toContain("exit 0");
+		expect(message.content).toContain(
+			"No managed background tasks remain; no further completion wake-up is pending.",
+		);
+		expect(message.details.remainingTaskCount).toBe(0);
+		expect(message.content).toContain("Managed task status: zmx-list");
 		expect(message.content).toContain("Output:\ncheck output");
 		expect(message.content).not.toContain("Command:");
 		expect(message.content).not.toContain("echoed command");
@@ -201,6 +216,51 @@ describe("background bash", () => {
 			"background-bash-task",
 			expect.objectContaining({ state: "finished", command: "just check" }),
 		);
+	});
+
+	it("reports how many managed tasks remain after each completion", async () => {
+		const finishWaits: Array<(result: ExecResult) => void> = [];
+		const exec = vi.fn(async (_command: string, args: string[]) => {
+			if (!isQuietWait(args)) return execResult();
+			return new Promise<ExecResult>((resolve) => finishWaits.push(resolve));
+		});
+		const { sendMessage, tool } = setupExtension(exec);
+
+		await tool.execute(
+			"call-first",
+			{ command: "first-task", background: true },
+			undefined,
+			undefined,
+			ctx,
+		);
+		await tool.execute(
+			"call-second",
+			{ command: "second-task", background: true },
+			undefined,
+			undefined,
+			ctx,
+		);
+		expect(finishWaits).toHaveLength(2);
+
+		finishWaits[0]?.(execResult());
+		await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+		const firstMessage = sendMessage.mock.calls[0]?.[0] as {
+			content: string;
+			details: { remainingTaskCount: number };
+		};
+		expect(firstMessage.content).toContain("1 managed background task remains");
+		expect(firstMessage.details.remainingTaskCount).toBe(1);
+
+		finishWaits[1]?.(execResult());
+		await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
+		const secondMessage = sendMessage.mock.calls[1]?.[0] as {
+			content: string;
+			details: { remainingTaskCount: number };
+		};
+		expect(secondMessage.content).toContain(
+			"No managed background tasks remain",
+		);
+		expect(secondMessage.details.remainingTaskCount).toBe(0);
 	});
 
 	it("wakes on a background timeout without stopping the command", async () => {
@@ -330,7 +390,7 @@ describe("background bash", () => {
 
 		const result = await tool.execute(
 			"call-foreground",
-			{ command: "pwd", timeout: 300 },
+			{ command: "pwd", timeout: 600 },
 			undefined,
 			undefined,
 			ctx,
@@ -340,7 +400,7 @@ describe("background bash", () => {
 		expect(exec).not.toHaveBeenCalled();
 	});
 
-	it("automatically backgrounds foreground timeouts longer than five minutes", async () => {
+	it("automatically backgrounds foreground timeouts longer than ten minutes", async () => {
 		const waitResult = new Promise<ExecResult>(() => {});
 		const exec = vi.fn(async (_command: string, args: string[]) =>
 			isQuietWait(args) ? waitResult : execResult(),
@@ -349,7 +409,7 @@ describe("background bash", () => {
 
 		const result = await tool.execute(
 			"call-auto-background",
-			{ command: "gauntlet-review", timeout: 301 },
+			{ command: "gauntlet-review", timeout: 601 },
 			undefined,
 			undefined,
 			ctx,
@@ -367,7 +427,7 @@ describe("background bash", () => {
 			"background-bash-task",
 			expect.objectContaining({
 				command: "gauntlet-review",
-				timeoutSeconds: 301,
+				timeoutSeconds: 601,
 			}),
 		);
 

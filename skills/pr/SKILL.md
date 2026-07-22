@@ -52,28 +52,24 @@ It saves complete GitHub Actions logs under `/tmp` and prints only bounded failu
 
 ## 3. Wait without consuming the agent turn
 
-When checks or an AI reviewer are still running, launch the waiter with background Bash instead of writing a polling loop:
+When checks or an AI reviewer are still running, launch the waiter as a managed background Bash task instead of writing a polling loop:
 
-```text
-bash({
-  command: "prctl wait [<pr>] --timeout 20m",
-  timeout: 600,
-  background: true
-})
+```bash
+prctl wait [<pr>] --timeout 20m
 ```
 
-For background Bash, `timeout` is an early wake-up: it triggers an agent turn if the command is still running but leaves the zmx task alive and still watched for completion. The waiter's own `--timeout` is its actual maximum wait. Do not wrap the command with the shell `timeout` executable.
+The waiter's own `--timeout` is the actual maximum wait, and the background task's completion notification is the wake-up. Do not wrap the command with the shell `timeout` executable and do not add a separate tool timeout.
 
 The waiter:
 
 - allows checks a short activation grace and supports repositories with no checks;
 - treats AI reviewers as optional;
-- waits while Codex has an eyes reaction;
+- waits while Codex has an eyes reaction, up to `--reviewer-timeout` (defaults to the full `--timeout`);
 - treats a current-head Codex comment, review, or thumbs-up as completion;
 - degrades instead of blocking forever when a reviewer is absent or unavailable;
 - resets all observed state when the PR head changes.
 
-Use `--require-checks` only when the repository must publish at least one check. Script success means signals settled, not that checks passed or reviewers found nothing. Run `snapshot` again after it wakes the agent.
+Use `--require-checks` only when the repository must publish at least one check. Script success means signals settled, not that checks passed or reviewers found nothing. When the waiter gives up on a still-active reviewer, it prints an explicit "start a new waiter" line — that waiter is done and nothing will wake the agent again; launch a new background waiter if the review outcome is still needed. Run `snapshot` again after it wakes the agent.
 
 Required human approval remains a terminal handoff by default. Only when the user explicitly wants to wait for a named human reviewer, use:
 

@@ -128,7 +128,7 @@ rec {
 
     Prefer `fd` over `find` for file discovery when available; it is faster, respects ignore files by default, and has friendlier syntax.
 
-    Keep the main agent thread responsive. Run long-running waits, monitoring, and other asynchronous workflows with Bash `background: true` rather than holding a foreground tool call open.
+    Keep the main agent thread responsive: long waits belong in background execution, never in an open foreground tool call. The Bash tool's own guidelines govern when and how.
 
     ${ephemeralTools}
     ${shellPortability}

@@ -1104,6 +1104,8 @@ def command_wait_for_approval(
 
 
 def command_wait(args: argparse.Namespace) -> int:
+    if args.reviewer_timeout is None:
+        args.reviewer_timeout = args.timeout
     initial = get_pr(args.pr, args.repo)
     host, repo = repo_from_url(initial.url)
     full_repo = repo_spec(host, repo)
@@ -1157,6 +1159,12 @@ def command_wait(args: argparse.Namespace) -> int:
                     f" checks_total={len(current.checks)}"
                     f" checks_pending={len(current.checks_pending)}"
                     f" checks_failed={len(current.checks_failed)} {reviewer_summary}",
+                    flush=True,
+                )
+                print(
+                    "wait timeout reached before reviewers settled; this waiter"
+                    " has exited — start a new waiter if a reviewer outcome is"
+                    " still needed",
                     flush=True,
                 )
                 return 0
@@ -1251,6 +1259,18 @@ def command_wait(args: argparse.Namespace) -> int:
                     f" {reviewer_summary}",
                     flush=True,
                 )
+                stalled = [
+                    name
+                    for name, state in last_states.items()
+                    if state == "unavailable"
+                ]
+                if stalled:
+                    print(
+                        f"reviewer timeout: {', '.join(stalled)} still active"
+                        " with no final review; this waiter has exited — start"
+                        " a new waiter if the review outcome is still needed",
+                        flush=True,
+                    )
                 return 0
         except GhError as error:
             progress.finish_line()
@@ -1304,7 +1324,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     wait_parser.add_argument("--checks-grace", type=duration, default=30)
     wait_parser.add_argument("--reviewer-grace", type=duration, default=30)
-    wait_parser.add_argument("--reviewer-timeout", type=duration, default=600)
+    wait_parser.add_argument(
+        "--reviewer-timeout",
+        type=duration,
+        default=None,
+        help="give up on an active reviewer after this long (default: --timeout)",
+    )
 
     thread_parser = commands.add_parser("threads", help="manage review threads")
     thread_commands = thread_parser.add_subparsers(dest="thread_command", required=True)

@@ -17,7 +17,7 @@ const STATUS_ID = "background-bash";
 const TASK_ENTRY_TYPE = "background-bash-task";
 const OUTPUT_MAX_BYTES = 12 * 1024;
 const OUTPUT_MAX_LINES = 100;
-const MAX_FOREGROUND_TIMEOUT_SECONDS = 5 * 60;
+const MAX_FOREGROUND_TIMEOUT_SECONDS = 10 * 60;
 const SESSION_RETENTION_SECONDS = 12 * 60 * 60;
 
 const bashParameters = Type.Object({
@@ -26,7 +26,7 @@ const bashParameters = Type.Object({
 		Type.Number({
 			minimum: 1,
 			description:
-				"Foreground: stop the command after this many seconds; requests above 300 seconds automatically run in the background. Background: wake the agent after this many seconds if the command is still running, without stopping it.",
+				"Foreground: stop the command after this many seconds; requests above 600 seconds automatically run in the background. Background: wake the agent after this many seconds if the command is still running, without stopping it.",
 		}),
 	),
 	background: Type.Optional(
@@ -308,14 +308,23 @@ function completionContent(
 	result: ExecResult,
 	durationMs: number,
 	output: string,
+	remainingTaskCount: number,
 ): string {
 	const duration = `${(durationMs / 1000).toFixed(1)}s`;
 	const historyCommand = `zmx history ${sessionName} | tail -n 200`;
+	const remainingStatus =
+		remainingTaskCount === 0
+			? "No managed background tasks remain; no further completion wake-up is pending."
+			: remainingTaskCount === 1
+				? "1 managed background task remains and will notify the agent when it finishes."
+				: `${remainingTaskCount} managed background tasks remain and will notify the agent when they finish.`;
 	const lines = [
 		result.code === 0
 			? `✓ Background command finished (exit 0, ${duration})`
 			: `✗ Background command failed (exit ${result.code}, ${duration})`,
-		`Zmx session: ${sessionName}`,
+		remainingStatus,
+		`Zmx session retained for logs: ${sessionName}`,
+		"Managed task status: zmx-list",
 		`Logs: ${historyCommand}`,
 	];
 	appendOutput(
@@ -444,6 +453,9 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				state: "finished",
 				timeoutNotified,
 			});
+			waitControllers.delete(controller);
+			updateStatus(ctx);
+			const remainingTaskCount = waitControllers.size;
 			pi.sendMessage(
 				{
 					customType: COMPLETION_MESSAGE_TYPE,
@@ -452,6 +464,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 						result,
 						Date.now() - startedAt,
 						output,
+						remainingTaskCount,
 					),
 					display: true,
 					details: {
@@ -459,6 +472,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 						cwd,
 						durationMs: Date.now() - startedAt,
 						exitCode: result.code,
+						remainingTaskCount,
 						sessionName,
 					},
 				},
@@ -542,10 +556,10 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			"Execute Bash commands, with detached background execution for asynchronous workflows",
 		promptGuidelines: [
 			"Use foreground Bash by default, including for tests, checks, builds, linting, and formatting.",
-			"Keep the main agent thread responsive: run long-running waits or monitoring commands with Bash background=true.",
-			"Use Bash with background=true only for intentionally asynchronous workflows such as PR waiters and Gauntlet reviews; do not use it merely to parallelize validation.",
+			"Keep the main agent thread responsive: run intentionally asynchronous work such as PR waiters and Gauntlet reviews with background=true; do not use it merely to parallelize validation.",
 			"Background Bash already returns immediately and notifies on completion; omit timeout unless an early wake-up is genuinely useful.",
 			"Never run zmx wait or zmx tail for a pi-bg-* session created by Bash with background=true; the harness already waits for it. Continue independent work or end the turn instead.",
+			"A background-bash-finished message states the authoritative remaining managed-task count; when zero remain, nothing is left to wake the agent — do not assume monitoring continues. Check managed task status with zmx-list (zmx-list --all includes completed exit status).",
 		],
 		parameters: bashParameters,
 		async execute(toolCallId, params, signal, onUpdate, ctx) {

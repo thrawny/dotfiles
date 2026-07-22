@@ -238,6 +238,7 @@ def test_waiter_accepts_no_checks_and_inactive_optional_reviewer(
     assert result.returncode == 0, result.stderr
     assert "checks_total=0" in result.stdout
     assert "codex_state=inactive" in result.stdout
+    assert "start a new waiter" not in result.stdout
 
 
 def test_active_reviewer_takes_precedence_over_final_artifacts(
@@ -270,7 +271,30 @@ def test_waiter_degrades_an_active_unavailable_reviewer(tmp_path: Path) -> None:
     )
     assert result.returncode == 0, result.stderr
     assert "codex_state=unavailable" in result.stdout
+    assert "reviewer timeout: codex still active with no final review" in result.stdout
+    assert "start a new waiter" in result.stdout
     assert result.stdout.count("snapshot ") == 2
+
+
+def test_waiter_reports_deadline_settle_as_inconclusive(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = pr_harness.env.copy()
+    env["FAKE_ACTIVE_REVIEWER"] = "1"
+    result = pr_harness.run(
+        "wait",
+        "12",
+        "--interval",
+        "1",
+        "--timeout",
+        "3",
+        "--reviewer-timeout",
+        "30",
+        env=env,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "settled" in result.stdout
+    assert "wait timeout reached before reviewers settled" in result.stdout
+    assert "start a new waiter" in result.stdout
 
 
 def test_waiter_can_require_approval_from_a_specific_reviewer(tmp_path: Path) -> None:
