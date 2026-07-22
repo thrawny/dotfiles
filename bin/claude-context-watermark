@@ -3,19 +3,19 @@
 #
 # Reads the hook JSON on stdin, estimates current context occupancy from the
 # last assistant usage block in the session transcript, and injects an
-# additionalContext warning once per 10%-band above the watermark so the model
-# writes a session-scoped auto-handoff before auto-compact fires. The
-# companion SessionStart hook (claude-handoff-takeoff) injects that file back
-# after compaction.
+# additionalContext warning at each configured checkpoint so the model writes
+# and then refreshes a session-scoped auto-handoff shortly before auto-compact
+# fires. The companion SessionStart hook (claude-handoff-takeoff) injects that
+# file back after compaction.
 #
 # Env:
-#   CLAUDE_CODE_AUTO_COMPACT_WINDOW  token window to measure against (default 300000)
-#   CLAUDE_CONTEXT_WATERMARK_PCT     percentage to start warning at (default 70)
+#   CLAUDE_CODE_AUTO_COMPACT_WINDOW   token window to measure against (default 300000)
+#   CLAUDE_CONTEXT_WATERMARK_PCTS     space/comma-separated checkpoints (default "85 88")
 set -uo pipefail
 
 main() {
-  local input transcript session usage window warn_pct pct band
-  local state_dir state_file last_band handoff_dir
+  local input transcript session usage window pct thresholds threshold trigger_pct
+  local state_dir state_file last_threshold handoff_dir
 
   input=$(cat) || return 0
   transcript=$(jq -r '.transcript_path // empty' <<<"$input" 2>/dev/null) || return 0
@@ -43,28 +43,38 @@ main() {
   [[ "$usage" =~ ^[0-9]+$ ]] || return 0
 
   window=${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-300000}
-  warn_pct=${CLAUDE_CONTEXT_WATERMARK_PCT:-70}
+  [[ "$window" =~ ^[1-9][0-9]*$ ]] || return 0
   pct=$((usage * 100 / window))
-  band=$((pct / 10))
 
-  # Debounce: warn once per 10%-band per session, so a typical run gets one
-  # handoff write (~70%) and one refresh (~80%) before compaction. When usage
-  # drops (compaction happened), lower the stored band so the next climb
-  # warns again.
+  # Warn at exact checkpoints rather than broad 10% bands. Claude reserves
+  # headroom and can compact before 90%, so the defaults create at 85% and
+  # refresh at 88%. If usage drops after compaction, reset for the next climb.
+  thresholds=${CLAUDE_CONTEXT_WATERMARK_PCTS:-"85 88"}
+  thresholds=${thresholds//,/ }
+
   state_dir=${TMPDIR:-/tmp}/claude-context-watermark
   mkdir -p "$state_dir" 2>/dev/null || return 0
   state_file=$state_dir/$session
-  last_band=$(cat "$state_file" 2>/dev/null) || last_band=0
-  [[ "$last_band" =~ ^[0-9]+$ ]] || last_band=0
-  if ((band < last_band)); then
-    echo "$band" >"$state_file" 2>/dev/null
+  last_threshold=$(cat "$state_file" 2>/dev/null) || last_threshold=0
+  [[ "$last_threshold" =~ ^[0-9]+$ ]] || last_threshold=0
+  if ((pct + 20 < last_threshold)); then
+    echo 0 >"$state_file" 2>/dev/null
     return 0
   fi
-  ((pct >= warn_pct && band > last_band)) || return 0
-  echo "$band" >"$state_file" 2>/dev/null
+
+  trigger_pct=0
+  for threshold in $thresholds; do
+    [[ "$threshold" =~ ^[0-9]+$ ]] || continue
+    ((threshold > 0 && threshold < 100)) || continue
+    if ((pct >= threshold && threshold > last_threshold && threshold > trigger_pct)); then
+      trigger_pct=$threshold
+    fi
+  done
+  ((trigger_pct > 0)) || return 0
+  echo "$trigger_pct" >"$state_file" 2>/dev/null
 
   handoff_dir=${XDG_STATE_HOME:-$HOME/.local/state}/claude/handoffs
-  jq -n --arg ctx "Context usage is at ~${pct}% of the ${window}-token auto-compact window. Write a session auto-handoff to ${handoff_dir}/${session}.md now (create the directory if needed), then continue the task. Include: the next goal; decisions made and why; paths of files touched; test/gate results and unresolved errors; anything deliberately left running (dev servers, background agents, acpx sessions); the immediate next action. Keep it under ~1000 tokens. This is separate from the manual handoff flow — do not touch any handoff.md in the repo." \
+  jq -n --arg ctx "Context usage is at ~${pct}% of the ${window}-token auto-compact window (crossed the ${trigger_pct}% handoff checkpoint). Write a session auto-handoff to ${handoff_dir}/${session}.md now (create the directory if needed), then continue the task. Include: the next goal; decisions made and why; paths of files touched; test/gate results and unresolved errors; anything deliberately left running (dev servers, background agents, acpx sessions); the immediate next action. Keep it under ~1000 tokens. This is separate from the manual handoff flow — do not touch any handoff.md in the repo." \
     '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $ctx}}'
 }
 
