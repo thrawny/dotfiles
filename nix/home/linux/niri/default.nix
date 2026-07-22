@@ -29,17 +29,49 @@ let
       action.spawn = [ "ghostty-cwd" ];
       hotkey-overlay.title = "Open Terminal";
     };
+    "Mod+Q" = {
+      action.spawn = [
+        "nirius"
+        "workspace-scratchpad"
+        "terminal"
+        "--app-id"
+        "^com\\.thrawny\\.GhosttyScratchpad$"
+        "--"
+        "ghostty"
+        "--class=com.thrawny.GhosttyScratchpad"
+        "--gtk-single-instance=true"
+        "--working-directory={workspace-directory}"
+      ];
+      hotkey-overlay.title = "Toggle Workspace Terminal";
+      repeat = false;
+    };
     "Super+Space" = {
       action.spawn = [ "walker" ];
       hotkey-overlay.title = "Application Launcher";
     };
     "Mod+O" = {
-      action.spawn = [ "1password" ];
-      hotkey-overlay.title = "1Password";
+      action.spawn = [
+        "nirius"
+        "scratchpad-show-or-spawn"
+        "--app-id"
+        "^1password$"
+        "--"
+        "1password"
+      ];
+      hotkey-overlay.title = "Toggle 1Password Scratchpad";
+      repeat = false;
     };
     "Mod+P" = {
-      action.spawn = [ "spotify" ];
-      hotkey-overlay.title = "Spotify";
+      action.spawn = [
+        "nirius"
+        "scratchpad-show-or-spawn"
+        "--app-id"
+        "^spotify$"
+        "--"
+        "spotify"
+      ];
+      hotkey-overlay.title = "Toggle Spotify Scratchpad";
+      repeat = false;
     };
     "Mod+Shift+Space" = {
       action.spawn = [
@@ -500,6 +532,7 @@ in
         command = [
           "ghostty"
           "+new-window"
+          "--working-directory=${config.home.homeDirectory}/dotfiles"
         ];
       }
       {
@@ -646,6 +679,17 @@ in
         ];
         open-floating = true;
         open-maximized = false;
+      }
+      {
+        matches = [ { app-id = "^com\\.thrawny\\.GhosttyScratchpad$"; } ];
+        open-floating = true;
+        open-maximized = false;
+        default-column-width.fixed = 1400;
+        default-window-height.fixed = 900;
+        min-width = 1400;
+        max-width = 1400;
+        min-height = 900;
+        max-height = 900;
       }
       {
         matches = [ { app-id = "^org\\.pulseaudio\\.pavucontrol$"; } ];

@@ -85,6 +85,14 @@ main() {
     workspace_name=$(basename "$project_dir")
   fi
 
+  # The picker is the source of truth for project workspace directories.
+  # Register before the existing-workspace fast path so reopening a project
+  # also refreshes niriusd after a daemon restart.
+  nirius set-workspace-directory \
+    --workspace-name "$workspace_name" \
+    "$project_dir" \
+    >/dev/null
+
   # If workspace already exists, just focus it
   if niri msg -j workspaces | jq -e ".[] | select(.name == \"$workspace_name\")" >/dev/null 2>&1; then
     niri msg action focus-workspace "$workspace_name"

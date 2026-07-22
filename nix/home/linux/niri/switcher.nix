@@ -2,7 +2,7 @@
 # Assumes agent-switch and the local nirius fork are available on PATH
 # (e.g., ~/.cargo/bin). App jumping is bound as an xremap chord (Alt-a prefix)
 # in ../xremap.nix; nirius also tracks debounced workspace focus history.
-{ pkgs, ... }:
+{ config, pkgs, ... }:
 {
   home.packages = [ pkgs.nirius ];
 
@@ -15,7 +15,13 @@
           "--niri"
         ];
       }
-      { command = [ "niriusd" ]; }
+      {
+        command = [
+          "niriusd"
+          "--workspace-directory"
+          "dotfiles=${config.home.homeDirectory}/dotfiles"
+        ];
+      }
     ];
   };
 }
