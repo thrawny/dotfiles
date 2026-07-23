@@ -42,6 +42,8 @@ def parse_session(line: str) -> Session:
     fields: dict[str, str] = {}
     for item in line.split("\t"):
         key, separator, value = item.strip().partition("=")
+        # zmx marks the session attached to the current terminal with "→ ".
+        key = key.removeprefix("→ ")
         if separator:
             fields[key] = value
 
