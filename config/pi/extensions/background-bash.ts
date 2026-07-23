@@ -15,6 +15,9 @@ const COMPLETION_MESSAGE_TYPE = "background-bash-finished";
 const TIMEOUT_MESSAGE_TYPE = "background-bash-timeout";
 const STATUS_ID = "background-bash";
 const TASK_ENTRY_TYPE = "background-bash-task";
+const EMPTY_TURN_ENTRY_TYPE = "background-bash-empty-turn";
+const EMPTY_TURN_NUDGE =
+	"The final background task completion above received an empty response. React to it now: continue the work it unblocks, or state the outcome and current status.";
 const OUTPUT_MAX_BYTES = 12 * 1024;
 const OUTPUT_MAX_LINES = 100;
 const MAX_FOREGROUND_TIMEOUT_SECONDS = 10 * 60;
@@ -175,6 +178,38 @@ async function pruneOldBackgroundSessions(
 }
 
 type OutputMarkers = { start: string; end: string };
+
+type AssistantRunMessage = {
+	role: "assistant";
+	stopReason: string;
+	content: Array<{ type: string; text?: string }>;
+};
+
+function lastAssistantMessage(
+	messages: unknown[],
+): AssistantRunMessage | undefined {
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index] as Partial<AssistantRunMessage> | null;
+		if (
+			typeof message === "object" &&
+			message !== null &&
+			message.role === "assistant" &&
+			Array.isArray(message.content)
+		) {
+			return message as AssistantRunMessage;
+		}
+	}
+	return undefined;
+}
+
+function isSilentStop(message: AssistantRunMessage): boolean {
+	if (message.stopReason !== "stop") return false;
+	return !message.content.some(
+		(block) =>
+			block.type === "toolCall" ||
+			(block.type === "text" && (block.text ?? "").trim() !== ""),
+	);
+}
 
 type BackgroundTask = {
 	version: 1;
@@ -340,6 +375,9 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 	const foregroundBash = createBashToolDefinition(process.cwd());
 	const waitControllers = new Set<AbortController>();
 	let sessionClosed = false;
+	// After the final completion notification (zero tasks remain), nothing else
+	// will ever wake the agent, so a silent run end there loses the result.
+	let finalWakeupWatch: "off" | "armed" | "nudged" = "off";
 
 	function updateStatus(ctx: ExtensionContext): void {
 		const count = waitControllers.size;
@@ -478,6 +516,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				},
 				{ deliverAs: "steer", triggerTurn: true },
 			);
+			finalWakeupWatch = remainingTaskCount === 0 ? "armed" : "off";
 		} catch (error) {
 			if (sessionClosed || controller.signal.aborted) return;
 			const message = error instanceof Error ? error.message : String(error);
@@ -538,14 +577,33 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		sessionClosed = false;
+		finalWakeupWatch = "off";
 		await restoreBackgroundTasks(ctx);
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
 		sessionClosed = true;
+		finalWakeupWatch = "off";
 		for (const controller of waitControllers) controller.abort();
 		waitControllers.clear();
 		updateStatus(ctx);
+	});
+
+	pi.on("agent_end", async (event) => {
+		if (sessionClosed || finalWakeupWatch === "off") return;
+		const last = lastAssistantMessage(event.messages);
+		if (!last || !isSilentStop(last)) {
+			finalWakeupWatch = "off";
+			return;
+		}
+		if (finalWakeupWatch === "nudged") {
+			finalWakeupWatch = "off";
+			pi.appendEntry(EMPTY_TURN_ENTRY_TYPE, { action: "gave-up" });
+			return;
+		}
+		finalWakeupWatch = "nudged";
+		pi.appendEntry(EMPTY_TURN_ENTRY_TYPE, { action: "nudged" });
+		pi.sendUserMessage(EMPTY_TURN_NUDGE);
 	});
 
 	pi.registerTool({
@@ -634,6 +692,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				timeoutNotified: false,
 			};
 			persistTask(task);
+			finalWakeupWatch = "off";
 			const controller = new AbortController();
 			waitControllers.add(controller);
 			updateStatus(ctx);

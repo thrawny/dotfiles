@@ -56,6 +56,7 @@ function setupExtension(
 	let tool: RegisteredBashTool | undefined;
 	const handlers = new Map<string, EventHandler>();
 	const sendMessage = vi.fn();
+	const sendUserMessage = vi.fn();
 	const appendEntry = vi.fn();
 	const pi = {
 		exec,
@@ -67,12 +68,20 @@ function setupExtension(
 		},
 		appendEntry,
 		sendMessage,
+		sendUserMessage,
 	} as unknown as ExtensionAPI;
 
 	backgroundBashExtension(pi);
 	if (!tool) throw new Error("bash tool was not registered");
 
-	return { appendEntry, handlers, sendMessage, tool };
+	return { appendEntry, handlers, sendMessage, sendUserMessage, tool };
+}
+
+function assistantStop(
+	content: Array<{ type: string; text?: string }>,
+	stopReason = "stop",
+) {
+	return { role: "assistant", stopReason, content };
 }
 
 const setStatus = vi.fn();
@@ -261,6 +270,146 @@ describe("background bash", () => {
 			"No managed background tasks remain",
 		);
 		expect(secondMessage.details.remainingTaskCount).toBe(0);
+	});
+
+	describe("final wakeup empty-turn watchdog", () => {
+		async function armWatch() {
+			let finishWait: ((result: ExecResult) => void) | undefined;
+			const exec = vi.fn(async (_command: string, args: string[]) => {
+				if (!isQuietWait(args)) return execResult();
+				return new Promise<ExecResult>((resolve) => {
+					finishWait = resolve;
+				});
+			});
+			const setup = setupExtension(exec);
+			await setup.tool.execute(
+				"call-watch",
+				{ command: "prctl wait 1027", background: true },
+				undefined,
+				undefined,
+				ctx,
+			);
+			finishWait?.(execResult());
+			await vi.waitFor(() => expect(setup.sendMessage).toHaveBeenCalledOnce());
+			return setup;
+		}
+
+		it("nudges once when the run after the final completion ends silently", async () => {
+			const { appendEntry, handlers, sendUserMessage } = await armWatch();
+
+			await handlers.get("agent_end")?.(
+				{
+					messages: [
+						assistantStop([
+							{ type: "thinking", text: "" },
+							{ type: "text", text: "" },
+						]),
+					],
+				},
+				ctx,
+			);
+
+			expect(sendUserMessage).toHaveBeenCalledOnce();
+			expect(sendUserMessage.mock.calls[0]?.[0]).toContain("empty response");
+			expect(appendEntry).toHaveBeenCalledWith("background-bash-empty-turn", {
+				action: "nudged",
+			});
+		});
+
+		it("gives up after one nudge instead of looping", async () => {
+			const { appendEntry, handlers, sendUserMessage } = await armWatch();
+			const agentEnd = handlers.get("agent_end");
+			const silentRun = {
+				messages: [assistantStop([{ type: "text", text: "" }])],
+			};
+
+			await agentEnd?.(silentRun, ctx);
+			await agentEnd?.(silentRun, ctx);
+			await agentEnd?.(silentRun, ctx);
+
+			expect(sendUserMessage).toHaveBeenCalledOnce();
+			expect(appendEntry).toHaveBeenCalledWith("background-bash-empty-turn", {
+				action: "gave-up",
+			});
+		});
+
+		it("disarms when the run responds with text or tool calls", async () => {
+			const textRun = await armWatch();
+			const textAgentEnd = textRun.handlers.get("agent_end");
+			await textAgentEnd?.(
+				{
+					messages: [
+						assistantStop([{ type: "text", text: "CI is green; continuing." }]),
+					],
+				},
+				ctx,
+			);
+			await textAgentEnd?.(
+				{ messages: [assistantStop([{ type: "text", text: "" }])] },
+				ctx,
+			);
+			expect(textRun.sendUserMessage).not.toHaveBeenCalled();
+
+			const toolRun = await armWatch();
+			await toolRun.handlers.get("agent_end")?.(
+				{ messages: [assistantStop([{ type: "toolCall" }])] },
+				ctx,
+			);
+			expect(toolRun.sendUserMessage).not.toHaveBeenCalled();
+		});
+
+		it("does not nudge aborted runs", async () => {
+			const { handlers, sendUserMessage } = await armWatch();
+
+			await handlers.get("agent_end")?.(
+				{ messages: [assistantStop([{ type: "text", text: "" }], "aborted")] },
+				ctx,
+			);
+			await handlers.get("agent_end")?.(
+				{ messages: [assistantStop([{ type: "text", text: "" }])] },
+				ctx,
+			);
+
+			expect(sendUserMessage).not.toHaveBeenCalled();
+		});
+
+		it("does not arm while other managed tasks remain", async () => {
+			const finishWaits: Array<(result: ExecResult) => void> = [];
+			const exec = vi.fn(async (_command: string, args: string[]) => {
+				if (!isQuietWait(args)) return execResult();
+				return new Promise<ExecResult>((resolve) => finishWaits.push(resolve));
+			});
+			const { handlers, sendMessage, sendUserMessage, tool } =
+				setupExtension(exec);
+
+			await tool.execute(
+				"call-first",
+				{ command: "first-task", background: true },
+				undefined,
+				undefined,
+				ctx,
+			);
+			await tool.execute(
+				"call-second",
+				{ command: "second-task", background: true },
+				undefined,
+				undefined,
+				ctx,
+			);
+
+			finishWaits[0]?.(execResult());
+			await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+			const silentRun = {
+				messages: [assistantStop([{ type: "text", text: "" }])],
+			};
+			await handlers.get("agent_end")?.(silentRun, ctx);
+			expect(sendUserMessage).not.toHaveBeenCalled();
+
+			finishWaits[1]?.(execResult());
+			await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
+			await handlers.get("agent_end")?.(silentRun, ctx);
+			expect(sendUserMessage).toHaveBeenCalledOnce();
+		});
 	});
 
 	it("wakes on a background timeout without stopping the command", async () => {
