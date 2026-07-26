@@ -1,5 +1,5 @@
 {
-  "model": "claude-fable-5",
+  "model": "claude-opus-5[1m]",
   "env": {
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "300000",
     "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "true",

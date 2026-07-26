@@ -98,11 +98,11 @@ codex_log="$(mktemp)"
 trap 'rm -f "$claude_out" "$codex_out" "$codex_log"' EXIT
 
 # Claude reviewer — prints findings to stdout, then exits. Pin every model
-# selection surface to Opus 4.8: /code-review may spawn subagents or carry its
+# selection surface to Opus 5: /code-review may spawn subagents or carry its
 # own model override, and user/project settings may configure fallback models.
 # Keep this policy hard-coded; gauntlet reviews must never consume Fable quota.
-readonly claude_review_model="claude-opus-4-8"
-readonly claude_review_settings='{"availableModels":["claude-opus-4-8"],"enforceAvailableModels":true,"fallbackModel":[]}'
+readonly claude_review_model="claude-opus-5"
+readonly claude_review_settings='{"availableModels":["claude-opus-5"],"enforceAvailableModels":true,"fallbackModel":[]}'
 CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
 ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
   claude -p --model "$claude_review_model" --setting-sources "" \
