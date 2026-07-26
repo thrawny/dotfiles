@@ -602,8 +602,18 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			return;
 		}
 		finalWakeupWatch = "nudged";
-		pi.appendEntry(EMPTY_TURN_ENTRY_TYPE, { action: "nudged" });
-		pi.sendUserMessage(EMPTY_TURN_NUDGE);
+		try {
+			// followUp queues behind any run the runtime still considers active;
+			// an unqueued send throws "Agent is already processing" from agent_end.
+			pi.sendUserMessage(EMPTY_TURN_NUDGE, { deliverAs: "followUp" });
+			pi.appendEntry(EMPTY_TURN_ENTRY_TYPE, { action: "nudged" });
+		} catch (error) {
+			finalWakeupWatch = "armed";
+			pi.appendEntry(EMPTY_TURN_ENTRY_TYPE, {
+				action: "nudge-failed",
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
 	});
 
 	pi.registerTool({

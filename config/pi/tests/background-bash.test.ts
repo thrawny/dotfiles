@@ -311,6 +311,32 @@ describe("background bash", () => {
 
 			expect(sendUserMessage).toHaveBeenCalledOnce();
 			expect(sendUserMessage.mock.calls[0]?.[0]).toContain("empty response");
+			expect(sendUserMessage.mock.calls[0]?.[1]).toEqual({
+				deliverAs: "followUp",
+			});
+			expect(appendEntry).toHaveBeenCalledWith("background-bash-empty-turn", {
+				action: "nudged",
+			});
+		});
+
+		it("stays armed and retries when the nudge cannot be delivered", async () => {
+			const { appendEntry, handlers, sendUserMessage } = await armWatch();
+			sendUserMessage.mockImplementationOnce(() => {
+				throw new Error("Agent is already processing.");
+			});
+			const agentEnd = handlers.get("agent_end");
+			const silentRun = {
+				messages: [assistantStop([{ type: "text", text: "" }])],
+			};
+
+			await agentEnd?.(silentRun, ctx);
+			expect(appendEntry).toHaveBeenCalledWith("background-bash-empty-turn", {
+				action: "nudge-failed",
+				error: "Agent is already processing.",
+			});
+
+			await agentEnd?.(silentRun, ctx);
+			expect(sendUserMessage).toHaveBeenCalledTimes(2);
 			expect(appendEntry).toHaveBeenCalledWith("background-bash-empty-turn", {
 				action: "nudged",
 			});
