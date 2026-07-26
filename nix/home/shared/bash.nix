@@ -9,6 +9,18 @@
         "ignorespace"
       ];
       initExtra = lib.mkOrder 2000 ''
+        # `zmx run` hardcodes a login bash so it can scrape `$?` for exit-code
+        # tracking, while interactive zmx shells come from $SHELL (zsh). Any
+        # bash inside a zmx session is therefore a task shell: render no prompt
+        # so PS1/PS2 stay out of the scrollback `zmx history` returns.
+        if [[ -n "$QUIET_PROMPT" || -n "$ZMX_SESSION" ]]; then
+          quiet_prompt=1
+          # direnv otherwise writes its whole export list into the scrollback of
+          # every task, which is more noise than the prompt ever was. Exported
+          # because direnv reads it as a separate process.
+          export DIRENV_LOG_FORMAT=
+        fi
+
         if type bind >/dev/null 2>&1; then
           if shopt -q progcomp 2>/dev/null && [[ ! -v BASH_COMPLETION_VERSINFO ]]; then
             . "${pkgs.bash-completion}/etc/profile.d/bash_completion.sh"
@@ -16,16 +28,20 @@
 
           eval "$(${pkgs.direnv}/bin/direnv hook bash)"
 
-          if [[ -n "$QUIET_PROMPT" ]]; then
+          if [[ -n "$quiet_prompt" ]]; then
             PS1=
+            PS2=
           elif [[ $TERM != "dumb" ]]; then
             eval "$(${pkgs.starship}/bin/starship init bash --print-full-init)"
           fi
-        elif [[ -n "$QUIET_PROMPT" ]]; then
+        elif [[ -n "$quiet_prompt" ]]; then
           PS1=
+          PS2=
         else
           PS1='bash:\W \$ '
         fi
+
+        unset quiet_prompt
       '';
     };
 
