@@ -1,5 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { basename } from "node:path";
+import { mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { homedir } from "node:os";
+import { basename, join } from "node:path";
 import {
 	createBashToolDefinition,
 	SettingsManager,
@@ -175,6 +177,38 @@ async function pruneOldBackgroundSessions(
 	} catch {
 		// Cleanup is opportunistic and must not prevent a new command from starting.
 	}
+
+	await pruneOldControlScripts();
+}
+
+// Resolved per call so tests can redirect writes with XDG_CACHE_HOME.
+function controlScriptDir(): string {
+	const cacheHome = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
+	return join(cacheHome, "pi", "background-bash");
+}
+
+async function pruneOldControlScripts(): Promise<void> {
+	const dir = controlScriptDir();
+	let entries: string[];
+	try {
+		entries = await readdir(dir);
+	} catch {
+		// The directory only exists once a background command has run.
+		return;
+	}
+
+	const cutoff = Date.now() - SESSION_RETENTION_SECONDS * 1000;
+	await Promise.all(
+		entries.map(async (entry) => {
+			const path = join(dir, entry);
+			try {
+				const info = await stat(path);
+				if (info.mtimeMs <= cutoff) await rm(path, { force: true });
+			} catch {
+				// A concurrent launch may have pruned the same file already.
+			}
+		}),
+	);
 }
 
 type OutputMarkers = { start: string; end: string };
@@ -304,6 +338,39 @@ function extractBackgroundOutput(
 		.slice(startIndex + 1, endIndex < 0 ? undefined : endIndex)
 		.join("\n")
 		.trimEnd();
+}
+
+function shellQuote(value: string): string {
+	return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+// zmx has no exec channel for `run`: it spawns a login bash and types the
+// launch line into the PTY, where the tty echoes it and readline renders it
+// again. Every argument therefore lands in `zmx history` twice. Keeping the
+// command in a script file holds the echoed line to `<shell> <script>`.
+function controlScript(
+	shellPath: string,
+	command: string,
+	markers: OutputMarkers,
+): string {
+	return `${[
+		`printf '%s\\n' ${shellQuote(markers.start)}`,
+		`${shellQuote(shellPath)} -c ${shellQuote(command)}`,
+		"pi_bg_exit_code=$?",
+		`printf '\\n%s:%s\\n' ${shellQuote(markers.end)} "$pi_bg_exit_code"`,
+		'exit "$pi_bg_exit_code"',
+	].join("\n")}\n`;
+}
+
+async function writeControlScript(
+	sessionName: string,
+	script: string,
+): Promise<string> {
+	const dir = controlScriptDir();
+	await mkdir(dir, { recursive: true });
+	const path = join(dir, `${sessionName}.sh`);
+	await writeFile(path, script, { mode: 0o700 });
+	return path;
 }
 
 function appendOutput(
@@ -654,13 +721,15 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				? `${bash.commandPrefix}\n${params.command}`
 				: params.command;
 			const markers = outputMarkers();
-			const controlCommand = [
-				`printf '%s\\n' "$3"`,
-				`"$1" -c "$2"`,
-				"pi_bg_exit_code=$?",
-				`printf '\\n%s:%s\\n' "$4" "$pi_bg_exit_code"`,
-				`exit "$pi_bg_exit_code"`,
-			].join("\n");
+			const scriptPath = await writeControlScript(
+				sessionName,
+				controlScript(bash.shellPath, command, markers),
+			);
+			// QUIET_PROMPT is redundant where bash.nix also suppresses the prompt
+			// for any ZMX_SESSION, but it keeps this working on hosts that do not
+			// use these dotfiles. zmx forks the daemon from this client, so the
+			// variable only lands if the session is created here — which it is,
+			// because every launch generates a fresh session name.
 			const launch = await pi.exec(
 				"env",
 				[
@@ -670,17 +739,12 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 					sessionName,
 					"-d",
 					bash.shellPath,
-					"-c",
-					controlCommand,
-					"pi-bg-control",
-					bash.shellPath,
-					command,
-					markers.start,
-					markers.end,
+					scriptPath,
 				],
 				{ cwd: ctx.cwd },
 			);
 			if (launch.code !== 0) {
+				await rm(scriptPath, { force: true }).catch(() => {});
 				const output = execFailure(launch);
 				throw new Error(
 					output

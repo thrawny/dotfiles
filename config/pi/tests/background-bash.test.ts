@@ -1,3 +1,7 @@
+import { mkdtempSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type {
 	ExecOptions,
 	ExecResult,
@@ -5,6 +9,9 @@ import type {
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+// Keep generated control scripts out of the real user cache directory.
+process.env.XDG_CACHE_HOME = mkdtempSync(join(tmpdir(), "pi-bg-test-"));
 import backgroundBashExtension, {
 	backgroundSessionName,
 } from "../extensions/background-bash.ts";
@@ -165,13 +172,7 @@ describe("background bash", () => {
 				expect.stringMatching(/^pi-bg-/),
 				"-d",
 				expect.any(String),
-				"-c",
-				expect.stringContaining("pi_bg_exit_code"),
-				"pi-bg-control",
-				expect.any(String),
-				"just check",
-				expect.stringMatching(/^__PI_BG_OUTPUT_START_/),
-				expect.stringMatching(/^__PI_BG_OUTPUT_END_/),
+				expect.stringMatching(/\/pi-bg-.*\.sh$/),
 			],
 			{ cwd: "/tmp" },
 		);
@@ -194,8 +195,11 @@ describe("background bash", () => {
 		expect(setStatus).toHaveBeenLastCalledWith("background-bash", " 1");
 
 		const launchArgs = exec.mock.calls[1]?.[1] as string[];
-		const startMarker = launchArgs.at(-2) ?? "";
-		const endMarker = launchArgs.at(-1) ?? "";
+		const script = await readFile(launchArgs.at(-1) ?? "", "utf8");
+		expect(script).toContain("pi_bg_exit_code");
+		expect(script).toContain("just check");
+		const startMarker = script.match(/__PI_BG_OUTPUT_START_\w+__/)?.[0] ?? "";
+		const endMarker = script.match(/__PI_BG_OUTPUT_END_\w+__/)?.[0] ?? "";
 		historyOutput = [
 			"echoed command containing a very long heredoc",
 			startMarker,
@@ -225,6 +229,32 @@ describe("background bash", () => {
 			"background-bash-task",
 			expect.objectContaining({ state: "finished", command: "just check" }),
 		);
+	});
+
+	it("keeps the command out of the launch line zmx echoes into scrollback", async () => {
+		const exec = vi.fn(async (_command: string, args: string[]) => {
+			if (isQuietWait(args)) return new Promise<ExecResult>(() => {});
+			return execResult();
+		});
+		const { tool } = setupExtension(exec);
+		// Quotes, newlines and $ all survive shell-quoting into the script file.
+		const command = "echo 'it'\\''s $HOME'\nprintf 'done\\n'";
+
+		await tool.execute(
+			"call-quoting",
+			{ command, background: true },
+			undefined,
+			undefined,
+			ctx,
+		);
+
+		const launchArgs = exec.mock.calls[1]?.[1] as string[];
+		expect(launchArgs.join(" ")).not.toContain("$HOME");
+		expect(launchArgs.filter((arg) => arg.includes("\n"))).toEqual([]);
+
+		const script = await readFile(launchArgs.at(-1) ?? "", "utf8");
+		expect(script).toContain(command.replaceAll("'", "'\\''"));
+		expect(script.trimEnd().endsWith('exit "$pi_bg_exit_code"')).toBe(true);
 	});
 
 	it("reports how many managed tasks remain after each completion", async () => {
@@ -595,7 +625,12 @@ describe("background bash", () => {
 		);
 		expect(exec).toHaveBeenCalledWith(
 			"env",
-			expect.arrayContaining(["zmx", "run", "-d", "gauntlet-review"]),
+			expect.arrayContaining([
+				"zmx",
+				"run",
+				"-d",
+				expect.stringMatching(/\/pi-bg-gauntlet-review-.*\.sh$/),
+			]),
 			{ cwd: "/tmp" },
 		);
 		expect(appendEntry).toHaveBeenCalledWith(
