@@ -26,6 +26,7 @@
       ];
       keybind = [
         "shift+enter=text:\\n"
+        "ctrl+enter=unbind"
         "super+a=select_all"
         "super+c=copy_to_clipboard"
         "super+v=paste_from_clipboard"

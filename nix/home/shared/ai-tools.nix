@@ -100,6 +100,7 @@ in
         ".pi/agent/pi-diff.json".source = configSource "pi/pi-diff.json";
         ".pi/agent/pi-vcc-config.json".source = configSource "pi/pi-vcc-config.json";
         ".pi/agent/models.json".source = configSource "pi/models.json";
+        ".pi/agent/keybindings.json".source = configSource "pi/keybindings.json";
 
         ".claude/commands".source = configSource "claude/commands";
         ".claude/agents".source = configSource "claude/agents";
