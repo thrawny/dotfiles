@@ -204,6 +204,7 @@ def main() -> None:
 
     model = data.get("model", {}).get("display_name", "Claude")
     model = model.replace("Claude ", "")  # Shorten "Claude Opus 4.5" to "Opus 4.5"
+    model = model.split(" (")[0].strip()  # Drop suffixes like "Opus 5 (1M context)"
 
     window_size = data.get("context_window", {}).get("context_window_size", 200_000)
     context_info = get_context_from_input(data)
