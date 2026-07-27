@@ -133,32 +133,40 @@ function execFailure(result: ExecResult): string {
 		.trim();
 }
 
+// One object per session from `zmx list --json`. Only `name` is guaranteed;
+// unreachable sessions carry `err` instead of the runtime fields.
+type ZmxSession = {
+	name: string;
+	clients?: number;
+	ended?: number;
+	err?: string;
+};
+
+function parseZmxSessions(output: string): ZmxSession[] {
+	const parsed: unknown = JSON.parse(output);
+	if (!Array.isArray(parsed))
+		throw new TypeError("zmx list JSON must be an array");
+	return parsed.filter(
+		(entry): entry is ZmxSession =>
+			typeof entry === "object" &&
+			entry !== null &&
+			typeof (entry as ZmxSession).name === "string",
+	);
+}
+
 function staleBackgroundSessions(output: string, nowSeconds: number): string[] {
 	const cutoff = nowSeconds - SESSION_RETENTION_SECONDS;
-	const stale: string[] = [];
 
-	for (const line of output.split("\n")) {
-		const fields = new Map<string, string>();
-		for (const field of line.trim().split("\t")) {
-			const separator = field.indexOf("=");
-			if (separator > 0) {
-				fields.set(field.slice(0, separator), field.slice(separator + 1));
-			}
-		}
-
-		const name = fields.get("name");
-		const ended = Number(fields.get("ended"));
-		if (
-			name?.startsWith("pi-bg-") &&
-			fields.get("clients") === "0" &&
-			Number.isSafeInteger(ended) &&
-			ended <= cutoff
-		) {
-			stale.push(name);
-		}
-	}
-
-	return stale;
+	return parseZmxSessions(output)
+		.filter(
+			(session) =>
+				session.name.startsWith("pi-bg-") &&
+				session.clients === 0 &&
+				// `ended` is absent while a task is still running.
+				session.ended !== undefined &&
+				session.ended <= cutoff,
+		)
+		.map((session) => session.name);
 }
 
 async function pruneOldBackgroundSessions(
@@ -166,7 +174,7 @@ async function pruneOldBackgroundSessions(
 	cwd: string,
 ): Promise<void> {
 	try {
-		const list = await pi.exec("zmx", ["list"], { cwd });
+		const list = await pi.exec("zmx", ["list", "--json"], { cwd });
 		if (list.code !== 0) return;
 
 		const stale = staleBackgroundSessions(
@@ -309,13 +317,11 @@ function persistedRunningTasks(ctx: ExtensionContext): BackgroundTask[] {
 }
 
 function listedBackgroundSessions(output: string): Set<string> {
-	const sessions = new Set<string>();
-	for (const line of output.split("\n")) {
-		for (const field of line.trim().split("\t")) {
-			if (field.startsWith("name=pi-bg-")) sessions.add(field.slice(5));
-		}
-	}
-	return sessions;
+	return new Set(
+		parseZmxSessions(output)
+			.map((session) => session.name)
+			.filter((name) => name.startsWith("pi-bg-")),
+	);
 }
 
 function outputMarkers(): OutputMarkers {
@@ -601,6 +607,12 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 					// The completion message above still triggers the wake-up turn.
 				}
 			}
+		} catch (error) {
+			if (sessionClosed || controller.signal.aborted) return;
+			const message = error instanceof Error ? error.message : String(error);
+			try {
+				pi.sendMessage(
+					{
 						customType: COMPLETION_MESSAGE_TYPE,
 						content: [
 							`Background command watcher failed for zmx session ${sessionName}.`,
@@ -632,17 +644,15 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			return;
 		}
 
-		let listed: Set<string> | undefined;
-		try {
-			const result = await pi.exec("zmx", ["list"], { cwd: ctx.cwd });
-			if (result.code === 0) listed = listedBackgroundSessions(result.stdout);
-		} catch {
-			// Fall back to zmx wait, which is also authoritative for each task.
+		const result = await pi.exec("zmx", ["list", "--json"], { cwd: ctx.cwd });
+		if (result.code !== 0) {
+			throw new Error(`Could not list zmx sessions: ${execFailure(result)}`);
 		}
+		const listed = listedBackgroundSessions(result.stdout);
 		if (sessionClosed) return;
 
 		for (const task of tasks) {
-			if (listed && !listed.has(task.sessionName)) {
+			if (!listed.has(task.sessionName)) {
 				persistTask({ ...task, state: "finished" });
 				continue;
 			}

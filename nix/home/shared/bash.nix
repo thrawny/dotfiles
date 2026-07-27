@@ -9,11 +9,9 @@
         "ignorespace"
       ];
       initExtra = lib.mkOrder 2000 ''
-        # `zmx run` hardcodes a login bash so it can scrape `$?` for exit-code
-        # tracking, while interactive zmx shells come from $SHELL (zsh). Any
-        # bash inside a zmx session is therefore a task shell: render no prompt
-        # so PS1/PS2 stay out of the scrollback `zmx history` returns.
-        if [[ -n "$QUIET_PROMPT" || -n "$ZMX_SESSION" ]]; then
+        # ZMX_TASK marks a `zmx run` session, which nobody is watching: render
+        # no prompt so PS1/PS2 stay out of the scrollback `zmx history` returns.
+        if [[ -n "$QUIET_PROMPT" || -n "$ZMX_TASK" ]]; then
           quiet_prompt=1
           # direnv otherwise writes its whole export list into the scrollback of
           # every task, which is more noise than the prompt ever was. Exported

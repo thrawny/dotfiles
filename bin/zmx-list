@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import signal
 import subprocess
 import sys
@@ -25,48 +26,6 @@ class ProcessInfo:
     pgid: int
     foreground_pgid: int
     elapsed: int
-
-
-def parse_timestamp(fields: dict[str, str], key: str) -> int | None:
-    value = fields.get(key)
-    if value is None:
-        return None
-
-    try:
-        return int(value)
-    except ValueError as error:
-        raise ValueError(f"invalid {key} timestamp {value!r}") from error
-
-
-def parse_session(line: str) -> Session:
-    fields: dict[str, str] = {}
-    for item in line.split("\t"):
-        key, separator, value = item.strip().partition("=")
-        # zmx marks the session attached to the current terminal with "→ ".
-        key = key.removeprefix("→ ")
-        if separator:
-            fields[key] = value
-
-    name = fields.get("name")
-    if not name:
-        raise ValueError(f"missing session name in {line!r}")
-
-    try:
-        pid = int(fields["pid"])
-    except (KeyError, ValueError) as error:
-        raise ValueError(f"invalid process ID for session {name!r}") from error
-
-    created = parse_timestamp(fields, "created")
-    if created is None:
-        raise ValueError(f"missing creation timestamp for session {name!r}")
-
-    return Session(
-        name=name,
-        pid=pid,
-        created=created,
-        ended=parse_timestamp(fields, "ended"),
-        exit_code=fields.get("exit_code"),
-    )
 
 
 def parse_elapsed(value: str) -> int:
@@ -182,7 +141,7 @@ def format_age(total_seconds: int) -> str:
 def load_sessions() -> tuple[list[Session], int]:
     try:
         result = subprocess.run(
-            ["zmx", "list"],
+            ["zmx", "list", "--json"],
             capture_output=True,
             check=False,
             text=True,
@@ -198,9 +157,17 @@ def load_sessions() -> tuple[list[Session], int]:
 
     try:
         sessions = [
-            parse_session(line) for line in result.stdout.splitlines() if line.strip()
+            Session(
+                name=fields["name"],
+                pid=fields["pid"],
+                created=fields["created"],
+                ended=fields.get("ended"),
+                exit_code=(str(fields["exit_code"]) if "exit_code" in fields else None),
+            )
+            for fields in json.loads(result.stdout)
+            if "err" not in fields
         ]
-    except ValueError as error:
+    except (KeyError, TypeError, ValueError) as error:
         print(f"Could not parse zmx output: {error}", file=sys.stderr)
         return [], 1
 

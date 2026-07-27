@@ -242,9 +242,15 @@
         ''
         ''
           # Allow automation shells to retain interactive behavior without rendering prompts.
-          if [[ -n "$QUIET_PROMPT" ]]; then
+          # ZMX_TASK marks a `zmx run` session, whose prompts would otherwise
+          # land in the scrollback `zmx history` returns.
+          if [[ -n "$QUIET_PROMPT" || -n "$ZMX_TASK" ]]; then
             PROMPT=
             RPROMPT=
+            # direnv otherwise writes its whole export list into the scrollback
+            # of every task. Exported because direnv reads it as a separate
+            # process.
+            export DIRENV_LOG_FORMAT=
           elif [[ "$TERM" != "dumb" ]]; then
             eval "$(${lib.getExe config.programs.starship.package} init zsh)"
           fi

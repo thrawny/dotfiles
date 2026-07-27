@@ -160,7 +160,7 @@ describe("background bash", () => {
 		expect(result.content[0]?.text).toContain(
 			"do not run zmx wait or zmx tail",
 		);
-		expect(exec).toHaveBeenNthCalledWith(1, "zmx", ["list"], {
+		expect(exec).toHaveBeenNthCalledWith(1, "zmx", ["list", "--json"], {
 			cwd: "/tmp",
 		});
 		expect(exec).toHaveBeenNthCalledWith(
@@ -604,13 +604,44 @@ describe("background bash", () => {
 		const nowSeconds = Math.floor(Date.now() / 1000);
 		const old = nowSeconds - 13 * 60 * 60;
 		const recent = nowSeconds - 11 * 60 * 60;
-		const listOutput = [
-			`name=pi-bg-old\tpid=1\tclients=0\tcreated=1\tended=${old}\texit_code=0`,
-			`name=pi-bg-recent\tpid=2\tclients=0\tcreated=1\tended=${recent}\texit_code=0`,
-			`name=pi-bg-running\tpid=3\tclients=0\tcreated=1`,
-			`name=pi-bg-attached\tpid=4\tclients=1\tcreated=1\tended=${old}\texit_code=0`,
-			`name=unrelated\tpid=5\tclients=0\tcreated=1\tended=${old}\texit_code=0`,
-		].join("\n");
+		const listOutput = JSON.stringify([
+			{
+				name: "pi-bg-old",
+				pid: 1,
+				clients: 0,
+				created: 1,
+				ended: old,
+				exit_code: 0,
+			},
+			{
+				name: "pi-bg-recent",
+				pid: 2,
+				clients: 0,
+				created: 1,
+				ended: recent,
+				exit_code: 0,
+			},
+			// Still running: zmx omits `ended` entirely rather than sending 0.
+			{ name: "pi-bg-running", pid: 3, clients: 0, created: 1 },
+			{
+				name: "pi-bg-attached",
+				pid: 4,
+				clients: 1,
+				created: 1,
+				ended: old,
+				exit_code: 0,
+			},
+			{
+				name: "unrelated",
+				pid: 5,
+				clients: 0,
+				created: 1,
+				ended: old,
+				exit_code: 0,
+			},
+			// Unreachable sessions carry `err` in place of the runtime fields.
+			{ name: "pi-bg-dead", current: false, err: "ConnectionRefused" },
+		]);
 		const exec = vi.fn(async (_command: string, args: string[]) =>
 			args[0] === "list" ? execResult({ stdout: listOutput }) : execResult(),
 		);
@@ -633,6 +664,7 @@ describe("background bash", () => {
 				"pi-bg-recent",
 				"pi-bg-running",
 				"pi-bg-attached",
+				"pi-bg-dead",
 				"unrelated",
 			]),
 			expect.anything(),
@@ -700,7 +732,9 @@ describe("background bash", () => {
 		const exec = vi.fn(async (_command: string, args: string[]) => {
 			if (args[0] === "list") {
 				return execResult({
-					stdout: `name=${sessionName}\tpid=1\tclients=0\tcreated=1`,
+					stdout: JSON.stringify([
+						{ name: sessionName, pid: 1, clients: 0, created: 1 },
+					]),
 				});
 			}
 			return isQuietWait(args) ? waitResult : execResult();
@@ -731,7 +765,9 @@ describe("background bash", () => {
 
 		await handlers.get("session_start")?.({}, restoredCtx);
 
-		expect(exec).toHaveBeenCalledWith("zmx", ["list"], { cwd: "/tmp" });
+		expect(exec).toHaveBeenCalledWith("zmx", ["list", "--json"], {
+			cwd: "/tmp",
+		});
 		expect(exec).toHaveBeenCalledWith(
 			"bash",
 			["-c", 'exec zmx wait "$1" >/dev/null', "pi-bg-wait", sessionName],
