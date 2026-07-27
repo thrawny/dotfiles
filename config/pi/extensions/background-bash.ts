@@ -20,6 +20,8 @@ const TASK_ENTRY_TYPE = "background-bash-task";
 const EMPTY_TURN_ENTRY_TYPE = "background-bash-empty-turn";
 const EMPTY_TURN_NUDGE =
 	"The final background task completion above received an empty response. React to it now: continue the work it unblocks, or state the outcome and current status.";
+const FINAL_WAKEUP_NUDGE =
+	"All background tasks are finished. Keep working: act on the results above; if everything is already done, state the final status.";
 const OUTPUT_MAX_BYTES = 12 * 1024;
 const OUTPUT_MAX_LINES = 100;
 const MAX_FOREGROUND_TIMEOUT_SECONDS = 10 * 60;
@@ -590,6 +592,15 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			try {
 				pi.sendMessage(
 					{
+			if (remainingTaskCount === 0) {
+				try {
+					// GPT-5.6 often no-ops notification turns but reliably engages
+					// with user messages; the watchdog backstops a failed send here.
+					pi.sendUserMessage(FINAL_WAKEUP_NUDGE, { deliverAs: "steer" });
+				} catch {
+					// The completion message above still triggers the wake-up turn.
+				}
+			}
 						customType: COMPLETION_MESSAGE_TYPE,
 						content: [
 							`Background command watcher failed for zmx session ${sessionName}.`,

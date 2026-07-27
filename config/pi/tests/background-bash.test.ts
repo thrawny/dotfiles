@@ -138,7 +138,8 @@ describe("background bash", () => {
 			},
 		);
 
-		const { appendEntry, sendMessage, tool } = setupExtension(exec);
+		const { appendEntry, sendMessage, sendUserMessage, tool } =
+			setupExtension(exec);
 
 		expect(tool.parameters.properties).toHaveProperty("background");
 		expect(tool.promptGuidelines?.join("\n")).toContain(
@@ -218,6 +219,9 @@ describe("background bash", () => {
 			"No managed background tasks remain; no further completion wake-up is pending.",
 		);
 		expect(message.details.remainingTaskCount).toBe(0);
+		expect(sendUserMessage).toHaveBeenCalledOnce();
+		expect(sendUserMessage.mock.calls[0]?.[0]).toContain("Keep working");
+		expect(sendUserMessage.mock.calls[0]?.[1]).toEqual({ deliverAs: "steer" });
 		expect(message.content).toContain("Managed task status: zmx-list");
 		expect(message.content).toContain("Output:\ncheck output");
 		expect(message.content).not.toContain("Command:");
@@ -263,7 +267,7 @@ describe("background bash", () => {
 			if (!isQuietWait(args)) return execResult();
 			return new Promise<ExecResult>((resolve) => finishWaits.push(resolve));
 		});
-		const { sendMessage, tool } = setupExtension(exec);
+		const { sendMessage, sendUserMessage, tool } = setupExtension(exec);
 
 		await tool.execute(
 			"call-first",
@@ -289,6 +293,7 @@ describe("background bash", () => {
 		};
 		expect(firstMessage.content).toContain("1 managed background task remains");
 		expect(firstMessage.details.remainingTaskCount).toBe(1);
+		expect(sendUserMessage).not.toHaveBeenCalled();
 
 		finishWaits[1]?.(execResult());
 		await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
@@ -300,6 +305,43 @@ describe("background bash", () => {
 			"No managed background tasks remain",
 		);
 		expect(secondMessage.details.remainingTaskCount).toBe(0);
+		expect(sendUserMessage).toHaveBeenCalledOnce();
+	});
+
+	it("still completes and stays armed when the final-wakeup nudge cannot be sent", async () => {
+		let finishWait: ((result: ExecResult) => void) | undefined;
+		const exec = vi.fn(async (_command: string, args: string[]) => {
+			if (!isQuietWait(args)) return execResult();
+			return new Promise<ExecResult>((resolve) => {
+				finishWait = resolve;
+			});
+		});
+		const { handlers, sendMessage, sendUserMessage, tool } =
+			setupExtension(exec);
+		sendUserMessage.mockImplementationOnce(() => {
+			throw new Error("Agent is already processing.");
+		});
+
+		await tool.execute(
+			"call-nudge-fail",
+			{ command: "flaky-nudge-task", background: true },
+			undefined,
+			undefined,
+			ctx,
+		);
+		finishWait?.(execResult());
+		await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
+		const message = sendMessage.mock.calls[0]?.[0] as { content: string };
+		expect(message.content).toContain("exit 0");
+
+		await handlers.get("agent_end")?.(
+			{ messages: [assistantStop([{ type: "text", text: "" }])] },
+			ctx,
+		);
+		expect(sendUserMessage).toHaveBeenCalledTimes(2);
+		expect(sendUserMessage.mock.calls[1]?.[1]).toEqual({
+			deliverAs: "followUp",
+		});
 	});
 
 	describe("final wakeup empty-turn watchdog", () => {
@@ -321,6 +363,9 @@ describe("background bash", () => {
 			);
 			finishWait?.(execResult());
 			await vi.waitFor(() => expect(setup.sendMessage).toHaveBeenCalledOnce());
+			// The final completion always sends a keep-working user nudge; drop it
+			// so these tests assert only the watchdog's own sends.
+			setup.sendUserMessage.mockClear();
 			return setup;
 		}
 
@@ -464,6 +509,11 @@ describe("background bash", () => {
 			finishWaits[1]?.(execResult());
 			await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
 			await handlers.get("agent_end")?.(silentRun, ctx);
+			await handlers.get("agent_end")?.(silentRun, ctx);
+			expect(sendUserMessage).toHaveBeenCalledTimes(2);
+			expect(sendUserMessage.mock.calls[1]?.[1]).toEqual({
+				deliverAs: "followUp",
+			});
 			expect(sendUserMessage).toHaveBeenCalledOnce();
 		});
 	});
