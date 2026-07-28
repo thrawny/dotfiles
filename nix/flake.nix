@@ -167,10 +167,6 @@
                     replace-service-with-usr-bin = false;
                   };
                 })
-                # Use the current pnpm 10 with the git-dependency CVE fixes for vesktop.
-                (final: prev: {
-                  vesktop = prev.vesktop.override { inherit (final) pnpm_10; };
-                })
               ];
             }
             {
