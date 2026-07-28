@@ -53,7 +53,7 @@ return {
         {
           "<leader>rm",
           function()
-            require("codediff.review").open_merge_base("origin/main", "HEAD")
+            require("codediff.review").open_merge_base("origin/main", "WORKING")
           end,
           desc = "Review branch changes",
         },
