@@ -592,12 +592,6 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				{ deliverAs: "steer", triggerTurn: true },
 			);
 			finalWakeupWatch = remainingTaskCount === 0 ? "armed" : "off";
-		} catch (error) {
-			if (sessionClosed || controller.signal.aborted) return;
-			const message = error instanceof Error ? error.message : String(error);
-			try {
-				pi.sendMessage(
-					{
 			if (remainingTaskCount === 0) {
 				try {
 					// GPT-5.6 often no-ops notification turns but reliably engages

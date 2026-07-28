@@ -508,13 +508,12 @@ describe("background bash", () => {
 
 			finishWaits[1]?.(execResult());
 			await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
-			await handlers.get("agent_end")?.(silentRun, ctx);
+			expect(sendUserMessage).toHaveBeenCalledOnce();
 			await handlers.get("agent_end")?.(silentRun, ctx);
 			expect(sendUserMessage).toHaveBeenCalledTimes(2);
 			expect(sendUserMessage.mock.calls[1]?.[1]).toEqual({
 				deliverAs: "followUp",
 			});
-			expect(sendUserMessage).toHaveBeenCalledOnce();
 		});
 	});
 
