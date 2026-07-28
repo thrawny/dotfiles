@@ -651,10 +651,6 @@ in
       }
       {
         matches = [
-          {
-            app-id = "^com\\.mitchellh\\.ghostty$";
-            title = "^btop\\+\\+$";
-          }
           { app-id = "^org\\.telegram\\.desktop$"; }
           { app-id = "^Slack$"; }
           { app-id = "^teams-for-linux$"; }
@@ -675,6 +671,7 @@ in
           }
           { app-id = "^com\\.thrawny\\.agent-switch$"; }
           { title = "^niri-project-picker$"; }
+          { title = "^btop\\+\\+$"; }
           { app-id = "^spotify$"; }
           { app-id = "^1password$"; }
         ];

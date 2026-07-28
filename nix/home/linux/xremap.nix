@@ -82,8 +82,13 @@ _: {
                 "b" = {
                   launch = [
                     "nirius"
-                    "focus"
+                    "scratchpad-show-or-spawn"
                     "--title"
+                    "^btop\\+\\+$"
+                    "--"
+                    "ghostty"
+                    "--title=btop++"
+                    "-e"
                     "btop"
                   ];
                 };
