@@ -73,6 +73,32 @@ try {
 
 title = title || basename(file);
 
+// Ask niri to own the preview process so the invoking terminal is released.
+// The marker prevents the niri-spawned copy from delegating itself again.
+if (process.env.NIRI_SOCKET && process.env.LIVE_HTML_NIRI_SPAWNED !== "1") {
+  try {
+    const spawned = Bun.spawnSync(
+      [
+        "niri",
+        "msg",
+        "action",
+        "spawn",
+        "--",
+        "env",
+        "LIVE_HTML_NIRI_SPAWNED=1",
+        resolve(Bun.argv[1]),
+        ...args,
+      ],
+      { stdout: "inherit", stderr: "inherit" },
+    );
+
+    if (spawned.success) process.exit(0);
+    console.error("live-html: niri spawn failed; continuing in this terminal");
+  } catch (err) {
+    console.error(`live-html: niri spawn failed (${err.message}); continuing in this terminal`);
+  }
+}
+
 let loadedOnce = false;
 let timer = null;
 let closed = false;
