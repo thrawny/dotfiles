@@ -20,7 +20,9 @@ Not every change deserves a blueprint. Estimate the tier and say it out loud:
 
 Roughly 80% of the value arrives in the first minutes of design; size the effort to the tier.
 
-This step is complete when the tier is stated and the user hasn't objected.
+The user may also request a section subset — "program design only" is the common one: TL;DR, the program-design fences, and Decisions, nothing else. The filetree then doubles as the scope boundary: files not listed are not touched. Anchor research (step 2) runs at full strength regardless of subset.
+
+This step is complete when the tier (and any requested subset) is stated and the user hasn't objected.
 
 ## 2. Research the anchors
 

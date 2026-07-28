@@ -2,6 +2,14 @@
 
 The source of truth is one markdown file, `lab/<name>.blueprint.md` — scratch space, not version control. `blueprint-html <source>` renders it to `lab/<name>.html`; the HTML is a disposable view — edit, diff, and argue with the source. Budget: 150–300 lines; if a section fights the budget, cut detail from another section rather than growing the document.
 
+Style rules:
+
+- Sections are `##` headings (the TOC indexes them); subsections are `###`.
+- Fences, lists, and tables carry the design. Prose is rationed: one short paragraph where structure can't say it, never several in a row.
+- Enumerable criteria (parity semantics, compatibility lists, invariants) are bullet lists, not comma-run sentences — reviewers tick items off.
+- State each fact once: scope holds the what, decisions hold the why.
+- Sections beyond the six below are allowed, but they go last — after Decisions — and stay short.
+
 ## Frontmatter
 
 ```yaml
@@ -60,7 +68,7 @@ Data model changes as real DDL in a `sql` fence, new query shapes as SQL comment
 
 The shape of the code below architecture: what an agent would otherwise get wrong. Light pseudocode visualizations, not mermaid.
 
-One `callstack` fence per changed control flow. Indentation is the call hierarchy; unchanged frames anchor the tree and must exist in the codebase today, cited in a comment:
+One `callstack` fence per changed control flow. Every frame is a callable — a function, method, or endpoint; work sequences ("compare X locally", "capture output") belong in the slices table, never in a callstack. Indentation is the call hierarchy; unchanged frames anchor the tree and must exist in the codebase today, cited in a comment:
 
 ```callstack
  entrypoint
