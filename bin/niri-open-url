@@ -43,16 +43,14 @@ if [[ -z "$focused_window_id" ]]; then
   focused_window_id=$(jq -r '.[] | select(.is_focused) | .id' <<<"$windows_json" | head -n1)
 fi
 
-focused_position=$(
+focused_col=$(
   jq -r \
     --argjson workspace_id "${focused_workspace_id:-0}" \
     --argjson focused_window_id "${focused_window_id:-0}" '
       map(select(.workspace_id == $workspace_id and .id == $focused_window_id))
-      | (.[0].layout.pos_in_scrolling_layout // [0, 0])
-      | "\(.[0] // 0) \(.[1] // 0)"
+      | .[0].layout.pos_in_scrolling_layout[0] // 0
     ' <<<"$windows_json"
 )
-read -r focused_col focused_row <<<"$focused_position"
 
 open_in_window() {
   local window_id="$1"
@@ -66,20 +64,20 @@ nearest_browser=$(
   jq -r \
     --argjson workspace_id "${focused_workspace_id:-0}" \
     --argjson focused_col "${focused_col:-0}" \
-    --argjson focused_row "${focused_row:-0}" \
     --argjson focused_window_id "${focused_window_id:-0}" '
       def sq: . * .;
       map(
         select(.workspace_id == $workspace_id and .app_id == "helium")
-        | .distance = (((.layout.pos_in_scrolling_layout[0] // 0) - $focused_col) | sq)
-                   + (((.layout.pos_in_scrolling_layout[1] // 0) - $focused_row) | sq)
+        | .column_distance = (((.layout.pos_in_scrolling_layout[0] // 0) - $focused_col) | sq)
       )
-      # Stacked windows share a layout position, so prefer the active window
-      # when distances tie. Fall back to the most recently focused window.
+      # Row indexes are only meaningful within a column. Including them in
+      # the distance makes the top window in an adjacent browser stack win.
+      # Pick the nearest browser column, then its most recently focused window.
       | sort_by(
-          .distance,
+          .column_distance,
           (if .id == $focused_window_id then 0 else 1 end),
           -(.focus_timestamp.secs // 0),
+          -(.focus_timestamp.nanos // 0),
           .id
         )
       | .[0]
