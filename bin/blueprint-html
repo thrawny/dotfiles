@@ -1,12 +1,12 @@
 #!/usr/bin/env -S uv run --script
 #
 # /// script
-# dependencies = ["markdown-it-py"]
+# dependencies = ["markdown-it-py", "pygments"]
 # ///
 """Render a blueprint source file to a self-contained HTML artifact.
 
 Usage:
-    blueprint-html docs/plans/foo.blueprint.md            # -> lab/foo.html
+    blueprint-html lab/foo.blueprint.md                   # -> lab/foo.html
     blueprint-html foo.blueprint.md -o out.html
 
 Source format: markdown with YAML-ish frontmatter (title, tier, description)
@@ -25,11 +25,67 @@ from datetime import date
 from pathlib import Path
 
 from markdown_it import MarkdownIt
+from pygments import highlight
+from pygments.formatters import HtmlFormatter
+from pygments.lexers import get_lexer_by_name
+from pygments.style import Style
+from pygments.token import (
+    Comment,
+    Error,
+    Generic,
+    Keyword,
+    Name,
+    Number,
+    Operator,
+    String,
+)
+from pygments.util import ClassNotFound
 
 DIFF_FENCES = {"callstack", "filetree", "contract", "signatures"}
 MARKER_CLASS = {"+": "add", "-": "del", "~": "mod"}
 COMMENT_RE = re.compile(r"(\s#\s?.*)$")
 ANCHOR_RE = re.compile(r"([\w./-]+\.\w+:\d+)")
+
+
+def _bp_style(bg: str, muted: str, kw: str, lit: str, ink: str) -> type[Style]:
+    return type(
+        "BpStyle",
+        (Style,),
+        {
+            "background_color": bg,
+            "styles": {
+                Comment: f"italic {muted}",
+                Keyword: f"bold {kw}",
+                Keyword.Type: f"bold {kw}",
+                Name.Builtin: kw,
+                Name.Function: ink,
+                Name.Class: ink,
+                String: lit,
+                Number: lit,
+                Name.Decorator: lit,
+                Operator: muted,
+                Generic.Inserted: kw,
+                Generic.Deleted: lit,
+                Error: lit,
+            },
+        },
+    )
+
+
+BP_LIGHT = _bp_style("#f4f3ef", "#6f6e66", "#1c5cab", "#8a4b12", "#26251f")
+BP_DARK = _bp_style("#1d2026", "#94927f", "#7fb2f0", "#f0a97a", "#e6e4dd")
+FRAG_FMT = HtmlFormatter(nowrap=True, nobackground=True)
+SIG_LEXER = get_lexer_by_name("typescript", stripnl=False)
+
+
+def style_sheet(style: type[Style], prefix: str = ".hl") -> str:
+    raw = HtmlFormatter(style=style, nobackground=True).get_style_defs(prefix)
+    return "\n".join(
+        line
+        for line in raw.splitlines()
+        if line.startswith(prefix + " .") and ".hll" not in line
+    )
+
 
 warnings: list[str] = []
 
@@ -53,7 +109,7 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
     return meta, text[end + 4 :]
 
 
-def render_diff_line(line: str) -> str:
+def render_diff_line(line: str, lexer=None) -> str:
     marker = line[:1]
     cls = MARKER_CLASS.get(marker, "ctx")
     body, comment = line, ""
@@ -64,14 +120,24 @@ def render_diff_line(line: str) -> str:
             r'<span class="anchor">\1</span>', html.escape(m.group(1))
         )
         comment = f'<span class="comment">{comment}</span>'
-    return f'<span class="ln {cls}">{html.escape(body)}{comment}</span>'
+    if lexer is not None and body.strip():
+        prefix, code = (marker, body[1:]) if cls != "ctx" else ("", body)
+        body_html = html.escape(prefix) + highlight(code, lexer, FRAG_FMT).rstrip("\n")
+    else:
+        body_html = html.escape(body)
+    # newline lives inside the span: keeps copy-paste byte-exact and avoids
+    # whitespace-only anonymous blocks doubling the line height under pre
+    return f'<span class="ln {cls}">{body_html}{comment}\n</span>'
 
 
 def render_diff_block(kind: str, content: str) -> str:
-    lines = "\n".join(render_diff_line(ln) for ln in content.rstrip("\n").split("\n"))
+    lexer = SIG_LEXER if kind == "signatures" else None
+    lines = "".join(
+        render_diff_line(ln, lexer) for ln in content.rstrip("\n").split("\n")
+    )
     return (
         f'<div class="block"><span class="badge">{kind}</span>'
-        f'<pre class="diffish">{lines}</pre></div>\n'
+        f'<pre class="diffish hl">{lines}</pre></div>\n'
     )
 
 
@@ -92,23 +158,18 @@ def make_fence_renderer(default_fence):
         if kind == "mockup":
             return render_mockup(token.content)
         if kind == "mermaid":
-            return f'<pre class="mermaid">{html.escape(token.content)}</pre>\n'
-        if kind and kind not in {
-            "text",
-            "sql",
-            "ts",
-            "js",
-            "py",
-            "go",
-            "rust",
-            "json",
-            "yaml",
-            "diff",
-            "sh",
-            "bash",
-            "lua",
-        }:
-            warn(f"unknown fence type '{kind}' rendered as plain code")
+            return (
+                '<div class="figure mermaid-figure">'
+                f'<pre class="mermaid">{html.escape(token.content)}</pre></div>\n'
+            )
+        if kind:
+            try:
+                lexer = get_lexer_by_name(kind, stripnl=False)
+            except ClassNotFound:
+                warn(f"unknown fence type '{kind}' rendered as plain code")
+            else:
+                code = highlight(token.content, lexer, FRAG_FMT)
+                return f'<pre class="hl"><code>{code}</code></pre>\n'
         return default_fence(tokens, idx, options, env)
 
     return fence
@@ -136,18 +197,44 @@ def render_body(md: MarkdownIt, body: str) -> tuple[str, list[tuple[str, str]]]:
     return md.renderer.render(tokens, md.options, {}), toc
 
 
-CSS = """
-:root { --bg:#fdfdfc; --fg:#1c1c1a; --muted:#6f6e66; --line:#e4e2da;
-  --accent:#3b5bdb; --add:#0a7a33; --add-bg:#e9f7ee; --del:#c22525; --del-bg:#fbeaea;
-  --mod:#996a00; --mod-bg:#fdf4dd; --code-bg:#f4f3ef; }
-@media (prefers-color-scheme: dark) {
-  :root { --bg:#14161a; --fg:#e6e4dd; --muted:#94927f; --line:#2b2e35;
-    --accent:#7b9aff; --add:#5dd882; --add-bg:#12331d; --del:#ff7d7d; --del-bg:#3a1a1a;
-    --mod:#e8c35c; --mod-bg:#33290f; --code-bg:#1d2026; } }
+LIGHT_VARS = """--bg:#fdfdfc; --fg:#1c1c1a; --muted:#6f6e66; --line:#e4e2da;
+  --accent:#3b5bdb; --add:#1c5cab; --add-bg:#dbe8fa; --del:#ad4600; --del-bg:#fbe4d5;
+  --mod:#00744f; --mod-bg:#dcefe8; --code-bg:#f4f3ef;"""
+DARK_VARS = """--bg:#14161a; --fg:#e6e4dd; --muted:#94927f; --line:#2b2e35;
+  --accent:#7b9aff; --add:#7fb2f0; --add-bg:#122840; --del:#f0894a; --del-bg:#3a2410;
+  --mod:#4fc4a0; --mod-bg:#0e2f28; --code-bg:#1d2026;"""
+
+CSS = (
+    ":root { " + LIGHT_VARS + " }\n"
+    ':root[data-theme="dark"] { ' + DARK_VARS + " }\n"
+    "@media (prefers-color-scheme: dark) {\n"
+    '  :root:not([data-theme="light"]) { '
+    + DARK_VARS
+    + " } }"
+    + """
 * { box-sizing:border-box; }
 body { margin:0; background:var(--bg); color:var(--fg);
   font:16px/1.6 system-ui,-apple-system,sans-serif; }
-main { max-width:52rem; margin:0 auto; padding:1.5rem 1.25rem 4rem; }
+main { display:grid; padding:1.5rem 0 4rem;
+  grid-template-columns:
+    [full-start] minmax(1.25rem,1fr)
+    [wide-start] minmax(0,4rem)
+    [content-start] minmax(0,52rem) [content-end]
+    minmax(0,4rem) [wide-end] minmax(1.25rem,1fr) [full-end]; }
+main > * { grid-column: content; }
+main > .figure { grid-column: wide; }
+.figure { position:relative; margin:1.2rem 0; padding:.6rem 0; overflow-x:auto;
+  overscroll-behavior-x:contain; }
+.figure.fit { overflow-x:hidden; }
+.figure.fit svg { width:100% !important; height:auto !important;
+  max-width:100% !important; }
+.figbtn { position:absolute; top:.2rem; right:.2rem; font:.7rem/1 system-ui;
+  padding:.3rem .6rem; border:1px solid var(--line); border-radius:6px;
+  background:var(--code-bg); color:var(--muted); cursor:pointer; }
+dialog.zoom { width:96vw; height:92vh; max-width:none; max-height:none;
+  border:0; padding:0; overflow:auto; background:var(--bg); }
+dialog.zoom svg { width:auto !important; max-width:none !important; }
+dialog.zoom::backdrop { background:rgb(0 0 0 / .5); }
 header.meta { border-bottom:1px solid var(--line); padding:1.5rem 0 1rem; margin-bottom:1.5rem; }
 header.meta h1 { margin:0 0 .35rem; font-size:1.6rem; line-height:1.25; }
 header.meta p { margin:.25rem 0; color:var(--muted); }
@@ -171,12 +258,16 @@ pre code { background:none; padding:0; font:inherit; }
 .badge { position:absolute; top:.45rem; right:.7rem; font-size:.68rem; font-weight:600;
   text-transform:uppercase; letter-spacing:.07em; color:var(--muted); }
 pre.diffish { padding-top:1.5rem; }
-pre.diffish .ln { display:block; white-space:pre; }
-.ln.add { color:var(--add); background:var(--add-bg); }
-.ln.del { color:var(--del); background:var(--del-bg); }
-.ln.mod { color:var(--mod); background:var(--mod-bg); }
+pre.diffish .ln { display:block; white-space:pre;
+  border-left:3px solid transparent; padding-left:.5rem; }
+.ln.add { color:var(--add); background:var(--add-bg); border-left-color:var(--add); }
+.ln.del { color:var(--del); background:var(--del-bg); border-left-color:var(--del);
+  border-left-style:double; }
+.ln.mod { color:var(--mod); background:var(--mod-bg); border-left-color:var(--mod);
+  border-left-style:dashed; }
 .comment { color:var(--muted); font-style:italic; }
-.comment .anchor { color:var(--accent); font-style:normal; }
+.comment .anchor { color:var(--muted); font-style:normal; font-weight:600;
+  text-decoration:underline dotted; }
 iframe.mockup { width:100%; min-height:22rem; border:1px solid var(--line);
   border-radius:8px; background:#fff; margin-top:1.4rem; }
 pre.mermaid { text-align:left; }
@@ -187,6 +278,46 @@ th { background:var(--code-bg); }
 blockquote { margin:1rem 0; padding:.1rem 1rem; border-left:3px solid var(--line);
   color:var(--muted); }
 footer { margin-top:3rem; font-size:.8rem; color:var(--muted); }
+.themebtn { position:fixed; top:.75rem; right:.75rem; z-index:10;
+  font:1rem/1 system-ui; padding:.35rem .55rem; border:1px solid var(--line);
+  border-radius:8px; background:var(--code-bg); color:var(--muted); cursor:pointer; }
+"""
+)
+
+CSS_HL = (
+    style_sheet(BP_LIGHT)
+    + "\n"
+    + style_sheet(BP_DARK, ':root[data-theme="dark"] .hl')
+    + "\n@media (prefers-color-scheme: dark) {\n"
+    + style_sheet(BP_DARK, ':root:not([data-theme="light"]) .hl')
+    + "\n}\n"
+)
+
+FAVICON = (
+    "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>"
+    "<rect width='64' height='64' rx='12' fill='%231c5cab'/>"
+    "<path d='M16 20h32M16 30h24M16 40h28M16 50h18' stroke='%23fdfdfc'"
+    " stroke-width='5' stroke-linecap='round'/></svg>"
+)
+
+THEME_JS = """
+<script>
+  const root = document.documentElement;
+  let saved = null;
+  try { saved = localStorage.getItem("bp-theme"); } catch {}
+  if (saved === "light" || saved === "dark") root.dataset.theme = saved;
+  addEventListener("DOMContentLoaded", () => {
+    document.getElementById("themebtn").onclick = () => {
+      const dark = root.dataset.theme
+        ? root.dataset.theme === "dark"
+        : matchMedia("(prefers-color-scheme: dark)").matches;
+      const next = dark ? "light" : "dark";
+      root.dataset.theme = next;
+      try { localStorage.setItem("bp-theme", next); } catch {}
+      dispatchEvent(new CustomEvent("bp-theme"));
+    };
+  });
+</script>
 """
 
 MERMAID_JS = """
@@ -194,9 +325,43 @@ MERMAID_JS = """
 try {
   const { default: mermaid } = await import(
     "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs");
-  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
-  mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral" });
-  await mermaid.run({ querySelector: "pre.mermaid" });
+  const pres = [...document.querySelectorAll("pre.mermaid")];
+  const srcs = pres.map(p => p.textContent);
+  const natural = { useMaxWidth: false };
+  const dark = () => document.documentElement.dataset.theme
+    ? document.documentElement.dataset.theme === "dark"
+    : matchMedia("(prefers-color-scheme: dark)").matches;
+  const render = async () => {
+    mermaid.initialize({ startOnLoad: false, theme: dark() ? "dark" : "neutral",
+      sequence: { ...natural, actorMargin: 60, messageFontSize: 14 },
+      flowchart: natural, class: natural, state: natural, er: natural,
+      gantt: natural, journey: natural, timeline: natural });
+    pres.forEach((p, i) => {
+      p.textContent = srcs[i];
+      p.removeAttribute("data-processed");
+    });
+    await mermaid.run({ querySelector: "pre.mermaid" });
+  };
+  await render();
+  addEventListener("bp-theme", render);
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (!document.documentElement.dataset.theme) render();
+  });
+  const dlg = Object.assign(document.createElement("dialog"), { className: "zoom" });
+  document.body.append(dlg);
+  dlg.addEventListener("click", () => dlg.close());
+  for (const fig of document.querySelectorAll(".mermaid-figure")) {
+    if (!fig.querySelector("svg")) continue;
+    const b = document.createElement("button");
+    b.className = "figbtn";
+    b.textContent = "fit";
+    b.onclick = () => { b.textContent = fig.classList.toggle("fit") ? "1:1" : "fit"; };
+    fig.append(b);
+    fig.addEventListener("dblclick", () => {
+      const svg = fig.querySelector("svg");
+      if (svg) { dlg.replaceChildren(svg.cloneNode(true)); dlg.showModal(); }
+    });
+  }
 } catch { /* offline: diagrams stay readable as text */ }
 </script>
 """
@@ -218,7 +383,10 @@ def render_page(meta: dict[str, str], body_html: str, toc, src: Path) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)}</title>
-<style>{CSS}</style>
+<link rel="icon" href="{FAVICON}">
+<style>{CSS}{CSS_HL}</style>
+{THEME_JS}
+<button id="themebtn" class="themebtn" title="Toggle light/dark">&#9680;</button>
 <main>
 <header class="meta">
 {tier_html}

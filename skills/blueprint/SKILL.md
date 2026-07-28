@@ -36,7 +36,7 @@ This step is complete when every existing symbol the design touches has been con
 
 ## 3. Draft the source
 
-Read [ARTIFACT-FORMAT.md](ARTIFACT-FORMAT.md) and write the source file — `docs/plans/<name>.blueprint.md` by default — with each section the tier calls for. Hard rules, in tension order:
+Read [ARTIFACT-FORMAT.md](ARTIFACT-FORMAT.md) and write the source file — `lab/<name>.blueprint.md` by default. Blueprints are working documents, not repo documentation: they live in `lab/` scratch space and stay out of version control unless the user explicitly asks to commit one. Draft each section the tier calls for. Hard rules, in tension order:
 
 - **Abstract up.** Signatures and shapes; if you are writing code that could be pasted into the repo, stop and rise a level. Code blocks are reserved for schemas, type definitions, contracts, and genuinely complex algorithms — everything else is a reference like "follow the pattern in `src/api/users.ts:45`".
 - **Survive decision changes.** If swapping a library or renaming a service would invalidate half the document, it contains implementation, not design.

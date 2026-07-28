@@ -1,6 +1,6 @@
 # Blueprint Source Format
 
-The source of truth is one markdown file, `docs/plans/<name>.blueprint.md`. `blueprint-html <source>` renders it to `lab/<name>.html`; the HTML is a disposable view — edit, diff, and argue with the source. Budget: 150–300 lines; if a section fights the budget, cut detail from another section rather than growing the document.
+The source of truth is one markdown file, `lab/<name>.blueprint.md` — scratch space, not version control. `blueprint-html <source>` renders it to `lab/<name>.html`; the HTML is a disposable view — edit, diff, and argue with the source. Budget: 150–300 lines; if a section fights the budget, cut detail from another section rather than growing the document.
 
 ## Frontmatter
 
@@ -16,7 +16,7 @@ description: One-sentence summary shown under the title.
 
 The renderer treats these fence languages specially; everything else is ordinary markdown (headings, prose, lists, tables, code blocks).
 
-- `callstack`, `filetree`, `contract`, `signatures` — diff-grammar blocks. Line grammar: first character `+` (added, green), `-` (removed, red), `~` (modified, amber), anything else is context. A trailing ` # comment` renders muted; `file:line` tokens inside comments render as highlighted anchor citations.
+- `callstack`, `filetree`, `contract`, `signatures` — diff-grammar blocks. Line grammar: first character `+` (added, blue), `-` (removed, orange), `~` (modified, teal), anything else is context; the palette is colorblind-safe and each marker also gets a distinct left-border rail. A trailing ` # comment` renders muted; `file:line` tokens inside comments render as anchor citations. `signatures` bodies are syntax-highlighted as TypeScript.
 - `mockup` — raw HTML, inlined into the page in a sandboxed frame. Use for wsff's "mock, don't describe": a rough screen beats three paragraphs.
 - `mermaid` — progressive enhancement: renders as a diagram online, stays readable as text offline. Architecture sequence diagrams only.
 
