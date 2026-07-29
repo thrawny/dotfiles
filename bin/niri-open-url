@@ -115,12 +115,46 @@ if [[ -n "$web_workspace_id" ]]; then
     open_in_window "$web_helium"
   fi
 
-  # Fail rather than opening on whichever workspace happens to be active if
-  # niri cannot switch to the intended fallback workspace.
+  # Chromium may reactivate a recently used workspace while its existing
+  # process creates the new window. Track the new niri window and move it to
+  # web explicitly rather than relying on the workspace focused at launch.
+  known_helium_ids=$(jq -c '[.[] | select(.app_id == "helium") | .id]' <<<"$windows_json")
+
   niri msg action focus-workspace web >/dev/null
   refreshed_workspaces=$(niri msg -j workspaces)
   jq -e '.[] | select(.name == "web" and .is_focused)' \
     <<<"$refreshed_workspaces" >/dev/null
+
+  helium --new-window "$url" >/dev/null 2>&1 &
+
+  for _ in {1..300}; do
+    refreshed_windows=$(niri msg -j windows 2>/dev/null || true)
+    new_window_id=$(
+      jq -r --argjson known_ids "$known_helium_ids" '
+        map(
+          select(
+            .app_id == "helium"
+            and (.id as $id | $known_ids | index($id) | not)
+          )
+        )
+        | sort_by(.id)
+        | last
+        | .id // empty
+      ' <<<"${refreshed_windows:-[]}" 2>/dev/null || true
+    )
+
+    if [[ -n "$new_window_id" ]]; then
+      niri msg action move-window-to-workspace \
+        --window-id "$new_window_id" --focus false web >/dev/null
+      niri msg action focus-window --id "$new_window_id" >/dev/null
+      exit 0
+    fi
+
+    sleep 0.1
+  done
+
+  echo "niri-open-url: timed out waiting for a new Helium window" >&2
+  exit 1
 fi
 
 # If there is no named web workspace, the original workspace is still focused.
