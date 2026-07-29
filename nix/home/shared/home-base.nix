@@ -69,14 +69,20 @@ in
   home = {
     stateVersion = "24.05";
 
-    activation.createNixAccessTokensFile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      tokens_file="${config.xdg.configHome}/nix/access-tokens.conf"
-      if [ ! -e "$tokens_file" ]; then
-        install -d -m0700 "$(dirname "$tokens_file")"
-        : > "$tokens_file"
-        chmod 0600 "$tokens_file"
-      fi
-    '';
+    activation = {
+      createNixAccessTokensFile = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        tokens_file="${config.xdg.configHome}/nix/access-tokens.conf"
+        if [ ! -e "$tokens_file" ]; then
+          install -d -m0700 "$(dirname "$tokens_file")"
+          : > "$tokens_file"
+          chmod 0600 "$tokens_file"
+        fi
+      '';
+
+      createProtectedDirectory = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        install -d -m0700 "${config.home.homeDirectory}/Protected"
+      '';
+    };
 
     sessionPath = [
       "$HOME/.cargo/bin"

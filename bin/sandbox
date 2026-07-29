@@ -319,6 +319,7 @@ sandbox() {
   # Incus is used by this wrapper before entering bwrap to discover the Docker
   # VM address, but must not be usable from inside the sandbox.
   local deny=(
+    ~/Protected
     ~/.ssh
     ~/.gnupg
     ~/.aws
