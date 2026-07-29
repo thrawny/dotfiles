@@ -279,6 +279,22 @@
         "type": "github"
       }
     },
+    "gh-stack": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785079564,
+        "narHash": "sha256-XpQv5V3nGM4nRVk3WH2vjm+Stc0GulrzufAWFqSBcgY=",
+        "owner": "github",
+        "repo": "gh-stack",
+        "rev": "53ed88c2a2637ac6d037d6fae02d21c4646a7bad",
+        "type": "github"
+      },
+      "original": {
+        "owner": "github",
+        "repo": "gh-stack",
+        "type": "github"
+      }
+    },
     "helium-browser": {
       "inputs": {
         "nixpkgs": [
@@ -893,6 +909,7 @@
         "anthropic-skills": "anthropic-skills",
         "disko": "disko",
         "elephant": "elephant",
+        "gh-stack": "gh-stack",
         "helium-browser": "helium-browser",
         "hermes-agent": "hermes-agent",
         "home-manager": "home-manager",
