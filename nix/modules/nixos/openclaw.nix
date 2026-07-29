@@ -90,7 +90,10 @@ let
         openai.enabled = true;
         codex = {
           enabled = true;
-          config.appServer.command = lib.getExe codexPackage;
+          config.appServer = {
+            command = lib.getExe codexPackage;
+            homeScope = "user";
+          };
         };
         discord.enabled = true;
       };
