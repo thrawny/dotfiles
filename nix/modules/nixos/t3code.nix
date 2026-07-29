@@ -157,7 +157,7 @@ let
   '';
   direnvConfig = pkgs.writeText "t3code-direnv.toml" ''
     [whitelist]
-    prefix = [${builtins.toJSON repos}]
+    prefix = [${builtins.toJSON repos}, ${builtins.toJSON "${state}/worktrees"}]
   '';
 
   prepare = pkgs.writeShellApplication {
