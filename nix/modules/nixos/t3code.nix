@@ -56,6 +56,20 @@ let
     '';
   };
 
+  claudeWithDirenv = pkgs.writeShellApplication {
+    name = "t3code-claude";
+    runtimeInputs = [
+      pkgs.direnv
+      llmPkgs.claude-code
+    ];
+    text = ''
+      set -euo pipefail
+
+      export DIRENV_LOG_FORMAT=
+      exec direnv exec "$PWD" ${lib.getExe llmPkgs.claude-code} "$@"
+    '';
+  };
+
   serverSettings = pkgs.writeText "t3code-settings.json" (
     builtins.toJSON {
       providers = {
@@ -63,7 +77,10 @@ let
           binaryPath = lib.getExe codexWithDirenv;
           homePath = codexHome;
         };
-        claudeAgent.enabled = false;
+        claudeAgent = {
+          enabled = true;
+          binaryPath = lib.getExe claudeWithDirenv;
+        };
         cursor.enabled = false;
         opencode.enabled = false;
         pi.enabled = false;
@@ -225,12 +242,14 @@ let
       fi
       settings_tmp="$(mktemp)"
       jq \
+        --arg claude_binary ${lib.escapeShellArg (lib.getExe claudeWithDirenv)} \
         --arg codex_binary ${lib.escapeShellArg (lib.getExe codexWithDirenv)} \
         --arg codex_home ${lib.escapeShellArg codexHome} \
         '
           .providers.codex.binaryPath = $codex_binary
           | .providers.codex.homePath = $codex_home
-          | .providers.claudeAgent.enabled = false
+          | .providers.claudeAgent.enabled = true
+          | .providers.claudeAgent.binaryPath = $claude_binary
           | .providers.cursor.enabled = false
           | .providers.opencode.enabled = false
           | .providers.pi.enabled = false
@@ -298,6 +317,7 @@ in
 
   environment.systemPackages = [
     pkgs.direnv
+    claudeWithDirenv
     codexWithDirenv
     llmPkgs.agent-browser
     pkgs.nix-direnv
@@ -330,8 +350,10 @@ in
     ];
     path = [
       package
+      claudeWithDirenv
       codexWithDirenv
       llmPkgs.agent-browser
+      llmPkgs.claude-code
       llmPkgs.codex
       pkgs.bashInteractive
       pkgs.coreutils
