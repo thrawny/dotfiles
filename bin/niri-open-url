@@ -89,9 +89,8 @@ if [[ -n "$nearest_browser" ]]; then
   open_in_window "$nearest_browser"
 fi
 
-# No Helium window in the current workspace: fall back to Helium in the named
-# "web" workspace. If no Helium window exists there, focus/create the web
-# workspace and open a fresh Helium window.
+# No Helium window in the current workspace: use only the named "web"
+# workspace. Never route the URL to a browser on an unrelated workspace.
 web_workspace_id=$(jq -r '.[] | select(.name == "web") | .id' <<<"$workspace_json" | head -n1)
 web_active_window_id=$(
   jq -r '.[] | select(.name == "web") | .active_window_id // 0' <<<"$workspace_json" | head -n1
@@ -116,7 +115,13 @@ if [[ -n "$web_workspace_id" ]]; then
     open_in_window "$web_helium"
   fi
 
-  niri msg action focus-workspace web >/dev/null 2>&1 || true
+  # Fail rather than opening on whichever workspace happens to be active if
+  # niri cannot switch to the intended fallback workspace.
+  niri msg action focus-workspace web >/dev/null
+  refreshed_workspaces=$(niri msg -j workspaces)
+  jq -e '.[] | select(.name == "web" and .is_focused)' \
+    <<<"$refreshed_workspaces" >/dev/null
 fi
 
+# If there is no named web workspace, the original workspace is still focused.
 exec helium --new-window "$url"
