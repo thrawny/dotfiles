@@ -23,7 +23,6 @@ Current custom extensions include:
 - `show-tools.ts` — `/show-tools` for debugging active tool state
 - `status-line.ts` — custom status line integration
 - `teleport.ts` — Pi session teleport helpers
-- `wayvoice.ts` — `ctrl+space` and `/voice` integration for inserting wayvoice transcripts into the Pi editor
 
 ## Local repository instructions
 
@@ -31,55 +30,14 @@ Pi officially loads `AGENTS.md`/`CLAUDE.md` context files. For private machine-l
 
 Official alternatives are `.pi/APPEND_SYSTEM.md` or `.pi/SYSTEM.md`, but those are project Pi resources rather than an `AGENTS.local.md`/`CLAUDE.local.md` convention.
 
-## wayvoice integration
-
-`wayvoice.ts` talks to the wayvoice daemon over its Unix socket:
-
-```text
-${XDG_RUNTIME_DIR:-/tmp}/wayvoice.sock
-```
-
-Override with environment variables:
-
-- `PI_WAYVOICE_SOCKET` — socket path
-- `PI_WAYVOICE_SHORTCUT` — Pi shortcut, default `ctrl+space`
-
-On trigger, the extension checks `status`. If idle, it sends a JSON `toggle` request with overrides. If already recording/transcribing, it sends a plain stop `{"cmd":"toggle"}` request.
-
-Request shape:
-
-```ts
-{
-  cmd: "toggle",
-  overrides: {
-    prompt: string,
-    extra_keywords: string[],
-    replacements: Record<string, string>,
-    inject_mode: "stdout"
-  }
-}
-```
-
-Response shape:
-
-```ts
-{
-  status?: string,
-  text?: string,
-  error?: string
-}
-```
-
-If `text` is present, the extension inserts it with `ctx.ui.pasteToEditor()`.
-
 ## Agent Switch integration
 
-`agent-switch.ts` forwards Pi lifecycle events to `agent-switch track` so session state is shared with tmux/niri switchers.
+`agent-switch.ts` forwards Pi lifecycle events to `agent-switch track` so session state is visible to consumers like the waybar status module.
 
 ### Requirements
 
 - `agent-switch` installed and on `PATH`
-- daemon running (`agent-switch serve` or `agent-switch serve --niri`)
+- headless daemon running (`agent-switch serve`, spawned by niri at startup) — `track` sends events over its socket
 
 ### Event mapping
 

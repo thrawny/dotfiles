@@ -73,10 +73,6 @@ let
     # Pass-through for nested tmux sessions
     bind C-n send-keys C-a n
     bind C-p send-keys C-a p
-
-    # Agent session switcher (Ctrl+` on Mac, Ctrl+< on Linux)
-    bind-key -n C-` display-popup -E -w 60% -h 60% "agent-switch tmux"
-    bind-key -n 'C-<' display-popup -E -w 60% -h 60% "agent-switch tmux"
   '';
 
   # Mouse scroll for specific TUI apps that don't handle mouse events (e.g. k9s)
@@ -197,11 +193,6 @@ in
 
       "# === Status Bar ==="
       statusBar
-
-      "# === Agent Switch Daemon ==="
-      ''
-        run-shell -b 'pgrep -f "agent-switch serve" >/dev/null 2>&1 || agent-switch serve &'
-      ''
 
       "# === Misc ==="
       ''

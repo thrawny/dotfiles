@@ -84,13 +84,6 @@ let
       hotkey-overlay.title = "Open Project";
       repeat = false;
     };
-    "Mod+S" = {
-      action.spawn = [
-        "agent-switch"
-        "toggle"
-      ];
-      hotkey-overlay.title = "Agent Sessions";
-    };
   };
 
   sessionBinds = {
@@ -283,14 +276,16 @@ let
   utilityBinds = {
     "Mod+R" = {
       action.spawn = [
-        "wayvoice-route"
+        "wayvoice"
+        "toggle"
       ];
       hotkey-overlay.title = "Voice Input Toggle";
       repeat = false;
     };
     "Super+P" = {
       action.spawn = [
-        "wayvoice-route"
+        "wayvoice"
+        "toggle"
       ];
       hotkey-overlay.title = "Voice Input Toggle";
       repeat = false;
@@ -669,7 +664,6 @@ in
             app-id = "^Slack$";
             title = "^(Slack - Huddle Preview|Huddle:)";
           }
-          { app-id = "^com\\.thrawny\\.agent-switch$"; }
           { title = "^niri-project-picker$"; }
           { title = "^btop\\+\\+$"; }
           { app-id = "^spotify$"; }

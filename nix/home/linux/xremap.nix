@@ -20,23 +20,6 @@ _: {
           name = "Global key remaps";
           remap = {
             "CapsLock" = "Esc";
-            "Shift_R" = {
-              skip_key_event = true;
-              press = [
-                {
-                  launch = [
-                    "wayvoice-route"
-                  ];
-                }
-              ];
-              release = [
-                {
-                  launch = [
-                    "wayvoice-route"
-                  ];
-                }
-              ];
-            };
           };
         }
       ];

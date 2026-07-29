@@ -299,7 +299,6 @@ let
       exec = "${homeDir}/dotfiles/bin/agent-status";
       return-type = "json";
       interval = 2;
-      on-click = "agent-switch toggle";
     };
 
     "custom/caffeine" = {

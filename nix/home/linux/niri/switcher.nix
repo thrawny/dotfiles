@@ -1,7 +1,7 @@
-# Agent session overlay (agent-switch, Rust GTK4 app) + nirius
-# Assumes agent-switch and the local nirius fork are available on PATH
-# (e.g., ~/.cargo/bin). App jumping is bound as an xremap chord (Alt-a prefix)
-# in ../xremap.nix; nirius also tracks debounced workspace focus history.
+# nirius (scratchpads, window focus, workspace focus history) and the
+# headless agent-switch daemon (hooks -> socket -> sessions.json; waybar
+# reads it via `agent-switch list`). Both assumed on PATH (~/.cargo/bin).
+# App jumping is bound as an xremap chord (Alt-a prefix) in ../xremap.nix.
 { config, pkgs, ... }:
 {
   home.packages = [ pkgs.nirius ];
@@ -12,7 +12,6 @@
         command = [
           "agent-switch"
           "serve"
-          "--niri"
         ];
       }
       {

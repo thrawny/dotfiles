@@ -210,11 +210,6 @@ sandbox() {
       "/run/user/${UID}/agent-switch"
       "/run/user/${UID}/agent-switch"
     )
-    args+=(
-      --ro-bind-try
-      "/run/user/${UID}/wayvoice"
-      "/run/user/${UID}/wayvoice"
-    )
 
     # Expose Wayland socket so wl-paste (used by pi/claude for image paste) works
     if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
