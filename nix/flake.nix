@@ -34,7 +34,13 @@
       url = "github:thrawny/nix-pkgs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    zmx.url = "github:thrawny/zmx-flake";
+    zmx = {
+      url = "github:thrawny/zmx-flake";
+      inputs.zmx-src-main = {
+        url = "github:thrawny/zmx/main";
+        flake = false;
+      };
+    };
     acpx-skills = {
       url = "github:openclaw/acpx";
       flake = false;

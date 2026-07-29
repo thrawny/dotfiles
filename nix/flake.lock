@@ -1321,15 +1321,16 @@
     "zmx-src-main": {
       "flake": false,
       "locked": {
-        "lastModified": 1785090725,
-        "narHash": "sha256-CNi9ypGLla8SNT+T6iNODPijv4wz/KpRpyVuzBEvWuc=",
-        "owner": "neurosnap",
+        "lastModified": 1785232003,
+        "narHash": "sha256-4RuoEurH1ayPnZW2vyiH3wvhEYA+j+S7kc0zTERsIXQ=",
+        "owner": "thrawny",
         "repo": "zmx",
-        "rev": "9e5eb5510c61b4e37e89ac1ae44db63f64afd873",
+        "rev": "c3519ad5f78e9f6eb5b86660f07290dd4b6af547",
         "type": "github"
       },
       "original": {
-        "owner": "neurosnap",
+        "owner": "thrawny",
+        "ref": "main",
         "repo": "zmx",
         "type": "github"
       }
