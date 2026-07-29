@@ -25,6 +25,7 @@ let
     fastfetch
     gnome-themes-extra
     keyd
+    nautilus
     networkmanagerapplet
     pamixer
     pavucontrol
@@ -128,6 +129,8 @@ in
       };
     };
     blueman.enable = true;
+    # Nautilus uses GVfs for trash, removable media, and network locations.
+    gvfs.enable = true;
 
     # Keyd disabled - using xremap instead to avoid double-grab keyboard conflicts
     keyd.enable = false;
@@ -172,8 +175,8 @@ in
     extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
     # niri-flake sets configPackages = [ niri ] with default=gnome;gtk, but
     # config.niri overrides that entirely, so replicate the defaults here.
-    # FileChooser must use gtk because the gnome portal delegates to Nautilus
-    # which isn't installed.
+    # Keep the lightweight GTK portal for file chooser dialogs; Nautilus is
+    # configured separately as the default directory browser.
     config.niri = {
       default = [
         "gnome"

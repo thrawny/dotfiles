@@ -2,6 +2,7 @@
 let
   imvDesktop = [ "imv.desktop" ];
   mpvDesktop = [ "mpv.desktop" ];
+  nautilusDesktop = [ "org.gnome.Nautilus.desktop" ];
   zathuraCbDesktop = [ "org.pwmt.zathura-cb.desktop" ];
   zathuraDjvuDesktop = [ "org.pwmt.zathura-djvu.desktop" ];
   zathuraPdfDesktop = [ "org.pwmt.zathura-pdf-mupdf.desktop" ];
@@ -18,6 +19,8 @@ in
   xdg.mimeApps = {
     enable = true;
     defaultApplications = {
+      "inode/directory" = nautilusDesktop;
+
       "application/epub+zip" = zathuraPdfDesktop;
       "application/eps" = zathuraPsDesktop;
       "application/oxps" = zathuraPdfDesktop;
