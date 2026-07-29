@@ -52,20 +52,67 @@ focused_col=$(
     ' <<<"$windows_json"
 )
 
+open_url_with_wtype() (
+  local clipboard_file clipboard_type clipboard_types had_clipboard=false
+  clipboard_file=$(mktemp)
+
+  restore_clipboard() {
+    trap - EXIT
+    if [[ "$had_clipboard" == true ]]; then
+      wl-copy --type "$clipboard_type" <"$clipboard_file" || true
+    else
+      wl-copy --clear || true
+    fi
+    rm -f "$clipboard_file"
+  }
+  trap restore_clipboard EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+
+  clipboard_types=$(wl-paste --list-types 2>/dev/null || true)
+  if [[ -n "$clipboard_types" ]]; then
+    for clipboard_type in \
+      'text/plain;charset=utf-8' \
+      'text/plain;charset=UTF-8' \
+      'UTF8_STRING' \
+      'text/plain' \
+      'image/png' \
+      'text/uri-list'; do
+      if grep -Fxq "$clipboard_type" <<<"$clipboard_types"; then
+        break
+      fi
+      clipboard_type=""
+    done
+
+    if [[ -z "$clipboard_type" ]]; then
+      clipboard_type=$(head -n1 <<<"$clipboard_types")
+    fi
+
+    wl-paste --no-newline --type "$clipboard_type" >"$clipboard_file"
+    had_clipboard=true
+  fi
+
+  wtype -M ctrl -k t -m ctrl
+  printf '%s' "$url" | wl-copy --type 'text/plain;charset=utf-8'
+  sleep 0.1
+  wtype -M ctrl -k v -m ctrl
+  sleep 0.1
+  wtype -k Return
+)
+
 open_in_window() {
   local window_id="$1"
 
   niri msg action focus-window --id "$window_id" >/dev/null
   sleep 0.2
 
-  # Chromium's ProcessSingleton routes command-line URLs to the default
-  # profile even when a window from another profile has compositor focus.
-  # Drive the already-focused window instead so the new tab cannot jump to a
-  # different profile. A small key delay avoids dropped shifted characters.
-  if command -v wtype >/dev/null 2>&1; then
-    wtype -M ctrl -k t -m ctrl
-    wtype -d 5 -- "$url"
-    wtype -k Return
+  # Chromium's ProcessSingleton cannot target a specific existing window.
+  # Drive the focused window, but paste the URL because wtype drops characters
+  # from long strings under some keyboard layouts.
+  if command -v wtype >/dev/null 2>&1 \
+    && command -v wl-copy >/dev/null 2>&1 \
+    && command -v wl-paste >/dev/null 2>&1; then
+    open_url_with_wtype
     exit 0
   fi
 
