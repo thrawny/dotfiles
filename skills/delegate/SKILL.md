@@ -13,15 +13,19 @@ Honor an explicitly requested agent or model. Otherwise, default implementation 
 
 Use a named session.
 
+## Work Orders
+
+Delegate execution, not design authority. Give delegates concrete work orders with decisions and constraints for product behavior, UX, architecture, and file structure already settled.
+
+## Review
+
+You remain accountable for ensuring the delegated work matches the agreed plan and intended outcome. Review for solution quality, UX, and coherence; leave broad bug hunting to PR review.
+
 ## Footguns
 
 - Always pass `--cwd <repo root>`; session scope is tied to the exact working directory.
 - The delegate does not inherit this conversation. Brief it with prior decisions, acceptance criteria, and non-obvious constraints.
 - When `SANDBOX=1`, use `--approve-all`; the host sandbox is already the isolation boundary. Outside it, use `--approve-all` for scoped implementation and `--approve-reads` for review.
-- Run long delegations with the harness's `background=true`, never a shell trailing `&`, which can kill the prompt and leave an idle session.
+- Run long delegations with the harness's `background=true`. A trailing shell `&` can kill the prompt and leave an idle session.
 - Delegates share the working tree. Parallel writers need disjoint scopes; otherwise serialize them or use separate worktrees.
 - Use unique session names per task, and send corrections through the same session.
-
-## Review
-
-You remain accountable for ensuring the delegated work matches the agreed plan and intended outcome. Focus your efforts on quality, ux and coherence of the solution as opposed to doing a bug hunter review - leave that for the PR review.
