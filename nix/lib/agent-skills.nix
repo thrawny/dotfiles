@@ -47,7 +47,6 @@ let
     skill;
 
   localSkillOverrides = {
-    codex-delegate.agents = [ "claude" ];
     zmx.agents = [
       "claude"
       "codex"
