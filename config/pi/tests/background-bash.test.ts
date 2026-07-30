@@ -219,9 +219,16 @@ describe("background bash", () => {
 			"No managed background tasks remain; no further completion wake-up is pending.",
 		);
 		expect(message.details.remainingTaskCount).toBe(0);
+		expect(sendMessage.mock.calls[0]?.[1]).toEqual({
+			deliverAs: "steer",
+			triggerTurn: false,
+		});
 		expect(sendUserMessage).toHaveBeenCalledOnce();
 		expect(sendUserMessage.mock.calls[0]?.[0]).toContain("Keep working");
 		expect(sendUserMessage.mock.calls[0]?.[1]).toEqual({ deliverAs: "steer" });
+		expect(sendMessage.mock.invocationCallOrder[0]).toBeLessThan(
+			sendUserMessage.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
+		);
 		expect(message.content).toContain("Managed task status: zmx-list");
 		expect(message.content).toContain("Output:\ncheck output");
 		expect(message.content).not.toContain("Command:");
@@ -293,6 +300,10 @@ describe("background bash", () => {
 		};
 		expect(firstMessage.content).toContain("1 managed background task remains");
 		expect(firstMessage.details.remainingTaskCount).toBe(1);
+		expect(sendMessage.mock.calls[0]?.[1]).toEqual({
+			deliverAs: "steer",
+			triggerTurn: true,
+		});
 		expect(sendUserMessage).not.toHaveBeenCalled();
 
 		finishWaits[1]?.(execResult());
@@ -305,6 +316,10 @@ describe("background bash", () => {
 			"No managed background tasks remain",
 		);
 		expect(secondMessage.details.remainingTaskCount).toBe(0);
+		expect(sendMessage.mock.calls[1]?.[1]).toEqual({
+			deliverAs: "steer",
+			triggerTurn: false,
+		});
 		expect(sendUserMessage).toHaveBeenCalledOnce();
 	});
 
@@ -563,7 +578,7 @@ describe("background bash", () => {
 					customType: "background-bash-finished",
 					content: expect.stringContaining("exit 0"),
 				}),
-				{ deliverAs: "steer", triggerTurn: true },
+				{ deliverAs: "steer", triggerTurn: false },
 			);
 		} finally {
 			vi.useRealTimers();
@@ -589,7 +604,7 @@ describe("background bash", () => {
 				expect.objectContaining({
 					customType: "background-bash-finished",
 				}),
-				{ deliverAs: "steer", triggerTurn: true },
+				{ deliverAs: "steer", triggerTurn: false },
 			);
 
 			await vi.advanceTimersByTimeAsync(5_000);

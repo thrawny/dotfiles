@@ -569,6 +569,8 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			waitControllers.delete(controller);
 			updateStatus(ctx);
 			const remainingTaskCount = waitControllers.size;
+			const isFinalCompletion = remainingTaskCount === 0;
+			finalWakeupWatch = isFinalCompletion ? "armed" : "off";
 			pi.sendMessage(
 				{
 					customType: COMPLETION_MESSAGE_TYPE,
@@ -589,16 +591,15 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 						sessionName,
 					},
 				},
-				{ deliverAs: "steer", triggerTurn: true },
+				{ deliverAs: "steer", triggerTurn: !isFinalCompletion },
 			);
-			finalWakeupWatch = remainingTaskCount === 0 ? "armed" : "off";
-			if (remainingTaskCount === 0) {
+			if (isFinalCompletion) {
 				try {
-					// GPT-5.6 often no-ops notification turns but reliably engages
-					// with user messages; the watchdog backstops a failed send here.
+					// Queue the completion before the user steer, then let the user
+					// message own the wake-up so both reach the same model turn.
 					pi.sendUserMessage(FINAL_WAKEUP_NUDGE, { deliverAs: "steer" });
 				} catch {
-					// The completion message above still triggers the wake-up turn.
+					// Session replacement can invalidate the extension between sends.
 				}
 			}
 		} catch (error) {
