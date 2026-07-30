@@ -79,6 +79,10 @@ Repository snapshot supplied by the handoff extension:
 ${repositoryState}`;
 }
 
+function shellQuote(value: string): string {
+	return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+
 export function buildFreshSessionPrompt(
 	goal: string,
 	note: string,
@@ -99,7 +103,13 @@ ${repositoryState}
 
 Parent session: \`${parentSession}\`
 
-A bounded \`history_query\` tool can retrieve a specific missing fact from that parent or another Pi, Codex, or Claude session. Use it only when a concrete missing fact blocks progress. Do not reconstruct or broadly reread the previous session.`;
+If a concrete missing fact blocks progress, replace the placeholder and run this bounded query with the normal shell tool:
+
+\`\`\`sh
+agent-history query ${shellQuote(parentSession)} '<narrow search phrase>' --limit 3 --max-chars 8000
+\`\`\`
+
+Add \`--include-tools\` only when the missing fact is specifically in tool output. Do not reconstruct or broadly reread the previous session.`;
 }
 
 function bounded(text: string): string {

@@ -18,16 +18,20 @@ describe("handoff extension", () => {
 		expect(request).toContain("Do not call tools");
 	});
 
-	it("marks parent retrieval as narrow and optional", () => {
+	it("prompts a bounded CLI query instead of a dedicated history tool", () => {
 		const prompt = buildFreshSessionPrompt(
 			"implement phase two",
 			"## Current state\nPhase one is complete.",
-			"/sessions/parent.jsonl",
+			"/sessions/parent's.jsonl",
 			"Working tree clean.",
 		);
 		expect(prompt).toContain("## Task\n\nimplement phase two");
-		expect(prompt).toContain("Parent session: `/sessions/parent.jsonl`");
-		expect(prompt).toContain("specific missing fact");
+		expect(prompt).toContain("Parent session: `/sessions/parent's.jsonl`");
+		expect(prompt).toContain(
+			"agent-history query '/sessions/parent'\"'\"'s.jsonl' '<narrow search phrase>' --limit 3 --max-chars 8000",
+		);
+		expect(prompt).toContain("normal shell tool");
+		expect(prompt).not.toContain("history_query");
 		expect(prompt).toContain("Do not reconstruct");
 	});
 
