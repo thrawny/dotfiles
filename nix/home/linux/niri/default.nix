@@ -1,6 +1,5 @@
-# Base Niri window manager configuration
-# Import this for any Linux system using niri
-# Add ./switcher.nix for agent-switch
+# Base Niri window manager configuration.
+# Import this for any Linux system using niri.
 {
   config,
   lib,
@@ -408,6 +407,8 @@ let
     // mediaBinds;
 in
 {
+  dotfiles.agentSwitch.enable = true;
+
   home.packages = [
     pkgs.swayosd
   ];
@@ -516,6 +517,12 @@ in
 
     # Spawn at startup (xwayland-satellite spawned on-demand by niri)
     spawn-at-startup = [
+      {
+        command = [
+          "agent-switch"
+          "serve"
+        ];
+      }
       { command = [ "swayosd-server" ]; }
       {
         command = [

@@ -31,11 +31,6 @@
     nix-index-database.homeModules.nix-index
   ];
 
-  _module.args = {
-    enableCodexHooks = false;
-    enablePiExtensions = false;
-  };
-
   programs.home-manager.enable = true;
   programs.nix-index-database.comma.enable = true;
 
@@ -83,30 +78,7 @@
             sed \
               -e 's/^voice_transcription = true$/voice_transcription = false/' \
               -e 's/^multi_agent = true$/multi_agent = false/' \
-              -e 's/^codex_hooks = true$/codex_hooks = false/' \
               "$example_path" > "$dest_path"
-            chmod 0644 "$dest_path"
-          fi
-        ''
-      );
-
-      seedClaudeSettings = lib.mkForce (
-        lib.hm.dag.entryBefore [ "linkGeneration" ] ''
-          if [ "${homeSource}" = "repo" ]; then
-            dest_path=${lib.escapeShellArg "${dotfiles}/config/claude/settings.json"}
-            example_path=${lib.escapeShellArg "${dotfiles}/config/claude/settings.example.json"}
-          else
-            dest_path=${lib.escapeShellArg "${config.home.homeDirectory}/.claude/settings.json"}
-            example_path=${lib.escapeShellArg "${configPath "claude/settings.example.json"}"}
-          fi
-
-          if [ ! -s "$dest_path" ] && [ -e "$example_path" ]; then
-            install -d -m0755 "$(dirname "$dest_path")"
-            if [ "${homeSource}" = "repo" ]; then
-              ${pkgs.jq}/bin/jq 'del(.hooks)' "$example_path" > "$dest_path"
-            else
-              ${pkgs.jq}/bin/jq 'del(.hooks) | .statusLine.command = "python3 ~/.claude/status_line.py"' "$example_path" > "$dest_path"
-            fi
             chmod 0644 "$dest_path"
           fi
         ''

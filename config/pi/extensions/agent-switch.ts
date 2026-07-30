@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { accessSync, constants } from "node:fs";
 import path from "node:path";
 import type {
 	ExtensionAPI,
@@ -21,6 +22,19 @@ type TrackPayload = {
 };
 
 const START_TIMEOUT_MS = 800;
+
+function commandOnPath(command: string): boolean {
+	for (const directory of (process.env.PATH ?? "").split(path.delimiter)) {
+		if (!directory) continue;
+		try {
+			accessSync(path.join(directory, command), constants.X_OK);
+			return true;
+		} catch {
+			// Keep searching PATH.
+		}
+	}
+	return false;
+}
 
 function sessionIdFromFile(
 	sessionFile: string | null | undefined,
@@ -70,6 +84,8 @@ function runTrack(
 }
 
 export default function (pi: ExtensionAPI) {
+	if (!commandOnPath("agent-switch")) return;
+
 	const ephemeralSessionId = `pi-ephemeral-${process.pid}-${Date.now().toString(36)}`;
 	let disabled = false;
 	let warned = false;

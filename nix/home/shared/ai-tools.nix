@@ -9,8 +9,7 @@ let
   hmLib = lib.hm;
   containerAssets = args.containerAssets or null;
   dotfiles = args.dotfiles or null;
-  enableCodexHooks = args.enableCodexHooks or true;
-  enablePiExtensions = args.enablePiExtensions or true;
+  enableAgentSwitchIntegration = config.dotfiles.agentSwitch.enable;
   repoBacked = homeSource == "repo";
   storeBacked = homeSource == "store";
   configPath =
@@ -21,6 +20,20 @@ let
   rulesSource =
     if repoBacked then config.lib.file.mkOutOfStoreSymlink (toString rulesRoot) else rulesRoot;
   agentInstructions = import ../../lib/agent-instructions.nix;
+  stripAgentSwitchHooks = ''
+    if .hooks then
+      .hooks |= with_entries(
+        .value |= map(
+          .hooks |= map(select(((.command // "") | contains("agent-switch")) | not))
+          | select((.hooks | length) > 0)
+        )
+        | select((.value | length) > 0)
+      )
+    else
+      .
+    end
+  '';
+  claudeSettingsFilter = if enableAgentSwitchIntegration then "." else stripAgentSwitchHooks;
 
   seedExampleRepo =
     example: destination:
@@ -40,9 +53,21 @@ let
         install -Dm0644 ${lib.escapeShellArg (toString example)} "$dest_path"
       fi
     '';
+  seedClaudeSettingsRepo = hmLib.dag.entryBefore [ "linkGeneration" ] ''
+    repo=${lib.escapeShellArg dotfiles}
+    example_path="$repo/config/claude/settings.example.json"
+    dest_path="$repo/config/claude/settings.json"
+    if [ ! -s "$dest_path" ] && [ -e "$example_path" ]; then
+      install -d -m0755 "$(dirname "$dest_path")"
+      ${pkgs.jq}/bin/jq ${lib.escapeShellArg claudeSettingsFilter} "$example_path" > "$dest_path"
+      chmod 0644 "$dest_path"
+    fi
+  '';
 in
 {
-  home = {
+  options.dotfiles.agentSwitch.enable = lib.mkEnableOption "agent-switch integrations for AI tools";
+
+  config.home = {
     sessionVariables = {
       CLAUDE_CONFIG_DIR = "${config.home.homeDirectory}/.claude";
     };
@@ -58,7 +83,7 @@ in
     }
     // lib.optionalAttrs repoBacked {
       seedCodexConfig = seedExampleRepo "config/codex/config.example.toml" "config/codex/config.toml";
-      seedClaudeSettings = seedExampleRepo "config/claude/settings.example.json" "config/claude/settings.json";
+      seedClaudeSettings = seedClaudeSettingsRepo;
       seedPiSettings = seedExampleRepo "config/pi/settings.example.json" "config/pi/settings.json";
     }
     // lib.optionalAttrs storeBacked {
@@ -71,10 +96,11 @@ in
         fi
         if [ ! -s "$dest_path" ]; then
           install -d -m0755 "$(dirname "$dest_path")"
-          ${pkgs.jq}/bin/jq '
-            del(.hooks, .enabledPlugins)
+          ${pkgs.jq}/bin/jq ${lib.escapeShellArg ''
+            ${claudeSettingsFilter}
+            | del(.enabledPlugins)
             | .statusLine.command = "python3 ~/.claude/status_line.py"
-          ' ${lib.escapeShellArg (toString (configPath "claude/settings.example.json"))} > "$dest_path"
+          ''} ${lib.escapeShellArg (toString (configPath "claude/settings.example.json"))} > "$dest_path"
           chmod 0644 "$dest_path"
         fi
       '';
@@ -82,42 +108,40 @@ in
       seedPiSettings = seedExampleStore (configPath "pi/settings.example.json") "${config.home.homeDirectory}/.pi/agent/settings.json";
     };
 
-    file =
-      lib.optionalAttrs enableCodexHooks {
-        ".codex/hooks.json".source = configSource "codex/hooks.json";
-        ".codex/hooks".source = configSource "codex/hooks";
-      }
-      // {
-        ".codex/AGENTS.md".text = agentInstructions.codexGlobal;
+    file = {
+      ".codex/hooks.json".source = configSource (
+        if enableAgentSwitchIntegration then "codex/hooks.agent-switch.json" else "codex/hooks.json"
+      );
+      ".codex/hooks".source = configSource "codex/hooks";
 
-        ".pi/agent/AGENTS.md".text = agentInstructions.piGlobal;
-        ".pi/agent/rules".source = rulesSource;
-        ".pi/agent/prompts".source = configSource "pi/prompts";
-        ".pi/agent/commands".source = configSource "pi/commands";
-        ".pi/agent/themes".source = configSource "pi/themes";
-        ".pi/agent/claude-bridge.json".source = configSource "pi/claude-bridge.json";
-        ".pi/agent/openai-server-compaction.json".source = configSource "pi/openai-server-compaction.json";
-        ".pi/agent/pi-diff.json".source = configSource "pi/pi-diff.json";
-        ".pi/agent/pi-vcc-config.json".source = configSource "pi/pi-vcc-config.json";
-        ".pi/agent/models.json".source = configSource "pi/models.json";
-        ".pi/agent/keybindings.json".source = configSource "pi/keybindings.json";
+      ".codex/AGENTS.md".text = agentInstructions.codexGlobal;
 
-        ".claude/commands".source = configSource "claude/commands";
-        ".claude/agents".source = configSource "claude/agents";
-        ".claude/rules".source = rulesSource;
-        ".claude/CLAUDE.md".text = agentInstructions.claudeGlobal;
-        ".claude/.keep".text = "";
-      }
-      // lib.optionalAttrs enablePiExtensions {
-        ".pi/agent/extensions".source = configSource "pi/extensions";
-      }
-      // lib.optionalAttrs repoBacked {
-        ".codex/config.toml".source = configSource "codex/config.toml";
-        ".pi/agent/settings.json".source = configSource "pi/settings.json";
-        ".claude/settings.json".source = configSource "claude/settings.json";
-      }
-      // lib.optionalAttrs storeBacked {
-        ".claude/status_line.py".source = configSource "claude/status_line.py";
-      };
+      ".pi/agent/AGENTS.md".text = agentInstructions.piGlobal;
+      ".pi/agent/rules".source = rulesSource;
+      ".pi/agent/prompts".source = configSource "pi/prompts";
+      ".pi/agent/commands".source = configSource "pi/commands";
+      ".pi/agent/themes".source = configSource "pi/themes";
+      ".pi/agent/claude-bridge.json".source = configSource "pi/claude-bridge.json";
+      ".pi/agent/openai-server-compaction.json".source = configSource "pi/openai-server-compaction.json";
+      ".pi/agent/pi-diff.json".source = configSource "pi/pi-diff.json";
+      ".pi/agent/pi-vcc-config.json".source = configSource "pi/pi-vcc-config.json";
+      ".pi/agent/models.json".source = configSource "pi/models.json";
+      ".pi/agent/keybindings.json".source = configSource "pi/keybindings.json";
+      ".pi/agent/extensions".source = configSource "pi/extensions";
+
+      ".claude/commands".source = configSource "claude/commands";
+      ".claude/agents".source = configSource "claude/agents";
+      ".claude/rules".source = rulesSource;
+      ".claude/CLAUDE.md".text = agentInstructions.claudeGlobal;
+      ".claude/.keep".text = "";
+    }
+    // lib.optionalAttrs repoBacked {
+      ".codex/config.toml".source = configSource "codex/config.toml";
+      ".pi/agent/settings.json".source = configSource "pi/settings.json";
+      ".claude/settings.json".source = configSource "claude/settings.json";
+    }
+    // lib.optionalAttrs storeBacked {
+      ".claude/status_line.py".source = configSource "claude/status_line.py";
+    };
   };
 }

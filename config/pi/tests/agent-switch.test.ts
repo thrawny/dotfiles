@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { execFileSync } = vi.hoisted(() => ({
+const { accessSync, execFileSync } = vi.hoisted(() => ({
+	accessSync: vi.fn(),
 	execFileSync: vi.fn(),
 }));
 
 vi.mock("node:child_process", () => ({ execFileSync }));
+vi.mock("node:fs", () => ({ accessSync, constants: { X_OK: 1 } }));
 
 import agentSwitch from "../extensions/agent-switch.ts";
 
@@ -12,10 +14,24 @@ type Handler = (event: unknown, ctx: unknown) => Promise<void>;
 
 describe("agent-switch lifecycle mapping", () => {
 	beforeEach(() => {
+		accessSync.mockReset();
 		execFileSync.mockReset();
 	});
 
+	it("stays dormant when agent-switch is not on PATH", () => {
+		accessSync.mockImplementation(() => {
+			throw new Error("not found");
+		});
+		const on = vi.fn();
+
+		agentSwitch({ on } as never);
+
+		expect(on).not.toHaveBeenCalled();
+		expect(execFileSync).not.toHaveBeenCalled();
+	});
+
 	it("tracks prompt-level starts and fully settled stops", async () => {
+		accessSync.mockReturnValue(undefined);
 		const handlers = new Map<string, Handler>();
 		const pi = {
 			on(event: string, handler: Handler) {
