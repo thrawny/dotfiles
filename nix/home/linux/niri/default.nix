@@ -27,6 +27,7 @@ let
     "Mod+Return" = {
       action.spawn = [ "ghostty-cwd" ];
       hotkey-overlay.title = "Open Terminal";
+      repeat = false;
     };
     "Mod+Q" = {
       action.spawn = [
@@ -37,7 +38,6 @@ let
         "^com\\.thrawny\\.GhosttyScratchpad$"
         "--"
         "ghostty"
-        "+new-window"
         "--class=com.thrawny.GhosttyScratchpad"
         "--gtk-single-instance=true"
         "--working-directory={workspace-directory}"
