@@ -63,6 +63,12 @@ let
       chmod 0644 "$dest_path"
     fi
   '';
+  seedClaudeLocalInstructionsRepo = hmLib.dag.entryBefore [ "linkGeneration" ] ''
+    local_instructions=${lib.escapeShellArg "${dotfiles}/config/claude/CLAUDE.local.md"}
+    if [ ! -e "$local_instructions" ]; then
+      install -Dm0644 /dev/null "$local_instructions"
+    fi
+  '';
 in
 {
   options.dotfiles.agentSwitch.enable = lib.mkEnableOption "agent-switch integrations for AI tools";
@@ -84,6 +90,7 @@ in
     // lib.optionalAttrs repoBacked {
       seedCodexConfig = seedExampleRepo "config/codex/config.example.toml" "config/codex/config.toml";
       seedClaudeSettings = seedClaudeSettingsRepo;
+      seedClaudeLocalInstructions = seedClaudeLocalInstructionsRepo;
       seedPiSettings = seedExampleRepo "config/pi/settings.example.json" "config/pi/settings.json";
     }
     // lib.optionalAttrs storeBacked {
@@ -132,13 +139,19 @@ in
       ".claude/commands".source = configSource "claude/commands";
       ".claude/agents".source = configSource "claude/agents";
       ".claude/rules".source = rulesSource;
-      ".claude/CLAUDE.md".text = agentInstructions.claudeGlobal;
+      ".claude/CLAUDE.md".text =
+        agentInstructions.claudeGlobal
+        + lib.optionalString repoBacked ''
+
+          @~/.claude/CLAUDE.local.md
+        '';
       ".claude/.keep".text = "";
     }
     // lib.optionalAttrs repoBacked {
       ".codex/config.toml".source = configSource "codex/config.toml";
       ".pi/agent/settings.json".source = configSource "pi/settings.json";
       ".claude/settings.json".source = configSource "claude/settings.json";
+      ".claude/CLAUDE.local.md".source = configSource "claude/CLAUDE.local.md";
     }
     // lib.optionalAttrs storeBacked {
       ".claude/status_line.py".source = configSource "claude/status_line.py";
