@@ -389,6 +389,7 @@ in
       User = "t3code";
       Group = "t3code";
       WorkingDirectory = repos;
+      EnvironmentFile = "-${home}/env";
       ExecStartPre = "${lib.getExe prepare}";
       ExecStart = "${lib.getExe package} serve --base-dir ${state} --host 127.0.0.1 --port ${toString port} ${repos}";
       Restart = "always";
