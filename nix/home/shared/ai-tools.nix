@@ -126,7 +126,6 @@ in
       ".pi/agent/AGENTS.md".text = agentInstructions.piGlobal;
       ".pi/agent/rules".source = rulesSource;
       ".pi/agent/prompts".source = configSource "pi/prompts";
-      ".pi/agent/commands".source = configSource "pi/commands";
       ".pi/agent/themes".source = configSource "pi/themes";
       ".pi/agent/claude-bridge.json".source = configSource "pi/claude-bridge.json";
       ".pi/agent/openai-server-compaction.json".source = configSource "pi/openai-server-compaction.json";
