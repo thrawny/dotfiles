@@ -60,8 +60,11 @@ let
   externalSkills = {
     acpx.source = acpx-skills + "/skills/acpx";
     agent-browser.source = agent-browser + "/skills/agent-browser";
+    domain-modeling.source = mattpocock-skills + "/skills/engineering/domain-modeling";
     frontend-design.source = anthropic-skills + "/skills/frontend-design";
     gh-stack.source = gh-stack + "/skills/gh-stack";
+    grill-with-docs.source = mattpocock-skills + "/skills/engineering/grill-with-docs";
+    grilling.source = mattpocock-skills + "/skills/productivity/grilling";
     writing-great-skills.source = mattpocock-skills + "/skills/productivity/writing-great-skills";
     teach.source = mattpocock-skills + "/skills/productivity/teach";
     improve-codebase-architecture.source =
