@@ -13,6 +13,7 @@ Every design decision for "glue v1" mission control is resolved and captured in 
   - **Attach model: lightweight attach by default + explicit "pin to workspace" for heavy engagements.** Exact mechanism deliberately left open → [02 — Attach mechanism](issues/02-attach-mechanism.md).
   - **Build the glue.** Custom Wayland compositor is the fallback, not the plan. t3code rejected as platform (no pi support; its chat UI replaces the terminal workflow) — may be played with for ideas.
 - Read first: memory note `project_thread_environment_design.md` (design pillars + full sidebar/landscape research: stable-list/ranked-palette, read-unread primitive, derive-don't-reconcile, archive-on-merge rules).
+- Constraint for the blueprint (user, 2026-08-03): the `bin/thread-*` prototypes hardcode niri/nirius/fzf — fine while prototyping, but the real verbs (park/summon/go-to/settle) must land behind an interface where the compositor glue is one backend, not baked into the verb logic.
 - Skills: `/grilling` + `/domain-modeling` for grilling tickets, `/prototype` for 02 and 06, `/research` for research tickets, `/blueprint` for the final artifact.
 - Preferences: subagents default to Opus 5, never Fable. pi is the primary harness; terminal-focused workflow (ghostty, nvim/hunk, zmx). Kanel work code stays inside kanel infra.
 
