@@ -686,13 +686,23 @@ in
             title = "^(Slack - Huddle Preview|Huddle:)";
           }
           { title = "^niri-project-picker$"; }
-          { title = "^thread-summon$"; }
           { title = "^btop\\+\\+$"; }
           { app-id = "^spotify$"; }
           { app-id = "^1password$"; }
         ];
         open-floating = true;
         open-maximized = false;
+      }
+      {
+        matches = [ { title = "^thread-summon$"; } ];
+        open-floating = true;
+        open-maximized = false;
+        default-column-width.fixed = 1250;
+        default-window-height.fixed = 480;
+        min-width = 1250;
+        max-width = 1250;
+        min-height = 480;
+        max-height = 480;
       }
       {
         matches = [ { app-id = "^com\\.thrawny\\.GhosttyScratchpad$"; } ];

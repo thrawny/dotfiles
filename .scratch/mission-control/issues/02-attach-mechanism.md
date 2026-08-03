@@ -21,12 +21,14 @@ Scoping refined 2026-08-03 (discussion before build):
 
 - `bin/thread-summon` — fzf picker (floating ghostty, Mod+S). Rows join `agent-switch list` (sessions are keyed by niri window id — the window↔thread identification problem was already solved by agent-switch hooks; no env handshake needed) with `niri msg --json windows`. Row: `agent  state  project-dir  [here|ws N|parked]  title`. `THREAD_SUMMON_ALL=1` lists all windows (testing).
 - `bin/thread-dismiss` — one keystroke (Mod+Shift+S): focused window in nirius scratchpad → `scratchpad-show` bounces it back to hidden; otherwise `scratchpad-toggle` parks it (first-time adoption).
-- Summon paths, all verified: parked → `nirius scratchpad-show --id` (appears floating + focused on current workspace); visible elsewhere → `niri msg action move-window-to-workspace --window-id` + focus; already here → focus only (dedup).
-- **Pin-to-workspace falls out for free**: `nirius scratchpad-toggle` on a summoned window un-adopts it into a normal window — the map's "heavy engagement" verb needs no new code.
+- Selection semantics (revised by feel on the real desktop, 2026-08-03): **parked → summon here; visible → go to it.** The first live session walked back "summon-to-me only" for visible windows — pulling a window that is already placed in another area felt wrong; `focus-window` jumps there instead. Summon-to-me survives only as the transition out of the parked state.
+- Summoned threads arrive **tiled**, not floating (feel feedback): `scratchpad-show --id` then `move-window-to-tiling --id`.
+- **Tiling doubles as un-adopt**: niriusd evicts a window from the scratchpad member list when it is tiled. This also fixes a real bug found by feel: a summoned window left as a scratchpad member gets dragged along by niriusd whenever the bottom-most workspace changes (e.g. when visiting the scratch workspace).
+- Picker rows (round 2, after "mostly chaos" feedback): fixed-width aligned columns `PROJECT AGENT STATE WHERE TITLE(dim)` + header, sorted waiting → responding → idle, state colored orange/blue, `--nth` scoped so the hidden window id is not searchable, floating window sized 1250x480 via rule.
 - Observations for the blueprint:
   - nirius's scratch state is the *bottom-most workspace*, not true invisibility — parked windows are reachable by scrolling down. Same mental model as Mod+Q workspace-scratchpad; acceptable, but "spatial absence at rest" is approximate.
   - The bottom-most workspace is recomputed as workspaces appear/close, so scratch membership must be tracked by nirius state (`list-scratchpad`), never by workspace position.
-  - `nirius move-to-current-workspace` has no `--id`; exact-window moves need raw niri IPC. Move-by-idx across multiple outputs is unverified (single-output test).
-  - Parked windows land floating when summoned; moved (never-parked) windows arrive tiled. Feels like lightweight-attach vs already-engaged split — evaluate in feel test.
+  - Shell prompts / agents rewrite window titles; titles are display-only, identity must stay window-id keyed.
+  - fzf verdict: readable after round 2, but if more surface is wanted (live state refresh, richer rows), the fallback is building the picker into agent-switch as a GTK overlay.
 
-Open: feel verdict on real desktop (`just switch`, then Mod+S / Mod+Shift+S), keybind ergonomics, picker row polish.
+Open: continued feel test on real desktop (`just switch`, then Mod+S / Mod+Shift+S), keybind ergonomics.
