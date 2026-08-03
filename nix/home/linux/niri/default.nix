@@ -81,26 +81,6 @@ let
       hotkey-overlay.title = "Open Project";
       repeat = false;
     };
-    "Mod+S" = {
-      action.spawn = [
-        "ghostty"
-        "--title=thread-summon"
-        "-e"
-        "thread-summon"
-      ];
-      hotkey-overlay.title = "Summon Agent Thread";
-      repeat = false;
-    };
-    "Mod+Shift+S" = {
-      action.spawn = [ "thread-dismiss" ];
-      hotkey-overlay.title = "Dismiss Agent Thread";
-      repeat = false;
-    };
-    "Mod+Ctrl+S" = {
-      action.spawn = [ "thread-settle" ];
-      hotkey-overlay.title = "Settle Agent Thread";
-      repeat = false;
-    };
   };
 
   sessionBinds = {
@@ -697,17 +677,6 @@ in
         ];
         open-floating = true;
         open-maximized = false;
-      }
-      {
-        matches = [ { title = "^thread-summon$"; } ];
-        open-floating = true;
-        open-maximized = false;
-        default-column-width.fixed = 1250;
-        default-window-height.fixed = 480;
-        min-width = 1250;
-        max-width = 1250;
-        min-height = 480;
-        max-height = 480;
       }
       {
         matches = [ { app-id = "^com\\.thrawny\\.GhosttyScratchpad$"; } ];
