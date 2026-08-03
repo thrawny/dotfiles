@@ -199,10 +199,10 @@ def render_body(md: MarkdownIt, body: str) -> tuple[str, list[tuple[str, str]]]:
 
 LIGHT_VARS = """--bg:#fdfdfc; --fg:#1c1c1a; --muted:#6f6e66; --line:#e4e2da;
   --accent:#3b5bdb; --add:#1c5cab; --add-bg:#dbe8fa; --del:#ad4600; --del-bg:#fbe4d5;
-  --mod:#00744f; --mod-bg:#dcefe8; --code-bg:#f4f3ef;"""
+  --mod:#45443e; --mod-bg:#eae8e0; --code-bg:#f4f3ef;"""
 DARK_VARS = """--bg:#14161a; --fg:#e6e4dd; --muted:#94927f; --line:#2b2e35;
   --accent:#7b9aff; --add:#7fb2f0; --add-bg:#122840; --del:#f0894a; --del-bg:#3a2410;
-  --mod:#4fc4a0; --mod-bg:#0e2f28; --code-bg:#1d2026;"""
+  --mod:#cfcdc2; --mod-bg:#282b32; --code-bg:#1d2026;"""
 
 CSS = (
     ":root { " + LIGHT_VARS + " }\n"
@@ -223,11 +223,11 @@ main { display:grid; padding:1.5rem 0 4rem;
     minmax(0,4rem) [wide-end] minmax(1.25rem,1fr) [full-end]; }
 main > * { grid-column: content; }
 main > .figure { grid-column: wide; }
+main > .mermaid-figure { grid-column: full; padding-inline:1.25rem; }
 .figure { position:relative; margin:1.2rem 0; padding:.6rem 0; overflow-x:auto;
   overscroll-behavior-x:contain; }
-.figure.fit { overflow-x:hidden; }
-.figure.fit svg { width:100% !important; height:auto !important;
-  max-width:100% !important; }
+.mermaid-figure svg { display:block; margin-inline:auto;
+  max-width:100% !important; height:auto !important; }
 .figbtn { position:absolute; top:.2rem; right:.2rem; font:.7rem/1 system-ui;
   padding:.3rem .6rem; border:1px solid var(--line); border-radius:6px;
   background:var(--code-bg); color:var(--muted); cursor:pointer; }
@@ -352,15 +352,17 @@ try {
   dlg.addEventListener("click", () => dlg.close());
   for (const fig of document.querySelectorAll(".mermaid-figure")) {
     if (!fig.querySelector("svg")) continue;
-    const b = document.createElement("button");
-    b.className = "figbtn";
-    b.textContent = "fit";
-    b.onclick = () => { b.textContent = fig.classList.toggle("fit") ? "1:1" : "fit"; };
-    fig.append(b);
-    fig.addEventListener("dblclick", () => {
+    const open = () => {
       const svg = fig.querySelector("svg");
       if (svg) { dlg.replaceChildren(svg.cloneNode(true)); dlg.showModal(); }
-    });
+    };
+    const b = document.createElement("button");
+    b.className = "figbtn";
+    b.textContent = "\\u26f6";
+    b.title = "Maximize";
+    b.onclick = open;
+    fig.append(b);
+    fig.addEventListener("dblclick", open);
   }
 } catch { /* offline: diagrams stay readable as text */ }
 </script>

@@ -49,7 +49,7 @@ description: <one sentence — the classification statement>
 Fixed section order; omit optional sections rather than leaving them empty:
 
 - **Touched** — table of area → impact (`extends — new `--check` flag`), one row per area from step 3.
-- **System map** *(optional)* — a `mermaid` flowchart, only when the topology genuinely helps: touched areas plus immediate neighbors, never an exhaustive graph. Color nodes with `classDef touched fill:#1a7f37,color:#fff`, `extended fill:#9a6700,color:#fff`, `added fill:#cf222e,color:#fff`, `untouched fill:#57606a,color:#fff`.
+- **System map** *(optional)* — a `mermaid` flowchart, only when the topology genuinely helps: touched areas plus immediate neighbors, never an exhaustive graph. Color nodes with `classDef added fill:#1c5cab,color:#fff`, `extended fill:#ad4600,color:#fff`, `touched fill:#45443e,color:#fff`, `untouched fill:#e4e2da,color:#3a3a36` — the blueprint fence palette (blue/orange/graphite, no green; colorblind-safe and legible on both themes).
 - **Before / after** *(optional)* — contract, schema, or CLI-surface changes using the blueprint typed fences (`contract`, `signatures`, `filetree`) with `-`/`+` diff lines.
 - **Plan vs actual** — only when a blueprint for this work exists in `lab/`: what shipped as planned and what drifted, as a short list with one-line reasons. When drift is recorded here, also update the blueprint source in place (per the blueprint skill) so it stays the record of what was actually built.
 

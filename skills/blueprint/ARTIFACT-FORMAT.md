@@ -7,7 +7,7 @@ Style rules:
 - Sections are `##` headings (the TOC indexes them); subsections are `###`.
 - Fences, lists, and tables carry the design. Prose is rationed: one short paragraph where structure can't say it, never several in a row.
 - Enumerable criteria (parity semantics, compatibility lists, invariants) are bullet lists, not comma-run sentences — reviewers tick items off.
-- State each fact once: scope holds the what, decisions hold the why.
+- State each fact once: scope holds the what, decisions hold the why. Never add a recap section — an "invariants" or "summary" list restating Decisions is the canonical violation.
 - Sections beyond the six below are allowed, but they go last — after Decisions — and stay short.
 
 ## Frontmatter
@@ -24,7 +24,7 @@ description: One-sentence summary shown under the title.
 
 The renderer treats these fence languages specially; everything else is ordinary markdown (headings, prose, lists, tables, code blocks).
 
-- `callstack`, `filetree`, `contract`, `signatures` — diff-grammar blocks. Line grammar: first character `+` (added, blue), `-` (removed, orange), `~` (modified, teal), anything else is context; the palette is colorblind-safe and each marker also gets a distinct left-border rail. A trailing ` # comment` renders muted; `file:line` tokens inside comments render as anchor citations. `signatures` bodies are syntax-highlighted as TypeScript.
+- `callstack`, `filetree`, `contract`, `signatures` — diff-grammar blocks. Line grammar: first character `+` (added, blue), `-` (removed, orange), `~` (modified, neutral gray), anything else is context; the palette is colorblind-safe (no green) and each marker also gets a distinct left-border rail. A trailing ` # comment` renders muted; `file:line` tokens inside comments render as anchor citations. `signatures` bodies are syntax-highlighted as TypeScript.
 - `mockup` — raw HTML, inlined into the page in a sandboxed frame. Use for wsff's "mock, don't describe": a rough screen beats three paragraphs.
 - `mermaid` — progressive enhancement: renders as a diagram online, stays readable as text offline. Architecture sequence diagrams only.
 

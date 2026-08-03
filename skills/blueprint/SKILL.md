@@ -40,6 +40,7 @@ This step is complete when every existing symbol the design touches has been con
 
 Read [ARTIFACT-FORMAT.md](ARTIFACT-FORMAT.md) and write the source file — `lab/<name>.blueprint.md` by default. Blueprints are working documents, not repo documentation: they live in `lab/` scratch space and stay out of version control unless the user explicitly asks to commit one. Draft each section the tier calls for. Hard rules, in tension order:
 
+- **Plan the ask, not the neighborhood.** Adjacent features the user never requested — cancellation, cleanup crons, ops UX, refactors — are not designed; defer each in one line under Will-not-touch or Decisions. If discussion before the blueprint settled on a phase, the blueprint covers that phase only.
 - **Abstract up.** Signatures and shapes; if you are writing code that could be pasted into the repo, stop and rise a level. Code blocks are reserved for schemas, type definitions, contracts, and genuinely complex algorithms — everything else is a reference like "follow the pattern in `src/api/users.ts:45`".
 - **Survive decision changes.** If swapping a library or renaming a service would invalidate half the document, it contains implementation, not design.
 - **Stay readable.** The comparison point is a 200-line plan read in place of 2000 lines of diff. Prefer diff-highlighted trees and short blocks over prose walls.
