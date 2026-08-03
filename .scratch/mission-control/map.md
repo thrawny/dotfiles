@@ -9,7 +9,7 @@ Every design decision for "glue v1" mission control is resolved and captured in 
 ## Notes
 
 - Charted premises (decided during charting, 2026-08-03):
-  - **Threads are not spatial.** A thread's identity is its registry entry + zmx session; niri stays stock and just displays windows. Workspace-per-thread rejected (a 20-minute maintenance thread must not cost a workspace).
+  - **Threads are not spatial.** A thread's identity is its registry entry + zmx session; niri stays stock and just displays windows. Workspace-per-thread rejected (a 20-minute maintenance thread must not cost a workspace). Refined 2026-08-03: workspaces remain meaningful as *areas of work* (the niri-project role) that threads visit while engaged; a thread at rest has zero windows.
   - **Attach model: lightweight attach by default + explicit "pin to workspace" for heavy engagements.** Exact mechanism deliberately left open → [02 — Attach mechanism](issues/02-attach-mechanism.md).
   - **Build the glue.** Custom Wayland compositor is the fallback, not the plan. t3code rejected as platform (no pi support; its chat UI replaces the terminal workflow) — may be played with for ideas.
 - Read first: memory note `project_thread_environment_design.md` (design pillars + full sidebar/landscape research: stable-list/ranked-palette, read-unread primitive, derive-don't-reconcile, archive-on-merge rules).
