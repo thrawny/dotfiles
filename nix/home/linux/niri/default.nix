@@ -96,6 +96,11 @@ let
       hotkey-overlay.title = "Dismiss Agent Thread";
       repeat = false;
     };
+    "Mod+Ctrl+S" = {
+      action.spawn = [ "thread-settle" ];
+      hotkey-overlay.title = "Settle Agent Thread";
+      repeat = false;
+    };
   };
 
   sessionBinds = {

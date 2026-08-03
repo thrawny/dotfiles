@@ -22,6 +22,7 @@ Every design decision for "glue v1" mission control is resolved and captured in 
 
 - [v1 scope cut](issues/01-v1-scope-cut.md) — local implementation with remote-shaped schema (host field day one, sync deferred to v2); harnesses pi + claude + codex (codex conditional met by research).
 - [Codex status surface](issues/05-codex-status-surface.md) — build the codex producer on its hooks engine (11 events, headless-capable, 3 already wired in this repo); no status file exists; liveness via `$PPID` from SessionStart + `kill -0`; watch for content-hashed hook-trust invalidation.
+- [Attach mechanism](issues/02-attach-mechanism.md) — verbs are park / summon / go-to on nirius scratchpad + niri IPC, window-id keyed via agent-switch; "summon-to-me only" softened: visible threads are visited, only parked threads summoned (arriving tiled); fzf picker workable but likely not final (GTK-in-agent-switch is the fallback); missing "settle" state fed into 03.
 
 ## Not yet specified
 

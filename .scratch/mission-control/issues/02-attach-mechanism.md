@@ -1,7 +1,18 @@
 # Attach mechanism
 
 Type: prototype
-Status: claimed
+Status: resolved
+
+## Answer (2026-08-03, decided by feel on the real desktop)
+
+The attach verb set is **park / summon / go-to**, implemented on nirius scratchpad + raw niri IPC, keyed by window id via agent-switch's session store:
+
+- **Park** (Mod+Shift+S, `bin/thread-dismiss`): one keystroke, window floats into the nirius scratchpad (bottom-most workspace). Verdict: good — "I don't want to see you now", for long-running work.
+- **Summon** (picker, `bin/thread-summon` on Mod+S): only *parked* threads are summoned to the current workspace; they arrive **tiled** (tiling also evicts nirius scratchpad membership, which fixes niriusd dragging summoned windows around).
+- **Go-to**: threads *visible* in another workspace are visited, not pulled — this walked back the charted "summon-to-me only" premise; pulling an already-placed window felt wrong. Summon-to-me survives only as the exit from the parked state.
+- Window↔thread identification was already solved: agent-switch keys sessions by niri window id (hooks). No env handshake needed; titles are display-only (shells/agents rewrite them).
+- Verdict on the fzf surface: workable after the readability pass (aligned columns, state-sorted, sized floating window), but probably not the end state — if the picker needs live state or richer rows, build it into agent-switch as a GTK overlay.
+- Feel-testing also surfaced the missing **settle** state ("work has been done, keep the thread around, out of sight") — recorded in [03 — Lifecycle verbs](03-lifecycle-verbs.md); a mark-based settle prototype rides along in the same scripts.
 
 ## Question
 

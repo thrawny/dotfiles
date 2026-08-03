@@ -6,6 +6,10 @@
 #   - window parked in the nirius scratchpad -> summon it here (show + tile)
 #   - window visible anywhere -> go to it (focus-window switches workspace)
 #
+# Settled threads (nirius mark "settled", or idle for >36h) are hidden
+# from the default view; ctrl-s reveals them. Summoning a settled thread
+# un-settles it.
+#
 # THREAD_SUMMON_ALL=1 lists every window (for testing in a nested niri
 # session where no real agent sessions exist).
 
@@ -17,6 +21,7 @@ workspaces=$(niri msg --json workspaces)
 focused_ws_id=$(jq -r '.[] | select(.is_focused) | .id' <<< "$workspaces")
 
 scratch_ids=$(nirius list-scratchpad 2>/dev/null | sed -n 's/^id: \([0-9]*\),.*/\1/p' || true)
+settled_ids=$(nirius list-marked settled 2>/dev/null | sed -n 's/^id: \([0-9]*\),.*/\1/p' || true)
 
 if [[ "${THREAD_SUMMON_ALL:-}" == "1" ]]; then
   sessions='{}'
@@ -24,13 +29,16 @@ else
   sessions=$(agent-switch list 2>/dev/null | jq '.sessions' || echo '{}')
 fi
 
-# Rows: <window-id>\t<aligned pretty columns>
+# Rows: <window-id>\t<aligned pretty columns>. Threads settled by mark or
+# by idle age land in the settled list; everything else in the active one.
 rows=$(jq -rn \
   --argjson windows "$windows" \
   --argjson workspaces "$workspaces" \
   --argjson sessions "$sessions" \
   --argjson ws_id "$focused_ws_id" \
-  --arg scratch "$scratch_ids" '
+  --argjson now "$(date +%s)" \
+  --arg scratch "$scratch_ids" \
+  --arg settled "$settled_ids" '
   def rpad($n): tostring | .[0:$n] as $s | $s + ((" " * ($n - ($s | length))) // "");
   def ws_label($id):
     (($workspaces[] | select(.id == $id) | (.name // (.idx | tostring))) // "?");
@@ -39,6 +47,10 @@ rows=$(jq -rn \
     elif $w.workspace_id == $ws_id then "here"
     else ws_label($w.workspace_id)
     end;
+  def is_settled($w; $s):
+    ($settled | split("\n") | index($w.id | tostring)) != null
+    or ($s != null and $s.state == "idle"
+        and ($s.state_updated // $now) < ($now - 36 * 3600));
   def rank: {"waiting": 0, "responding": 1, "idle": 2}[.state] // 3;
 
   [ $windows[] as $w
@@ -47,20 +59,23 @@ rows=$(jq -rn \
     | if $s != null then
         { id: $w.id, agent: $s.agent, state: $s.state,
           project: ($s.cwd // "?" | sub(".*/"; "")),
-          where: where($w), title: $w.title }
+          where: where($w), title: $w.title, settled: is_settled($w; $s) }
       elif ($sessions | length) == 0 then
         { id: $w.id, agent: ($w.app_id // "?"), state: "-",
-          project: "-", where: where($w), title: $w.title }
+          project: "-", where: where($w), title: $w.title,
+          settled: is_settled($w; null) }
       else
         empty
       end
   ]
-  | sort_by(rank, .project)
+  | sort_by(.settled, rank, .project)
   | .[]
-  | (if .state == "waiting" then "[33m"
+  | (if .settled then "settled" else .state end) as $state
+  | (if .settled then ""
+     elif .state == "waiting" then "[33m"
      elif .state == "responding" then "[34m"
      else "" end) as $c
-  | "\(.id)\t\(.project | rpad(24))\(.agent | rpad(8))\($c)\(.state | rpad(12))[0m\(.where | rpad(16))[2m\(.title | rpad(60))[0m"
+  | "\(.id)\t\(if .settled then "settled" else "active" end)\t\(.project | rpad(24))\(.agent | rpad(8))\($c)\($state | rpad(12))[0m\(.where | rpad(16))[2m\(.title | rpad(60))[0m"
 ')
 
 if [[ -z "$rows" ]]; then
@@ -69,17 +84,34 @@ if [[ -z "$rows" ]]; then
   exit 0
 fi
 
-header="$(printf '%-24s%-8s%-12s%-16s%s' PROJECT AGENT STATE WHERE TITLE)"
+# Two views: default hides settled threads; ctrl-s reveals everything.
+tmpdir=$(mktemp -d)
+trap 'rm -rf "$tmpdir"' EXIT
+awk -F'\t' '$2 == "active"' <<< "$rows" > "$tmpdir/active"
+printf '%s\n' "$rows" > "$tmpdir/all"
+
+view="$tmpdir/active"
+[[ -s "$view" ]] || view="$tmpdir/all"
+
+header="$(printf '%-24s%-8s%-12s%-16s%s' PROJECT AGENT STATE WHERE TITLE)
+ctrl-s: show settled"
 
 set +e
 selected=$(fzf --prompt="thread> " --height=100% --ansi --no-multi --cycle \
-  --info=hidden --delimiter='\t' --with-nth=2 --nth=2 \
-  --header="$header" <<< "$rows")
+  --info=hidden --delimiter='\t' --with-nth=3 --nth=3 \
+  --header="$header" \
+  --bind "ctrl-s:reload(cat $tmpdir/all)" \
+  < "$view")
 rc=$?
 set -e
 [[ $rc -ne 0 || -z "$selected" ]] && exit 0
 
 win_id=$(cut -f1 <<< "$selected")
+
+# Summoning a settled thread un-settles it.
+if grep -qx "$win_id" <<< "$settled_ids"; then
+  nirius toggle-mark settled --id "$win_id"
+fi
 
 if grep -qx "$win_id" <<< "$scratch_ids"; then
   nirius scratchpad-show --id "$win_id"
