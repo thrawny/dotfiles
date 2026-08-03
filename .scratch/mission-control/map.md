@@ -20,6 +20,9 @@ Every design decision for "glue v1" mission control is resolved and captured in 
 
 <!-- one line per closed ticket: gist + link -->
 
+- [v1 scope cut](issues/01-v1-scope-cut.md) — local implementation with remote-shaped schema (host field day one, sync deferred to v2); harnesses pi + claude + codex (codex conditional met by research).
+- [Codex status surface](issues/05-codex-status-surface.md) — build the codex producer on its hooks engine (11 events, headless-capable, 3 already wired in this repo); no status file exists; liveness via `$PPID` from SessionStart + `kill -0`; watch for content-hashed hook-trust invalidation.
+
 ## Not yet specified
 
 - Thread creation flow (picker → project / harness / host / worktree-vs-stable-checkout; tenancy via path convention) — sharpens after scope cut + registry design.
