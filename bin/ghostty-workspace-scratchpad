@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Keep workspace scratchpads in one dedicated Ghostty instance while passing
+# each new window its workspace directory explicitly over D-Bus.
+set -euo pipefail
+
+directory=${1:?Usage: ghostty-workspace-scratchpad DIRECTORY}
+class=com.thrawny.GhosttyScratchpad
+
+bus_args=(--user)
+if [[ -n "${DBUS_SESSION_BUS_ADDRESS:-}" ]]; then
+  bus_args=(--address="$DBUS_SESSION_BUS_ADDRESS")
+fi
+
+if busctl "${bus_args[@]}" status "$class" >/dev/null 2>&1; then
+  exec ghostty +new-window \
+    --class="$class" \
+    --working-directory="$directory"
+fi
+
+exec ghostty \
+  --class="$class" \
+  --gtk-single-instance=true \
+  --working-directory="$directory"

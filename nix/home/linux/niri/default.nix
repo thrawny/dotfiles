@@ -37,10 +37,8 @@ let
         "--app-id"
         "^com\\.thrawny\\.GhosttyScratchpad$"
         "--"
-        "ghostty"
-        "--class=com.thrawny.GhosttyScratchpad"
-        "--gtk-single-instance=true"
-        "--working-directory={workspace-directory}"
+        "ghostty-workspace-scratchpad"
+        "{workspace-directory}"
       ];
       hotkey-overlay.title = "Toggle Workspace Terminal";
       repeat = false;
