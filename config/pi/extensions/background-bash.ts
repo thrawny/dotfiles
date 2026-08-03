@@ -21,9 +21,11 @@ const EMPTY_TURN_ENTRY_TYPE = "background-bash-empty-turn";
 const EMPTY_TURN_NUDGE =
 	"The final background task completion above received an empty response. React to it now: continue the work it unblocks, or state the outcome and current status.";
 const FINAL_WAKEUP_NUDGE =
-	"All background tasks are finished. Keep working: act on the results above; if everything is already done, state the final status.";
+	"Extension-generated wake-up, not a new user instruction: react to the background completion notification above. Keep working; if everything is already done, state the final status.";
 const OUTPUT_MAX_BYTES = 12 * 1024;
 const OUTPUT_MAX_LINES = 100;
+const COMPLETION_BATCH_DELAY_MS = 250;
+const COMPLETION_BATCH_MAX_TASKS = 16;
 const MAX_FOREGROUND_TIMEOUT_SECONDS = 10 * 60;
 const SESSION_RETENTION_SECONDS = 12 * 60 * 60;
 
@@ -255,8 +257,21 @@ function isSilentStop(message: AssistantRunMessage): boolean {
 	);
 }
 
+type NotificationState = "none" | "pending" | "sent";
+
+type CompletionSnapshot = {
+	exitCode: number;
+	durationMs: number;
+	output: string;
+};
+
+type TimeoutSnapshot = {
+	durationMs: number;
+	output: string;
+};
+
 type BackgroundTask = {
-	version: 1;
+	version: 2;
 	state: "running" | "finished";
 	sessionName: string;
 	command: string;
@@ -265,15 +280,23 @@ type BackgroundTask = {
 	shellPath: string;
 	markers: OutputMarkers;
 	timeoutSeconds?: number;
-	timeoutNotified: boolean;
+	timeout?: TimeoutSnapshot;
+	timeoutNotification: NotificationState;
+	completion?: CompletionSnapshot;
+	completionNotification: NotificationState;
+	completionWake: NotificationState;
 };
+
+function notificationState(value: unknown): value is NotificationState {
+	return value === "none" || value === "pending" || value === "sent";
+}
 
 function backgroundTask(value: unknown): BackgroundTask | undefined {
 	if (typeof value !== "object" || value === null) return undefined;
 	const data = value as Record<string, unknown>;
 	const markers = data.markers;
 	if (
-		data.version !== 1 ||
+		(data.version !== 1 && data.version !== 2) ||
 		(data.state !== "running" && data.state !== "finished") ||
 		typeof data.sessionName !== "string" ||
 		typeof data.command !== "string" ||
@@ -291,8 +314,51 @@ function backgroundTask(value: unknown): BackgroundTask | undefined {
 	) {
 		return undefined;
 	}
+
+	if (data.version === 1) {
+		return {
+			version: 2,
+			state: data.state,
+			sessionName: data.sessionName,
+			command: data.command,
+			cwd: data.cwd,
+			startedAt: data.startedAt,
+			shellPath: data.shellPath,
+			markers: markers as OutputMarkers,
+			timeoutSeconds: data.timeoutSeconds as number | undefined,
+			timeoutNotification: data.timeoutNotified === true ? "sent" : "none",
+			completionNotification: data.state === "finished" ? "sent" : "none",
+			completionWake: "none",
+		};
+	}
+
+	const timeout = data.timeout as Record<string, unknown> | null | undefined;
+	const completion = data.completion as
+		| Record<string, unknown>
+		| null
+		| undefined;
+	if (
+		!notificationState(data.timeoutNotification) ||
+		(timeout !== undefined &&
+			(timeout === null ||
+				typeof timeout.durationMs !== "number" ||
+				!Number.isFinite(timeout.durationMs) ||
+				typeof timeout.output !== "string")) ||
+		!notificationState(data.completionNotification) ||
+		!notificationState(data.completionWake) ||
+		(completion !== undefined &&
+			(completion === null ||
+				typeof completion.exitCode !== "number" ||
+				!Number.isFinite(completion.exitCode) ||
+				typeof completion.durationMs !== "number" ||
+				!Number.isFinite(completion.durationMs) ||
+				typeof completion.output !== "string"))
+	) {
+		return undefined;
+	}
+
 	return {
-		version: 1,
+		version: 2,
 		state: data.state,
 		sessionName: data.sessionName,
 		command: data.command,
@@ -301,11 +367,15 @@ function backgroundTask(value: unknown): BackgroundTask | undefined {
 		shellPath: data.shellPath,
 		markers: markers as OutputMarkers,
 		timeoutSeconds: data.timeoutSeconds as number | undefined,
-		timeoutNotified: data.timeoutNotified === true,
+		timeout: timeout as TimeoutSnapshot | undefined,
+		timeoutNotification: data.timeoutNotification,
+		completion: completion as CompletionSnapshot | undefined,
+		completionNotification: data.completionNotification,
+		completionWake: data.completionWake,
 	};
 }
 
-function persistedRunningTasks(ctx: ExtensionContext): BackgroundTask[] {
+function persistedTasks(ctx: ExtensionContext): BackgroundTask[] {
 	const latest = new Map<string, BackgroundTask>();
 	for (const entry of ctx.sessionManager.getBranch()) {
 		if (entry.type !== "custom" || entry.customType !== TASK_ENTRY_TYPE)
@@ -313,7 +383,7 @@ function persistedRunningTasks(ctx: ExtensionContext): BackgroundTask[] {
 		const task = backgroundTask(entry.data);
 		if (task) latest.set(task.sessionName, task);
 	}
-	return [...latest.values()].filter((task) => task.state === "running");
+	return [...latest.values()];
 }
 
 function listedBackgroundSessions(output: string): Set<string> {
@@ -386,11 +456,12 @@ function appendOutput(
 	label: string,
 	output: string,
 	historyCommand: string,
-): void {
-	const tail = truncateTail(output, {
+	limits: { maxBytes: number; maxLines: number } = {
 		maxBytes: OUTPUT_MAX_BYTES,
 		maxLines: OUTPUT_MAX_LINES,
-	});
+	},
+): void {
+	const tail = truncateTail(output, limits);
 	lines.push("", `${label}:`, tail.content || "(no output)");
 	if (tail.truncated) {
 		lines.push(`[Output truncated; use ${historyCommand} for full history.]`);
@@ -413,46 +484,92 @@ function timeoutContent(
 	return lines.join("\n");
 }
 
-function completionContent(
-	sessionName: string,
-	result: ExecResult,
-	durationMs: number,
-	output: string,
+function remainingTaskStatus(
 	remainingTaskCount: number,
+	deferredCompletionCount = 0,
 ): string {
-	const duration = `${(durationMs / 1000).toFixed(1)}s`;
-	const historyCommand = `zmx history ${sessionName} | tail -n 200`;
-	const remainingStatus =
+	if (remainingTaskCount === 0 && deferredCompletionCount === 0) {
+		return "No managed background tasks remain; no further completion wake-up is pending.";
+	}
+	const running =
 		remainingTaskCount === 0
-			? "No managed background tasks remain; no further completion wake-up is pending."
+			? undefined
 			: remainingTaskCount === 1
 				? "1 managed background task remains and will notify the agent when it finishes."
 				: `${remainingTaskCount} managed background tasks remain and will notify the agent when they finish.`;
+	const deferred =
+		deferredCompletionCount === 0
+			? undefined
+			: `${deferredCompletionCount} additional completion notification${deferredCompletionCount === 1 ? " is" : "s are"} queued.`;
+	return [running, deferred].filter(Boolean).join(" ");
+}
+
+function completionTaskContent(
+	sessionName: string,
+	completion: CompletionSnapshot,
+	outputLimits: { maxBytes: number; maxLines: number },
+): string {
+	const duration = `${(completion.durationMs / 1000).toFixed(1)}s`;
+	const historyCommand = `zmx history ${sessionName} | tail -n 200`;
 	const lines = [
-		result.code === 0
+		completion.exitCode === 0
 			? `✓ Background command finished (exit 0, ${duration})`
-			: `✗ Background command failed (exit ${result.code}, ${duration})`,
-		remainingStatus,
+			: `✗ Background command failed (exit ${completion.exitCode}, ${duration})`,
 		`Zmx session retained for logs: ${sessionName}`,
-		"Managed task status: zmx-list",
 		`Logs: ${historyCommand}`,
 	];
 	appendOutput(
 		lines,
 		"Output",
-		output || (result.code === 0 ? "" : execFailure(result)),
+		completion.output,
 		historyCommand,
+		outputLimits,
 	);
 	return lines.join("\n");
+}
+
+function completionContent(
+	tasks: BackgroundTask[],
+	remainingTaskCount: number,
+	deferredCompletionCount: number,
+): string {
+	const outputLimits = {
+		maxBytes: Math.max(512, Math.floor(OUTPUT_MAX_BYTES / tasks.length)),
+		maxLines: Math.max(5, Math.floor(OUTPUT_MAX_LINES / tasks.length)),
+	};
+	const blocks = tasks.flatMap((task, index) => {
+		if (!task.completion) return [];
+		const heading =
+			tasks.length === 1
+				? undefined
+				: `Background completion ${index + 1}/${tasks.length}`;
+		return [
+			[
+				heading,
+				completionTaskContent(task.sessionName, task.completion, outputLimits),
+			]
+				.filter(Boolean)
+				.join("\n"),
+		];
+	});
+	return [
+		remainingTaskStatus(remainingTaskCount, deferredCompletionCount),
+		"Managed task status: zmx-list",
+		...blocks,
+	].join("\n\n");
 }
 
 export default function backgroundBashExtension(pi: ExtensionAPI) {
 	const foregroundBash = createBashToolDefinition(process.cwd());
 	const waitControllers = new Set<AbortController>();
+	const tasksBySession = new Map<string, BackgroundTask>();
 	let sessionClosed = false;
+	let completionFlushTimer: ReturnType<typeof setTimeout> | undefined;
+	let completionFlushReady = false;
 	// After the final completion notification (zero tasks remain), nothing else
-	// will ever wake the agent, so a silent run end there loses the result.
+	// will ever wake the agent, so a silent settled run there loses the result.
 	let finalWakeupWatch: "off" | "armed" | "nudged" = "off";
+	let finalWakeupRun: "pending" | "silent" | "engaged" = "pending";
 
 	function updateStatus(ctx: ExtensionContext): void {
 		const count = waitControllers.size;
@@ -479,11 +596,202 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 	}
 
 	function persistTask(task: BackgroundTask): void {
+		tasksBySession.set(task.sessionName, task);
 		try {
 			pi.appendEntry(TASK_ENTRY_TYPE, task);
 		} catch {
 			// Session replacement can invalidate the old extension between checks.
 		}
+	}
+
+	function updateTask(
+		sessionName: string,
+		update: (task: BackgroundTask) => BackgroundTask,
+	): BackgroundTask | undefined {
+		const current = tasksBySession.get(sessionName);
+		if (!current) return undefined;
+		const next = update(current);
+		persistTask(next);
+		return next;
+	}
+
+	function deliverTimeoutNotification(task: BackgroundTask): boolean {
+		if (
+			task.timeoutNotification !== "pending" ||
+			task.timeoutSeconds === undefined ||
+			!task.timeout
+		) {
+			return false;
+		}
+		try {
+			pi.sendMessage(
+				{
+					customType: TIMEOUT_MESSAGE_TYPE,
+					content: timeoutContent(
+						task.sessionName,
+						task.timeoutSeconds,
+						task.timeout.output,
+					),
+					display: true,
+					details: {
+						command: task.command,
+						cwd: task.cwd,
+						durationMs: task.timeout.durationMs,
+						sessionName: task.sessionName,
+						stillRunning: task.state === "running",
+						timeoutSeconds: task.timeoutSeconds,
+					},
+				},
+				{ deliverAs: "steer", triggerTurn: true },
+			);
+		} catch {
+			return false;
+		}
+		updateTask(task.sessionName, (current) => ({
+			...current,
+			timeoutNotification: "sent",
+		}));
+		return true;
+	}
+
+	function markPendingCompletionWakesSent(): void {
+		for (const task of tasksBySession.values()) {
+			if (task.completionWake !== "pending") continue;
+			updateTask(task.sessionName, (current) => ({
+				...current,
+				completionWake: "sent",
+			}));
+		}
+	}
+
+	function sendFinalWake(task: BackgroundTask): boolean {
+		if (
+			task.completionNotification !== "sent" ||
+			task.completionWake !== "pending"
+		) {
+			return false;
+		}
+		finalWakeupWatch = "armed";
+		finalWakeupRun = "pending";
+		try {
+			pi.sendUserMessage(FINAL_WAKEUP_NUDGE, { deliverAs: "steer" });
+		} catch {
+			return false;
+		}
+		updateTask(task.sessionName, (current) => ({
+			...current,
+			completionWake: "sent",
+		}));
+		return true;
+	}
+
+	function flushCompletionBatch(): boolean {
+		if (!completionFlushReady || sessionClosed) return false;
+		const pending = [...tasksBySession.values()].filter(
+			(task) =>
+				task.state === "finished" &&
+				task.completion !== undefined &&
+				task.completionNotification === "pending",
+		);
+		if (pending.length === 0) {
+			completionFlushReady = false;
+			return false;
+		}
+
+		const batch = pending.slice(0, COMPLETION_BATCH_MAX_TASKS);
+		const deferredCompletionCount = pending.length - batch.length;
+		const remainingTaskCount = waitControllers.size;
+		const isFinalCompletion =
+			remainingTaskCount === 0 && deferredCompletionCount === 0;
+		const anchor = batch.at(-1);
+		if (isFinalCompletion && anchor) {
+			updateTask(anchor.sessionName, (current) => ({
+				...current,
+				completionWake: "pending",
+			}));
+		}
+
+		try {
+			pi.sendMessage(
+				{
+					customType: COMPLETION_MESSAGE_TYPE,
+					content: completionContent(
+						batch,
+						remainingTaskCount,
+						deferredCompletionCount,
+					),
+					display: true,
+					details: {
+						remainingTaskCount,
+						deferredCompletionCount,
+						completions: batch.map((task) => ({
+							command: task.command,
+							cwd: task.cwd,
+							durationMs: task.completion?.durationMs,
+							exitCode: task.completion?.exitCode,
+							sessionName: task.sessionName,
+						})),
+						...(batch.length === 1
+							? {
+									command: batch[0]?.command,
+									cwd: batch[0]?.cwd,
+									durationMs: batch[0]?.completion?.durationMs,
+									exitCode: batch[0]?.completion?.exitCode,
+									sessionName: batch[0]?.sessionName,
+								}
+							: {}),
+					},
+				},
+				{ deliverAs: "steer", triggerTurn: !isFinalCompletion },
+			);
+		} catch {
+			// Keep the durable pending state for the next safe retry point.
+			return false;
+		}
+
+		for (const task of batch) {
+			updateTask(task.sessionName, (current) => ({
+				...current,
+				completionNotification: "sent",
+			}));
+		}
+		completionFlushReady = false;
+		if (deferredCompletionCount > 0) scheduleCompletionFlush();
+
+		if (!isFinalCompletion || !anchor) return !isFinalCompletion;
+		const currentAnchor = tasksBySession.get(anchor.sessionName);
+		return currentAnchor ? sendFinalWake(currentAnchor) : false;
+	}
+
+	function flushPendingNotifications(): boolean {
+		let triggeredTurn = false;
+		// Snapshot pre-existing wake retries so a failed first send from the batch
+		// below is retried only at the next safe event, not immediately in a loop.
+		const pendingWakeSessionNames = [...tasksBySession.values()]
+			.filter(
+				(task) =>
+					task.completionNotification === "sent" &&
+					task.completionWake === "pending",
+			)
+			.map((task) => task.sessionName);
+		for (const task of tasksBySession.values()) {
+			if (deliverTimeoutNotification(task)) triggeredTurn = true;
+		}
+		if (flushCompletionBatch()) triggeredTurn = true;
+		for (const sessionName of pendingWakeSessionNames) {
+			const task = tasksBySession.get(sessionName);
+			if (task && sendFinalWake(task)) triggeredTurn = true;
+		}
+		return triggeredTurn;
+	}
+
+	function scheduleCompletionFlush(): void {
+		if (completionFlushTimer !== undefined || completionFlushReady) return;
+		completionFlushTimer = setTimeout(() => {
+			completionFlushTimer = undefined;
+			completionFlushReady = true;
+			flushPendingNotifications();
+		}, COMPLETION_BATCH_DELAY_MS);
 	}
 
 	async function watchCompletion(
@@ -501,9 +809,8 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			timeoutSeconds,
 		} = task;
 		let settled = false;
-		let timeoutNotified = task.timeoutNotified;
 		const timeoutDelay =
-			timeoutSeconds === undefined || timeoutNotified
+			timeoutSeconds === undefined || task.timeoutNotification !== "none"
 				? undefined
 				: Math.max(0, startedAt + timeoutSeconds * 1000 - Date.now());
 		const timeoutHandle =
@@ -514,32 +821,15 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 							if (settled || sessionClosed || controller.signal.aborted) return;
 							const output = await readOutput(sessionName, cwd, markers);
 							if (settled || sessionClosed || controller.signal.aborted) return;
-							timeoutNotified = true;
-							persistTask({ ...task, timeoutNotified });
-							try {
-								pi.sendMessage(
-									{
-										customType: TIMEOUT_MESSAGE_TYPE,
-										content: timeoutContent(
-											sessionName,
-											timeoutSeconds,
-											output,
-										),
-										display: true,
-										details: {
-											command,
-											cwd,
-											durationMs: Date.now() - startedAt,
-											sessionName,
-											stillRunning: true,
-											timeoutSeconds,
-										},
-									},
-									{ deliverAs: "steer", triggerTurn: true },
-								);
-							} catch {
-								// The session may have been replaced before the timer fired.
-							}
+							const pending = updateTask(sessionName, (current) => ({
+								...current,
+								timeout: {
+									durationMs: Date.now() - startedAt,
+									output,
+								},
+								timeoutNotification: "pending",
+							}));
+							if (pending) deliverTimeoutNotification(pending);
 						})();
 					}, timeoutDelay);
 		const clearWakeTimer = () => {
@@ -561,47 +851,20 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			const output = await readOutput(sessionName, cwd, markers);
 			if (sessionClosed || controller.signal.aborted) return;
 
+			const current = tasksBySession.get(sessionName) ?? task;
 			persistTask({
-				...task,
+				...current,
 				state: "finished",
-				timeoutNotified,
+				completion: {
+					exitCode: result.code,
+					durationMs: Date.now() - startedAt,
+					output: output || (result.code === 0 ? "" : execFailure(result)),
+				},
+				completionNotification: "pending",
 			});
 			waitControllers.delete(controller);
 			updateStatus(ctx);
-			const remainingTaskCount = waitControllers.size;
-			const isFinalCompletion = remainingTaskCount === 0;
-			finalWakeupWatch = isFinalCompletion ? "armed" : "off";
-			pi.sendMessage(
-				{
-					customType: COMPLETION_MESSAGE_TYPE,
-					content: completionContent(
-						sessionName,
-						result,
-						Date.now() - startedAt,
-						output,
-						remainingTaskCount,
-					),
-					display: true,
-					details: {
-						command,
-						cwd,
-						durationMs: Date.now() - startedAt,
-						exitCode: result.code,
-						remainingTaskCount,
-						sessionName,
-					},
-				},
-				{ deliverAs: "steer", triggerTurn: !isFinalCompletion },
-			);
-			if (isFinalCompletion) {
-				try {
-					// Queue the completion before the user steer, then let the user
-					// message own the wake-up so both reach the same model turn.
-					pi.sendUserMessage(FINAL_WAKEUP_NUDGE, { deliverAs: "steer" });
-				} catch {
-					// Session replacement can invalidate the extension between sends.
-				}
-			}
+			scheduleCompletionFlush();
 		} catch (error) {
 			if (sessionClosed || controller.signal.aborted) return;
 			const message = error instanceof Error ? error.message : String(error);
@@ -633,62 +896,98 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 	}
 
 	async function restoreBackgroundTasks(ctx: ExtensionContext): Promise<void> {
-		const tasks = persistedRunningTasks(ctx);
-		if (tasks.length === 0) {
-			updateStatus(ctx);
-			return;
-		}
-
-		const result = await pi.exec("zmx", ["list", "--json"], { cwd: ctx.cwd });
-		if (result.code !== 0) {
-			throw new Error(`Could not list zmx sessions: ${execFailure(result)}`);
-		}
-		const listed = listedBackgroundSessions(result.stdout);
-		if (sessionClosed) return;
-
-		for (const task of tasks) {
-			if (!listed.has(task.sessionName)) {
-				persistTask({ ...task, state: "finished" });
-				continue;
+		tasksBySession.clear();
+		for (const task of persistedTasks(ctx))
+			tasksBySession.set(task.sessionName, task);
+		const runningTasks = [...tasksBySession.values()].filter(
+			(task) => task.state === "running",
+		);
+		if (runningTasks.length > 0) {
+			const result = await pi.exec("zmx", ["list", "--json"], { cwd: ctx.cwd });
+			if (result.code !== 0) {
+				throw new Error(`Could not list zmx sessions: ${execFailure(result)}`);
 			}
-			const controller = new AbortController();
-			waitControllers.add(controller);
-			void watchCompletion(task, controller, ctx);
+			const listed = listedBackgroundSessions(result.stdout);
+			if (sessionClosed) return;
+
+			for (const task of runningTasks) {
+				if (!listed.has(task.sessionName)) {
+					persistTask({ ...task, state: "finished" });
+					continue;
+				}
+				const controller = new AbortController();
+				waitControllers.add(controller);
+				void watchCompletion(task, controller, ctx);
+			}
 		}
 		updateStatus(ctx);
+		if (
+			[...tasksBySession.values()].some(
+				(task) => task.completionNotification === "pending",
+			)
+		) {
+			completionFlushReady = true;
+		}
+		flushPendingNotifications();
 	}
 
 	pi.on("session_start", async (_event, ctx) => {
 		sessionClosed = false;
 		finalWakeupWatch = "off";
+		finalWakeupRun = "pending";
 		await restoreBackgroundTasks(ctx);
 	});
 
 	pi.on("session_shutdown", async (_event, ctx) => {
 		sessionClosed = true;
 		finalWakeupWatch = "off";
+		if (completionFlushTimer !== undefined) clearTimeout(completionFlushTimer);
+		completionFlushTimer = undefined;
+		completionFlushReady = false;
 		for (const controller of waitControllers) controller.abort();
 		waitControllers.clear();
+		updateStatus(ctx);
+	});
+
+	pi.on("tool_execution_end", async (_event, ctx) => {
+		if (!sessionClosed) flushPendingNotifications();
 		updateStatus(ctx);
 	});
 
 	pi.on("agent_end", async (event) => {
 		if (sessionClosed || finalWakeupWatch === "off") return;
 		const last = lastAssistantMessage(event.messages);
-		if (!last || !isSilentStop(last)) {
+		if (
+			last &&
+			(last.stopReason === "aborted" ||
+				last.content.some(
+					(block) =>
+						block.type === "toolCall" ||
+						(block.type === "text" && (block.text ?? "").trim() !== ""),
+				))
+		) {
+			finalWakeupRun = "engaged";
 			finalWakeupWatch = "off";
+			markPendingCompletionWakesSent();
 			return;
 		}
+		finalWakeupRun = last && isSilentStop(last) ? "silent" : "pending";
+	});
+
+	pi.on("agent_settled", async (_event, _ctx) => {
+		if (sessionClosed) return;
+		if (flushPendingNotifications()) return;
+		if (finalWakeupWatch === "off" || finalWakeupRun === "engaged") return;
 		if (finalWakeupWatch === "nudged") {
 			finalWakeupWatch = "off";
 			pi.appendEntry(EMPTY_TURN_ENTRY_TYPE, { action: "gave-up" });
 			return;
 		}
 		finalWakeupWatch = "nudged";
+		finalWakeupRun = "pending";
 		try {
-			// followUp queues behind any run the runtime still considers active;
-			// an unqueued send throws "Agent is already processing" from agent_end.
 			pi.sendUserMessage(EMPTY_TURN_NUDGE, { deliverAs: "followUp" });
+			markPendingCompletionWakesSent();
 			pi.appendEntry(EMPTY_TURN_ENTRY_TYPE, { action: "nudged" });
 		} catch (error) {
 			finalWakeupWatch = "armed";
@@ -770,7 +1069,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			}
 
 			const task: BackgroundTask = {
-				version: 1,
+				version: 2,
 				state: "running",
 				sessionName,
 				command: params.command,
@@ -779,10 +1078,13 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				shellPath: bash.shellPath,
 				markers,
 				timeoutSeconds: params.timeout,
-				timeoutNotified: false,
+				timeoutNotification: "none",
+				completionNotification: "none",
+				completionWake: "none",
 			};
 			persistTask(task);
 			finalWakeupWatch = "off";
+			finalWakeupRun = "pending";
 			const controller = new AbortController();
 			waitControllers.add(controller);
 			updateStatus(ctx);

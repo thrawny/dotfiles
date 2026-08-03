@@ -323,7 +323,95 @@ describe("background bash", () => {
 		expect(sendUserMessage).toHaveBeenCalledOnce();
 	});
 
-	it("still completes and stays armed when the final-wakeup nudge cannot be sent", async () => {
+	it("batches completions that finish together into one wake-up", async () => {
+		vi.useFakeTimers();
+		try {
+			const finishWaits: Array<(result: ExecResult) => void> = [];
+			const exec = vi.fn(async (_command: string, args: string[]) => {
+				if (!isQuietWait(args)) return execResult();
+				return new Promise<ExecResult>((resolve) => finishWaits.push(resolve));
+			});
+			const { sendMessage, sendUserMessage, tool } = setupExtension(exec);
+
+			await tool.execute(
+				"call-batch-first",
+				{ command: "first-task", background: true },
+				undefined,
+				undefined,
+				ctx,
+			);
+			await tool.execute(
+				"call-batch-second",
+				{ command: "second-task", background: true },
+				undefined,
+				undefined,
+				ctx,
+			);
+			finishWaits[0]?.(execResult());
+			finishWaits[1]?.(execResult({ code: 3, stderr: "failed" }));
+			await vi.advanceTimersByTimeAsync(0);
+			expect(sendMessage).not.toHaveBeenCalled();
+
+			await vi.advanceTimersByTimeAsync(250);
+			expect(sendMessage).toHaveBeenCalledOnce();
+			const message = sendMessage.mock.calls[0]?.[0] as {
+				content: string;
+				details: { completions: unknown[]; remainingTaskCount: number };
+			};
+			expect(message.content).toContain("Background completion 1/2");
+			expect(message.content).toContain("Background completion 2/2");
+			expect(message.content).toContain("exit 3");
+			expect(message.details.completions).toHaveLength(2);
+			expect(message.details.remainingTaskCount).toBe(0);
+			expect(sendMessage.mock.calls[0]?.[1]).toEqual({
+				deliverAs: "steer",
+				triggerTurn: false,
+			});
+			expect(sendUserMessage).toHaveBeenCalledOnce();
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("retries a failed completion notification at a safe tool boundary", async () => {
+		let finishWait: ((result: ExecResult) => void) | undefined;
+		const exec = vi.fn(async (_command: string, args: string[]) => {
+			if (!isQuietWait(args)) return execResult();
+			return new Promise<ExecResult>((resolve) => {
+				finishWait = resolve;
+			});
+		});
+		const { appendEntry, handlers, sendMessage, sendUserMessage, tool } =
+			setupExtension(exec);
+		sendMessage.mockImplementationOnce(() => {
+			throw new Error("session temporarily busy");
+		});
+
+		await tool.execute(
+			"call-notification-retry",
+			{ command: "retry-task", background: true },
+			undefined,
+			undefined,
+			ctx,
+		);
+		finishWait?.(execResult());
+		await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
+		expect(appendEntry).toHaveBeenLastCalledWith(
+			"background-bash-task",
+			expect.objectContaining({ completionNotification: "pending" }),
+		);
+		expect(sendUserMessage).not.toHaveBeenCalled();
+
+		await handlers.get("tool_execution_end")?.({}, ctx);
+		expect(sendMessage).toHaveBeenCalledTimes(2);
+		expect(sendUserMessage).toHaveBeenCalledOnce();
+		expect(appendEntry).toHaveBeenCalledWith(
+			"background-bash-task",
+			expect.objectContaining({ completionNotification: "sent" }),
+		);
+	});
+
+	it("retries a failed final-wakeup delivery when the agent settles", async () => {
 		let finishWait: ((result: ExecResult) => void) | undefined;
 		const exec = vi.fn(async (_command: string, args: string[]) => {
 			if (!isQuietWait(args)) return execResult();
@@ -353,10 +441,55 @@ describe("background bash", () => {
 			{ messages: [assistantStop([{ type: "text", text: "" }])] },
 			ctx,
 		);
+		await handlers.get("agent_settled")?.({}, ctx);
 		expect(sendUserMessage).toHaveBeenCalledTimes(2);
+		expect(sendUserMessage.mock.calls[1]?.[0]).toContain(
+			"Extension-generated wake-up",
+		);
 		expect(sendUserMessage.mock.calls[1]?.[1]).toEqual({
-			deliverAs: "followUp",
+			deliverAs: "steer",
 		});
+	});
+
+	it("does not retry a failed final wake when the completion was acted on", async () => {
+		let finishWait: ((result: ExecResult) => void) | undefined;
+		const exec = vi.fn(async (_command: string, args: string[]) => {
+			if (!isQuietWait(args)) return execResult();
+			return new Promise<ExecResult>((resolve) => {
+				finishWait = resolve;
+			});
+		});
+		const { appendEntry, handlers, sendMessage, sendUserMessage, tool } =
+			setupExtension(exec);
+		sendUserMessage.mockImplementationOnce(() => {
+			throw new Error("Agent is already processing.");
+		});
+
+		await tool.execute(
+			"call-nudge-observed",
+			{ command: "quick-task", background: true },
+			undefined,
+			undefined,
+			ctx,
+		);
+		finishWait?.(execResult());
+		await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledOnce());
+
+		await handlers.get("agent_end")?.(
+			{
+				messages: [
+					assistantStop([{ type: "text", text: "Completion handled." }]),
+				],
+			},
+			ctx,
+		);
+		await handlers.get("agent_settled")?.({}, ctx);
+
+		expect(sendUserMessage).toHaveBeenCalledOnce();
+		expect(appendEntry).toHaveBeenCalledWith(
+			"background-bash-task",
+			expect.objectContaining({ completionWake: "sent" }),
+		);
 	});
 
 	describe("final wakeup empty-turn watchdog", () => {
@@ -398,6 +531,7 @@ describe("background bash", () => {
 				},
 				ctx,
 			);
+			await handlers.get("agent_settled")?.({}, ctx);
 
 			expect(sendUserMessage).toHaveBeenCalledOnce();
 			expect(sendUserMessage.mock.calls[0]?.[0]).toContain("empty response");
@@ -420,12 +554,13 @@ describe("background bash", () => {
 			};
 
 			await agentEnd?.(silentRun, ctx);
+			await handlers.get("agent_settled")?.({}, ctx);
 			expect(appendEntry).toHaveBeenCalledWith("background-bash-empty-turn", {
 				action: "nudge-failed",
 				error: "Agent is already processing.",
 			});
 
-			await agentEnd?.(silentRun, ctx);
+			await handlers.get("agent_settled")?.({}, ctx);
 			expect(sendUserMessage).toHaveBeenCalledTimes(2);
 			expect(appendEntry).toHaveBeenCalledWith("background-bash-empty-turn", {
 				action: "nudged",
@@ -440,8 +575,10 @@ describe("background bash", () => {
 			};
 
 			await agentEnd?.(silentRun, ctx);
+			await handlers.get("agent_settled")?.({}, ctx);
 			await agentEnd?.(silentRun, ctx);
-			await agentEnd?.(silentRun, ctx);
+			await handlers.get("agent_settled")?.({}, ctx);
+			await handlers.get("agent_settled")?.({}, ctx);
 
 			expect(sendUserMessage).toHaveBeenCalledOnce();
 			expect(appendEntry).toHaveBeenCalledWith("background-bash-empty-turn", {
@@ -481,10 +618,12 @@ describe("background bash", () => {
 				{ messages: [assistantStop([{ type: "text", text: "" }], "aborted")] },
 				ctx,
 			);
+			await handlers.get("agent_settled")?.({}, ctx);
 			await handlers.get("agent_end")?.(
 				{ messages: [assistantStop([{ type: "text", text: "" }])] },
 				ctx,
 			);
+			await handlers.get("agent_settled")?.({}, ctx);
 
 			expect(sendUserMessage).not.toHaveBeenCalled();
 		});
@@ -519,12 +658,14 @@ describe("background bash", () => {
 				messages: [assistantStop([{ type: "text", text: "" }])],
 			};
 			await handlers.get("agent_end")?.(silentRun, ctx);
+			await handlers.get("agent_settled")?.({}, ctx);
 			expect(sendUserMessage).not.toHaveBeenCalled();
 
 			finishWaits[1]?.(execResult());
 			await vi.waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(2));
 			expect(sendUserMessage).toHaveBeenCalledOnce();
 			await handlers.get("agent_end")?.(silentRun, ctx);
+			await handlers.get("agent_settled")?.({}, ctx);
 			expect(sendUserMessage).toHaveBeenCalledTimes(2);
 			expect(sendUserMessage.mock.calls[1]?.[1]).toEqual({
 				deliverAs: "followUp",
@@ -567,11 +708,14 @@ describe("background bash", () => {
 			);
 			expect(appendEntry).toHaveBeenLastCalledWith(
 				"background-bash-task",
-				expect.objectContaining({ state: "running", timeoutNotified: true }),
+				expect.objectContaining({
+					state: "running",
+					timeoutNotification: "sent",
+				}),
 			);
 
 			finishWait?.(execResult());
-			await vi.advanceTimersByTimeAsync(0);
+			await vi.advanceTimersByTimeAsync(250);
 			expect(sendMessage).toHaveBeenCalledTimes(2);
 			expect(sendMessage).toHaveBeenLastCalledWith(
 				expect.objectContaining({
@@ -579,6 +723,43 @@ describe("background bash", () => {
 					content: expect.stringContaining("exit 0"),
 				}),
 				{ deliverAs: "steer", triggerTurn: false },
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it("retries a failed timeout notification at a safe tool boundary", async () => {
+		vi.useFakeTimers();
+		try {
+			const waitResult = new Promise<ExecResult>(() => {});
+			const exec = vi.fn(async (_command: string, args: string[]) =>
+				isQuietWait(args) ? waitResult : execResult(),
+			);
+			const { appendEntry, handlers, sendMessage, tool } = setupExtension(exec);
+			sendMessage.mockImplementationOnce(() => {
+				throw new Error("session temporarily busy");
+			});
+
+			await tool.execute(
+				"call-timeout-retry",
+				{ command: "slow-check", background: true, timeout: 5 },
+				undefined,
+				undefined,
+				ctx,
+			);
+			await vi.advanceTimersByTimeAsync(5_000);
+			expect(sendMessage).toHaveBeenCalledOnce();
+			expect(appendEntry).toHaveBeenLastCalledWith(
+				"background-bash-task",
+				expect.objectContaining({ timeoutNotification: "pending" }),
+			);
+
+			await handlers.get("tool_execution_end")?.({}, ctx);
+			expect(sendMessage).toHaveBeenCalledTimes(2);
+			expect(appendEntry).toHaveBeenLastCalledWith(
+				"background-bash-task",
+				expect.objectContaining({ timeoutNotification: "sent" }),
 			);
 		} finally {
 			vi.useRealTimers();
@@ -598,7 +779,7 @@ describe("background bash", () => {
 				undefined,
 				ctx,
 			);
-			await vi.advanceTimersByTimeAsync(0);
+			await vi.advanceTimersByTimeAsync(250);
 			expect(sendMessage).toHaveBeenCalledOnce();
 			expect(sendMessage).toHaveBeenLastCalledWith(
 				expect.objectContaining({
@@ -738,6 +919,56 @@ describe("background bash", () => {
 		);
 
 		await handlers.get("session_shutdown")?.({}, ctx);
+	});
+
+	it("delivers a persisted pending completion after session restore", async () => {
+		const exec = vi.fn(async () => execResult());
+		const { appendEntry, handlers, sendMessage, sendUserMessage } =
+			setupExtension(exec);
+		const restoredCtx = {
+			...ctx,
+			sessionManager: {
+				getBranch: () => [
+					{
+						type: "custom",
+						customType: "background-bash-task",
+						data: {
+							version: 2,
+							state: "finished",
+							sessionName: "pi-bg-restored-finished",
+							command: "just check",
+							cwd: "/tmp",
+							startedAt: Date.now() - 1_000,
+							shellPath: "bash",
+							markers: { start: "start", end: "end" },
+							timeoutNotification: "none",
+							completion: {
+								exitCode: 0,
+								durationMs: 1_000,
+								output: "restored output",
+							},
+							completionNotification: "pending",
+							completionWake: "none",
+						},
+					},
+				],
+			},
+		} as unknown as ExtensionContext;
+
+		await handlers.get("session_start")?.({}, restoredCtx);
+
+		expect(sendMessage).toHaveBeenCalledOnce();
+		expect(sendMessage.mock.calls[0]?.[0]).toEqual(
+			expect.objectContaining({
+				customType: "background-bash-finished",
+				content: expect.stringContaining("restored output"),
+			}),
+		);
+		expect(sendUserMessage).toHaveBeenCalledOnce();
+		expect(appendEntry).toHaveBeenCalledWith(
+			"background-bash-task",
+			expect.objectContaining({ completionNotification: "sent" }),
+		);
 	});
 
 	it("restores running task watchers from session state", async () => {
