@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ "${1:-}" == "--version" ]]; then
+  exec /home/thrawny/dotfiles/bin/sandbox codex "$@"
+fi
+
 exec /home/thrawny/dotfiles/bin/sandbox direnv exec "$PWD" codex "$@"
