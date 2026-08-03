@@ -81,6 +81,21 @@ let
       hotkey-overlay.title = "Open Project";
       repeat = false;
     };
+    "Mod+S" = {
+      action.spawn = [
+        "ghostty"
+        "--title=thread-summon"
+        "-e"
+        "thread-summon"
+      ];
+      hotkey-overlay.title = "Summon Agent Thread";
+      repeat = false;
+    };
+    "Mod+Shift+S" = {
+      action.spawn = [ "thread-dismiss" ];
+      hotkey-overlay.title = "Dismiss Agent Thread";
+      repeat = false;
+    };
   };
 
   sessionBinds = {
@@ -671,6 +686,7 @@ in
             title = "^(Slack - Huddle Preview|Huddle:)";
           }
           { title = "^niri-project-picker$"; }
+          { title = "^thread-summon$"; }
           { title = "^btop\\+\\+$"; }
           { app-id = "^spotify$"; }
           { app-id = "^1password$"; }

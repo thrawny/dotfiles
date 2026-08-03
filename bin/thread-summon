@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+# Prototype: summon an agent-thread window to the current workspace.
+#
+# Picker rows come from agent-switch sessions joined with live niri windows.
+# Summon semantics (move-or-focus):
+#   - window parked in the nirius scratchpad -> nirius scratchpad-show --id
+#   - window already on the focused workspace -> just focus it
+#   - window elsewhere -> move it to the focused workspace and focus it
+#
+# THREAD_SUMMON_ALL=1 lists every window (for testing in a nested niri
+# session where no real agent sessions exist).
+
+[[ "${TRACE:-}" ]] && set -x
+set -euo pipefail
+
+windows=$(niri msg --json windows)
+workspaces=$(niri msg --json workspaces)
+focused_ws_idx=$(jq -r '.[] | select(.is_focused) | .idx' <<< "$workspaces")
+focused_ws_id=$(jq -r '.[] | select(.is_focused) | .id' <<< "$workspaces")
+
+scratch_ids=$(nirius list-scratchpad 2>/dev/null | sed -n 's/^id: \([0-9]*\),.*/\1/p' || true)
+
+if [[ "${THREAD_SUMMON_ALL:-}" == "1" ]]; then
+  sessions='{}'
+else
+  sessions=$(agent-switch list 2>/dev/null | jq '.sessions' || echo '{}')
+fi
+
+# Rows: <window-id>\t<label>
+rows=$(jq -rn \
+  --argjson windows "$windows" \
+  --argjson workspaces "$workspaces" \
+  --argjson sessions "$sessions" \
+  --argjson ws_id "$focused_ws_id" \
+  --arg scratch "$scratch_ids" '
+  def ws_label($id):
+    ($workspaces[] | select(.id == $id) | (.name // (.idx | tostring))) // "?";
+  def place($w):
+    if ($scratch | split("\n") | index($w.id | tostring)) then "[parked]"
+    elif $w.workspace_id == $ws_id then "[here]"
+    else "[ws \(ws_label($w.workspace_id))]"
+    end;
+  $windows[] as $w
+  | select($w.title != "thread-summon")
+  | ($sessions[$w.id | tostring]) as $s
+  | if $s != null then
+      "\($w.id)\t\($s.agent)  \($s.state)  \($s.cwd // "?" | sub(".*/"; ""))  \(place($w))  \($w.title)"
+    elif ($sessions | length) == 0 then
+      "\($w.id)\t\($w.app_id // "?")  \(place($w))  \($w.title)"
+    else
+      empty
+    end
+')
+
+if [[ -z "$rows" ]]; then
+  echo "no agent threads found" >&2
+  sleep 1
+  exit 0
+fi
+
+set +e
+selected=$(fzf --prompt="thread> " --height=100% --delimiter='\t' --with-nth=2 <<< "$rows")
+rc=$?
+set -e
+[[ $rc -ne 0 || -z "$selected" ]] && exit 0
+
+win_id=$(cut -f1 <<< "$selected")
+win_ws_id=$(jq -r --argjson id "$win_id" '.[] | select(.id == $id) | .workspace_id' <<< "$windows")
+
+if grep -qx "$win_id" <<< "$scratch_ids"; then
+  nirius scratchpad-show --id "$win_id"
+elif [[ "$win_ws_id" == "$focused_ws_id" ]]; then
+  niri msg action focus-window --id "$win_id"
+else
+  niri msg action move-window-to-workspace --window-id "$win_id" --focus true "$focused_ws_idx"
+  niri msg action focus-window --id "$win_id"
+fi

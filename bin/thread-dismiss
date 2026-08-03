@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Prototype: one-keystroke dismiss for agent-thread windows.
+#
+# If the focused window is already a nirius scratchpad window (i.e. it was
+# summoned), bounce it back to the hidden scratchpad. Otherwise park it:
+# scratchpad-toggle adopts it into the scratchpad (floats + hides it).
+#
+# Pin-to-workspace (heavy engagement) stays explicit: run
+# `nirius scratchpad-toggle` on a summoned window to un-adopt it.
+
+[[ "${TRACE:-}" ]] && set -x
+set -euo pipefail
+
+focused_id=$(niri msg --json focused-window | jq -r '.id // empty')
+[[ -z "$focused_id" ]] && exit 0
+
+if nirius list-scratchpad 2>/dev/null | sed -n 's/^id: \([0-9]*\),.*/\1/p' | grep -qx "$focused_id"; then
+  # scratchpad-show on a currently-shown scratchpad window moves it back
+  nirius scratchpad-show
+else
+  nirius scratchpad-toggle
+fi
