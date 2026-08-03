@@ -70,20 +70,83 @@ let
     '';
   };
 
+  codexProviderSettings = {
+    enabled = true;
+    binaryPath = lib.getExe codexWithDirenv;
+    homePath = codexHome;
+    shadowHomePath = "";
+    launchArgs = "";
+    customModels = [ ];
+  };
+  claudeProviderSettings = {
+    enabled = true;
+    binaryPath = lib.getExe claudeWithDirenv;
+    homePath = "";
+    launchArgs = "";
+    customModels = [ ];
+  };
+
   serverSettings = pkgs.writeText "t3code-settings.json" (
     builtins.toJSON {
       providers = {
+        codex = codexProviderSettings;
+        claudeAgent = claudeProviderSettings;
+        cursor.enabled = false;
+        grok.enabled = false;
+        opencode.enabled = false;
+      };
+      providerInstances = {
         codex = {
-          binaryPath = lib.getExe codexWithDirenv;
-          homePath = codexHome;
+          driver = "codex";
+          displayName = "Codex";
+          enabled = true;
+          config = codexProviderSettings;
         };
         claudeAgent = {
+          driver = "claudeAgent";
+          displayName = "Claude Code";
           enabled = true;
-          binaryPath = lib.getExe claudeWithDirenv;
+          config = claudeProviderSettings;
         };
-        cursor.enabled = false;
-        opencode.enabled = false;
-        pi.enabled = false;
+        cursor = {
+          driver = "cursor";
+          enabled = false;
+          config = {
+            enabled = false;
+            binaryPath = "cursor-agent";
+            apiEndpoint = "";
+            customModels = [ ];
+          };
+        };
+        grok = {
+          driver = "grok";
+          enabled = false;
+          config = {
+            enabled = false;
+            binaryPath = "grok";
+            customModels = [ ];
+          };
+        };
+        opencode = {
+          driver = "opencode";
+          enabled = false;
+          config = {
+            enabled = false;
+            binaryPath = "opencode";
+            serverUrl = "";
+            serverPassword = "";
+            customModels = [ ];
+          };
+        };
+        pi = {
+          driver = "pi";
+          enabled = false;
+          config = {
+            enabled = false;
+            binaryPath = "pi";
+            customModels = [ ];
+          };
+        };
       };
       textGenerationModelSelection = {
         instanceId = "codex";
@@ -95,6 +158,7 @@ let
           }
         ];
       };
+      sourceControlWriterModelSelection = null;
     }
   );
 
@@ -246,16 +310,81 @@ let
         --arg codex_binary ${lib.escapeShellArg (lib.getExe codexWithDirenv)} \
         --arg codex_home ${lib.escapeShellArg codexHome} \
         '
-          .providers.codex.binaryPath = $codex_binary
-          | .providers.codex.homePath = $codex_home
-          | .providers.claudeAgent.enabled = true
-          | .providers.claudeAgent.binaryPath = $claude_binary
-          | .providers.cursor.enabled = false
-          | .providers.opencode.enabled = false
-          | .providers.pi.enabled = false
-          | .textGenerationModelSelection.instanceId = "codex"
-          | .textGenerationModelSelection.model = "gpt-5.6-sol"
-          | .textGenerationModelSelection.options = [{"id": "reasoningEffort", "value": "low"}]
+          .providers.codex = {
+            enabled: true,
+            binaryPath: $codex_binary,
+            homePath: $codex_home,
+            shadowHomePath: "",
+            launchArgs: "",
+            customModels: []
+          }
+          | .providers.claudeAgent = {
+            enabled: true,
+            binaryPath: $claude_binary,
+            homePath: "",
+            launchArgs: "",
+            customModels: []
+          }
+          | .providers.cursor = {
+            enabled: false,
+            binaryPath: "cursor-agent",
+            apiEndpoint: "",
+            customModels: []
+          }
+          | .providers.grok = {
+            enabled: false,
+            binaryPath: "grok",
+            customModels: []
+          }
+          | .providers.opencode = {
+            enabled: false,
+            binaryPath: "opencode",
+            serverUrl: "",
+            serverPassword: "",
+            customModels: []
+          }
+          | .providerInstances.codex = {
+            driver: "codex",
+            displayName: "Codex",
+            enabled: true,
+            config: .providers.codex
+          }
+          | .providerInstances.claudeAgent = {
+            driver: "claudeAgent",
+            displayName: "Claude Code",
+            enabled: true,
+            config: .providers.claudeAgent
+          }
+          | .providerInstances.cursor = {
+            driver: "cursor",
+            enabled: false,
+            config: .providers.cursor
+          }
+          | .providerInstances.grok = {
+            driver: "grok",
+            enabled: false,
+            config: .providers.grok
+          }
+          | .providerInstances.opencode = {
+            driver: "opencode",
+            enabled: false,
+            config: .providers.opencode
+          }
+          | .providerInstances.pi = {
+            driver: "pi",
+            enabled: false,
+            config: {
+              enabled: false,
+              binaryPath: "pi",
+              customModels: []
+            }
+          }
+          | .textGenerationModelSelection = {
+            instanceId: "codex",
+            model: "gpt-5.6-sol",
+            options: [{id: "reasoningEffort", value: "low"}]
+          }
+          | .sourceControlWriterModelSelection = null
         ' \
         "$settings_path" > "$settings_tmp"
       install -m 0600 "$settings_tmp" "$settings_path"
