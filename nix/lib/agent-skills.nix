@@ -70,6 +70,11 @@ let
     improve-codebase-architecture.source =
       mattpocock-skills + "/skills/engineering/improve-codebase-architecture";
     tdd.source = mattpocock-skills + "/skills/engineering/tdd";
+    prototype.source = mattpocock-skills + "/skills/engineering/prototype";
+    research.source = mattpocock-skills + "/skills/engineering/research";
+    setup-matt-pocock-skills.source =
+      mattpocock-skills + "/skills/engineering/setup-matt-pocock-skills";
+    wayfinder.source = mattpocock-skills + "/skills/engineering/wayfinder";
   };
 
   skillCatalog = lib.mapAttrs validateSkill (
