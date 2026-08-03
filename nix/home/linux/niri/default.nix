@@ -519,6 +519,7 @@ in
         command = [
           "agent-switch"
           "serve"
+          "--niri"
         ];
       }
       { command = [ "swayosd-server" ]; }
