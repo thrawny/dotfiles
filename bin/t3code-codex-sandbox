@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+exec /home/thrawny/dotfiles/bin/sandbox direnv exec "$PWD" codex "$@"
