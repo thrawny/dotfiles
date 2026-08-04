@@ -135,8 +135,6 @@ function execFailure(result: ExecResult): string {
 		.trim();
 }
 
-// One object per session from `zmx list --json`. Only `name` is guaranteed;
-// unreachable sessions carry `err` instead of the runtime fields.
 type ZmxSession = {
 	name: string;
 	clients?: number;
@@ -144,16 +142,34 @@ type ZmxSession = {
 	err?: string;
 };
 
+// zmx documents the default list output as stable tab-separated key=value
+// fields. We only consume task lifecycle fields and ignore cwd/cmd/labels.
 function parseZmxSessions(output: string): ZmxSession[] {
-	const parsed: unknown = JSON.parse(output);
-	if (!Array.isArray(parsed))
-		throw new TypeError("zmx list JSON must be an array");
-	return parsed.filter(
-		(entry): entry is ZmxSession =>
-			typeof entry === "object" &&
-			entry !== null &&
-			typeof (entry as ZmxSession).name === "string",
-	);
+	const sessions: ZmxSession[] = [];
+	for (const line of output.split("\n")) {
+		const fields = new Map<string, string>();
+		for (const item of line.split("\t")) {
+			const separator = item.indexOf("=");
+			if (separator < 0) continue;
+			const key = item
+				.slice(0, separator)
+				.trim()
+				.replace(/^→\s*/, "");
+			fields.set(key, item.slice(separator + 1));
+		}
+
+		const name = fields.get("name");
+		if (!name) continue;
+		const clients = Number(fields.get("clients"));
+		const ended = Number(fields.get("ended"));
+		sessions.push({
+			name,
+			clients: Number.isSafeInteger(clients) ? clients : undefined,
+			ended: Number.isSafeInteger(ended) ? ended : undefined,
+			err: fields.get("err"),
+		});
+	}
+	return sessions;
 }
 
 function staleBackgroundSessions(output: string, nowSeconds: number): string[] {
@@ -176,7 +192,7 @@ async function pruneOldBackgroundSessions(
 	cwd: string,
 ): Promise<void> {
 	try {
-		const list = await pi.exec("zmx", ["list", "--json"], { cwd });
+		const list = await pi.exec("zmx", ["list"], { cwd });
 		if (list.code !== 0) return;
 
 		const stale = staleBackgroundSessions(
@@ -903,7 +919,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 			(task) => task.state === "running",
 		);
 		if (runningTasks.length > 0) {
-			const result = await pi.exec("zmx", ["list", "--json"], { cwd: ctx.cwd });
+			const result = await pi.exec("zmx", ["list"], { cwd: ctx.cwd });
 			if (result.code !== 0) {
 				throw new Error(`Could not list zmx sessions: ${execFailure(result)}`);
 			}
