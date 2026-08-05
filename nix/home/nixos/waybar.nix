@@ -37,13 +37,13 @@ let
       padding: 0 8px;
     }
 
-    #custom-agent-status.waiting {
-      color: @waybar-accent;
+    /* Sidebar priority: bright Done, sky Working, muted Idle. */
+    #custom-agent-status.done {
+      color: #ffffff;
     }
 
-    /* State colors match agent-switch's molokai theme (themes.rs) */
-    #custom-agent-status.responding {
-      color: #a6e22e;
+    #custom-agent-status.working {
+      color: #7dcfff;
     }
 
     #custom-agent-status.idle,
@@ -299,7 +299,7 @@ let
       exec = "${homeDir}/dotfiles/bin/agent-status";
       return-type = "json";
       interval = 2;
-      on-click = "${homeDir}/.cargo/bin/agent-switch toggle";
+      on-click = "${homeDir}/code/agent-switch/target/debug/agent-switch demo-sidebar --live";
     };
 
     "custom/caffeine" = {
