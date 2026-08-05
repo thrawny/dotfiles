@@ -1,5 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { accessSync, constants } from "node:fs";
+import {
+	accessSync,
+	constants,
+	mkdirSync,
+	readFileSync,
+	unlinkSync,
+	watch,
+} from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import type {
 	ExtensionAPI,
@@ -22,6 +30,15 @@ type TrackPayload = {
 };
 
 const START_TIMEOUT_MS = 800;
+
+// The agent-switch sidebar propagates a thread rename by dropping
+// `<session_id>` (content = new name) in this directory; we watch it and
+// apply the name to the live session so pi's own picker shows it too.
+const RENAMES_DIR = path.join(
+	process.env.XDG_STATE_HOME ?? path.join(os.homedir(), ".local", "state"),
+	"agent-switch",
+	"renames",
+);
 
 function commandOnPath(command: string): boolean {
 	for (const directory of (process.env.PATH ?? "").split(path.delimiter)) {
@@ -89,6 +106,31 @@ export default function (pi: ExtensionAPI) {
 	const ephemeralSessionId = `pi-ephemeral-${process.pid}-${Date.now().toString(36)}`;
 	let disabled = false;
 	let warned = false;
+	let currentSessionId: string | null = null;
+
+	// Sidebar rename hand-off: apply a pending rename dropped for this
+	// session, if any. Called on session_start (covers resume) and from the
+	// directory watcher (covers live renames).
+	function applyPendingRename() {
+		if (!currentSessionId) return;
+		const file = path.join(RENAMES_DIR, currentSessionId);
+		try {
+			const name = readFileSync(file, "utf8").trim();
+			unlinkSync(file);
+			if (name) pi.setSessionName(name);
+		} catch {
+			// No pending rename (or unreadable) — nothing to do.
+		}
+	}
+
+	try {
+		mkdirSync(RENAMES_DIR, { recursive: true });
+		watch(RENAMES_DIR, { persistent: false }, (_eventType, filename) => {
+			if (filename === currentSessionId) applyPendingRename();
+		});
+	} catch {
+		// Watcher is best-effort; session_start still applies pending renames.
+	}
 
 	function track(
 		ctx: ExtensionContext,
@@ -100,6 +142,7 @@ export default function (pi: ExtensionAPI) {
 		const resolvedSessionId =
 			sessionId ?? sessionIdFromContext(ctx, ephemeralSessionId);
 		if (!resolvedSessionId) return;
+		if (sessionId == null) currentSessionId = resolvedSessionId;
 
 		const payload: TrackPayload = {
 			agent: "pi",
@@ -132,6 +175,7 @@ export default function (pi: ExtensionAPI) {
 			track(ctx, "session-end", previousSessionId);
 		}
 		track(ctx, "session-start");
+		applyPendingRename();
 	});
 
 	pi.on("before_agent_start", async (_event, ctx) => {
