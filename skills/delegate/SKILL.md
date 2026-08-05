@@ -9,18 +9,24 @@ Consult the `acpx` skill for command syntax, permissions, models, and session me
 
 ## Choose
 
-Honor an explicitly requested agent or model. Otherwise, default implementation work to Codex with `gpt-5.6-sol`.
+Only delegate to these models:
+
+- Codex: `gpt-5.6-sol`
+- Claude Code: `claude-fable-5`
+- Claude Code: `claude-opus-5`
+
+Honor an explicit choice from this list. Otherwise, default to Codex with `gpt-5.6-sol`.
 
 Put global `acpx` options such as `--cwd`, `--model`, and permissions before the agent name. Always ensure the named session exists, then prompt it:
 
 ```bash
-# Claude Code on Fable 5
-acpx --cwd <repo root> --model claude-fable-5 --approve-all claude sessions ensure --name <session-name>
-acpx --cwd <repo root> --model claude-fable-5 --approve-all claude -s <session-name> '<work order>'
-
 # Codex on GPT-5.6 Sol
 acpx --cwd <repo root> --model gpt-5.6-sol --approve-all codex sessions ensure --name <session-name>
 acpx --cwd <repo root> --model gpt-5.6-sol --approve-all codex -s <session-name> '<work order>'
+
+# Claude Code on Fable 5 (substitute claude-opus-5 for Opus 5)
+acpx --cwd <repo root> --model claude-fable-5 --approve-all claude sessions ensure --name <session-name>
+acpx --cwd <repo root> --model claude-fable-5 --approve-all claude -s <session-name> '<work order>'
 ```
 
 Use a named session for delegated work so follow-up prompts can reuse context.
