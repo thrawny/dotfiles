@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Marker command for the Claude PostToolUse hook.
+#
+# This process cannot identify its Claude session. Its PostToolUse event can,
+# so claude-context-watermark performs the actual promotion after this exits.
+set -euo pipefail
+
+printf '%s\n' 'Requesting promotion of this session auto-handoff.'

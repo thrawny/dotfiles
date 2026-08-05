@@ -1,23 +1,67 @@
 #!/usr/bin/env bash
-# PostToolUse hook: warn the model when context usage crosses a watermark.
+# PostToolUse hook: manage Claude's session-scoped auto-handoff.
 #
-# Reads the hook JSON on stdin, estimates current context occupancy from the
-# last assistant usage block in the session transcript, and injects an
-# additionalContext warning at each configured checkpoint so the model writes
-# and then refreshes a session-scoped auto-handoff shortly before auto-compact
-# fires. The companion SessionStart hook (claude-handoff-takeoff) injects that
-# file back after compaction.
+# A claude-handoff-promote tool call copies this session's existing auto-handoff
+# into the current worktree for the manual /handoff flow. All other tool calls
+# estimate current context occupancy from the last assistant usage block in the
+# transcript and inject an additionalContext warning at each configured
+# checkpoint so the model writes and then refreshes an auto-handoff shortly
+# before auto-compact. The companion SessionStart hook
+# (claude-handoff-takeoff) injects that file back after compaction.
 #
 # Env:
 #   CLAUDE_CODE_AUTO_COMPACT_WINDOW   token window to measure against (default 300000)
 #   CLAUDE_CONTEXT_WATERMARK_PCTS     space/comma-separated checkpoints (default "85 88")
 set -uo pipefail
 
+emit_context() {
+  jq -n --arg ctx "$1" \
+    '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $ctx}}'
+}
+
+promote_handoff() {
+  local input=$1 session cwd handoff_dir source git_root destination
+
+  session=$(jq -r '.session_id // empty' <<<"$input" 2>/dev/null) || return 0
+  cwd=$(jq -r '.cwd // empty' <<<"$input" 2>/dev/null) || return 0
+  [[ -n "$session" && "$session" != */* && -d "$cwd" ]] || {
+    emit_context "Auto-handoff promotion failed because the hook received no valid session or working directory. Continue the /handoff flow by writing a fresh handoff.md."
+    return 0
+  }
+
+  git_root=$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null) || {
+    emit_context "No Git worktree was found for the manual handoff. Stop and tell the user; do not write handoff.md outside a worktree."
+    return 0
+  }
+
+  handoff_dir=${XDG_STATE_HOME:-$HOME/.local/state}/claude/handoffs
+  source=$handoff_dir/$session.md
+  destination=$git_root/handoff.md
+  if [[ ! -s "$source" ]]; then
+    emit_context "No auto-handoff exists for this session. Continue the /handoff flow by extracting a fresh handoff from the current conversation, using the user's supplied goal if present."
+    return 0
+  fi
+
+  cp -f -- "$source" "$destination" 2>/dev/null || {
+    emit_context "The session auto-handoff exists but could not be copied to ${destination}. Stop and report the error; do not silently regenerate it."
+    return 0
+  }
+
+  emit_context "Promoted this session's existing auto-handoff to ${destination}. Treat it as the draft for the manual /handoff: apply the user's supplied goal as authoritative, reconcile only meaningful changes since the snapshot (including files, tests, and live state), then stop. Do not regenerate the handoff from scratch."
+}
+
 main() {
-  local input transcript session usage window pct thresholds threshold trigger_pct
-  local state_dir state_file last_threshold handoff_dir
+  local input tool_name tool_command transcript session usage window pct
+  local thresholds threshold trigger_pct state_dir state_file last_threshold handoff_dir
 
   input=$(cat) || return 0
+  tool_name=$(jq -r '.tool_name // empty' <<<"$input" 2>/dev/null) || return 0
+  tool_command=$(jq -r '.tool_input.command // empty' <<<"$input" 2>/dev/null) || return 0
+  if [[ "$tool_name" == "Bash" && "$tool_command" == "claude-handoff-promote" ]]; then
+    promote_handoff "$input"
+    return 0
+  fi
+
   transcript=$(jq -r '.transcript_path // empty' <<<"$input" 2>/dev/null) || return 0
   session=$(jq -r '.session_id // empty' <<<"$input" 2>/dev/null) || return 0
   [[ -f "$transcript" && -n "$session" && "$session" != */* ]] || return 0
@@ -74,8 +118,7 @@ main() {
   echo "$trigger_pct" >"$state_file" 2>/dev/null
 
   handoff_dir=${XDG_STATE_HOME:-$HOME/.local/state}/claude/handoffs
-  jq -n --arg ctx "Context usage is at ~${pct}% of the ${window}-token auto-compact window (crossed the ${trigger_pct}% handoff checkpoint). Write a session auto-handoff to ${handoff_dir}/${session}.md now (create the directory if needed), then continue the task. Include: the next goal; decisions made and why; paths of files touched; test/gate results and unresolved errors; anything deliberately left running (dev servers, background agents, acpx sessions); the immediate next action. Keep it under ~1000 tokens. This is separate from the manual handoff flow — do not touch any handoff.md in the repo." \
-    '{hookSpecificOutput: {hookEventName: "PostToolUse", additionalContext: $ctx}}'
+  emit_context "Context usage is at ~${pct}% of the ${window}-token auto-compact window (crossed the ${trigger_pct}% handoff checkpoint). Write a session auto-handoff to ${handoff_dir}/${session}.md now (create the directory if needed), then continue the task. Use these headings: Next goal; Context (decisions and why); Files; Skills; Live state (dev servers, background agents, acpx sessions deliberately left running); Immediate action. Include test/gate results and unresolved errors where relevant. Keep it under ~1000 tokens. This is separate from the manual handoff flow — do not touch any handoff.md in the repo."
 }
 
 main
