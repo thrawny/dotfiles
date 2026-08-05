@@ -13,7 +13,7 @@ Current custom extensions include:
 
 - `agent-switch.ts` — forwards Pi lifecycle events to `agent-switch track`
 - `agents-local.ts` — loads private `AGENTS.local.md` files from the current git worktree
-- `background-bash.ts` — adds `background: true` to `bash` using zmx with completion wake-ups, non-destructive timeout wake-ups, and 12-hour retention of both sessions and the `~/.cache/pi/background-bash/<session>.sh` control scripts it launches through
+- `background-bash.ts` — adds `background: true` to `bash` using zmx, automatically backgrounds configured apps such as `live-html`, provides completion and non-destructive timeout wake-ups, and retains sessions plus `~/.cache/pi/background-bash/<session>.sh` control scripts for 12 hours
 - `gc.ts` — provides `/gc` with inline Git context and a temporary `thinking: off` override
 - `handoff.ts` — asks the live compacted agent for a focused transfer note, then opens a parent-linked review session with a bounded `agent-history query` fallback
 - `impeccable.ts` — integrates impeccable command metadata when available

@@ -28,6 +28,7 @@ const COMPLETION_BATCH_DELAY_MS = 250;
 const COMPLETION_BATCH_MAX_TASKS = 16;
 const MAX_FOREGROUND_TIMEOUT_SECONDS = 10 * 60;
 const SESSION_RETENTION_SECONDS = 12 * 60 * 60;
+const ALWAYS_BACKGROUND_COMMANDS = new Set(["live-html"]);
 
 const bashParameters = Type.Object({
 	command: Type.String({ description: "Bash command to execute" }),
@@ -67,9 +68,35 @@ function unquoteShellWord(word: string): string {
 	return word;
 }
 
+function commandSegments(command: string): string[] {
+	const launchLine = command.trimStart().split("\n", 1)[0] ?? "";
+	return launchLine.split(/\s*(?:\|\||&&|[|;])\s*/);
+}
+
+function segmentCommandName(segment: string): string | undefined {
+	const words = segment.match(/'[^']*'|"[^"]*"|\S+/g)?.map(unquoteShellWord);
+	if (!words) return undefined;
+	const command = words.find((word) => !/^[a-zA-Z_][a-zA-Z0-9_]*=/.test(word));
+	return command ? basename(command) : undefined;
+}
+
+function alwaysBackgroundApp(command: string): string | undefined {
+	for (const segment of commandSegments(command)) {
+		const commandName = segmentCommandName(segment);
+		if (commandName && ALWAYS_BACKGROUND_COMMANDS.has(commandName)) {
+			return commandName;
+		}
+	}
+	return undefined;
+}
+
+export function shouldAlwaysBackground(command: string): boolean {
+	return alwaysBackgroundApp(command) !== undefined;
+}
+
 function backgroundCommandName(command: string): string {
 	const launchLine = command.trimStart().split("\n", 1)[0] ?? "";
-	const segments = launchLine.split(/\s*(?:\|\||&&|[|;])\s*/);
+	const segments = commandSegments(command);
 
 	for (const segment of segments) {
 		const words = segment.match(/'[^']*'|"[^"]*"|\S+/g)?.map(unquoteShellWord);
@@ -1023,6 +1050,7 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 		promptGuidelines: [
 			"Use foreground Bash by default, including for tests, checks, builds, linting, and formatting.",
 			"Keep the main agent thread responsive: run intentionally asynchronous work such as PR waiters and Gauntlet reviews with background=true; do not use it merely to parallelize validation.",
+			`Bash automatically launches ${[...ALWAYS_BACKGROUND_COMMANDS].join(", ")} in detached background mode; background=true is not required for these applications.`,
 			"Background Bash already returns immediately and notifies on completion; omit timeout unless an early wake-up is genuinely useful.",
 			"Never run zmx wait or zmx tail for a pi-bg-* session created by Bash with background=true; the harness already waits for it. Continue independent work or end the turn instead.",
 			"A background-bash-finished message states the authoritative remaining managed-task count; when zero remain, nothing is left to wake the agent — do not assume monitoring continues. Check managed task status with zmx-list (zmx-list --all includes completed exit status).",
@@ -1030,11 +1058,15 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 		parameters: bashParameters,
 		async execute(toolCallId, params, signal, onUpdate, ctx) {
 			const bash = configuredBash(ctx.cwd);
-			const automaticallyBackgrounded =
+			const backgroundApp =
+				params.background !== true
+					? alwaysBackgroundApp(params.command)
+					: undefined;
+			const timeoutBackgrounded =
 				params.background !== true &&
 				params.timeout !== undefined &&
 				params.timeout > MAX_FOREGROUND_TIMEOUT_SECONDS;
-			if (!params.background && !automaticallyBackgrounded) {
+			if (!params.background && !backgroundApp && !timeoutBackgrounded) {
 				return bash.tool.execute(
 					toolCallId,
 					{ command: params.command, timeout: params.timeout },
@@ -1112,7 +1144,10 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 						type: "text",
 						text: [
 							`Started background command in zmx session ${sessionName}.`,
-							automaticallyBackgrounded
+							backgroundApp
+								? `Automatically sent to the background because ${backgroundApp} is configured as an always-background application.`
+								: undefined,
+							timeoutBackgrounded
 								? `Automatically sent to the background because the requested ${params.timeout}s timeout exceeds the ${MAX_FOREGROUND_TIMEOUT_SECONDS}s foreground limit.`
 								: undefined,
 							"Completion will notify the agent automatically; do not run zmx wait or zmx tail for this session.",

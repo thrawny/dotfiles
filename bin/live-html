@@ -87,7 +87,9 @@ if (process.env.NIRI_SOCKET && process.env.LIVE_HTML_NIRI_SPAWNED !== "1") {
         "env",
         "LIVE_HTML_NIRI_SPAWNED=1",
         resolve(Bun.argv[1]),
-        ...args,
+        "--title",
+        title,
+        file,
       ],
       { stdout: "inherit", stderr: "inherit" },
     );

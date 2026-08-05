@@ -14,6 +14,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 process.env.XDG_CACHE_HOME = mkdtempSync(join(tmpdir(), "pi-bg-test-"));
 import backgroundBashExtension, {
 	backgroundSessionName,
+	shouldAlwaysBackground,
 } from "../extensions/background-bash.ts";
 
 type ToolResult = {
@@ -122,6 +123,16 @@ describe("background bash", () => {
 		expect(backgroundSessionName("call-review", command)).toMatch(
 			/^pi-bg-gauntlet-call-review-/,
 		);
+	});
+
+	it("recognizes live-html as an always-background application", () => {
+		expect(shouldAlwaysBackground("live-html preview.html")).toBe(true);
+		expect(
+			shouldAlwaysBackground(
+				"test -f preview.html && LIVE_HTML_NIRI_SPAWNED=1 /usr/bin/live-html preview.html",
+			),
+		).toBe(true);
+		expect(shouldAlwaysBackground("echo live-html preview.html")).toBe(false);
 	});
 
 	it("returns immediately and wakes the agent with bounded command output", async () => {
@@ -850,6 +861,42 @@ describe("background bash", () => {
 
 		expect(result.content[0]?.text.trim()).toBe("/tmp");
 		expect(exec).not.toHaveBeenCalled();
+	});
+
+	it("automatically backgrounds live-html without an explicit flag", async () => {
+		const waitResult = new Promise<ExecResult>(() => {});
+		const exec = vi.fn(async (_command: string, args: string[]) =>
+			isQuietWait(args) ? waitResult : execResult(),
+		);
+		const { appendEntry, handlers, tool } = setupExtension(exec);
+
+		const result = await tool.execute(
+			"call-live-html",
+			{ command: "live-html preview.html" },
+			undefined,
+			undefined,
+			ctx,
+		);
+
+		expect(result.content[0]?.text).toContain(
+			"live-html is configured as an always-background application",
+		);
+		expect(exec).toHaveBeenCalledWith(
+			"env",
+			expect.arrayContaining([
+				"zmx",
+				"run",
+				"-d",
+				expect.stringMatching(/\/pi-bg-live-html-.*\.sh$/),
+			]),
+			{ cwd: "/tmp" },
+		);
+		expect(appendEntry).toHaveBeenCalledWith(
+			"background-bash-task",
+			expect.objectContaining({ command: "live-html preview.html" }),
+		);
+
+		await handlers.get("session_shutdown")?.({}, ctx);
 	});
 
 	it("automatically backgrounds foreground timeouts longer than ten minutes", async () => {
