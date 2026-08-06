@@ -22,10 +22,10 @@ git branch --set-upstream-to=origin/main main
 
 | Repository | Upstream | Current state | Maintenance policy |
 |---|---|---:|---|
-| `nirius` | SourceHut `~tsdh/nirius` | 4 ahead / 0 behind | Continue following upstream and rebase only when upstream advances. |
-| `pi-diff` | `buddingnewinsights/pi-diff` | 20 ahead / 0 behind | Continue following upstream. It is loaded directly by the live Pi configuration. |
-| `rpiv-mono` | `juicesharp/rpiv-mono` | 3 ahead / 0 behind | Temporary fork loaded directly by Pi for inline `ask_user_question` rendering. Retire it and return to the npm package once upstream makes inline/non-overlay rendering configurable; use upstream's existing `collapseKey: "off"` setting. |
-| `zmx` | `neurosnap/zmx` | 3 ahead / 0 behind | Continue following upstream. |
+| `nirius` | SourceHut `~tsdh/nirius` | 5 ahead / 0 behind | Continue following upstream and rebase only when upstream advances. |
+| `pi-diff` | `buddingnewinsights/pi-diff` | 21 ahead / 0 behind | Continue following upstream. It is loaded directly by the live Pi configuration. |
+| `rpiv-mono` | `juicesharp/rpiv-mono` | 4 ahead / 0 behind | Temporary fork loaded directly by Pi for inline `ask_user_question` rendering. Retire it and return to the npm package once upstream makes inline/non-overlay rendering configurable; use upstream's existing `collapseKey: "off"` setting. |
+| `zmx` | `neurosnap/zmx` | 4 ahead / 0 behind | Continue following upstream. |
 
 All maintained forks are current. None needs rebasing or updating.
 
