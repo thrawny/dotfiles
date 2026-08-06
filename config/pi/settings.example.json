@@ -32,7 +32,8 @@
     "git:github.com/PurpleMyst/pi-goal",
     "npm:@diegopetrucci/pi-openai-fast",
     "/home/thrawny/code/pi-codex-web-run",
-    "/home/thrawny/code/pi-diff"
+    "/home/thrawny/code/pi-diff",
+    "/home/thrawny/code/rpiv-mono/packages/rpiv-ask-user-question"
   ],
   "lastChangelogVersion": "0.80.6",
   "hideThinkingBlock": true
