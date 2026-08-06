@@ -18,4 +18,4 @@ Zsh, tmux, ghostty, direnv, starship etc. are generated entirely by Nix — no f
 
 ## Example/live settings pairs
 
-Claude (`config/claude/settings.example.json`), Codex (`config/codex/config.example.toml`), and Pi (`config/pi/settings.example.json`) each have a gitignored live counterpart without the `example` infix. Update the example first, then ask whether to also update the live file.
+Claude (`config/claude/settings.example.json`), Codex (`config/codex/config.example.toml`), and Pi (`config/pi/settings.example.json`) each have a gitignored live counterpart without the `example` infix. Update the example first, then update the live file by default without asking. Only leave the live file unchanged when the user explicitly requests it.
