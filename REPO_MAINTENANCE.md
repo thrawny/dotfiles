@@ -1,6 +1,6 @@
 # Maintained forks and reference repositories
 
-Updated **2026-08-04**.
+Updated **2026-08-06**.
 
 This file tracks repositories that are currently maintained, intentionally kept for source/documentation reference, or provide user-installed tools that are actively used. Own projects are included when their local build is part of the running system. Abandoned experiments, historical GitHub forks, and cleanup history are out of scope.
 
@@ -24,6 +24,7 @@ git branch --set-upstream-to=origin/main main
 |---|---|---:|---|
 | `nirius` | SourceHut `~tsdh/nirius` | 4 ahead / 0 behind | Continue following upstream and rebase only when upstream advances. |
 | `pi-diff` | `buddingnewinsights/pi-diff` | 20 ahead / 0 behind | Continue following upstream. It is loaded directly by the live Pi configuration. |
+| `rpiv-mono` | `juicesharp/rpiv-mono` | 3 ahead / 0 behind | Temporary fork loaded directly by Pi for inline `ask_user_question` rendering. Retire it and return to the npm package once upstream makes inline/non-overlay rendering configurable; use upstream's existing `collapseKey: "off"` setting. |
 | `zmx` | `neurosnap/zmx` | 3 ahead / 0 behind | Continue following upstream. |
 
 All maintained forks are current. None needs rebasing or updating.
