@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+# PreCompact hook: shorten the compaction summary when a session auto-handoff
+# will be injected right after it.
+#
+# Claude Code appends this script's stdout to the compaction prompt verbatim as
+# an "Additional Instructions" block (exit 0 = instructions, exit 2 = block
+# compaction). Every compaction, auto or manual, is followed by the
+# SessionStart(compact) hook (claude-handoff-takeoff) injecting this session's
+# auto-handoff, so the summary is a secondary record and does not need the full
+# nine-section reconstruction. Measured auto-compacts before this hook: 3.5k-5.3k
+# summary tokens and 108-170s of dead time, against a ~700-token handoff that
+# carries the same state.
+#
+# Emits nothing when no handoff exists for this session — then the summary is the
+# only continuity and should stay thorough.
+#
+# Env:
+#   CLAUDE_COMPACT_BRIEF_DISABLE   set to 1 to keep default summaries
+set -uo pipefail
+
+main() {
+  local input session handoff_dir
+  [[ "${CLAUDE_COMPACT_BRIEF_DISABLE:-0}" == 1 ]] && return 0
+
+  input=$(cat) || return 0
+  session=$(jq -r '.session_id // empty' <<<"$input" 2>/dev/null) || return 0
+  [[ -n "$session" && "$session" != */* ]] || return 0
+
+  handoff_dir=${XDG_STATE_HOME:-$HOME/.local/state}/claude/handoffs
+  [[ -s "$handoff_dir/$session.md" ]] || return 0
+
+  cat <<'EOF'
+A session handoff document is injected immediately after this compaction by a
+SessionStart hook. It already carries the next goal and immediate action, the
+decisions and their reasoning, files touched, live state (dev servers,
+background agents), test results, and unresolved errors. Do not spend output
+reconstructing that here.
+
+Treat this summary as the secondary record and keep it short:
+- Hold the <analysis> block to at most 5 terse lines. It is stripped before the
+  summary is used and never read, so length there is pure latency.
+- Target 400-600 words inside <summary>; do not exceed 900.
+- Keep every required section heading, but "None" or one line is fine wherever
+  that is accurate.
+- In Files and Code Sections give the path plus one clause on why it matters.
+  Do not reproduce code, diffs, or file contents; the transcript path is in the
+  continuation message when exact text is needed.
+- In All user messages use one short line per message, still preserving any
+  security-relevant or explicitly stated constraint verbatim.
+- Favour the most recent work and anything still unfinished over a
+  chronological recap of work already completed.
+EOF
+}
+
+main
+exit 0

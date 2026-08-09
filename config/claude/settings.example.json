@@ -55,6 +55,16 @@
         ]
       }
     ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "claude-compact-brief"
+          }
+        ]
+      }
+    ],
     "SessionStart": [
       {
         "hooks": [
