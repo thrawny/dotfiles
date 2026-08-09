@@ -11,8 +11,6 @@
   # helium-browser flake; include both launcher and wrapped binary names.
   environment.etc."1password/custom_allowed_browsers" = {
     text = ''
-      zen
-      .zen-wrapped
       helium
       .helium-wrapped
       google-chrome

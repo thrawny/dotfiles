@@ -40,7 +40,7 @@ let
     '') codexSkills
   );
 
-  package = thrawny-pkgs.packages.${system}.t3code;
+  package = thrawny-pkgs.packages.${system}.t3code-nightly;
 
   codexWithDirenv = pkgs.writeShellApplication {
     name = "t3code-codex";

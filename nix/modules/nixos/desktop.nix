@@ -2,7 +2,6 @@
   config,
   pkgs,
   helium-browser,
-  zen-browser,
   walker,
   xremap-flake,
   ...
@@ -92,7 +91,7 @@ in
   programs = {
     niri = {
       enable = true;
-      package = pkgs.niri-stable;
+      package = pkgs.niri;
     };
 
     # Enable AppImage support
@@ -192,7 +191,6 @@ in
   home-manager = {
     extraSpecialArgs = {
       inherit
-        zen-browser
         walker
         xremap-flake
         ;

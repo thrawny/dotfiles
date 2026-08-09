@@ -8,13 +8,10 @@
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
     hunk.url = "github:modem-dev/hunk";
-    hunk.inputs.bun2nix.inputs.systems.follows = "linux-systems";
     nix-index-database.url = "github:Mic92/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
     nixos-hardware.url = "github:NixOS/nixos-hardware";
     nur.url = "github:nix-community/NUR";
-    zen-browser.url = "github:0xc000022070/zen-browser-flake";
-    zen-browser.inputs.nixpkgs.follows = "nixpkgs";
     helium-browser.url = "github:schembriaiden/helium-browser-nix-flake";
     helium-browser.inputs.nixpkgs.follows = "nixpkgs";
     linux-systems.url = "github:nix-systems/default-linux";
@@ -22,7 +19,6 @@
     walker.url = "github:abenz1267/walker";
     walker.inputs.elephant.follows = "elephant";
     niri-flake.url = "github:sodiboo/niri-flake";
-    niri-flake.inputs.niri-stable.url = "github:niri-wm/niri/v26.04";
     xremap-flake.url = "github:xremap/nix-flake";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
@@ -72,7 +68,6 @@
       nix-index-database,
       nixos-hardware,
       nur,
-      zen-browser,
       helium-browser,
       walker,
       niri-flake,
@@ -154,7 +149,6 @@
               hermes-agent
               agentAssets
               thrawny-pkgs
-              zen-browser
               walker
               nurPkgs
               xremap-flake
@@ -168,19 +162,6 @@
             home-manager.nixosModules.home-manager
             niri-flake.nixosModules.niri # cached niri package + system setup
             zmx.nixosModules.cache
-            {
-              nixpkgs.overlays = [
-                niri-flake.overlays.niri
-                # niri-flake's stable package still applies a pre-26.04 service
-                # patch that expects /usr/bin in niri.service. niri 26.04 no
-                # longer needs it, and the patch fails the build.
-                (_: prev: {
-                  niri-stable = prev.niri-stable.override {
-                    replace-service-with-usr-bin = false;
-                  };
-                })
-              ];
-            }
             {
               home-manager.extraSpecialArgs = flakeArgs;
             }
@@ -210,7 +191,6 @@
               hermes-agent
               agentAssets
               thrawny-pkgs
-              zen-browser
               walker
               nurPkgs
               xremap-flake

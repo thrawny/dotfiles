@@ -356,7 +356,6 @@ let
       tooltip = false;
       rewrite = {
         "com.mitchellh.ghostty - (.*)" = "Ghostty - $1";
-        "zen - (.*)" = "Zen Browser - $1";
         "org.gnome.(.*) - (.*)" = "$1 - $2";
         "firefox - (.*)" = "Firefox - $1";
         "Spotify - (.*)" = "Spotify - $1";

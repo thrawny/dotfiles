@@ -363,7 +363,6 @@ cache dry_run="":
     # Large pre-built binaries that have their own distribution
     exclude=(
         helium
-        zen-beta
         spotify
         slack
         teams-for-linux

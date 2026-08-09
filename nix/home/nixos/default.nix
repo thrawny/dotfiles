@@ -27,7 +27,6 @@
     ./telegram.nix
     ./walker.nix
     ./waybar.nix
-    ./zen-browser.nix
     ./gtk.nix
     ./viewers.nix
   ];

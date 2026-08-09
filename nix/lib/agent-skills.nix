@@ -65,7 +65,7 @@ let
     gh-stack.source = gh-stack + "/skills/gh-stack";
     grill-with-docs.source = mattpocock-skills + "/skills/engineering/grill-with-docs";
     grilling.source = mattpocock-skills + "/skills/productivity/grilling";
-    writing-great-skills.source = mattpocock-skills + "/skills/productivity/writing-great-skills";
+    writing-for-agents.source = mattpocock-skills + "/skills/productivity/writing-for-agents";
     teach.source = mattpocock-skills + "/skills/productivity/teach";
     improve-codebase-architecture.source =
       mattpocock-skills + "/skills/engineering/improve-codebase-architecture";
