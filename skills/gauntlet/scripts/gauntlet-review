@@ -6,7 +6,8 @@
 # context brief and does all the judgment — dedupe, verify, fix, summarize.
 #
 # Usage:
-#   gauntlet-review [--base <branch> | --uncommitted | --commit <sha>] [brief]
+#   gauntlet-review [--base <branch> | --uncommitted | --commit <sha>]
+#                   [--prior <file> | --no-prior] [brief]
 #   ... | gauntlet-review --uncommitted -      # read brief from stdin
 #
 # Scope defaults to the current branch vs origin's default branch
@@ -14,31 +15,51 @@
 # verbatim to both engines; omit it or
 # pass '-' to read from stdin (empty is allowed).
 #
+# Looping: each run persists its raw pass output and the reviewed SHA under a
+# per-repo/per-branch state dir, and picks up that branch's ledger of
+# already-adjudicated findings so a later round spends its budget on new ground
+# instead of re-deriving the last round's findings. This mirrors the hosted
+# Codex PR reviewer, which re-reads the full diff every round with prior
+# findings suppressed. See SKILL.md for the ledger format and loop protocol.
+#
 # Graceful degradation: if one engine is unauthenticated or out of usage/quota,
 # the script continues with the other and labels why. Exits 0 if at least one
-# engine produced a result, non-zero only if both failed.
+# engine produced a result, non-zero only if all passes failed.
+#
+# Env overrides: GAUNTLET_CODEX_EFFORT (default high), GAUNTLET_CODEX_MODEL,
+# GAUNTLET_PRIOR (ledger path), GAUNTLET_STATE_DIR (output root).
 #
 # Testable with stubs: put fake `claude`/`codex` earlier on PATH.
 set -euo pipefail
 
 usage() {
   cat >&2 <<'EOF'
-Usage: gauntlet-review [--base <branch> | --uncommitted | --commit <sha>] [brief]
+Usage: gauntlet-review [--base <branch> | --uncommitted | --commit <sha>]
+                       [--prior <file> | --no-prior] [brief]
 
-Runs Claude (/code-review) and Codex (review) over the same scope in parallel
-and prints both raw findings in delimited sections. The caller supplies the
-brief and does the dedupe/verify/fix/summarize.
+Runs one Claude (/code-review) pass and three Codex (review) passes over the
+same scope in parallel, printing each pass's raw findings in a delimited
+section. The caller supplies the brief and does the dedupe/verify/fix/summarize.
+
+Raw output and the reviewed SHA are saved under the branch's state dir (printed
+at exit). Findings already adjudicated on this branch are read from that dir's
+ledger.md unless --no-prior is given.
 EOF
   exit "${1:-0}"
 }
 
 scope=""
 scope_set=0
+prior_file=""
+prior_set=0
+no_prior=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base) scope="--base $2"; scope_set=1; shift 2 ;;
     --uncommitted) scope="--uncommitted"; scope_set=1; shift ;;
     --commit) scope="--commit $2"; scope_set=1; shift 2 ;;
+    --prior) prior_file="$2"; prior_set=1; shift 2 ;;
+    --no-prior) no_prior=1; shift ;;
     -h | --help) usage 0 ;;
     --) shift; break ;;
     -) break ;; # stdin marker for the brief; handled below
@@ -77,25 +98,120 @@ case "$scope" in
   "--commit "*) sha="${scope#--commit }"; scope_desc="Review only the changes introduced by commit ${sha}: 'git diff ${sha}~1..${sha}'." ;;
 esac
 
-focus="Treat the context/brief above as intended behavior — do not flag intentional choices, pre-existing code, style, or speculative edge cases. Report only real correctness bugs and clear issues introduced by this change. Prefer precision over recall."
+# Per-repo, per-branch state dir. Deliberately outside the working tree: the
+# reviewers are told never to write into the repo because the tree is the
+# artifact under review, and on --uncommitted scope an untracked ledger would
+# land inside its own review. Keyed by branch so parallel worktrees and stacked
+# branches keep separate ledgers, and it survives a session handoff.
+slug() { printf '%s' "$1" | tr -c 'A-Za-z0-9._-' '-' | sed 's/^-*//; s/-*$//'; }
+repo_root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+repo_slug="$(slug "$(basename "$repo_root")")"
+branch_slug="$(slug "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo detached)")"
+state_root="${GAUNTLET_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/gauntlet}"
+branch_dir="$state_root/$repo_slug/$branch_slug"
+ledger_default="$branch_dir/ledger.md"
+
+# Prior findings: explicit flag wins, then env, then this branch's ledger. The
+# auto-pickup is what makes looping ergonomic, but it is never silent — a NOTE
+# says which ledger was used, so a one-shot run after an old loop cannot
+# quietly inherit stale suppression.
+#
+# Resolved before the round directory is created: a run that dies on an
+# unreadable ledger must not burn a round number, or the round count the loop
+# protocol reasons about silently drifts from the number of reviews actually run.
+prior=""
+prior_src=""
+if [[ "$no_prior" -eq 0 ]]; then
+  if [[ "$prior_set" -eq 0 && -n "${GAUNTLET_PRIOR:-}" ]]; then prior_file="$GAUNTLET_PRIOR"; prior_set=1; fi
+  if [[ "$prior_set" -eq 0 && -s "$ledger_default" ]]; then prior_file="$ledger_default"; prior_set=1; fi
+  if [[ "$prior_set" -eq 1 ]]; then
+    if [[ ! -r "$prior_file" ]]; then
+      echo "gauntlet-review: --prior file not readable: $prior_file" >&2
+      exit 1
+    fi
+    prior="$(cat "$prior_file")"
+    prior_src="$prior_file"
+  fi
+fi
+
+# Round numbering makes the loop legible after the fact and keeps rounds ordered
+# lexically; the ledger is what carries meaning between them.
+mkdir -p "$branch_dir"
+round=1
+while [[ -e "$(printf '%s/round-%02d' "$branch_dir" "$round")" ]]; do round=$((round + 1)); done
+round_dir="$(printf '%s/round-%02d' "$branch_dir" "$round")"
+mkdir -p "$round_dir"
+
+# Record exactly what was reviewed. This is what makes a loop self-measuring:
+# with the SHA per round you can tell afterwards whether a finding landed in
+# code a previous round already read (resampling) or in the fixes it prompted.
+head_sha="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then tree_state="dirty"; else tree_state="clean"; fi
+merge_base=""
+case "$scope" in
+  "--base "*) merge_base="$(git merge-base "${scope#--base }" HEAD 2>/dev/null || true)" ;;
+esac
+
+# Suppression, not silencing. The hosted reviewer demonstrably re-reads the full
+# diff each round while declining to repost adjudicated findings, and still
+# surfaces genuinely new ones in already-reviewed code — including issues
+# introduced by the previous round's fix. Both escape hatches below are load
+# bearing: without them a ledger turns every touched area into a blind spot.
+# The decline-challenge clause has no counterpart in the hosted reviewer, which
+# only sees a resolved thread; locally we keep the reason, so a wrong decline
+# stays correctable instead of being made permanent by suppression.
+prior_block=""
+if [[ -n "$prior" ]]; then
+  prior_block="PREVIOUSLY ADJUDICATED FINDINGS (earlier rounds on this same change):
+${prior}
+
+Do not report any of the above again. Two exceptions, and use them freely:
+- A genuinely distinct issue in the same file or area — including one introduced by the fix for a listed finding — IS reportable. Report it and state explicitly why it is not the same finding.
+- A finding listed as declined was judged not to apply, and the reason is given. If that reason is factually wrong about the code as it stands now, say so and report the finding again with the correction.
+Everything not listed above is in scope as usual. Spend this pass on ground the earlier rounds did not cover."
+fi
+
+# Scope, not suppression. The brief is the intent statement (the local stand-in
+# for a PR description), and pre-existing code / style are out of scope because
+# the review rubric itself puts them there. Deliberately absent: any
+# "prefer precision over recall" steer. Generation-time suppression means a real
+# bug is never surfaced to be judged; the skill's verify-before-fix step is the
+# false-positive guard, and it can only filter what it is shown.
+focus="Treat the context/brief above as intended behavior — do not flag choices it marks as deliberate, pre-existing code outside this change, or trivial style.
+Within that scope, be exhaustive: report every finding the author would fix if they knew about it, and do not stop at the first one."
+
+# Confirmation is mostly reading, not running: the suite is green before a
+# gauntlet, so re-running it re-confirms a gate we already passed. The narrow
+# exception is behaviour no test covers, where a probe kills a speculative
+# finding cheaply — and it must not touch the tree, which is the review artifact.
+verify="Before reporting a finding, confirm it against the real code: read the surrounding code and every caller of what changed. The test suite and the linters are already green, so re-running them proves nothing. Where a finding turns on behaviour no existing test covers — an empty or nil input, an error path, an ordering or concurrency case — probe that one case directly instead of reporting a maybe: call the function, script the sequence, print the value. Never create or modify files in the repository; the working tree is the artifact under review. Say what you probed, and drop candidates the probe disproves."
 
 claude_prompt="/code-review ${scope_desc}
 
 ${brief}
 
 ${focus}
-Report findings only: do NOT edit, comment, fix, or commit. For each finding output a line 'file:line — SEVERITY — one-line description', SEVERITY in high/medium/low."
+
+${verify}
+
+${prior_block}
+Report findings only: do NOT edit, fix, or commit — running read-only checks and tests to confirm a finding is fine. For each finding output a line 'file:line — SEVERITY — one-line description', SEVERITY in high/medium/low."
 
 codex_prompt="${scope_desc}
 
 ${brief}
 
-${focus}"
+${focus}
 
-claude_out="$(mktemp)"
-codex_out="$(mktemp)"
-codex_log="$(mktemp)"
-trap 'rm -f "$claude_out" "$codex_out" "$codex_log"' EXIT
+${verify}
+
+${prior_block}"
+
+# Output is kept, not scratched. A round costs four passes at 5-20 minutes and
+# real quota; discarding the raw findings the moment the caller has read them
+# once means a bad dedupe forces a full re-run, and a loop that crosses a
+# context compaction loses the basis it is supposed to dedupe against.
+claude_out="$round_dir/claude.out"
 
 # Claude reviewer — prints findings to stdout, then exits. Pin every model
 # selection surface to Opus 5: /code-review may spawn subagents or carry its
@@ -110,13 +226,49 @@ ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
     --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
 claude_pid=$!
 
-# Codex reviewer — scope is in the prompt (see above); high reasoning effort for
-# a thorough review; writes its final answer to $codex_out, progress to $codex_log.
-codex exec --ephemeral --color never --model gpt-5.6-sol -c model_reasoning_effort="high" -o "$codex_out" review "$codex_prompt" >"$codex_log" 2>&1 &
-codex_pid=$!
+# Codex reviewers — scope is in the prompt (see above). Effort stays at high;
+# recall comes from the independent passes below, not from a higher tier. Raise
+# it per-run with GAUNTLET_CODEX_EFFORT if a particular diff warrants it.
+readonly codex_model="${GAUNTLET_CODEX_MODEL:-gpt-5.6-sol}"
+readonly codex_effort="${GAUNTLET_CODEX_EFFORT:-high}"
+
+# Independent passes, unioned by the caller. Sampling the reviewer more than once
+# is the main recall lever available locally, and it is close to free in
+# wall-clock since the passes run concurrently. `broad` mirrors the hosted
+# reviewer; the lensed passes chase the two classes it most often wins on —
+# failure paths, and consequences elsewhere in the repo.
+codex_pass_names=(broad failure-modes contracts)
+codex_pass_lenses=(
+  ""
+  "LENS: concentrate on failure and edge paths — error handling, partial failure and rollback, cancellation, cleanup and resource release, concurrency and ordering, unchecked return values, boundary and empty inputs."
+  "LENS: concentrate on contracts across the whole codebase — callers or implementors not updated for a changed signature, type, invariant or return shape; config, schema, migration or serialization drift; behavior other modules rely on. Search for affected sites rather than reasoning from the diff alone."
+)
+
+codex_outs=()
+codex_logs=()
+codex_pids=()
+for i in "${!codex_pass_names[@]}"; do
+  pass="${codex_pass_names[$i]}"
+  out="$round_dir/codex-$pass.out"
+  log="$round_dir/codex-$pass.log"
+  codex_outs+=("$out")
+  codex_logs+=("$log")
+  pass_prompt="$codex_prompt"
+  if [[ -n "${codex_pass_lenses[$i]}" ]]; then
+    pass_prompt="$codex_prompt
+
+${codex_pass_lenses[$i]}"
+  fi
+  codex exec --ephemeral --color never --model "$codex_model" \
+    -c model_reasoning_effort="$codex_effort" -o "$out" review "$pass_prompt" >"$log" 2>&1 &
+  codex_pids+=("$!")
+done
 
 if wait "$claude_pid"; then claude_status=0; else claude_status=$?; fi
-if wait "$codex_pid"; then codex_status=0; else codex_status=$?; fi
+codex_statuses=()
+for pid in "${codex_pids[@]}"; do
+  if wait "$pid"; then codex_statuses+=(0); else codex_statuses+=("$?"); fi
+done
 
 # Classify a non-zero engine result so we can degrade gracefully and say why.
 classify() {
@@ -134,35 +286,81 @@ classify() {
 }
 
 claude_state="$(classify "$claude_status" "$claude_out")"
-codex_state="$(classify "$codex_status" "$codex_log")"
+codex_states=()
+codex_ok=0
+for i in "${!codex_pass_names[@]}"; do
+  codex_states+=("$(classify "${codex_statuses[$i]}" "${codex_logs[$i]}")")
+  [[ "${codex_statuses[$i]}" -eq 0 ]] && codex_ok=$((codex_ok + 1))
+done
 
-ok_count=0
+ok_count="$codex_ok"
 [[ "$claude_status" -eq 0 ]] && ok_count=$((ok_count + 1))
-[[ "$codex_status" -eq 0 ]] && ok_count=$((ok_count + 1))
 
-# Graceful degradation: continue on whichever engine(s) succeeded; say why if one dropped.
-if [[ "$ok_count" -eq 1 ]]; then
-  if [[ "$claude_status" -eq 0 ]]; then
-    printf 'NOTE: degraded to a single reviewer — codex %s. Proceeding with Claude only.\n\n' "$codex_state"
-  else
-    printf 'NOTE: degraded to a single reviewer — claude %s. Proceeding with Codex only.\n\n' "$claude_state"
+# meta.txt is the per-round record the loop is measured from: what scope ran,
+# against which commit, with which ledger, and which passes actually produced
+# findings (a thin round is otherwise indistinguishable from a dry one).
+{
+  printf 'round: %d\n' "$round"
+  printf 'finished: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf 'scope: %s\n' "$scope"
+  printf 'head_sha: %s\n' "$head_sha"
+  printf 'worktree: %s\n' "$tree_state"
+  [[ -n "$merge_base" ]] && printf 'merge_base: %s\n' "$merge_base"
+  printf 'prior_ledger: %s\n' "${prior_src:-none}"
+  printf 'codex_model: %s\n' "$codex_model"
+  printf 'codex_effort: %s\n' "$codex_effort"
+  printf 'claude: %s\n' "$claude_state"
+  for i in "${!codex_pass_names[@]}"; do
+    printf 'codex[%s]: %s\n' "${codex_pass_names[$i]}" "${codex_states[$i]}"
+  done
+  printf -- '--- brief ---\n%s\n' "$brief"
+} >"$round_dir/meta.txt"
+
+# Graceful degradation: continue on whichever passes succeeded; say what dropped
+# so the caller knows the agreement signal is thinner than usual.
+if [[ "$ok_count" -eq 0 ]]; then
+  printf 'ERROR: no reviewer produced results — claude %s; codex %s\n' \
+    "$claude_state" "${codex_states[0]}" >&2
+else
+  if [[ "$claude_status" -ne 0 ]]; then
+    printf 'NOTE: claude %s — proceeding with Codex passes only.\n' "$claude_state"
   fi
-elif [[ "$ok_count" -eq 0 ]]; then
-  printf 'ERROR: no reviewer produced results — claude %s; codex %s\n' "$claude_state" "$codex_state" >&2
+  if [[ "$codex_ok" -eq 0 ]]; then
+    printf 'NOTE: every Codex pass failed (%s) — proceeding with Claude only.\n' "${codex_states[0]}"
+  elif [[ "$codex_ok" -lt "${#codex_pass_names[@]}" ]]; then
+    printf 'NOTE: %d of %d Codex passes succeeded — recall is lower than a full run.\n' \
+      "$codex_ok" "${#codex_pass_names[@]}"
+  fi
+  if [[ -n "$prior_src" ]]; then
+    printf 'NOTE: round %d — suppressing findings already adjudicated in %s\n' "$round" "$prior_src"
+  else
+    printf 'NOTE: round %d — no prior ledger%s\n' "$round" \
+      "$([[ "$no_prior" -eq 1 ]] && printf ' (--no-prior)' || printf '')"
+  fi
+  printf '\n'
 fi
 
 printf '===== CLAUDE REVIEW [%s] =====\n' "$claude_state"
 if [[ "$claude_status" -eq 0 ]]; then cat "$claude_out"; else tail -40 "$claude_out"; fi
-printf '\n===== CODEX REVIEW [%s] =====\n' "$codex_state"
-if [[ "$codex_status" -eq 0 ]]; then
-  cat "$codex_out"
-else
-  # On failure, show codex's answer file if it wrote anything, plus the log tail
-  # (codex diagnostics usually land on stderr -> $codex_log, but not always).
-  if [[ -s "$codex_out" ]]; then cat "$codex_out"; fi
-  printf '\n----- codex log tail -----\n'
-  tail -40 "$codex_log"
-fi
 
-# Succeed if at least one engine produced a result; degrade gracefully otherwise.
+for i in "${!codex_pass_names[@]}"; do
+  printf '\n===== CODEX REVIEW [pass: %s] [%s] =====\n' "${codex_pass_names[$i]}" "${codex_states[$i]}"
+  if [[ "${codex_statuses[$i]}" -eq 0 ]]; then
+    cat "${codex_outs[$i]}"
+  else
+    # On failure, show codex's answer file if it wrote anything, plus the log tail
+    # (codex diagnostics usually land on stderr -> the log, but not always).
+    if [[ -s "${codex_outs[$i]}" ]]; then cat "${codex_outs[$i]}"; fi
+    printf '\n----- codex log tail -----\n'
+    tail -40 "${codex_logs[$i]}"
+  fi
+done
+
+printf '\n===== GAUNTLET STATE =====\n'
+printf 'round:  %d (reviewed %s, worktree %s)\n' "$round" "${head_sha:0:12}" "$tree_state"
+printf 'output: %s\n' "$round_dir"
+printf 'ledger: %s%s\n' "$ledger_default" \
+  "$([[ -s "$ledger_default" ]] && printf '' || printf '  (not yet written)')"
+
+# Succeed if at least one pass produced a result; degrade gracefully otherwise.
 [[ "$ok_count" -ge 1 ]]
