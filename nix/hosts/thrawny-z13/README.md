@@ -26,8 +26,16 @@ though `snd_pci_ps` uses legacy INTx. Stale MSI configuration can cause lost
 ACP interrupts, leaving capture present but nonfunctional. The patch clears MSI
 before reinitializing ACP hardware.
 
-The patch was accepted into the ASoC maintainer tree for Linux 7.2 and applies
-cleanly to Linux 6.18.38. It is intentionally not applied in this configuration
-because `boot.kernelPatches` would require a local kernel build. Revisit this
-when the commit is included in a binary-cached kernel, backported to 6.18, or if
-locally compiling the kernel becomes acceptable.
+The patch was accepted into the ASoC maintainer tree for Linux 7.2 and later
+backported to the Linux 6.18 stable series as commit
+`f33ad19e3e3d63c0d43b8be96754aae156c8c5af`. Linux 6.18.42 is the first 6.18
+release containing it, so no local `boot.kernelPatches` build is needed.
+
+The host booted Linux 6.18.42 on 2026-08-09. The microphone remained functional
+after two suspend/resume cycles, including an overnight suspend from 20:18 to
+08:58. A Wayvoice recording after the overnight resume contained real audio,
+and a subsequent PipeWire capture from the digital microphone produced nonzero
+samples while the ACP interrupt count advanced. The journal did not contain the
+patch's `ACP: MSI unexpectedly enabled after resume` warning, so that particular
+resume may not have triggered the formerly bad firmware state. Treat the issue
+as provisionally fixed and revisit only if it recurs on Linux 6.18.42 or newer.
