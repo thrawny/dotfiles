@@ -1,6 +1,5 @@
-{ pkgs, lib, ... }:
+{ pkgs, ... }:
 let
-  inherit (pkgs.stdenv) isDarwin;
   gitIgnores = import ../../lib/git-ignore.nix;
 in
 {
@@ -39,6 +38,19 @@ in
         username = "thrawny";
       };
 
+      "credential \"https://github.com\"" = {
+        helper = [
+          ""
+          "!${pkgs.gh}/bin/gh auth git-credential"
+        ];
+      };
+      "credential \"https://gist.github.com\"" = {
+        helper = [
+          ""
+          "!${pkgs.gh}/bin/gh auth git-credential"
+        ];
+      };
+
       init.defaultBranch = "main";
       merge.conflictStyle = "zdiff3";
       rerere.enabled = true;
@@ -59,21 +71,6 @@ in
         line-numbers-zero-style = "#888888";
       };
 
-    }
-    // lib.optionalAttrs isDarwin {
-      # macOS: use gh CLI for GitHub credential management
-      "credential \"https://github.com\"" = {
-        helper = [
-          ""
-          "!${pkgs.gh}/bin/gh auth git-credential"
-        ];
-      };
-      "credential \"https://gist.github.com\"" = {
-        helper = [
-          ""
-          "!${pkgs.gh}/bin/gh auth git-credential"
-        ];
-      };
     };
 
     ignores = gitIgnores;
