@@ -23,8 +23,8 @@ rec {
   shellPortability = ''
     ## Shell portability
 
-    Do not assign to a shell variable named `status`. In zsh, `status` is a read-only special parameter equivalent to `$?`.
-    Use `exit_code`, `cmd_status`, or a command-specific name such as `review_status` instead.
+    Zsh has special parameters with ordinary-looking names. In shell snippets that may run under zsh, never use `status` or `history` as variable names because they are read-only, or `path` because it is tied to `PATH`. Other collision-prone names include `argv`, `aliases`, `builtins`, `commands`, `functions`, `keymaps`, `modules`, `options`, `parameters`, `prompt`, `watch`, and `widgets`. When unsure, inspect `''${parameters[$name]}` and avoid types containing `special`.
+    Prefer descriptive names such as `exit_code`, `cmd_status`, `history_text`, or a command-specific name such as `review_status`.
   '';
 
   sandbox = ''
