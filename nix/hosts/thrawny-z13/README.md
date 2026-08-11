@@ -37,5 +37,13 @@ after two suspend/resume cycles, including an overnight suspend from 20:18 to
 and a subsequent PipeWire capture from the digital microphone produced nonzero
 samples while the ACP interrupt count advanced. The journal did not contain the
 patch's `ACP: MSI unexpectedly enabled after resume` warning, so that particular
-resume may not have triggered the formerly bad firmware state. Treat the issue
-as provisionally fixed and revisit only if it recurs on Linux 6.18.42 or newer.
+resume may not have triggered the formerly bad firmware state.
+
+The problem recurred on 2026-08-11 after another overnight suspend on the same
+Linux 6.18.42 boot. This failure differed from the earlier zero-filled capture:
+Wayvoice and direct PipeWire capture returned almost entirely full-scale
+`-32768` samples with only a handful of distinct values. The ACP interrupt count
+and ALSA hardware pointer continued advancing, and the journal contained no MSI
+warning or IOMMU fault. The MSI backport therefore guards one real resume failure
+mode but does not fix every ACP63/PDM resume failure on this machine. The issue
+remains open.
