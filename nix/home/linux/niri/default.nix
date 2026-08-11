@@ -279,14 +279,6 @@ let
       hotkey-overlay.title = "Voice Input Toggle";
       repeat = false;
     };
-    "Super+P" = {
-      action.spawn = [
-        "wayvoice"
-        "toggle"
-      ];
-      hotkey-overlay.title = "Voice Input Toggle";
-      repeat = false;
-    };
     "Mod+Shift+R" = {
       action.spawn = [
         "wayvoice"

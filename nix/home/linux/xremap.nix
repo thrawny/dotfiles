@@ -34,6 +34,15 @@ _: {
           };
         }
         {
+          name = "Right Alt Wayvoice";
+          remap = {
+            "Alt_R-p".launch = [
+              "wayvoice"
+              "toggle"
+            ];
+          };
+        }
+        {
           name = "App jump chord (Alt-a prefix)";
           remap = {
             "Alt-a" = {
