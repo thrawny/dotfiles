@@ -40,6 +40,10 @@ _: {
               "wayvoice"
               "toggle"
             ];
+            "Super_R-p".launch = [
+              "wayvoice"
+              "toggle"
+            ];
           };
         }
         {
