@@ -31,9 +31,9 @@
     "npm:pi-subdir-context",
     "git:github.com/PurpleMyst/pi-goal",
     "npm:@diegopetrucci/pi-openai-fast",
-    "/home/thrawny/code/pi-codex-web-run",
-    "/home/thrawny/code/pi-diff",
-    "/home/thrawny/code/rpiv-mono/packages/rpiv-ask-user-question"
+    "git:github.com/thrawny/pi-codex-web-run",
+    "git:github.com/thrawny/pi-diff",
+    "git:github.com/thrawny/rpiv-mono@inline-questionnaire"
   ],
   "lastChangelogVersion": "0.80.6",
   "hideThinkingBlock": true
