@@ -133,7 +133,9 @@ return {
       },
       {
         "<leader>.",
-        merged_picker.open,
+        function()
+          Snacks.picker(merged_picker.opts())
+        end,
         desc = "Find + Grep (merged)",
       },
       {
@@ -162,7 +164,9 @@ return {
               icon = " ",
               key = ".",
               desc = "Find + Grep",
-              action = merged_picker.open,
+              action = function()
+                Snacks.picker(merged_picker.opts())
+              end,
             },
             {
               icon = " ",
@@ -181,9 +185,6 @@ return {
         },
       },
       picker = {
-        sources = {
-          [merged_picker.source] = merged_picker.opts(),
-        },
         hidden = true, -- Show hidden files by default
         ignored = true, -- Show gitignored files by default
         exclude = ignored_patterns.snacks_exclude_globs(),

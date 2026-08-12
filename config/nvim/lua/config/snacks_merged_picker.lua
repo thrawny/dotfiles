@@ -2,8 +2,6 @@ local ignored_patterns = require("config.ignored_patterns")
 
 local M = {}
 
-M.source = "merged_file_grep"
-
 local function permutations(parts)
   if #parts == 1 then
     return { parts[1] }
@@ -55,7 +53,6 @@ end
 ---@return table
 function M.opts(overrides)
   local opts = {
-    source = M.source,
     title = "Find + Grep (cwd)",
     live = true,
     hidden = true,
@@ -125,11 +122,6 @@ function M.opts(overrides)
   end
 
   return opts
-end
-
----@return snacks.Picker
-function M.open()
-  return Snacks.picker.resume(M.source)
 end
 
 return M
