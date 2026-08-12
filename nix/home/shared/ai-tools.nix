@@ -19,7 +19,25 @@ let
   rulesRoot = if repoBacked then ../../../rules else containerAssets.rules;
   rulesSource =
     if repoBacked then config.lib.file.mkOutOfStoreSymlink (toString rulesRoot) else rulesRoot;
-  agentInstructions = import ../../lib/agent-instructions.nix;
+  instructionBlockOption =
+    description:
+    lib.mkOption {
+      type = lib.types.bool;
+      default = true;
+      inherit description;
+    };
+  instructionConfig = config.dotfiles.agentInstructions;
+  agentInstructionLib = import ../../lib/agent-instructions.nix;
+  agentInstructions = agentInstructionLib.mkInstructions {
+    enableGrilling = instructionConfig.grilling.enable;
+    enableEphemeralTools = instructionConfig.ephemeralTools.enable;
+    enableShellPortability = instructionConfig.shellPortability.enable;
+    enableSandbox = instructionConfig.sandbox.enable;
+    enableBackgroundTasks = instructionConfig.backgroundTasks.enable;
+    enableContextManagement = instructionConfig.contextManagement.enable;
+    enableCodeQuality = instructionConfig.codeQuality.enable;
+    enablePiWorkflow = instructionConfig.piWorkflow.enable;
+  };
   stripAgentSwitchHooks = ''
     if .hooks then
       .hooks |= with_entries(
@@ -71,7 +89,20 @@ let
   '';
 in
 {
-  options.dotfiles.agentSwitch.enable = lib.mkEnableOption "agent-switch integrations for AI tools";
+  options.dotfiles = {
+    agentSwitch.enable = lib.mkEnableOption "agent-switch integrations for AI tools";
+
+    agentInstructions = {
+      grilling.enable = instructionBlockOption "Include Claude grilling instructions";
+      ephemeralTools.enable = instructionBlockOption "Include ephemeral tool instructions";
+      shellPortability.enable = instructionBlockOption "Include shell portability instructions";
+      sandbox.enable = instructionBlockOption "Include sandbox-specific instructions";
+      backgroundTasks.enable = instructionBlockOption "Include background task instructions";
+      contextManagement.enable = instructionBlockOption "Include context management instructions";
+      codeQuality.enable = instructionBlockOption "Include Codex code quality instructions";
+      piWorkflow.enable = instructionBlockOption "Include Pi workflow instructions";
+    };
+  };
 
   config.home = {
     sessionVariables = {

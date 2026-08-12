@@ -1,4 +1,14 @@
+let
+  optionalBlock = enabled: block: if enabled then [ block ] else [ ];
+  render = title: blocks: builtins.concatStringsSep "\n" ([ title ] ++ blocks) + "\n";
+in
 rec {
+  grilling = ''
+    ## Grilling
+
+    When grilling, ask one question at a time using the `AskUserQuestion` tool, and wait for the answer before asking the next question.
+  '';
+
   ephemeralTools = ''
     ## Ephemeral tools
 
@@ -53,22 +63,7 @@ rec {
     When the conversation is summarized for compaction, always preserve: the current goal and immediate next action; decisions made and their reasoning; paths of files read or modified and commits created; test/gate results and unresolved errors; anything deliberately left running (dev servers, background agents, acpx sessions). Write the summary as terse bullets — the preserved facts only, no narrative or process recap; a session auto-handoff carrying detailed state is injected after compaction, so the summary does not need to be exhaustive.
   '';
 
-  claudeGlobal = ''
-    # Global Claude Code Instructions
-
-    ${ephemeralTools}
-    ${shellPortability}
-    ${sandbox}
-    ${backgroundTasks}
-    ${contextManagement}
-  '';
-
-  codexGlobal = ''
-    # Global Codex Instructions
-
-    ${ephemeralTools}
-    ${shellPortability}
-    ${sandbox}
+  codeQuality = ''
     ## Code Quality Tools
 
     After editing files, run the appropriate formatting/linting tools. These are fallback defaults when a project has no specific instructions.
@@ -123,15 +118,47 @@ rec {
     ```
   '';
 
-  piGlobal = ''
-    # Global Pi Instructions
-
+  piWorkflow = ''
     Prefer `fd` over `find` for file discovery when available; it is faster, respects ignore files by default, and has friendlier syntax.
 
     Keep the main agent thread responsive: long waits belong in background execution, never in an open foreground tool call. The Bash tool's own guidelines govern when and how.
-
-    ${ephemeralTools}
-    ${shellPortability}
-    ${sandbox}
   '';
+
+  mkInstructions =
+    {
+      enableGrilling ? true,
+      enableEphemeralTools ? true,
+      enableShellPortability ? true,
+      enableSandbox ? true,
+      enableBackgroundTasks ? true,
+      enableContextManagement ? true,
+      enableCodeQuality ? true,
+      enablePiWorkflow ? true,
+    }:
+    {
+      claudeGlobal = render "# Global Claude Code Instructions" (
+        optionalBlock enableGrilling grilling
+        ++ optionalBlock enableEphemeralTools ephemeralTools
+        ++ optionalBlock enableShellPortability shellPortability
+        ++ optionalBlock enableSandbox sandbox
+        ++ optionalBlock enableBackgroundTasks backgroundTasks
+        ++ optionalBlock enableContextManagement contextManagement
+      );
+
+      codexGlobal = render "# Global Codex Instructions" (
+        optionalBlock enableEphemeralTools ephemeralTools
+        ++ optionalBlock enableShellPortability shellPortability
+        ++ optionalBlock enableSandbox sandbox
+        ++ optionalBlock enableCodeQuality codeQuality
+      );
+
+      piGlobal = render "# Global Pi Instructions" (
+        optionalBlock enablePiWorkflow piWorkflow
+        ++ optionalBlock enableEphemeralTools ephemeralTools
+        ++ optionalBlock enableShellPortability shellPortability
+        ++ optionalBlock enableSandbox sandbox
+      );
+    };
+
+  inherit (mkInstructions { }) claudeGlobal codexGlobal piGlobal;
 }

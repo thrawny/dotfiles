@@ -31,6 +31,8 @@
     nix-index-database.homeModules.nix-index
   ];
 
+  dotfiles.agentInstructions.sandbox.enable = false;
+
   programs.home-manager.enable = true;
   programs.nix-index-database.comma.enable = true;
 
