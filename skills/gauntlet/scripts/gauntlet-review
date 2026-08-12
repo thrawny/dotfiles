@@ -24,7 +24,7 @@
 #
 # Graceful degradation: if one engine is unauthenticated or out of usage/quota,
 # the script continues with the other and labels why. Exits 0 if at least one
-# engine produced a result, non-zero only if all passes failed.
+# engine produced a result, non-zero only if both fail.
 #
 # Env overrides: GAUNTLET_CODEX_EFFORT (default high), GAUNTLET_CODEX_MODEL,
 # GAUNTLET_PRIOR (ledger path), GAUNTLET_STATE_DIR (output root).
@@ -37,9 +37,9 @@ usage() {
 Usage: gauntlet-review [--base <branch> | --uncommitted | --commit <sha>]
                        [--prior <file> | --no-prior] [brief]
 
-Runs one Claude (/code-review) pass and three Codex (review) passes over the
-same scope in parallel, printing each pass's raw findings in a delimited
-section. The caller supplies the brief and does the dedupe/verify/fix/summarize.
+Runs one Claude (/code-review) and one Codex (review) over the same scope in
+parallel, printing each review's raw findings in a delimited section. The
+caller supplies the brief and does the dedupe/verify/fix/summarize.
 
 Raw output and the reviewed SHA are saved under the branch's state dir (printed
 at exit). Findings already adjudicated on this branch are read from that dir's
@@ -207,7 +207,7 @@ ${verify}
 
 ${prior_block}"
 
-# Output is kept, not scratched. A round costs four passes at 5-20 minutes and
+# Output is kept, not scratched. A round costs two reviews at 5-20 minutes and
 # real quota; discarding the raw findings the moment the caller has read them
 # once means a bad dedupe forces a full re-run, and a loop that crosses a
 # context compaction loses the basis it is supposed to dedupe against.
@@ -226,49 +226,18 @@ ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
     --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
 claude_pid=$!
 
-# Codex reviewers — scope is in the prompt (see above). Effort stays at high;
-# recall comes from the independent passes below, not from a higher tier. Raise
-# it per-run with GAUNTLET_CODEX_EFFORT if a particular diff warrants it.
+# Codex reviewer — scope is in the prompt (see above). Raise the default high
+# effort per-run with GAUNTLET_CODEX_EFFORT if a particular diff warrants it.
 readonly codex_model="${GAUNTLET_CODEX_MODEL:-gpt-5.6-sol}"
 readonly codex_effort="${GAUNTLET_CODEX_EFFORT:-high}"
-
-# Independent passes, unioned by the caller. Sampling the reviewer more than once
-# is the main recall lever available locally, and it is close to free in
-# wall-clock since the passes run concurrently. `broad` mirrors the hosted
-# reviewer; the lensed passes chase the two classes it most often wins on —
-# failure paths, and consequences elsewhere in the repo.
-codex_pass_names=(broad failure-modes contracts)
-codex_pass_lenses=(
-  ""
-  "LENS: concentrate on failure and edge paths — error handling, partial failure and rollback, cancellation, cleanup and resource release, concurrency and ordering, unchecked return values, boundary and empty inputs."
-  "LENS: concentrate on contracts across the whole codebase — callers or implementors not updated for a changed signature, type, invariant or return shape; config, schema, migration or serialization drift; behavior other modules rely on. Search for affected sites rather than reasoning from the diff alone."
-)
-
-codex_outs=()
-codex_logs=()
-codex_pids=()
-for i in "${!codex_pass_names[@]}"; do
-  pass="${codex_pass_names[$i]}"
-  out="$round_dir/codex-$pass.out"
-  log="$round_dir/codex-$pass.log"
-  codex_outs+=("$out")
-  codex_logs+=("$log")
-  pass_prompt="$codex_prompt"
-  if [[ -n "${codex_pass_lenses[$i]}" ]]; then
-    pass_prompt="$codex_prompt
-
-${codex_pass_lenses[$i]}"
-  fi
-  codex exec --ephemeral --color never --model "$codex_model" \
-    -c model_reasoning_effort="$codex_effort" -o "$out" review "$pass_prompt" >"$log" 2>&1 &
-  codex_pids+=("$!")
-done
+codex_out="$round_dir/codex.out"
+codex_log="$round_dir/codex.log"
+codex exec --ephemeral --color never --model "$codex_model" \
+  -c model_reasoning_effort="$codex_effort" -o "$codex_out" review "$codex_prompt" >"$codex_log" 2>&1 &
+codex_pid=$!
 
 if wait "$claude_pid"; then claude_status=0; else claude_status=$?; fi
-codex_statuses=()
-for pid in "${codex_pids[@]}"; do
-  if wait "$pid"; then codex_statuses+=(0); else codex_statuses+=("$?"); fi
-done
+if wait "$codex_pid"; then codex_status=0; else codex_status=$?; fi
 
 # Classify a non-zero engine result so we can degrade gracefully and say why.
 classify() {
@@ -286,19 +255,15 @@ classify() {
 }
 
 claude_state="$(classify "$claude_status" "$claude_out")"
-codex_states=()
-codex_ok=0
-for i in "${!codex_pass_names[@]}"; do
-  codex_states+=("$(classify "${codex_statuses[$i]}" "${codex_logs[$i]}")")
-  [[ "${codex_statuses[$i]}" -eq 0 ]] && codex_ok=$((codex_ok + 1))
-done
+codex_state="$(classify "$codex_status" "$codex_log")"
 
-ok_count="$codex_ok"
+ok_count=0
 [[ "$claude_status" -eq 0 ]] && ok_count=$((ok_count + 1))
+[[ "$codex_status" -eq 0 ]] && ok_count=$((ok_count + 1))
 
 # meta.txt is the per-round record the loop is measured from: what scope ran,
-# against which commit, with which ledger, and which passes actually produced
-# findings (a thin round is otherwise indistinguishable from a dry one).
+# against which commit, with which ledger, and which reviewers actually produced
+# findings (a degraded round is otherwise indistinguishable from a dry one).
 {
   printf 'round: %d\n' "$round"
   printf 'finished: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -310,26 +275,21 @@ ok_count="$codex_ok"
   printf 'codex_model: %s\n' "$codex_model"
   printf 'codex_effort: %s\n' "$codex_effort"
   printf 'claude: %s\n' "$claude_state"
-  for i in "${!codex_pass_names[@]}"; do
-    printf 'codex[%s]: %s\n' "${codex_pass_names[$i]}" "${codex_states[$i]}"
-  done
+  printf 'codex: %s\n' "$codex_state"
   printf -- '--- brief ---\n%s\n' "$brief"
 } >"$round_dir/meta.txt"
 
-# Graceful degradation: continue on whichever passes succeeded; say what dropped
-# so the caller knows the agreement signal is thinner than usual.
+# Graceful degradation: continue on whichever reviewer succeeded; say what
+# dropped so the caller knows the agreement signal is unavailable.
 if [[ "$ok_count" -eq 0 ]]; then
   printf 'ERROR: no reviewer produced results — claude %s; codex %s\n' \
-    "$claude_state" "${codex_states[0]}" >&2
+    "$claude_state" "$codex_state" >&2
 else
   if [[ "$claude_status" -ne 0 ]]; then
-    printf 'NOTE: claude %s — proceeding with Codex passes only.\n' "$claude_state"
+    printf 'NOTE: claude %s — proceeding with Codex only.\n' "$claude_state"
   fi
-  if [[ "$codex_ok" -eq 0 ]]; then
-    printf 'NOTE: every Codex pass failed (%s) — proceeding with Claude only.\n' "${codex_states[0]}"
-  elif [[ "$codex_ok" -lt "${#codex_pass_names[@]}" ]]; then
-    printf 'NOTE: %d of %d Codex passes succeeded — recall is lower than a full run.\n' \
-      "$codex_ok" "${#codex_pass_names[@]}"
+  if [[ "$codex_status" -ne 0 ]]; then
+    printf 'NOTE: codex %s — proceeding with Claude only.\n' "$codex_state"
   fi
   if [[ -n "$prior_src" ]]; then
     printf 'NOTE: round %d — suppressing findings already adjudicated in %s\n' "$round" "$prior_src"
@@ -343,18 +303,16 @@ fi
 printf '===== CLAUDE REVIEW [%s] =====\n' "$claude_state"
 if [[ "$claude_status" -eq 0 ]]; then cat "$claude_out"; else tail -40 "$claude_out"; fi
 
-for i in "${!codex_pass_names[@]}"; do
-  printf '\n===== CODEX REVIEW [pass: %s] [%s] =====\n' "${codex_pass_names[$i]}" "${codex_states[$i]}"
-  if [[ "${codex_statuses[$i]}" -eq 0 ]]; then
-    cat "${codex_outs[$i]}"
-  else
-    # On failure, show codex's answer file if it wrote anything, plus the log tail
-    # (codex diagnostics usually land on stderr -> the log, but not always).
-    if [[ -s "${codex_outs[$i]}" ]]; then cat "${codex_outs[$i]}"; fi
-    printf '\n----- codex log tail -----\n'
-    tail -40 "${codex_logs[$i]}"
-  fi
-done
+printf '\n===== CODEX REVIEW [%s] =====\n' "$codex_state"
+if [[ "$codex_status" -eq 0 ]]; then
+  cat "$codex_out"
+else
+  # On failure, show codex's answer file if it wrote anything, plus the log tail
+  # (codex diagnostics usually land on stderr -> the log, but not always).
+  if [[ -s "$codex_out" ]]; then cat "$codex_out"; fi
+  printf '\n----- codex log tail -----\n'
+  tail -40 "$codex_log"
+fi
 
 printf '\n===== GAUNTLET STATE =====\n'
 printf 'round:  %d (reviewed %s, worktree %s)\n' "$round" "${head_sha:0:12}" "$tree_state"
@@ -362,5 +320,5 @@ printf 'output: %s\n' "$round_dir"
 printf 'ledger: %s%s\n' "$ledger_default" \
   "$([[ -s "$ledger_default" ]] && printf '' || printf '  (not yet written)')"
 
-# Succeed if at least one pass produced a result; degrade gracefully otherwise.
+# Succeed if at least one reviewer produced a result; degrade gracefully otherwise.
 [[ "$ok_count" -ge 1 ]]
