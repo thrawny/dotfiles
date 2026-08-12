@@ -4,8 +4,6 @@
 mod nix
 mod nvim "config/nvim"
 
-headless := if env("DISPLAY", "") != "" { "false" } else if env("WAYLAND_DISPLAY", "") != "" { "false" } else if os() == "macos" { "false" } else { "true" }
-
 # Default recipe - list all recipes
 default:
     @just --list

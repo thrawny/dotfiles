@@ -13,10 +13,7 @@ in
 
   users = {
     groups.docker = { };
-    users.users.${username} = {
-      autoSubUidGidRange = true;
-      extraGroups = [ "podman" ];
-    };
+    users.${username}.autoSubUidGidRange = true;
   };
 
   virtualisation = {

@@ -164,9 +164,21 @@ eval-all:
     failed=0
 
     echo "==> Evaluating NixOS configurations..."
-    for host in thrawny-z13 thrawny-desktop; do
+    for host in thrawny-z13 thrawny-desktop obelisk; do
         echo -n "  $host: "
         if nix eval ".#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null 2>&1; then
+            echo "ok"
+        else
+            echo "FAILED"
+            failed=1
+        fi
+    done
+
+    echo ""
+    echo "==> Evaluating headless images..."
+    for host in headless headless-docker headless-podman; do
+        echo -n "  $host: "
+        if nix eval ".#nixosConfigurations.$host.config.system.build.images.incus" --no-write-lock-file > /dev/null 2>&1; then
             echo "ok"
         else
             echo "FAILED"

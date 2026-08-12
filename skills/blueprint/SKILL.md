@@ -50,7 +50,7 @@ This step is complete when every section is drafted and every decision in it is 
 
 ## 4. Render
 
-Run `blueprint-html <source>` — it writes `lab/<name>.html` and prints the path. Fix any warnings it emits, then offer the user a preview via `live-html`. Publishing beyond the local file happens only on explicit request (`share-html`).
+Run `blueprint-html <source>` — it writes `lab/<name>.html` and prints the path. Fix any warnings it emits, then offer a `live-html` preview when a graphical session is available; otherwise return the generated path. Publishing beyond the local file happens only on explicit request (`share-html`).
 
 This step is complete when the renderer runs warning-free.
 

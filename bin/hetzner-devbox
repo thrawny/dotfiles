@@ -105,9 +105,21 @@ cmd_up() {
   echo "Tailscale IP: $ts_ip"
 
   echo "Waiting for Incus API on tailnet..."
-  until curl -sk --connect-timeout 2 "https://$ts_ip:8443" >/dev/null 2>&1; do
+  local incus_ready=false
+  for _ in $(seq 60); do
+    if curl -sk --connect-timeout 2 --max-time 5 "https://$ts_ip:8443" >/dev/null 2>&1; then
+      incus_ready=true
+      break
+    fi
     sleep 5
   done
+  if [[ "$incus_ready" != true ]]; then
+    echo "Timed out waiting for the Incus API at $ts_ip:8443" >&2
+    tailscale ssh "root@$TS_HOSTNAME" \
+      "systemctl --no-pager --full status incus 2>&1; echo '---'; journalctl -u incus -n 30 --no-pager" \
+      >&2 || true
+    exit 1
+  fi
 
   echo "Generating Incus trust token..."
   local token

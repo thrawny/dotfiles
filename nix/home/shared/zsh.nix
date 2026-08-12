@@ -79,10 +79,6 @@
         scx = "sandbox codex --dangerously-bypass-approvals-and-sandbox";
         sc = "sandbox claude --dangerously-skip-permissions";
         spi = "sandbox pi";
-      }
-      // lib.optionalAttrs pkgs.stdenv.isLinux {
-        pbcopy = "wl-copy";
-        pbpaste = "wl-paste";
       };
 
       # Set options
@@ -154,6 +150,13 @@
             alias ls='eza --icons --group-directories-first'
             # Monokai spectrum palette: purple dirs, orange exec, pink perms, cyan user
             export EZA_COLORS="di=38;5;141:ex=38;5;209:ln=38;5;141:ur=38;5;204:uw=38;5;204:ux=38;5;204:ue=38;5;204:gr=38;5;204:gw=38;5;204:gx=38;5;204:tr=38;5;204:tw=38;5;204:tx=38;5;204:uu=38;5;81:gu=38;5;81:da=38;5;243:sn=38;5;255:sb=38;5;243:ga=38;5;81:gm=38;5;227:gd=38;5;204:gv=38;5;141"
+          fi
+
+          if command -v wl-copy &>/dev/null; then
+            alias pbcopy='wl-copy'
+          fi
+          if command -v wl-paste &>/dev/null; then
+            alias pbpaste='wl-paste'
           fi
 
           # ===== Functions =====

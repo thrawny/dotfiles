@@ -73,6 +73,11 @@ try {
 
 title = title || basename(file);
 
+if (process.platform !== "darwin" && !process.env.DISPLAY && !process.env.WAYLAND_DISPLAY) {
+  console.log(`live-html: no graphical session; preview file: ${file}`);
+  process.exit(0);
+}
+
 // Ask niri to own the preview process so the invoking terminal is released.
 // The marker prevents the niri-spawned copy from delegating itself again.
 if (process.env.NIRI_SOCKET && process.env.LIVE_HTML_NIRI_SPAWNED !== "1") {

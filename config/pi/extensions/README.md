@@ -36,7 +36,7 @@ Official alternatives are `.pi/APPEND_SYSTEM.md` or `.pi/SYSTEM.md`, but those a
 ### Requirements
 
 - `agent-switch` installed and on `PATH`
-- headless daemon running (`agent-switch serve`, spawned by niri at startup) — `track` sends events over its socket
+- background daemon running (`agent-switch serve`, spawned by niri at startup) — `track` sends events over its socket
 
 If `agent-switch` is not on `PATH`, the extension silently registers no handlers.
 

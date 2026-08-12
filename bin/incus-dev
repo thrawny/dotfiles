@@ -20,14 +20,16 @@ import subprocess
 import sys
 import tarfile
 import tempfile
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import jwt
 
 DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
+READINESS_TIMEOUT_SECONDS = 120
 HOME = Path.home()
 logger = logging.getLogger("incus-dev")
 
@@ -284,13 +286,27 @@ def shell(
     return run(args, capture=capture, check=check)
 
 
-def wait_user_shell(container: str, user: str, home: str) -> None:
-    import time
-
-    while (
-        shell(container, user, home, "true", capture=True, check=False).returncode != 0
-    ):
+def wait_until_ready(
+    check: Callable[[], subprocess.CompletedProcess], description: str
+) -> None:
+    deadline = time.monotonic() + READINESS_TIMEOUT_SECONDS
+    while True:
+        result = check()
+        if result.returncode == 0:
+            return
+        if time.monotonic() >= deadline:
+            detail = result.stderr or result.stdout or "no diagnostic output"
+            if isinstance(detail, bytes):
+                detail = detail.decode(errors="replace")
+            raise SystemExit(f"Timed out waiting for {description}: {detail.strip()}")
         time.sleep(0.5)
+
+
+def wait_user_shell(container: str, user: str, home: str) -> None:
+    wait_until_ready(
+        lambda: shell(container, user, home, "true", capture=True, check=False),
+        f"user shell in {container}",
+    )
 
 
 def build_headless_image(repo_root: Path, variant: str) -> str:
@@ -412,10 +428,8 @@ def ensure_dirs(container: str, user: str, home: str) -> None:
 
 
 def setup_user_systemd(container: str, user: str, home: str) -> None:
-    import time
-
-    while (
-        run(
+    wait_until_ready(
+        lambda: run(
             [
                 "incus",
                 "exec",
@@ -427,15 +441,14 @@ def setup_user_systemd(container: str, user: str, home: str) -> None:
             ],
             capture=True,
             check=False,
-        ).returncode
-        != 0
-    ):
-        time.sleep(0.5)
+        ),
+        f"systemd in {container}",
+    )
     uid = out(["incus", "exec", container, "--", "id", "-u", user])
     run(["incus", "exec", container, "--", "loginctl", "enable-linger", user])
     run(["incus", "exec", container, "--", "systemctl", "start", f"user@{uid}.service"])
-    while (
-        run(
+    wait_until_ready(
+        lambda: run(
             [
                 "incus",
                 "exec",
@@ -457,10 +470,9 @@ def setup_user_systemd(container: str, user: str, home: str) -> None:
             ],
             capture=True,
             check=False,
-        ).returncode
-        != 0
-    ):
-        time.sleep(0.5)
+        ),
+        f"systemd user manager for {user} in {container}",
+    )
 
 
 def push_file(

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ "${1:-}" == "--version" ]]; then
-  exec /home/thrawny/dotfiles/bin/sandbox codex "$@"
+  exec sandbox codex "$@"
 fi
 
-exec /home/thrawny/dotfiles/bin/sandbox direnv exec "$PWD" codex "$@"
+exec sandbox direnv exec "$PWD" codex "$@"
