@@ -21,7 +21,6 @@ Current custom extensions include:
 - `schedule/` — scheduling extension entrypoint
 - `show-tools.ts` — `/show-tools` for debugging active tool state
 - `status-line.ts` — custom status line integration
-- `teleport.ts` — Pi session teleport helpers
 
 ## Local repository instructions
 
