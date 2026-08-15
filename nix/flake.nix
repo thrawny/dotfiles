@@ -41,10 +41,6 @@
       url = "github:openclaw/acpx";
       flake = false;
     };
-    gh-stack = {
-      url = "github:github/gh-stack";
-      flake = false;
-    };
     agent-browser = {
       url = "github:vercel-labs/agent-browser";
       flake = false;
@@ -80,7 +76,6 @@
       thrawny-pkgs,
       zmx,
       acpx-skills,
-      gh-stack,
       agent-browser,
       mattpocock-skills,
       anthropic-skills,
@@ -111,7 +106,6 @@
           acpx-skills
           agent-browser
           anthropic-skills
-          gh-stack
           lib
           mattpocock-skills
           ;

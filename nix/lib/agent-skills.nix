@@ -3,7 +3,6 @@
   agent-browser,
   anthropic-skills,
   containerAssets,
-  gh-stack,
   lib,
   mattpocock-skills,
   ...
@@ -62,7 +61,6 @@ let
     agent-browser.source = agent-browser + "/skills/agent-browser";
     domain-modeling.source = mattpocock-skills + "/skills/engineering/domain-modeling";
     frontend-design.source = anthropic-skills + "/skills/frontend-design";
-    gh-stack.source = gh-stack + "/skills/gh-stack";
     grill-with-docs.source = mattpocock-skills + "/skills/engineering/grill-with-docs";
     grilling.source = mattpocock-skills + "/skills/productivity/grilling";
     writing-for-agents.source = mattpocock-skills + "/skills/productivity/writing-for-agents";
@@ -71,7 +69,6 @@ let
       mattpocock-skills + "/skills/engineering/improve-codebase-architecture";
     tdd.source = mattpocock-skills + "/skills/engineering/tdd";
     prototype.source = mattpocock-skills + "/skills/engineering/prototype";
-    research.source = mattpocock-skills + "/skills/engineering/research";
     setup-matt-pocock-skills.source =
       mattpocock-skills + "/skills/engineering/setup-matt-pocock-skills";
     wayfinder.source = mattpocock-skills + "/skills/engineering/wayfinder";
