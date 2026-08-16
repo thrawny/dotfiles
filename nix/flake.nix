@@ -18,7 +18,7 @@
     elephant.url = "github:abenz1267/elephant";
     walker.url = "github:abenz1267/walker";
     walker.inputs.elephant.follows = "elephant";
-    niri-flake.url = "github:sodiboo/niri-flake";
+    niri-flake.url = "github:epireyn/niri-flake";
     xremap-flake.url = "github:xremap/nix-flake";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";

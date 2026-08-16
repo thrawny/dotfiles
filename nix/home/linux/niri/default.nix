@@ -505,6 +505,19 @@ in
     # Overview
     overview.workspace-shadow.enable = false;
 
+    recent-windows = {
+      debounce-ms = 750;
+      open-delay-ms = 150;
+      highlight = {
+        active-color = "${colors.active}ff";
+        urgent-color = "${colors.urgent}ff";
+      };
+      binds = {
+        "Mod+Tab".action.next-window = [ ];
+        "Mod+Shift+Tab".action.previous-window = [ ];
+      };
+    };
+
     # Spawn at startup (xwayland-satellite spawned on-demand by niri)
     spawn-at-startup = [
       {
@@ -695,27 +708,11 @@ in
     binds = baseBinds;
   };
 
-  # niri-flake doesn't expose recent-windows settings yet, so append raw KDL
-  # to the generated config file. This isn't circular because finalConfig
-  # depends on settings/config, not on xdg.configFile.source.
+  # Keep the mutable override last: niri-flake emits structured includes first,
+  # before the generated default-column-width that local.kdl must override.
   xdg.configFile.niri-config.source = lib.mkForce (
     pkgs.writeText "niri-config.kdl" ''
       ${config.programs.niri.finalConfig}
-
-      recent-windows {
-          debounce-ms 750
-          open-delay-ms 150
-
-          highlight {
-              active-color "${colors.active}ff"
-              urgent-color "${colors.urgent}ff"
-          }
-
-          binds {
-              Mod+Tab         { next-window; }
-              Mod+Shift+Tab   { previous-window; }
-          }
-      }
 
       include optional=true "local.kdl"
     ''
