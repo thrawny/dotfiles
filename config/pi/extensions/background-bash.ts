@@ -1088,11 +1088,9 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 				sessionName,
 				controlScript(bash.shellPath, command, markers),
 			);
-			// QUIET_PROMPT is redundant where bash.nix also suppresses the prompt
-			// for any ZMX_SESSION, but it keeps this working on hosts that do not
-			// use these dotfiles. zmx forks the daemon from this client, so the
-			// variable only lands if the session is created here — which it is,
-			// because every launch generates a fresh session name.
+			// The fresh session inherits QUIET_PROMPT at shell creation, keeping
+			// prompts and direnv messages out of the task scrollback. Existing
+			// sessions cannot be reconfigured this way, hence the unique name.
 			const launch = await pi.exec(
 				"env",
 				[

@@ -244,10 +244,9 @@
           fi
         ''
         ''
-          # Allow automation shells to retain interactive behavior without rendering prompts.
-          # ZMX_TASK marks a `zmx run` session, whose prompts would otherwise
-          # land in the scrollback `zmx history` returns.
-          if [[ -n "$QUIET_PROMPT" || -n "$ZMX_TASK" ]]; then
+          # Allow explicitly quiet automation shells to retain interactive
+          # behavior without rendering prompts into task scrollback.
+          if [[ -n "$QUIET_PROMPT" ]]; then
             PROMPT=
             RPROMPT=
             # direnv otherwise writes its whole export list into the scrollback

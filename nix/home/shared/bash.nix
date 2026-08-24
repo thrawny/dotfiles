@@ -9,9 +9,9 @@
         "ignorespace"
       ];
       initExtra = lib.mkOrder 2000 ''
-        # ZMX_TASK marks a `zmx run` session, which nobody is watching: render
-        # no prompt so PS1/PS2 stay out of the scrollback `zmx history` returns.
-        if [[ -n "$QUIET_PROMPT" || -n "$ZMX_TASK" ]]; then
+        # Automation can explicitly suppress prompts and direnv noise in
+        # dedicated shells whose scrollback will be consumed as task output.
+        if [[ -n "$QUIET_PROMPT" ]]; then
           quiet_prompt=1
           # direnv otherwise writes its whole export list into the scrollback of
           # every task, which is more noise than the prompt ever was. Exported
