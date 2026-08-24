@@ -13,7 +13,10 @@ in
 
   programs = {
     imv.enable = true;
-    zathura.enable = true;
+    zathura = {
+      enable = true;
+      options.selection-clipboard = "clipboard";
+    };
   };
 
   xdg.mimeApps = {
