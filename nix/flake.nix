@@ -39,6 +39,10 @@
       url = "github:vercel-labs/agent-browser";
       flake = false;
     };
+    cursor-plugins = {
+      url = "github:cursor/plugins";
+      flake = false;
+    };
     mattpocock-skills = {
       url = "github:mattpocock/skills";
       flake = false;
@@ -71,6 +75,7 @@
       zmx,
       acpx-skills,
       agent-browser,
+      cursor-plugins,
       mattpocock-skills,
       anthropic-skills,
       ...
@@ -100,6 +105,7 @@
           acpx-skills
           agent-browser
           anthropic-skills
+          cursor-plugins
           lib
           mattpocock-skills
           ;
