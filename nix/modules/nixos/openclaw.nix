@@ -38,14 +38,10 @@ let
       ];
     };
     canvasHost.enabled = false;
-    models.providers.openai.models = [
-      {
-        id = "gpt-5.6-sol";
-        name = "GPT-5.6 Sol";
-        reasoning = true;
-        contextTokens = 272000;
-      }
-    ];
+    # The canonical openai/* route uses the Codex subscription/runtime here,
+    # not Platform API-key billing. Fail closed instead of falling back to the
+    # embedded OpenClaw runtime.
+    models.providers.openai.agentRuntime.id = "codex";
     tools = {
       profile = "full";
       fs.workspaceOnly = true;
@@ -68,20 +64,12 @@ let
         skipBootstrap = true;
         timeoutSeconds = 900;
         thinkingDefault = "low";
-        models = {
-          "openai/gpt-5.6-sol" = { };
-          "openai-codex/gpt-5.6-sol" = { };
-        };
+        models."openai/gpt-5.6-sol" = { };
       };
       list = [
         {
           id = "main";
           default = true;
-          model = {
-            primary = "openai/gpt-5.6-sol";
-            fallbacks = [ ];
-          };
-          inherit workspace;
         }
       ];
     };
@@ -110,10 +98,6 @@ let
       groupChat.visibleReplies = "automatic";
       visibleReplies = "automatic";
       removeAckAfterReply = true;
-    };
-    auth.profiles."openai-codex:jonas@lergell.se" = {
-      provider = "openai-codex";
-      mode = "oauth";
     };
     channels = {
       telegram.enabled = true;
