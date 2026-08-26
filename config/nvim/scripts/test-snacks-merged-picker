@@ -54,7 +54,7 @@ cd "${repo_root}"
 PICKER_CWD="${fixture_dir}" \
   PICKER_QUERY="${query}" \
   PICKER_TOP="${top}" \
-  nvim --headless -u config/nvim/init.lua -i NONE \
+  nix run ./nix#nvim -- --headless -i NONE \
   +"set noundofile" \
   +"lua require('config.snacks_merged_picker_harness').run()" \
   +qa!

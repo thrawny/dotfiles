@@ -380,6 +380,26 @@
         "type": "github"
       }
     },
+    "lazy-nvim-nix": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1787663686,
+        "narHash": "sha256-JuTyLK0tK6jmhhreHO2AjDY6eYMMhlJIi+kUkc35OqU=",
+        "owner": "josh",
+        "repo": "lazy-nvim-nix",
+        "rev": "6d7749b6eb0b2adb5c60bb6ac99c18bb616f65a8",
+        "type": "github"
+      },
+      "original": {
+        "owner": "josh",
+        "repo": "lazy-nvim-nix",
+        "type": "github"
+      }
+    },
     "linux-systems": {
       "locked": {
         "lastModified": 1689347949,
@@ -817,6 +837,102 @@
         "type": "github"
       }
     },
+    "nvim-auto-save": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1774843481,
+        "narHash": "sha256-udN8ETRYKmVEeu+/2J6yZHnnBWtnLV7yKiOY0AvS8rg=",
+        "owner": "okuuva",
+        "repo": "auto-save.nvim",
+        "rev": "9aabcb8396224dcbf8d51c0c1d620d88a46e89d7",
+        "type": "github"
+      },
+      "original": {
+        "owner": "okuuva",
+        "repo": "auto-save.nvim",
+        "type": "github"
+      }
+    },
+    "nvim-baml-syntax": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1775108174,
+        "narHash": "sha256-oUTg0WQ4wVYefa5h9HrKKRUVw/tTjxjwnJmX1QbX6Ns=",
+        "owner": "klepp0",
+        "repo": "nvim-baml-syntax",
+        "rev": "f05aa12f658ca91d12a1f59f5f782fe09c09a1f9",
+        "type": "github"
+      },
+      "original": {
+        "owner": "klepp0",
+        "repo": "nvim-baml-syntax",
+        "type": "github"
+      }
+    },
+    "nvim-codediff": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1785400442,
+        "narHash": "sha256-uyzRgF/R8rkKD9itZQrrIH0lQI62GosdzW5OWuXCIVs=",
+        "owner": "thrawny",
+        "repo": "codediff.nvim",
+        "rev": "e5f57577945c7ad1482d2723d0f46ddbf8aedd99",
+        "type": "github"
+      },
+      "original": {
+        "owner": "thrawny",
+        "repo": "codediff.nvim",
+        "type": "github"
+      }
+    },
+    "nvim-git-conflict": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1731162896,
+        "narHash": "sha256-1t0kKxTGLuOvuRkoLgkoqMZpF+oKo8+gMsTdgPsSb+8=",
+        "owner": "akinsho",
+        "repo": "git-conflict.nvim",
+        "rev": "4bbfdd92d547d2862a75b4e80afaf30e73f7bbb4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "akinsho",
+        "repo": "git-conflict.nvim",
+        "type": "github"
+      }
+    },
+    "nvim-monokai-pro": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1778819959,
+        "narHash": "sha256-ntrEnswE/47o2pKfhrSdrrHX+eNVa/KIo5rkxXt0Sx0=",
+        "owner": "loctvl842",
+        "repo": "monokai-pro.nvim",
+        "rev": "a68e38b8e55d69a215d0f02598900a79c356da9d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "loctvl842",
+        "repo": "monokai-pro.nvim",
+        "type": "github"
+      }
+    },
+    "nvim-tmux-navigator": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1769370258,
+        "narHash": "sha256-efqiRffnidYx+qjgsHyWshCFWgZp/ZrHl+Clt04pfpM=",
+        "owner": "christoomey",
+        "repo": "vim-tmux-navigator",
+        "rev": "e41c431a0c7b7388ae7ba341f01a0d217eb3a432",
+        "type": "github"
+      },
+      "original": {
+        "owner": "christoomey",
+        "repo": "vim-tmux-navigator",
+        "type": "github"
+      }
+    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -878,6 +994,7 @@
         "hermes-agent": "hermes-agent",
         "home-manager": "home-manager",
         "hunk": "hunk",
+        "lazy-nvim-nix": "lazy-nvim-nix",
         "linux-systems": "linux-systems",
         "llm-agents": "llm-agents",
         "mattpocock-skills": "mattpocock-skills",
@@ -887,6 +1004,12 @@
         "nixpkgs": "nixpkgs_7",
         "nixpkgs-xwayland": "nixpkgs-xwayland",
         "nur": "nur",
+        "nvim-auto-save": "nvim-auto-save",
+        "nvim-baml-syntax": "nvim-baml-syntax",
+        "nvim-codediff": "nvim-codediff",
+        "nvim-git-conflict": "nvim-git-conflict",
+        "nvim-monokai-pro": "nvim-monokai-pro",
+        "nvim-tmux-navigator": "nvim-tmux-navigator",
         "srvos": "srvos",
         "thrawny-pkgs": "thrawny-pkgs",
         "walker": "walker",

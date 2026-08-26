@@ -25,7 +25,6 @@ let
     fd
     git
     gnumake
-    neovim
     ripgrep
     tmux
     wget

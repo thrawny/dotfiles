@@ -1,15 +1,8 @@
-local codediff_dir = vim.fn.expand("~/code/codediff.nvim")
-local codediff_plugin_name = "codediff.nvim"
 local codediff_spec = {
-  name = codediff_plugin_name,
+  "thrawny/codediff.nvim",
+  name = "codediff.nvim",
+  branch = "main",
 }
-
-if (vim.uv or vim.loop).fs_stat(codediff_dir) then
-  codediff_spec.dir = codediff_dir
-else
-  codediff_spec[1] = "thrawny/codediff.nvim"
-  codediff_spec.branch = "main"
-end
 
 local review_opts = {
   keymaps = {
