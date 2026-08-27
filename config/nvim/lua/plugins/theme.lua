@@ -73,28 +73,9 @@ return {
             ["@keyword"] = { fg = pink, italic = false },
             ["@keyword.lua"] = { fg = pink, italic = false },
 
-            -- Functions and methods
-            -- LSP semantic token overrides (higher priority than treesitter)
-            ["@lsp.type.function"] = { fg = yellow },
-            ["@lsp.type.method"] = { fg = yellow },
-
-            -- Variables (keep neutral/white)
-            ["@lsp.type.variable"] = { fg = white },
-            ["@lsp.type.parameter"] = { fg = white },
-            ["@lsp.type.namespace"] = { fg = white },
-            ["@lsp.type.module"] = { fg = white },
-
-            -- Properties/fields in purple
-            ["@lsp.type.property"] = { fg = purple },
-            ["@lsp.type.field"] = { fg = purple },
-
-            -- Types in cyan
-            ["@lsp.type.type"] = { fg = cyan },
-            ["@lsp.type.struct"] = { fg = cyan },
-            ["@lsp.type.class"] = { fg = cyan },
-            ["@lsp.type.interface"] = { fg = cyan },
-            ["@lsp.type.enum"] = { fg = cyan },
-            ["@lsp.type.typeParameter"] = { fg = cyan },
+            -- No @lsp.* groups here: semantic-token highlighting is disabled
+            -- (lsp.lua clears every @lsp group), so treesitter colors are the
+            -- single source of truth.
 
             -- Bash (Dracula-style)
             ["@function.bash"] = { fg = yellow },
@@ -133,15 +114,6 @@ return {
             ["@decorator.python"] = { fg = yellow },
             ["@constructor.python"] = { fg = cyan },
 
-            -- Python LSP semantic tokens
-            ["@lsp.type.variable.python"] = { fg = white },
-            ["@lsp.type.parameter.python"] = { fg = white },
-            ["@lsp.type.property.python"] = { fg = white },
-            ["@lsp.type.function.python"] = { fg = yellow },
-            ["@lsp.type.method.python"] = { fg = yellow },
-            ["@lsp.type.class.python"] = { fg = cyan },
-            ["@lsp.type.namespace.python"] = { fg = white },
-
             -- TypeScript/JavaScript constants in purple
             ["@constant.typescript"] = { fg = purple },
             ["@constant.javascript"] = { fg = purple },
@@ -170,27 +142,6 @@ return {
             ["@operator.rust"] = { fg = pink },
             ["@module.rust"] = { fg = white },
             ["@namespace.rust"] = { fg = white },
-
-            -- Rust LSP semantic tokens (override rust-analyzer's colorful defaults)
-            ["@lsp.type.variable.rust"] = { fg = white },
-            ["@lsp.type.parameter.rust"] = { fg = white },
-            ["@lsp.type.property.rust"] = { fg = white },
-            ["@lsp.type.enumMember.rust"] = { fg = purple },
-            ["@lsp.type.function.rust"] = { fg = yellow },
-            ["@lsp.type.method.rust"] = { fg = yellow },
-            ["@lsp.type.macro.rust"] = { fg = yellow },
-            ["@lsp.type.namespace.rust"] = { fg = white },
-            ["@lsp.type.struct.rust"] = { fg = cyan },
-            ["@lsp.type.enum.rust"] = { fg = cyan },
-            ["@lsp.type.interface.rust"] = { fg = cyan },
-            ["@lsp.type.typeAlias.rust"] = { fg = cyan },
-            ["@lsp.type.selfKeyword.rust"] = { fg = pink },
-            ["@lsp.type.selfTypeKeyword.rust"] = { fg = cyan },
-            ["@lsp.type.lifetime.rust"] = { fg = pink },
-            ["@lsp.type.formatSpecifier.rust"] = { fg = yellow },
-            ["@lsp.mod.mutable.rust"] = {},
-            ["@lsp.mod.reference.rust"] = {},
-            ["@lsp.mod.consuming.rust"] = {},
 
             -- Colorblind-friendly diffs (avoid red/green contrast)
             DiffAdd = { bg = bg, fg = cyan },
@@ -260,63 +211,4 @@ return {
       colorscheme = "monokai-pro",
     },
   },
-
-  -- Previous theme (monokai-nightasty) - kept for reference
-  -- Uncomment to switch back
-  -- {
-  --   "polirritmico/monokai-nightasty.nvim",
-  --   lazy = false,
-  --   priority = 1000,
-  --   config = function()
-  --     require("monokai-nightasty").load({
-  --       dark_style_background = "dark",
-  --       light_style_background = "default",
-  --       color_headers = false,
-  --       lualine_bold = true,
-  --       lualine_style = "default",
-  --       markdown_header_marks = false,
-  --       hl_styles = {
-  --         comments = { italic = true },
-  --         keywords = { italic = false },
-  --         functions = {},
-  --         variables = {},
-  --         floats = "default",
-  --         sidebars = "default",
-  --       },
-  --       sidebars = { "qf", "help", "terminal", "packer" },
-  --       hide_inactive_statusline = false,
-  --       dim_inactive = false,
-  --       terminal_colors = false,
-  --       on_colors = function(colors) end,
-  --       on_highlights = function(highlights, colors)
-  --         local ghostty_bg = "#1c1c1c"
-  --         highlights.Terminal = { bg = ghostty_bg }
-  --         highlights.TerminalNC = { bg = ghostty_bg }
-  --         highlights.Normal = { fg = colors.fg, bg = ghostty_bg }
-  --         highlights.NormalFloat = { fg = colors.fg, bg = ghostty_bg }
-  --       end,
-  --     })
-  --
-  --     -- Terminal ANSI colors matching Ghostty's Molokai theme
-  --     vim.g.terminal_color_0 = "#121212"
-  --     vim.g.terminal_color_1 = "#fa2573"
-  --     vim.g.terminal_color_2 = "#98e123"
-  --     vim.g.terminal_color_3 = "#dfd460"
-  --     vim.g.terminal_color_4 = "#1080d0"
-  --     vim.g.terminal_color_5 = "#8700ff"
-  --     vim.g.terminal_color_6 = "#43a8d0"
-  --     vim.g.terminal_color_7 = "#bbbbbb"
-  --     vim.g.terminal_color_8 = "#555555"
-  --     vim.g.terminal_color_9 = "#f6669d"
-  --     vim.g.terminal_color_10 = "#b1e05f"
-  --     vim.g.terminal_color_11 = "#fff26d"
-  --     vim.g.terminal_color_12 = "#00afff"
-  --     vim.g.terminal_color_13 = "#af87ff"
-  --     vim.g.terminal_color_14 = "#51ceff"
-  --     vim.g.terminal_color_15 = "#ffffff"
-  --   end,
-  -- },
-  --
-  -- -- To use monokai-nightasty, also change LazyVim colorscheme above to:
-  -- -- colorscheme = "monokai-nightasty",
 }

@@ -1,11 +1,6 @@
--- Nix LSP override: use nixd instead of nil_ls
--- Note: The lazyvim nix extra is conditionally imported in lazy.lua
-local has_nixd = vim.fn.executable("nixd") == 1
-
-if not has_nixd then
-  return {}
-end
-
+-- Nix LSP override: use nixd instead of nil_ls (the lang.nix extra is
+-- imported unconditionally in nix/lib/nvim-package.nix; nixd comes from
+-- the shared Home Manager packages)
 return {
   {
     "neovim/nvim-lspconfig",

@@ -5,20 +5,6 @@ return {
   opts = {
     setup = {
       gopls = function(server, opts)
-        Snacks.util.lsp.on({ name = "gopls" }, function(_, client)
-          local semantic = vim.tbl_get(client.config, "capabilities", "textDocument", "semanticTokens")
-          if semantic and not client.server_capabilities.semanticTokensProvider then
-            client.server_capabilities.semanticTokensProvider = {
-              full = true,
-              legend = {
-                tokenTypes = semantic.tokenTypes,
-                tokenModifiers = semantic.tokenModifiers,
-              },
-              range = true,
-            }
-          end
-        end)
-
         -- Register the user settings first so the resolved config also contains
         -- nvim-lspconfig's default gopls command and root-dir callback.
         vim.lsp.config(server, opts)

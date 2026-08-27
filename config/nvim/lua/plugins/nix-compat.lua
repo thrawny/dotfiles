@@ -1,9 +1,6 @@
--- Nix compatibility: disable Mason on NixOS/Nix (LSPs provided by Nix)
-
-if vim.fn.isdirectory("/nix") == 0 then
-  return {} -- Non-Nix: keep Mason
-end
-
+-- Mason is disabled: language servers, formatters, and linters are provided
+-- by the shared Home Manager package sets (the editor itself only exists as a
+-- Nix package, so there is no non-Nix environment to support).
 return {
   { "mason-org/mason.nvim", enabled = false },
   { "mason-org/mason-lspconfig.nvim", enabled = false },

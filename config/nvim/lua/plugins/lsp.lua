@@ -99,22 +99,6 @@ return {
             },
           },
         },
-        -- Without Mason, lua_ls starts before lazydev.nvim can set up its
-        -- workspace/configuration handler, so it never gets the library paths.
-        -- Provide them statically so lua_ls has type info from startup.
-        lua_ls = {
-          settings = {
-            Lua = {
-              workspace = {
-                library = {
-                  vim.env.VIMRUNTIME .. "/lua",
-                  vim.fn.stdpath("data") .. "/lazy/LazyVim/lua",
-                  vim.fn.stdpath("data") .. "/lazy/lazy.nvim/lua",
-                },
-              },
-            },
-          },
-        },
         taplo = {
           root_dir = function(bufnr, cb)
             local fname = vim.api.nvim_buf_get_name(bufnr)
@@ -130,5 +114,27 @@ return {
         },
       },
     },
+  },
+
+  {
+    "neovim/nvim-lspconfig",
+    -- Without Mason, lua_ls starts before lazydev.nvim can set up its
+    -- workspace/configuration handler, so it never gets the library paths.
+    -- Provide them statically so lua_ls has type info from startup. The plugin
+    -- dirs must be resolved here (at load time, from the plugin table) because
+    -- they live in the Nix store at paths only lazy.nvim knows.
+    opts = function(_, opts)
+      local plugins = require("lazy.core.config").plugins
+      local library = { vim.env.VIMRUNTIME .. "/lua" }
+      for _, name in ipairs({ "LazyVim", "lazy.nvim" }) do
+        if plugins[name] then
+          table.insert(library, plugins[name].dir .. "/lua")
+        end
+      end
+      opts.servers = opts.servers or {}
+      opts.servers.lua_ls = vim.tbl_deep_extend("force", opts.servers.lua_ls or {}, {
+        settings = { Lua = { workspace = { library = library } } },
+      })
+    end,
   },
 }
