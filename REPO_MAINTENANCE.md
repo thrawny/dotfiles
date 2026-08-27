@@ -54,7 +54,6 @@ These tools are currently used from user-managed installations rather than the N
 | `niri-cu` | `~/.cargo/bin/niri-cu`, built from `~/code/niri-cu` | Used for the active nested/sandboxed Niri work | The repository has no remote. Add one if the project needs off-machine protection. |
 | `nirius` / `niriusd` | `~/.cargo/bin`, built from `~/code/nirius` | `niriusd` is running; Niri and helper scripts call `nirius` | Nix also installs `pkgs.nirius`, but the Cargo binaries win on the current `PATH`. Keep the Cargo build current while developing the fork, or remove it when returning to the Nix package. |
 | `quotabar` | `~/.cargo/bin/quotabar`, built from `~/code/quotabar` | Waybar invokes this exact absolute path | Repository is 3 commits ahead of origin. Rebuild/restart Waybar after code changes and push retained work. |
-| `wayvoice` | `~/.cargo/bin/wayvoice`, built from `~/code/wayvoice` | `wayvoice serve` and HUD are running; Niri keybindings invoke it | Repository is 4 commits ahead of origin with nine dirty paths. Protect/commit the work, rebuild, and restart the service when ready. |
 | `glimpseui` | npm-global `glimpseui@0.8.1` | Runtime dependency of `bin/live-html` | Installed from npm, not the deleted source clone. `~/dotfiles/node_modules/glimpseui` links to the global package for Bun resolution. |
 
 ### Other active user-managed tools
