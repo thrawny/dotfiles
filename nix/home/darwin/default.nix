@@ -14,6 +14,13 @@
     ./setup.nix
   ];
 
+  # Determinate owns the Nix installation, daemon, and configuration on macOS.
+  # Do not let Home Manager generate nix.conf or add upstream Nix to PATH.
+  nix = {
+    enable = false;
+    package = null;
+  };
+
   # Force XDG paths on macOS (apps default to ~/Library/Application Support/ otherwise)
   xdg.enable = true;
 
