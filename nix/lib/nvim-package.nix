@@ -76,7 +76,6 @@ lazyNvim.LazyVim.override {
     "lazyvim.plugins.extras.ui.edgy"
     "lazyvim.plugins.extras.lang.sql"
     "lazyvim.plugins.extras.editor.harpoon2"
-    "lazyvim.plugins.extras.editor.fzf"
     "lazyvim.plugins.extras.coding.mini-surround"
     "lazyvim.plugins.extras.lang.typescript.biome"
     "lazyvim.plugins.extras.lang.nix"

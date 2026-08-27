@@ -116,6 +116,9 @@ return {
     "snacks.nvim",
     keys = {
       { "<leader>S", false },
+      -- Keep <leader>, as the alternate-buffer toggle (keymaps.lua); the
+      -- snacks_picker extra would otherwise bind it to the buffers picker
+      { "<leader>,", false },
       {
         "<M-;>",
         function()
@@ -192,6 +195,10 @@ return {
           input = {
             keys = {
               ["<c-g>"] = false,
+              -- Hidden/ignored toggles on ctrl keys; the default alt-h/alt-i
+              -- never reach nvim (grabbed by the window manager)
+              ["<c-y>"] = { "toggle_hidden", mode = { "i", "n" } },
+              ["<c-o>"] = { "toggle_ignored", mode = { "i", "n" } },
             },
           },
           list = {
