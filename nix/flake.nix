@@ -7,6 +7,32 @@
     nixpkgs-xwayland.url = "github:NixOS/nixpkgs/b60793b86201040d9dee019a05089a9150d08b5b";
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
+    lazy-nvim-nix.url = "github:josh/lazy-nvim-nix";
+    lazy-nvim-nix.inputs.nixpkgs.follows = "nixpkgs";
+    nvim-auto-save = {
+      url = "github:okuuva/auto-save.nvim";
+      flake = false;
+    };
+    nvim-baml-syntax = {
+      url = "github:klepp0/nvim-baml-syntax";
+      flake = false;
+    };
+    nvim-codediff = {
+      url = "github:thrawny/codediff.nvim";
+      flake = false;
+    };
+    nvim-git-conflict = {
+      url = "github:akinsho/git-conflict.nvim";
+      flake = false;
+    };
+    nvim-monokai-pro = {
+      url = "github:loctvl842/monokai-pro.nvim";
+      flake = false;
+    };
+    nvim-tmux-navigator = {
+      url = "github:christoomey/vim-tmux-navigator";
+      flake = false;
+    };
     hunk.url = "github:modem-dev/hunk";
     nix-index-database.url = "github:Mic92/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
@@ -58,6 +84,13 @@
       self,
       nixpkgs,
       home-manager,
+      lazy-nvim-nix,
+      nvim-auto-save,
+      nvim-baml-syntax,
+      nvim-codediff,
+      nvim-git-conflict,
+      nvim-monokai-pro,
+      nvim-tmux-navigator,
       hunk,
       nix-index-database,
       nixos-hardware,
@@ -115,8 +148,15 @@
         inherit
           agentAssets
           hunk
+          lazy-nvim-nix
           llm-agents
           nix-index-database
+          nvim-auto-save
+          nvim-baml-syntax
+          nvim-codediff
+          nvim-git-conflict
+          nvim-monokai-pro
+          nvim-tmux-navigator
           thrawny-pkgs
           zmx
           ;
@@ -313,6 +353,34 @@
           aarch64-linux = mkFormatter nixpkgs.legacyPackages.aarch64-linux;
           aarch64-darwin = mkFormatter nixpkgs.legacyPackages.aarch64-darwin;
         };
+
+      packages =
+        lib.genAttrs
+          [
+            "x86_64-linux"
+            "aarch64-linux"
+            "aarch64-darwin"
+          ]
+          (
+            system:
+            let
+              pkgs = nixpkgs.legacyPackages.${system};
+            in
+            {
+              nvim = import ./lib/nvim-package.nix {
+                inherit
+                  lazy-nvim-nix
+                  nvim-auto-save
+                  nvim-baml-syntax
+                  nvim-codediff
+                  nvim-git-conflict
+                  nvim-monokai-pro
+                  nvim-tmux-navigator
+                  pkgs
+                  ;
+              };
+            }
+          );
 
       homeConfigurations = {
         thrawnym1 = mkHomeConfiguration {

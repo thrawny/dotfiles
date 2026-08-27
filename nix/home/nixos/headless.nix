@@ -59,9 +59,6 @@
       COLORTERM = "truecolor";
       XDG_RUNTIME_DIR = "/run/user/$UID";
       DBUS_SESSION_BUS_ADDRESS = "unix:path=$XDG_RUNTIME_DIR/bus";
-    }
-    // lib.optionalAttrs (homeSource == "store") {
-      NVIM_STORE_CONFIG = "1";
     };
 
     activation = {

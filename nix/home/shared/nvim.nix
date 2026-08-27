@@ -1,23 +1,28 @@
 {
-  config,
-  configPath,
-  configSource,
-  homeSource,
-  lib,
+  lazy-nvim-nix,
+  nvim-auto-save,
+  nvim-baml-syntax,
+  nvim-codediff,
+  nvim-git-conflict,
+  nvim-monokai-pro,
+  nvim-tmux-navigator,
   pkgs,
   ...
 }:
-{
-  xdg.configFile."nvim".source = configSource "nvim";
-
-  home.activation = lib.optionalAttrs (homeSource == "store") {
-    seedLazyLockfile = lib.hm.dag.entryBefore [ "linkGeneration" ] ''
-      dest_path=${lib.escapeShellArg "${config.home.homeDirectory}/.local/state/nvim/lazy-lock.json"}
-      if [ ! -s "$dest_path" ]; then
-        install -Dm0644 ${lib.escapeShellArg (toString (configPath "nvim/lazy-lock.json"))} "$dest_path"
-      fi
-    '';
+let
+  nvim = import ../../lib/nvim-package.nix {
+    inherit
+      lazy-nvim-nix
+      nvim-auto-save
+      nvim-baml-syntax
+      nvim-codediff
+      nvim-git-conflict
+      nvim-monokai-pro
+      nvim-tmux-navigator
+      pkgs
+      ;
   };
-
-  home.packages = [ pkgs.neovim ];
+in
+{
+  home.packages = [ nvim ];
 }

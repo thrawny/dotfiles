@@ -71,8 +71,8 @@ test: test-nvim
 
 # Run Neovim config tests
 test-nvim:
-    nvim --headless -u config/nvim/init.lua \
-        +"lua local ok,tests=pcall(require,'tests'); if ok and tests.run_all then tests.run_all() end" \
+    nix run ./nix#nvim -- --headless \
+        +"lua local tests=require('tests'); assert(type(tests.run_all) == 'function'); tests.run_all()" \
         +qa
 
 # === Combined workflows ===
