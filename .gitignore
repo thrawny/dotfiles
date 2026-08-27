@@ -1,9 +1,5 @@
 *.lock.json
 
-config/nvim/undo/*
-config/nvim/backup/*
-config/nvim/swap/*
-
 config/codex/config.toml
 
 config/claude/settings.json
