@@ -75,9 +75,9 @@ in
 
   # Pre-trust niri cache so it works on first build (before niri-flake module applies)
   nix.settings = {
-    trusted-substituters = [ "https://niri.cachix.org" ];
+    trusted-substituters = [ "https://niri-epireyn.cachix.org" ];
     trusted-public-keys = [
-      "niri.cachix.org-1:Wv0OmO7PsuocRKzfDoJ3mulSl7Z6oezYhGhR+3W2964="
+      "niri-epireyn.cachix.org-1:tlVyFN7CtsDT+ZcLPS+ekFWeT1X6X4OqvWqbBMyIzFA="
     ];
   };
 
