@@ -6,6 +6,17 @@
   voxtype,
   ...
 }:
+let
+  voxtypePackage = pkgs.symlinkJoin {
+    name = "voxtype-groq";
+    paths = [ voxtype.packages.${pkgs.stdenv.hostPlatform.system}.default ];
+    nativeBuildInputs = [ pkgs.makeWrapper ];
+    postBuild = ''
+      wrapProgram "$out/bin/voxtype" \
+        --run 'if [ -z "''${VOXTYPE_WHISPER_API_KEY:-}" ] && [ -n "''${GROQ_API_KEY:-}" ]; then export VOXTYPE_WHISPER_API_KEY="$GROQ_API_KEY"; fi'
+    '';
+  };
+in
 {
   imports = [
     ./hyprlock.nix
@@ -15,8 +26,7 @@
 
   programs.voxtype = {
     enable = true;
-    package = voxtype.packages.${pkgs.stdenv.hostPlatform.system}.vulkan;
-    model.name = "base.en";
+    package = voxtypePackage;
     service.enable = true;
     settings = {
       hotkey.enabled = false;
@@ -25,6 +35,13 @@
         mode = "type";
         fallback_to_clipboard = true;
         paste_keys = "shift+insert";
+      };
+      whisper = {
+        mode = "remote";
+        language = "en";
+        remote_endpoint = "https://api.groq.com/openai";
+        remote_model = "whisper-large-v3-turbo";
+        remote_timeout_secs = 30;
       };
       text.replacements = {
         "wavois" = "voxtype";
