@@ -20,6 +20,9 @@
     ./niri
     ./niri/switcher.nix
 
+    # Hyprland (Lua config; session selectable at the greeter)
+    ./hyprland.nix
+
     # Desktop modules
     ./hypridle.nix
     ./hyprlock.nix

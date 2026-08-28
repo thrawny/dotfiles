@@ -325,6 +325,24 @@ let
     "on-click" = "niri msg action switch-layout next";
   };
 
+  hyprlandLanguage = {
+    format = "{}";
+    "format-en" = "AU";
+    "format-sv" = "SE";
+    "on-click" = "hyprctl switchxkblayout all next";
+  };
+
+  hyprlandWorkspaces = {
+    format = "{icon} {id} {name}";
+    "format-icons" = {
+      main = "󰧨";
+      web = "󰖟";
+      dotfiles = "󰚩";
+      default = "";
+    };
+    "on-click" = "activate";
+  };
+
   standardNiriBar = sharedModules // {
     layer = "top";
     position = "top";
@@ -440,6 +458,30 @@ let
       "format-full" = "󰂅 {capacity}%";
     };
   };
+
+  # Hyprland variants: same bars with hyprland/* modules swapped in.
+  swapLanguage = map (m: if m == "niri/language" then "hyprland/language" else m);
+
+  standardHyprlandBar = standardNiriBar // {
+    "modules-left" = [ "hyprland/workspaces" ];
+    "modules-center" = [ "hyprland/window" ];
+    "modules-right" = swapLanguage standardNiriBar."modules-right";
+    "hyprland/workspaces" = hyprlandWorkspaces;
+    "hyprland/language" = hyprlandLanguage;
+    "hyprland/window" = {
+      format = "{class} - {title}";
+      max-length = 80;
+      tooltip = false;
+      rewrite = standardNiriBar."niri/window".rewrite;
+    };
+  };
+
+  compactHyprlandBar = compactNiriBar // {
+    "modules-left" = [ "hyprland/workspaces" ];
+    "modules-right" = swapLanguage compactNiriBar."modules-right";
+    "hyprland/workspaces" = hyprlandWorkspaces;
+    "hyprland/language" = hyprlandLanguage;
+  };
 in
 {
   programs.waybar = {
@@ -456,4 +498,12 @@ in
   ];
 
   xdg.configFile."waybar/style-niri.css".text = sharedStyle;
+
+  # Hyprland-specific config (spawned from config/hypr/lua/autostart.lua).
+  xdg.configFile."waybar/config-hyprland".text = builtins.toJSON [
+    standardHyprlandBar
+    compactHyprlandBar
+  ];
+
+  xdg.configFile."waybar/style-hyprland.css".text = sharedStyle;
 }
