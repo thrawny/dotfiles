@@ -6,17 +6,6 @@
   voxtype,
   ...
 }:
-let
-  voxtypePackage = pkgs.symlinkJoin {
-    name = "voxtype-groq";
-    paths = [ voxtype.packages.${pkgs.stdenv.hostPlatform.system}.default ];
-    nativeBuildInputs = [ pkgs.makeWrapper ];
-    postBuild = ''
-      wrapProgram "$out/bin/voxtype" \
-        --run 'if [ -z "''${VOXTYPE_WHISPER_API_KEY:-}" ] && [ -n "''${GROQ_API_KEY:-}" ]; then export VOXTYPE_WHISPER_API_KEY="$GROQ_API_KEY"; fi'
-    '';
-  };
-in
 {
   imports = [
     ./hyprlock.nix
@@ -26,7 +15,7 @@ in
 
   programs.voxtype = {
     enable = true;
-    package = voxtypePackage;
+    package = voxtype.packages.${pkgs.stdenv.hostPlatform.system}.default;
     service.enable = true;
     settings = {
       hotkey.enabled = false;

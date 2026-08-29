@@ -66,7 +66,7 @@
       flake = false;
     };
     voxtype = {
-      url = "github:peteonrails/voxtype/v0.7.5";
+      url = "github:peteonrails/voxtype";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     cursor-plugins = {
