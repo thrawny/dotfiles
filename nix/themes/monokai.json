@@ -87,26 +87,14 @@
     },
     "tmux": {
       "bg": "#2d2a2e",
-      "fg": "#fcfcfa",
-      "yellow": "#ffd866",
-      "green": "#a9dc76",
-      "pink": "#ff6188",
       "gray": "#5b595c",
       "darkGray": "#403e41",
       "dimGray": "#727072",
       "lightGray": "#939293"
     },
     "k9s": {
-      "fg": "#f0f0f0",
-      "bg": "#1c1c1c",
       "currentLine": "#2d2a2e",
-      "selection": "#49483e",
-      "comment": "#808080",
-      "cyan": "#78dce8",
-      "green": "#a9dc76",
-      "pink": "#ff6188",
-      "purple": "#ab9df2",
-      "yellow": "#ffd866"
+      "comment": "#808080"
     },
     "hunk": {
       "panelAlt": "#252525",
@@ -138,17 +126,6 @@
       "fgStripe": "#34313a",
       "fgSafeMuted": "#c8c3cf",
       "shikiTheme": "monokai"
-    },
-    "statusLine": {
-      "cyan": "#66d9ef",
-      "yellow": "#e6db74",
-      "orange": "#fd971f",
-      "red": "#f92672",
-      "pink": "#f92672",
-      "purple": "#ae81ff",
-      "gray": "#75715e",
-      "lightGray": "#a59f85",
-      "line": "#49483e"
     },
     "mako": {
       "background": "#1c1c1c",

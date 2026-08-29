@@ -17,16 +17,29 @@ const BOLT = "";
 
 // Colors come from the central dotfiles theme (nix/themes/monokai.json),
 // published by Home Manager. Renders uncolored when the file is missing.
-function loadStatusLineColors(): Record<string, string> {
+function loadStatusLineColors(): Record<string, string | undefined> {
 	try {
 		const raw = readFileSync(
 			join(homedir(), ".config", "dotfiles", "theme.json"),
 			"utf8",
 		);
 		const theme = JSON.parse(raw) as {
-			applications?: { statusLine?: Record<string, string> };
+			semantic?: Record<string, string>;
+			syntax?: Record<string, string>;
 		};
-		return theme.applications?.statusLine ?? {};
+		const sem = theme.semantic ?? {};
+		const syn = theme.syntax ?? {};
+		return {
+			cyan: syn.type,
+			yellow: syn.function,
+			orange: sem.warning,
+			red: sem.error,
+			pink: sem.accent,
+			purple: sem.accentAlt,
+			gray: sem.dim,
+			lightGray: sem.muted,
+			line: sem.border,
+		};
 	} catch {
 		return {};
 	}

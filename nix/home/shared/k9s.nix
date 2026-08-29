@@ -1,18 +1,21 @@
 { theme, ... }:
 let
-  # Monokai palette (central theme, applications.k9s)
-  inherit (theme.applications.k9s)
-    fg
-    bg
-    currentLine
+  # Canonical roles; only the warm panel background and the toggle-off gray
+  # stay k9s-specific.
+  inherit (theme.applications.k9s) currentLine comment;
+  fg = theme.terminal.foreground;
+  bg = theme.terminal.background;
+  inherit (theme.semantic)
     selection
-    comment
-    cyan
-    green
-    pink
-    purple
-    yellow
+    success
+    accent
+    accentAlt
     ;
+  cyan = theme.syntax.type;
+  green = success;
+  pink = accent;
+  purple = accentAlt;
+  yellow = theme.syntax."function";
 in
 {
   programs.k9s = {

@@ -8,8 +8,14 @@
 let
   tmuxNonLoginShell = args.tmuxNonLoginShell or false;
 
-  # Monokai Pro color palette (central theme, applications.tmux)
-  colors = theme.applications.tmux;
+  # Accents come from the canonical Spectrum roles; only the warm status-bar
+  # background and its derived neutrals stay tmux-specific.
+  colors = theme.applications.tmux // {
+    fg = theme.semantic.foreground;
+    yellow = theme.syntax."function";
+    green = theme.semantic.success;
+    pink = theme.semantic.accent;
+  };
 
   # Terminal settings
   terminalSettings = ''
