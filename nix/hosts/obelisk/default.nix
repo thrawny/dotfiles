@@ -9,11 +9,11 @@ let
 in
 {
   imports = [
-    ../../modules/nixos/headless.nix
-    ../../modules/nixos/tailscale-serve.nix
-    ../../modules/nixos/forgejo.nix
-    ../../modules/nixos/agents.nix
-    ../../modules/nixos/t3code.nix
+    ../../modules/headless.nix
+    ../../modules/tailscale-serve.nix
+    ../../modules/forgejo.nix
+    ../../modules/agents.nix
+    ../../modules/t3code.nix
     ./hardware-configuration.nix
     ./disko.nix
   ];

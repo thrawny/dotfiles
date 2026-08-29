@@ -22,7 +22,7 @@ let
   forgejoHost = "forgejo.${config.dotfiles.tailnetDomain}";
   forgejoUrl = "https://${forgejoHost}";
   forgejoUser = "thrawny";
-  gitIgnores = import ../../lib/git-ignore.nix;
+  gitIgnores = import ../lib/git-ignore.nix;
 
   codexConfig = pkgs.runCommand "t3code-codex-config.toml" { } ''
     cat ${lib.escapeShellArg (toString agentAssets.codexFiles.config)} > "$out"
