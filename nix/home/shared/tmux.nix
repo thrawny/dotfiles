@@ -1,24 +1,15 @@
 {
   lib,
   pkgs,
+  theme,
   ...
 }@args:
 
 let
   tmuxNonLoginShell = args.tmuxNonLoginShell or false;
 
-  # Monokai Pro color palette
-  colors = {
-    bg = "#2d2a2e";
-    fg = "#fcfcfa";
-    yellow = "#ffd866";
-    green = "#a9dc76";
-    pink = "#ff6188";
-    gray = "#5b595c";
-    darkGray = "#403e41";
-    dimGray = "#727072";
-    lightGray = "#939293";
-  };
+  # Monokai Pro color palette (central theme, applications.tmux)
+  colors = theme.applications.tmux;
 
   # Terminal settings
   terminalSettings = ''

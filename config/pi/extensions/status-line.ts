@@ -15,18 +15,24 @@ const DIM = "\x1b[2m";
 const BRANCH_GLYPH = "";
 const BOLT = "";
 
-// Monokai
-const MK = {
-	cyan: "#66d9ef",
-	yellow: "#e6db74",
-	orange: "#fd971f",
-	red: "#f92672",
-	pink: "#f92672",
-	purple: "#ae81ff",
-	gray: "#75715e",
-	lightGray: "#a59f85",
-	line: "#49483e",
-};
+// Colors come from the central dotfiles theme (nix/themes/monokai.json),
+// published by Home Manager. Renders uncolored when the file is missing.
+function loadStatusLineColors(): Record<string, string> {
+	try {
+		const raw = readFileSync(
+			join(homedir(), ".config", "dotfiles", "theme.json"),
+			"utf8",
+		);
+		const theme = JSON.parse(raw) as {
+			applications?: { statusLine?: Record<string, string> };
+		};
+		return theme.applications?.statusLine ?? {};
+	} catch {
+		return {};
+	}
+}
+
+const MK = loadStatusLineColors();
 
 function hexToRgb(hex: string): [number, number, number] {
 	const clean = hex.replace("#", "");
@@ -37,7 +43,8 @@ function hexToRgb(hex: string): [number, number, number] {
 	];
 }
 
-function fgTrue(hex: string): string {
+function fgTrue(hex: string | undefined): string {
+	if (!hex) return "";
 	const [r, g, b] = hexToRgb(hex);
 	return `\x1b[38;2;${r};${g};${b}m`;
 }

@@ -21,6 +21,8 @@ let
     rel: if repoBacked then config.lib.file.mkOutOfStoreSymlink (configPath rel) else configPath rel;
 in
 {
+  imports = [ ./theme.nix ];
+
   _module.args = {
     inherit
       configPath

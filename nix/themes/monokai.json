@@ -1,0 +1,202 @@
+{
+  "schemaVersion": 1,
+  "name": "monokai",
+  "semantic": {
+    "background": "#222222",
+    "surface": "#272727",
+    "foreground": "#f7f1ff",
+    "muted": "#8b888f",
+    "dim": "#69676c",
+    "border": "#5f5b63",
+    "selection": "#49483e",
+    "accent": "#fc618d",
+    "accentAlt": "#948ae3",
+    "success": "#7bd88f",
+    "warning": "#fc9867",
+    "error": "#fc618d"
+  },
+  "syntax": {
+    "comment": "#8b888f",
+    "keyword": "#fc618d",
+    "function": "#fce566",
+    "variable": "#f7f1ff",
+    "string": "#fce566",
+    "number": "#948ae3",
+    "type": "#5ad4e6",
+    "operator": "#fc618d",
+    "punctuation": "#f7f1ff"
+  },
+  "terminal": {
+    "normal": [
+      "#121212",
+      "#fc618d",
+      "#98e123",
+      "#fce566",
+      "#5ad4e6",
+      "#948ae3",
+      "#5ad4e6",
+      "#bbbbbb"
+    ],
+    "bright": [
+      "#555555",
+      "#ff87a8",
+      "#b1e05f",
+      "#fef87e",
+      "#7de4f0",
+      "#b5b0f0",
+      "#7de4f0",
+      "#f7f1ff"
+    ],
+    "foreground": "#f0f0f0",
+    "background": "#1c1c1c",
+    "selection": "#49483e"
+  },
+  "diff": {
+    "added": {
+      "foreground": "#5ad4e6",
+      "lineBackground": "#004466",
+      "emphasisBackground": "#005f8e",
+      "dimBackground": "#003355"
+    },
+    "removed": {
+      "foreground": "#fc618d",
+      "lineBackground": "#660100",
+      "emphasisBackground": "#8e0100",
+      "dimBackground": "#440100"
+    },
+    "changed": {
+      "foreground": "#fce566"
+    }
+  },
+  "applications": {
+    "nvim": {
+      "explorerSelection": "#3a3a4a",
+      "bashString": "#678256"
+    },
+    "delta": {
+      "syntaxTheme": "Monokai Extended"
+    },
+    "ghostty": {
+      "theme": "Molokai",
+      "background": "#1c1c1c",
+      "foreground": "#f0f0f0",
+      "selectionBackground": "#49483e",
+      "selectionForeground": "#f8f8f2",
+      "palette0": "#5c5c5c",
+      "palette8": "#808080"
+    },
+    "tmux": {
+      "bg": "#2d2a2e",
+      "fg": "#fcfcfa",
+      "yellow": "#ffd866",
+      "green": "#a9dc76",
+      "pink": "#ff6188",
+      "gray": "#5b595c",
+      "darkGray": "#403e41",
+      "dimGray": "#727072",
+      "lightGray": "#939293"
+    },
+    "k9s": {
+      "fg": "#f0f0f0",
+      "bg": "#1c1c1c",
+      "currentLine": "#2d2a2e",
+      "selection": "#49483e",
+      "comment": "#808080",
+      "cyan": "#78dce8",
+      "green": "#a9dc76",
+      "pink": "#ff6188",
+      "purple": "#ab9df2",
+      "yellow": "#ffd866"
+    },
+    "hunk": {
+      "panelAlt": "#252525",
+      "accentMuted": "#34313a",
+      "muted": "#78747d",
+      "selectedHunk": "#004b8f",
+      "noteBackground": "#2b2435",
+      "noteTitleBackground": "#3a2d4a",
+      "punctuation": "#c8c3cf"
+    },
+    "pi": {
+      "background": "#1f1f1f",
+      "backgroundAlt": "#232323",
+      "panel": "#272727",
+      "selection": "#343745",
+      "green": "#98e123",
+      "red": "#ff5c8a",
+      "comment": "#75715e",
+      "toolPendingBg": "#242424",
+      "toolSuccessBg": "#20321f",
+      "toolErrorBg": "#361d28",
+      "thinkingXhigh": "#ff5fa2",
+      "pageBg": "#181818",
+      "infoBg": "#332f22"
+    },
+    "piDiff": {
+      "fgDim": "#78747d",
+      "fgLnum": "#78747d",
+      "fgStripe": "#34313a",
+      "fgSafeMuted": "#c8c3cf",
+      "shikiTheme": "monokai"
+    },
+    "statusLine": {
+      "cyan": "#66d9ef",
+      "yellow": "#e6db74",
+      "orange": "#fd971f",
+      "red": "#f92672",
+      "pink": "#f92672",
+      "purple": "#ae81ff",
+      "gray": "#75715e",
+      "lightGray": "#a59f85",
+      "line": "#49483e"
+    },
+    "mako": {
+      "background": "#1c1c1c",
+      "text": "#f0f0f0",
+      "border": "#3a3a3a",
+      "progress": "#66d9ef"
+    },
+    "niri": {
+      "active": "#f92672",
+      "inactive": "#3a3a3a",
+      "urgent": "#cc4444",
+      "shadow": "#0007"
+    },
+    "walker": {
+      "background": "#1c1c1c",
+      "accent": "#f92672",
+      "foreground": "#f8f8f2",
+      "selection": "#49483e",
+      "match": "#a6e22e",
+      "subtext": "#75715e"
+    },
+    "waybar": {
+      "bg": "#121418",
+      "bgAlt": "#1a1c21",
+      "surface": "#262a31",
+      "border": "#8896a0",
+      "fg": "#e8e6df",
+      "muted": "#9aa0a6",
+      "accent": "#f92672",
+      "accentAlt": "#fd971f",
+      "onAccent": "#050505",
+      "working": "#7dcfff",
+      "done": "#ffffff",
+      "urgentFg": "#f7f1ff",
+      "urgentBg": "#004466",
+      "quotaWarning": "#e6db74"
+    },
+    "eza": {
+      "dir": "141",
+      "executable": "209",
+      "permissions": "204",
+      "owner": "81",
+      "date": "243",
+      "size": "255",
+      "gitNew": "81",
+      "gitModified": "227",
+      "gitDeleted": "204",
+      "gitRenamed": "141"
+    }
+  }
+}

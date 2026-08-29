@@ -1,13 +1,14 @@
-{ pkgs, ... }:
+{ pkgs, theme, ... }:
+let
+  app = theme.applications.ghostty;
+in
 {
   programs.ghostty = {
     enable = true;
     # Only install package on Linux (macOS users install via Homebrew or direct download)
     package = if pkgs.stdenv.isLinux then pkgs.ghostty else null;
     settings = {
-      theme = "Molokai";
-      background = "#1c1c1c";
-      foreground = "#F0F0F0";
+      inherit (app) theme background foreground;
       font-family = "CaskaydiaMono Nerd Font";
       font-size = 12;
       window-padding-x = 10;
@@ -18,11 +19,11 @@
       cursor-style-blink = false;
       font-synthetic-style = false;
       minimum-contrast = 1.2;
-      selection-background = "#49483e";
-      selection-foreground = "#f8f8f2";
+      selection-background = app.selectionBackground;
+      selection-foreground = app.selectionForeground;
       palette = [
-        "0=#5c5c5c"
-        "8=#808080"
+        "0=${app.palette0}"
+        "8=${app.palette8}"
       ];
       keybind = [
         "shift+enter=text:\\n"

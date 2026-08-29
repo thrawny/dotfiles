@@ -1,17 +1,24 @@
-{ config, ... }:
+{
+  config,
+  theme,
+  themeLib,
+  ...
+}:
 let
   homeDir = config.home.homeDirectory;
+  wb = theme.applications.waybar;
+  inherit (themeLib) rgb;
 
   # Shared style for both configs
   sharedStyle = ''
-    @define-color waybar-bg rgba(18, 20, 24, 0.68);
-    @define-color waybar-surface rgba(38, 42, 49, 0.62);
-    @define-color waybar-border rgba(136, 150, 160, 0.18);
-    @define-color waybar-fg #e8e6df;
-    @define-color waybar-muted #9aa0a6;
-    @define-color waybar-accent #f92672;
-    @define-color waybar-accent-2 #fd971f;
-    @define-color waybar-warning #f92672;
+    @define-color waybar-bg rgba(${rgb wb.bg}, 0.68);
+    @define-color waybar-surface rgba(${rgb wb.surface}, 0.62);
+    @define-color waybar-border rgba(${rgb wb.border}, 0.18);
+    @define-color waybar-fg ${wb.fg};
+    @define-color waybar-muted ${wb.muted};
+    @define-color waybar-accent ${wb.accent};
+    @define-color waybar-accent-2 ${wb.accentAlt};
+    @define-color waybar-warning ${wb.accent};
 
     * {
       font-family: "CaskaydiaMono Nerd Font", "JetBrains Mono", sans-serif;
@@ -21,7 +28,7 @@ let
     }
 
     window#waybar {
-      background: linear-gradient(90deg, rgba(18, 20, 24, 0.76), rgba(26, 28, 33, 0.58));
+      background: linear-gradient(90deg, rgba(${rgb wb.bg}, 0.76), rgba(${rgb wb.bgAlt}, 0.58));
       border-bottom: 1px solid @waybar-border;
     }
 
@@ -39,11 +46,11 @@ let
 
     /* Sidebar priority: bright Done, sky Working, muted Idle. */
     #custom-agent-status.done {
-      color: #ffffff;
+      color: ${wb.done};
     }
 
     #custom-agent-status.working {
-      color: #7dcfff;
+      color: ${wb.working};
     }
 
     #custom-agent-status.idle,
@@ -78,36 +85,36 @@ let
 
     #workspaces button:hover {
       background: @waybar-surface;
-      border-color: rgba(232, 230, 223, 0.12);
+      border-color: rgba(${rgb wb.fg}, 0.12);
       color: @waybar-fg;
     }
 
     /* Niri */
     #workspaces button.focused,
     #workspaces button.active {
-      color: #050505;
+      color: ${wb.onAccent};
       background: linear-gradient(110deg, @waybar-accent 0%, @waybar-accent 42%, @waybar-accent-2 100%);
-      border-color: rgba(249, 38, 114, 0.34);
-      box-shadow: 0 0 8px rgba(249, 38, 114, 0.18);
+      border-color: rgba(${rgb wb.accent}, 0.34);
+      box-shadow: 0 0 8px rgba(${rgb wb.accent}, 0.18);
     }
 
     #workspaces button.focused *,
     #workspaces button.active * {
-      color: #050505;
+      color: ${wb.onAccent};
       text-shadow: none;
     }
 
     #workspaces button.focused:hover *,
     #workspaces button.active:hover * {
-      color: #050505;
+      color: ${wb.onAccent};
     }
 
     /* On multi-monitor niri, every visible workspace is "active".
        Keep non-focused active workspaces visible without making them look selected. */
     #workspaces button.active:not(.focused) {
       color: @waybar-accent-2;
-      background: rgba(253, 151, 31, 0.14);
-      border-color: rgba(253, 151, 31, 0.24);
+      background: rgba(${rgb wb.accentAlt}, 0.14);
+      border-color: rgba(${rgb wb.accentAlt}, 0.24);
       box-shadow: none;
     }
 
@@ -117,8 +124,8 @@ let
     }
 
     #workspaces button.urgent {
-      color: #f7f1ff;
-      background: #004466;
+      color: ${wb.urgentFg};
+      background: ${wb.urgentBg};
       border-color: transparent;
     }
 
@@ -189,7 +196,7 @@ let
 
     #custom-quotabar-claude.warning,
     #custom-quotabar-codex.warning {
-      color: #e6db74;
+      color: ${wb.quotaWarning};
     }
 
     #custom-quotabar-claude.critical,

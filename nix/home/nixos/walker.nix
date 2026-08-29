@@ -2,8 +2,12 @@
   pkgs,
   lib,
   walker,
+  theme,
   ...
 }:
+let
+  colors = theme.applications.walker;
+in
 {
   imports = [ walker.homeManagerModules.default ];
 
@@ -195,11 +199,11 @@
     '';
 
     themes.molokai.style = ''
-      @define-color window_bg_color #1c1c1c;
-      @define-color accent_bg_color #f92672;
-      @define-color theme_fg_color #f8f8f2;
-      @define-color error_bg_color #f92672;
-      @define-color error_fg_color #f8f8f2;
+      @define-color window_bg_color ${colors.background};
+      @define-color accent_bg_color ${colors.accent};
+      @define-color theme_fg_color ${colors.foreground};
+      @define-color error_bg_color ${colors.accent};
+      @define-color error_fg_color ${colors.foreground};
 
       * {
         all: unset;
@@ -247,7 +251,7 @@
       }
 
       .input selection {
-        background: #49483e;
+        background: ${colors.selection};
       }
 
       .input {
@@ -277,12 +281,12 @@
       }
 
       child:selected .item-text {
-        color: #a6e22e;
+        color: ${colors.match};
       }
 
       .item-subtext {
         font-size: 12px;
-        color: #75715e;
+        color: ${colors.subtext};
       }
 
       .providerlist .item-subtext {

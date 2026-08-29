@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+# Guard the central theme contract (nix/themes/monokai.json):
+#   1. validate the theme document itself
+#   2. reject raw #RRGGBB literals in migrated consumer files
+#   3. keep Pi's inline diffColors aligned with the canonical diff contract
+set -euo pipefail
+cd "$(dirname "$0")/.."
+
+THEME=nix/themes/monokai.json
+fail=0
+
+# --- 1. theme document sanity ---------------------------------------------
+
+if ! jq -e '.schemaVersion == 1' "$THEME" >/dev/null; then
+  echo "check-theme: $THEME schemaVersion must be 1"
+  fail=1
+fi
+
+for section in semantic syntax terminal diff applications; do
+  if ! jq -e --arg s "$section" 'has($s)' "$THEME" >/dev/null; then
+    echo "check-theme: $THEME is missing section '$section'"
+    fail=1
+  fi
+done
+
+bad_leaves=$(jq -r '[.semantic, .syntax, .terminal, .diff] | [.. | strings | select(test("^#[0-9a-fA-F]{6}$") | not)] | .[]' "$THEME")
+if [ -n "$bad_leaves" ]; then
+  echo "check-theme: non-#RRGGBB leaves in semantic/syntax/terminal/diff:"
+  printf '  %s\n' "$bad_leaves"
+  fail=1
+fi
+
+# --- 2. no color literals in migrated consumers ---------------------------
+
+scoped_files=(
+  nix/home/shared/ghostty.nix
+  nix/home/shared/tmux.nix
+  nix/home/shared/k9s.nix
+  nix/home/shared/btop.nix
+  nix/home/shared/git.nix
+  nix/home/shared/lazygit.nix
+  nix/home/shared/hunk.nix
+  nix/home/shared/zsh.nix
+  nix/home/nixos/mako.nix
+  nix/home/nixos/walker.nix
+  nix/home/nixos/waybar.nix
+  nix/home/linux/niri/default.nix
+  config/nvim/lua/plugins/theme.lua
+  config/nvim/lua/plugins/review.lua
+  config/nvim/lua/config/theme.lua
+  config/pi/extensions/status-line.ts
+)
+
+if grep -nE '#[0-9a-fA-F]{6}' "${scoped_files[@]}"; then
+  echo "check-theme: color literals found in themed files; move them to $THEME"
+  fail=1
+fi
+
+# --- 3. Pi settings diffColors match the canonical contract ---------------
+# pi-diff only supports inline colors today, so the example (and seeded live
+# file, when present) must mirror the theme's diff contract byte for byte.
+
+expected=$(jq -S '{
+  bgAdd: .diff.added.lineBackground,
+  bgDel: .diff.removed.lineBackground,
+  bgAddHighlight: .diff.added.emphasisBackground,
+  bgDelHighlight: .diff.removed.emphasisBackground,
+  bgGutterAdd: .diff.added.dimBackground,
+  bgGutterDel: .diff.removed.dimBackground,
+  bgEmpty: .semantic.background,
+  fgAdd: .diff.added.foreground,
+  fgDel: .diff.removed.foreground,
+  fgDim: .applications.piDiff.fgDim,
+  fgLnum: .applications.piDiff.fgLnum,
+  fgRule: .semantic.border,
+  fgStripe: .applications.piDiff.fgStripe,
+  fgSafeMuted: .applications.piDiff.fgSafeMuted,
+  shikiTheme: .applications.piDiff.shikiTheme
+}' "$THEME")
+
+for settings in config/pi/settings.example.json config/pi/settings.json; do
+  [ -f "$settings" ] || continue
+  if ! diff <(printf '%s\n' "$expected") <(jq -S '.diffColors' "$settings") >/dev/null; then
+    echo "check-theme: $settings diffColors drifted from $THEME:"
+    diff <(printf '%s\n' "$expected") <(jq -S '.diffColors' "$settings") || true
+    fail=1
+  fi
+done
+
+if [ "$fail" -ne 0 ]; then
+  exit 1
+fi
+echo "check-theme: ok"

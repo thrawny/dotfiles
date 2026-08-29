@@ -1,16 +1,18 @@
-_:
+{ theme, ... }:
 let
-  # Monokai palette (matches Ghostty Molokai theme and tmux status bar)
-  fg = "#f0f0f0";
-  bg = "#1c1c1c";
-  currentLine = "#2d2a2e";
-  selection = "#49483e";
-  comment = "#808080";
-  cyan = "#78dce8";
-  green = "#a9dc76";
-  pink = "#ff6188";
-  purple = "#ab9df2";
-  yellow = "#ffd866";
+  # Monokai palette (central theme, applications.k9s)
+  inherit (theme.applications.k9s)
+    fg
+    bg
+    currentLine
+    selection
+    comment
+    cyan
+    green
+    pink
+    purple
+    yellow
+    ;
 in
 {
   programs.k9s = {

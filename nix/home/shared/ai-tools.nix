@@ -3,6 +3,8 @@
   homeSource,
   lib,
   pkgs,
+  theme,
+  themeLib,
   ...
 }@args:
 let
@@ -157,7 +159,9 @@ in
       ".pi/agent/AGENTS.md".text = agentInstructions.piGlobal;
       ".pi/agent/rules".source = rulesSource;
       ".pi/agent/prompts".source = configSource "pi/prompts";
-      ".pi/agent/themes".source = configSource "pi/themes";
+      # Pi themes have no inheritance mechanism, so the complete document is
+      # generated from the central theme (edit nix/themes/monokai.json).
+      ".pi/agent/themes/monokai-pi.json".text = builtins.toJSON (themeLib.piTheme theme);
       ".pi/agent/claude-bridge.json".source = configSource "pi/claude-bridge.json";
       ".pi/agent/openai-server-compaction.json".source = configSource "pi/openai-server-compaction.json";
       ".pi/agent/pi-diff.json".source = configSource "pi/pi-diff.json";

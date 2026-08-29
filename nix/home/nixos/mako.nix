@@ -1,12 +1,16 @@
-_: {
+{ theme, ... }:
+let
+  app = theme.applications.mako;
+in
+{
   services.mako = {
     enable = true;
     settings = {
       # Molokai colors with full opacity
-      background-color = "#1c1c1cff";
-      text-color = "#f0f0f0ff";
-      border-color = "#3a3a3aff";
-      progress-color = "#66d9efff";
+      background-color = "${app.background}ff";
+      text-color = "${app.text}ff";
+      border-color = "${app.border}ff";
+      progress-color = "${app.progress}ff";
 
       width = 420;
       height = 110;
