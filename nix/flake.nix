@@ -293,7 +293,7 @@
           system = "x86_64-linux";
           modules = [
             ./images/headless.nix
-            ./modules/nixos/docker.nix
+            ./modules/docker.nix
           ];
         };
 
@@ -301,7 +301,7 @@
           system = "x86_64-linux";
           modules = [
             ./images/headless.nix
-            ./modules/nixos/docker.nix
+            ./modules/docker.nix
           ];
         };
 
@@ -309,7 +309,7 @@
           system = "x86_64-linux";
           modules = [
             ./images/headless.nix
-            ./modules/nixos/podman.nix
+            ./modules/podman.nix
           ];
         };
       };

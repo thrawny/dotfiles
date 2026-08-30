@@ -9,7 +9,7 @@ let
 in
 {
   imports = [
-    ../modules/nixos/headless.nix
+    ../modules/headless.nix
   ];
 
   home-manager.users.${username} = {

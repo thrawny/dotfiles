@@ -15,8 +15,8 @@ let
 in
 {
   imports = [
-    ../../modules/nixos/default.nix
-    ../../modules/nixos/laptop.nix
+    ../../modules/default.nix
+    ../../modules/laptop.nix
     ./hardware-configuration.nix
     ./hibernate.nix
   ];

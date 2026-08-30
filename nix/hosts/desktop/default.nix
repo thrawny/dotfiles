@@ -17,7 +17,7 @@ in
     })
   ];
   imports = [
-    ../../modules/nixos/default.nix
+    ../../modules/default.nix
     ./hardware-configuration.nix
   ];
 

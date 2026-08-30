@@ -198,6 +198,6 @@ in
         xremap-flake
         ;
     };
-    users.${username} = import ../../home/nixos/default.nix;
+    users.${username} = import ../home/nixos/default.nix;
   };
 }

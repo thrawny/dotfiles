@@ -44,7 +44,7 @@ scoped_files=(
   nix/home/nixos/mako.nix
   nix/home/nixos/walker.nix
   nix/home/nixos/waybar.nix
-  nix/home/linux/niri/default.nix
+  nix/home/nixos/niri/default.nix
   config/nvim/lua/plugins/theme.lua
   config/nvim/lua/plugins/review.lua
   config/nvim/lua/config/theme.lua
