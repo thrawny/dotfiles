@@ -174,6 +174,10 @@ let
         helper = store
         username = ${forgejoUser}
 
+    [credential "https://github.com"]
+        helper =
+        helper = !${lib.getExe pkgs.gh} auth git-credential
+
     [init]
         defaultBranch = main
 
