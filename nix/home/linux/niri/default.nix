@@ -269,25 +269,11 @@ let
   utilityBinds = {
     "Mod+R" = {
       action.spawn = [
-        "wayvoice"
+        "voxtype"
+        "record"
         "toggle"
       ];
       hotkey-overlay.title = "Voice Input Toggle";
-      repeat = false;
-    };
-    "Mod+Shift+R" = {
-      action.spawn = [
-        "wayvoice"
-        "cancel"
-      ];
-      hotkey-overlay.title = "Voice Input Cancel";
-    };
-    "Super+Shift+P" = {
-      action.spawn = [
-        "wayvoice"
-        "cancel"
-      ];
-      hotkey-overlay.title = "Voice Input Cancel";
       repeat = false;
     };
 
@@ -554,15 +540,6 @@ in
         ];
       }
       { command = [ "mako" ]; }
-      {
-        command = [
-          "env"
-          "VOICE_PASTE_MOD=shift"
-          "VOICE_PASTE_KEY=Insert"
-          "wayvoice"
-          "serve"
-        ];
-      }
     ];
 
     # Environment

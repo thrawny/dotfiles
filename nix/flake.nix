@@ -65,6 +65,10 @@
       url = "github:vercel-labs/agent-browser";
       flake = false;
     };
+    voxtype = {
+      url = "github:peteonrails/voxtype";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     cursor-plugins = {
       url = "github:cursor/plugins";
       flake = false;
@@ -108,6 +112,7 @@
       zmx,
       acpx-skills,
       agent-browser,
+      voxtype,
       cursor-plugins,
       mattpocock-skills,
       anthropic-skills,
@@ -159,6 +164,7 @@
           nvim-tmux-navigator
           thrawny-pkgs
           zmx
+          voxtype
           ;
         containerAssets = storeHomeAssets;
       };

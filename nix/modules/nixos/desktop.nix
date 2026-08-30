@@ -16,6 +16,9 @@ let
       . "$HOME/.secrets"
       set +a
     fi
+    if [ -n "''${VOXTYPE_WHISPER_API_KEY:-}" ]; then
+      systemctl --user import-environment VOXTYPE_WHISPER_API_KEY
+    fi
     exec ${config.programs.niri.package}/bin/niri-session
   '';
 

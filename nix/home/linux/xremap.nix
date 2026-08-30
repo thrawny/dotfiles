@@ -34,14 +34,16 @@ _: {
           };
         }
         {
-          name = "Right Alt Wayvoice";
+          name = "Right Alt Voxtype";
           remap = {
             "Alt_R-p".launch = [
-              "wayvoice"
+              "voxtype"
+              "record"
               "toggle"
             ];
             "Super_R-p".launch = [
-              "wayvoice"
+              "voxtype"
+              "record"
               "toggle"
             ];
           };
