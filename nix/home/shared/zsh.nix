@@ -2,8 +2,39 @@
   config,
   pkgs,
   lib,
+  theme,
   ...
 }:
+let
+  # Eza only takes 256-color indexes; the palette-approximate indexes live in
+  # the central theme (applications.eza).
+  ezaColors =
+    with theme.applications.eza;
+    lib.concatStringsSep ":" [
+      "di=38;5;${dir}"
+      "ex=38;5;${executable}"
+      "ln=38;5;${dir}"
+      "ur=38;5;${permissions}"
+      "uw=38;5;${permissions}"
+      "ux=38;5;${permissions}"
+      "ue=38;5;${permissions}"
+      "gr=38;5;${permissions}"
+      "gw=38;5;${permissions}"
+      "gx=38;5;${permissions}"
+      "tr=38;5;${permissions}"
+      "tw=38;5;${permissions}"
+      "tx=38;5;${permissions}"
+      "uu=38;5;${owner}"
+      "gu=38;5;${owner}"
+      "da=38;5;${date}"
+      "sn=38;5;${size}"
+      "sb=38;5;${date}"
+      "ga=38;5;${gitNew}"
+      "gm=38;5;${gitModified}"
+      "gd=38;5;${gitDeleted}"
+      "gv=38;5;${gitRenamed}"
+    ];
+in
 {
   programs = {
     zsh = {
@@ -149,7 +180,7 @@
           if command -v eza &>/dev/null && [[ -o interactive ]]; then
             alias ls='eza --icons --group-directories-first'
             # Monokai spectrum palette: purple dirs, orange exec, pink perms, cyan user
-            export EZA_COLORS="di=38;5;141:ex=38;5;209:ln=38;5;141:ur=38;5;204:uw=38;5;204:ux=38;5;204:ue=38;5;204:gr=38;5;204:gw=38;5;204:gx=38;5;204:tr=38;5;204:tw=38;5;204:tx=38;5;204:uu=38;5;81:gu=38;5;81:da=38;5;243:sn=38;5;255:sb=38;5;243:ga=38;5;81:gm=38;5;227:gd=38;5;204:gv=38;5;141"
+            export EZA_COLORS="${ezaColors}"
           fi
 
           if command -v wl-copy &>/dev/null; then

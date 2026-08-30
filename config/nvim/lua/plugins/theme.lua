@@ -1,3 +1,5 @@
+local theme = require("config.theme").load()
+
 return {
   -- Monokai Pro theme with spectrum filter (colorblind-friendly)
   {
@@ -5,11 +7,16 @@ return {
     lazy = false,
     priority = 1000,
     config = function()
+      local sem = theme.semantic
+      local syn = theme.syntax
+      local diff = theme.diff
+      local app = theme.applications.nvim
+
+      local bg = sem.background
       require("monokai-pro").setup({
         filter = "spectrum",
         terminal_colors = false,
         override = function(c)
-          local bg = "#222222"
           return {
             -- Set backgrounds for normal windows and terminals to match theme
             Normal = { fg = c.base.white, bg = bg },
@@ -28,19 +35,18 @@ return {
       vim.api.nvim_create_autocmd("ColorScheme", {
         pattern = "monokai-pro",
         callback = function()
-          -- Spectrum palette colors
-          local yellow = "#fce566"
-          local cyan = "#5ad4e6"
-          local purple = "#948ae3"
-          local pink = "#fc618d"
-          local orange = "#fc9867"
-          local white = "#f7f1ff"
-          local green = "#678256"
-          local bg = "#222222"
+          -- Roles from the central theme (spectrum palette)
+          local yellow = syn["function"]
+          local cyan = syn.type
+          local purple = syn.number
+          local pink = syn.keyword
+          local orange = sem.warning
+          local white = sem.foreground
+          local green = app.bashString
 
           local highlights = {
             -- Float window borders (LSP hover, etc.)
-            FloatBorder = { fg = "#69676c", bg = bg },
+            FloatBorder = { fg = sem.dim, bg = bg },
 
             -- Variables stay neutral (white/text color)
             ["@variable"] = { fg = white },
@@ -144,33 +150,33 @@ return {
             ["@namespace.rust"] = { fg = white },
 
             -- Colorblind-friendly diffs (avoid red/green contrast)
-            DiffAdd = { bg = bg, fg = cyan },
-            DiffDelete = { bg = bg, fg = pink },
-            DiffChange = { bg = bg, fg = yellow },
-            GitSignsAdd = { fg = cyan },
-            GitSignsChange = { fg = yellow },
-            GitSignsDelete = { fg = pink },
+            DiffAdd = { bg = bg, fg = diff.added.foreground },
+            DiffDelete = { bg = bg, fg = diff.removed.foreground },
+            DiffChange = { bg = bg, fg = diff.changed.foreground },
+            GitSignsAdd = { fg = diff.added.foreground },
+            GitSignsChange = { fg = diff.changed.foreground },
+            GitSignsDelete = { fg = diff.removed.foreground },
 
             -- codediff explorer selected file
-            CodeDiffExplorerSelected = { bg = "#3a3a4a" },
+            CodeDiffExplorerSelected = { bg = app.explorerSelection },
 
             -- Snacks file explorer
             SnacksPickerDirectory = { fg = purple, bold = true },
             SnacksPickerFile = { fg = white },
-            SnacksPickerDir = { fg = "#8b888f" }, -- dimmed gray for path portions
-            SnacksPickerPathHidden = { fg = "#69676c" }, -- darker gray for hidden files
-            SnacksPickerPathIgnored = { fg = "#69676c" }, -- darker gray for ignored files
-            SnacksPickerTree = { fg = "#69676c" }, -- tree indent lines
+            SnacksPickerDir = { fg = sem.muted }, -- dimmed gray for path portions
+            SnacksPickerPathHidden = { fg = sem.dim }, -- darker gray for hidden files
+            SnacksPickerPathIgnored = { fg = sem.dim }, -- darker gray for ignored files
+            SnacksPickerTree = { fg = sem.dim }, -- tree indent lines
             SnacksPickerLink = { fg = purple }, -- symlinks in purple
             SnacksPickerLinkBroken = { fg = pink }, -- broken links in pink
 
             -- Snacks git status
-            SnacksPickerGitStatusAdded = { fg = "#7bd88f" }, -- green
+            SnacksPickerGitStatusAdded = { fg = sem.success },
             SnacksPickerGitStatusModified = { fg = yellow },
             SnacksPickerGitStatusDeleted = { fg = pink },
             SnacksPickerGitStatusRenamed = { fg = yellow },
             SnacksPickerGitStatusUntracked = { fg = purple },
-            SnacksPickerGitStatusIgnored = { fg = "#69676c" },
+            SnacksPickerGitStatusIgnored = { fg = sem.dim },
             SnacksPickerGitStatusUnmerged = { fg = pink }, -- conflicts
             SnacksPickerGitStatusStaged = { fg = cyan },
           }
@@ -184,23 +190,13 @@ return {
       -- Trigger the autocmd manually on first load
       vim.cmd("doautocmd ColorScheme monokai-pro")
 
-      -- Terminal ANSI colors using monokai-pro spectrum palette
-      vim.g.terminal_color_0 = "#121212" -- black
-      vim.g.terminal_color_1 = "#fc618d" -- red (pink from spectrum)
-      vim.g.terminal_color_2 = "#98e123" -- green
-      vim.g.terminal_color_3 = "#fce566" -- yellow (from spectrum)
-      vim.g.terminal_color_4 = "#5ad4e6" -- blue (cyan from spectrum)
-      vim.g.terminal_color_5 = "#948ae3" -- magenta (purple from spectrum)
-      vim.g.terminal_color_6 = "#5ad4e6" -- cyan (from spectrum)
-      vim.g.terminal_color_7 = "#bbbbbb" -- white/light gray
-      vim.g.terminal_color_8 = "#555555" -- bright black (gray)
-      vim.g.terminal_color_9 = "#ff87a8" -- bright red (lighter pink)
-      vim.g.terminal_color_10 = "#b1e05f" -- bright green
-      vim.g.terminal_color_11 = "#fef87e" -- bright yellow
-      vim.g.terminal_color_12 = "#7de4f0" -- bright blue (lighter cyan)
-      vim.g.terminal_color_13 = "#b5b0f0" -- bright magenta (lighter purple)
-      vim.g.terminal_color_14 = "#7de4f0" -- bright cyan
-      vim.g.terminal_color_15 = "#f7f1ff" -- bright white (from spectrum)
+      -- Terminal ANSI colors from the central theme
+      for i, color in ipairs(theme.terminal.normal) do
+        vim.g["terminal_color_" .. (i - 1)] = color
+      end
+      for i, color in ipairs(theme.terminal.bright) do
+        vim.g["terminal_color_" .. (i + 7)] = color
+      end
     end,
   },
 

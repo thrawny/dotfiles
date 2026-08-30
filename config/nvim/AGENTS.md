@@ -6,4 +6,4 @@ Preferences:
 
 - Leader key is `,` (comma).
 - Clipboard is deliberately manual (`<space>y`/`<space>p`), not synced to the system clipboard.
-- Theme background `#1c1c1c` intentionally matches Ghostty.
+- Colors come from the central theme (`nix/themes/monokai.json`), injected at build time via `vim.g.dotfiles_theme_path` and loaded by `lua/config/theme.lua` — no color literals in the Lua config. The editor background (`semantic.background`, `#222222`) is deliberately a shade lighter than Ghostty's `#1c1c1c`.

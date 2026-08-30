@@ -23,6 +23,10 @@ let
   leanLazyNvim = lazyNvim // {
     plugins = pluginsWithoutBundledTools;
   };
+  themeLib = import ./theme.nix { inherit (pkgs) lib; };
+  themeJson = pkgs.writeText "dotfiles-theme.json" (
+    builtins.toJSON (themeLib.loadTheme ../themes/monokai.json)
+  );
   nvimRoot = ../../config/nvim;
   nvimConfig = pkgs.lib.fileset.toSource {
     root = nvimRoot;
@@ -55,6 +59,7 @@ lazyNvim.LazyVim.override {
   lazy-nvim-nix = leanLazyNvim;
 
   customLuaRC = ''
+    vim.g.dotfiles_theme_path = ${builtins.toJSON (toString themeJson)}
     vim.g.loaded_node_provider = 0
     vim.g.loaded_perl_provider = 0
     vim.g.loaded_python3_provider = 0

@@ -4,16 +4,12 @@
   config,
   lib,
   pkgs,
+  theme,
   ...
 }:
 let
-  # Base colors - matching Hyprland Molokai theme
-  colors = {
-    active = "#f92672";
-    inactive = "#3a3a3a";
-    urgent = "#cc4444";
-    shadow = "#0007";
-  };
+  # Base colors - matching Hyprland Molokai theme (central theme, applications.niri)
+  colors = theme.applications.niri;
 
   overviewBinds = {
     "Mod+D" = {

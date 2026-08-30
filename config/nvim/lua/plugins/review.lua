@@ -1,3 +1,5 @@
+local diff_theme = require("config.theme").load().diff
+
 local codediff_spec = {
   "thrawny/codediff.nvim",
   name = "codediff.nvim",
@@ -89,8 +91,12 @@ return {
     end,
     opts = {
       highlights = {
-        line_insert = "#004466",
-        line_delete = "#660100",
+        line_insert = diff_theme.added.lineBackground,
+        line_delete = diff_theme.removed.lineBackground,
+        -- Pin character emphasis explicitly instead of relying on codediff's
+        -- brightness derivation, so the canonical contract stays authoritative.
+        char_insert = diff_theme.added.emphasisBackground,
+        char_delete = diff_theme.removed.emphasisBackground,
       },
       diff = {
         layout = "inline",

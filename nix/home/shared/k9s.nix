@@ -1,16 +1,21 @@
-_:
+{ theme, ... }:
 let
-  # Monokai palette (matches Ghostty Molokai theme and tmux status bar)
-  fg = "#f0f0f0";
-  bg = "#1c1c1c";
-  currentLine = "#2d2a2e";
-  selection = "#49483e";
-  comment = "#808080";
-  cyan = "#78dce8";
-  green = "#a9dc76";
-  pink = "#ff6188";
-  purple = "#ab9df2";
-  yellow = "#ffd866";
+  # Canonical roles; only the warm panel background and the toggle-off gray
+  # stay k9s-specific.
+  inherit (theme.applications.k9s) currentLine comment;
+  fg = theme.terminal.foreground;
+  bg = theme.terminal.background;
+  inherit (theme.semantic)
+    selection
+    success
+    accent
+    accentAlt
+    ;
+  cyan = theme.syntax.type;
+  green = success;
+  pink = accent;
+  purple = accentAlt;
+  yellow = theme.syntax."function";
 in
 {
   programs.k9s = {

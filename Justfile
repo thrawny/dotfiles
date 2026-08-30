@@ -64,6 +64,12 @@ typecheck: typecheck-python
 typecheck-python:
     basedpyright
 
+# === Theme ===
+
+# Validate the central theme and reject color-literal drift in consumers
+check-theme:
+    bin/check-theme
+
 # === Tests ===
 
 # Run all tests
@@ -81,10 +87,10 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi nix::eval
+check-parallel: lint typecheck pi check-theme nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all
 
 # CI: lint, typecheck, format, and test
-ci: fmt lint typecheck test
+ci: fmt lint typecheck check-theme test
