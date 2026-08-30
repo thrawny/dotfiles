@@ -264,7 +264,12 @@ sandbox() {
         for host in $SANDBOX_SSH_HOSTS; do
           ssh_add_args+=(-h "$host")
         done
-        timeout 5 ssh-add "${ssh_add_args[@]}" "$key" </dev/null >/dev/null 2>&1
+        local ssh_add_error
+        if ! ssh_add_error="$(timeout 5 ssh-add "${ssh_add_args[@]}" "$key" </dev/null 2>&1 >/dev/null)"; then
+          echo "sandbox: failed to add destination-constrained SSH key" >&2
+          [[ -z "$ssh_add_error" ]] || echo "sandbox: $ssh_add_error" >&2
+          return 1
+        fi
       else
         timeout 5 ssh-add "$key" </dev/null 2>/dev/null || true
       fi
