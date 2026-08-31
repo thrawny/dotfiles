@@ -25,6 +25,9 @@ let
     exec ${config.programs.niri.package}/bin/niri-session
   '';
 
+  # uwsm gives Hyprland the systemd session niri-session provides natively:
+  # graphical-session.target lifecycle, so user services (xremap, hypridle,
+  # wpaperd) actually run in the Hyprland session.
   hyprlandSessionCommand = pkgs.writeShellScript "hyprland-session-with-secrets" ''
     set -e
     if [ -f "$HOME/.secrets" ]; then
@@ -32,7 +35,13 @@ let
       . "$HOME/.secrets"
       set +a
     fi
-    exec ${config.programs.hyprland.package}/bin/Hyprland
+    if [ -z "''${VOXTYPE_WHISPER_API_KEY:-}" ] && [ -n "''${GROQ_API_KEY:-}" ]; then
+      export VOXTYPE_WHISPER_API_KEY="$GROQ_API_KEY"
+    fi
+    if [ -n "''${VOXTYPE_WHISPER_API_KEY:-}" ]; then
+      systemctl --user import-environment VOXTYPE_WHISPER_API_KEY
+    fi
+    exec ${config.programs.uwsm.package}/bin/uwsm start -- hyprland-uwsm.desktop
   '';
 
   # Session picker entries for tuigreet (F3 menu). Both wrap ~/.secrets.
@@ -129,7 +138,10 @@ in
 
     # Hyprland 0.56+ (core scrolling layout, Lua config). Config lives in
     # config/hypr/ as Lua, symlinked by home/nixos/hyprland.nix.
-    hyprland.enable = true;
+    hyprland = {
+      enable = true;
+      withUWSM = true;
+    };
 
     # Enable AppImage support
     appimage = {
