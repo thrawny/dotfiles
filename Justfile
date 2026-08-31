@@ -36,7 +36,7 @@ fmt: nix::fmt fmt-lua fmt-python
 
 # Format Lua files
 fmt-lua:
-    stylua config/nvim
+    stylua config/nvim config/hypr
 
 # Format Python files
 fmt-python:

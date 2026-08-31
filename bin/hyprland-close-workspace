@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+main() {
+  local workspace_id
+  workspace_id=$(hyprctl activeworkspace -j | jq '.id')
+
+  # Close all windows on the focused workspace. Unlike niri there is no
+  # unset-name step: Hyprland removes a non-persistent workspace once empty.
+  local addresses
+  addresses=$(hyprctl clients -j | jq -r ".[] | select(.workspace.id == $workspace_id) | .address")
+  for addr in $addresses; do
+    hyprctl dispatch closewindow "address:$addr"
+  done
+
+  hyprctl dispatch workspace e-1
+}
+
+main "$@"

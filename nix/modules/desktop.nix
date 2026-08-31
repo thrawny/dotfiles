@@ -22,6 +22,33 @@ let
     exec ${config.programs.niri.package}/bin/niri-session
   '';
 
+  hyprlandSessionCommand = pkgs.writeShellScript "hyprland-session-with-secrets" ''
+    set -e
+    if [ -f "$HOME/.secrets" ]; then
+      set -a
+      . "$HOME/.secrets"
+      set +a
+    fi
+    exec ${config.programs.hyprland.package}/bin/Hyprland
+  '';
+
+  # Session picker entries for tuigreet (F3 menu). Both wrap ~/.secrets.
+  mkGreeterSession =
+    name: command:
+    pkgs.writeTextDir "${name}.desktop" ''
+      [Desktop Entry]
+      Name=${name}
+      Exec=${command}
+      Type=Application
+    '';
+  greeterSessions = pkgs.symlinkJoin {
+    name = "greeter-sessions";
+    paths = [
+      (mkGreeterSession "niri" niriSessionCommand)
+      (mkGreeterSession "hyprland" hyprlandSessionCommand)
+    ];
+  };
+
   desktopPackages = with pkgs; [
     brightnessctl
     fastfetch
@@ -97,6 +124,10 @@ in
       package = pkgs.niri;
     };
 
+    # Hyprland 0.56+ (core scrolling layout, Lua config). Config lives in
+    # config/hypr/ as Lua, symlinked by home/nixos/hyprland.nix.
+    hyprland.enable = true;
+
     # Enable AppImage support
     appimage = {
       enable = true;
@@ -127,7 +158,7 @@ in
           command = niriSessionCommand;
           user = username;
         };
-        default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --cmd ${niriSessionCommand}";
+        default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --remember-session --sessions ${greeterSessions} --cmd ${niriSessionCommand}";
       };
     };
     blueman.enable = true;
