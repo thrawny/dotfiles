@@ -8,6 +8,7 @@ package.path = confdir .. "/lua/?.lua;" .. package.path
 require("options")
 require("rules")
 require("binds")
+require("appjump")
 require("autostart")
 
 -- Optional host-local overrides (gitignored), mirrors niri's local.kdl.
