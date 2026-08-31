@@ -10,7 +10,6 @@ hl.on("hyprland.start", function()
 	hl.exec_cmd(
 		"waybar -c " .. home .. "/.config/waybar/config-hyprland -s " .. home .. "/.config/waybar/style-hyprland.css"
 	)
-	hl.exec_cmd("env VOICE_PASTE_MOD=shift VOICE_PASTE_KEY=Insert wayvoice serve")
 
 	hl.dispatch(hl.dsp.exec_cmd("ghostty +new-window --working-directory=" .. home .. "/dotfiles", {
 		workspace = "3",

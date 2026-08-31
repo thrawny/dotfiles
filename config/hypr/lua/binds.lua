@@ -33,10 +33,12 @@ bind("ALT + SUPER + Space", dsp.exec_cmd("hyprctl switchxkblayout all next"))
 
 -- Windows
 bind("ALT + W", dsp.window.close())
+bind("ALT + SHIFT + W", dsp.exec_cmd("hyprland-close-workspace"))
 bind("ALT + F", dsp.window.fullscreen({ mode = "maximized", layout_aware = true }))
 bind("ALT + SHIFT + F", dsp.window.fullscreen({ mode = "fullscreen", layout_aware = true }))
 bind("ALT + V", dsp.window.float({ action = "toggle" }))
 bind("ALT + M", dsp.focus({ last = true }))
+bind("ALT + SHIFT + M", dsp.focus({ workspace = "previous" }))
 bind("ALT + Tab", dsp.focus({ last = true }))
 bind("ALT + G", dsp.group.toggle())
 bind("ALT + SHIFT + G", dsp.group.next())
@@ -98,10 +100,7 @@ bind("ALT + mouse:273", dsp.window.resize(), { mouse = true })
 bind("ALT + mouse_down", dsp.focus({ workspace = "e+1" }))
 bind("ALT + mouse_up", dsp.focus({ workspace = "e-1" }))
 
--- Voice input
-bind("ALT + R", dsp.exec_cmd("wayvoice toggle"))
-bind("ALT + SHIFT + R", dsp.exec_cmd("wayvoice cancel"))
-bind("SUPER + SHIFT + P", dsp.exec_cmd("wayvoice cancel"))
+-- Voice input is handled by xremap (evdev-level, compositor-agnostic).
 
 -- Screenshots (hyprshot; output dir comes from HYPRSHOT_DIR in options.lua)
 bind("Print", dsp.exec_cmd("hyprshot -m region"))
