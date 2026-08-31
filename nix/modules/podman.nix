@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   ...
 }:
@@ -7,22 +8,24 @@ let
   inherit (config.dotfiles) username;
 in
 {
-  environment.systemPackages = [ pkgs.podman-compose ];
+  environment.systemPackages = [
+    pkgs.docker-client
+    pkgs.podman-compose
+  ];
 
-  security.unprivilegedUsernsClone = true;
-
-  users = {
-    groups.docker = { };
-    users.${username}.autoSubUidGidRange = true;
-  };
+  users.users.${username}.autoSubUidGidRange = true;
 
   virtualisation = {
     containers.enable = true;
     docker.enable = false;
     podman = {
       enable = true;
-      dockerCompat = true;
+      dockerCompat = false;
       defaultNetwork.settings.dns_enabled = true;
     };
   };
+
+  # Local containers use rootless Podman. Keep the system-wide rootful API
+  # socket disabled; the per-user Podman socket remains available.
+  systemd.sockets.podman.wantedBy = lib.mkForce [ ];
 }

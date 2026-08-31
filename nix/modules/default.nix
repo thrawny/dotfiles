@@ -4,7 +4,7 @@
     ./system.nix
     ./desktop.nix
     ./1password.nix
-    ./docker.nix
+    ./podman.nix
   ];
 
   nix.gc = {

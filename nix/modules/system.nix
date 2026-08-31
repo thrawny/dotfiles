@@ -93,10 +93,7 @@ in
     users.users.${username} = {
       isNormalUser = true;
       home = userHome;
-      extraGroups = [
-        "wheel"
-        "docker"
-      ];
+      extraGroups = [ "wheel" ];
       shell = pkgs.zsh;
     };
 
