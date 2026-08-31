@@ -1,9 +1,11 @@
 -- Session autostart (exec-once equivalent). wpaperd is a systemd user service
--- and starts on its own; agent-switch is niri-only for now (Lua port pending).
+-- and starts on its own (via uwsm's graphical-session.target).
 
 local home = os.getenv("HOME")
 
 hl.on("hyprland.start", function()
+	-- Headless session daemon; the GTK overlay (serve --niri) is niri-only.
+	hl.exec_cmd("agent-switch serve")
 	hl.exec_cmd("swayosd-server")
 	hl.exec_cmd("wl-paste --watch cliphist store")
 	hl.exec_cmd("mako")
