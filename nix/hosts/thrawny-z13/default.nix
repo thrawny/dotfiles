@@ -150,7 +150,7 @@ in
     zerotierone.enable = true;
   };
 
-  users.users.${config.dotfiles.username}.extraGroups = [ "incus-admin" ];
+  users.users.${config.dotfiles.username}.extraGroups = [ "incus" ];
 
   virtualisation.incus = {
     enable = true;
