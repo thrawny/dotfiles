@@ -928,11 +928,11 @@
     "nvim-codediff": {
       "flake": false,
       "locked": {
-        "lastModified": 1785400442,
-        "narHash": "sha256-uyzRgF/R8rkKD9itZQrrIH0lQI62GosdzW5OWuXCIVs=",
+        "lastModified": 1788178481,
+        "narHash": "sha256-vPw5zMKCVkHZ/ueh9mXTpZazVxvTRe+OReRogfzu/Yk=",
         "owner": "thrawny",
         "repo": "codediff.nvim",
-        "rev": "e5f57577945c7ad1482d2723d0f46ddbf8aedd99",
+        "rev": "a1ec5ba1d1ff277859e8a99e5736b2529cdd1e64",
         "type": "github"
       },
       "original": {

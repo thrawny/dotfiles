@@ -1,10 +1,15 @@
 local diff_theme = require("config.theme").load().diff
 
+local codediff_dir = vim.fn.expand("~/code/codediff.nvim")
 local codediff_spec = {
   "thrawny/codediff.nvim",
   name = "codediff.nvim",
   branch = "main",
 }
+
+if (vim.uv or vim.loop).fs_stat(codediff_dir) then
+  codediff_spec.dir = codediff_dir
+end
 
 local review_opts = {
   keymaps = {
