@@ -16,6 +16,9 @@ let
       . "$HOME/.secrets"
       set +a
     fi
+    if [ -z "''${VOXTYPE_WHISPER_API_KEY:-}" ] && [ -n "''${GROQ_API_KEY:-}" ]; then
+      export VOXTYPE_WHISPER_API_KEY="$GROQ_API_KEY"
+    fi
     if [ -n "''${VOXTYPE_WHISPER_API_KEY:-}" ]; then
       systemctl --user import-environment VOXTYPE_WHISPER_API_KEY
     fi

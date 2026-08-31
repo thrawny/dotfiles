@@ -43,6 +43,7 @@
     package = voxtype.packages.${pkgs.stdenv.hostPlatform.system}.default;
     service.enable = true;
     settings = {
+      audio.device = "pipewire";
       hotkey.enabled = false;
       osd.frontend = "native";
       output = {
@@ -53,6 +54,8 @@
       whisper = {
         mode = "remote";
         language = "en";
+        # Work around voxtype#496, which sends the local model name to remote APIs.
+        model = "whisper-large-v3-turbo";
         remote_endpoint = "https://api.groq.com/openai";
         remote_model = "whisper-large-v3-turbo";
         remote_timeout_secs = 30;
