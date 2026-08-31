@@ -7,6 +7,7 @@ package.path = confdir .. "/lua/?.lua;" .. package.path
 
 require("options")
 require("rules")
+require("projectdirs")
 require("binds")
 require("appjump")
 require("autostart")

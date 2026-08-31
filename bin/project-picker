@@ -27,4 +27,10 @@ elif [[ $rc -ne 0 ]]; then
   exit 0
 fi
 
-[[ -n "${dir:-}" ]] && niri-project --terminals 1 "$dir"
+[[ -n "${dir:-}" ]] || exit 0
+
+if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  hyprland-project --terminals 1 "$dir"
+else
+  niri-project --terminals 1 "$dir"
+fi

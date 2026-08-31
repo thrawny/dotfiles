@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE}" ]] && set -x
+set -euo pipefail
+
+error() {
+  echo "Error: $*" >&2
+  exit 1
+}
+
+show_usage() {
+  echo "Usage: hyprland-project [--name NAME] [--terminals COUNT] [directory]"
+  echo ""
+  echo "Create a Hyprland workspace for a project with terminals."
+  echo "Workspace name is derived from the directory basename unless overridden."
+  echo ""
+  echo "Options:"
+  echo "  --name NAME        Override the workspace name"
+  echo "  --terminals COUNT  Number of terminals to spawn (default: 3)"
+  echo "  -h, --help         Show this help"
+  echo ""
+  echo "Arguments:"
+  echo "  directory    Project directory (default: current directory)"
+}
+
+main() {
+  local workspace_name=""
+  local terminals=3
+  local project_dir="$PWD"
+
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -h|--help)
+        show_usage
+        exit 0
+        ;;
+      --name)
+        [[ $# -ge 2 ]] || error "Missing value for --name"
+        workspace_name="$2"
+        shift 2
+        ;;
+      --terminals)
+        [[ $# -ge 2 ]] || error "Missing value for --terminals"
+        [[ "$2" =~ ^[0-9]+$ ]] || error "--terminals must be a non-negative integer"
+        terminals="$2"
+        shift 2
+        ;;
+      --)
+        shift
+        break
+        ;;
+      -*)
+        error "Unknown option: $1"
+        ;;
+      *)
+        [[ "$project_dir" == "$PWD" ]] || error "Only one directory argument is supported"
+        project_dir="$1"
+        shift
+        ;;
+    esac
+  done
+
+  if [[ $# -gt 0 ]]; then
+    [[ "$project_dir" == "$PWD" ]] || error "Only one directory argument is supported"
+    project_dir="$1"
+    shift
+  fi
+
+  [[ $# -eq 0 ]] || error "Unexpected arguments: $*"
+
+  project_dir=$(cd "$project_dir" && pwd)
+
+  if [[ ! -d "$project_dir" ]]; then
+    error "Directory does not exist: $project_dir"
+  fi
+
+  if [[ -z "$workspace_name" ]]; then
+    workspace_name=$(basename "$project_dir")
+  fi
+
+  # Register in the Lua-owned map (config/hypr/lua/projectdirs.lua). Register
+  # before the existing-workspace fast path so reopening a project refreshes
+  # the map after a compositor restart.
+  hyprctl eval "set_project_dir(\"$workspace_name\", \"$project_dir\")" >/dev/null
+
+  # `workspace name:` focuses the named workspace, creating it if missing.
+  # Only spawn terminals when it didn't exist yet.
+  local existed=""
+  if hyprctl workspaces -j | jq -e --arg n "$workspace_name" \
+    '.[] | select(.name == $n)' >/dev/null; then
+    existed=1
+  fi
+
+  hyprctl dispatch workspace "name:$workspace_name" >/dev/null
+
+  [[ -n "$existed" ]] && exit 0
+
+  for ((i = 0; i < terminals; i++)); do
+    hyprctl dispatch exec -- \
+      "ghostty +new-window --working-directory=$project_dir" >/dev/null
+  done
+}
+
+main "$@"

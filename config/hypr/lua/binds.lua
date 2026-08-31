@@ -15,8 +15,18 @@ local function scratchpad(special, spawn_guard)
 end
 
 -- Launchers
-bind("ALT + Return", dsp.exec_cmd("ghostty"))
+-- Terminal opens in the workspace's project directory when one is
+-- registered (project_dir from projectdirs.lua, set by hyprland-project).
+bind("ALT + Return", function()
+	local dir = project_dir()
+	if dir then
+		hl.dispatch(dsp.exec_cmd("ghostty +new-window --working-directory=" .. dir))
+	else
+		hl.dispatch(dsp.exec_cmd("ghostty"))
+	end
+end)
 bind("SUPER + Space", dsp.exec_cmd("walker"))
+bind("ALT + SHIFT + Space", dsp.exec_cmd("ghostty --title=project-picker -e project-picker"))
 bind("ALT + Q", scratchpad("term", "pgrep -f GhosttyScratchpad || ghostty --class=com.thrawny.GhosttyScratchpad"))
 bind("ALT + O", scratchpad("1password", "pgrep -x 1password || 1password"))
 bind("ALT + P", scratchpad("spotify", "pgrep -x spotify || spotify"))

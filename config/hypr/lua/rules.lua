@@ -35,6 +35,11 @@ hl.window_rule({
 	match = { title = "^btop\\+\\+$" },
 	float = true,
 })
+hl.window_rule({
+	name = "float-project-picker",
+	match = { title = "^project-picker$" },
+	float = true,
+})
 
 -- Scratchpads on special workspaces (toggled from binds.lua).
 hl.window_rule({

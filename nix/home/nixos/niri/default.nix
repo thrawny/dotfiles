@@ -70,9 +70,9 @@ let
     "Mod+Shift+Space" = {
       action.spawn = [
         "ghostty"
-        "--title=niri-project-picker"
+        "--title=project-picker"
         "-e"
-        "niri-project-picker"
+        "project-picker"
       ];
       hotkey-overlay.title = "Open Project";
       repeat = false;
@@ -648,7 +648,7 @@ in
             app-id = "^Slack$";
             title = "^(Slack - Huddle Preview|Huddle:)";
           }
-          { title = "^niri-project-picker$"; }
+          { title = "^project-picker$"; }
           { title = "^btop\\+\\+$"; }
           { app-id = "^spotify$"; }
           { app-id = "^1password$"; }
