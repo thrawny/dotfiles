@@ -77,7 +77,7 @@ in
     nixpkgs.config.allowUnfree = true;
 
     nix.settings = {
-      trusted-users = [ username ];
+      trusted-users = lib.mkForce [ "root" ];
       extra-substituters = [
         "https://cache.numtide.com"
         "https://nix-community.cachix.org"
@@ -135,26 +135,29 @@ in
       };
     };
 
-    # Allow passwordless nix commands for wheel group
-    security.sudo.extraRules = [
-      {
-        groups = [ "wheel" ];
-        commands = [
-          {
-            command = "/run/current-system/sw/bin/nixos-rebuild";
-            options = [ "NOPASSWD" ];
-          }
-          {
-            command = "/run/current-system/sw/bin/nix-collect-garbage";
-            options = [ "NOPASSWD" ];
-          }
-          {
-            command = "/run/current-system/sw/bin/nix-env";
-            options = [ "NOPASSWD" ];
-          }
-        ];
-      }
-    ];
+    security.sudo = {
+      # Required for the user-specific rule below; sudoers still denies users
+      # without an explicit rule.
+      execWheelOnly = lib.mkForce false;
+
+      # Deliberately allow the primary user and local agents to rebuild NixOS
+      # and recover disk space without an interactive authentication prompt.
+      extraRules = [
+        {
+          users = [ username ];
+          commands = [
+            {
+              command = "/run/current-system/sw/bin/nixos-rebuild";
+              options = [ "NOPASSWD" ];
+            }
+            {
+              command = "/run/current-system/sw/bin/nix-collect-garbage";
+              options = [ "NOPASSWD" ];
+            }
+          ];
+        }
+      ];
+    };
 
     services = {
       tailscale.enable = true;
