@@ -110,8 +110,25 @@ sandbox() {
     fi
   done
 
-  local sandbox_bin_dir
+  local sandbox_bin_dir sandbox_path
   sandbox_bin_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  sandbox_path="$sandbox_bin_dir:$PATH"
+
+  # The NixOS Hyprland wrapper passes CAP_SYS_NICE to the compositor. bwrap
+  # drops capabilities, so the wrapper cannot run inside the sandbox. Put the
+  # ordinary binary first on the sandbox's PATH instead. Nested Hyprland
+  # tolerates normal scheduling priority.
+  local system_hyprland="/run/current-system/sw/bin/Hyprland" unwrapped_hyprland
+  if [[ -x "$system_hyprland" ]]; then
+    unwrapped_hyprland="$(readlink -f "$system_hyprland")"
+    if [[ -x "$unwrapped_hyprland" ]]; then
+      args+=(
+        --dir /tmp/sandbox-bin
+        --ro-bind "$unwrapped_hyprland" /tmp/sandbox-bin/Hyprland
+      )
+      sandbox_path="/tmp/sandbox-bin:$sandbox_path"
+    fi
+  fi
 
   # If the current environment points at a kubeconfig with a sibling
   # sandbox-config, use that inside the sandbox. The sandbox kubeconfig can use
@@ -201,6 +218,18 @@ sandbox() {
     export DOCKER_CONFIG="${DOCKER_CONFIG:-$HOME/.cache/sandbox/docker}"
     mkdir -p "$DOCKER_CONFIG"
   fi
+
+  # Nested Hyprland's Wayland backend needs a DRM render node for allocation.
+  # Expose render nodes only, not card/control nodes.
+  local render_node render_dir_added=0
+  for render_node in /dev/dri/renderD*; do
+    [[ -e "$render_node" ]] || continue
+    if (( render_dir_added == 0 )); then
+      args+=(--dir /dev/dri)
+      render_dir_added=1
+    fi
+    args+=(--dev-bind "$render_node" "$render_node")
+  done
 
   # Hide host runtime sockets and give the sandbox its own empty runtime dir.
   if [[ -d "/run/user/${UID}" ]]; then
@@ -385,7 +414,7 @@ sandbox() {
     --proc /proc \
     --die-with-parent \
     --setenv SANDBOX 1 \
-    --setenv PATH "$sandbox_bin_dir:$PATH" \
+    --setenv PATH "$sandbox_path" \
     "${args[@]}" \
     "${extra[@]}" \
     -- "$@" || bwrap_status=$?
