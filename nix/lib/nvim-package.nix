@@ -96,6 +96,7 @@ lazyNvim.LazyVim.override {
     (pluginSpec "monokai-pro.nvim" nvim-monokai-pro)
     (pluginSpec "vim-tmux-navigator" nvim-tmux-navigator)
     { import = "plugins"; }
+    (pkgs.lib.generators.mkLuaInline ''require("config.local_spec").find()'')
   ];
 
   opts = {
