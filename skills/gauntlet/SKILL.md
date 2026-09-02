@@ -105,7 +105,7 @@ Record **declined findings too, with the reason.** They are the ones that come b
 1. Run the gauntlet (steps 1–5). The ledger is picked up automatically from round 2 on.
 2. Fix, commit, append every finding to the ledger with its verdict.
 3. A round is **dry** when it surfaces nothing that isn't already in the ledger. Judge that against the *whole* ledger — fixed, declined, and minor alike — not just what you fixed.
-4. Stop after **two consecutive dry rounds**. One dry round happens by luck often enough to be worthless as a stopping rule.
+4. Stop after **one dry round**.
 
 Expect later rounds to flag the *fixes* from earlier rounds — that is a real and recurring category, not noise, and it is the reason to keep looping rather than stopping at the first quiet round. Converging locally before pushing is also what makes any finding a hosted reviewer reports afterwards genuinely informative: it is a miss, rather than a finding in fix code nothing had reviewed yet.
 
