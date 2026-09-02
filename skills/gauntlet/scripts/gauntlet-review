@@ -7,7 +7,7 @@
 #
 # Usage:
 #   gauntlet-review [--base <branch> | --uncommitted | --commit <sha>]
-#                   [--prior <file> | --no-prior] [brief]
+#                   [--reviewers claude,codex] [--prior <file> | --no-prior] [brief]
 #   ... | gauntlet-review --uncommitted -      # read brief from stdin
 #
 # Scope defaults to the current branch vs origin's default branch
@@ -26,7 +26,13 @@
 # the script continues with the other and labels why. Exits 0 if at least one
 # engine produced a result, non-zero only if both fail.
 #
-# Env overrides: GAUNTLET_CODEX_EFFORT (default high), GAUNTLET_CODEX_MODEL,
+# Reviewer selection: --reviewers takes a comma list of claude/codex (default
+# both). A deselected engine is never launched — unlike quota degradation this
+# is deterministic, so a Codex-only loop stays Codex-only even after a Claude
+# quota reset mid-loop. GAUNTLET_REVIEWERS sets the default.
+#
+# Env overrides: GAUNTLET_REVIEWERS (default claude,codex),
+# GAUNTLET_CODEX_EFFORT (default high), GAUNTLET_CODEX_MODEL,
 # GAUNTLET_PRIOR (ledger path), GAUNTLET_STATE_DIR (output root).
 #
 # Testable with stubs: put fake `claude`/`codex` earlier on PATH.
@@ -35,11 +41,14 @@ set -euo pipefail
 usage() {
   cat >&2 <<'EOF'
 Usage: gauntlet-review [--base <branch> | --uncommitted | --commit <sha>]
-                       [--prior <file> | --no-prior] [brief]
+                       [--reviewers claude,codex] [--prior <file> | --no-prior]
+                       [brief]
 
 Runs one Claude (/code-review) and one Codex (review) over the same scope in
 parallel, printing each review's raw findings in a delimited section. The
 caller supplies the brief and does the dedupe/verify/fix/summarize.
+--reviewers restricts which engines run (comma list of claude/codex; default
+both, or GAUNTLET_REVIEWERS).
 
 Raw output and the reviewed SHA are saved under the branch's state dir (printed
 at exit). Findings already adjudicated on this branch are read from that dir's
@@ -53,11 +62,13 @@ scope_set=0
 prior_file=""
 prior_set=0
 no_prior=0
+reviewers="${GAUNTLET_REVIEWERS:-}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base) scope="--base $2"; scope_set=1; shift 2 ;;
     --uncommitted) scope="--uncommitted"; scope_set=1; shift ;;
     --commit) scope="--commit $2"; scope_set=1; shift 2 ;;
+    --reviewers) reviewers="$2"; shift 2 ;;
     --prior) prior_file="$2"; prior_set=1; shift 2 ;;
     --no-prior) no_prior=1; shift ;;
     -h | --help) usage 0 ;;
@@ -67,6 +78,29 @@ while [[ $# -gt 0 ]]; do
     *) break ;;
   esac
 done
+
+# Resolve reviewer selection. Default is both engines; an explicit selection
+# fails loudly on a typo rather than silently running the wrong set.
+run_claude=1
+run_codex=1
+if [[ -n "$reviewers" ]]; then
+  run_claude=0
+  run_codex=0
+  IFS=',' read -ra selected <<<"$reviewers"
+  for r in "${selected[@]}"; do
+    case "$(printf '%s' "$r" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" in
+      claude) run_claude=1 ;;
+      codex) run_codex=1 ;;
+      both | all) run_claude=1; run_codex=1 ;;
+      "") ;;
+      *) echo "gauntlet-review: unknown reviewer '$r' (expected claude, codex)" >&2; exit 1 ;;
+    esac
+  done
+  if [[ "$run_claude" -eq 0 && "$run_codex" -eq 0 ]]; then
+    echo "gauntlet-review: --reviewers selected no reviewer" >&2
+    exit 1
+  fi
+fi
 
 # Auto-detect scope when none was given: current branch vs origin's default
 # branch, or uncommitted changes when already on the corresponding local branch.
@@ -219,12 +253,15 @@ claude_out="$round_dir/claude.out"
 # Keep this policy hard-coded; gauntlet reviews must never consume Fable quota.
 readonly claude_review_model="claude-opus-5"
 readonly claude_review_settings='{"availableModels":["claude-opus-5"],"enforceAvailableModels":true,"fallbackModel":[]}'
-CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
-ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
-  claude -p --model "$claude_review_model" --setting-sources "" \
-    --settings "$claude_review_settings" --no-session-persistence \
-    --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
-claude_pid=$!
+claude_pid=""
+if [[ "$run_claude" -eq 1 ]]; then
+  CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
+  ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
+    claude -p --model "$claude_review_model" --setting-sources "" \
+      --settings "$claude_review_settings" --no-session-persistence \
+      --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
+  claude_pid=$!
+fi
 
 # Codex reviewer — scope is in the prompt (see above). Raise the default high
 # effort per-run with GAUNTLET_CODEX_EFFORT if a particular diff warrants it.
@@ -232,12 +269,21 @@ readonly codex_model="${GAUNTLET_CODEX_MODEL:-gpt-5.6-sol}"
 readonly codex_effort="${GAUNTLET_CODEX_EFFORT:-high}"
 codex_out="$round_dir/codex.out"
 codex_log="$round_dir/codex.log"
-codex exec --ephemeral --color never --model "$codex_model" \
-  -c model_reasoning_effort="$codex_effort" -o "$codex_out" review "$codex_prompt" >"$codex_log" 2>&1 &
-codex_pid=$!
+codex_pid=""
+if [[ "$run_codex" -eq 1 ]]; then
+  codex exec --ephemeral --color never --model "$codex_model" \
+    -c model_reasoning_effort="$codex_effort" -o "$codex_out" review "$codex_prompt" >"$codex_log" 2>&1 &
+  codex_pid=$!
+fi
 
-if wait "$claude_pid"; then claude_status=0; else claude_status=$?; fi
-if wait "$codex_pid"; then codex_status=0; else codex_status=$?; fi
+claude_status=0
+codex_status=0
+if [[ -n "$claude_pid" ]]; then
+  if wait "$claude_pid"; then claude_status=0; else claude_status=$?; fi
+fi
+if [[ -n "$codex_pid" ]]; then
+  if wait "$codex_pid"; then codex_status=0; else codex_status=$?; fi
+fi
 
 # Classify a non-zero engine result so we can degrade gracefully and say why.
 classify() {
@@ -254,12 +300,12 @@ classify() {
   esac
 }
 
-claude_state="$(classify "$claude_status" "$claude_out")"
-codex_state="$(classify "$codex_status" "$codex_log")"
+if [[ "$run_claude" -eq 1 ]]; then claude_state="$(classify "$claude_status" "$claude_out")"; else claude_state="skipped (--reviewers)"; fi
+if [[ "$run_codex" -eq 1 ]]; then codex_state="$(classify "$codex_status" "$codex_log")"; else codex_state="skipped (--reviewers)"; fi
 
 ok_count=0
-[[ "$claude_status" -eq 0 ]] && ok_count=$((ok_count + 1))
-[[ "$codex_status" -eq 0 ]] && ok_count=$((ok_count + 1))
+[[ "$run_claude" -eq 1 && "$claude_status" -eq 0 ]] && ok_count=$((ok_count + 1))
+[[ "$run_codex" -eq 1 && "$codex_status" -eq 0 ]] && ok_count=$((ok_count + 1))
 
 # meta.txt is the per-round record the loop is measured from: what scope ran,
 # against which commit, with which ledger, and which reviewers actually produced
@@ -272,6 +318,8 @@ ok_count=0
   printf 'worktree: %s\n' "$tree_state"
   [[ -n "$merge_base" ]] && printf 'merge_base: %s\n' "$merge_base"
   printf 'prior_ledger: %s\n' "${prior_src:-none}"
+  printf 'reviewers: %s%s\n' "$([[ "$run_claude" -eq 1 ]] && printf 'claude')" \
+    "$([[ "$run_codex" -eq 1 ]] && { [[ "$run_claude" -eq 1 ]] && printf ',codex' || printf 'codex'; })"
   printf 'codex_model: %s\n' "$codex_model"
   printf 'codex_effort: %s\n' "$codex_effort"
   printf 'claude: %s\n' "$claude_state"
@@ -285,10 +333,14 @@ if [[ "$ok_count" -eq 0 ]]; then
   printf 'ERROR: no reviewer produced results — claude %s; codex %s\n' \
     "$claude_state" "$codex_state" >&2
 else
-  if [[ "$claude_status" -ne 0 ]]; then
+  if [[ "$run_claude" -eq 0 ]]; then
+    printf 'NOTE: claude skipped by --reviewers.\n'
+  elif [[ "$claude_status" -ne 0 ]]; then
     printf 'NOTE: claude %s — proceeding with Codex only.\n' "$claude_state"
   fi
-  if [[ "$codex_status" -ne 0 ]]; then
+  if [[ "$run_codex" -eq 0 ]]; then
+    printf 'NOTE: codex skipped by --reviewers.\n'
+  elif [[ "$codex_status" -ne 0 ]]; then
     printf 'NOTE: codex %s — proceeding with Claude only.\n' "$codex_state"
   fi
   if [[ -n "$prior_src" ]]; then
@@ -301,10 +353,14 @@ else
 fi
 
 printf '===== CLAUDE REVIEW [%s] =====\n' "$claude_state"
-if [[ "$claude_status" -eq 0 ]]; then cat "$claude_out"; else tail -40 "$claude_out"; fi
+if [[ "$run_claude" -eq 0 ]]; then
+  : # deselected — nothing ran, nothing to print
+elif [[ "$claude_status" -eq 0 ]]; then cat "$claude_out"; else tail -40 "$claude_out"; fi
 
 printf '\n===== CODEX REVIEW [%s] =====\n' "$codex_state"
-if [[ "$codex_status" -eq 0 ]]; then
+if [[ "$run_codex" -eq 0 ]]; then
+  : # deselected — nothing ran, nothing to print
+elif [[ "$codex_status" -eq 0 ]]; then
   cat "$codex_out"
 else
   # On failure, show codex's answer file if it wrote anything, plus the log tail

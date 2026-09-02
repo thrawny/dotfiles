@@ -12,7 +12,7 @@ rec {
   unslop = ''
     ## Unslop
 
-    At the start of every task, invoke the `unslop` skill before doing any work. This is unconditional. Load it for coding, debugging, and terse replies too. Apply it to all user-facing prose.
+    Invoke the `unslop` skill before drafting or editing prose intended for people, including documentation, READMEs, ADRs, PR descriptions, release notes, commit messages, and emails.
   '';
 
   ephemeralTools = ''

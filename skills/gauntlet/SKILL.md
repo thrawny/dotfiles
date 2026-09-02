@@ -11,7 +11,7 @@ The parallel launch is handled by the bundled `scripts/gauntlet-review` launcher
 
 This skill is tuned for **recall at generation time and precision at judgment time**. The reviewers are deliberately asked to be exhaustive, so expect more raw findings than pass the bar — including some false positives. That is the intended shape: a finding you never generate cannot be caught in step 4, but a bad one can. Do not try to restore precision by softening the launcher's prompts; restore it by verifying and declining in step 4.
 
-Default behavior: fix major findings (high severity / Codex P1–P2). Minor and declined findings are reported, not fixed. If the user asks for report-only, do steps 1–3 and skip the fixing.
+Default behavior: fix major findings (high severity / Codex P1–P2) that triage as implementation bugs; design gaps and scope increases are escalated or deferred, not autofixed (§4). Minor and declined findings are reported, not fixed. If the user asks for report-only, do steps 1–3 and skip the fixing.
 
 One run is one sample. When the user wants the change actually driven to convergence — before pushing, before a PR, or when they ask to "loop" or "keep going until it's clean" — follow the loop protocol in §6 rather than calling a single quiet round done.
 
@@ -35,6 +35,7 @@ bash <skill-dir>/scripts/gauntlet-review "<your context brief>"
 ```
 
 - Scope is auto-detected: the current branch's diff against origin's remote-tracking default branch (for example, `origin/main`), or uncommitted changes when already on the corresponding local branch. Override with `--base <branch>`, `--uncommitted`, or `--commit <sha>` (before the brief). For a long brief, pipe it on stdin with a trailing `-`.
+- Both engines run by default. Restrict with `--reviewers claude` or `--reviewers codex` (comma list; `GAUNTLET_REVIEWERS` sets the default) — for a single-engine loop the user asked for, or to stop spending one engine's quota. Unlike quota degradation this is deterministic: a deselected engine never runs, even if its quota comes back mid-loop. A single-reviewer run has no second opinion, so lean harder on per-finding verification (step 4.1).
 - It runs both reviewers in parallel and prints two delimited blocks labeled with each reviewer's state — `===== CLAUDE REVIEW [ok] =====` and `===== CODEX REVIEW [ok] =====`. **Reviews take 5–20 minutes. If the harness offers managed background execution that notifies on completion, launch the command that way and continue other work until the notification arrives. Only without such a mechanism, run it in the foreground with the longest timeout available.**
 - Codex reasoning effort defaults to `high`; raise it for a single run with `GAUNTLET_CODEX_EFFORT` (for example `xhigh`) or change the model with `GAUNTLET_CODEX_MODEL`.
 - Every run saves each reviewer's raw output, the reviewed SHA, and the brief under a per-repo/per-branch state dir, and prints a `===== GAUNTLET STATE =====` footer with the round number, the output path, and the ledger path. **Note those paths** — the raw output is how you re-check a dedupe decision without paying for another 5–20 minute round.
@@ -50,17 +51,20 @@ Merge the blocks into one set of unique issues:
 - **Agreement is a confidence signal** — surface findings raised by both reviewers first, and treat a single-reviewer finding as a candidate that step 4.1 must earn.
 - Codex scores P1/P2/P3, Claude scores high/medium/low — normalize to one scale (high/medium/low); on conflict take the higher.
 
-## 4. Fix the major issues
+## 4. Triage, then fix
 
 For each finding that is **major** (high severity / Codex P1–P2):
 
-1. **Verify it against the real code first** — open the file and adjacent code and confirm the bug is real, in scope, and not already handled. Reading is usually enough; the gates were green before this run, so re-running them settles nothing. Probe directly only when the finding hinges on a case no test covers. This verification is the *primary* false-positive guard — the reviewers are asked to be exhaustive precisely because this step exists, so it is not optional and a healthy run declines a real share of findings.
-2. If it holds up, fix it. If it's a false positive, intentional per the brief, or out of scope, **decline it** and record why — do not blindly apply findings.
-3. Keep fixes surgical: address the finding, don't expand scope or refactor unrelated code.
+1. **Verify it against the real code first** — open the file and adjacent code and confirm the bug is real, in scope, and not already handled. Reading is usually enough; the gates were green before this run, so re-running them settles nothing. Probe directly only when the finding hinges on a case no test covers. This verification is the *primary* false-positive guard — the reviewers are asked to be exhaustive precisely because this step exists, so it is not optional and a healthy run declines a real share of findings. A false positive, a choice the brief marks intentional, or an out-of-scope finding is **declined** with the reason recorded — do not blindly apply findings.
+2. **Classify the fix, not the finding.** A verified-real finding is not automatically autofixable — what matters is what its fix would do. The change's **boundary** is the blueprint when one exists (its filetree is the set of touchable files; Decisions and Will-not-touch are the recorded calls); otherwise it is the footprint and evident intent of the diff under review.
+   - **Implementation bug** — the fix corrects code against something that already exists (a recorded decision, an existing invariant, the change's own intent) and stays inside the boundary. Fix it. Blueprint silence on the detail is fine — the interior of the boundary is implementor discretion.
+   - **Design gap** — the fix would contradict a recorded decision, touch files outside the boundary, or create something new that outlives this diff: a new interface, public API shape, config surface, dependency direction, or invariant. Do **not** fix it, however small the diff looks — a small fix that makes an unowned decision is scope damage, not progress. Ledger it and escalate (below).
+   - **Scope increase** — real, but serves work the user never asked for. Ledger as deferred, report as follow-up work, don't fix.
+3. Fix implementation bugs surgically: address the finding, don't expand scope or refactor unrelated code.
 
-**Stop and ask the user instead of fixing** when a fix would change the change's intended contract, balloon the diff well past its original scope, or when two findings prescribe conflicting fixes. Autofix is for clear, contained corrections — not redesigns.
+**Escalation:** finish the round — verify, classify, and fix the remaining implementation bugs — then stop the loop and put the design gaps to the user as a batch, each stated as the decision it requires, with your recommendation. Never start another round with design gaps unresolved: their resolution changes the code the next round would review. When a blueprint exists, record the resolution in it first, then implement. Conflicting findings (two fixes that can't both be applied) escalate the same way.
 
-Commit the fixes, then record every finding in the ledger (§6) with its verdict — fixed with the commit SHA, or declined with the reason. Leave **minor** findings (medium/low, Codex P3) as a reported list — don't fix them unless the user asks, but still ledger them, or the next round re-raises them.
+Commit the fixes, then record every finding in the ledger (§6) with its verdict — fixed with the commit SHA, declined with the reason, design gap with the decision it requires, or deferred as scope. Leave **minor** findings (medium/low, Codex P3) as a reported list — don't fix them unless the user asks, but still ledger them, or the next round re-raises them.
 
 Committing is not just hygiene when looping. On a branch the scope is `git diff <base>...HEAD`, which is **committed work only**: uncommitted fixes are invisible to the next round, so it re-finds everything you just fixed and the loop cannot converge. The inverse holds on the default branch, where the scope is `--uncommitted` — committing there empties the scope and the next round reports a false dry round. So: **commit between rounds on a branch, never on the default branch.**
 
@@ -72,9 +76,11 @@ Present one unified report, highest severity first:
 |----------|----------|-------|------------|--------|
 | high | `path:line` | one-line description | both | fixed |
 | high | `path:line` | … | codex | declined (false positive: …) |
+| high | `path:line` | … | both | design gap (escalated: needs decision on …) |
+| medium | `path:line` | … | codex | deferred (scope: …) |
 | medium | `path:line` | … | claude | reported |
 
-Close with a one-line tally: total unique findings, how many both reviewers agreed on, how many were fixed vs declined vs left as minor, and whether either reviewer failed to run.
+Close with a one-line tally: total unique findings, how many both reviewers agreed on, how many were fixed vs declined vs escalated as design gaps vs deferred vs left as minor, and whether either reviewer failed to run.
 
 ## 6. The ledger, and looping to convergence
 
@@ -87,6 +93,8 @@ That only works with a memory. Without one, round 2 spends both reviews re-deriv
 ```
 - path:line — severity — one-line description — **fixed** in <sha>
 - path:line — severity — one-line description — **declined**: <why>
+- path:line — severity — one-line description — **design gap**: <the decision it requires; update with the resolution and fix SHA once made>
+- path:line — severity — one-line description — **deferred (scope)**: <why it's beyond the ask>
 - path:line — severity — one-line description — **minor, not fixed**
 ```
 
