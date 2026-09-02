@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+prototype_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+exec python3 "$prototype_dir/clipboard_broker.py" client -- "$@"

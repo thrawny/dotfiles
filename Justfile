@@ -70,6 +70,13 @@ typecheck-python:
 check-theme:
     bin/check-theme
 
+# === Prototypes ===
+
+# Run the throwaway image-only clipboard broker
+prototype-clipboard-broker:
+    python3 prototypes/clipboard-broker/clipboard_broker.py broker \
+        --socket "${XDG_RUNTIME_DIR}/clipboard-broker-prototype.sock"
+
 # === Tests ===
 
 # Run all tests
