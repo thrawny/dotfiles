@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+[[ "${TRACE:-}" ]] && set -x
+set -euo pipefail
+
+sandboxed=false
+if [[ "${1:-}" == "--sandbox" ]]; then
+  sandboxed=true
+  shift
+fi
+
+if [[ $# -lt 1 ]]; then
+  echo "Usage: claude-worktree-new [--sandbox] <branch> [claude args...]" >&2
+  exit 1
+fi
+
+branch="$1"
+shift
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+
+NIRI_SOCKET= "$script_dir/git-worktree-new" "$branch"
+worktree_dir=$("$script_dir/git-worktree-go" "$branch")
+
+cd "$worktree_dir"
+if [[ "$sandboxed" == true ]]; then
+  exec sandbox claude --dangerously-skip-permissions "$@"
+else
+  exec claude "$@"
+fi

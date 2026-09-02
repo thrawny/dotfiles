@@ -107,8 +107,11 @@ in
         taf = "terraform apply -auto-approve";
         cx = "codex";
         cxy = "codex --dangerously-bypass-approvals-and-sandbox";
+        piw = "pi-worktree-new";
+        spiw = "pi-worktree-new --sandbox";
         scx = "sandbox codex --dangerously-bypass-approvals-and-sandbox";
         sc = "sandbox claude --dangerously-skip-permissions";
+        scw = "claude-worktree-new --sandbox";
         spi = "sandbox pi";
       };
 
