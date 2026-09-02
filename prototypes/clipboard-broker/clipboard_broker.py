@@ -10,6 +10,7 @@ import socket
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 ALLOWED_IMAGE_TYPES = {
     "image/png",
@@ -21,6 +22,8 @@ ALLOWED_IMAGE_TYPES = {
 }
 MAX_IMAGE_BYTES = 20 * 1024 * 1024
 MAX_REQUEST_BYTES = 8192
+MAX_URL_BYTES = 16 * 1024
+LOCAL_HTML_SUFFIXES = {".html", ".htm"}
 
 
 def send_response(
@@ -79,7 +82,62 @@ def host_clipboard_image(wl_paste: str, mime: str) -> bytes:
     return result.stdout
 
 
-def handle_request(connection: socket.socket, wl_paste: str) -> None:
+def default_html_roots() -> list[Path]:
+    home = Path.home()
+    roots = [home / "dotfiles", home / "code"]
+    roots.extend((home / "work").glob("*/code"))
+    return [root.resolve() for root in roots if root.is_dir()]
+
+
+def normalized_open_target(target: str, html_roots: list[Path]) -> str:
+    if not target or len(target.encode()) > MAX_URL_BYTES:
+        raise ValueError("URL is empty or too long")
+    if any(ord(character) < 32 for character in target):
+        raise ValueError("URL contains control characters")
+
+    parsed = urlparse(target)
+    if parsed.scheme in {"http", "https"}:
+        if not parsed.netloc:
+            raise ValueError("HTTP URL has no host")
+        return target
+
+    if parsed.scheme == "file":
+        if parsed.netloc not in {"", "localhost"}:
+            raise ValueError("remote file URLs are not allowed")
+        candidate = Path(unquote(parsed.path))
+    elif not parsed.scheme:
+        candidate = Path(target)
+    else:
+        raise ValueError(f"URL scheme is not allowed: {parsed.scheme}")
+
+    if not candidate.is_absolute():
+        raise ValueError("local HTML path must be absolute")
+    resolved = candidate.resolve(strict=True)
+    if not resolved.is_file() or resolved.suffix.lower() not in LOCAL_HTML_SUFFIXES:
+        raise ValueError("local target must be an HTML file")
+    if not any(resolved.is_relative_to(root) for root in html_roots):
+        raise ValueError("local HTML file is outside the allowed roots")
+    return resolved.as_uri()
+
+
+def open_url(niri_open_url: str, target: str, html_roots: list[Path]) -> None:
+    normalized = normalized_open_target(target, html_roots)
+    subprocess.Popen(
+        [niri_open_url, normalized],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    print(f"open-url -> {normalized}", flush=True)
+
+
+def handle_request(
+    connection: socket.socket,
+    wl_paste: str,
+    niri_open_url: str,
+    html_roots: list[Path],
+) -> None:
     try:
         request = read_request(connection)
         operation = request.get("operation")
@@ -94,6 +152,12 @@ def handle_request(connection: socket.socket, wl_paste: str) -> None:
             data = host_clipboard_image(wl_paste, mime)
             print(f"read {mime} -> {len(data)} bytes", flush=True)
             send_response(connection, data=data)
+        elif operation == "open-url":
+            target = request.get("target")
+            if not isinstance(target, str):
+                raise ValueError("open-url requires a target")
+            open_url(niri_open_url, target, html_roots)
+            send_response(connection)
         else:
             raise ValueError(f"unsupported operation: {operation}")
     except Exception as error:
@@ -101,7 +165,12 @@ def handle_request(connection: socket.socket, wl_paste: str) -> None:
         send_response(connection, error=str(error))
 
 
-def run_broker(socket_path: Path, wl_paste: str) -> None:
+def run_broker(
+    socket_path: Path,
+    wl_paste: str,
+    niri_open_url: str,
+    html_roots: list[Path],
+) -> None:
     socket_path.parent.mkdir(parents=True, exist_ok=True)
     socket_path.unlink(missing_ok=True)
     server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -113,7 +182,7 @@ def run_broker(socket_path: Path, wl_paste: str) -> None:
         while True:
             connection, _ = server.accept()
             with connection:
-                handle_request(connection, wl_paste)
+                handle_request(connection, wl_paste, niri_open_url, html_roots)
     finally:
         server.close()
         socket_path.unlink(missing_ok=True)
@@ -153,18 +222,36 @@ def parse_wl_paste_args(arguments: list[str]) -> dict[str, object]:
     raise ValueError("prototype wl-paste requires --list-types, -l, or --type MIME")
 
 
+def client_operation(tool: str, arguments: list[str]) -> dict[str, object]:
+    if tool == "wl-paste":
+        return parse_wl_paste_args(arguments)
+    if tool == "niri-open-url" and len(arguments) == 1:
+        return {"operation": "open-url", "target": arguments[0]}
+    raise ValueError(f"unsupported {tool} arguments")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
     broker = subparsers.add_parser("broker")
     broker.add_argument("--socket", type=Path, required=True)
     broker.add_argument("--wl-paste", default="/run/current-system/sw/bin/wl-paste")
+    broker.add_argument(
+        "--niri-open-url", default=str(Path.home() / "dotfiles/bin/niri-open-url")
+    )
+    broker.add_argument("--html-root", action="append", type=Path)
     client = subparsers.add_parser("client")
+    client.add_argument("--tool", choices=["wl-paste", "niri-open-url"], required=True)
     client.add_argument("arguments", nargs=argparse.REMAINDER)
     args = parser.parse_args()
 
     if args.command == "broker":
-        run_broker(args.socket, args.wl_paste)
+        html_roots = (
+            [root.resolve() for root in args.html_root]
+            if args.html_root
+            else default_html_roots()
+        )
+        run_broker(args.socket, args.wl_paste, args.niri_open_url, html_roots)
         return
 
     socket_value = os.environ.get("CLIPBOARD_BROKER_SOCKET")
@@ -174,9 +261,11 @@ def main() -> None:
         arguments = (
             args.arguments[1:] if args.arguments[:1] == ["--"] else args.arguments
         )
-        data = client_request(Path(socket_value), parse_wl_paste_args(arguments))
+        data = client_request(
+            Path(socket_value), client_operation(args.tool, arguments)
+        )
     except Exception as error:
-        print(f"wl-paste broker: {error}", file=sys.stderr)
+        print(f"desktop broker: {error}", file=sys.stderr)
         raise SystemExit(1) from error
     sys.stdout.buffer.write(data)
 
