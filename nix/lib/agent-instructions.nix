@@ -9,6 +9,12 @@ rec {
     When grilling, ask one question at a time using the `AskUserQuestion` tool, and wait for the answer before asking the next question.
   '';
 
+  unslop = ''
+    ## Unslop
+
+    At the start of every task, invoke the `unslop` skill before doing any work. This is unconditional. Load it for coding, debugging, and terse replies too. Apply it to all user-facing prose.
+  '';
+
   ephemeralTools = ''
     ## Ephemeral tools
 
@@ -127,6 +133,7 @@ rec {
   mkInstructions =
     {
       enableGrilling ? true,
+      enableUnslop ? true,
       enableEphemeralTools ? true,
       enableShellPortability ? true,
       enableSandbox ? true,
@@ -138,6 +145,7 @@ rec {
     {
       claudeGlobal = render "# Global Claude Code Instructions" (
         optionalBlock enableGrilling grilling
+        ++ optionalBlock enableUnslop unslop
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
         ++ optionalBlock enableSandbox sandbox
