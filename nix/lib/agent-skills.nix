@@ -68,11 +68,7 @@ let
     teach.source = mattpocock-skills + "/skills/productivity/teach";
     improve-codebase-architecture.source =
       mattpocock-skills + "/skills/engineering/improve-codebase-architecture";
-    tdd.source = mattpocock-skills + "/skills/engineering/tdd";
     unslop.source = cursor-plugins + "/pstack/skills/unslop";
-    prototype.source = mattpocock-skills + "/skills/engineering/prototype";
-    setup-matt-pocock-skills.source =
-      mattpocock-skills + "/skills/engineering/setup-matt-pocock-skills";
     wayfinder.source = mattpocock-skills + "/skills/engineering/wayfinder";
   };
 
