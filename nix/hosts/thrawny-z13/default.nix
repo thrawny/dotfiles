@@ -216,7 +216,10 @@ in
   networking = {
     hostName = "thrawny-z13";
     nftables.enable = true;
-    firewall.trustedInterfaces = [ "incusbr0" ];
+    firewall.trustedInterfaces = [
+      "incusbr0"
+      "incusbr-1000"
+    ];
   };
 
   # Host-specific home-manager overrides

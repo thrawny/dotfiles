@@ -279,6 +279,12 @@ sandbox() {
     }
 
     export SSH_AUTH_SOCK="${SANDBOX_SSH_AUTH_SOCK:-$runtime_dir/sandbox-ssh-${key_id}.sock}"
+    local ssh_auth_sock_dir
+    ssh_auth_sock_dir="$(dirname -- "$SSH_AUTH_SOCK")"
+    if ! mkdir -p "$ssh_auth_sock_dir"; then
+      echo "sandbox: failed to create SSH agent socket directory: $ssh_auth_sock_dir" >&2
+      exit 1
+    fi
 
     if ! timeout 2 ssh-add -l >/dev/null 2>&1; then
       rm -f "$SSH_AUTH_SOCK"

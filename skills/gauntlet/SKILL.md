@@ -5,7 +5,7 @@ description: Run Claude and Codex code reviews in parallel over the current chan
 
 # Gauntlet
 
-Run the current diff through two independent reviewers at once — one Claude `/code-review` and one Codex `review` — merge their findings, **fix the major issues by default**, and summarize. Findings raised by **both reviewers** are the highest-confidence ones.
+Run the current diff through two independent reviewers at once — one Claude `/code-review` and one Codex `review` — merge their findings, **fix the major issues by default**, and summarize. The engines mostly surface *different* findings — that disjoint union is the value of running two, and confidence comes from per-finding verification (§4), not from agreement.
 
 The parallel launch is handled by the bundled `scripts/gauntlet-review` launcher; this skill owns the judgment around it.
 
@@ -35,20 +35,19 @@ bash <skill-dir>/scripts/gauntlet-review "<your context brief>"
 ```
 
 - Scope is auto-detected: the current branch's diff against origin's remote-tracking default branch (for example, `origin/main`), or uncommitted changes when already on the corresponding local branch. Override with `--base <branch>`, `--uncommitted`, or `--commit <sha>` (before the brief). For a long brief, pipe it on stdin with a trailing `-`.
-- Both engines run by default. Restrict with `--reviewers claude` or `--reviewers codex` (comma list; `GAUNTLET_REVIEWERS` sets the default) — for a single-engine loop the user asked for, or to stop spending one engine's quota. Unlike quota degradation this is deterministic: a deselected engine never runs, even if its quota comes back mid-loop. A single-reviewer run has no second opinion, so lean harder on per-finding verification (step 4.1).
+- Both engines run by default. Restrict with `--reviewers claude` or `--reviewers codex` (comma list; `GAUNTLET_REVIEWERS` sets the default) — for a single-engine loop the user asked for, or to stop spending one engine's quota. Unlike quota degradation this is deterministic: a deselected engine never runs, even if its quota comes back mid-loop. A single-reviewer run generates a smaller union of findings — expect lower recall, not lower precision; verification (step 4.1) is unchanged.
 - It runs both reviewers in parallel and prints two delimited blocks labeled with each reviewer's state — `===== CLAUDE REVIEW [ok] =====` and `===== CODEX REVIEW [ok] =====`. **Reviews take 5–20 minutes. If the harness offers managed background execution that notifies on completion, launch the command that way and continue other work until the notification arrives. Only without such a mechanism, run it in the foreground with the longest timeout available.**
 - Codex reasoning effort defaults to `high`; raise it for a single run with `GAUNTLET_CODEX_EFFORT` (for example `xhigh`) or change the model with `GAUNTLET_CODEX_MODEL`.
 - Every run saves each reviewer's raw output, the reviewed SHA, and the brief under a per-repo/per-branch state dir, and prints a `===== GAUNTLET STATE =====` footer with the round number, the output path, and the ledger path. **Note those paths** — the raw output is how you re-check a dedupe decision without paying for another 5–20 minute round.
 - If this branch already has a `ledger.md` (see §6), the launcher picks it up automatically and tells the reviewers not to repeat findings already adjudicated there. A `NOTE:` line always says which ledger was used. Suppress it with `--no-prior`, or point elsewhere with `--prior <file>`.
-- **Graceful degradation:** a reviewer that is unauthenticated or out of usage/quota gets an `[unavailable: …]` block, and the script prints a `NOTE:` line saying what dropped, succeeding on the reviewer that ran. Proceed with the available findings and tell the user what was skipped and why. With only one reviewer there is no agreement signal, so lean harder on per-finding verification (step 4.1). If neither ran the script prints `ERROR:` and exits non-zero — report that and stop.
+- **Graceful degradation:** a reviewer that is unauthenticated or out of usage/quota gets an `[unavailable: …]` block, and the script prints a `NOTE:` line saying what dropped, succeeding on the reviewer that ran. Proceed with the available findings and tell the user what was skipped and why. With only one reviewer the union of findings is smaller — a recall loss verification can't recover, so note it in the summary. If neither ran the script prints `ERROR:` and exits non-zero — report that and stop.
 
 ## 3. Dedupe
 
 Merge the blocks into one set of unique issues:
 
 - Two findings are the **same issue** when they point at the same file and overlapping location *and* describe the same root cause — even if worded or scored differently. Merge them.
-- For each unique issue, record who raised it: `claude`, `codex`, or **both**.
-- **Agreement is a confidence signal** — surface findings raised by both reviewers first, and treat a single-reviewer finding as a candidate that step 4.1 must earn.
+- For each unique issue, record who raised it: `claude`, `codex`, or **both**. This is telemetry, not confidence — every major finding gets the same verification in step 4.1 regardless of source. Two independent engines mostly find *different* things; a single-source finding is the normal case, not a mark against it, and agreement changes nothing about how a finding is handled.
 - Codex scores P1/P2/P3, Claude scores high/medium/low — normalize to one scale (high/medium/low); on conflict take the higher.
 
 ## 4. Triage, then fix
@@ -104,8 +103,11 @@ Record **declined findings too, with the reason.** They are the ones that come b
 
 1. Run the gauntlet (steps 1–5). The ledger is picked up automatically from round 2 on.
 2. Fix, commit, append every finding to the ledger with its verdict.
-3. A round is **dry** when it surfaces nothing that isn't already in the ledger. Judge that against the *whole* ledger — fixed, declined, and minor alike — not just what you fixed.
-4. Stop after **one dry round**.
+3. A round is **dry** when it surfaces nothing that isn't already in the ledger. Judge that against the *whole* ledger — fixed, declined, and minor alike — not just what you fixed. Open **design gap** entries don't count against dryness: they clear through the user (§4), not through more rounds, so an otherwise-dry round with unresolved design gaps is still dry.
+4. The loop has three terminal states, and the final summary must name which one happened — a loop that exits on budget looks identical to one that exits on convergence unless the report says so:
+   - **Converged** — one dry round.
+   - **Escalated** — design gaps are batched and waiting on the user (§4). Not a failure; the loop resumes after they're resolved.
+   - **Capped** — round 4 finished without converging. Stop and report rather than keep paying: past this point rounds tend to churn fixes into new findings faster than they settle. The user can explicitly ask for more rounds; never extend past the cap on your own.
 
 Expect later rounds to flag the *fixes* from earlier rounds — that is a real and recurring category, not noise, and it is the reason to keep looping rather than stopping at the first quiet round. Converging locally before pushing is also what makes any finding a hosted reviewer reports afterwards genuinely informative: it is a miss, rather than a finding in fix code nothing had reviewed yet.
 
