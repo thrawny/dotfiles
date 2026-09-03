@@ -96,6 +96,10 @@ check-macos:
 generate-portable-theme:
     bin/generate-portable-theme
 
+# Refresh committed external agent skills from their upstream repositories
+update-portable-skills:
+    bin/update-portable-skills
+
 # === Theme ===
 
 # Validate the central theme and reject color-literal drift in consumers
@@ -137,8 +141,9 @@ test-desktop-broker:
 check-aerospace:
     aerospace reload-config --dry-run --warnings-as-errors --no-gui
 
-# Exercise portable macOS linking and conflict handling in a temporary home
+# Exercise portable macOS generated skills, linking, and conflict handling
 test-macos-portable:
+    tests/portable-skills.sh
     tests/setup-macos.sh
 
 # Build the Debian/Linuxbrew image and run the portable macOS E2E test

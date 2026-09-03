@@ -9,6 +9,15 @@ ok() { printf 'ok    %s\n' "$1"; }
 fail() { printf 'FAIL  %s\n' "$1"; problems=$((problems + 1)); }
 warn() { printf 'warn  %s\n' "$1"; warnings=$((warnings + 1)); }
 
+check_link() {
+  local source_path=$1 target_path=$2 label=$3
+  if [[ -L "$target_path" && $(readlink "$target_path") == "$source_path" ]]; then
+    ok "$label"
+  else
+    fail "unmanaged or missing link: $label"
+  fi
+}
+
 if [[ $(uname -s) == Darwin && $(uname -m) == arm64 ]]; then
   ok "Apple Silicon macOS"
 elif [[ ${DOTFILES_SETUP_TESTING:-0} == 1 ]]; then
@@ -64,14 +73,28 @@ fi
 
 while IFS=$'\t' read -r source_relative target_relative; do
   [[ -z "$source_relative" || "$source_relative" == \#* ]] && continue
-  source_path="$repo_root/$source_relative"
-  target_path="$HOME/$target_relative"
-  if [[ -L "$target_path" && $(readlink "$target_path") == "$source_path" ]]; then
-    ok "\$HOME/$target_relative"
-  else
-    fail "unmanaged or missing link: \$HOME/$target_relative"
-  fi
+  check_link "$repo_root/$source_relative" "$HOME/$target_relative" "\$HOME/$target_relative"
 done <"$repo_root/portable/macos/links.tsv"
+
+for skill_source in "$repo_root"/portable/macos/generated/agent-skills/.agents/skills/*; do
+  [[ -d "$skill_source" && -f "$skill_source/SKILL.md" ]] || continue
+  skill_name=$(basename "$skill_source")
+  check_link "$skill_source" "$HOME/.claude/skills/$skill_name" "Claude skill: $skill_name"
+  check_link "$skill_source" "$HOME/.codex/skills/$skill_name" "Codex skill: $skill_name"
+  check_link "$skill_source" "$HOME/.pi/agent/skills/$skill_name" "Pi skill: $skill_name"
+done
+
+for skill_source in "$repo_root"/skills/*; do
+  [[ -d "$skill_source" && -f "$skill_source/SKILL.md" ]] || continue
+  skill_name=$(basename "$skill_source")
+  if [[ "$skill_name" != zmx-pi ]]; then
+    check_link "$skill_source" "$HOME/.claude/skills/$skill_name" "Claude skill: $skill_name"
+    check_link "$skill_source" "$HOME/.codex/skills/$skill_name" "Codex skill: $skill_name"
+  fi
+  if [[ "$skill_name" != zmx ]]; then
+    check_link "$skill_source" "$HOME/.pi/agent/skills/$skill_name" "Pi skill: $skill_name"
+  fi
+done
 
 if [[ -s "$HOME/.gitconfig.local" ]]; then
   ok "\$HOME/.gitconfig.local"

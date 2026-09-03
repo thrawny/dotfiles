@@ -22,6 +22,13 @@ setup="$HOME/dotfiles/bin/setup-macos"
 [[ -f "$HOME/dotfiles/config/claude/settings.json" ]]
 [[ -f "$HOME/dotfiles/config/codex/config.toml" ]]
 [[ -f "$HOME/dotfiles/config/pi/settings.json" ]]
+for skill_source in "$HOME/dotfiles"/portable/macos/generated/agent-skills/.agents/skills/*; do
+  [[ -d "$skill_source" && -f "$skill_source/SKILL.md" ]] || continue
+  skill_name=$(basename "$skill_source")
+  [[ $(readlink "$HOME/.claude/skills/$skill_name") == "$skill_source" ]]
+  [[ $(readlink "$HOME/.codex/skills/$skill_name") == "$skill_source" ]]
+  [[ $(readlink "$HOME/.pi/agent/skills/$skill_name") == "$skill_source" ]]
+done
 
 # A second run converges without replacing correct links.
 first_inode=$(stat -c %i "$HOME/.zshrc" 2>/dev/null || stat -f %i "$HOME/.zshrc")

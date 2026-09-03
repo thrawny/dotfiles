@@ -150,15 +150,30 @@ if grep -RE '{{(semantic|syntax|diff|ghostty|tmux|delta)\.' "$output_dir" >/dev/
   exit 1
 fi
 
+generated_files=(
+  eza.zsh
+  ghostty.conf
+  gitconfig
+  lazygit.yml
+  monokai-pi.json
+  theme.json
+  tmux.conf
+)
+
 if [[ $check_only -eq 1 ]]; then
-  if ! diff -ru "$tracked_dir" "$output_dir"; then
+  stale=0
+  for generated_file in "${generated_files[@]}"; do
+    diff -u "$tracked_dir/$generated_file" "$output_dir/$generated_file" || stale=1
+  done
+  if [[ $stale -ne 0 ]]; then
     echo "generate-portable-theme: generated files are stale; run bin/generate-portable-theme" >&2
     exit 1
   fi
   echo "generate-portable-theme: ok"
 else
-  rm -rf "$tracked_dir"
-  mkdir -p "$(dirname "$tracked_dir")"
-  cp -R "$output_dir" "$tracked_dir"
+  mkdir -p "$tracked_dir"
+  for generated_file in "${generated_files[@]}"; do
+    cp "$output_dir/$generated_file" "$tracked_dir/$generated_file"
+  done
   echo "generated portable theme files in portable/macos/generated"
 fi

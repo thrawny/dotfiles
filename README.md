@@ -49,7 +49,16 @@ macOS preference changes are separate and opt-in:
 ~/dotfiles/bin/apply-macos-defaults
 ```
 
-The portable files under `portable/macos/generated/` are committed so the first setup does not need `jq`. After changing `nix/themes/monokai.json`, regenerate them with `just generate-portable-theme`.
+The portable files under `portable/macos/generated/` are committed so initial setup does not need generators or network access. After changing `nix/themes/monokai.json`, regenerate the themed files with `just generate-portable-theme`.
+
+External agent skills are also committed there, including their `skills-lock.json`. Their selected sources live in `portable/macos/skills.sources.tsv`. Refresh the exact set from upstream, review the generated diff, and commit it:
+
+```bash
+just update-portable-skills
+just test-macos-portable
+```
+
+`bin/setup-macos` links both the generated external skills and the repo-owned `skills/` into Claude, Codex, and Pi.
 
 A Debian container exercises the setup as a non-root user, installs the formula portion of the Brewfile through Linuxbrew, starts the configured shell, tmux, and Neovim, and checks repeat runs and conflict backups:
 
