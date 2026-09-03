@@ -1,0 +1,6 @@
+# source<TAB>skills managed from that source, separated by spaces<TAB>license path
+openclaw/acpx	acpx	LICENSE
+vercel-labs/agent-browser	agent-browser	LICENSE
+mattpocock/skills	domain-modeling grill-with-docs grilling writing-for-agents teach improve-codebase-architecture tdd prototype setup-matt-pocock-skills wayfinder	LICENSE
+anthropics/skills	frontend-design	skills/frontend-design/LICENSE.txt
+cursor/plugins	unslop	pstack/LICENSE

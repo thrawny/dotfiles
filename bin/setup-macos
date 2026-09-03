@@ -132,6 +132,15 @@ while IFS=$'\t' read -r source_relative target_relative; do
   install_link "$repo_root/$source_relative" "$HOME/$target_relative"
 done <"$manifest"
 
+# Generated external skills are committed so setup does not need network access.
+for skill_source in "$repo_root"/portable/macos/generated/agent-skills/.agents/skills/*; do
+  [[ -d "$skill_source" && -f "$skill_source/SKILL.md" ]] || continue
+  skill_name=$(basename "$skill_source")
+  install_link "$skill_source" "$HOME/.claude/skills/$skill_name"
+  install_link "$skill_source" "$HOME/.codex/skills/$skill_name"
+  install_link "$skill_source" "$HOME/.pi/agent/skills/$skill_name"
+done
+
 # Local skills are shared by all supported agents, with the existing zmx split.
 for skill_source in "$repo_root"/skills/*; do
   [[ -d "$skill_source" && -f "$skill_source/SKILL.md" ]] || continue

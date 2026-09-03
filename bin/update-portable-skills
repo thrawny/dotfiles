@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
+manifest="$repo_root/portable/macos/skills.sources.tsv"
+target="$repo_root/portable/macos/generated/agent-skills"
+temp_root=$(mktemp -d)
+staging="$temp_root/agent-skills"
+trap 'rm -rf "$temp_root"' EXIT
+
+for required_command in curl npx; do
+  if ! command -v "$required_command" >/dev/null 2>&1; then
+    echo "update-portable-skills: $required_command is required" >&2
+    exit 1
+  fi
+done
+
+mkdir -p "$staging"
+export DO_NOT_TRACK=1
+
+while IFS=$'\t' read -r source skill_list license_path; do
+  [[ -z "$source" || "$source" == \#* ]] && continue
+  if [[ -z "$skill_list" ]]; then
+    echo "update-portable-skills: no skills selected for $source" >&2
+    exit 1
+  fi
+
+  read -r -a selected_skills <<<"$skill_list"
+  echo "update $source: ${selected_skills[*]}"
+  (
+    cd "$staging"
+    npx --yes skills@latest add "$source" \
+      --skill "${selected_skills[@]}" \
+      --agent codex \
+      --full-depth \
+      --yes </dev/null
+  )
+done <"$manifest"
+
+mkdir -p "$staging/licenses"
+while IFS=$'\t' read -r source skill_list license_path; do
+  [[ -z "$source" || "$source" == \#* ]] && continue
+  if [[ -z "$license_path" ]]; then
+    echo "update-portable-skills: no license path configured for $source" >&2
+    exit 1
+  fi
+  license_name=${source//\//--}.LICENSE
+  curl --fail --silent --show-error --location \
+    "https://raw.githubusercontent.com/$source/HEAD/$license_path" \
+    --output "$staging/licenses/$license_name"
+done <"$manifest"
+
+if [[ ! -s "$staging/skills-lock.json" ]]; then
+  echo "update-portable-skills: skills CLI did not create skills-lock.json" >&2
+  exit 1
+fi
+
+expected_names="$temp_root/expected"
+actual_names="$temp_root/actual"
+: >"$expected_names"
+while IFS=$'\t' read -r source skill_list license_path; do
+  [[ -z "$source" || "$source" == \#* ]] && continue
+  read -r -a selected_skills <<<"$skill_list"
+  for skill_name in "${selected_skills[@]}"; do
+    printf '%s\n' "$skill_name" >>"$expected_names"
+  done
+done <"$manifest"
+sort -u -o "$expected_names" "$expected_names"
+
+: >"$actual_names"
+for skill_dir in "$staging"/.agents/skills/*; do
+  [[ -d "$skill_dir" && -f "$skill_dir/SKILL.md" ]] || continue
+  basename "$skill_dir" >>"$actual_names"
+done
+sort -u -o "$actual_names" "$actual_names"
+
+if ! diff -u "$expected_names" "$actual_names"; then
+  echo "update-portable-skills: generated skills do not match the manifest" >&2
+  exit 1
+fi
+
+rm -rf "$target"
+mkdir -p "$(dirname "$target")"
+mv "$staging" "$target"
+printf '\nUpdated %s\n' "$target"
+echo "Review and commit the generated skill contents and skills-lock.json."
