@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track stop --agent claude; fi"
+            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track stop --agent claude; fi'"
           }
         ]
       }
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track prompt-submit --agent claude; fi"
+            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track prompt-submit --agent claude; fi'"
           }
         ]
       }
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track notification --agent claude; fi"
+            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track notification --agent claude; fi'"
           }
         ]
       }
@@ -50,7 +50,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track session-start --agent claude; fi"
+            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-start --agent claude; fi'"
           }
         ]
       }
@@ -60,7 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track session-end --agent claude; fi"
+            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-end --agent claude; fi'"
           }
         ]
       }

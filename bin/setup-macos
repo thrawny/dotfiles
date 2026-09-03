@@ -1,0 +1,165 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+usage: bin/setup-macos [--dry-run] [--force]
+
+Link the portable macOS configuration into $HOME.
+  --dry-run  print changes without writing them
+  --force    back up and replace unmanaged conflicts
+EOF
+}
+
+dry_run=0
+force=0
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    --dry-run) dry_run=1 ;;
+    --force) force=1 ;;
+    -h|--help) usage; exit 0 ;;
+    *) usage >&2; exit 2 ;;
+  esac
+  shift
+done
+
+repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
+expected_root="$HOME/dotfiles"
+if [[ ${DOTFILES_SETUP_TESTING:-0} != 1 ]]; then
+  if [[ $(uname -s) != Darwin || $(uname -m) != arm64 ]]; then
+    echo "setup-macos: only Apple Silicon macOS is supported" >&2
+    exit 1
+  fi
+  if [[ "$repo_root" != "$expected_root" ]]; then
+    echo "setup-macos: clone this repository at $expected_root" >&2
+    echo "current checkout: $repo_root" >&2
+    exit 1
+  fi
+fi
+
+manifest="$repo_root/portable/macos/links.tsv"
+backup_root="$HOME/.dotfiles-backups/$(date +%Y%m%d-%H%M%S)-$$"
+linked=0
+unchanged=0
+skipped=0
+seeded_sources=()
+
+run() {
+  if [[ $dry_run -eq 1 ]]; then
+    printf 'would run:'
+    printf ' %q' "$@"
+    printf '\n'
+  else
+    "$@"
+  fi
+}
+
+seed_file() {
+  local example=$1 destination=$2
+  if [[ -e "$destination" || -L "$destination" ]]; then
+    return
+  fi
+  echo "seed $destination"
+  seeded_sources+=("$destination")
+  run mkdir -p "$(dirname "$destination")"
+  run cp "$example" "$destination"
+}
+
+backup_conflict() {
+  local target=$1 relative_target backup_target
+  relative_target=${target#"$HOME"/}
+  backup_target="$backup_root/$relative_target"
+  echo "backup $target -> $backup_target"
+  run mkdir -p "$(dirname "$backup_target")"
+  run mv "$target" "$backup_target"
+}
+
+install_link() {
+  local source=$1 target=$2 current_link planned_source=0 seeded_source
+  if [[ ! -e "$source" && ! -L "$source" ]]; then
+    for seeded_source in "${seeded_sources[@]}"; do
+      [[ "$seeded_source" == "$source" ]] && planned_source=1
+    done
+    if [[ $dry_run -ne 1 || $planned_source -ne 1 ]]; then
+      echo "setup-macos: missing source $source" >&2
+      exit 1
+    fi
+  fi
+
+  if [[ -L "$target" ]]; then
+    current_link=$(readlink "$target")
+    if [[ "$current_link" == "$source" ]]; then
+      ((unchanged += 1))
+      return
+    fi
+
+    if [[ "$current_link" == "$repo_root"/* ]]; then
+      echo "repair $target -> $source"
+      run rm "$target"
+      run ln -s "$source" "$target"
+      ((linked += 1))
+      return
+    fi
+  fi
+
+  if [[ -e "$target" || -L "$target" ]]; then
+    if [[ $force -eq 0 ]]; then
+      echo "skip unmanaged conflict: $target"
+      ((skipped += 1))
+      return
+    fi
+    backup_conflict "$target"
+  fi
+
+  echo "link $target -> $source"
+  run mkdir -p "$(dirname "$target")"
+  run ln -s "$source" "$target"
+  ((linked += 1))
+}
+
+# Live agent settings remain in the repository but outside version control.
+seed_file "$repo_root/config/claude/settings.example.json" "$repo_root/config/claude/settings.json"
+if [[ ! -e "$repo_root/config/claude/CLAUDE.local.md" ]]; then
+  echo "seed $repo_root/config/claude/CLAUDE.local.md"
+  seeded_sources+=("$repo_root/config/claude/CLAUDE.local.md")
+  run touch "$repo_root/config/claude/CLAUDE.local.md"
+fi
+seed_file "$repo_root/config/codex/config.example.toml" "$repo_root/config/codex/config.toml"
+seed_file "$repo_root/config/pi/settings.example.json" "$repo_root/config/pi/settings.json"
+
+while IFS=$'\t' read -r source_relative target_relative; do
+  [[ -z "$source_relative" || "$source_relative" == \#* ]] && continue
+  install_link "$repo_root/$source_relative" "$HOME/$target_relative"
+done <"$manifest"
+
+# Local skills are shared by all supported agents, with the existing zmx split.
+for skill_source in "$repo_root"/skills/*; do
+  [[ -d "$skill_source" && -f "$skill_source/SKILL.md" ]] || continue
+  skill_name=$(basename "$skill_source")
+  if [[ "$skill_name" != zmx-pi ]]; then
+    install_link "$skill_source" "$HOME/.claude/skills/$skill_name"
+    install_link "$skill_source" "$HOME/.codex/skills/$skill_name"
+  fi
+  if [[ "$skill_name" != zmx ]]; then
+    install_link "$skill_source" "$HOME/.pi/agent/skills/$skill_name"
+  fi
+done
+
+# Codex slash commands use the same skill directory format.
+for skill_source in "$repo_root"/config/codex/commands/*; do
+  [[ -d "$skill_source" && -f "$skill_source/SKILL.md" ]] || continue
+  install_link "$skill_source" "$HOME/.codex/skills/$(basename "$skill_source")"
+done
+
+printf '\nsetup-macos: %d linked, %d unchanged, %d skipped\n' "$linked" "$unchanged" "$skipped"
+if [[ $skipped -gt 0 ]]; then
+  echo "Run bin/setup-macos --force to back up and replace conflicts."
+fi
+if ! command -v brew >/dev/null 2>&1; then
+  cat <<'EOF'
+Homebrew is not available. Configuration was still applied.
+After IT installs or approves Homebrew, run: bin/install-macos-packages
+EOF
+else
+  echo "Install or update packages with: bin/install-macos-packages"
+fi

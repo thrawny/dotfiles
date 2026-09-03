@@ -1,0 +1,48 @@
+[include]
+    path = ~/.gitconfig.local
+[pull]
+    rebase = true
+[rebase]
+    autoSquash = true
+    autoStash = true
+[push]
+    default = simple
+    useForceIfIncludes = true
+[core]
+    pager = less -F -X
+    autocrlf = input
+    editor = "nvim -c 'autocmd VimLeave * call system(\"printf \\033c\")'"
+    excludesFile = ~/.config/git/ignore
+[pager]
+    diff = delta
+[credential "https://forgejo.tailf85bba.ts.net"]
+    helper = store
+    username = thrawny
+[credential "https://github.com"]
+    helper =
+    helper = !gh auth git-credential
+[credential "https://gist.github.com"]
+    helper =
+    helper = !gh auth git-credential
+[init]
+    defaultBranch = main
+[merge]
+    conflictStyle = zdiff3
+[rerere]
+    enabled = true
+[interactive]
+    diffFilter = delta --color-only
+[delta]
+    dark = true
+    syntax-theme = Monokai Extended
+    line-numbers = true
+    paging = never
+    plus-style = syntax "#004466"
+    plus-emph-style = syntax "#005f8e"
+    plus-non-emph-style = syntax "#003355"
+    minus-style = syntax "#660100"
+    minus-emph-style = syntax "#8e0100"
+    minus-non-emph-style = syntax "#440100"
+    line-numbers-plus-style = #5ad4e6
+    line-numbers-minus-style = #fc618d
+    line-numbers-zero-style = #8b888f

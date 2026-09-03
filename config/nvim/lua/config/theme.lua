@@ -1,6 +1,6 @@
 -- Loader for the central dotfiles theme (nix/themes/monokai.json).
--- The nix-built Neovim package injects the resolved palette via
--- vim.g.dotfiles_theme_path; the Home Manager runtime copy is the fallback.
+-- Nix injects its generated copy; the portable macOS setup links the runtime
+-- fallback at ~/.config/dotfiles/theme.json.
 local M = {}
 
 local cached
@@ -37,7 +37,7 @@ function M.load()
     end
   end
   error(
-    "dotfiles theme not found (checked $DOTFILES_THEME, vim.g.dotfiles_theme_path, ~/.config/dotfiles/theme.json); run `just switch`"
+    "dotfiles theme not found (checked $DOTFILES_THEME, vim.g.dotfiles_theme_path, ~/.config/dotfiles/theme.json); run `just switch` or `bin/setup-macos`"
   )
 end
 

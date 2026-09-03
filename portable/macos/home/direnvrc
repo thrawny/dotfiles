@@ -1,0 +1,46 @@
+dotenv_if_exists .env
+dotenv_if_exists .env.local
+
+source_local_envrc() {
+  if [[ -n "${SANDBOX:-}" ]]; then
+    source_env_if_exists .envrc.sandbox
+  else
+    source_env_if_exists .envrc.local
+    dotenv_if_exists .secrets
+  fi
+}
+
+use_zmx() {
+  local project_name dir_name git_common_dir git_dir worktree_name
+  if git rev-parse --git-common-dir >/dev/null 2>&1; then
+    git_common_dir="$(realpath "$(git rev-parse --git-common-dir)")"
+    git_dir="$(realpath "$(git rev-parse --git-dir)")"
+    project_name="$(basename "$(dirname "$git_common_dir")")"
+    if [[ "$git_dir" != "$git_common_dir" ]]; then
+      worktree_name="$(basename "$(git rev-parse --show-toplevel)")"
+      dir_name="${project_name}-${worktree_name}"
+    else
+      dir_name="$project_name"
+    fi
+  else
+    dir_name="$(basename "$PWD")"
+  fi
+  export ZMX_DIR="$HOME/.cache/zmx/$dir_name"
+  mkdir -p "$ZMX_DIR"
+}
+
+layout_uv() {
+  if [[ -d .venv ]]; then
+    VIRTUAL_ENV="$PWD/.venv"
+  fi
+  if [[ -z "${VIRTUAL_ENV:-}" || ! -d "$VIRTUAL_ENV" ]]; then
+    if [[ ! -f pyproject.toml ]]; then
+      log_status 'No uv project exists. Running `uv init`.'
+      uv init
+    fi
+    uv venv
+    VIRTUAL_ENV="$PWD/.venv"
+  fi
+  PATH_add "$VIRTUAL_ENV/bin"
+  export UV_ACTIVE=1 VIRTUAL_ENV
+}

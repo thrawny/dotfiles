@@ -1,0 +1,164 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "$0")/.." && pwd)
+theme_file="$repo_root/nix/themes/monokai.json"
+template_dir="$repo_root/portable/macos/templates"
+tracked_dir="$repo_root/portable/macos/generated"
+check_only=0
+
+if [[ ${1:-} == --check ]]; then
+  check_only=1
+elif [[ $# -ne 0 ]]; then
+  echo "usage: bin/generate-portable-theme [--check]" >&2
+  exit 2
+fi
+
+if ! command -v jq >/dev/null 2>&1; then
+  echo "generate-portable-theme: jq is required" >&2
+  exit 1
+fi
+
+work_dir=$(mktemp -d)
+trap 'rm -rf "$work_dir"' EXIT
+output_dir="$work_dir/generated"
+mkdir -p "$output_dir"
+
+export SEM_FOREGROUND SEM_MUTED SEM_ACCENT SEM_SUCCESS
+export SYN_FUNCTION
+export DIFF_ADD_FG DIFF_ADD_BG DIFF_ADD_EMPH DIFF_ADD_DIM
+export DIFF_DEL_FG DIFF_DEL_BG DIFF_DEL_EMPH DIFF_DEL_DIM
+export GHOSTTY_THEME GHOSTTY_BG GHOSTTY_FG GHOSTTY_SEL_BG GHOSTTY_SEL_FG GHOSTTY_P0 GHOSTTY_P8
+export TMUX_BG TMUX_GRAY TMUX_DARK_GRAY TMUX_DIM_GRAY TMUX_LIGHT_GRAY
+export DELTA_THEME
+
+SEM_FOREGROUND=$(jq -r '.semantic.foreground' "$theme_file")
+SEM_MUTED=$(jq -r '.semantic.muted' "$theme_file")
+SEM_ACCENT=$(jq -r '.semantic.accent' "$theme_file")
+SEM_SUCCESS=$(jq -r '.semantic.success' "$theme_file")
+SYN_FUNCTION=$(jq -r '.syntax.function' "$theme_file")
+DIFF_ADD_FG=$(jq -r '.diff.added.foreground' "$theme_file")
+DIFF_ADD_BG=$(jq -r '.diff.added.lineBackground' "$theme_file")
+DIFF_ADD_EMPH=$(jq -r '.diff.added.emphasisBackground' "$theme_file")
+DIFF_ADD_DIM=$(jq -r '.diff.added.dimBackground' "$theme_file")
+DIFF_DEL_FG=$(jq -r '.diff.removed.foreground' "$theme_file")
+DIFF_DEL_BG=$(jq -r '.diff.removed.lineBackground' "$theme_file")
+DIFF_DEL_EMPH=$(jq -r '.diff.removed.emphasisBackground' "$theme_file")
+DIFF_DEL_DIM=$(jq -r '.diff.removed.dimBackground' "$theme_file")
+GHOSTTY_THEME=$(jq -r '.applications.ghostty.theme' "$theme_file")
+GHOSTTY_BG=$(jq -r '.applications.ghostty.background' "$theme_file")
+GHOSTTY_FG=$(jq -r '.applications.ghostty.foreground' "$theme_file")
+GHOSTTY_SEL_BG=$(jq -r '.applications.ghostty.selectionBackground' "$theme_file")
+GHOSTTY_SEL_FG=$(jq -r '.applications.ghostty.selectionForeground' "$theme_file")
+GHOSTTY_P0=$(jq -r '.applications.ghostty.palette0' "$theme_file")
+GHOSTTY_P8=$(jq -r '.applications.ghostty.palette8' "$theme_file")
+TMUX_BG=$(jq -r '.applications.tmux.bg' "$theme_file")
+TMUX_GRAY=$(jq -r '.applications.tmux.gray' "$theme_file")
+TMUX_DARK_GRAY=$(jq -r '.applications.tmux.darkGray' "$theme_file")
+TMUX_DIM_GRAY=$(jq -r '.applications.tmux.dimGray' "$theme_file")
+TMUX_LIGHT_GRAY=$(jq -r '.applications.tmux.lightGray' "$theme_file")
+DELTA_THEME=$(jq -r '.applications.delta.syntaxTheme' "$theme_file")
+
+render() {
+  local source_file=$1 destination_file=$2
+  perl -pe '
+    s/\{\{semantic\.foreground\}\}/$ENV{SEM_FOREGROUND}/g;
+    s/\{\{semantic\.muted\}\}/$ENV{SEM_MUTED}/g;
+    s/\{\{semantic\.accent\}\}/$ENV{SEM_ACCENT}/g;
+    s/\{\{semantic\.success\}\}/$ENV{SEM_SUCCESS}/g;
+    s/\{\{syntax\.function\}\}/$ENV{SYN_FUNCTION}/g;
+    s/\{\{diff\.added\.foreground\}\}/$ENV{DIFF_ADD_FG}/g;
+    s/\{\{diff\.added\.lineBackground\}\}/$ENV{DIFF_ADD_BG}/g;
+    s/\{\{diff\.added\.emphasisBackground\}\}/$ENV{DIFF_ADD_EMPH}/g;
+    s/\{\{diff\.added\.dimBackground\}\}/$ENV{DIFF_ADD_DIM}/g;
+    s/\{\{diff\.removed\.foreground\}\}/$ENV{DIFF_DEL_FG}/g;
+    s/\{\{diff\.removed\.lineBackground\}\}/$ENV{DIFF_DEL_BG}/g;
+    s/\{\{diff\.removed\.emphasisBackground\}\}/$ENV{DIFF_DEL_EMPH}/g;
+    s/\{\{diff\.removed\.dimBackground\}\}/$ENV{DIFF_DEL_DIM}/g;
+    s/\{\{ghostty\.theme\}\}/$ENV{GHOSTTY_THEME}/g;
+    s/\{\{ghostty\.background\}\}/$ENV{GHOSTTY_BG}/g;
+    s/\{\{ghostty\.foreground\}\}/$ENV{GHOSTTY_FG}/g;
+    s/\{\{ghostty\.selectionBackground\}\}/$ENV{GHOSTTY_SEL_BG}/g;
+    s/\{\{ghostty\.selectionForeground\}\}/$ENV{GHOSTTY_SEL_FG}/g;
+    s/\{\{ghostty\.palette0\}\}/$ENV{GHOSTTY_P0}/g;
+    s/\{\{ghostty\.palette8\}\}/$ENV{GHOSTTY_P8}/g;
+    s/\{\{tmux\.bg\}\}/$ENV{TMUX_BG}/g;
+    s/\{\{tmux\.gray\}\}/$ENV{TMUX_GRAY}/g;
+    s/\{\{tmux\.darkGray\}\}/$ENV{TMUX_DARK_GRAY}/g;
+    s/\{\{tmux\.dimGray\}\}/$ENV{TMUX_DIM_GRAY}/g;
+    s/\{\{tmux\.lightGray\}\}/$ENV{TMUX_LIGHT_GRAY}/g;
+    s/\{\{delta\.syntaxTheme\}\}/$ENV{DELTA_THEME}/g;
+  ' "$source_file" >"$destination_file"
+}
+
+render "$template_dir/ghostty.conf" "$output_dir/ghostty.conf"
+render "$template_dir/tmux.conf" "$output_dir/tmux.conf"
+render "$template_dir/gitconfig" "$output_dir/gitconfig"
+render "$template_dir/lazygit.yml" "$output_dir/lazygit.yml"
+cp "$theme_file" "$output_dir/theme.json"
+
+jq '{
+  "$schema": "https://raw.githubusercontent.com/badlogic/pi-mono/main/packages/coding-agent/src/modes/interactive/theme/theme-schema.json",
+  name: "monokai-pi",
+  vars: {
+    bg: .applications.pi.background,
+    bgAlt: .applications.pi.backgroundAlt,
+    bgPanel: .applications.pi.panel,
+    selection: .applications.pi.selection,
+    green: .applications.pi.green,
+    red: .applications.pi.red,
+    white: .semantic.foreground,
+    muted: .semantic.muted,
+    dim: .semantic.dim,
+    pink: .semantic.accent,
+    pinkBright: .terminal.bright[1],
+    purple: .semantic.accentAlt,
+    cyan: .syntax.type,
+    yellow: .syntax.function,
+    orange: .semantic.warning
+  },
+  colors: {
+    accent: "pink", border: "pink", borderAccent: "pinkBright", borderMuted: "dim",
+    success: "green", error: "red", warning: "orange", muted: "muted", dim: "dim",
+    text: "white", thinkingText: "muted", selectedBg: "selection", userMessageBg: "bgPanel",
+    userMessageText: "white", customMessageBg: "bgAlt", customMessageText: "white",
+    customMessageLabel: "purple", toolPendingBg: .applications.pi.toolPendingBg,
+    toolSuccessBg: .applications.pi.toolSuccessBg, toolErrorBg: .applications.pi.toolErrorBg,
+    toolTitle: "white", toolOutput: "muted", mdHeading: "yellow", mdLink: "cyan",
+    mdLinkUrl: "muted", mdCode: "green", mdCodeBlock: "green", mdCodeBlockBorder: "dim",
+    mdQuote: "muted", mdQuoteBorder: "dim", mdHr: "dim", mdListBullet: "pink",
+    toolDiffAdded: "cyan", toolDiffRemoved: "pink", toolDiffContext: "muted",
+    syntaxComment: .applications.pi.comment, syntaxKeyword: .syntax.keyword,
+    syntaxFunction: .syntax.function, syntaxVariable: .syntax.variable, syntaxString: .syntax.string,
+    syntaxNumber: .syntax.number, syntaxType: .syntax.type, syntaxOperator: .syntax.operator,
+    syntaxPunctuation: .syntax.punctuation, thinkingOff: "dim", thinkingMinimal: "muted",
+    thinkingLow: "purple", thinkingMedium: "pink", thinkingHigh: "pinkBright",
+    thinkingXhigh: .applications.pi.thinkingXhigh, bashMode: "orange"
+  },
+  export: {
+    pageBg: .applications.pi.pageBg,
+    infoBg: .applications.pi.infoBg,
+    cardBg: .applications.pi.background
+  }
+}' "$theme_file" >"$output_dir/monokai-pi.json"
+
+jq -r '"export EZA_COLORS=\"di=38;5;\(.applications.eza.dir):ex=38;5;\(.applications.eza.executable):ln=38;5;\(.applications.eza.dir):ur=38;5;\(.applications.eza.permissions):uw=38;5;\(.applications.eza.permissions):ux=38;5;\(.applications.eza.permissions):ue=38;5;\(.applications.eza.permissions):gr=38;5;\(.applications.eza.permissions):gw=38;5;\(.applications.eza.permissions):gx=38;5;\(.applications.eza.permissions):tr=38;5;\(.applications.eza.permissions):tw=38;5;\(.applications.eza.permissions):tx=38;5;\(.applications.eza.permissions):uu=38;5;\(.applications.eza.owner):gu=38;5;\(.applications.eza.owner):da=38;5;\(.applications.eza.date):sn=38;5;\(.applications.eza.size):sb=38;5;\(.applications.eza.date):ga=38;5;\(.applications.eza.gitNew):gm=38;5;\(.applications.eza.gitModified):gd=38;5;\(.applications.eza.gitDeleted):gv=38;5;\(.applications.eza.gitRenamed)\""' "$theme_file" >"$output_dir/eza.zsh"
+
+if grep -RE '{{(semantic|syntax|diff|ghostty|tmux|delta)\.' "$output_dir" >/dev/null; then
+  echo "generate-portable-theme: unresolved theme token" >&2
+  grep -REn '{{(semantic|syntax|diff|ghostty|tmux|delta)\.' "$output_dir" >&2
+  exit 1
+fi
+
+if [[ $check_only -eq 1 ]]; then
+  if ! diff -ru "$tracked_dir" "$output_dir"; then
+    echo "generate-portable-theme: generated files are stale; run bin/generate-portable-theme" >&2
+    exit 1
+  fi
+  echo "generate-portable-theme: ok"
+else
+  rm -rf "$tracked_dir"
+  mkdir -p "$(dirname "$tracked_dir")"
+  cp -R "$output_dir" "$tracked_dir"
+  echo "generated portable theme files in portable/macos/generated"
+fi

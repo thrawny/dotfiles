@@ -1,0 +1,185 @@
+# Portable macOS counterpart of nix/home/shared/zsh.nix.
+
+export WORDCHARS='_-'
+export FZF_CTRL_R_OPTS='--bind esc:print-query --bind ctrl-c:print-query'
+export PYTHONDONTWRITEBYTECODE=1
+export PYTHONPYCACHEPREFIX="$HOME/.cache/python-pycache"
+export PYTHONUNBUFFERED=1
+export GOPATH="$HOME/go"
+export PNPM_HOME="$HOME/.local/share/pnpm"
+export EDITOR=nvim
+export VISUAL=nvim
+export MANPAGER='nvim +Man!'
+export AWS_PAGER=''
+export LANG='en_US.UTF-8'
+export LC_ALL='en_US.UTF-8'
+export LC_CTYPE='en_US.UTF-8'
+export KUBECTL_EXTERNAL_DIFF=kubectl-dyff
+export CLAUDE_CONFIG_DIR="$HOME/.claude"
+export PATH="$HOME/dotfiles/bin:$HOME/.local/bin:$HOME/.npm-global/bin:$PNPM_HOME:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:$PATH"
+
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=50000
+SAVEHIST=50000
+setopt AUTO_CD AUTO_PUSHD PUSHD_IGNORE_DUPS PUSHDMINUS
+setopt EXTENDED_HISTORY HIST_EXPIRE_DUPS_FIRST HIST_IGNORE_DUPS HIST_IGNORE_SPACE HIST_VERIFY
+setopt INC_APPEND_HISTORY SHARE_HISTORY
+
+autoload -Uz compinit && compinit
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Za-z}'
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+zstyle ':completion:*' menu select
+
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+  FPATH="$(brew --prefix)/share/zsh/site-functions:$FPATH"
+
+  plugin_files=(
+    "$(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh"
+    "$(brew --prefix)/share/zsh-history-substring-search/zsh-history-substring-search.zsh"
+  )
+  for plugin_file in $plugin_files; do
+    [[ -r "$plugin_file" ]] && source "$plugin_file"
+  done
+
+  vi_mode="$(brew --prefix)/opt/zsh-vi-mode/share/zsh-vi-mode/zsh-vi-mode.plugin.zsh"
+  if [[ -z "$NVIM" && -r "$vi_mode" ]]; then
+    ZVM_VI_INSERT_ESCAPE_BINDKEY=jk
+    ZVM_LINE_INIT_MODE=$ZVM_MODE_INSERT
+    source "$vi_mode"
+  fi
+
+  omz_git="$HOME/.local/share/oh-my-zsh/plugins/git/git.plugin.zsh"
+  [[ -r "$omz_git" ]] && source "$omz_git"
+
+  syntax_highlighting="$(brew --prefix)/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh"
+fi
+
+if command -v zmx >/dev/null 2>&1; then
+  source <(zmx completions zsh)
+fi
+if command -v kubectl >/dev/null 2>&1; then
+  source <(kubectl completion zsh)
+fi
+if command -v direnv >/dev/null 2>&1; then
+  eval "$(direnv hook zsh)"
+fi
+
+if command -v fzf >/dev/null 2>&1; then
+  fzf_share="$(brew --prefix fzf 2>/dev/null)/shell"
+  [[ -r "$fzf_share/key-bindings.zsh" ]] && source "$fzf_share/key-bindings.zsh"
+  [[ -r "$fzf_share/completion.zsh" ]] && source "$fzf_share/completion.zsh"
+  export FZF_DEFAULT_COMMAND='fd --type f --hidden --follow --exclude .git --exclude .venv --exclude node_modules'
+  export FZF_DEFAULT_OPTS='--height 40% --layout=reverse --border --info=inline'
+  export FZF_CTRL_T_OPTS='--preview "bat --style=numbers --color=always --line-range :100 {}"'
+fi
+
+ZSH_AUTOSUGGEST_PARTIAL_ACCEPT_WIDGETS+=(forward-word emacs-forward-word vi-forward-word)
+bindkey '^F' forward-word
+bindkey '^f' forward-word
+[[ -n "$NVIM" ]] && bindkey '^E' end-of-line
+
+alias h=history
+alias l='ls -lh'
+alias fig='docker compose'
+alias vim=nvim
+alias k=kubectl
+alias kp='kubectl get pod'
+alias ka='kubectl apply -f'
+alias kn='kubectl -n kube-system'
+alias ku='kubectl config use-context'
+alias gsha='git rev-parse HEAD | cut -c1-9'
+alias hb='gh repo view --web'
+alias gcam='git add -A && git commit -m'
+alias bu='brew upgrade'
+alias c=claude
+alias cy='claude --dangerously-skip-permissions'
+alias gp='git push --force-with-lease --force-if-includes'
+alias gw='git worktree'
+alias tp='terraform plan'
+alias ta='terraform apply'
+alias taf='terraform apply -auto-approve'
+alias cx=codex
+alias cxy='codex --dangerously-bypass-approvals-and-sandbox'
+alias piw='pi-worktree-new'
+alias spiw='pi-worktree-new --sandbox'
+alias scx='sandbox codex --dangerously-bypass-approvals-and-sandbox'
+alias sc='sandbox claude --dangerously-skip-permissions'
+alias scw='claude-worktree-new --sandbox'
+alias spi='sandbox pi'
+alias cct='security find-generic-password -s "Claude Code-credentials" -w | jq -c "{claudeAiOauth}"'
+
+if command -v bat >/dev/null 2>&1 && [[ -o interactive ]]; then
+  alias cat='bat --style=grid,snip --theme "Monokai Extended Origin"'
+fi
+if command -v eza >/dev/null 2>&1 && [[ -o interactive ]]; then
+  alias ls='eza --icons --group-directories-first'
+  # Updated by bin/generate-portable-theme.
+  [[ -r "$HOME/.config/dotfiles/eza.zsh" ]] && source "$HOME/.config/dotfiles/eza.zsh"
+fi
+
+function gtrm() {
+  git tag --delete "$1" && git push --delete origin "$1"
+}
+
+function gpo() {
+  git push -u origin "$(git rev-parse --abbrev-ref HEAD)"
+}
+
+function gwg() {
+  cd "$(git-worktree-go "$1")" || return
+}
+
+function zmx-clear-all() {
+  if ! command -v zmx >/dev/null 2>&1; then
+    echo 'zmx is not installed'
+    return 1
+  fi
+  local killed=0 session_name
+  while IFS= read -r session_name; do
+    [[ -z "$session_name" ]] && continue
+    zmx kill "$session_name"
+    ((killed++))
+  done < <(zmx list --short)
+  [[ $killed -eq 0 ]] && echo 'No zmx sessions to clear'
+}
+
+function al() {
+  local aws_profile="${AWS_PROFILE:-default}"
+  aws sso login --profile "$aws_profile"
+}
+
+function ecr_login() {
+  local account_id aws_region ecr_url
+  account_id="$(aws --profile "$1" sts get-caller-identity --query Account --output text)"
+  aws_region="$(aws --profile "$1" configure get region)"
+  ecr_url="$account_id.dkr.ecr.$aws_region.amazonaws.com"
+  aws --profile "$1" ecr get-login-password | docker login --username AWS --password-stdin "$ecr_url"
+}
+
+if command -v zoxide >/dev/null 2>&1 && [[ -o interactive ]]; then
+  eval "$(zoxide init --cmd cd zsh)"
+fi
+
+if [[ -z "$SANDBOX" && -f "$HOME/.secrets" ]]; then
+  set -a
+  source "$HOME/.secrets"
+  set +a
+fi
+[[ -f "$HOME/.zsh.local" ]] && source "$HOME/.zsh.local"
+
+if [[ -n "$SANDBOX" ]]; then
+  SAVEHIST=0
+  unsetopt APPEND_HISTORY INC_APPEND_HISTORY SHARE_HISTORY
+fi
+
+if [[ -n "$QUIET_PROMPT" ]]; then
+  PROMPT=
+  RPROMPT=
+  export DIRENV_LOG_FORMAT=
+elif [[ "$TERM" != dumb ]] && command -v starship >/dev/null 2>&1; then
+  eval "$(starship init zsh)"
+fi
+
+# Syntax highlighting must be the last plugin loaded because it wraps widgets.
+[[ -n "${syntax_highlighting:-}" && -r "$syntax_highlighting" ]] && source "$syntax_highlighting"

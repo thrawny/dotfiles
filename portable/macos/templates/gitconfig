@@ -1,0 +1,48 @@
+[include]
+    path = ~/.gitconfig.local
+[pull]
+    rebase = true
+[rebase]
+    autoSquash = true
+    autoStash = true
+[push]
+    default = simple
+    useForceIfIncludes = true
+[core]
+    pager = less -F -X
+    autocrlf = input
+    editor = "nvim -c 'autocmd VimLeave * call system(\"printf \\033c\")'"
+    excludesFile = ~/.config/git/ignore
+[pager]
+    diff = delta
+[credential "https://forgejo.tailf85bba.ts.net"]
+    helper = store
+    username = thrawny
+[credential "https://github.com"]
+    helper =
+    helper = !gh auth git-credential
+[credential "https://gist.github.com"]
+    helper =
+    helper = !gh auth git-credential
+[init]
+    defaultBranch = main
+[merge]
+    conflictStyle = zdiff3
+[rerere]
+    enabled = true
+[interactive]
+    diffFilter = delta --color-only
+[delta]
+    dark = true
+    syntax-theme = {{delta.syntaxTheme}}
+    line-numbers = true
+    paging = never
+    plus-style = syntax "{{diff.added.lineBackground}}"
+    plus-emph-style = syntax "{{diff.added.emphasisBackground}}"
+    plus-non-emph-style = syntax "{{diff.added.dimBackground}}"
+    minus-style = syntax "{{diff.removed.lineBackground}}"
+    minus-emph-style = syntax "{{diff.removed.emphasisBackground}}"
+    minus-non-emph-style = syntax "{{diff.removed.dimBackground}}"
+    line-numbers-plus-style = {{diff.added.foreground}}
+    line-numbers-minus-style = {{diff.removed.foreground}}
+    line-numbers-zero-style = {{semantic.muted}}
