@@ -67,16 +67,61 @@ typecheck: typecheck-python
 typecheck-python:
     basedpyright
 
+# === Portable macOS ===
+
+# Link portable macOS configuration (safe to rerun)
+setup-macos *args:
+    bin/setup-macos {{ args }}
+
+# Install the portable macOS package set after Homebrew is available
+install-macos-packages:
+    bin/install-macos-packages
+
+# Apply the opt-in macOS preference set
+macos-defaults:
+    bin/apply-macos-defaults
+
+# Check portable macOS links, applications, and commands
+check-macos:
+    bin/check-macos
+
+# Regenerate committed portable configuration from the canonical theme
+generate-portable-theme:
+    bin/generate-portable-theme
+
 # === Theme ===
 
 # Validate the central theme and reject color-literal drift in consumers
 check-theme:
     bin/check-theme
+    bin/generate-portable-theme --check
 
 # === Tests ===
 
 # Run all tests
-test: test-nvim
+test: test-nvim test-macos-portable
+
+# Exercise portable macOS linking and conflict handling in a temporary home
+test-macos-portable:
+    tests/setup-macos.sh
+
+# Build the Debian/Linuxbrew image and run the portable macOS E2E test
+test-macos-container:
+    tests/macos-container.sh
+
+# Leave a playground container running from the previously built E2E image
+macos-container-start:
+    docker rm -f dotfiles-portable-macos-playground >/dev/null 2>&1 || true
+    docker run -d --name dotfiles-portable-macos-playground --entrypoint sleep "${MACOS_CONTAINER_IMAGE:-dotfiles-portable-macos-test}" infinity
+    @echo 'Enter with: just macos-container-shell'
+
+# Open an interactive shell in the running playground container
+macos-container-shell:
+    docker exec -it dotfiles-portable-macos-playground zsh -l
+
+# Stop the playground container
+macos-container-stop:
+    docker rm -f dotfiles-portable-macos-playground
 
 # Run Neovim config tests
 test-nvim:

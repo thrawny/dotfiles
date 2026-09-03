@@ -1,3 +1,5 @@
+local nix_package = vim.env.DOTFILES_PORTABLE ~= "1" and vim.v.progpath:find("/nix/store/", 1, true) ~= nil
+
 local function is_special_lsp_path(path)
   return path:match("^%a+://") or path:match("^/nix/store/")
 end
@@ -107,10 +109,10 @@ return {
           end,
         },
         basedpyright = {
-          mason = false,
+          mason = not nix_package,
         },
         ruff = {
-          mason = false,
+          mason = not nix_package,
         },
       },
     },
@@ -119,11 +121,11 @@ return {
   {
     "neovim/nvim-lspconfig",
     -- Without Mason, lua_ls starts before lazydev.nvim can set up its
-    -- workspace/configuration handler, so it never gets the library paths.
-    -- Provide them statically so lua_ls has type info from startup. The plugin
-    -- dirs must be resolved here (at load time, from the plugin table) because
-    -- they live in the Nix store at paths only lazy.nvim knows.
+    -- workspace/configuration handler. Nix therefore needs static paths.
     opts = function(_, opts)
+      if not nix_package then
+        return
+      end
       local plugins = require("lazy.core.config").plugins
       local library = { vim.env.VIMRUNTIME .. "/lua" }
       for _, name in ipairs({ "LazyVim", "lazy.nvim" }) do

@@ -1,0 +1,83 @@
+#!/usr/bin/env bash
+set -u
+
+repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
+problems=0
+warnings=0
+
+ok() { printf 'ok    %s\n' "$1"; }
+fail() { printf 'FAIL  %s\n' "$1"; problems=$((problems + 1)); }
+warn() { printf 'warn  %s\n' "$1"; warnings=$((warnings + 1)); }
+
+if [[ $(uname -s) == Darwin && $(uname -m) == arm64 ]]; then
+  ok "Apple Silicon macOS"
+elif [[ ${DOTFILES_SETUP_TESTING:-0} == 1 ]]; then
+  ok "Linux container compatibility mode"
+else
+  fail "Apple Silicon macOS required"
+fi
+
+if [[ "$repo_root" == "$HOME/dotfiles" ]]; then
+  ok "checkout at ~/dotfiles"
+else
+  fail "checkout must be ~/dotfiles, found $repo_root"
+fi
+
+if command -v brew >/dev/null 2>&1; then
+  ok "Homebrew"
+else
+  warn "Homebrew missing; configuration links can still work"
+fi
+
+required_commands=(
+  bat delta difft direnv eza fd fzf gh git jq just lazygit nvim node
+  acpx pi pnpm python3 rg starship tmux uv yq zmx zoxide zsh agent-browser
+)
+if [[ ${DOTFILES_SETUP_TESTING:-0} != 1 ]]; then
+  required_commands+=(claude codex)
+fi
+for command_name in "${required_commands[@]}"; do
+  if command -v "$command_name" >/dev/null 2>&1; then
+    ok "$command_name"
+  else
+    fail "missing command: $command_name"
+  fi
+done
+
+for optional_command in agent-history agent-switch; do
+  if command -v "$optional_command" >/dev/null 2>&1; then
+    ok "$optional_command"
+  else
+    warn "optional command missing: $optional_command"
+  fi
+done
+
+if [[ $(uname -s) == Darwin ]]; then
+  for application in Ghostty AeroSpace; do
+    if open -Ra "$application" >/dev/null 2>&1; then
+      ok "$application.app"
+    else
+      fail "missing application: $application"
+    fi
+  done
+fi
+
+while IFS=$'\t' read -r source_relative target_relative; do
+  [[ -z "$source_relative" || "$source_relative" == \#* ]] && continue
+  source_path="$repo_root/$source_relative"
+  target_path="$HOME/$target_relative"
+  if [[ -L "$target_path" && $(readlink "$target_path") == "$source_path" ]]; then
+    ok "\$HOME/$target_relative"
+  else
+    fail "unmanaged or missing link: \$HOME/$target_relative"
+  fi
+done <"$repo_root/portable/macos/links.tsv"
+
+if [[ -s "$HOME/.gitconfig.local" ]]; then
+  ok "\$HOME/.gitconfig.local"
+else
+  warn "\$HOME/.gitconfig.local is absent; set your Git name and email there"
+fi
+
+printf '\ncheck-macos: %d problem(s), %d warning(s)\n' "$problems" "$warnings"
+[[ $problems -eq 0 ]]

@@ -13,11 +13,11 @@ status_line = ["model-with-reasoning", "context-used", "git-branch"]
 theme = "monokai-extended"
 
 [sandbox_workspace_write]
-writable_roots = ["/home/thrawny/.cache", "/home/thrawny/.npm"]
+writable_roots = ["/Users/thrawny/.cache", "/Users/thrawny/.npm"]
 network_access = true
 
-[projects."/home/thrawny/dotfiles"]
+[projects."/Users/thrawny/dotfiles"]
 trust_level = "trusted"
 
-[projects."/home/thrawny/code"]
+[projects."/Users/thrawny/code"]
 trust_level = "trusted"

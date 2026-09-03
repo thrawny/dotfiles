@@ -1,6 +1,10 @@
-# Neovim Notes
+# Neovim notes
 
-The immutable LazyVim package is assembled in `nix/lib/nvim-package.nix`; the Lua modules here are copied into its runtime path. Add LazyVim extras and external plugin source pins in Nix, while keeping plugin behavior in `lua/plugins/`.
+The Lua configuration supports two package paths. Nix assembles an immutable LazyVim package in `nix/lib/nvim-package.nix`. Portable macOS bootstraps `lazy.nvim` from `init.lua`, pins plugins in `lazy-lock.json`, and uses Mason for editor tools.
+
+Keep LazyVim extras aligned between `nix/lib/nvim-package.nix` and `lua/config/lazy.lua`. Plugin behavior belongs in `lua/plugins/`. A Nix-only package override must detect the `/nix/store` program path so Homebrew Neovim keeps its runtime installer.
+
+After portable bootstrap changes, run an unwrapped Neovim sync and `just test-nvim`.
 
 Preferences:
 

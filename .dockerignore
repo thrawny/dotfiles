@@ -1,5 +1,7 @@
 .git
 .gitmodules
+.secrets*
+**/.secrets*
 .venv
 **/.venv
 venv
@@ -10,6 +12,7 @@ __pycache__
 *.pyd
 .DS_Store
 node_modules
+**/node_modules
 **/.cache
 **/.mypy_cache
 **/.ruff_cache
@@ -34,9 +37,11 @@ config/nvim/swap/*
 config/k9s/clusters/*
 config/k9s/aliases.yaml
 
-config/codex/*
-!config/codex/config.example.toml
-!config/codex/prompts
+# Live agent settings stay outside container build contexts.
+config/codex/config.toml
+config/claude/settings.json
+config/claude/CLAUDE.local.md
+config/pi/settings.json
 
 # Rust build artifacts
 rust/target

@@ -22,7 +22,7 @@
     "fgSafeMuted": "#c8c3cf",
     "shikiTheme": "monokai"
   },
-  "shellPath": "/run/current-system/sw/bin/zsh",
+  "shellPath": "/bin/zsh",
   "enabledModels": [
     "openai-codex/gpt-5.6-sol",
     "openai-codex/gpt-6-astra"

@@ -1,0 +1,6 @@
+# Homebrew lives here on supported Apple Silicon Macs.
+if [[ -x /opt/homebrew/bin/brew ]]; then
+  eval "$(/opt/homebrew/bin/brew shellenv)"
+fi
+
+export PATH="$HOME/dotfiles/bin:$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:$PATH"

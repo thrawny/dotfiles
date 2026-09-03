@@ -30,7 +30,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-switch track stop --agent claude"
+            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track stop --agent claude; fi'"
           }
         ]
       }
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-switch track prompt-submit --agent claude"
+            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track prompt-submit --agent claude; fi'"
           }
         ]
       }
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-switch track notification --agent claude"
+            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track notification --agent claude; fi'"
           }
         ]
       }
@@ -71,7 +71,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-switch track session-start --agent claude"
+            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-start --agent claude; fi'"
           }
         ]
       },
@@ -90,7 +90,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "agent-switch track session-end --agent claude"
+            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-end --agent claude; fi'"
           }
         ]
       }

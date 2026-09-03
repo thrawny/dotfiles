@@ -1,0 +1,11 @@
+promptToReturnFromSubprocess: false
+quitOnTopLevelReturn: true
+git:
+  diffRenderers:
+    - colorArg: always
+      command: "delta --paging=never --dark --syntax-theme='Monokai Extended' --line-numbers --plus-style='syntax \"#004466\"' --plus-emph-style='syntax \"#005f8e\"' --plus-non-emph-style='syntax \"#003355\"' --minus-style='syntax \"#660100\"' --minus-emph-style='syntax \"#8e0100\"' --minus-non-emph-style='syntax \"#440100\"' --line-numbers-plus-style='#5ad4e6' --line-numbers-minus-style='#fc618d' --line-numbers-zero-style='#8b888f'"
+    - command: "difft --color=always --display=inline"
+      type: extDiff
+os:
+  edit: '[ -z "$NVIM" ] && nvim {{filename}} || (nvim --server "$NVIM" --remote-send "q" && nvim --server "$NVIM" --remote {{filename}})'
+  editAtLine: '[ -z "$NVIM" ] && nvim +{{line}} {{filename}} || (nvim --server "$NVIM" --remote-send "q" && nvim --server "$NVIM" --remote +{{line}} {{filename}})'

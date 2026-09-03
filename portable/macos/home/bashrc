@@ -1,0 +1,15 @@
+# shellcheck shell=bash
+export PATH="$HOME/dotfiles/bin:$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm:$HOME/.bun/bin:$HOME/.cargo/bin:$HOME/go/bin:$PATH"
+export EDITOR=nvim
+export VISUAL=nvim
+
+if [[ -n "$QUIET_PROMPT" ]]; then
+  PS1=
+  PS2=
+  export DIRENV_LOG_FORMAT=
+else
+  command -v direnv >/dev/null 2>&1 && eval "$(direnv hook bash)"
+  if [[ "$TERM" != dumb ]] && command -v starship >/dev/null 2>&1; then
+    eval "$(starship init bash)"
+  fi
+fi

@@ -1,18 +1,12 @@
 # Neovim
 
-This is a Lua-configured LazyVim setup packaged immutably with
-[`lazy-nvim-nix`](https://github.com/josh/lazy-nvim-nix). LazyVim, plugins, and
-Treesitter parsers are Nix store paths; startup performs no plugin installation
-or update. Language servers and formatters remain in the shared Home Manager
-package sets so agents and shell workflows can use the same tools.
+This Lua-configured LazyVim setup has two package paths.
 
-- `nix/lib/nvim-package.nix` selects LazyVim extras and external plugin sources.
-- `lua/config/` and `lua/plugins/` keep the normal LazyVim configuration model.
-- `nix/flake.lock` is the only plugin/source lock file.
+The Nix path uses [`lazy-nvim-nix`](https://github.com/josh/lazy-nvim-nix). Plugins and Treesitter parsers are immutable store paths, while language servers and formatters come from Home Manager. `nix/lib/nvim-package.nix` selects extras and plugin sources; `nix/flake.lock` pins them.
 
-Run `just test-nvim` from the repository root to build the package and execute
-the Lua tests. Lua edits take effect after `just switch`; `nix run ./nix#nvim`
-builds and launches the pending configuration without switching the profile.
+The portable macOS path starts at `init.lua`, bootstraps `lazy.nvim`, and uses `lazy-lock.json`. Mason installs its language servers and formatters. `lua/config/lazy.lua` must select the same LazyVim extras as the Nix package.
+
+Both paths use `lua/config/` and `lua/plugins/`. Run `just test-nvim` from the repository root to build the Nix package and execute the Lua tests. Lua edits on Nix take effect after `just switch`; `nix run ./nix#nvim` builds and launches the pending configuration without switching the profile.
 
 Update the editor inputs from `nix/` with:
 
