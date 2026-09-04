@@ -22,6 +22,7 @@ head = "a" * 40
 no_checks = os.environ.get("FAKE_NO_CHECKS") == "1"
 no_signals = os.environ.get("FAKE_NO_SIGNALS") == "1"
 active_reviewer = os.environ.get("FAKE_ACTIVE_REVIEWER") == "1"
+comment_reaction = os.environ.get("FAKE_COMMENT_REACTION") == "1"
 human_review_state = os.environ.get("FAKE_HUMAN_REVIEW_STATE")
 
 if args[:2] == ["pr", "view"]:
@@ -96,7 +97,31 @@ if args and args[0] == "api":
         raise SystemExit(0)
 
     items = []
-    if not no_signals:
+    if comment_reaction:
+        if endpoint.startswith("repos/acme/widgets/issues/12/comments?"):
+            items = [{
+                "id": 555,
+                "user": {"login": "ReviewerOne"},
+                "body": "@codex review",
+                "created_at": "2026-07-10T00:05:00Z",
+                "reactions": {"total_count": 1, "eyes": 1},
+            }, {
+                "id": 444,
+                "user": {"login": "ReviewerOne"},
+                "body": "@codex review",
+                "created_at": "2026-07-09T23:00:00Z",
+                "reactions": {"total_count": 1, "eyes": 1},
+            }]
+        elif endpoint.startswith("repos/acme/widgets/issues/comments/555/reactions?"):
+            items = [{
+                "user": {"login": "chatgpt-codex-connector[bot]"},
+                "content": "eyes",
+                "created_at": "2026-07-10T00:05:30Z",
+            }]
+        elif "/issues/comments/" in endpoint:
+            print("unexpected reaction lookup: " + endpoint, file=sys.stderr)
+            raise SystemExit(2)
+    elif not no_signals:
         if "/reactions?" in endpoint:
             items = [{
                 "user": {"login": "chatgpt-codex-connector[bot]"},
@@ -252,6 +277,21 @@ def test_active_reviewer_takes_precedence_over_final_artifacts(
     data = json.loads(result.stdout)
     assert data["reviewers"][0]["state"] == "active"
     assert "codex-active" in data["readiness"]["machineBlockers"]
+
+
+def test_reaction_on_a_trigger_comment_marks_the_reviewer_active(
+    tmp_path: Path,
+) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = pr_harness.env.copy()
+    env["FAKE_COMMENT_REACTION"] = "1"
+    result = pr_harness.run("snapshot", "12", "--json", env=env)
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    reviewer = data["reviewers"][0]
+    assert reviewer["state"] == "active"
+    assert reviewer["active_reactions"] == 1
+    assert reviewer["issue_comments"] == 0
 
 
 def test_waiter_degrades_an_active_unavailable_reviewer(tmp_path: Path) -> None:

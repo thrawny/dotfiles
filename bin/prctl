@@ -412,29 +412,36 @@ def reviewer_signals(
     cutoff: datetime,
     adapter: ReviewerAdapter,
 ) -> ReviewerSignals:
-    reactions = [
-        item
-        for item in paginated_items(host, f"repos/{repo}/issues/{pr_number}/reactions")
-        if artifact_is_current(
-            item,
-            adapter=adapter,
-            head_sha=head_sha,
-            cutoff=cutoff,
-            date_field="created_at",
-        )
-    ]
-
-    def count(endpoint: str, date_field: str) -> int:
-        return sum(
-            artifact_is_current(
+    def current(items: list[dict[str, Any]], date_field: str) -> list[dict[str, Any]]:
+        return [
+            item
+            for item in items
+            if artifact_is_current(
                 item,
                 adapter=adapter,
                 head_sha=head_sha,
                 cutoff=cutoff,
                 date_field=date_field,
             )
-            for item in paginated_items(host, endpoint)
+        ]
+
+    issue_comments = paginated_items(host, f"repos/{repo}/issues/{pr_number}/comments")
+    # A reviewer triggered by a comment (`@codex review`) reacts on that comment,
+    # not on the pull request, so reactions on comments posted for this head are
+    # part of the reviewer's signal.
+    reactions = paginated_items(host, f"repos/{repo}/issues/{pr_number}/reactions")
+    for comment in issue_comments:
+        if not comment_may_carry_trigger_reaction(comment, cutoff):
+            continue
+        reactions.extend(
+            paginated_items(
+                host, f"repos/{repo}/issues/comments/{comment['id']}/reactions"
+            )
         )
+    reactions = current(reactions, "created_at")
+
+    def count(endpoint: str, date_field: str) -> int:
+        return len(current(paginated_items(host, endpoint), date_field))
 
     return ReviewerSignals(
         name=adapter.name,
@@ -448,8 +455,21 @@ def reviewer_signals(
         ),
         reviews=count(f"repos/{repo}/pulls/{pr_number}/reviews", "submitted_at"),
         inline_comments=count(f"repos/{repo}/pulls/{pr_number}/comments", "created_at"),
-        issue_comments=count(f"repos/{repo}/issues/{pr_number}/comments", "created_at"),
+        issue_comments=len(current(issue_comments, "created_at")),
     )
+
+
+def comment_may_carry_trigger_reaction(
+    comment: dict[str, Any], cutoff: datetime
+) -> bool:
+    """True for a comment posted for the current head that anyone reacted to."""
+    if not isinstance(comment.get("id"), int):
+        return False
+    created_at = comment.get("created_at")
+    if not isinstance(created_at, str) or timestamp(created_at) < cutoff:
+        return False
+    summary = comment.get("reactions")
+    return isinstance(summary, dict) and int(summary.get("total_count") or 0) > 0
 
 
 def graphql_json(host: str, query: str, *fields: tuple[str, object]) -> Any:
