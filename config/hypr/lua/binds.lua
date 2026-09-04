@@ -53,6 +53,23 @@ bind("ALT + Tab", dsp.focus({ last = true }))
 bind("ALT + G", dsp.group.toggle())
 bind("ALT + SHIFT + G", dsp.group.next())
 
+-- Switch only the active workspace between the niri-like scrolling layout and
+-- Hyprland's standard dwindle layout. This follows Omarchy's SUPER+L toggle.
+bind("SUPER + L", function()
+	local workspace = hl.get_active_workspace()
+	if not workspace then
+		return
+	end
+
+	local layout = workspace.tiled_layout == "scrolling" and "dwindle" or "scrolling"
+	hl.workspace_rule({ workspace = tostring(workspace.id), layout = layout })
+	hl.notification.create({
+		text = "Workspace layout: " .. layout,
+		duration = 2000,
+		icon = "info",
+	})
+end)
+
 -- Focus
 bind("ALT + H", dsp.focus({ direction = "l" }))
 bind("ALT + J", dsp.focus({ direction = "d" }))
