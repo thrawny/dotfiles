@@ -45,6 +45,16 @@ let
       skill.source + "/SKILL.md"
     )) "agent skill '${name}' is missing SKILL.md at ${toString skill.source}";
     skill;
+  materializeSkill =
+    pkgs: name: skill:
+    skill
+    // lib.optionalAttrs (skill ? patches) {
+      source = pkgs.applyPatches {
+        name = "agent-skill-${name}";
+        src = skill.source;
+        inherit (skill) patches;
+      };
+    };
 
   localSkillOverrides = {
     zmx.agents = [
@@ -68,7 +78,11 @@ let
     teach.source = mattpocock-skills + "/skills/productivity/teach";
     improve-codebase-architecture.source =
       mattpocock-skills + "/skills/engineering/improve-codebase-architecture";
-    unslop.source = cursor-plugins + "/pstack/skills/unslop";
+    unslop = {
+      source = cursor-plugins + "/pstack/skills/unslop";
+      # Upstream disables automatic invocation despite declaring this skill must always apply.
+      patches = [ ../patches/skills/unslop-enable-model-invocation.patch ];
+    };
     wayfinder.source = mattpocock-skills + "/skills/engineering/wayfinder";
   };
 
@@ -97,7 +111,10 @@ rec {
   };
 
   skillEntriesFor =
-    agent: lib.filterAttrs (_: skill: builtins.elem agent (skill.agents or agents)) skillCatalog;
+    pkgs: agent:
+    lib.mapAttrs (materializeSkill pkgs) (
+      lib.filterAttrs (_: skill: builtins.elem agent (skill.agents or agents)) skillCatalog
+    );
   skillFiles =
     agent: skills:
     lib.mapAttrs' (

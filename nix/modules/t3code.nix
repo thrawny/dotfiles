@@ -33,7 +33,7 @@ let
     EOF
   '';
 
-  codexSkills = agentAssets.skillEntriesFor "codex";
+  codexSkills = agentAssets.skillEntriesFor pkgs "codex";
   codexSkillLinks = lib.concatStringsSep "\n" (
     lib.mapAttrsToList (name: skill: ''
       link_store_path ${lib.escapeShellArg "${codexHome}/skills/${name}"} ${lib.escapeShellArg (toString skill.source)}
