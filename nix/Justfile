@@ -360,51 +360,49 @@ clean:
     echo ""
     echo "==> Cleanup complete!"
 
-# Push system closure to Cachix, excluding large upstream binaries
+# Push the flake's cache-bundle (selected expensive builds) to Cachix
 cache dry_run="":
     #!/usr/bin/env bash
     set -euo pipefail
 
     dry_run="{{ dry_run }}"
+    cache=thrawny
 
     if [ -z "$dry_run" ] && [ -z "${CACHIX_AUTH_TOKEN:-}" ]; then
         echo "Error: CACHIX_AUTH_TOKEN not set"
         exit 1
     fi
 
-    # Large pre-built binaries that have their own distribution
-    exclude=(
-        helium
-        spotify
-        slack
-        teams-for-linux
-        google-chrome
-        1password
-    )
+    # Members are declared in flake.nix (packages.<system>.cache-bundle). Building the
+    # bundle also builds anything missing, so this works before `just switch`.
+    bundle=$(nix build .#cache-bundle --no-link --print-out-paths --no-write-lock-file)
 
-    pattern=$(printf '|%s' "${exclude[@]}")
-    pattern="${pattern:1}"
+    echo "cache-bundle members:"
+    ls "$bundle" | sed 's/^/  /'
 
-    all_paths=$(nix path-info -r /run/current-system)
-    total=$(echo "$all_paths" | wc -l)
-    paths=$(echo "$all_paths" | grep -Ev "/nix/store/[a-z0-9]+-($pattern)-")
-    kept=$(echo "$paths" | wc -l)
-    skipped=$((total - kept))
+    # One narinfo HEAD per closure path tells us what the cache already has.
+    export narinfo_base="https://$cache.cachix.org"
+    closure=$(nix path-info -rs "$bundle")
+    missing=$(echo "$closure" | awk '{ print $1 }' | xargs -P 16 -n 1 sh -c '
+        hash=${1#/nix/store/}
+        curl -sfI "$narinfo_base/${hash%%-*}.narinfo" >/dev/null || echo "$1"' _)
+    summary=$(echo "$closure" | awk -v missing="$missing" '
+        BEGIN { n = split(missing, m, "\n"); for (i = 1; i <= n; i++) if (m[i] != "") miss[m[i]] = 1 }
+        { total++; size += $2; if ($1 in miss) { mcount++; msize += $2 } }
+        END { printf "%d paths (%d MiB) in closure, %d paths (%d MiB) not yet in cache", \
+                     total, size / 1048576, mcount, msize / 1048576 }')
 
     if [ -n "$dry_run" ]; then
-        echo "DRY RUN: would push $kept paths, skipping $skipped"
-        echo ""
-        echo "Excluded:"
-        echo "$all_paths" | grep -E "/nix/store/[a-z0-9]+-($pattern)-" | sed 's|/nix/store/[a-z0-9]*-|  |'
+        echo "DRY RUN: $summary"
         exit 0
     fi
 
-    echo "Pushing $kept paths to thrawny (skipping $skipped large upstream binaries)..."
-    echo "$paths" | cachix push thrawny
+    echo "Pushing to $cache: $summary"
+    cachix push "$cache" "$bundle"
 
     echo ""
-    echo "Pinning system closure (keeping last 3 revisions)..."
-    cachix pin thrawny "$(hostname)" /run/current-system --keep-revisions 3
+    echo "Pinning cache-bundle (keeping last 3 revisions)..."
+    cachix pin "$cache" cache-bundle "$bundle" --keep-revisions 3
 
 # Format Nix files
 fmt:

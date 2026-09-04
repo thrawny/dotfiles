@@ -13,6 +13,9 @@ default:
 # Switch nix configuration
 switch: nix::switch
 
+# Push the flake's cache-bundle (selected expensive builds) to Cachix
+cache dry_run="": (nix::cache dry_run)
+
 # Update AI tool flake inputs and switch
 ai: nix::ai
 

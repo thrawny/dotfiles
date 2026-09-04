@@ -385,6 +385,13 @@
                   pkgs
                   ;
               };
+
+              # Expensive builds that `just cache` pushes to Cachix.
+              cache-bundle = pkgs.linkFarmFromDrvs "cache-bundle" [
+                hunk.packages.${system}.default
+                voxtype.packages.${system}.default
+                voxtype.packages.${system}.osd-native
+              ];
             }
           );
 
