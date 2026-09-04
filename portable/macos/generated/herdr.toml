@@ -1,0 +1,60 @@
+onboarding = false
+
+[terminal]
+shell_mode = "auto"
+new_cwd = "follow"
+
+[keys]
+prefix = "ctrl+a"
+new_tab = "prefix+c"
+previous_tab = ["ctrl+shift+h", "prefix+h", "prefix+p"]
+next_tab = ["ctrl+shift+l", "prefix+l", "prefix+n"]
+move_tab_previous = "prefix+shift+comma"
+move_tab_next = "prefix+shift+period"
+close_tab = "prefix+shift+x"
+focus_pane_left = "ctrl+h"
+focus_pane_down = "ctrl+j"
+focus_pane_up = "ctrl+k"
+focus_pane_right = "ctrl+l"
+split_vertical = "prefix+v"
+split_horizontal = "prefix+minus"
+close_pane = "prefix+x"
+reload_config = "prefix+shift+r"
+
+[ui]
+tab_bar_position = "bottom"
+prompt_new_tab_name = false
+pane_outer_borders = false
+pane_scrollbars = false
+pane_gaps = false
+sidebar_start_collapsed = false
+sidebar_width = 26
+sidebar_collapsed_mode = "compact"
+status_indicators = "symbols"
+
+[theme]
+name = "terminal"
+
+[theme.custom]
+accent = "#fc618d"
+panel_bg = "#272727"
+sidebar_bg = "#222222"
+active_row_bg = "#403e41"
+selection_bg = "#49483e"
+surface0 = "#272727"
+surface1 = "#2d2a2e"
+surface_dim = "#222222"
+overlay0 = "#5f5b63"
+overlay1 = "#8b888f"
+text = "#f7f1ff"
+subtext0 = "#8b888f"
+mauve = "#948ae3"
+green = "#7bd88f"
+yellow = "#fce566"
+red = "#fc618d"
+blue = "#5ad4e6"
+teal = "#5ad4e6"
+peach = "#fc9867"
+
+[advanced]
+scrollback_limit_bytes = 50000000

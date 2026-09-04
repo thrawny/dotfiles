@@ -7,6 +7,7 @@ portable/macos/home/bunfig.toml	.bunfig.toml
 portable/macos/generated/gitconfig	.gitconfig
 portable/macos/home/gitignore_global	.config/git/ignore
 portable/macos/generated/ghostty.conf	.config/ghostty/config
+portable/macos/generated/herdr.toml	.config/herdr/config.toml
 portable/macos/generated/tmux.conf	.config/tmux/tmux.conf
 portable/macos/home/starship.toml	.config/starship.toml
 portable/macos/home/direnvrc	.config/direnv/direnvrc

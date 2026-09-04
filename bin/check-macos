@@ -39,7 +39,7 @@ else
 fi
 
 required_commands=(
-  bat delta difft direnv eza fd fzf gh git jq just lazygit nvim node
+  bat delta difft direnv eza fd fzf gh git herdr jq just lazygit nvim node
   acpx pi pnpm python3 rg starship tmux uv yq zmx zoxide zsh agent-browser
 )
 if [[ ${DOTFILES_SETUP_TESTING:-0} != 1 ]]; then

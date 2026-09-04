@@ -7,6 +7,7 @@ tap "neurosnap/tap"
 # Shell and terminal
 brew "direnv"
 brew "fzf"
+brew "herdr"
 brew "starship"
 brew "tmux"
 brew "zoxide"
