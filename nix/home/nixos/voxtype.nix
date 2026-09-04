@@ -15,9 +15,10 @@
       hotkey.enabled = false;
       osd.frontend = "native";
       output = {
-        mode = "type";
-        fallback_to_clipboard = true;
-        paste_keys = "shift+insert";
+        mode = "paste";
+        paste_keys = "ctrl+shift+v";
+        restore_clipboard = true;
+        restore_clipboard_delay_ms = 300;
       };
       whisper = {
         mode = "remote";
