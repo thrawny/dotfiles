@@ -34,6 +34,10 @@
       flake = false;
     };
     hunk.url = "github:modem-dev/hunk";
+    herdr = {
+      url = "github:herdrdev/herdr";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     nix-index-database.url = "github:Mic92/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
     nixos-hardware.url = "github:NixOS/nixos-hardware";
@@ -96,6 +100,7 @@
       nvim-monokai-pro,
       nvim-tmux-navigator,
       hunk,
+      herdr,
       nix-index-database,
       nixos-hardware,
       nur,
@@ -152,6 +157,7 @@
       flakeArgs = {
         inherit
           agentAssets
+          herdr
           hunk
           lazy-nvim-nix
           llm-agents

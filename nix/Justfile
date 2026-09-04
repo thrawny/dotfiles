@@ -338,6 +338,10 @@ full-update:
 # Update all flake inputs and switch
 update: full-update
 
+# Update one flake input without switching
+lock input:
+    nix flake update "{{ input }}"
+
 # Clean up old generations (keeps last 6) and optimize store
 clean:
     #!/usr/bin/env bash
