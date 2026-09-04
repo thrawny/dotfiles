@@ -19,6 +19,7 @@ setup="$HOME/dotfiles/bin/setup-macos"
 "$setup" >/dev/null
 [[ -L "$HOME/.zshrc" ]]
 [[ $(readlink "$HOME/.zshrc") == "$HOME/dotfiles/portable/macos/home/zshrc" ]]
+[[ $(readlink "$HOME/.config/herdr/config.toml") == "$HOME/dotfiles/portable/macos/generated/herdr.toml" ]]
 [[ -f "$HOME/dotfiles/config/claude/settings.json" ]]
 [[ -f "$HOME/dotfiles/config/codex/config.toml" ]]
 [[ -f "$HOME/dotfiles/config/pi/settings.json" ]]

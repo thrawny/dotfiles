@@ -24,8 +24,9 @@ trap 'rm -rf "$work_dir"' EXIT
 output_dir="$work_dir/generated"
 mkdir -p "$output_dir"
 
-export SEM_FOREGROUND SEM_MUTED SEM_ACCENT SEM_SUCCESS
-export SYN_FUNCTION
+export SEM_FOREGROUND SEM_MUTED SEM_ACCENT SEM_ACCENT_ALT SEM_SUCCESS SEM_ERROR SEM_WARNING
+export SEM_BACKGROUND SEM_SURFACE SEM_BORDER SEM_SELECTION
+export SYN_FUNCTION SYN_TYPE
 export DIFF_ADD_FG DIFF_ADD_BG DIFF_ADD_EMPH DIFF_ADD_DIM
 export DIFF_DEL_FG DIFF_DEL_BG DIFF_DEL_EMPH DIFF_DEL_DIM
 export GHOSTTY_THEME GHOSTTY_BG GHOSTTY_FG GHOSTTY_SEL_BG GHOSTTY_SEL_FG GHOSTTY_P0 GHOSTTY_P8
@@ -35,8 +36,16 @@ export DELTA_THEME
 SEM_FOREGROUND=$(jq -r '.semantic.foreground' "$theme_file")
 SEM_MUTED=$(jq -r '.semantic.muted' "$theme_file")
 SEM_ACCENT=$(jq -r '.semantic.accent' "$theme_file")
+SEM_ACCENT_ALT=$(jq -r '.semantic.accentAlt' "$theme_file")
 SEM_SUCCESS=$(jq -r '.semantic.success' "$theme_file")
+SEM_ERROR=$(jq -r '.semantic.error' "$theme_file")
+SEM_WARNING=$(jq -r '.semantic.warning' "$theme_file")
+SEM_BACKGROUND=$(jq -r '.semantic.background' "$theme_file")
+SEM_SURFACE=$(jq -r '.semantic.surface' "$theme_file")
+SEM_BORDER=$(jq -r '.semantic.border' "$theme_file")
+SEM_SELECTION=$(jq -r '.semantic.selection' "$theme_file")
 SYN_FUNCTION=$(jq -r '.syntax.function' "$theme_file")
+SYN_TYPE=$(jq -r '.syntax.type' "$theme_file")
 DIFF_ADD_FG=$(jq -r '.diff.added.foreground' "$theme_file")
 DIFF_ADD_BG=$(jq -r '.diff.added.lineBackground' "$theme_file")
 DIFF_ADD_EMPH=$(jq -r '.diff.added.emphasisBackground' "$theme_file")
@@ -65,8 +74,16 @@ render() {
     s/\{\{semantic\.foreground\}\}/$ENV{SEM_FOREGROUND}/g;
     s/\{\{semantic\.muted\}\}/$ENV{SEM_MUTED}/g;
     s/\{\{semantic\.accent\}\}/$ENV{SEM_ACCENT}/g;
+    s/\{\{semantic\.accentAlt\}\}/$ENV{SEM_ACCENT_ALT}/g;
     s/\{\{semantic\.success\}\}/$ENV{SEM_SUCCESS}/g;
+    s/\{\{semantic\.error\}\}/$ENV{SEM_ERROR}/g;
+    s/\{\{semantic\.warning\}\}/$ENV{SEM_WARNING}/g;
+    s/\{\{semantic\.background\}\}/$ENV{SEM_BACKGROUND}/g;
+    s/\{\{semantic\.surface\}\}/$ENV{SEM_SURFACE}/g;
+    s/\{\{semantic\.border\}\}/$ENV{SEM_BORDER}/g;
+    s/\{\{semantic\.selection\}\}/$ENV{SEM_SELECTION}/g;
     s/\{\{syntax\.function\}\}/$ENV{SYN_FUNCTION}/g;
+    s/\{\{syntax\.type\}\}/$ENV{SYN_TYPE}/g;
     s/\{\{diff\.added\.foreground\}\}/$ENV{DIFF_ADD_FG}/g;
     s/\{\{diff\.added\.lineBackground\}\}/$ENV{DIFF_ADD_BG}/g;
     s/\{\{diff\.added\.emphasisBackground\}\}/$ENV{DIFF_ADD_EMPH}/g;
@@ -92,6 +109,7 @@ render() {
 }
 
 render "$template_dir/ghostty.conf" "$output_dir/ghostty.conf"
+render "$template_dir/herdr.toml" "$output_dir/herdr.toml"
 render "$template_dir/tmux.conf" "$output_dir/tmux.conf"
 render "$template_dir/gitconfig" "$output_dir/gitconfig"
 render "$template_dir/lazygit.yml" "$output_dir/lazygit.yml"
@@ -153,6 +171,7 @@ fi
 generated_files=(
   eza.zsh
   ghostty.conf
+  herdr.toml
   gitconfig
   lazygit.yml
   monokai-pi.json

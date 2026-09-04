@@ -9,6 +9,7 @@ bin/setup-macos
 [[ -L "$HOME/.zshrc" ]]
 [[ -L "$HOME/.aerospace.toml" ]]
 [[ -L "$HOME/.config/ghostty/config" ]]
+[[ -L "$HOME/.config/herdr/config.toml" ]]
 [[ -L "$HOME/.config/nvim" ]]
 [[ -f config/claude/settings.json ]]
 [[ -f config/codex/config.toml ]]
@@ -39,11 +40,16 @@ python3 - <<'PY'
 import tomllib
 from pathlib import Path
 
-for config_path in (Path.home() / ".aerospace.toml", Path.home() / ".config/starship.toml"):
+for config_path in (
+    Path.home() / ".aerospace.toml",
+    Path.home() / ".config/herdr/config.toml",
+    Path.home() / ".config/starship.toml",
+):
     with config_path.open("rb") as config_file:
         tomllib.load(config_file)
 PY
-zsh -lic 'brew --version >/dev/null && command -v starship direnv fzf zoxide >/dev/null'
+zsh -lic 'brew --version >/dev/null && command -v herdr starship direnv fzf zoxide >/dev/null'
+herdr config check
 
 tmux -L portable-e2e -f "$HOME/.config/tmux/tmux.conf" new-session -d 'sleep 10'
 [[ $(tmux -L portable-e2e show-options -gv prefix) == C-a ]]
