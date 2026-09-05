@@ -187,6 +187,7 @@ sandbox() {
     ~/.npm
     ~/.zsh_history
     ~/dotfiles
+    ~/dotfiles-worktrees
     ~/code
     ~/.config
     ~/.acpx
