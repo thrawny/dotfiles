@@ -26,7 +26,6 @@ in
         "8=${app.palette8}"
       ];
       keybind = [
-        "shift+enter=text:\\n"
         "ctrl+enter=unbind"
         "super+a=select_all"
         "super+c=copy_to_clipboard"
