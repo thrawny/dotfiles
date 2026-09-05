@@ -24,7 +24,8 @@
   },
   "shellPath": "/run/current-system/sw/bin/zsh",
   "enabledModels": [
-    "openai-codex/gpt-5.6-sol"
+    "openai-codex/gpt-5.6-sol",
+    "openai-codex/gpt-6-astra"
   ],
   "packages": [
     "npm:pi-subdir-context",
