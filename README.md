@@ -23,6 +23,8 @@ skills/   # Local agent skills linked into Claude, Pi, and Codex
 
 ## Portable macOS setup
 
+For a new computer, follow [the new-Mac setup guide](docs/new-mac-setup.md). It covers developer tools, existing or missing Homebrew, configuration backups, package installation, and first launch.
+
 The supported checkout location is `~/dotfiles`. Applying configuration requires only the macOS system tools and is safe to repeat:
 
 ```bash
