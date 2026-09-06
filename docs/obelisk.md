@@ -53,6 +53,13 @@ herdr session stop agents
 
 Stopping a session also stops its panes and agents.
 
+## Shared editor
+
+All users can run the same configured Neovim package through `nvim`, `vim`, or
+`vi`. `EDITOR` and `VISUAL` select `nvim`, including in T3 Code's service
+environment. The aliases share one Nix store closure; they do not install
+separate copies per user. Editor state and caches still live in each user's home.
+
 ## T3 Code and Astra
 
 The server settings register `gpt-6-astra` with Codex and select it for text

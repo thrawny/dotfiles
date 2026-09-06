@@ -3,11 +3,19 @@
   lib,
   llm-agents,
   pkgs,
+  self,
   ...
 }:
 let
   inherit (config.dotfiles) username;
   llmPkgs = llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+  nvim = self.packages.${pkgs.stdenv.hostPlatform.system}.nvim;
+  # Aliases point at the existing configured package, without wrapping it again.
+  nvimAliases = pkgs.runCommand "neovim-aliases" { } ''
+    mkdir -p "$out/bin"
+    ln -s ${lib.getExe nvim} "$out/bin/vi"
+    ln -s ${lib.getExe nvim} "$out/bin/vim"
+  '';
 in
 {
   imports = [
@@ -66,8 +74,26 @@ in
   environment.systemPackages = with pkgs; [
     btop
     ncurses
+    nvim
+    (lib.hiPrio nvimAliases)
     (lib.hiPrio ghostty.terminfo)
   ];
+  environment.sessionVariables = {
+    EDITOR = lib.mkForce "nvim";
+    VISUAL = "nvim";
+  };
+
+  # T3 Code starts its agents and terminals with a separate systemd PATH.
+  systemd.services.t3code = {
+    path = [
+      nvim
+      nvimAliases
+    ];
+    environment = {
+      EDITOR = "nvim";
+      VISUAL = "nvim";
+    };
+  };
 
   boot.loader.grub = {
     enable = true;
