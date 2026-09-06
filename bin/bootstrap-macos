@@ -1,0 +1,341 @@
+#!/bin/bash
+# Run from a downloaded file or an existing checkout. Requires macOS Bash 3.2.
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+usage: bash bootstrap-macos [--help]
+
+Walk through the non-Nix setup for an Apple Silicon Mac.
+Detect or install developer tools and Homebrew, clone into ~/dotfiles,
+then offer configuration, packages, identity, sign-ins, apps, and preferences.
+
+Run in an interactive terminal as your normal user. Press Ctrl-C or answer q
+to stop. Rerun to continue; existing files are preserved unless you explicitly
+choose to back up and replace configuration conflicts.
+EOF
+}
+
+fail() {
+  printf '\n%s\n' "$*" >&2
+  exit 1
+}
+
+finish() {
+  local exit_code=$?
+  trap - EXIT
+  if [[ -n "$installer_file" ]]; then
+    rm -f "$installer_file"
+  fi
+  if [[ $exit_code -ne 0 ]]; then
+    printf '\nStopped during: %s. Rerun the setup script when ready.\n' "$stage" >&2
+  fi
+  exit "$exit_code"
+}
+
+read_answer() {
+  printf '%s' "$1"
+  if ! IFS= read -r reply; then
+    printf '\nInput closed.\n' >&2
+    exit 130
+  fi
+  case "$reply" in
+  q | Q) exit 130 ;;
+  esac
+}
+
+confirm() {
+  local suffix='[y/N/q]' default=${2:-n}
+  [[ "$default" == y ]] && suffix='[Y/n/q]'
+  while true; do
+    read_answer "$1 $suffix "
+    case "${reply:-$default}" in
+    y | Y | yes | YES) return 0 ;;
+    n | N | no | NO) return 1 ;;
+    *) printf 'Enter y, n, or q.\n' ;;
+    esac
+  done
+}
+
+defer() {
+  deferred="${deferred}
+  - $1"
+}
+
+heading() {
+  stage=$1
+  printf '\n== %s ==\n' "$stage"
+}
+
+require_terminal() {
+  [[ -t 0 && -t 1 ]] || fail 'Run this script from a terminal, not through a pipe.'
+}
+
+check_platform() {
+  [[ $(id -u) -ne 0 ]] || fail 'Run as your normal user, without sudo.'
+  [[ $(uname -s) == Darwin && $(uname -m) == arm64 ]] ||
+    fail 'Apple Silicon macOS is required. On Apple Silicon, reopen Terminal without Rosetta.'
+}
+
+developer_tools() {
+  heading 'Developer tools'
+  if ! xcode-select -p >/dev/null 2>&1; then
+    confirm 'Open the Command Line Tools installer?' y || fail 'Git and developer tools are needed to continue.'
+    xcode-select --install || printf 'An installer may already be open. Complete it before continuing.\n'
+    until xcode-select -p >/dev/null 2>&1; do
+      read_answer 'Finish the installer window, then press Enter to check again, or q to stop: '
+    done
+  fi
+  git --version
+}
+
+load_homebrew() {
+  brew_ready=0
+  if [[ -x /opt/homebrew/bin/brew ]]; then
+    local brew_environment
+    brew_environment=$(/opt/homebrew/bin/brew shellenv)
+    eval "$brew_environment"
+  fi
+  if command -v brew >/dev/null 2>&1; then
+    [[ $(brew --prefix) == /opt/homebrew ]] ||
+      fail 'This setup requires Apple Silicon Homebrew at /opt/homebrew. Resolve the existing Homebrew prefix first.'
+    brew_ready=1
+    brew --version
+  fi
+}
+
+install_homebrew() {
+  installer_file=$(mktemp -t dotfiles-homebrew)
+  curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh -o "$installer_file"
+  /bin/bash "$installer_file"
+  rm -f "$installer_file"
+  installer_file=''
+}
+
+homebrew() {
+  heading 'Homebrew'
+  load_homebrew
+  if [[ $brew_ready -eq 0 ]]; then
+    printf 'Homebrew is missing. On a managed Mac, follow your company installation policy.\n'
+    printf 'The installer comes from https://brew.sh and may request your administrator password.\n'
+    if confirm 'Install Homebrew now?' y; then
+      install_homebrew
+      load_homebrew
+      [[ $brew_ready -eq 1 ]] || fail 'Homebrew installation finished, but /opt/homebrew is not available.'
+    else
+      defer 'Install Homebrew, then rerun this script to install packages.'
+    fi
+  fi
+}
+
+checkout() {
+  heading 'Dotfiles checkout'
+  if [[ ! -e "$repo_root" && ! -L "$repo_root" ]]; then
+    confirm "Clone the without-nix branch into $repo_root?" y || fail 'A checkout is needed to continue.'
+    git clone --branch without-nix https://github.com/thrawny/dotfiles.git "$repo_root"
+  fi
+  [[ -d "$repo_root" && ! -L "$repo_root" ]] || fail "$repo_root must be a regular directory."
+  local actual_root branch
+  actual_root=$(git -C "$repo_root" rev-parse --show-toplevel) || fail "$repo_root is not a Git checkout."
+  [[ "$actual_root" == "$repo_root" ]] || fail "Use a checkout rooted at $repo_root."
+  branch=$(git -C "$repo_root" branch --show-current)
+  [[ "$branch" == without-nix ]] || fail "Existing checkout is on '$branch'. Switch it to without-nix before continuing."
+  for script in setup-macos install-macos-packages check-macos apply-macos-defaults; do
+    [[ -x "$repo_root/bin/$script" ]] || fail "Missing executable: $repo_root/bin/$script"
+  done
+  printf 'Using %s. Existing edits are kept; this script does not pull or reset the checkout.\n' "$repo_root"
+  cd "$repo_root"
+  export PATH="$repo_root/bin:$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm:$PATH"
+}
+
+configuration() {
+  heading 'Configuration links'
+  printf 'Preview the links and local settings that setup would create:\n'
+  bin/setup-macos --dry-run
+  if ! confirm 'Apply these links, leaving unmanaged conflicts alone?' y; then
+    defer 'Apply configuration links and install packages by rerunning this script.'
+    return
+  fi
+  local setup_output
+  if ! setup_output=$(bin/setup-macos 2>&1); then
+    printf '%s\n' "$setup_output" >&2
+    fail 'Configuration setup failed.'
+  fi
+  printf '%s\n' "$setup_output"
+  if [[ "$setup_output" == *'skip unmanaged conflict:'* ]]; then
+    printf 'Backups preserve the original paths under ~/.dotfiles-backups/<timestamp>-<pid>/.\n'
+    if confirm 'Back up and replace the skipped configuration conflicts?'; then
+      bin/setup-macos --force
+    else
+      defer 'Resolve skipped configuration conflicts, then rerun setup.'
+      return
+    fi
+  fi
+  links_ready=1
+}
+
+packages() {
+  heading 'Packages and plugins'
+  if [[ $brew_ready -eq 0 || $links_ready -eq 0 ]]; then
+    printf 'Package installation needs Homebrew and the configuration links. Skipping for now.\n'
+    return
+  fi
+  printf 'Installs or updates the Brewfile, Pi, acpx, shell/editor plugins, and a browser.\n'
+  printf 'This also trusts the nikitabobko/tap and neurosnap/tap Homebrew repositories.\n'
+  if confirm 'Install or update packages and plugins now?' y; then
+    brew update
+    bin/install-macos-packages
+  else
+    defer 'Install or update packages with bin/install-macos-packages.'
+  fi
+}
+
+identity() {
+  heading 'Git identity'
+  local git_name git_email
+  git_name=$(git config --file "$HOME/.gitconfig.local" --get user.name || true)
+  git_email=$(git config --file "$HOME/.gitconfig.local" --get user.email || true)
+  printf 'Local Git name: %s\nLocal Git email: %s\n' "${git_name:-not set}" "${git_email:-not set}"
+  if confirm 'Set or edit the identity in ~/.gitconfig.local?'; then
+    read_answer "Name [${git_name:-required}]: "
+    git_name=${reply:-$git_name}
+    read_answer "Email [${git_email:-required}]: "
+    git_email=${reply:-$git_email}
+    if [[ -n "$git_name" && -n "$git_email" ]]; then
+      git config --file "$HOME/.gitconfig.local" user.name "$git_name"
+      git config --file "$HOME/.gitconfig.local" user.email "$git_email"
+    else
+      printf 'Both fields are required. The identity file was left unchanged.\n'
+      defer 'Set your Git name and email in ~/.gitconfig.local.'
+    fi
+  elif [[ -z "$git_name" || -z "$git_email" ]]; then
+    defer 'Set your Git name and email in ~/.gitconfig.local.'
+  fi
+}
+
+sign_ins() {
+  heading 'Sign-ins'
+  if command -v gh >/dev/null 2>&1; then
+    if gh auth status --hostname github.com >/dev/null 2>&1; then
+      printf 'GitHub CLI is already signed in.\n'
+    elif confirm 'Sign in to GitHub now?'; then
+      gh auth login --hostname github.com --git-protocol https || defer 'Finish GitHub sign-in with gh auth login.'
+    else
+      defer 'Sign in to GitHub with gh auth login when needed.'
+    fi
+  fi
+  printf 'Agent CLIs handle their own sign-ins. Exit each CLI to return to this walkthrough.\n'
+  local agent
+  for agent in claude codex pi; do
+    if command -v "$agent" >/dev/null 2>&1; then
+      if confirm "Open $agent for sign-in or provider setup?"; then
+        "$agent" || defer "Finish $agent setup when needed."
+      fi
+    fi
+  done
+}
+
+apps() {
+  heading 'Desktop apps and editor'
+  local application
+  for application in Ghostty AeroSpace; do
+    if open -Ra "$application" >/dev/null 2>&1; then
+      [[ "$application" != AeroSpace ]] || printf 'AeroSpace needs Accessibility permission to manage windows and is configured to start at login.\n'
+      if confirm "Open $application now?"; then
+        open -a "$application" || defer "Open $application from Applications."
+      fi
+    fi
+  done
+  if command -v nvim >/dev/null 2>&1; then
+    printf 'Neovim can finish installing Mason language tools. Use :qa to return here.\n'
+    if confirm 'Open Neovim now?'; then
+      nvim || defer 'Open Neovim to finish editor setup.'
+    fi
+  fi
+}
+
+preferences() {
+  heading 'Optional macOS preferences'
+  printf 'Changes Finder, Dock, key repeat, screenshots, the clock, and update preferences.\n'
+  printf 'Also disables the empty-Trash warning. Defaults are not backed up by this step.\n'
+  if confirm 'Print the preference script for review?'; then
+    cat bin/apply-macos-defaults
+  fi
+  if confirm 'Apply these macOS preferences?'; then
+    bin/apply-macos-defaults
+    if confirm 'Restart Finder and Dock now to pick up the changes?'; then
+      killall Finder Dock || printf 'Finder or Dock may already be stopped.\n'
+    fi
+  fi
+}
+
+verification() {
+  heading 'Verification'
+  if [[ $links_ready -eq 1 && $brew_ready -eq 1 ]]; then
+    bin/check-macos || verification_failed=1
+    brew bundle check --file Brewfile || verification_failed=1
+  else
+    defer 'Run bin/check-macos after configuration and packages are installed.'
+  fi
+  printf '\nOpen a new Ghostty window to load the shell configuration.\n'
+  printf 'Keep ~/dotfiles in place. Leave its Nix-based .envrc blocked by direnv.\n'
+  printf 'Guide: %s/docs/new-mac-setup.md\n' "$repo_root"
+  if [[ -n "$deferred" ]]; then
+    printf '\nDeferred steps:%s\n' "$deferred"
+  fi
+  [[ $verification_failed -eq 0 ]] || fail 'Verification found problems. Review the output above, then rerun this script.'
+  if [[ -n "$deferred" ]]; then
+    printf '\nWalkthrough finished with deferred steps.\n'
+  else
+    printf '\nWalkthrough finished. Sign-ins and app permissions remain yours to verify.\n'
+  fi
+}
+
+main() {
+  [[ $# -le 1 ]] || {
+    usage >&2
+    exit 2
+  }
+  case ${1:-} in
+  -h | --help)
+    usage
+    return
+    ;;
+  '') ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+  esac
+  [[ $# -eq 0 ]] || {
+    usage >&2
+    exit 2
+  }
+  require_terminal
+  check_platform
+  repo_root="$HOME/dotfiles"
+  stage=starting
+  installer_file=''
+  deferred=''
+  brew_ready=0
+  links_ready=0
+  verification_failed=0
+  trap finish EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  printf 'New Mac setup, without Nix. Answer q or press Ctrl-C to stop at any prompt.\n'
+  developer_tools
+  homebrew
+  checkout
+  configuration
+  packages
+  identity
+  sign_ins
+  apps
+  preferences
+  verification
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then
+  main "$@"
+fi
