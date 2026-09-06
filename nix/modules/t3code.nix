@@ -19,6 +19,7 @@ let
   state = "${home}/.t3code";
   repos = "${home}/repos";
   port = 3773;
+  defaultCodexModel = "gpt-6-astra";
   forgejoHost = "forgejo.${config.dotfiles.tailnetDomain}";
   forgejoUrl = "https://${forgejoHost}";
   forgejoUser = "thrawny";
@@ -76,7 +77,7 @@ let
     homePath = codexHome;
     shadowHomePath = "";
     launchArgs = "";
-    customModels = [ ];
+    customModels = [ defaultCodexModel ];
   };
   claudeProviderSettings = {
     enabled = true;
@@ -150,7 +151,7 @@ let
       };
       textGenerationModelSelection = {
         instanceId = "codex";
-        model = "gpt-5.6-sol";
+        model = defaultCodexModel;
         options = [
           {
             id = "reasoningEffort";
@@ -320,7 +321,7 @@ let
             homePath: $codex_home,
             shadowHomePath: "",
             launchArgs: "",
-            customModels: []
+            customModels: ["${defaultCodexModel}"]
           }
           | .providers.claudeAgent = {
             enabled: true,
@@ -385,7 +386,7 @@ let
           }
           | .textGenerationModelSelection = {
             instanceId: "codex",
-            model: "gpt-5.6-sol",
+            model: "${defaultCodexModel}",
             options: [{id: "reasoningEffort", value: "low"}]
           }
           | .sourceControlWriterModelSelection = null

@@ -157,6 +157,14 @@ eval force="--force=false":
     fi
     echo "Config is valid"
 
+# Evaluate a specific NixOS host, or inspect one of its config attributes
+eval-host target attr="system.build.toplevel.drvPath":
+    nix eval --json ".#nixosConfigurations.{{ target }}.config.{{ attr }}" --no-write-lock-file
+
+# Build a specific NixOS host without activating or deploying it
+build-host target:
+    nix build ".#nixosConfigurations.{{ target }}.config.system.build.toplevel" --no-link --no-write-lock-file
+
 # Evaluate all host configurations
 eval-all:
     #!/usr/bin/env bash

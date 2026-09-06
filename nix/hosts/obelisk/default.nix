@@ -1,11 +1,13 @@
 {
   config,
   lib,
+  llm-agents,
   pkgs,
   ...
 }:
 let
   inherit (config.dotfiles) username;
+  llmPkgs = llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
 in
 {
   imports = [
@@ -26,6 +28,8 @@ in
     tailnetDomain = "tailf85bba.ts.net";
   };
 
+  # Keep Herdr's user runtime directory available after the last SSH disconnect.
+  users.users.thrawny.linger = true;
   users.users.thrawny.hashedPasswordFile = "/etc/user-password";
   users.users.thrawny.openssh.authorizedKeys.keys = [
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA2Uiv/7oVuix/LbkSZw4BamMlo0uRYNtr5bRHHUSL5Y jonas@lergell.se"
@@ -71,8 +75,12 @@ in
     efiInstallAsRemovable = true;
   };
 
-  home-manager.users.${username} = {
+  home-manager.users.${username} = { containerAssets, ... }: {
     imports = [
+      ../../home/shared/agent-skills.nix
+      ../../home/shared/ai-tools.nix
+      ../../home/shared/direnv.nix
+      ../../home/shared/herdr.nix
       ../../home/shared/theme.nix
       ../../home/shared/bash.nix
       ../../home/shared/zsh.nix
@@ -88,8 +96,23 @@ in
       inherit username;
       homeDirectory = "/home/${username}";
       packages = with pkgs; [
+        llmPkgs.claude-code
+        llmPkgs.codex
+        llmPkgs.pi
+        # Runtimes for the shared agent hooks, extensions, and package installs.
+        bun
+        jq
+        just
+        nodejs_24
+        pnpm_11
+        python3
+        uv
         ncurses
         (lib.hiPrio ghostty.terminfo)
+      ];
+      sessionPath = [
+        "${containerAssets.bin}"
+        "$HOME/.local/bin"
       ];
       sessionVariables = {
         LANG = "en_US.UTF-8";
