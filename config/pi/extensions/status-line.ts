@@ -65,8 +65,8 @@ function fgTrue(hex: string | undefined): string {
 const DIVIDER = ` ${fgTrue(MK.line)}│${RESET} `;
 
 /** Shorten known model ids, e.g. "gpt-5.6-sol" → "Sol 5.6". */
-function modelDisplayName(id: string): string {
-	const match = id.match(/gpt-(\d+(?:\.\d+)?)-(sol|terra|luna)/);
+export function modelDisplayName(id: string): string {
+	const match = id.match(/gpt-(\d+(?:\.\d+)?)-(sol|terra|luna|astra)/);
 	if (match) {
 		const [, version, codename] = match;
 		return `${codename[0].toUpperCase()}${codename.slice(1)} ${version}`;

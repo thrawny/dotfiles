@@ -5,10 +5,23 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	isCodexFastEnabled,
+	modelDisplayName,
 	normalizeExtensionStatuses,
 	partitionExtensionStatuses,
 	resolveGitInfo,
 } from "../extensions/status-line.ts";
+
+describe("status line model names", () => {
+	it.each([
+		["gpt-6-astra", "Astra 6"],
+		["gpt-5.6-sol", "Sol 5.6"],
+		["gpt-5.6-terra", "Terra 5.6"],
+		["gpt-5.6-luna", "Luna 5.6"],
+		["unknown-model", "unknown-model"],
+	])("displays %s as %s", (id, name) => {
+		expect(modelDisplayName(id)).toBe(name);
+	});
+});
 
 describe("status line extension statuses", () => {
 	it("shows pi-openai-fast fast status once", () => {
