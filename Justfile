@@ -76,6 +76,10 @@ typecheck-python *files:
 
 # === Portable macOS ===
 
+# Walk through a new Mac setup interactively
+bootstrap-macos:
+    bin/bootstrap-macos
+
 # Link portable macOS configuration (safe to rerun)
 setup-macos *args:
     bin/setup-macos {{ args }}
@@ -110,7 +114,7 @@ check-theme:
 # === Tests ===
 
 # Run all tests
-test: test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-macos-portable
+test: test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-macos-portable test-macos-bootstrap
 
 # Project selection and backend dispatch
 test-project-picker:
@@ -145,6 +149,10 @@ check-aerospace:
 test-macos-portable:
     tests/portable-skills.sh
     tests/setup-macos.sh
+
+# Exercise the interactive walkthrough with isolated homes and mocked installers
+test-macos-bootstrap:
+    python3 -B -m unittest discover -s tests -p 'test_macos_bootstrap.py' -v
 
 # Exercise VM snapshot boundaries, timeouts and cleanup without a hypervisor
 test-macos-vm-harness:

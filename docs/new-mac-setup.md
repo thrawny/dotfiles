@@ -2,7 +2,31 @@
 
 Use this guide to install the `without-nix` branch directly on a new Apple Silicon Mac. Keep the checkout at `~/dotfiles`, because the configuration links point there. Nix and Tart are not needed.
 
-The package and configuration setup passed on macOS Sequoia 15.7.7 in a clean VM. That image already had Homebrew. The Homebrew bootstrap below follows the official installation instructions and was not part of the VM test.
+## Interactive walkthrough
+
+Open Apple's Terminal app and run:
+
+```bash
+bootstrap_file=$(mktemp -t dotfiles-bootstrap)
+curl -fsSL https://raw.githubusercontent.com/thrawny/dotfiles/without-nix/bin/bootstrap-macos -o "$bootstrap_file" && /bin/bash "$bootstrap_file"
+rm -f "$bootstrap_file"
+```
+
+This downloads the script before running it, so it can read your answers from the terminal. Git, Homebrew, and `just` do not need to be installed beforehand. The script offers to install developer tools and Homebrew, clones the `without-nix` branch into `~/dotfiles` if needed, then walks through the steps below.
+
+Press Enter to choose the displayed default, answer `n` to skip an offered step, or use `q` or Ctrl-C to stop. Package installation waits until Homebrew and configuration links are ready. Replacing existing configuration requires a separate choice and creates backups. Sign-ins, app launches, and macOS preferences are optional and default to no.
+
+To rerun after the checkout exists:
+
+```bash
+/bin/bash "$HOME/dotfiles/bin/bootstrap-macos"
+```
+
+The script detects existing tools and preserves checkout edits. It does not pull updates or switch an existing checkout's branch. Review and pull updates yourself before rerunning when needed. Failed commands stop the walkthrough with the current step name. Deferred work is listed at the end, and failed verification returns a nonzero exit status.
+
+You can also run `just bootstrap-macos` from `~/dotfiles` after packages are installed. The sections below are the manual equivalent and explain what each step changes.
+
+The package and configuration setup passed on macOS Sequoia 15.7.7 in a clean VM. That image already had Homebrew. The interactive script's decision paths are tested with isolated homes and mocked installers using `just test-macos-bootstrap`. An actual fresh Homebrew installation through the walkthrough has not been tested.
 
 ## 1. Prepare Terminal and Git
 

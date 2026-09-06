@@ -23,7 +23,13 @@ skills/   # Local agent skills linked into Claude, Pi, and Codex
 
 ## Portable macOS setup
 
-For a new computer, follow [the new-Mac setup guide](docs/new-mac-setup.md). It covers developer tools, existing or missing Homebrew, configuration backups, package installation, and first launch.
+For a new computer, use [the interactive setup walkthrough](docs/new-mac-setup.md#interactive-walkthrough). It works before Git or Homebrew is installed and offers configuration backups, packages, sign-ins, and first launch. With a checkout already at `~/dotfiles`, run:
+
+```bash
+/bin/bash "$HOME/dotfiles/bin/bootstrap-macos"
+```
+
+The [new-Mac setup guide](docs/new-mac-setup.md) also has the manual commands.
 
 The supported checkout location is `~/dotfiles`. Applying configuration requires only the macOS system tools and is safe to repeat:
 
