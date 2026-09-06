@@ -2,7 +2,7 @@
 
 ## Deploy
 
-From the dotfiles repository root, outside the agent sandbox:
+From the dotfiles repository root:
 
 ```sh
 just nix::deploy obelisk
