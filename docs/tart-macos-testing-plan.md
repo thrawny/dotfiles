@@ -1,6 +1,45 @@
 # Tart macOS VM testing plan
 
-Planning snapshot: 2026-09-03. Status: proposed.
+Planning snapshot: 2026-09-03. Implementation update: 2026-09-06.
+Status: implemented and validated on macOS. Linux container validation remains
+blocked by an upstream package URL.
+
+## Validation notes
+
+- Host: Apple M1, macOS 15.7.4, 16 GiB RAM.
+- Tart 2.36.0 installed through Homebrew but aborted before startup because
+  `libswiftCompatibilitySpan.dylib` is absent on macOS 15. This matches
+  [upstream issue 1302](https://github.com/openai/tart/issues/1302).
+- The checksum-verified Tart 2.34.0 release runs on this host. Install it with
+  `just install-macos-vm-tools`; the harness uses its isolated cache path.
+- The Sequoia image is pinned by OCI digest in `bin/test-macos-tart`. The selected
+  image is 23.6 GiB compressed with a 50 GB virtual disk.
+- `just test-macos-vm-harness`: 17 tests passed, including filtered transfer,
+  timeout, partial clone failure, guest exit status, interruption and retention.
+- `just test-macos-portable`: passed after resolving macOS temporary paths and
+  making assertions fail explicitly on the system Bash 3.2.
+- `just test-macos-container`: blocked by the upstream zmx formula's
+  `https://zmx.sh/a/zmx-0.8.1-linux-aarch64.tar.gz` returning HTTP 404. The macOS
+  archive is available. No Linux test assertions were bypassed.
+- Real guest boot and `tart exec` passed on macOS 15.7.7 arm64, including a
+  checksum-verified tar transfer and headless font cask installation.
+- `just test-macos-vm --links-only`: passed with exit 0 and clone deletion.
+- Two fresh full integration runs passed with exit 0 on macOS 15.7.7 arm64.
+  Each installed the Brewfile, passed consumer and defaults checks, and finished
+  `check-macos` with zero problems. Its three warnings are expected: optional
+  `agent-history` / `agent-switch` and the unconfigured Git identity.
+- The first fresh full run used `--keep`; the retained VM reopened successfully
+  with working `tart exec`, then was stopped and deleted. The second used the
+  default automatic cleanup and left no local VM behind.
+- All disposable test VMs were deleted. The pinned OCI image remains cached for
+  subsequent runs. Ruff, ShellCheck, shfmt and `git diff --check` passed.
+- The Cirrus image preinstalls pnpm through npm, which conflicts with the
+  Brewfile's pnpm symlinks. Full guest tests remove that image-owned npm copy
+  first; the production installer remains unchanged.
+- Tart 2.34 can leave `control.sock` after stopping. The harness removes only
+  its retained clone's socket after the Tart process exits, enabling `--keep`
+  inspection without stale-socket errors.
+
 
 ## Decision
 
@@ -70,7 +109,7 @@ harness use `tart exec` without SSH, passwords, or guest networking for command
 transport. Xcode is not required by this repository, so the larger `xcode`
 variant would waste download and disk space.
 
-Pin a tested image tag or OCI digest in the harness. Do not make `latest` the
+Pin an image tag or OCI digest in the harness and record successful guest validation before considering the pin tested. Do not make `latest` the
 long-term default. Allow a temporary override:
 
 ```bash
@@ -106,16 +145,16 @@ tar -C "$staging_dir" -cf - . |
     'mkdir -p "$HOME/dotfiles" && tar -C "$HOME/dotfiles" -xf -'
 ```
 
-## Proposed files and interface
+## Files and interface
 
 ### `bin/test-macos-tart`
 
-Add one standalone Bash orchestrator with these responsibilities:
+A standalone Python 3.9+ orchestrator (standard library only) has these responsibilities:
 
-- require an Apple Silicon macOS host, Tart, Git, and enough free disk space;
+- require an Apple Silicon macOS 14+ host, Python 3.9+, Tart, Git, and enough free disk space;
 - accept `--keep`, `--links-only`, and `--image <reference>`;
-- create a collision-resistant VM name;
-- clone the pinned base image and configure reasonable CPU and memory defaults;
+- create a collision-resistant VM name and refuse any pre-existing name;
+- clone the pinned base image with automatic cache pruning disabled, using four CPUs and 6 GiB RAM by default;
 - start `tart run --no-graphics` and capture its process ID and log;
 - poll `tart exec` until the Guest Agent responds, with a bounded timeout;
 - create and transfer the filtered worktree snapshot;
@@ -123,12 +162,12 @@ Add one standalone Bash orchestrator with these responsibilities:
 - stop the VM and delete only the disposable clone created by this run; and
 - print commands for entering or deleting a VM retained by `--keep`.
 
-Use a `trap` for cleanup. Cleanup must be idempotent and must never prune the
+Use `try`/`finally` and bounded process-group termination for cleanup. Cleanup must be idempotent and must never prune the
 shared OCI cache or delete a pre-existing VM.
 
 ### `bin/test-macos-tart-guest`
 
-Add a standalone guest-side test script. It runs from `/Users/admin/dotfiles`
+A standalone Bash guest-side test script implements the integration checks. It runs from `/Users/admin/dotfiles`
 and checks each stage before moving on:
 
 1. Assert `uname -s` is `Darwin`, `uname -m` is `arm64`, and the checkout is
@@ -157,15 +196,28 @@ test-macos-vm *args:
     bin/test-macos-tart {{ args }}
 ```
 
-The script owns VM lifecycle details. The recipe remains a thin public entry
+The runner owns VM lifecycle details. The recipe remains a thin public entry
 point.
+
+### `bin/install-test-tart`
+
+Downloads and verifies the pinned Tart 2.34.0 release archive under
+`${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-tools/tart-2.34.0/`. It requires only
+system shell tools and does not install anything into the guest or change the
+host's package-manager symlinks. `TART_BIN` or `--tart` selects another binary.
+
+### `tests/test_macos_tart.py`
+
+Uses a temporary Git repository and fake Tart executable to verify snapshot
+boundaries, real archive transport, lifecycle cleanup and bounded waits without
+requiring a VM. Run with `just test-macos-vm-harness`.
 
 ### `README.md`
 
 Add a short "Clean macOS VM test" section with:
 
 ```bash
-brew install openai/tools/tart
+just install-macos-vm-tools
 just test-macos-vm
 just test-macos-vm --links-only
 just test-macos-vm --keep
@@ -179,7 +231,7 @@ copying it into the README.
 
 ### Batch 1: manual spike
 
-1. Install Tart on the host with `brew install openai/tools/tart`.
+1. Install the pinned, checksum-verified Tart release with `just install-macos-vm-tools`.
 2. Clone the selected base image and start it with `--no-graphics`.
 3. Confirm `tart exec` works and reports an `arm64` macOS guest.
 4. Transfer a small tar stream into the guest.
@@ -235,7 +287,7 @@ Always print:
 - the failed guest stage; and
 - the host path to the Tart run log.
 
-With `--keep`, also print:
+With `--keep`, print commands using the actual selected Tart executable, equivalent to:
 
 ```bash
 tart run <vm-name>
@@ -263,6 +315,9 @@ The plan is complete when:
 ## Expected constraints
 
 - The first base-image download is large, roughly tens of gigabytes.
+- Headless Neovim exits can interrupt Mason language-tool installations. The
+  smoke test requires startup and the expected theme; it does not certify that
+  every editor language tool has completed installation.
 - Full Homebrew and browser installation will take much longer than the link
   test and requires internet access.
 - Launch Services checks prove that casks are installed and discoverable, not

@@ -49,6 +49,7 @@ extend-include = [
   "bin/kpf",
   "bin/prctl",
   "bin/run-if-changed",
+  "bin/test-macos-tart",
 ]
 
 [tool.ruff.lint]

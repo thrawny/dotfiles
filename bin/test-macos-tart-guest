@@ -1,0 +1,126 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+stage=prerequisites
+report_exit() {
+  local exit_code=$?
+  if [[ $exit_code -ne 0 ]]; then
+    printf 'guest stage failed: %s (exit %s)\n' "$stage" "$exit_code" >&2
+  fi
+  exit "$exit_code"
+}
+trap report_exit EXIT
+announce() {
+  stage=$1
+  printf '\n=== guest: %s ===\n' "$stage"
+}
+
+links_only=0
+case ${1:-} in
+--links-only)
+  links_only=1
+  shift
+  ;;
+esac
+[[ $# -eq 0 ]] || exit 1
+[[ ${DOTFILES_TART_GUEST:-} == 1 ]] || exit 1
+[[ $(uname -s) == Darwin && $(uname -m) == arm64 ]] || exit 1
+[[ $(pwd -P) == "$HOME/dotfiles" ]] || exit 1
+[[ ! -e /nix && -z ${DOTFILES_SETUP_TESTING:-} ]] || exit 1
+sw_vers
+uname -m
+
+# The Guest Agent does not run a login shell. Match the portable login PATH.
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+export PATH="$HOME/dotfiles/bin:$HOME/.local/bin:$HOME/.npm-global/bin:$HOME/.local/share/pnpm:$PATH"
+export TERM=xterm-256color
+export HOMEBREW_NO_INSTALL_CLEANUP=1
+export CI=1
+
+if [[ $links_only -eq 0 && -d /opt/homebrew/lib/node_modules/pnpm ]]; then
+  announce image-baseline
+  # Cirrus base images install pnpm through npm. Remove that guest-image copy
+  # so the Brewfile can install its Homebrew-managed pnpm without link conflicts.
+  /opt/homebrew/bin/npm --prefix /opt/homebrew uninstall --global pnpm
+fi
+
+announce setup
+# Base images can contain shell config. Exercise conservative setup first;
+# converge those image-owned conflicts explicitly in this disposable guest.
+bin/setup-macos
+bin/setup-macos --force
+while IFS=$'\t' read -r source_relative target_relative; do
+  [[ -z "$source_relative" || "$source_relative" == \#* ]] && continue
+  [[ $(readlink "$HOME/$target_relative") == "$HOME/dotfiles/$source_relative" ]] || exit 1
+done <portable/macos/links.tsv
+for local_file in config/claude/settings.json config/codex/config.toml config/pi/settings.json; do
+  [[ -f "$local_file" && ! -L "$local_file" ]] || exit 1
+done
+
+announce repeat-setup
+inode_before=$(stat -f %i "$HOME/.zshrc")
+bin/setup-macos
+[[ $(stat -f %i "$HOME/.zshrc") == "$inode_before" ]] || exit 1
+for local_file in config/claude/settings.json config/codex/config.toml config/pi/settings.json; do
+  cmp "$local_file" "${local_file%.*}.example.${local_file##*.}"
+done
+
+announce unmanaged-conflict
+rm "$HOME/.zshrc"
+printf 'vm-test-unmanaged\n' >"$HOME/.zshrc"
+bin/setup-macos
+[[ -f "$HOME/.zshrc" && ! -L "$HOME/.zshrc" ]] || exit 1
+[[ $(<"$HOME/.zshrc") == vm-test-unmanaged ]] || exit 1
+bin/setup-macos --force
+[[ $(readlink "$HOME/.zshrc") == "$HOME/dotfiles/portable/macos/home/zshrc" ]] || exit 1
+found_backup=0
+for backup in "$HOME"/.dotfiles-backups/*/.zshrc; do
+  if [[ -f "$backup" && $(<"$backup") == vm-test-unmanaged ]]; then
+    found_backup=1
+  fi
+done
+[[ $found_backup -eq 1 ]] || exit 1
+if [[ $links_only -eq 1 ]]; then
+  printf 'portable macOS VM links: ok\n'
+  exit 0
+fi
+
+announce packages
+bin/install-macos-packages
+brew bundle check --file Brewfile
+
+announce configuration
+bin/generate-portable-theme --check
+git config --file "$HOME/.gitconfig" --get delta.syntax-theme | grep -Fx 'Monokai Extended'
+jq -e . "$HOME/.pi/agent/settings.json" "$HOME/.pi/agent/themes/monokai-pi.json" >/dev/null
+yq eval '.' "$HOME/.config/lazygit/config.yml" >/dev/null
+python3 - <<'PY'
+import tomllib
+from pathlib import Path
+
+for relative in (".aerospace.toml", ".config/herdr/config.toml", ".config/starship.toml"):
+    with (Path.home() / relative).open("rb") as config_file:
+        tomllib.load(config_file)
+PY
+
+announce consumers
+zsh -lic 'brew --version >/dev/null && command -v herdr starship direnv fzf zoxide >/dev/null'
+herdr config check
+tmux -L portable-vm-e2e -f "$HOME/.config/tmux/tmux.conf" new-session -d 'sleep 30'
+[[ $(tmux -L portable-vm-e2e show-options -gv prefix) == C-a ]] || exit 1
+tmux -L portable-vm-e2e kill-server
+nvim --headless "+lua if vim.g.colors_name ~= 'monokai-pro' then vim.cmd('cquit 1') end" +qa
+open -Ra Ghostty
+open -Ra AeroSpace
+
+announce macos-defaults
+bin/apply-macos-defaults
+[[ $(defaults read com.apple.finder AppleShowAllFiles) == 1 ]] || exit 1
+[[ $(defaults read NSGlobalDomain KeyRepeat) == 2 ]] || exit 1
+[[ $(defaults read com.apple.screencapture type) == png ]] || exit 1
+[[ $(defaults read com.apple.screencapture location) == "$HOME/Screenshots" ]] || exit 1
+[[ -d "$HOME/Screenshots" ]] || exit 1
+
+announce final-check
+bin/check-macos
+printf 'portable macOS VM E2E: ok\n'

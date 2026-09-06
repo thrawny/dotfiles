@@ -69,7 +69,28 @@ just macos-container-shell
 # later: just macos-container-stop
 ```
 
-The container cannot test macOS casks, application launch, or `defaults` changes. Those remain covered by `bin/check-macos` on a real Mac.
+The container cannot test macOS casks, application discovery, or `defaults` changes. The VM test covers those on real macOS.
+
+### Clean macOS VM test
+
+Run these commands from the worktree root on an Apple Silicon Mac with macOS 14+, Python 3.9+, Git, and `just`:
+
+```bash
+just install-macos-vm-tools
+just test-macos-vm --links-only
+just test-macos-vm
+just test-macos-vm --keep
+```
+
+The tool installer downloads and checksum-verifies Tart 2.34.0 into `~/.cache/dotfiles-tools/`. This version runs on Sequoia; the 2.35/2.36 release binaries have a [known missing Swift library issue on macOS 15](https://github.com/openai/tart/issues/1302). The runner uses the pinned binary directly. Override it with `TART_BIN=/path/to/tart` or `--tart /path/to/tart`.
+
+The first run downloads a pinned Sequoia base image (23.6 GiB compressed, 50 GB virtual disk). Budget about 60–80 GiB free for the initial download and package installation. Subsequent runs reuse the cached image and APFS copy-on-write clones. The default guest has four CPUs and 6 GiB RAM; `--cpu` and `--memory` adjust these. The runner refuses to start below 30 GiB free in Tart storage; `--min-free-gib` changes that threshold. `TART_HOME` selects another storage location.
+
+Each run copies the current tracked and non-ignored worktree into the guest's `~/dotfiles`, including uncommitted changes. Ignored files, live agent settings, secret paths, and caches are excluded. The host checkout is not mounted. The base image includes Homebrew. Full tests remove its npm-installed pnpm copy before installing the Brewfile’s pnpm. Installing Homebrew itself and interactive application behavior are outside this test. The Neovim smoke test checks startup and theme loading; headless exits can interrupt Mason language-tool installations, which can finish during an interactive editor session.
+
+The runner stops and deletes its VM on completion, failure, or interruption. `--keep` retains a stopped VM and prints commands to inspect it. Logs and the filtered file manifest remain in the printed temporary directory. `guest.log` records each guest stage, `tart-run.log` records VM startup, and `run.json` records the image and tool versions. Use `--boot-timeout` and `--test-timeout` to change the bounded waits.
+
+Run `just test-macos-vm-harness` to test snapshot filtering and VM cleanup without downloading or booting a VM. See [the testing plan](docs/tart-macos-testing-plan.md) for coverage and validation results.
 
 ## Nix usage
 
