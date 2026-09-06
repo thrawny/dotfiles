@@ -1,0 +1,471 @@
+#!/usr/bin/env python3
+"""Test the current worktree in a disposable Tart VM (standard library only)."""
+
+import argparse
+import fnmatch
+import json
+import os
+import platform
+import shlex
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+import uuid
+from pathlib import Path
+
+DEFAULT_IMAGE = (
+    "ghcr.io/cirruslabs/macos-sequoia-base@"
+    "sha256:4947ac5ab1b2fdc46ab856132d2ba958f8e45b5f85192c66370dafc028c514dd"
+)
+EXCLUDED_PARTS = (
+    ".git",
+    ".secrets*",
+    ".env*",
+    ".ssh",
+    ".aws",
+    ".gnupg",
+    ".DS_Store",
+    "node_modules",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".cache",
+    ".direnv",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".pytest_cache",
+    ".vscode",
+    ".idea",
+    "dist",
+    "build",
+    "target",
+    "result",
+    "result-*",
+    "*.pyc",
+    "*.log",
+)
+EXCLUDED_PATHS = (
+    "config/claude/settings.json",
+    "config/claude/CLAUDE.local.md",
+    "config/codex/config.toml",
+    "config/pi/settings.json",
+    "config/nvim/undo/*",
+    "config/nvim/backup/*",
+    "config/nvim/swap/*",
+    "config/k9s/clusters/*",
+    "config/k9s/aliases.yaml",
+)
+
+
+def excluded(name):
+    return any(
+        fnmatch.fnmatchcase(part, pattern)
+        for part in Path(name).parts
+        for pattern in EXCLUDED_PARTS
+    ) or any(fnmatch.fnmatchcase(name, pattern) for pattern in EXCLUDED_PATHS)
+
+
+def snapshot(repo, archive, manifest):
+    """Copy Git-selected files, never following symlinks to excluded data."""
+    names = subprocess.check_output(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        cwd=repo,
+    )
+    # --exclude-standard only filters untracked files; check tracked paths too.
+    ignored = subprocess.run(
+        ["git", "check-ignore", "--no-index", "--stdin", "-z"],
+        input=names,
+        cwd=repo,
+        stdout=subprocess.PIPE,
+        check=False,
+    )
+    if ignored.returncode not in (0, 1):
+        raise RuntimeError("Git ignore filtering failed")
+    ignored_names = set(ignored.stdout.split(b"\0"))
+    selected = set()
+    for raw in names.split(b"\0"):
+        if not raw or raw in ignored_names:
+            continue
+        name = os.fsdecode(raw)
+        if excluded(name):
+            continue
+        path = repo / name
+        if not path.exists() and not path.is_symlink():
+            continue  # Deleted in the current worktree.
+        if Path(name).is_absolute() or ".." in Path(name).parts:
+            raise RuntimeError("Unsafe Git path")
+        if path.is_dir() or not (path.is_file() or path.is_symlink()):
+            raise RuntimeError(f"Snapshot requires ordinary files: {name}")
+        selected.add(name)
+    for name in selected:
+        path = repo / name
+        if path.is_symlink() and Path(os.readlink(path)).is_absolute():
+            raise RuntimeError(f"Snapshot symlink must be relative: {name}")
+        try:
+            resolved = path.resolve(strict=True).relative_to(repo)
+        except (ValueError, OSError, RuntimeError) as error:
+            raise RuntimeError(
+                f"Snapshot path escapes checkout or is broken: {name}"
+            ) from error
+        if resolved.as_posix() not in selected:
+            raise RuntimeError(f"Snapshot path resolves to excluded data: {name}")
+        # Reject symlinked parents, including ones pointing elsewhere inside the repo.
+        if path.parent.resolve() != path.parent:
+            raise RuntimeError(f"Snapshot path has a symlinked parent: {name}")
+    ordered = sorted(selected)
+    manifest.write_bytes(b"".join(os.fsencode(name) + b"\0" for name in ordered))
+
+    def public_metadata(info):
+        info.uid = info.gid = 0
+        info.uname = info.gname = ""
+        return info
+
+    with tarfile.open(archive, "w", dereference=False) as output:
+        for name in ordered:
+            output.add(
+                repo / name, arcname=name, recursive=False, filter=public_metadata
+            )
+    return len(ordered)
+
+
+def stop_process(process):
+    # Reap an already stopped Tart process before signalling its process group.
+    if process.poll() is not None:
+        return
+    try:
+        os.killpg(process.pid, signal.SIGTERM)
+    except ProcessLookupError:
+        return
+    except PermissionError:
+        process.terminate()
+    try:
+        process.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        pass
+    # A child can ignore TERM even after its parent exits. Reap the whole group.
+    try:
+        os.killpg(process.pid, signal.SIGKILL)
+    except ProcessLookupError:
+        pass
+    except PermissionError:
+        if process.poll() is None:
+            process.kill()
+    process.wait(timeout=5)
+
+
+class Harness:
+    def __init__(self, repo, args, log_dir):
+        self.repo, self.args, self.log_dir = repo, args, log_dir
+        self.tart = args.tart
+        self.vm = "dotfiles-test-" + uuid.uuid4().hex
+        self.owned = False
+        self.boot = None
+        self.stage = "prerequisites"
+        self.env = dict(os.environ, TART_NO_AUTO_PRUNE="1")
+
+    def announce(self, stage):
+        self.stage = stage
+        print(f"VM test: {stage}", flush=True)
+
+    def run(self, command, *, timeout=60, check=True, stdin=None, log="commands.log"):
+        if command[0] == "tart":
+            command = [self.tart, *command[1:]]
+        with (self.log_dir / log).open("ab", buffering=0) as output:
+            process = subprocess.Popen(
+                command,
+                stdin=stdin if stdin is not None else subprocess.DEVNULL,
+                stdout=output,
+                stderr=subprocess.STDOUT,
+                env=self.env,
+                start_new_session=True,
+            )
+            try:
+                code = process.wait(timeout=timeout)
+            except BaseException:
+                stop_process(process)
+                raise
+        if check and code:
+            raise subprocess.CalledProcessError(code, command)
+        return code
+
+    def execute(self):
+        if platform.system() != "Darwin" or platform.machine() != "arm64":
+            raise RuntimeError("An Apple Silicon macOS host is required")
+        if int(platform.mac_ver()[0].split(".")[0]) < 14:
+            raise RuntimeError("tart exec requires macOS 14 or newer")
+        for executable in (self.tart, "git"):
+            if not shutil.which(executable):
+                raise RuntimeError(
+                    f"Required command missing: {executable}; run just install-macos-vm-tools"
+                )
+        storage = Path(os.environ.get("TART_HOME", Path.home() / ".tart")).expanduser()
+        while not storage.exists():
+            storage = storage.parent
+        free_gib = shutil.disk_usage(storage).free / 1024**3
+        print(
+            f"Host: macOS {platform.mac_ver()[0]} arm64; free storage: {free_gib:.1f} GiB"
+        )
+        if free_gib < self.args.min_free_gib:
+            raise RuntimeError(
+                f"Need at least {self.args.min_free_gib} GiB free in Tart storage"
+            )
+        version = subprocess.check_output(
+            [self.tart, "--version"], timeout=10, text=True
+        ).strip()
+        print(f"Tart: {version}\nImage: {self.args.image}\nVM: {self.vm}", flush=True)
+        (self.log_dir / "run.json").write_text(
+            json.dumps(
+                {
+                    "host_macos": platform.mac_ver()[0],
+                    "tart_version": version,
+                    "image": self.args.image,
+                    "vm": self.vm,
+                    "cpu": self.args.cpu,
+                    "memory_mib": self.args.memory,
+                    "links_only": self.args.links_only,
+                },
+                indent=2,
+            )
+            + "\n"
+        )
+        self.run(["tart", "--version"])
+        # Never take ownership of a name that already exists.
+        if self.run(["tart", "get", self.vm], check=False) == 0:
+            raise RuntimeError("Generated VM name already exists; refusing to use it")
+        with tempfile.TemporaryDirectory(prefix="dotfiles-vm-source-") as temporary:
+            archive = Path(temporary) / "source.tar"
+            self.announce("building filtered worktree snapshot")
+            count = snapshot(self.repo, archive, self.log_dir / "manifest.nul")
+            print(
+                f"Snapshot: {count} files, {archive.stat().st_size / 1024**2:.1f} MiB",
+                flush=True,
+            )
+            self.announce("cloning image")
+            self.owned = True  # A failed clone may still have created its local VM.
+            self.run(["tart", "clone", self.args.image, self.vm], timeout=7200)
+            self.run(
+                [
+                    "tart",
+                    "set",
+                    self.vm,
+                    "--cpu",
+                    str(self.args.cpu),
+                    "--memory",
+                    str(self.args.memory),
+                ]
+            )
+            self.announce("booting guest")
+            with (self.log_dir / "tart-run.log").open("ab", buffering=0) as output:
+                self.boot = subprocess.Popen(
+                    [self.tart, "run", "--no-graphics", self.vm],
+                    stdin=subprocess.DEVNULL,
+                    stdout=output,
+                    stderr=subprocess.STDOUT,
+                    env=self.env,
+                    start_new_session=True,
+                )
+            deadline = time.monotonic() + self.args.boot_timeout
+            while time.monotonic() < deadline:
+                if self.boot.poll() is not None:
+                    raise RuntimeError("Tart exited before the guest became ready")
+                try:
+                    if (
+                        self.run(
+                            ["tart", "exec", self.vm, "/usr/bin/true"],
+                            timeout=min(5, max(0.1, deadline - time.monotonic())),
+                            check=False,
+                        )
+                        == 0
+                    ):
+                        break
+                except subprocess.TimeoutExpired:
+                    pass
+                time.sleep(min(1, max(0, deadline - time.monotonic())))
+            else:
+                raise RuntimeError("Guest Agent startup timed out")
+            self.announce("transferring snapshot")
+            with archive.open("rb") as source:
+                self.run(
+                    [
+                        "tart",
+                        "exec",
+                        "-i",
+                        self.vm,
+                        "/bin/sh",
+                        "-c",
+                        'test ! -e "$HOME/dotfiles" && mkdir "$HOME/dotfiles" && tar -C "$HOME/dotfiles" -xf -',
+                    ],
+                    stdin=source,
+                    timeout=300,
+                )
+        self.announce("running guest integration checks (see guest.log)")
+        guest_args = ["--links-only"] if self.args.links_only else []
+        self.run(
+            [
+                "tart",
+                "exec",
+                self.vm,
+                "/bin/bash",
+                "-c",
+                'cd "$HOME/dotfiles" && export DOTFILES_TART_GUEST=1 && exec /bin/bash bin/test-macos-tart-guest "$@"',
+                "test-macos-tart-guest",
+                *guest_args,
+            ],
+            timeout=self.args.test_timeout,
+            log="guest.log",
+        )
+        self.announce("passed")
+
+    def cleanup(self):
+        errors = []
+        if self.owned:
+            try:
+                self.run(["tart", "stop", self.vm], timeout=20, check=False)
+            except (OSError, subprocess.TimeoutExpired) as error:
+                errors.append(str(error))
+        if self.boot is not None:
+            try:
+                try:
+                    self.boot.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    stop_process(self.boot)
+            except (OSError, subprocess.TimeoutExpired) as error:
+                errors.append(str(error))
+        if self.owned:
+            if self.args.keep:
+                # Tart 2.34 can leave its Unix socket behind after stopping.
+                # Remove only this run's socket, after its process has exited.
+                storage = Path(
+                    os.environ.get("TART_HOME", Path.home() / ".tart")
+                ).expanduser()
+                control = storage / "vms" / self.vm / "control.sock"
+                if self.boot is not None and self.boot.poll() is not None:
+                    try:
+                        if stat.S_ISSOCK(control.lstat().st_mode):
+                            control.unlink()
+                    except FileNotFoundError:
+                        pass
+                    except OSError as error:
+                        errors.append(str(error))
+                command = shlex.quote(self.tart)
+                print(
+                    f"Retained VM: {self.vm}\n  {command} run {self.vm}\n  {command} exec -t {self.vm} /bin/zsh\n  {command} stop {self.vm}\n  {command} delete {self.vm}"
+                )
+                self.owned = False
+            else:
+                try:
+                    self.run(["tart", "delete", self.vm], timeout=30)
+                    self.owned = False
+                except (OSError, subprocess.SubprocessError) as error:
+                    errors.append(str(error))
+        for error in errors:
+            print(f"Cleanup failed: {error}", file=sys.stderr)
+        return not errors
+
+
+def positive_integer(value):
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return number
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    cached_tart = (
+        Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+        / "dotfiles-tools/tart-2.34.0/tart.app/Contents/MacOS/tart"
+    )
+    parser.add_argument(
+        "--tart",
+        default=os.environ.get("TART_BIN", str(cached_tart)),
+        help="Tart executable (or TART_BIN); defaults to just install-macos-vm-tools output",
+    )
+    parser.add_argument(
+        "--image", default=os.environ.get("TART_MACOS_IMAGE", DEFAULT_IMAGE)
+    )
+    parser.add_argument(
+        "--keep", action="store_true", help="stop but retain the VM, even on success"
+    )
+    parser.add_argument(
+        "--links-only",
+        action="store_true",
+        help="skip packages, consumers and defaults",
+    )
+    parser.add_argument("--cpu", type=positive_integer, default=4)
+    parser.add_argument(
+        "--memory",
+        type=positive_integer,
+        default=6144,
+        help="guest RAM in MiB (default: 6144)",
+    )
+    parser.add_argument(
+        "--boot-timeout", type=positive_integer, default=180, help="seconds"
+    )
+    parser.add_argument(
+        "--test-timeout", type=positive_integer, default=7200, help="seconds"
+    )
+    parser.add_argument(
+        "--min-free-gib",
+        type=positive_integer,
+        default=30,
+        help="minimum free Tart storage (default: 30 GiB)",
+    )
+    args = parser.parse_args(argv)
+    repo = Path(__file__).resolve().parent.parent
+    log_dir = Path(tempfile.mkdtemp(prefix="dotfiles-macos-vm-"))
+    print(f"Logs: {log_dir}", flush=True)
+    harness = Harness(repo, args, log_dir)
+    previous_term = signal.getsignal(signal.SIGTERM)
+
+    def interrupted(_signum, _frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, interrupted)
+    code = 0
+    try:
+        harness.execute()
+    except KeyboardInterrupt:
+        code = 130
+    except subprocess.CalledProcessError as error:
+        code = error.returncode if error.returncode > 0 else 128 - error.returncode
+    except subprocess.TimeoutExpired:
+        code = 124
+    except (RuntimeError, OSError, ValueError) as error:
+        print(str(error), file=sys.stderr)
+        code = 1
+    finally:
+        # A second interrupt must not abandon cleanup halfway through.
+        previous_int = signal.signal(signal.SIGINT, signal.SIG_IGN)
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        try:
+            if not harness.cleanup() and code == 0:
+                code = 1
+        finally:
+            signal.signal(signal.SIGINT, previous_int)
+            signal.signal(signal.SIGTERM, previous_term)
+        guest_log = log_dir / "guest.log"
+        if guest_log.exists():
+            guest_stage = "prerequisites"
+            guest_version = "unknown"
+            with guest_log.open(errors="replace") as output:
+                for line in output:
+                    if line.startswith("=== guest:"):
+                        guest_stage = line.strip()
+                    if line.startswith("ProductVersion:"):
+                        guest_version = line.split(":", 1)[1].strip()
+            print(f"Guest macOS: {guest_version}; last guest stage: {guest_stage}")
+        print(
+            f"VM test exit: {code}; last host stage: {harness.stage}\nLogs retained: {log_dir}",
+            flush=True,
+        )
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

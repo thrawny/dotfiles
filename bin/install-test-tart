@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# 2.35/2.36 release binaries require a Swift library absent on macOS 15.
+# Keep this host-only dependency separate from the guest's Brewfile.
+[[ $(uname -s) == Darwin && $(uname -m) == arm64 ]] || {
+  echo 'install-test-tart: Apple Silicon macOS is required' >&2
+  exit 1
+}
+version=2.34.0
+checksum=c9f1609f4945258ef0ee277dd44dc9700d6f069789a11e43be7f35b0a64b3135
+cache_root="${XDG_CACHE_HOME:-$HOME/.cache}/dotfiles-tools"
+destination="$cache_root/tart-$version"
+executable="$destination/tart.app/Contents/MacOS/tart"
+if [[ -x "$executable" && $("$executable" --version) == "$version" ]]; then
+  printf 'Tart %s ready: %s\n' "$version" "$executable"
+  exit 0
+fi
+if [[ -e "$destination" ]]; then
+  printf 'install-test-tart: unexpected existing installation: %s\n' "$destination" >&2
+  exit 1
+fi
+mkdir -p "$cache_root"
+temporary=$(mktemp -d "$cache_root/.tart-install.XXXXXX")
+trap 'rm -rf "$temporary"' EXIT
+curl --fail --location --retry 3 \
+  "https://github.com/openai/tart/releases/download/$version/tart.tar.gz" \
+  --output "$temporary/tart.tar.gz"
+printf '%s  %s\n' "$checksum" "$temporary/tart.tar.gz" | shasum -a 256 --check -
+tar -xzf "$temporary/tart.tar.gz" -C "$temporary"
+[[ $("$temporary/tart.app/Contents/MacOS/tart" --version) == "$version" ]] || exit 1
+mv "$temporary" "$destination"
+printf 'Tart %s ready: %s\n' "$version" "$executable"

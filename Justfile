@@ -110,6 +110,18 @@ test-macos-portable:
     tests/portable-skills.sh
     tests/setup-macos.sh
 
+# Exercise VM snapshot boundaries, timeouts and cleanup without a hypervisor
+test-macos-vm-harness:
+    python3 -B -m unittest discover -s tests -p 'test_macos_tart.py' -v
+
+# Install the pinned host-only Tart binary with macOS Sequoia compatibility
+install-macos-vm-tools:
+    bin/install-test-tart
+
+# Test the current worktree in a disposable Apple Silicon macOS VM
+test-macos-vm *args:
+    bin/test-macos-tart {{ args }}
+
 # Build the Debian/Linuxbrew image and run the portable macOS E2E test
 test-macos-container:
     tests/macos-container.sh

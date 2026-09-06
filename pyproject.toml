@@ -25,7 +25,7 @@ reportUnusedCallResult = false
 reportImplicitOverride = false
 
 [tool.ruff]
-extend-include = ["bin/incus-dev", "bin/kpf", "bin/prctl", "bin/run-if-changed"]
+extend-include = ["bin/incus-dev", "bin/kpf", "bin/prctl", "bin/run-if-changed", "bin/test-macos-tart"]
 
 [tool.ruff.lint]
 select = ["I"]
