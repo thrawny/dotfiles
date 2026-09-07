@@ -11,8 +11,8 @@ in
 {
   home.packages = [ herdr.packages.${system}.default ];
 
-  # Herdr tabs and panes mirror the tmux window/pane workflow where the
-  # concepts overlap. Herdr-only workspace and agent controls keep defaults.
+  # Tabs and panes mirror tmux where concepts overlap, except number keys
+  # select agents. Workspace browsing and sidebar controls keep defaults.
   xdg.configFile."herdr/config.toml".source = (pkgs.formats.toml { }).generate "herdr-config.toml" {
     onboarding = false;
 
@@ -23,6 +23,11 @@ in
 
     keys = {
       prefix = "ctrl+a";
+
+      focus_agent = "prefix+1..9";
+      next_agent = "prefix+j";
+      previous_agent = "prefix+k";
+      switch_tab = "";
 
       new_tab = "prefix+c";
       previous_tab = [
