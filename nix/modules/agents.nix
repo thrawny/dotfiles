@@ -13,6 +13,34 @@ let
   openclaw = import ./openclaw.nix {
     inherit config lib pkgs;
     codexPackage = llmPkgs.codex;
+    openclawPackage = llmPkgs.openclaw;
+  };
+  # Run administrative commands as the service user with the same config,
+  # credentials and tools. Never source the systemd EnvironmentFile as shell code.
+  openclawAdmin = pkgs.writeShellApplication {
+    name = "openclaw-admin";
+    runtimeInputs = [ pkgs.systemd ];
+    text =
+      let
+        service = config.systemd.services.openclaw;
+        envArgs = lib.mapAttrsToList (name: value: "--setenv=${name}=${value}") service.environment;
+      in
+      ''
+        if [ "$EUID" -ne 0 ]; then
+          echo "Run with sudo: sudo openclaw-admin <command>" >&2
+          exit 1
+        fi
+        terminal_args=(--pipe)
+        if [ -t 0 ] && [ -t 1 ]; then
+          terminal_args=(--pty)
+        fi
+        exec systemd-run --quiet --wait --collect "''${terminal_args[@]}" \
+          --property=User=openclaw --property=Group=openclaw \
+          --property=WorkingDirectory=${lib.escapeShellArg openclaw.workspace} \
+          --property=EnvironmentFile=/srv/agents/openclaw/env \
+          ${lib.escapeShellArgs envArgs} \
+          ${lib.getExe llmPkgs.openclaw} "$@"
+      '';
   };
   hermes = import ./hermes.nix { inherit lib pkgs; };
   forgejoHost = "forgejo.${config.dotfiles.tailnetDomain}";
@@ -350,6 +378,52 @@ in
 lib.mkMerge [
   {
     users.manageLingering = true;
+    systemd.services.openclaw = {
+      # Rootless Podman needs the setuid newuidmap/newgidmap wrappers.
+      path = [ "/run/wrappers" ];
+      restartTriggers = [ openclaw.configFile ];
+      after = [
+        "systemd-tmpfiles-setup.service"
+        "systemd-tmpfiles-resetup.service"
+      ];
+    };
+
+    system.build.openclaw-check =
+      pkgs.runCommand "openclaw-config-check"
+        {
+          nativeBuildInputs = [
+            llmPkgs.openclaw
+            pkgs.jq
+          ];
+        }
+        ''
+          export HOME="$TMPDIR/home"
+          mkdir -p "$HOME"
+          export OPENCLAW_NIX_MODE=1
+          export OPENCLAW_CONFIG_PATH=${openclaw.configFile}
+          export OPENCLAW_STATE_DIR="$HOME/.openclaw"
+          test -s ${openclaw.uiSource}/index.html
+          for plugin_dir in $(jq -r '.plugins.load.paths[]' ${openclaw.configFile}); do
+            test -s "$plugin_dir/openclaw.plugin.json"
+            test -s "$plugin_dir/index.js"
+          done
+          openclaw config validate --json > "$out"
+          jq -e '.valid == true and ((.warnings // []) | length) == 0' "$out"
+          if openclaw config set gateway.port 19999 > "$TMPDIR/write-error" 2>&1; then
+            echo "Nix mode unexpectedly allowed a config write" >&2
+            exit 1
+          fi
+          grep -q 'managed by Nix' "$TMPDIR/write-error"
+          jq -e '
+            .gateway.auth.token.source == "env" and
+            .channels.discord.token.source == "file" and
+            .channels.telegram.botToken.source == "env" and
+            .models.providers.openai.agentRuntime.id == "codex" and
+            .agents.defaults.model.fallbacks == [] and
+            .agents.entries.main == {} and
+            (.plugins.load.paths | length) == 5
+          ' ${openclaw.configFile}
+        '';
 
     virtualisation = {
       containers.enable = true;
@@ -362,6 +436,7 @@ lib.mkMerge [
 
     environment.systemPackages = [
       llmPkgs.openclaw
+      openclawAdmin
       zmxPkg
       pkgs.podman-compose
     ]
@@ -371,9 +446,16 @@ lib.mkMerge [
       "d /srv/agents 0755 root root -"
       "d /srv/agents/openclaw 0750 openclaw openclaw -"
       "d /srv/agents/openclaw/home 0750 openclaw openclaw -"
+      # Bootstrap's nested mkdir previously left these ancestors owned by root,
+      # preventing rootless Podman from creating its storage directory.
+      "d /srv/agents/openclaw/home/.local 0750 openclaw openclaw -"
+      "d /srv/agents/openclaw/home/.local/share 0750 openclaw openclaw -"
       "d /srv/agents/openclaw/home/.openclaw 0750 openclaw openclaw -"
       "d /srv/agents/openclaw/home/.openclaw/secrets 0700 openclaw openclaw -"
       "d /srv/agents/openclaw/workspace 0750 openclaw openclaw -"
+      "L+ ${openclaw.stateDir}/openclaw.json - - - - ${openclaw.configFile}"
+      "d /var/lib/openclaw-ui 0755 root root -"
+      "C ${openclaw.uiRoot} - root root - ${openclaw.uiSource}"
       "d /srv/agents/hermes 0750 hermes hermes -"
     ];
 
@@ -408,7 +490,12 @@ lib.mkMerge [
     name = "openclaw";
     uid = 3101;
     package = llmPkgs.openclaw;
-    command = "${llmPkgs.openclaw}/bin/openclaw gateway run --bind loopback --port 18789 --tailscale off --allow-unconfigured --force";
+    command = "${llmPkgs.openclaw}/bin/openclaw gateway run";
+    extraEnvironment = openclaw.environment;
+    extraServiceConfig = {
+      UMask = "0077";
+      TimeoutStopSec = 120;
+    };
     execStartPre = [
       "+${
         mkForgejoBootstrap {
@@ -417,10 +504,10 @@ lib.mkMerge [
           botDisplayName = "Gestral Vendor";
           botEmail = "gestral-bot@obelisk.local";
           uid = 3101;
+          extraExports = openclaw.environment;
           inherit (openclaw) workspace;
         }
       }/bin/openclaw-forgejo-bootstrap"
-      "+${openclaw.prepareConfig}/bin/openclaw-prepare-config"
     ];
   })
 

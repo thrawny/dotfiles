@@ -2,12 +2,23 @@
   codexPackage,
   config,
   lib,
+  openclawPackage,
   pkgs,
 }:
 let
   json = pkgs.formats.json { };
   home = "/srv/agents/openclaw/home";
   workspace = "/srv/agents/openclaw/workspace";
+  stateDir = "${home}/.openclaw";
+  uiSource = "${openclawPackage}/lib/openclaw/dist/control-ui";
+  uiRoot = "/var/lib/openclaw-ui/${builtins.baseNameOf (toString openclawPackage)}";
+  runtimePlugins = [
+    "codex"
+    "discord"
+    "duckduckgo"
+    "openai"
+    "telegram"
+  ];
 
   openclawConfig = {
     "$schema" = "https://docs.openclaw.ai/schema/openclaw.json";
@@ -17,6 +28,9 @@ let
       port = 18789;
       controlUi = {
         enabled = true;
+        # Serve the prebuilt UI without runtime asset retention. Custom roots
+        # reject Nix store hardlinks, so tmpfiles materializes a root-owned copy.
+        root = uiRoot;
         allowedOrigins = [
           "http://localhost:18789"
           "https://localhost:18789"
@@ -27,17 +41,20 @@ let
         chatCompletions.enabled = false;
         responses.enabled = false;
       };
-      tailscale = {
-        mode = "off";
-        resetOnExit = false;
+      tailscale.mode = "off";
+      auth = {
+        mode = "token";
+        token = {
+          source = "env";
+          provider = "default";
+          id = "OPENCLAW_GATEWAY_AUTH_TOKEN";
+        };
       };
-      channelHealthCheckMinutes = 0;
       trustedProxies = [
         "127.0.0.1"
         "::1"
       ];
     };
-    canvasHost.enabled = false;
     # The canonical openai/* route uses the Codex subscription/runtime here,
     # not Platform API-key billing. Fail closed instead of falling back to the
     # embedded OpenClaw runtime.
@@ -66,12 +83,7 @@ let
         thinkingDefault = "low";
         models."openai/gpt-5.6-sol" = { };
       };
-      list = [
-        {
-          id = "main";
-          default = true;
-        }
-      ];
+      entries.main = { };
     };
     plugins = {
       entries = {
@@ -84,23 +96,30 @@ let
           };
         };
         discord.enabled = true;
+        telegram.enabled = true;
+        canvas.enabled = false;
       };
-      allow = [
-        "codex"
-        "discord"
-        "duckduckgo"
-        "openai"
-        "telegram"
-      ];
-      bundledDiscovery = "compat";
+      allow = runtimePlugins;
+      # Use the host's compiled runtime tree so plugins retain bundled trust.
+      # Source/dist paths are classified as external and lose channel-state APIs.
+      # Explicit paths also avoid relying on the legacy SQLite discovery setting.
+      load.paths = map (
+        id: "${openclawPackage}/lib/openclaw/dist-runtime/extensions/${id}"
+      ) runtimePlugins;
     };
     messages = {
       groupChat.visibleReplies = "automatic";
       visibleReplies = "automatic";
-      removeAckAfterReply = true;
     };
     channels = {
-      telegram.enabled = true;
+      telegram = {
+        enabled = true;
+        botToken = {
+          source = "env";
+          provider = "default";
+          id = "TELEGRAM_BOT_TOKEN";
+        };
+      };
       discord = {
         enabled = true;
         token = {
@@ -149,7 +168,7 @@ let
     };
     secrets.providers.discord = {
       source = "file";
-      path = "${home}/.openclaw/secrets/discord.json";
+      path = "${stateDir}/secrets/discord.json";
       mode = "json";
     };
     commands = {
@@ -158,81 +177,24 @@ let
     };
   };
 
-  openclawConfigFile = json.generate "openclaw.json" openclawConfig;
+  configFile = json.generate "openclaw.json" openclawConfig;
 in
 {
-  inherit home workspace;
+  inherit
+    home
+    workspace
+    stateDir
+    uiSource
+    uiRoot
+    configFile
+    ;
 
-  prepareConfig = pkgs.writeShellApplication {
-    name = "openclaw-prepare-config";
-    runtimeInputs = [
-      pkgs.coreutils
-      pkgs.jq
-    ];
-    text = ''
-      set -euo pipefail
-
-      openclaw_home=${lib.escapeShellArg home}
-      config_path="$openclaw_home/.openclaw/openclaw.json"
-      secrets_dir="$openclaw_home/.openclaw/secrets"
-      discord_secret="$secrets_dir/discord.json"
-
-      install -d -m 0750 -o openclaw -g openclaw "$openclaw_home/.openclaw"
-      install -d -m 0700 -o openclaw -g openclaw "$secrets_dir"
-
-      config_tmp="$(mktemp)"
-      cp ${openclawConfigFile} "$config_tmp"
-
-      update_config() {
-        next_tmp="$(mktemp)"
-        jq "$1" "$config_tmp" > "$next_tmp"
-        mv "$next_tmp" "$config_tmp"
-      }
-
-      if [ -n "''${OPENCLAW_GATEWAY_AUTH_TOKEN:-}" ]; then
-        next_tmp="$(mktemp)"
-        jq --arg token "$OPENCLAW_GATEWAY_AUTH_TOKEN" \
-          '.gateway.auth = {mode: "token", token: $token}' \
-          "$config_tmp" > "$next_tmp"
-        mv "$next_tmp" "$config_tmp"
-      fi
-
-      if [ -z "''${DISCORD_BOT_TOKEN:-}" ] && [ ! -r "$discord_secret" ]; then
-        update_config '
-          .channels.discord.enabled = false
-          | del(.channels.discord.token)
-          | .plugins.entries.discord.enabled = false
-          | .plugins.allow |= map(select(. != "discord"))
-        '
-      fi
-
-      if [ -z "''${TELEGRAM_BOT_TOKEN:-}" ]; then
-        update_config '
-          .channels.telegram.enabled = false
-          | .plugins.allow |= map(select(. != "telegram"))
-        '
-      fi
-
-      # OpenClaw uses this runtime-owned metadata to distinguish intentional
-      # config replacements from truncated writes and otherwise restores stale state.
-      if [ -r "$config_path" ]; then
-        next_tmp="$(mktemp)"
-        jq --slurpfile current "$config_path" \
-          '.meta = ($current[0].meta // .meta)' \
-          "$config_tmp" > "$next_tmp"
-        mv "$next_tmp" "$config_tmp"
-      fi
-
-      install -m 0600 -o openclaw -g openclaw "$config_tmp" "$config_path"
-      rm -f "$config_tmp"
-
-      if [ -n "''${DISCORD_BOT_TOKEN:-}" ]; then
-        secret_tmp="$(mktemp)"
-        jq -n --arg token "$DISCORD_BOT_TOKEN" \
-          '{DISCORD_BOT_TOKEN: $token}' > "$secret_tmp"
-        install -m 0600 -o openclaw -g openclaw "$secret_tmp" "$discord_secret"
-        rm -f "$secret_tmp"
-      fi
-    '';
+  environment = {
+    OPENCLAW_NIX_MODE = "1";
+    OPENCLAW_STATE_DIR = stateDir;
+    # 2026.8.2's recovery path bypasses the Nix write guard and can replace a
+    # symlink with stale config. Read the store path directly, accepting its
+    # harmless warning when it tries to write a sibling .last-good file.
+    OPENCLAW_CONFIG_PATH = toString configFile;
   };
 }

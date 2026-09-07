@@ -166,6 +166,32 @@ eval-host target attr="system.build.toplevel.drvPath":
 build-host target:
     nix build ".#nixosConfigurations.{{ target }}.config.system.build.toplevel" --no-link --no-write-lock-file
 
+# Validate OpenClaw's generated config and its Nix-mode write guard offline
+check-openclaw target="obelisk":
+    nix build ".#nixosConfigurations.{{ target }}.config.system.build.openclaw-check" --no-link --no-write-lock-file
+
+# Check the deployed gateway using its service identity and credential environment
+openclaw-health target="obelisk":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ssh "root@{{ target }}" 'bash -se' <<'REMOTE'
+    set -euo pipefail
+    systemctl is-active --quiet openclaw.service
+    openclaw-admin config validate --json | jq -e '.valid and ((.warnings // []) | length) == 0'
+    if ! health_json="$(openclaw-admin health --json)"; then
+      printf '%s\n' "$health_json" >&2
+      exit 1
+    fi
+    printf '%s\n' "$health_json" | jq -e '
+      {ok, plugins, channels: (.channels | with_entries(.value |= {configured, running, connected, lastError}))}
+      | select(.ok and (.plugins.errors | length) == 0
+          and .channels.discord.running and .channels.telegram.running
+          and .channels.discord.lastError == null and .channels.telegram.lastError == null)
+    '
+    curl -fsS -o /dev/null -w 'UI HTTP %{http_code}\n' http://127.0.0.1:18789/
+    systemctl show openclaw.service -p ActiveState -p SubState -p NRestarts
+    REMOTE
+
 # Evaluate all host configurations
 eval-all:
     #!/usr/bin/env bash
