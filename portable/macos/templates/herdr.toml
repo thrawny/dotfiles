@@ -6,6 +6,10 @@ new_cwd = "follow"
 
 [keys]
 prefix = "ctrl+a"
+focus_agent = "prefix+1..9"
+next_agent = "prefix+j"
+previous_agent = "prefix+k"
+switch_tab = ""
 new_tab = "prefix+c"
 previous_tab = ["ctrl+shift+h", "prefix+h", "prefix+p"]
 next_tab = ["ctrl+shift+l", "prefix+l", "prefix+n"]
