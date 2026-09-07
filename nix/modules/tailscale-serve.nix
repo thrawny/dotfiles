@@ -6,6 +6,13 @@
 }:
 let
   cfg = config.services.tailscaleServe;
+  # Serve config and AdvertiseServices are shared daemon state. Keep the same
+  # lock for every start/stop, including during concurrent NixOS activation.
+  # Do not use per-unit RuntimeDirectory cleanup: it could unlink a held lock.
+  lockFile = "/run/lock/dotfiles-tailscale-serve.lock";
+  flock = lib.getExe' pkgs.util-linux "flock";
+  tailscale = lib.getExe pkgs.tailscale;
+  lockedTailscale = "${flock} --exclusive --wait 60 ${lockFile} ${tailscale}";
 in
 {
   options.services.tailscaleServe = {
@@ -73,12 +80,32 @@ in
         serviceConfig = {
           Type = "oneshot";
           RemainAfterExit = true;
-          ExecStart = "${lib.getExe pkgs.tailscale} serve --service=${lib.escapeShellArg service.serviceName} --yes --https=${toString service.httpsPort} ${lib.escapeShellArg service.target}";
-          ExecStop = "${lib.getExe pkgs.tailscale} serve clear ${lib.escapeShellArg service.serviceName}";
+          ExecStart = "${lockedTailscale} serve --service=${lib.escapeShellArg service.serviceName} --yes --https=${toString service.httpsPort} ${lib.escapeShellArg service.target}";
+          ExecStop = "${lockedTailscale} serve clear ${lib.escapeShellArg service.serviceName}";
+          UMask = "0077";
+          TimeoutStartSec = 90;
+          TimeoutStopSec = 90;
           Restart = "on-failure";
           RestartSec = 10;
         };
       }
     ) cfg.services;
+
+    system.build.tailscale-serve-check =
+      let
+        spec = pkgs.writeText "tailscale-serve-units.json" (
+          builtins.toJSON {
+            inherit lockFile flock tailscale;
+            services = lib.mapAttrs (name: service: {
+              inherit (service) serviceName target httpsPort;
+              inherit (config.systemd.services."tailscale-serve-${name}".serviceConfig) ExecStart ExecStop;
+            }) cfg.services;
+          }
+        );
+      in
+      pkgs.runCommand "tailscale-serve-check" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+        python3 ${../../bin/check-tailscale-serve} ${spec}
+        touch "$out"
+      '';
   };
 }

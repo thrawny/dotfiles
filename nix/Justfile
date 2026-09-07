@@ -166,6 +166,34 @@ eval-host target attr="system.build.toplevel.drvPath":
 build-host target:
     nix build ".#nixosConfigurations.{{ target }}.config.system.build.toplevel" --no-link --no-write-lock-file
 
+# Exercise generated Tailscale Serve commands against a concurrent fake daemon
+check-tailscale-serve target="obelisk":
+    nix build ".#nixosConfigurations.{{ target }}.config.system.build.tailscale-serve-check" --no-link --no-write-lock-file
+
+# Check real advertisements and HTTPS reachability from this client
+# Redirects and auth challenges count as reachable, not as authenticated access.
+tailscale-serve-health target="obelisk":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    configured="$(nix eval --json '.#nixosConfigurations.{{ target }}.config.services.tailscaleServe.services' --no-write-lock-file)"
+    tailnet_domain="$(nix eval --raw '.#nixosConfigurations.{{ target }}.config.dotfiles.tailnetDomain' --no-write-lock-file)"
+    advertised="$(ssh 'root@{{ target }}' 'tailscale debug prefs | jq .AdvertiseServices')"
+    jq -en --argjson configured "$configured" --argjson advertised "$advertised" \
+        '$configured | all(.[]; .serviceName as $name | ($advertised | index($name)) != null)'
+    failed=0
+    while IFS=$'\t' read -r service_name https_port; do
+        url="https://${service_name#svc:}.$tailnet_domain:$https_port/"
+        if ! http_code="$(curl --max-time 15 --silent --show-error --output /dev/null --write-out '%{http_code}' "$url")"; then
+            failed=1
+        fi
+        printf '%s HTTP %s\n' "$url" "$http_code"
+        case "$http_code" in
+            200|3??|401|403) ;;
+            *) failed=1 ;;
+        esac
+    done < <(jq -r '.[] | [.serviceName, .httpsPort] | @tsv' <<< "$configured")
+    exit "$failed"
+
 # Validate OpenClaw's generated config and its Nix-mode write guard offline
 check-openclaw target="obelisk":
     nix build ".#nixosConfigurations.{{ target }}.config.system.build.openclaw-check" --no-link --no-write-lock-file

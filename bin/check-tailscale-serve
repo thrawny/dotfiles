@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""Check generated Serve commands and exercise their shared lock without networking."""
+
+import concurrent.futures
+import json
+import os
+import shlex
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+FAKE_TAILSCALE = """\
+import json
+import os
+from pathlib import Path
+import sys
+import time
+
+state_file = Path(os.environ["SERVE_TEST_STATE"])
+marker = state_file.with_suffix(".busy")
+# Exclusive creation fails if two fake daemon mutations overlap.
+with marker.open("x"):
+    try:
+        state = json.loads(state_file.read_text())
+        args = sys.argv[1:]
+        if args[:2] == ["serve", "clear"]:
+            state.pop(args[2], None)
+        else:
+            name = next(arg.removeprefix("--service=") for arg in args if arg.startswith("--service="))
+            state[name] = args[-1]
+        time.sleep(0.08)
+        state_file.write_text(json.dumps(state))
+    finally:
+        marker.unlink()
+"""
+
+
+def run_concurrently(commands: list[list[str]], env: dict[str, str]) -> None:
+    def run(command: list[str]) -> None:
+        result = subprocess.run(
+            command, env=env, text=True, capture_output=True, timeout=15, check=False
+        )
+        if result.returncode:
+            raise AssertionError(f"Serve command failed: {result.stderr}")
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(commands)) as pool:
+        list(pool.map(run, commands))
+
+
+def main() -> None:
+    spec = json.loads(Path(sys.argv[1]).read_text())
+    services = spec["services"]
+    if not services:
+        raise AssertionError("No Serve units were generated")
+    prefix = [spec["flock"], "--exclusive", "--wait", "60", spec["lockFile"]]
+    names: list[str] = [service["serviceName"] for service in services.values()]
+    if len(set(names)) != len(names):
+        raise AssertionError("Serve units must have distinct service names")
+
+    with tempfile.TemporaryDirectory(prefix="tailscale-serve-check-") as scratch:
+        root = Path(scratch)
+        fake = root / "tailscale"
+        fake.write_text(f"#!{sys.executable}\n{FAKE_TAILSCALE}")
+        fake.chmod(0o700)
+        state_file = root / "state.json"
+        state_file.write_text("{}")
+        env = dict(os.environ, SERVE_TEST_STATE=str(state_file))
+        starts: list[list[str]] = []
+        stops: list[list[str]] = []
+        expected: dict[str, str] = {}
+
+        for service in services.values():
+            name = service["serviceName"]
+            expected[name] = service["target"]
+            for field, args, commands in (
+                (
+                    "ExecStart",
+                    [
+                        "serve",
+                        f"--service={name}",
+                        "--yes",
+                        f"--https={service['httpsPort']}",
+                        service["target"],
+                    ],
+                    starts,
+                ),
+                ("ExecStop", ["serve", "clear", name], stops),
+            ):
+                actual = shlex.split(service[field])
+                if actual != [*prefix, spec["tailscale"], *args]:
+                    raise AssertionError(f"Unexpected {field} for {name}: {actual}")
+                # Keep the generated locking command, replacing only its lock
+                # path and the Tailscale executable with isolated test fixtures.
+                commands.append(
+                    [*actual[:4], str(root / "serve.lock"), str(fake), *actual[6:]]
+                )
+
+        for _ in range(3):
+            run_concurrently(starts, env)
+            if json.loads(state_file.read_text()) != expected:
+                raise AssertionError("Concurrent starts lost a service advertisement")
+            run_concurrently(stops, env)
+            if json.loads(state_file.read_text()) != {}:
+                raise AssertionError(
+                    "Concurrent stops left service advertisements behind"
+                )
+        # Starting and stopping different services can overlap during a switch.
+        run_concurrently([*starts[::2], *stops[1::2]], env)
+        remaining = {names[i]: expected[names[i]] for i in range(0, len(names), 2)}
+        if json.loads(state_file.read_text()) != remaining:
+            raise AssertionError(
+                "Mixed starts/stops lost or retained the wrong service"
+            )
+
+    print(
+        f"Validated shared locking and concurrent updates for {len(services)} Serve units"
+    )
+
+
+if __name__ == "__main__":
+    main()
