@@ -12,7 +12,7 @@ in
   home.packages = [ herdr.packages.${system}.default ];
 
   # Tabs and panes mirror tmux where concepts overlap, except number keys
-  # select agents. Workspace browsing and sidebar controls keep defaults.
+  # select agents. Workspace navigation uses j/k as well as the arrow keys.
   xdg.configFile."herdr/config.toml".source = (pkgs.formats.toml { }).generate "herdr-config.toml" {
     onboarding = false;
 
@@ -28,6 +28,18 @@ in
       next_agent = "prefix+j";
       previous_agent = "prefix+k";
       switch_tab = "";
+
+      navigate_workspace_down = [
+        "j"
+        "down"
+      ];
+      navigate_workspace_up = [
+        "k"
+        "up"
+      ];
+      # In workspace navigation mode, reserve j/k for workspace selection.
+      navigate_pane_down = "";
+      navigate_pane_up = "";
 
       new_tab = "prefix+c";
       previous_tab = [
