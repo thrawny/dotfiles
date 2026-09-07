@@ -76,7 +76,16 @@ check-theme:
 # === Tests ===
 
 # Run all tests
-test: test-nvim
+test: test-nvim test-aerospace
+
+# Check AeroSpace keybindings, app rules, and terminal launcher shell syntax
+# Portable checks only; macOS behavior still needs a smoke test.
+test-aerospace:
+    python3 -B -m unittest discover -s tests -p 'test_aerospace.py' -v
+
+# Validate the active AeroSpace config on macOS without applying it
+check-aerospace:
+    aerospace reload-config --dry-run --warnings-as-errors --no-gui
 
 # Run Neovim config tests
 test-nvim:
@@ -90,7 +99,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi check-theme nix::eval
+check-parallel: lint typecheck pi check-theme test-aerospace nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all
