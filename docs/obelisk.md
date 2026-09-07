@@ -12,6 +12,12 @@ This deploys the pinned NixOS configuration, including system packages and
 Home Manager for `thrawny`. It can restart services. If a live switch is blocked,
 the recipe installs the next boot generation and asks before rebooting.
 
+Deployment requires SSH access as `root@obelisk`. The remote Nix daemon trusts
+only root to import unsigned, locally built store paths. Using `thrawny` for
+the copy step fails with "lacks a signature by a trusted key"; activation via
+`--sudo` does not elevate that copy step. Regular SSH and Herdr sessions still
+use `thrawny`.
+
 To validate without deploying:
 
 ```sh
