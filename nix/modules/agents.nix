@@ -3,6 +3,7 @@
   lib,
   pkgs,
   llm-agents,
+  hermes-agent,
   zmx,
   ...
 }:
@@ -43,6 +44,10 @@ let
       '';
   };
   hermes = import ./hermes.nix { inherit lib pkgs; };
+  # Match the gateway's effective package, including dependency groups and fixes.
+  hermesPackage = config.services.hermes-agent.package.override {
+    inherit (config.services.hermes-agent) extraPythonPackages extraDependencyGroups;
+  };
   forgejoHost = "forgejo.${config.dotfiles.tailnetDomain}";
   forgejoUrl = "https://${forgejoHost}";
   commonPath = [
@@ -388,6 +393,14 @@ lib.mkMerge [
       ];
     };
 
+    system.build.hermes-web-check =
+      pkgs.runCommand "hermes-web-check"
+        { nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.requests ])) ]; }
+        ''
+          python3 ${../../bin/check-hermes-web} ${hermesPackage}/bin/hermes
+          touch "$out"
+        '';
+
     system.build.openclaw-check =
       pkgs.runCommand "openclaw-config-check"
         {
@@ -526,9 +539,18 @@ lib.mkMerge [
         "--accept-hooks"
       ];
       extraDependencyGroups = [ "messaging" ];
+      extraPythonPackages = [
+        (import ../lib/hermes-state-modules.nix {
+          inherit lib;
+          # The plugin hook filters by interpreter identity, not just ABI version.
+          pkgs = hermes-agent.inputs.nixpkgs.legacyPackages.${system};
+          source = hermes-agent.outPath;
+        })
+      ];
       extraPackages = commonPath;
       restartSec = 10;
       settings = {
+        dashboard.public_url = "https://hermes.${config.dotfiles.tailnetDomain}";
         plugins.enabled = [
           "discord"
           "telegram"
@@ -600,7 +622,7 @@ lib.mkMerge [
         "hermes-agent.service"
       ];
       path = [
-        config.services.hermes-agent.package
+        hermesPackage
         pkgs.bash
         pkgs.coreutils
       ]
@@ -618,7 +640,7 @@ lib.mkMerge [
         Group = "hermes";
         WorkingDirectory = hermes.workspace;
         ExecStartPre = "+${mkHermesDashboardAuthBootstrap}/bin/hermes-dashboard-auth-bootstrap";
-        ExecStart = "${config.services.hermes-agent.package}/bin/hermes dashboard --no-open --host 0.0.0.0 --port 9119 --skip-build";
+        ExecStart = "${hermesPackage}/bin/hermes dashboard --no-open --host 127.0.0.1 --port 9119 --skip-build";
         Restart = "always";
         RestartSec = 10;
         UMask = "0007";

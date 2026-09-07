@@ -162,6 +162,10 @@ eval force="--force=false":
 eval-host target attr="system.build.toplevel.drvPath":
     nix eval --json ".#nixosConfigurations.{{ target }}.config.{{ attr }}" --no-write-lock-file
 
+# Start the packaged Hermes dashboard offline and verify password authentication
+check-hermes-web target="obelisk":
+    nix build ".#nixosConfigurations.{{ target }}.config.system.build.hermes-web-check" --no-link -L
+
 # Build a specific NixOS host without activating or deploying it
 build-host target:
     nix build ".#nixosConfigurations.{{ target }}.config.system.build.toplevel" --no-link --no-write-lock-file

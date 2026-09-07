@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Start the packaged Hermes dashboard offline and check its login boundary."""
+
+import os
+import secrets
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+import requests
+
+
+def main() -> None:
+    with tempfile.TemporaryDirectory(prefix="hermes-web-check-") as directory:
+        home = Path(directory)
+        password = secrets.token_urlsafe(24)
+        env = os.environ | {
+            "HOME": directory,
+            "HERMES_HOME": directory,
+            "HERMES_MANAGED": "true",
+            "HERMES_DASHBOARD_PUBLIC_URL": "https://hermes.example.test",
+            "HERMES_DASHBOARD_BASIC_AUTH_USERNAME": "admin",
+            "HERMES_DASHBOARD_BASIC_AUTH_PASSWORD": password,
+            "HERMES_DASHBOARD_BASIC_AUTH_SECRET": secrets.token_urlsafe(32),
+        }
+        (home / "config.yaml").write_text("plugins:\n  enabled: [discord, telegram]\n")
+        with socket.socket() as listener:
+            listener.bind(("127.0.0.1", 0))
+            port = listener.getsockname()[1]
+        url = f"http://127.0.0.1:{port}"
+        with (home / "server.log").open("w+") as log:
+            process = subprocess.Popen(
+                [
+                    sys.argv[1],
+                    "dashboard",
+                    "--no-open",
+                    "--skip-build",
+                    "--host",
+                    "127.0.0.1",
+                    "--port",
+                    str(port),
+                ],
+                cwd=directory,
+                env=env,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+            )
+            try:
+                deadline = time.monotonic() + 60
+                while True:
+                    if process.poll() is not None:
+                        raise RuntimeError("Dashboard exited during startup")
+                    try:
+                        response = requests.get(f"{url}/login", timeout=2)
+                        break
+                    except requests.ConnectionError:
+                        if time.monotonic() >= deadline:
+                            raise TimeoutError(
+                                "Dashboard did not listen within 60s"
+                            ) from None
+                        time.sleep(0.25)
+                assert response.status_code == 200, response.status_code
+                assert "password" in response.text.lower(), (
+                    "Password login form missing"
+                )
+                response = requests.get(
+                    f"{url}/api/sessions", timeout=10, allow_redirects=False
+                )
+                assert response.status_code in (401, 403), response.status_code
+                credentials = {
+                    "provider": "basic",
+                    "username": "admin",
+                    "password": "wrong",
+                }
+                response = requests.post(
+                    f"{url}/auth/password-login", json=credentials, timeout=10
+                )
+                assert response.status_code == 401, response.status_code
+                credentials["password"] = password
+                response = requests.post(
+                    f"{url}/auth/password-login", json=credentials, timeout=10
+                )
+                assert response.status_code == 200, response.status_code
+                assert response.json()["ok"] is True
+                # The real deployment uses HTTPS. Send its Secure cookies explicitly
+                # for this loopback-only HTTP test; never weaken the server policy.
+                cookie = "; ".join(
+                    f"{key}={value}" for key, value in response.cookies.items()
+                )
+                assert cookie, "Login did not issue session cookies"
+                response = requests.get(
+                    f"{url}/api/sessions", headers={"Cookie": cookie}, timeout=10
+                )
+                assert response.status_code == 200, response.status_code
+                print(
+                    "Hermes dashboard starts; login required; valid login can read sessions"
+                )
+            except BaseException:
+                log.seek(0)
+                print(log.read(), file=sys.stderr)
+                raise
+            finally:
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+
+
+if __name__ == "__main__":
+    main()
