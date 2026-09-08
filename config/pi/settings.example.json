@@ -3,6 +3,7 @@
   "defaultModel": "gpt-6-astra",
   "defaultThinkingLevel": "high",
   "theme": "monokai-pi",
+  "tuiMode": "fullscreen",
   "diffTheme": "subtle",
   "diffView": "unified",
   "diffColors": {
