@@ -76,12 +76,17 @@ check-theme:
 # === Tests ===
 
 # Run all tests
-test: test-nvim test-aerospace
+test: test-nvim test-aerospace test-niri-layout
 
 # Check AeroSpace keybindings, app rules, and terminal launcher shell syntax
 # Portable checks only; macOS behavior still needs a smoke test.
 test-aerospace:
     python3 -B -m unittest discover -s tests -p 'test_aerospace.py' -v
+
+# Check niri layout detection with mocked desktop commands
+test-niri-layout:
+    bash -n bin/niri-layout
+    python3 -B -m unittest discover -s tests -p 'test_niri_layout.py' -v
 
 # Validate the active AeroSpace config on macOS without applying it
 check-aerospace:
@@ -99,7 +104,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi check-theme test-aerospace nix::eval
+check-parallel: lint typecheck pi check-theme test-aerospace test-niri-layout nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

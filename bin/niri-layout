@@ -12,6 +12,18 @@ set_output_power() {
   niri msg output "$output" "$state" >/dev/null 2>&1 || true
 }
 
+work_output() {
+  local output
+  output=$(niri msg -j outputs | jq -er '
+    [.[] | select(.make == "Philips Consumer Electronics Company") | .name]
+    | if length == 1 then .[0] else empty end
+  ') || {
+    echo "Work layout requires exactly one connected Philips monitor." >&2
+    return 1
+  }
+  printf '%s\n' "$output"
+}
+
 main() {
   local layout="${1:?Usage: niri-layout <laptop|home|work>}"
 
@@ -33,9 +45,12 @@ main() {
       niri-set-column-width 0.5
       ;;
     work)
-      # Main on the laptop panel; everything else on DP-1 (Philips ultrawide)
+      # Connector names change across docks. Find the Philips by identity.
+      local output
+      output=$(work_output)
+      # Main on the laptop panel; everything else on the Philips ultrawide.
       set_output_power eDP-1 on
-      niri-move-workspaces DP-1 --except main
+      niri-move-workspaces "$output" --except main
       niri msg action move-workspace-to-monitor --reference main eDP-1
       niri-set-column-width 0.33333
       ;;
