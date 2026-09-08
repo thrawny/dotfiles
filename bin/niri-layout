@@ -24,6 +24,21 @@ work_output() {
   printf '%s\n' "$output"
 }
 
+position_work_outputs() {
+  local output="$1"
+  local position x y
+  # Use logical dimensions so centering also works with display scaling.
+  position=$(niri msg -j outputs | jq -er --arg output "$output" '
+    .[$output].logical as $monitor | .["eDP-1"].logical as $laptop
+    | if ($monitor.width > 0 and $monitor.height > 0 and $laptop.width > 0)
+      then [((($monitor.width - $laptop.width) / 2) | round), $monitor.height] | @tsv
+      else error("Work layout requires active Philips and laptop outputs") end
+  ')
+  read -r x y <<< "$position"
+  niri msg output "$output" position set 0 0
+  niri msg output eDP-1 position set "$x" "$y"
+}
+
 main() {
   local layout="${1:?Usage: niri-layout <laptop|home|work>}"
 
@@ -50,6 +65,8 @@ main() {
       output=$(work_output)
       # Main on the laptop panel; everything else on the Philips ultrawide.
       set_output_power eDP-1 on
+      niri msg output "$output" on
+      position_work_outputs "$output"
       niri-move-workspaces "$output" --except main
       niri msg action move-workspace-to-monitor --reference main eDP-1
       niri-set-column-width 0.33333
