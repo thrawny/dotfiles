@@ -152,11 +152,11 @@ test-macos-portable:
 
 # Exercise the interactive walkthrough with isolated homes and mocked installers
 test-macos-bootstrap:
-    python3 -B -m unittest discover -s tests -p 'test_macos_bootstrap.py' -v
+    @just test-python tests/test_macos_bootstrap.py
 
 # Exercise VM snapshot boundaries, timeouts and cleanup without a hypervisor
 test-macos-vm-harness:
-    python3 -B -m unittest discover -s tests -p 'test_macos_tart.py' -v
+    @just test-python tests/test_macos_tart.py
 
 # Install the pinned host-only Tart binary with macOS Sequoia compatibility
 install-macos-vm-tools:
