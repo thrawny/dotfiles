@@ -78,20 +78,24 @@ check-theme:
 # Run all tests
 test: test-nvim test-aerospace test-niri-layout test-desktop-broker
 
+# Run Python tests with the locked development dependencies
+test-python *args:
+    uv run --locked python -B -m pytest {{args}}
+
 # Check AeroSpace keybindings, app rules, and terminal launcher shell syntax
 # Portable checks only; macOS behavior still needs a smoke test.
 test-aerospace:
-    python3 -B -m unittest discover -s tests -p 'test_aerospace.py' -v
+    @just test-python tests/test_aerospace.py
 
 # Check niri layout detection with mocked desktop commands
 test-niri-layout:
     bash -n bin/niri-layout
-    python3 -B -m unittest discover -s tests -p 'test_niri_layout.py' -v
+    @just test-python tests/test_niri_layout.py
 
 # Check the desktop broker protocol and sandbox routing with a fake browser
 test-desktop-broker:
     bash -n bin/niri-open-url bin/sandbox bin/sandbox-wl-paste
-    python3 -B -m unittest discover -s tests -p 'test_desktop_broker*.py' -v
+    @just test-python tests/test_desktop_broker.py tests/test_desktop_broker_clipboard.py
 
 # Validate the active AeroSpace config on macOS without applying it
 check-aerospace:
