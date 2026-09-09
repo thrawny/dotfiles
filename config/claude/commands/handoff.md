@@ -1,6 +1,6 @@
 ---
-allowed-tools: Read, Write(handoff.md), Glob, Grep, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(remove-handoff), Bash(claude-handoff-promote), Bash(acpx * sessions*), TaskList, TaskStop
-description: Hand off work to another session, reusing the auto-handoff when available
+allowed-tools: Read, Write(handoff.md), Glob, Grep, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(remove-handoff), Bash(acpx * sessions*), TaskList, TaskStop
+description: Hand off work to another session
 ---
 
 $ARGUMENTS
@@ -11,12 +11,7 @@ First, run `remove-handoff` (NOT `rm`, which requires approval) to delete any ex
 
 Then settle live async state so the next session doesn't inherit it blind: stop background tasks and teammate agents that are done or won't be needed; close finished acpx sessions. Anything deliberately left running belongs in the handoff.
 
-Next, run exactly `claude-handoff-promote`. Its PostToolUse hook will report one of two outcomes:
-
-- **Auto-handoff promoted:** Read `handoff.md` and use it as the draft. Do not reconstruct it from scratch. Apply the supplied goal as authoritative (or the inferred goal if none was supplied), and reconcile only meaningful changes since the snapshot was written — especially files touched, test/gate results, unresolved errors, and live state.
-- **No auto-handoff:** Extract a fresh handoff from the current conversation.
-
-The final `handoff.md` must contain:
+Then extract the handoff from the current conversation and write it to `handoff.md` at the repo root. It must contain:
 
 1. **Next goal**: What the next session should accomplish
 2. **Context**: Only information relevant to that goal — decisions made, approaches tried, current state

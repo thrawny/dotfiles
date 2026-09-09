@@ -8,23 +8,12 @@
     "USE_BUILTIN_RIPGREP": "0"
   },
   "permissions": {
-    "allow": [
-    ],
+    "allow": [],
     "deny": [],
     "ask": [],
     "defaultMode": "auto"
   },
   "hooks": {
-    "PostToolUse": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claude-context-watermark"
-          }
-        ]
-      }
-    ],
     "Stop": [
       {
         "hooks": [
@@ -56,31 +45,12 @@
         ]
       }
     ],
-    "PreCompact": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claude-compact-brief"
-          }
-        ]
-      }
-    ],
     "SessionStart": [
       {
         "hooks": [
           {
             "type": "command",
             "command": "agent-switch track session-start --agent claude"
-          }
-        ]
-      },
-      {
-        "matcher": "compact",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "claude-handoff-takeoff"
           }
         ]
       }

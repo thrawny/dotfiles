@@ -36,7 +36,6 @@ let
     enableShellPortability = instructionConfig.shellPortability.enable;
     enableSandbox = instructionConfig.sandbox.enable;
     enableBackgroundTasks = instructionConfig.backgroundTasks.enable;
-    enableContextManagement = instructionConfig.contextManagement.enable;
     enableCodeQuality = instructionConfig.codeQuality.enable;
     enablePiWorkflow = instructionConfig.piWorkflow.enable;
   };
@@ -100,7 +99,6 @@ in
       shellPortability.enable = instructionBlockOption "Include shell portability instructions";
       sandbox.enable = instructionBlockOption "Include sandbox-specific instructions";
       backgroundTasks.enable = instructionBlockOption "Include background task instructions";
-      contextManagement.enable = instructionBlockOption "Include context management instructions";
       codeQuality.enable = instructionBlockOption "Include Codex code quality instructions";
       piWorkflow.enable = instructionBlockOption "Include Pi workflow instructions";
     };

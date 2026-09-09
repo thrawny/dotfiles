@@ -63,12 +63,6 @@ rec {
     - Before ending a session or handing off, stop background tasks you started; anything deliberately left running must be named in the handoff.
   '';
 
-  contextManagement = ''
-    ## Context management
-
-    When the conversation is summarized for compaction, always preserve: the current goal and immediate next action; decisions made and their reasoning; paths of files read or modified and commits created; test/gate results and unresolved errors; anything deliberately left running (dev servers, background agents, acpx sessions). Write the summary as terse bullets — the preserved facts only, no narrative or process recap; a session auto-handoff carrying detailed state is injected after compaction, so the summary does not need to be exhaustive.
-  '';
-
   codeQuality = ''
     ## Code Quality Tools
 
@@ -138,7 +132,6 @@ rec {
       enableShellPortability ? true,
       enableSandbox ? true,
       enableBackgroundTasks ? true,
-      enableContextManagement ? true,
       enableCodeQuality ? true,
       enablePiWorkflow ? true,
     }:
@@ -150,7 +143,6 @@ rec {
         ++ optionalBlock enableShellPortability shellPortability
         ++ optionalBlock enableSandbox sandbox
         ++ optionalBlock enableBackgroundTasks backgroundTasks
-        ++ optionalBlock enableContextManagement contextManagement
       );
 
       codexGlobal = render "# Global Codex Instructions" (
