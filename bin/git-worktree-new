@@ -17,6 +17,10 @@ if [[ ! -d "$wt_dir" ]]; then
   if git show-ref --verify --quiet "refs/heads/$branch"; then
     git worktree add "$wt_dir" "$branch" "$@"
   else
+    # With no explicit arguments, branch from main rather than the current HEAD.
+    if [[ $# -eq 0 ]]; then
+      set -- main
+    fi
     git worktree add -b "$branch" "$wt_dir" "$@"
   fi
 fi
