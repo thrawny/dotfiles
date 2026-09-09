@@ -31,7 +31,7 @@ class ProtocolTests(unittest.TestCase):
             client.sendall(payload)
             client.shutdown(socket.SHUT_WR)
             with patch.object(broker, "open_url") as opener:
-                broker.handle(server, "/fixed/router", [])
+                broker.handle(server, "/fixed/router", [], "/fixed/wl-paste")
                 return broker.receive(client, 1), opener.call_args_list
 
     def test_open_url_has_one_fixed_host_command(self):
@@ -100,12 +100,12 @@ class ProtocolTests(unittest.TestCase):
         server, client = socket.socketpair()
         client.close()
         with server:
-            broker.handle(server, "/unused", [])
+            broker.handle(server, "/unused", [], "/unused")
 
     def test_wrong_uid_is_rejected(self):
         server, client = socket.socketpair()
         with server, client, patch.object(broker.os, "getuid", return_value=-1):
-            broker.handle(server, "/unused", [])
+            broker.handle(server, "/unused", [], "/unused")
             self.assertIn("UID", broker.receive(client, 1)["error"])
 
     def test_nonzero_opener_status_is_an_error(self):
@@ -209,6 +209,8 @@ class RoutingTests(unittest.TestCase):
                         "serve",
                         "--opener",
                         str(opener),
+                        "--wl-paste",
+                        "/unused",
                     ],
                     pass_fds=(fd,),
                     env=environment,
@@ -270,7 +272,16 @@ class RoutingTests(unittest.TestCase):
     def test_server_refuses_sandbox_and_missing_activation(self):
         for sandbox in ("1", ""):
             result = subprocess.run(
-                [sys.executable, "-I", str(SCRIPT), "serve", "--opener", "/unused"],
+                [
+                    sys.executable,
+                    "-I",
+                    str(SCRIPT),
+                    "serve",
+                    "--opener",
+                    "/unused",
+                    "--wl-paste",
+                    "/unused",
+                ],
                 env={
                     **os.environ,
                     "SANDBOX": sandbox,

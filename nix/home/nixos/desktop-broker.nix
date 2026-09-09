@@ -60,7 +60,7 @@ in
       PartOf = [ "graphical-session.target" ];
     };
     Service = {
-      ExecStart = "${pkgs.python3}/bin/python3 -I ${broker} serve --opener ${hostRouter}";
+      ExecStart = "${pkgs.python3}/bin/python3 -I ${broker} serve --opener ${hostRouter} --wl-paste ${pkgs.wl-clipboard}/bin/wl-paste";
       Restart = "on-failure";
       RestartSec = 1;
       UMask = "0077";

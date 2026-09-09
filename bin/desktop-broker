@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import selectors
 import signal
 import socket
 import struct
@@ -21,6 +22,16 @@ MAX_MESSAGE_BYTES = 16384
 REQUEST_TIMEOUT = 2.0
 OPEN_TIMEOUT = 40.0
 RESPONSE_TIMEOUT = 60.0
+CLIPBOARD_TIMEOUT = 2.0
+MAX_IMAGE_BYTES = 20 * 1024 * 1024
+IMAGE_MIME_TYPES = (
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/webp",
+    "image/gif",
+    "image/bmp",
+)
 
 
 def socket_path() -> Path:
@@ -28,38 +39,70 @@ def socket_path() -> Path:
     return Path(runtime) / "desktop-broker" / "broker.sock"
 
 
-def receive(connection: socket.socket, timeout: float) -> dict[str, Any]:
+def receive_frame(
+    connection: socket.socket,
+    timeout: float,
+    *,
+    body_limit: int = 0,
+) -> tuple[dict[str, Any], bytes]:
+    # Requests and ordinary replies are JSON lines. Image replies append exactly
+    # `length` raw bytes, which may arrive in the same recv as the JSON header.
     deadline = time.monotonic() + timeout
-    data = bytearray()
-    while b"\n" not in data:
+
+    def read(size: int) -> bytes:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise ValueError("message timed out")
         connection.settimeout(remaining)
-        chunk = connection.recv(min(4096, MAX_MESSAGE_BYTES + 1 - len(data)))
+        chunk = connection.recv(size)
         if not chunk:
-            raise ValueError("message ended before newline")
-        data.extend(chunk)
-        if len(data) > MAX_MESSAGE_BYTES:
+            raise ValueError("message ended before completion")
+        return chunk
+
+    data = bytearray()
+    while b"\n" not in data:
+        data.extend(read(min(4096, MAX_MESSAGE_BYTES + 1 - len(data))))
+        if b"\n" not in data and len(data) >= MAX_MESSAGE_BYTES:
             raise ValueError("message is too large")
-    line, _, trailing = data.partition(b"\n")
-    if trailing:
-        raise ValueError("only one message per connection is allowed")
+    line, _, body = data.partition(b"\n")
+    if len(line) + 1 > MAX_MESSAGE_BYTES:
+        raise ValueError("message is too large")
     try:
         value = json.loads(line)
     except (ValueError, UnicodeError, RecursionError) as error:
         raise ValueError("invalid JSON") from error
     if not isinstance(value, dict):
         raise ValueError("message must be an object")
-    return cast(dict[str, Any], value)
+    header = cast(dict[str, Any], value)
+    length = header.get("length", 0)
+    if type(length) is not int or not 0 <= length <= body_limit:
+        raise ValueError("invalid body length")
+    if len(body) > length:
+        raise ValueError("unexpected data after message")
+    while len(body) < length:
+        body.extend(read(min(65536, length - len(body))))
+    return header, bytes(body)
 
 
-def send(connection: socket.socket, message: dict[str, Any]) -> None:
+def receive(connection: socket.socket, timeout: float) -> dict[str, Any]:
+    header, _ = receive_frame(connection, timeout)
+    return header
+
+
+def send(
+    connection: socket.socket,
+    message: dict[str, Any],
+    body: bytes = b"",
+) -> None:
+    if len(body) > MAX_IMAGE_BYTES:
+        raise ValueError("image is too large")
+    if body:
+        message = {**message, "length": len(body)}
     data = json.dumps(message, ensure_ascii=True).encode() + b"\n"
     if len(data) > MAX_MESSAGE_BYTES:
         raise ValueError("message is too large")
     connection.settimeout(REQUEST_TIMEOUT)
-    connection.sendall(data)
+    connection.sendall(data + body)
 
 
 def html_roots(home: Path) -> list[Path]:
@@ -132,26 +175,108 @@ def open_url(target: str, opener: str) -> None:
         raise ValueError("host URL opener failed; the URL may have opened")
 
 
-def dispatch(request: dict[str, Any], opener: str, roots: list[Path]) -> None:
+def clipboard_output(wl_paste: str, arguments: list[str], limit: int) -> bytes:
+    # Bound output while reading, not after communicate() has buffered an
+    # arbitrarily large clipboard. Never capture or forward tool stderr.
+    with subprocess.Popen(
+        [wl_paste, *arguments],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    ) as process:
+        assert process.stdout is not None
+        deadline = time.monotonic() + CLIPBOARD_TIMEOUT
+        data = bytearray()
+        try:
+            with selectors.DefaultSelector() as selector:
+                selector.register(process.stdout, selectors.EVENT_READ)
+                while True:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0 or not selector.select(remaining):
+                        raise ValueError("clipboard read timed out")
+                    chunk = os.read(
+                        process.stdout.fileno(), min(65536, limit + 1 - len(data))
+                    )
+                    if not chunk:
+                        break
+                    data.extend(chunk)
+                    if len(data) > limit:
+                        raise ValueError("clipboard exceeds size limit")
+            if process.wait(timeout=max(0, deadline - time.monotonic())):
+                raise ValueError(
+                    "clipboard is unavailable or the requested type is missing"
+                )
+        except subprocess.TimeoutExpired as error:
+            raise ValueError("clipboard read timed out") from error
+        finally:
+            # Kill a stuck reader before Popen's context manager waits for it.
+            # Do not signal a PID after wait() has already reaped the process.
+            if process.returncode is None:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+        return bytes(data)
+
+
+def clipboard_types(wl_paste: str) -> list[str]:
+    offered = clipboard_output(wl_paste, ["--list-types"], MAX_MESSAGE_BYTES)
+    # Expose only these exact types, not arbitrary clipboard metadata or SVG.
+    types = offered.decode("utf-8", errors="replace").splitlines()
+    return [mime for mime in IMAGE_MIME_TYPES if mime in types]
+
+
+def clipboard_image(wl_paste: str, mime: object) -> bytes:
+    if not isinstance(mime, str) or mime not in IMAGE_MIME_TYPES:
+        raise ValueError("only allowlisted image MIME types can be read")
+    data = clipboard_output(wl_paste, ["--type", mime, "--no-newline"], MAX_IMAGE_BYTES)
+    if not data:
+        raise ValueError("clipboard image is empty")
+    return data
+
+
+def dispatch(
+    request: dict[str, Any],
+    opener: str,
+    roots: list[Path],
+    wl_paste: str,
+) -> tuple[object, bytes]:
     if type(request.get("version")) is not int or request["version"] != VERSION:
         raise ValueError("unsupported protocol version")
-    # Add future operations here with their own exact schemas and handlers.
-    # There is deliberately no generic command or compositor IPC passthrough.
-    if request.get("operation") != "open-url":
+    # Each operation has an exact schema. There is no generic command or
+    # compositor IPC passthrough, and clipboard requests cannot select a tool.
+    schemas = {
+        "open-url": {"version", "operation", "target"},
+        "clipboard-image-types": {"version", "operation"},
+        "clipboard-image-read": {"version", "operation", "mime"},
+    }
+    operation = request.get("operation")
+    if not isinstance(operation, str) or operation not in schemas:
         raise ValueError("unsupported operation")
-    if set(request) != {"version", "operation", "target"}:
-        raise ValueError("open-url requires exactly version, operation and target")
+    if set(request) != schemas[operation]:
+        raise ValueError("invalid operation fields")
+    if operation == "clipboard-image-types":
+        return clipboard_types(wl_paste), b""
+    if operation == "clipboard-image-read":
+        return {"mime": request["mime"]}, clipboard_image(wl_paste, request["mime"])
     open_url(normalize_target(request["target"], roots), opener)
+    return None, b""
 
 
-def handle(connection: socket.socket, opener: str, roots: list[Path]) -> None:
+def handle(
+    connection: socket.socket, opener: str, roots: list[Path], wl_paste: str
+) -> None:
+    body = b""
     try:
         credentials = connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
         _, uid, _ = struct.unpack("3i", credentials)
         if uid != os.getuid():
             raise ValueError("peer UID does not match broker UID")
-        dispatch(receive(connection, REQUEST_TIMEOUT), opener, roots)
-        response = {"version": VERSION, "ok": True, "result": None}
+        result, body = dispatch(
+            receive(connection, REQUEST_TIMEOUT), opener, roots, wl_paste
+        )
+        response = {"version": VERSION, "ok": True, "result": result}
     except (OSError, ValueError) as error:
         # Never log URLs, file paths, or subprocess output from requests.
         message = (
@@ -159,12 +284,12 @@ def handle(connection: socket.socket, opener: str, roots: list[Path]) -> None:
         )
         response = {"version": VERSION, "ok": False, "error": message}
     try:
-        send(connection, response)
+        send(connection, response, body)
     except OSError:
         pass  # A disconnected client must not take down the listener.
 
 
-def serve(opener: str) -> None:
+def serve(opener: str, wl_paste: str) -> None:
     if os.environ.get("SANDBOX") == "1":
         raise ValueError("the desktop broker must run on the host")
     if (
@@ -181,13 +306,12 @@ def serve(opener: str) -> None:
         while True:
             connection, _ = listener.accept()
             with connection:
-                handle(connection, opener, roots)
+                handle(connection, opener, roots, wl_paste)
 
 
-def request_open(target: str) -> None:
-    # Resolve relative paths on the client, whose cwd can differ from the host's.
-    if not urlsplit(target).scheme and not target.startswith("-"):
-        target = str(Path(target).absolute())
+def client_request(
+    request: dict[str, Any], *, body_limit: int = 0
+) -> tuple[object, bytes]:
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
         connection.settimeout(REQUEST_TIMEOUT)
         try:
@@ -197,12 +321,40 @@ def request_open(target: str) -> None:
                 "host desktop broker unavailable; activate desktop-broker.socket "
                 + "on the host and restart the sandbox"
             ) from error
-        send(
-            connection, {"version": VERSION, "operation": "open-url", "target": target}
+        send(connection, {"version": VERSION, **request})
+        response, body = receive_frame(
+            connection, RESPONSE_TIMEOUT, body_limit=body_limit
         )
-        response = receive(connection, RESPONSE_TIMEOUT)
     if response.get("version") != VERSION or response.get("ok") is not True:
         raise ValueError(str(response.get("error", "invalid broker response")))
+    return response.get("result"), body
+
+
+def request_open(target: str) -> None:
+    # Resolve relative paths on the client, whose cwd can differ from the host's.
+    if not urlsplit(target).scheme and not target.startswith("-"):
+        target = str(Path(target).absolute())
+    client_request({"operation": "open-url", "target": target})
+
+
+def paste_image(list_types: bool, mime: str | None) -> bytes:
+    if list_types:
+        result, _ = client_request({"operation": "clipboard-image-types"})
+        if not isinstance(result, list):
+            raise ValueError("invalid clipboard types response")
+        types = cast(list[object], result)
+        if any(item not in IMAGE_MIME_TYPES for item in types):
+            raise ValueError("invalid clipboard types response")
+        return "".join(f"{item}\n" for item in types).encode()
+    if mime not in IMAGE_MIME_TYPES:
+        raise ValueError("only allowlisted image MIME types can be read")
+    result, body = client_request(
+        {"operation": "clipboard-image-read", "mime": mime},
+        body_limit=MAX_IMAGE_BYTES,
+    )
+    if result != {"mime": mime} or not body:
+        raise ValueError("invalid clipboard image response")
+    return body
 
 
 def main() -> int:
@@ -214,12 +366,26 @@ def main() -> int:
     server.add_argument(
         "--opener", required=True, help="fixed host URL router executable"
     )
+    server.add_argument(
+        "--wl-paste", required=True, help="fixed host wl-paste executable"
+    )
+    paste = subparsers.add_parser(
+        "wl-paste", help="image-only wl-paste compatibility client"
+    )
+    choice = paste.add_mutually_exclusive_group(required=True)
+    choice.add_argument("-l", "--list-types", action="store_true")
+    choice.add_argument("-t", "--type", dest="mime")
+    # Images are always binary, never newline-terminated. Accept the flag used
+    # by Pi and Claude but do not expose watch, primary selection or text modes.
+    paste.add_argument("-n", "--no-newline", action="store_true")
     client = subparsers.add_parser("open-url", help="ask the host to open a URL")
     client.add_argument("target")
     arguments = parser.parse_args()
     try:
         if arguments.command == "serve":
-            serve(arguments.opener)
+            serve(arguments.opener, arguments.wl_paste)
+        elif arguments.command == "wl-paste":
+            sys.stdout.buffer.write(paste_image(arguments.list_types, arguments.mime))
         else:
             request_open(arguments.target)
     except (OSError, ValueError) as error:

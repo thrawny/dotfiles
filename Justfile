@@ -90,8 +90,8 @@ test-niri-layout:
 
 # Check the desktop broker protocol and sandbox routing with a fake browser
 test-desktop-broker:
-    bash -n bin/niri-open-url bin/sandbox
-    python3 -B -m unittest discover -s tests -p 'test_desktop_broker.py' -v
+    bash -n bin/niri-open-url bin/sandbox bin/sandbox-wl-paste
+    python3 -B -m unittest discover -s tests -p 'test_desktop_broker*.py' -v
 
 # Validate the active AeroSpace config on macOS without applying it
 check-aerospace:

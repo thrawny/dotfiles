@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Mounted as wl-paste only inside the sandbox. Never fall back to host Wayland.
+exec desktop-broker wl-paste "$@"

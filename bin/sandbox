@@ -112,7 +112,11 @@ sandbox() {
 
   local sandbox_bin_dir sandbox_path
   sandbox_bin_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
-  sandbox_path="$sandbox_bin_dir:$PATH"
+  sandbox_path="/tmp/sandbox-bin:$sandbox_bin_dir:$PATH"
+  args+=(
+    --dir /tmp/sandbox-bin
+    --ro-bind "$sandbox_bin_dir/sandbox-wl-paste" /tmp/sandbox-bin/wl-paste
+  )
 
   # The NixOS Hyprland wrapper passes CAP_SYS_NICE to the compositor. bwrap
   # drops capabilities, so the wrapper cannot run inside the sandbox. Put the
@@ -123,10 +127,8 @@ sandbox() {
     unwrapped_hyprland="$(readlink -f "$system_hyprland")"
     if [[ -x "$unwrapped_hyprland" ]]; then
       args+=(
-        --dir /tmp/sandbox-bin
         --ro-bind "$unwrapped_hyprland" /tmp/sandbox-bin/Hyprland
       )
-      sandbox_path="/tmp/sandbox-bin:$sandbox_path"
     fi
   fi
 
@@ -249,7 +251,8 @@ sandbox() {
       "/run/user/${UID}/desktop-broker"
     )
 
-    # Expose Wayland socket so wl-paste (used by pi/claude for image paste) works
+    # Image paste now uses the broker. Keep Wayland for nested compositors;
+    # replacing this raw socket with a restricted one is separate hardening.
     if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
       args+=(
         --ro-bind-try
