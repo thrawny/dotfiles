@@ -241,6 +241,14 @@ sandbox() {
       "/run/user/${UID}/agent-switch"
     )
 
+    # Only the broker protocol is exposed, never raw niri/Hyprland IPC. Bind
+    # its directory so socket replacement survives in already-running sandboxes.
+    args+=(
+      --ro-bind-try
+      "/run/user/${UID}/desktop-broker"
+      "/run/user/${UID}/desktop-broker"
+    )
+
     # Expose Wayland socket so wl-paste (used by pi/claude for image paste) works
     if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
       args+=(

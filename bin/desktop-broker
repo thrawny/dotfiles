@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""Host desktop operations over a bounded, versioned Unix-socket protocol."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import signal
+import socket
+import struct
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any, cast
+from urllib.parse import unquote, urlsplit
+
+VERSION = 1
+MAX_MESSAGE_BYTES = 16384
+REQUEST_TIMEOUT = 2.0
+OPEN_TIMEOUT = 40.0
+RESPONSE_TIMEOUT = 60.0
+
+
+def socket_path() -> Path:
+    runtime = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+    return Path(runtime) / "desktop-broker" / "broker.sock"
+
+
+def receive(connection: socket.socket, timeout: float) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout
+    data = bytearray()
+    while b"\n" not in data:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ValueError("message timed out")
+        connection.settimeout(remaining)
+        chunk = connection.recv(min(4096, MAX_MESSAGE_BYTES + 1 - len(data)))
+        if not chunk:
+            raise ValueError("message ended before newline")
+        data.extend(chunk)
+        if len(data) > MAX_MESSAGE_BYTES:
+            raise ValueError("message is too large")
+    line, _, trailing = data.partition(b"\n")
+    if trailing:
+        raise ValueError("only one message per connection is allowed")
+    try:
+        value = json.loads(line)
+    except (ValueError, UnicodeError, RecursionError) as error:
+        raise ValueError("invalid JSON") from error
+    if not isinstance(value, dict):
+        raise ValueError("message must be an object")
+    return cast(dict[str, Any], value)
+
+
+def send(connection: socket.socket, message: dict[str, Any]) -> None:
+    data = json.dumps(message, ensure_ascii=True).encode() + b"\n"
+    if len(data) > MAX_MESSAGE_BYTES:
+        raise ValueError("message is too large")
+    connection.settimeout(REQUEST_TIMEOUT)
+    connection.sendall(data)
+
+
+def html_roots(home: Path) -> list[Path]:
+    return [home / "dotfiles", home / "dotfiles-worktrees", home / "code"] + list(
+        (home / "work").glob("*/code")
+    )
+
+
+def normalize_target(target: object, roots: list[Path]) -> str:
+    if not isinstance(target, str) or not target:
+        raise ValueError("target must be a nonempty string")
+    if any(ord(char) < 32 or ord(char) == 127 for char in target):
+        raise ValueError("target contains control characters")
+    try:
+        parsed = urlsplit(target)
+        if parsed.scheme in {"http", "https"} and parsed.hostname:
+            # Validate the port too; urlsplit otherwise leaves it unchecked.
+            _ = parsed.port
+            return target
+        if parsed.scheme == "file":
+            if (
+                parsed.netloc not in {"", "localhost"}
+                or parsed.query
+                or parsed.fragment
+            ):
+                raise ValueError("file URL must be local, without a query or fragment")
+            candidate = Path(unquote(parsed.path))
+        elif not parsed.scheme and target.startswith("/"):
+            candidate = Path(target)
+        else:
+            raise ValueError("only HTTP(S) URLs and local HTML files are allowed")
+        resolved = candidate.resolve(strict=True)
+    except (OSError, RuntimeError) as error:
+        raise ValueError("HTML file is not available on the host") from error
+    if not candidate.is_absolute() or resolved.suffix.lower() not in {".html", ".htm"}:
+        raise ValueError("target must be an absolute HTML file path")
+    if not resolved.is_file() or not any(
+        resolved.is_relative_to(root.resolve()) for root in roots
+    ):
+        raise ValueError("HTML file is outside the allowed project roots")
+    return resolved.as_uri()
+
+
+def open_url(target: str, opener: str) -> None:
+    # The opener comes from host service configuration, never the request.
+    # Wait for focus/paste to finish before accepting another URL.
+    with subprocess.Popen(
+        [opener, target],
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    ) as process:
+        try:
+            exit_code = process.wait(timeout=OPEN_TIMEOUT)
+        except subprocess.TimeoutExpired as error:
+            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                process.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                pass
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            raise ValueError(
+                "host URL opener timed out; the URL may have opened"
+            ) from error
+    if exit_code:
+        raise ValueError("host URL opener failed; the URL may have opened")
+
+
+def dispatch(request: dict[str, Any], opener: str, roots: list[Path]) -> None:
+    if type(request.get("version")) is not int or request["version"] != VERSION:
+        raise ValueError("unsupported protocol version")
+    # Add future operations here with their own exact schemas and handlers.
+    # There is deliberately no generic command or compositor IPC passthrough.
+    if request.get("operation") != "open-url":
+        raise ValueError("unsupported operation")
+    if set(request) != {"version", "operation", "target"}:
+        raise ValueError("open-url requires exactly version, operation and target")
+    open_url(normalize_target(request["target"], roots), opener)
+
+
+def handle(connection: socket.socket, opener: str, roots: list[Path]) -> None:
+    try:
+        credentials = connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+        _, uid, _ = struct.unpack("3i", credentials)
+        if uid != os.getuid():
+            raise ValueError("peer UID does not match broker UID")
+        dispatch(receive(connection, REQUEST_TIMEOUT), opener, roots)
+        response = {"version": VERSION, "ok": True, "result": None}
+    except (OSError, ValueError) as error:
+        # Never log URLs, file paths, or subprocess output from requests.
+        message = (
+            str(error) if isinstance(error, ValueError) else "host operation failed"
+        )
+        response = {"version": VERSION, "ok": False, "error": message}
+    try:
+        send(connection, response)
+    except OSError:
+        pass  # A disconnected client must not take down the listener.
+
+
+def serve(opener: str) -> None:
+    if os.environ.get("SANDBOX") == "1":
+        raise ValueError("the desktop broker must run on the host")
+    if (
+        os.environ.get("LISTEN_PID") != str(os.getpid())
+        or os.environ.get("LISTEN_FDS") != "1"
+    ):
+        raise ValueError("serve requires one systemd-activated listening socket")
+    # Take ownership of systemd's FD and do not leak activation state to children.
+    with socket.socket(fileno=3) as listener:
+        listener.set_inheritable(False)
+        for name in ("LISTEN_PID", "LISTEN_FDS", "LISTEN_FDNAMES"):
+            os.environ.pop(name, None)
+        roots = html_roots(Path.home())
+        while True:
+            connection, _ = listener.accept()
+            with connection:
+                handle(connection, opener, roots)
+
+
+def request_open(target: str) -> None:
+    # Resolve relative paths on the client, whose cwd can differ from the host's.
+    if not urlsplit(target).scheme and not target.startswith("-"):
+        target = str(Path(target).absolute())
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(REQUEST_TIMEOUT)
+        try:
+            connection.connect(str(socket_path()))
+        except OSError as error:
+            raise ValueError(
+                "host desktop broker unavailable; activate desktop-broker.socket "
+                + "on the host and restart the sandbox"
+            ) from error
+        send(
+            connection, {"version": VERSION, "operation": "open-url", "target": target}
+        )
+        response = receive(connection, RESPONSE_TIMEOUT)
+    if response.get("version") != VERSION or response.get("ok") is not True:
+        raise ValueError(str(response.get("error", "invalid broker response")))
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    server = subparsers.add_parser(
+        "serve", help="host service, with systemd socket activation"
+    )
+    server.add_argument(
+        "--opener", required=True, help="fixed host URL router executable"
+    )
+    client = subparsers.add_parser("open-url", help="ask the host to open a URL")
+    client.add_argument("target")
+    arguments = parser.parse_args()
+    try:
+        if arguments.command == "serve":
+            serve(arguments.opener)
+        else:
+            request_open(arguments.target)
+    except (OSError, ValueError) as error:
+        print(f"desktop-broker: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

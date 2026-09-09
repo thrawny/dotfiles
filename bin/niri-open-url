@@ -12,13 +12,20 @@ fi
 
 url="$1"
 
+# Fullscreen TUIs open clicked links from inside their own sandbox. Ask the
+# host to route them; never expose the compositor socket or silently create
+# a new browser window when the broker is unavailable.
+if [[ "${SANDBOX:-}" == 1 ]]; then
+  script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+  exec python3 -I "$script_dir/desktop-broker" open-url -- "$url"
+fi
+
 # This router focuses the destination itself. Forwarding activation metadata
 # inherited from a long-lived panel or layer-shell popup can make Chromium
 # defer ProcessSingleton requests until that popup releases focus.
 unset XDG_ACTIVATION_TOKEN DESKTOP_STARTUP_ID
 
-# When the niri session isn't reachable — launched from a sandbox without the
-# niri socket, or before niri/jq are available — we can't find or focus a
+# Outside niri, or before niri/jq are available, we cannot find or focus a
 # window. Open a fresh Helium window instead.
 open_detached() {
   exec helium --new-window "$url"

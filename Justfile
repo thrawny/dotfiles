@@ -64,8 +64,8 @@ lint-python:
 typecheck: typecheck-python
 
 # Typecheck Python code
-typecheck-python:
-    basedpyright
+typecheck-python *files:
+    basedpyright {{files}}
 
 # === Theme ===
 
@@ -76,7 +76,7 @@ check-theme:
 # === Tests ===
 
 # Run all tests
-test: test-nvim test-aerospace test-niri-layout
+test: test-nvim test-aerospace test-niri-layout test-desktop-broker
 
 # Check AeroSpace keybindings, app rules, and terminal launcher shell syntax
 # Portable checks only; macOS behavior still needs a smoke test.
@@ -87,6 +87,11 @@ test-aerospace:
 test-niri-layout:
     bash -n bin/niri-layout
     python3 -B -m unittest discover -s tests -p 'test_niri_layout.py' -v
+
+# Check the desktop broker protocol and sandbox routing with a fake browser
+test-desktop-broker:
+    bash -n bin/niri-open-url bin/sandbox
+    python3 -B -m unittest discover -s tests -p 'test_desktop_broker.py' -v
 
 # Validate the active AeroSpace config on macOS without applying it
 check-aerospace:
@@ -104,7 +109,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi check-theme test-aerospace test-niri-layout nix::eval
+check-parallel: lint typecheck pi check-theme test-aerospace test-niri-layout test-desktop-broker nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all
