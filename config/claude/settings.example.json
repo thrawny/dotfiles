@@ -73,6 +73,7 @@
   },
   "autoCompactEnabled": true,
   "plansDirectory": ".claude/plans",
+  "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "includeCoAuthoredBy": false
 }

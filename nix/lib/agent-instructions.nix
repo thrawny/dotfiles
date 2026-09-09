@@ -15,6 +15,12 @@ rec {
     Invoke the `unslop` skill before drafting or editing prose intended for people, including documentation, READMEs, ADRs, PR descriptions, release notes, commit messages, and emails.
   '';
 
+  docs = ''
+    ## Docs
+
+    `README.md` is for people: what the thing is and how to start, kept short. `AGENTS.md` is for agents: the checks to run, the conventions, and the gotchas the code does not show. A fact lives in one of them and the other links to it. A repo's own instructions override this split.
+  '';
+
   ephemeralTools = ''
     ## Ephemeral tools
 
@@ -139,6 +145,7 @@ rec {
       claudeGlobal = render "# Global Claude Code Instructions" (
         optionalBlock enableGrilling grilling
         ++ optionalBlock enableUnslop unslop
+        ++ [ docs ]
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
         ++ optionalBlock enableSandbox sandbox
@@ -146,7 +153,8 @@ rec {
       );
 
       codexGlobal = render "# Global Codex Instructions" (
-        optionalBlock enableEphemeralTools ephemeralTools
+        [ docs ]
+        ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
         ++ optionalBlock enableSandbox sandbox
         ++ optionalBlock enableCodeQuality codeQuality
@@ -154,6 +162,7 @@ rec {
 
       piGlobal = render "# Global Pi Instructions" (
         optionalBlock enablePiWorkflow piWorkflow
+        ++ [ docs ]
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
         ++ optionalBlock enableSandbox sandbox
