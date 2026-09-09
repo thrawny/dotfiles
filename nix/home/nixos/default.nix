@@ -27,7 +27,7 @@
     ./hyprlock.nix
     ./btop.nix
     ./mako.nix
-    ./open-url.nix
+    ./desktop-broker.nix
     ./telegram.nix
     ./walker.nix
     ./waybar.nix
