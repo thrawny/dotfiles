@@ -9,7 +9,3 @@ Never inspect or edit `.secrets*`. Use targeted environment-variable checks. Kee
 ## Questions
 
 When clarification is needed, use an available structured question tool that supports the current mode. Prefer asynchronous questions when available, and continue independent work while waiting. If no suitable tool is available, ask in plain text. Never treat an unanswered question as approval.
-
-## Grilling
-
-When grilling, follow the `grilling` skill's question rounds. Frontload independent questions in the first round, then ask dependent follow-ups after their prerequisites are answered. Use plain text if the question tool cannot fit the round.
