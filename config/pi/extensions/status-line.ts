@@ -80,9 +80,49 @@ function formatTokens(tokens: number): string {
 	return `${tokens}`;
 }
 
-function truncate(text: string, maxLen = 20): string {
-	if (text.length <= maxLen) return text;
-	return `${text.slice(0, maxLen - 1)}…`;
+/** Keep a breathing gap between groups; shorten each side only as a last resort. */
+function footerRow(left: string, right: string, width: number): string {
+	if (width <= 0) return "";
+	if (!right) return truncateToWidth(left, width, "…");
+	if (!left) return truncateToWidth(right, width, "…");
+	if (width < 4) return truncateToWidth(left, width, "…");
+	const rightBudget = Math.min(
+		visibleWidth(right),
+		Math.max(Math.floor((width - 2) / 2), width - visibleWidth(left) - 2),
+	);
+	const renderedRight = truncateToWidth(right, rightBudget, "…");
+	const renderedLeft = truncateToWidth(
+		left,
+		width - visibleWidth(renderedRight) - 2,
+		"…",
+	);
+	return (
+		renderedLeft +
+		" ".repeat(
+			width - visibleWidth(renderedLeft) - visibleWidth(renderedRight),
+		) +
+		renderedRight
+	);
+}
+
+export function layoutStatusLine(
+	width: number,
+	primary: string[],
+	project: string[],
+	statuses: string,
+	sessionName?: string,
+): string[] {
+	const session = sessionName ? `${DIM}${sessionName}${RESET}` : "";
+	const left = [...primary, ...project].join(DIVIDER);
+	const right = [session, statuses].filter(Boolean).join("  ");
+	// Four spare columns keep the single-row layout from feeling packed.
+	if (visibleWidth(left) + visibleWidth(right) + 4 <= width) {
+		return [footerRow(left, right, width)];
+	}
+	return [
+		footerRow(primary.join(DIVIDER), statuses, width),
+		footerRow(project.join(DIVIDER), session, width),
+	];
 }
 
 function stripAnsi(text: string): string {
@@ -351,14 +391,15 @@ function install(
 					? `${BOLD}${fgTrue(MK.cyan)}${modelDisplayName(model.id)}${RESET}`
 					: `${fgTrue(MK.gray)}no-model${RESET}`;
 
-				const parts: string[] = [modelPart, ctxPart];
+				const primary: string[] = [modelPart, ctxPart];
+				const parts: string[] = [];
 
 				const cwd = activeCtx?.cwd ?? process.cwd();
 				const dirname = cwd.replace(/\/+$/, "").split("/").pop() || "/";
-				parts.push(`${fgTrue(MK.purple)}${truncate(dirname)}${RESET}`);
+				parts.push(`${fgTrue(MK.purple)}${dirname}${RESET}`);
 
 				if (branch) {
-					let gitPart = `${fgTrue(MK.yellow)}${BRANCH_GLYPH} ${truncate(branch, 32)}${RESET}`;
+					let gitPart = `${fgTrue(MK.yellow)}${BRANCH_GLYPH} ${branch}${RESET}`;
 					if (statusSymbols) {
 						gitPart += ` ${fgTrue(MK.orange)}${statusSymbols}${RESET}`;
 					}
@@ -370,10 +411,8 @@ function install(
 				}
 
 				if (backgroundStatus) {
-					parts.push(`${fgTrue(MK.pink)}${backgroundStatus}${RESET}`);
+					primary.push(`${fgTrue(MK.pink)}${backgroundStatus}${RESET}`);
 				}
-
-				const left = parts.join(DIVIDER);
 
 				const rightPieces: string[] = [];
 				if (model?.reasoning) {
@@ -387,33 +426,7 @@ function install(
 						? `${DIM}${rightPieces.join(" • ")}${RESET}`
 						: "";
 
-				const leftWidth = visibleWidth(left);
-				const rightWidth = visibleWidth(right);
-				const centerText = sessionName ? ` ${sessionName} ` : "";
-				const centerSlot = width - leftWidth - rightWidth;
-				if (centerText && centerSlot > 1) {
-					const renderedCenter = truncateToWidth(centerText, centerSlot, "");
-					if (renderedCenter) {
-						const centerWidth = visibleWidth(renderedCenter);
-						const centerPad = centerSlot - centerWidth;
-						if (centerPad >= 0) {
-							const leftPad = " ".repeat(Math.floor(centerPad / 2));
-							const rightPad = " ".repeat(
-								centerPad - Math.floor(centerPad / 2),
-							);
-							return [
-								`${left}${leftPad}${DIM}${renderedCenter}${RESET}${rightPad}${right}`,
-							];
-						}
-					}
-				}
-
-				if (leftWidth + 2 + rightWidth <= width) {
-					const pad = " ".repeat(Math.max(2, width - leftWidth - rightWidth));
-					return [`${left}${pad}${right}`];
-				}
-
-				return [truncateToWidth(left, width, "")];
+				return layoutStatusLine(width, primary, parts, right, sessionName);
 			},
 		};
 	});
