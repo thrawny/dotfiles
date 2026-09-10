@@ -65,7 +65,7 @@ typecheck: typecheck-python
 
 # Typecheck Python code
 typecheck-python *files:
-    basedpyright {{files}}
+    uv run --locked basedpyright {{files}}
 
 # === Theme ===
 

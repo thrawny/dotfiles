@@ -8,7 +8,16 @@ testpaths = ["tests"]
 addopts = ["--import-mode=importlib"]
 
 [tool.basedpyright]
-include = [".", "bin/desktop-broker", "bin/check-hermes-web", "bin/check-tailscale-serve", "bin/incus-dev", "bin/kpf", "bin/prctl", "bin/run-if-changed"]
+include = [
+  ".",
+  "bin/desktop-broker",
+  "bin/check-hermes-web",
+  "bin/check-tailscale-serve",
+  "bin/incus-dev",
+  "bin/kpf",
+  "bin/prctl",
+  "bin/run-if-changed",
+]
 exclude = [
   ".venv",
   "venv",
@@ -21,7 +30,10 @@ exclude = [
   "config/claude/status_line.py",
   "result",
   "nix/result",
-  "config/pi/node_modules"
+  "**/node_modules",
+  # Nested agent checkouts have their own source trees and dependencies.
+  ".claude/worktrees",
+  ".delta",
 ]
 reportExplicitAny = false
 reportAny = false
@@ -29,12 +41,18 @@ reportUnusedCallResult = false
 reportImplicitOverride = false
 
 [tool.ruff]
-extend-include = ["bin/desktop-broker", "bin/check-hermes-web", "bin/check-tailscale-serve", "bin/incus-dev", "bin/kpf", "bin/prctl", "bin/run-if-changed"]
+extend-include = [
+  "bin/desktop-broker",
+  "bin/check-hermes-web",
+  "bin/check-tailscale-serve",
+  "bin/incus-dev",
+  "bin/kpf",
+  "bin/prctl",
+  "bin/run-if-changed",
+]
 
 [tool.ruff.lint]
 select = ["I"]
 
 [dependency-groups]
-dev = [
-    "pytest>=9.1.1",
-]
+dev = ["pytest>=9.1.1", "requests>=2.34.2"]
