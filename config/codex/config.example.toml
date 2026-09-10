@@ -7,9 +7,9 @@ model_verbosity = "low"
 personality = "pragmatic"
 web_search = "live"
 
-# Closest native match to the Claude powerline segments: model, context %, git branch.
+# Status line: project, model, context usage, and Git branch.
 [tui]
-status_line = ["model-with-reasoning", "context-used", "git-branch"]
+status_line = ["project-root", "model-with-reasoning", "context-used", "git-branch"]
 theme = "monokai-extended"
 
 [sandbox_workspace_write]
