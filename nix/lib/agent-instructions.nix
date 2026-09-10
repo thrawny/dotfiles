@@ -3,12 +3,6 @@ let
   render = title: blocks: builtins.concatStringsSep "\n" ([ title ] ++ blocks) + "\n";
 in
 rec {
-  grilling = ''
-    ## Grilling
-
-    When grilling, follow the `grilling` skill's question rounds. Frontload independent questions in the first round, then ask dependent follow-ups after their prerequisites are answered. Use plain text if the question tool cannot fit the round.
-  '';
-
   codexQuestions = ''
     ## Questions
 
@@ -138,7 +132,6 @@ rec {
 
   mkInstructions =
     {
-      enableGrilling ? true,
       enableUnslop ? true,
       enableEphemeralTools ? true,
       enableShellPortability ? true,
@@ -149,8 +142,7 @@ rec {
     }:
     {
       claudeGlobal = render "# Global Claude Code Instructions" (
-        optionalBlock enableGrilling grilling
-        ++ optionalBlock enableUnslop unslop
+        optionalBlock enableUnslop unslop
         ++ [ docs ]
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
@@ -163,7 +155,6 @@ rec {
           docs
           codexQuestions
         ]
-        ++ optionalBlock enableGrilling grilling
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
         ++ optionalBlock enableSandbox sandbox

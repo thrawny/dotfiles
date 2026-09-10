@@ -31,7 +31,6 @@ let
   instructionConfig = config.dotfiles.agentInstructions;
   agentInstructionLib = import ../../lib/agent-instructions.nix;
   agentInstructions = agentInstructionLib.mkInstructions {
-    enableGrilling = instructionConfig.grilling.enable;
     enableEphemeralTools = instructionConfig.ephemeralTools.enable;
     enableShellPortability = instructionConfig.shellPortability.enable;
     enableSandbox = instructionConfig.sandbox.enable;
@@ -94,7 +93,6 @@ in
     agentSwitch.enable = lib.mkEnableOption "agent-switch integrations for AI tools";
 
     agentInstructions = {
-      grilling.enable = instructionBlockOption "Include agent-specific grilling instructions";
       ephemeralTools.enable = instructionBlockOption "Include ephemeral tool instructions";
       shellPortability.enable = instructionBlockOption "Include shell portability instructions";
       sandbox.enable = instructionBlockOption "Include sandbox-specific instructions";
