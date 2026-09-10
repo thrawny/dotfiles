@@ -9,6 +9,18 @@ rec {
     When grilling, ask one question at a time using the `AskUserQuestion` tool, and wait for the answer before asking the next question.
   '';
 
+  codexQuestions = ''
+    ## Questions
+
+    When clarification is needed, use an available structured question tool that supports the current mode. Prefer asynchronous questions when available, and continue independent work while waiting. If no suitable tool is available, ask in plain text. Never treat an unanswered question as approval.
+  '';
+
+  codexGrilling = ''
+    ## Grilling
+
+    When grilling, ask one decision at a time using the available question tool, and wait for the answer before asking the next question. This overrides skill instructions to batch questions.
+  '';
+
   unslop = ''
     ## Unslop
 
@@ -153,7 +165,11 @@ rec {
       );
 
       codexGlobal = render "# Global Codex Instructions" (
-        [ docs ]
+        [
+          docs
+          codexQuestions
+        ]
+        ++ optionalBlock enableGrilling codexGrilling
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
         ++ optionalBlock enableSandbox sandbox

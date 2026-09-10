@@ -40,6 +40,28 @@
           }
         ]
       }
+    ],
+    "PermissionRequest": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then jq '\"'\"'.notification_type = \"permission_prompt\"'\"'\"' | agent-switch track notification --agent codex; fi'",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-end --agent codex; fi'",
+            "timeout": 3
+          }
+        ]
+      }
     ]
   }
 }

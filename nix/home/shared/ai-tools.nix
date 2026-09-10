@@ -94,7 +94,7 @@ in
     agentSwitch.enable = lib.mkEnableOption "agent-switch integrations for AI tools";
 
     agentInstructions = {
-      grilling.enable = instructionBlockOption "Include Claude grilling instructions";
+      grilling.enable = instructionBlockOption "Include agent-specific grilling instructions";
       ephemeralTools.enable = instructionBlockOption "Include ephemeral tool instructions";
       shellPortability.enable = instructionBlockOption "Include shell portability instructions";
       sandbox.enable = instructionBlockOption "Include sandbox-specific instructions";
