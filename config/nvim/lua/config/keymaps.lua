@@ -42,10 +42,18 @@ local function reload_workspace()
     client:stop(true)
   end
 
+  -- Review snapshots, panels, and terminals are not files on disk.
+  local function is_file_buffer(buf)
+    return vim.api.nvim_buf_is_valid(buf)
+      and vim.api.nvim_buf_is_loaded(buf)
+      and vim.bo[buf].buftype == ""
+      and vim.api.nvim_buf_get_name(buf) ~= ""
+  end
+
   -- Delete buffers for files that no longer exist on disk
   local removed = 0
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.api.nvim_buf_is_loaded(buf) then
+    if is_file_buffer(buf) then
       local name = vim.api.nvim_buf_get_name(buf)
       if name ~= "" and vim.fn.filereadable(name) == 0 then
         vim.api.nvim_buf_delete(buf, { force = true })
@@ -56,7 +64,7 @@ local function reload_workspace()
 
   -- Reload remaining buffers from disk so LSP gets fresh content
   for _, buf in ipairs(vim.api.nvim_list_bufs()) do
-    if vim.api.nvim_buf_is_loaded(buf) and vim.bo[buf].modifiable and vim.api.nvim_buf_get_name(buf) ~= "" then
+    if is_file_buffer(buf) and vim.bo[buf].modifiable then
       vim.api.nvim_buf_call(buf, function()
         vim.cmd("edit!")
       end)
@@ -68,7 +76,27 @@ local function reload_workspace()
 
   -- Restart LSP after gopls has fully terminated
   vim.defer_fn(function()
-    vim.cmd("edit")
+    -- Trigger LSP attachment in real files, even when invoked from a Review panel.
+    for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+      if is_file_buffer(buf) and vim.fn.filereadable(vim.api.nvim_buf_get_name(buf)) == 1 then
+        vim.api.nvim_buf_call(buf, function()
+          vim.cmd("edit")
+        end)
+      end
+    end
+
+    -- Do not load CodeDiff just for a workspace reload.
+    local lifecycle = package.loaded["codediff.ui.lifecycle"]
+    if lifecycle then
+      for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
+        local session = lifecycle.get_session(tab)
+        if session and session.explorer then
+          local module = session.mode == "history" and "codediff.ui.history.refresh"
+            or "codediff.ui.explorer.refresh"
+          require(module).refresh(session.explorer)
+        end
+      end
+    end
     local msg = "Workspace reloaded"
     if removed > 0 then
       msg = msg .. " (cleaned " .. removed .. " stale buffers)"
