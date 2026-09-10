@@ -12,4 +12,4 @@ When clarification is needed, use an available structured question tool that sup
 
 ## Grilling
 
-When grilling, ask one decision at a time using the available question tool, and wait for the answer before asking the next question. This overrides skill instructions to batch questions.
+When grilling, follow the `grilling` skill's question rounds. Frontload independent questions in the first round, then ask dependent follow-ups after their prerequisites are answered. Use plain text if the question tool cannot fit the round.
