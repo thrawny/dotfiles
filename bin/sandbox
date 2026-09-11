@@ -261,17 +261,6 @@ sandbox() {
       )
     fi
 
-    # Expose PipeWire/PulseAudio socket so paplay (notification sounds) works
-    args+=(
-      --ro-bind-try
-      "/run/user/${UID}/pulse"
-      "/run/user/${UID}/pulse"
-    )
-    args+=(
-      --ro-bind-try
-      "/run/user/${UID}/pipewire-0"
-      "/run/user/${UID}/pipewire-0"
-    )
   fi
 
   # Optionally create a dedicated SSH agent for a specific key.
@@ -331,12 +320,6 @@ sandbox() {
   # Forward SSH agent socket so git can authenticate without exposing ~/.ssh
   if [[ -n "${SSH_AUTH_SOCK:-}" && -S "${SSH_AUTH_SOCK}" ]]; then
     args+=(--ro-bind "$SSH_AUTH_SOCK" "$SSH_AUTH_SOCK")
-  fi
-
-  # Expose Claude Code browser bridge socket for Chrome extension integration
-  local bridge_dir="/tmp/claude-mcp-browser-bridge-${USER}"
-  if [[ -d "$bridge_dir" ]]; then
-    args+=(--bind "$bridge_dir" "$bridge_dir")
   fi
 
   # work/*/code and work/*/.direnv directories
