@@ -83,6 +83,7 @@ return {
     end,
     opts = {
       inlay_hints = { enabled = false },
+      codelens = { enabled = false },
       servers = {
         -- Disable <leader>co (organize imports) in diffview buffers so it doesn't
         -- conflict with diffview's conflict_choose("ours") binding

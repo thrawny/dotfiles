@@ -162,6 +162,9 @@ return {
     opts = {
       scroll = { enabled = false },
       styles = {
+        notification = {
+          wo = { winblend = 0 },
+        },
         dashboard = {
           wo = {
             -- Use the main editor background instead of snacks.nvim's dashboard background.
