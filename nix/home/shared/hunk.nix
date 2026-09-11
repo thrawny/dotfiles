@@ -13,7 +13,8 @@ in
     enableGitIntegration = false;
     settings = {
       theme = "custom";
-      mode = "auto";
+      mode = "stack";
+      prompt_save_view_preferences = false;
       line_numbers = true;
       wrap_lines = false;
       agent_notes = true;
