@@ -251,16 +251,7 @@ sandbox() {
       "/run/user/${UID}/desktop-broker"
     )
 
-    # Image paste now uses the broker. Keep Wayland for nested compositors;
-    # replacing this raw socket with a restricted one is separate hardening.
-    if [[ -n "${WAYLAND_DISPLAY:-}" ]]; then
-      args+=(
-        --ro-bind-try
-        "/run/user/${UID}/${WAYLAND_DISPLAY}"
-        "/run/user/${UID}/${WAYLAND_DISPLAY}"
-      )
-    fi
-
+    # No host Wayland socket: image paste and URL routing use the broker.
   fi
 
   # Optionally create a dedicated SSH agent for a specific key.
@@ -414,6 +405,8 @@ sandbox() {
     --dev /dev \
     --proc /proc \
     --die-with-parent \
+    --unsetenv WAYLAND_DISPLAY \
+    --unsetenv WAYLAND_SOCKET \
     --setenv SANDBOX 1 \
     --setenv PATH "$sandbox_path" \
     "${args[@]}" \

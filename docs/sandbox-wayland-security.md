@@ -2,6 +2,24 @@
 
 Analysis of `~/dotfiles/bin/sandbox` (bwrap wrapper). Written 2026-06-10.
 
+## Current status
+
+The wrapper no longer mounts the host Wayland socket and explicitly unsets
+`WAYLAND_DISPLAY` and `WAYLAND_SOCKET`. Image paste and URL opening use the
+host desktop broker instead. Existing sandboxes must be restarted to lose
+previously mounted sockets.
+
+The wrapper also no longer mounts the session bus, PipeWire, PulseAudio, or
+Claude browser bridge. The historical analysis below describes the earlier
+exposures; its clipboard trade-off and pending decisions are superseded.
+
+Visible nested compositors now need a separately provisioned restricted host
+connection. Do not restore the raw host socket for them. Headless nested
+desktops can use their own display socket inside the sandbox.
+
+The broker's exact-window URL router still uses host keyboard injection.
+Its focus race remains an accepted trade-off, not something this change fixes.
+
 ## Finding
 
 The sandbox hides all host runtime sockets with `--tmpfs /run/user/$UID`, then
