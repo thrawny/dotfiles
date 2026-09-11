@@ -25,6 +25,11 @@ return {
       opts.servers = opts.servers or {}
       opts.servers.tofu_ls = lsp_server == "tofu_ls" and (opts.servers.tofu_ls or {}) or false
       opts.servers.terraformls = lsp_server == "terraformls" and (opts.servers.terraformls or {}) or false
+      if opts.servers.terraformls then
+        -- Override nvim-lspconfig's default hook, which enables CodeLens even
+        -- when it is globally disabled. Keep reference navigation available.
+        opts.servers.terraformls.on_attach = function() end
+      end
     end,
   },
 

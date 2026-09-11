@@ -6,6 +6,9 @@ return {
   {
     "neovim/nvim-lspconfig",
     init = function()
+      -- Neovim 0.12 enables native CodeLens independently of LazyVim's option.
+      vim.lsp.codelens.enable(false)
+
       -- Prevent LSP from attaching to non-file URI schemes (diffview://, fugitive://, etc.)
       -- and to read-only Nix store sources. This avoids noisy diagnostics from
       -- buffers that are outside the editable project/workspace.
@@ -89,6 +92,8 @@ return {
         -- conflict with diffview's conflict_choose("ours") binding
         ["*"] = {
           keys = {
+            { "<leader>cc", false, mode = { "n", "x" } },
+            { "<leader>cC", false },
             {
               "<leader>co",
               LazyVim.lsp.action["source.organizeImports"],
