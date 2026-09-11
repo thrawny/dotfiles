@@ -1,10 +1,15 @@
 return {
   "saghen/blink.cmp",
   opts = {
+    -- Completion is opt-in per buffer via :ToggleCompletion.
+    enabled = function()
+      return vim.b.completion == true
+    end,
+    cmdline = { enabled = false },
+    completion = { ghost_text = { enabled = false } },
     keymap = {
       preset = "default",
       ["<Tab>"] = {
-        LazyVim.cmp.map({ "ai_accept" }),
         function(cmp)
           if cmp.snippet_active() then
             return cmp.accept()

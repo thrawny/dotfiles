@@ -127,11 +127,7 @@ vim.api.nvim_create_autocmd({ "BufEnter", "LspAttach" }, {
 
 -- Toggle blink.cmp completion for current buffer
 vim.api.nvim_create_user_command("ToggleCompletion", function()
-  if vim.b.completion == false then
-    vim.b.completion = true
-  else
-    vim.b.completion = false
-  end
+  vim.b.completion = vim.b.completion ~= true
   vim.notify("Completion " .. (vim.b.completion and "enabled" or "disabled"))
 end, {})
 

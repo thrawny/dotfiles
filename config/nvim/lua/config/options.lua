@@ -9,8 +9,13 @@ vim.g.maplocalleader = ","
 -- Use basedpyright as Python LSP
 vim.g.lazyvim_python_lsp = "basedpyright"
 
--- Disable Copilot integration with completion menu to enable automatic ghost text
+-- Disable AI completion integration; no AI plugins are configured.
 vim.g.ai_cmp = false
+
+-- Use absolute line numbers only and disable UI animations
+vim.opt.number = true
+vim.opt.relativenumber = false
+vim.g.snacks_animate = false
 
 -- Auto-reload files when changed externally
 vim.opt.autoread = true

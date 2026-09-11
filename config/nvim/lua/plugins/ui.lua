@@ -63,6 +63,16 @@ local function smart_review()
 end
 
 return {
+  -- Use native Vim motions and classic vim-surround instead of Flash.
+  {
+    "folke/flash.nvim",
+    enabled = false,
+  },
+  {
+    "tpope/vim-surround",
+    event = "VeryLazy",
+  },
+
   -- Disable bufferline (top tab view)
   {
     "akinsho/bufferline.nvim",
@@ -150,6 +160,7 @@ return {
       },
     },
     opts = {
+      scroll = { enabled = false },
       styles = {
         dashboard = {
           wo = {
