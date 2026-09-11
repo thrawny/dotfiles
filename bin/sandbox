@@ -116,6 +116,7 @@ sandbox() {
   args+=(
     --dir /tmp/sandbox-bin
     --ro-bind "$sandbox_bin_dir/sandbox-wl-paste" /tmp/sandbox-bin/wl-paste
+    --ro-bind "$sandbox_bin_dir/sandbox-xdg-open" /tmp/sandbox-bin/xdg-open
   )
 
   # The NixOS Hyprland wrapper passes CAP_SYS_NICE to the compositor. bwrap

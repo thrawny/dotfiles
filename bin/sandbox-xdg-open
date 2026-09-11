@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Mounted as xdg-open inside the sandbox; never fall back to a local browser.
+if [[ $# -ne 1 ]]; then
+  echo 'Usage: xdg-open <url-or-html-file>' >&2
+  exit 1
+fi
+exec desktop-broker open-url -- "$1"

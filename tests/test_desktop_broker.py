@@ -196,8 +196,9 @@ def test_only_existing_html_inside_roots(broker: ModuleType, tmp_path: Path):
             broker.normalize_target(str(target), [root])
 
 
+@pytest.mark.parametrize("router", ["niri-open-url", "sandbox-xdg-open"])
 def test_router_uses_activated_broker_inside_sandbox(
-    desktop_host: dict[str, str], tmp_path: Path
+    desktop_host: dict[str, str], tmp_path: Path, router: str
 ):
     log = tmp_path / "opened"
     opener = tmp_path / "opener"
@@ -210,8 +211,8 @@ def test_router_uses_activated_broker_inside_sandbox(
 
     def click(target: str):
         return subprocess.run(
-            ["bash", str(ROOT / "bin/niri-open-url"), target],
-            env=desktop_host,
+            ["bash", str(ROOT / "bin" / router), target],
+            env={**desktop_host, "PATH": f"{ROOT / 'bin'}:{os.environ['PATH']}"},
             capture_output=True,
             text=True,
             timeout=5,
@@ -228,17 +229,18 @@ def test_router_uses_activated_broker_inside_sandbox(
         assert end == start.replace("start ", "end ", 1)
 
 
-def test_unavailable_broker_does_not_fall_back_to_helium(tmp_path: Path):
+@pytest.mark.parametrize("router", ["niri-open-url", "sandbox-xdg-open"])
+def test_unavailable_broker_does_not_fall_back_to_helium(tmp_path: Path, router: str):
     helium = tmp_path / "helium"
     helium.write_text("#!/bin/sh\necho 'unexpected browser launch' >&2\nexit 99\n")
     helium.chmod(0o755)
     result = subprocess.run(
-        ["bash", str(ROOT / "bin/niri-open-url"), "https://example.com"],
+        ["bash", str(ROOT / "bin" / router), "https://example.com"],
         env={
             **os.environ,
             "SANDBOX": "1",
             "XDG_RUNTIME_DIR": str(tmp_path),
-            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+            "PATH": f"{tmp_path}:{ROOT / 'bin'}:{os.environ['PATH']}",
         },
         capture_output=True,
         text=True,
