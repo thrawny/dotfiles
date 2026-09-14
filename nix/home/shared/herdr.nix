@@ -24,7 +24,10 @@ in
     keys = {
       prefix = "ctrl+a";
 
-      focus_agent = "prefix+1..9";
+      focus_agent = [
+        "prefix+1..9"
+        "super+1..9"
+      ];
       next_agent = "prefix+j";
       previous_agent = "prefix+k";
       switch_tab = "";
