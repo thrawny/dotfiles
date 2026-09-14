@@ -28,6 +28,8 @@ in
       next_agent = "prefix+j";
       previous_agent = "prefix+k";
       switch_tab = "";
+      next_workspace = "ctrl+shift+j";
+      previous_workspace = "ctrl+shift+k";
 
       navigate_workspace_down = [
         "j"
