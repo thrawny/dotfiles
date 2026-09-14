@@ -1,0 +1,14 @@
+id = "thrawny.project-picker"
+name = "Project picker"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+platforms = ["linux", "macos"]
+description = "Pick a project and focus or create its Herdr workspace"
+
+[[panes]]
+id = "picker"
+title = "Pick a project"
+placement = "popup"
+width = "80%"
+height = "70%"
+command = ["project-picker", "--herdr"]
