@@ -64,7 +64,7 @@ hack-nix-conf-caches:
     echo "Updated $conf"
     sudo grep -E '^(substituters|trusted-substituters|trusted-public-keys)[[:space:]]*=' "$conf"
 
-# Switch configuration (auto-detects NixOS vs Home Manager)
+# Switch configuration (NixOS, nix-darwin, or standalone Home Manager)
 switch:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -79,6 +79,17 @@ switch:
             echo "⚠️  Kernel changed: $running_kernel -> $new_kernel"
             echo "   Reboot before hibernating to avoid resume issues."
         fi
+    elif [ "$(uname -s)" = Darwin ]; then
+        if [ "${SANDBOX:-0}" = 1 ]; then
+            echo "Run just switch on the Mac, outside the sandbox." >&2
+            exit 1
+        fi
+        host=$(/usr/sbin/scutil --get LocalHostName)
+        if ! command -v darwin-rebuild >/dev/null 2>&1; then
+            echo "Run just bootstrap-darwin from the repo root first." >&2
+            exit 1
+        fi
+        sudo nix run .#darwin-rebuild -- switch --flake ".#$host"
     else
         echo "Standalone Home Manager detected, running home-manager switch..."
         home-manager switch -b bak --flake ".#$host"
@@ -136,7 +147,7 @@ diff:
     host=$(hostname)
     sudo nixos-rebuild build --flake ".#$host" && nvd diff /run/current-system result
 
-# Evaluate config without building (auto-detects NixOS vs Home Manager)
+# Evaluate config without building (NixOS, nix-darwin, or Home Manager)
 eval force="--force=false":
     #!/usr/bin/env bash
     set -euo pipefail
@@ -148,6 +159,9 @@ eval force="--force=false":
             --include 'flake.lock' \
             --include '**/*.nix' \
             -- nix eval ".#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null
+    elif [ "$(uname -s)" = Darwin ]; then
+        host=$(/usr/sbin/scutil --get LocalHostName)
+        nix eval ".#darwinConfigurations.$host.system.drvPath" --no-write-lock-file > /dev/null
     else
         echo "Evaluating Home Manager config for $host..."
         run-if-changed --name "home-eval-$host" "{{ force }}" \
@@ -157,6 +171,18 @@ eval force="--force=false":
             -- nix eval ".#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null
     fi
     echo "Config is valid"
+
+# Evaluate the complete M1 system, including integrated Home Manager
+eval-darwin:
+    nix eval .#darwinConfigurations.thrawnym1.system.drvPath --no-write-lock-file
+
+# Build on Apple Silicon without activating
+build-darwin:
+    nix build .#darwinConfigurations.thrawnym1.system --no-link
+
+# Lock only the nix-darwin input
+lock-darwin:
+    nix flake update nix-darwin
 
 # Evaluate a specific NixOS host, or inspect one of its config attributes
 eval-host target attr="system.build.toplevel.drvPath":
@@ -254,6 +280,9 @@ eval-all:
     done
 
     echo ""
+    echo "==> Evaluating nix-darwin..."
+    nix eval .#darwinConfigurations.thrawnym1.system.drvPath --no-write-lock-file || failed=1
+
     echo "==> Evaluating Home Manager configurations..."
     for host in thrawnym1; do
         echo -n "  $host: "

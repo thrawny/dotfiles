@@ -1,10 +1,12 @@
 {
-  description = "NixOS + Home Manager (monorepo) using out-of-store symlinks into this repo";
+  description = "NixOS + nix-darwin + Home Manager (monorepo) using out-of-store symlinks into this repo";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     # Pinned for xwayland 24.1.0 (newer versions crash Steam under xwayland-satellite)
     nixpkgs-xwayland.url = "github:NixOS/nixpkgs/b60793b86201040d9dee019a05089a9150d08b5b";
+    nix-darwin.url = "github:nix-darwin/nix-darwin/master";
+    nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
     lazy-nvim-nix.url = "github:josh/lazy-nvim-nix";
@@ -92,6 +94,7 @@
       self,
       nixpkgs,
       home-manager,
+      nix-darwin,
       lazy-nvim-nix,
       nvim-auto-save,
       nvim-baml-syntax,
@@ -271,6 +274,17 @@
 
     in
     {
+      darwinConfigurations.thrawnym1 = nix-darwin.lib.darwinSystem {
+        modules = [
+          ./hosts/thrawnym1/darwin.nix
+          home-manager.darwinModules.home-manager
+          {
+            home-manager.extraSpecialArgs = flakeArgs // (import ./hosts/thrawnym1/default.nix);
+            home-manager.users.thrawny = import ./home/darwin/default.nix;
+          }
+        ];
+      };
+
       nixosConfigurations = {
         thrawny-z13 = mkHost {
           system = "x86_64-linux";
@@ -399,8 +413,12 @@
                 voxtype.packages.${system}.osd-native
               ];
             }
+            // lib.optionalAttrs (system == "aarch64-darwin") {
+              inherit (nix-darwin.packages.${system}) darwin-rebuild;
+            }
           );
 
+      # Retained for migration/rollback; normal Mac switches use nix-darwin.
       homeConfigurations = {
         thrawnym1 = mkHomeConfiguration {
           pkgs = nixpkgs.legacyPackages.aarch64-darwin;

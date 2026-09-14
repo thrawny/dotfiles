@@ -13,6 +13,13 @@ default:
 # Switch nix configuration
 switch: nix::switch
 
+# First nix-darwin activation on the M1 Air, retaining Determinate Nix
+bootstrap-darwin:
+    bin/bootstrap-darwin
+
+# Build the M1 configuration without activating it, on an Apple Silicon Mac
+build-darwin: nix::build-darwin
+
 # Push the flake's cache-bundle (selected expensive builds) to Cachix
 cache dry_run="": (nix::cache dry_run)
 

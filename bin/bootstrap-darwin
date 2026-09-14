@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
+if [[ $# -ne 0 ]]; then
+  echo 'usage: just bootstrap-darwin' >&2
+  exit 2
+fi
+if [[ ${SANDBOX:-0} == 1 ]]; then
+  echo 'bootstrap-darwin: run this on the Mac, outside the sandbox' >&2
+  exit 1
+fi
+if [[ $(uname -s) != Darwin || $(uname -m) != arm64 ]]; then
+  echo 'bootstrap-darwin: Apple Silicon macOS is required' >&2
+  exit 1
+fi
+if [[ $(id -un) != thrawny || "$repo_root" != /Users/thrawny/dotfiles ]]; then
+  echo 'bootstrap-darwin: run as thrawny from /Users/thrawny/dotfiles' >&2
+  exit 1
+fi
+if ! command -v nix >/dev/null 2>&1; then
+  echo 'bootstrap-darwin: install Determinate Nix first, then open a new terminal' >&2
+  exit 1
+fi
+for app_dir in /Applications/Tailscale.app "$HOME/Applications/Tailscale.app"; do
+  if [[ -d "$app_dir" ]]; then
+    echo "bootstrap-darwin: remove $app_dir before switching to the CLI daemon" >&2
+    echo 'Do this locally; replacing Tailscale disconnects its current connection.' >&2
+    exit 1
+  fi
+done
+
+# Use the rebuild tool pinned in this repository, not a separately fetched master.
+sudo nix run "$repo_root/nix#darwin-rebuild" -- \
+  switch --flake "$repo_root/nix#thrawnym1"
+
+printf '\nNext steps:\n'
+printf '  Open a new terminal, then run: sudo tailscale up --ssh\n'
+printf '  Check your tailnet SSH policy and test a remote login before closing the lid.\n'
