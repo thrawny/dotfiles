@@ -101,6 +101,8 @@ function runTrack(
 }
 
 export default function (pi: ExtensionAPI) {
+	// Herdr owns tracking and titles for its sessions.
+	if (process.env.HERDR_ENV === "1") return;
 	if (!commandOnPath("agent-switch")) return;
 
 	const ephemeralSessionId = `pi-ephemeral-${process.pid}-${Date.now().toString(36)}`;

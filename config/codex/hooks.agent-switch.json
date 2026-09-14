@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-start --agent codex; fi'",
+            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-start --agent codex; fi'",
             "timeout": 5
           },
           {
@@ -23,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track prompt-submit --agent codex; fi'",
+            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track prompt-submit --agent codex; fi'",
             "timeout": 5
           }
         ]
@@ -35,7 +35,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track stop --agent codex; fi'",
+            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track stop --agent codex; fi'",
             "timeout": 5
           }
         ]
@@ -46,7 +46,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then jq '\"'\"'.notification_type = \"permission_prompt\"'\"'\"' | agent-switch track notification --agent codex; fi'",
+            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then jq '\"'\"'.notification_type = \"permission_prompt\"'\"'\"' | agent-switch track notification --agent codex; fi'",
             "timeout": 5
           }
         ]
@@ -57,7 +57,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh -lc 'if command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-end --agent codex; fi'",
+            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-end --agent codex; fi'",
             "timeout": 3
           }
         ]
