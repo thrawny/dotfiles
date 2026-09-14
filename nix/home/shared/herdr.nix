@@ -75,6 +75,10 @@ in
       split_horizontal = "prefix+minus";
       close_pane = "prefix+x";
 
+      open_notification_target = [
+        "prefix+o"
+        "super+o"
+      ];
       reload_config = "prefix+shift+r";
     };
 
