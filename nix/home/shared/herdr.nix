@@ -37,8 +37,8 @@ in
         "super+k"
       ];
       switch_tab = "";
-      next_workspace = "ctrl+shift+j";
-      previous_workspace = "ctrl+shift+k";
+      next_workspace = "super+shift+j";
+      previous_workspace = "super+shift+k";
 
       navigate_workspace_down = [
         "j"
