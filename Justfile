@@ -166,23 +166,23 @@ install-macos-vm-tools:
 test-macos-vm *args:
     bin/test-macos-tart {{ args }}
 
-# Build the Debian/Linuxbrew image and run the portable macOS E2E test
+# Build the Debian/Linuxbrew image and run E2E. Set CONTAINER_ENGINE=podman for Podman.
 test-macos-container:
     tests/macos-container.sh
 
 # Leave a playground container running from the previously built E2E image
 macos-container-start:
-    docker rm -f dotfiles-portable-macos-playground >/dev/null 2>&1 || true
-    docker run -d --name dotfiles-portable-macos-playground --entrypoint sleep "${MACOS_CONTAINER_IMAGE:-dotfiles-portable-macos-test}" infinity
+    "${CONTAINER_ENGINE:-docker}" rm -f dotfiles-portable-macos-playground >/dev/null 2>&1 || true
+    "${CONTAINER_ENGINE:-docker}" run -d --name dotfiles-portable-macos-playground --entrypoint sleep "${MACOS_CONTAINER_IMAGE:-dotfiles-portable-macos-test}" infinity
     @echo 'Enter with: just macos-container-shell'
 
 # Open an interactive shell in the running playground container
 macos-container-shell:
-    docker exec -it dotfiles-portable-macos-playground zsh -l
+    "${CONTAINER_ENGINE:-docker}" exec -it dotfiles-portable-macos-playground zsh -l
 
 # Stop the playground container
 macos-container-stop:
-    docker rm -f dotfiles-portable-macos-playground
+    "${CONTAINER_ENGINE:-docker}" rm -f dotfiles-portable-macos-playground
 
 # Run Neovim config tests
 test-nvim:

@@ -1,4 +1,4 @@
-FROM debian:trixie-slim AS linuxbrew
+FROM docker.io/library/debian:trixie-slim AS linuxbrew
 
 # hadolint ignore=DL3008
 RUN apt-get update \
@@ -32,14 +32,15 @@ RUN ln -s /home/linuxbrew/.linuxbrew /opt/homebrew
 
 USER linuxbrew
 ENV HOME=/home/linuxbrew \
+    XDG_CONFIG_HOME=/home/linuxbrew/.config \
     LANG=en_US.UTF-8 \
     LC_ALL=en_US.UTF-8 \
     PATH=/home/linuxbrew/.linuxbrew/bin:/home/linuxbrew/.linuxbrew/sbin:/home/linuxbrew/.npm-global/bin:/usr/local/bin:/usr/bin:/bin
 
 COPY --chown=linuxbrew:linuxbrew Brewfile /tmp/Brewfile
 RUN brew update --quiet \
-    && brew tap neurosnap/tap \
     && brew trust neurosnap/tap \
+    && brew tap neurosnap/tap \
     && brew bundle --file /tmp/Brewfile \
     && brew cleanup --prune=all \
     && rm -rf /home/linuxbrew/.cache/Homebrew

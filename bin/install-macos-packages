@@ -21,11 +21,12 @@ if [[ ${DOTFILES_SETUP_TESTING:-0} != 1 ]] && [[ $(uname -s) != Darwin || $(unam
   exit 1
 fi
 
-brew tap neurosnap/tap
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 brew trust neurosnap/tap
+brew tap neurosnap/tap
 if [[ $(uname -s) == Darwin ]]; then
-  brew tap nikitabobko/tap
   brew trust nikitabobko/tap
+  brew tap nikitabobko/tap
 fi
 brew bundle --file "$repo_root/Brewfile"
 
