@@ -28,8 +28,14 @@ in
         "prefix+1..9"
         "super+1..9"
       ];
-      next_agent = "prefix+j";
-      previous_agent = "prefix+k";
+      next_agent = [
+        "prefix+j"
+        "super+j"
+      ];
+      previous_agent = [
+        "prefix+k"
+        "super+k"
+      ];
       switch_tab = "";
       next_workspace = "ctrl+shift+j";
       previous_workspace = "ctrl+shift+k";
