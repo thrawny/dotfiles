@@ -97,7 +97,7 @@ in
       pane_scrollbars = false;
       pane_gaps = false;
       sidebar_start_collapsed = false;
-      sidebar_width = 36;
+      sidebar_width = 26;
       sidebar_collapsed_mode = "compact";
       status_indicators = "symbols";
       sidebar.agents = {
