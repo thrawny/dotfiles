@@ -97,9 +97,49 @@ in
       pane_scrollbars = false;
       pane_gaps = false;
       sidebar_start_collapsed = false;
-      sidebar_width = 26;
+      sidebar_width = 36;
       sidebar_collapsed_mode = "compact";
       status_indicators = "symbols";
+      sidebar.agents = {
+        row_gap = 1;
+        rows = [
+          [
+            {
+              token = "terminal_title_stripped";
+              fg = theme.semantic.foreground;
+              bold = true;
+              dim = false;
+            }
+          ]
+          [
+            {
+              token = "state_icon";
+              dim = false;
+            }
+            {
+              token = "state_text";
+              dim = false;
+            }
+            {
+              token = "agent";
+              fg = theme.semantic.foreground;
+              dim = false;
+            }
+          ]
+          [
+            {
+              token = "workspace";
+              fg = theme.semantic.muted;
+              dim = false;
+            }
+            {
+              token = "machine";
+              fg = theme.semantic.muted;
+              dim = false;
+            }
+          ]
+        ];
+      };
     };
 
     theme = {
