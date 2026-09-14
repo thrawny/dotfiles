@@ -22,6 +22,8 @@ setup="$HOME/dotfiles/bin/setup-macos"
 [[ -L "$HOME/.zshrc" ]] || exit 1
 [[ $(readlink "$HOME/.zshrc") == "$HOME/dotfiles/portable/macos/home/zshrc" ]] || exit 1
 [[ $(readlink "$HOME/.config/herdr/config.toml") == "$HOME/dotfiles/portable/macos/generated/herdr.toml" ]] || exit 1
+[[ $(readlink "$HOME/.config/hunk/config.toml") == "$HOME/dotfiles/portable/macos/home/hunk.toml" ]] || exit 1
+grep -qx 'wrap_lines = true' "$HOME/.config/hunk/config.toml" || exit 1
 [[ -f "$HOME/dotfiles/config/claude/settings.json" ]] || exit 1
 [[ -f "$HOME/dotfiles/config/codex/config.toml" ]] || exit 1
 [[ -f "$HOME/dotfiles/config/pi/settings.json" ]] || exit 1
