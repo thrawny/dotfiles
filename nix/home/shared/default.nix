@@ -15,7 +15,6 @@
     ./packages/cloud.nix
     ./packages/ai.nix
     ./btop.nix
-    ./diffnav.nix
     ./direnv.nix
     ./git.nix
     ./ghostty.nix

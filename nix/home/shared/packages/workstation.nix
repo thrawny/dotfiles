@@ -24,7 +24,6 @@
     # Diff/analysis tools
     difftastic
     dyff
-    diffnav
     hyperfine
     usage
     cowsay
