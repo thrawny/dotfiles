@@ -91,8 +91,7 @@ local function reload_workspace()
       for _, tab in ipairs(vim.api.nvim_list_tabpages()) do
         local session = lifecycle.get_session(tab)
         if session and session.explorer then
-          local module = session.mode == "history" and "codediff.ui.history.refresh"
-            or "codediff.ui.explorer.refresh"
+          local module = session.mode == "history" and "codediff.ui.history.refresh" or "codediff.ui.explorer.refresh"
           require(module).refresh(session.explorer)
         end
       end
