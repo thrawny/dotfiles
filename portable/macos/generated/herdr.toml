@@ -10,8 +10,8 @@ focus_agent = ["prefix+1..9", "super+1..9"]
 next_agent = ["prefix+j", "super+j"]
 previous_agent = ["prefix+k", "super+k"]
 switch_tab = ""
-next_workspace = "ctrl+shift+j"
-previous_workspace = "ctrl+shift+k"
+next_workspace = "super+shift+j"
+previous_workspace = "super+shift+k"
 navigate_workspace_down = ["j", "down"]
 navigate_workspace_up = ["k", "up"]
 # In workspace navigation mode, reserve j/k for workspace selection.
