@@ -33,6 +33,12 @@ close_pane = "prefix+x"
 open_notification_target = ["prefix+o", "super+o"]
 reload_config = "prefix+shift+r"
 
+[[keys.command]]
+key = "super+p"
+type = "plugin_action"
+command = "thrawny.project-picker.open"
+description = "Pick a project"
+
 [ui]
 tab_bar_position = "bottom"
 prompt_new_tab_name = false
