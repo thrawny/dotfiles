@@ -79,6 +79,14 @@ in
         "prefix+o"
         "super+o"
       ];
+      command = [
+        {
+          key = "super+p";
+          type = "plugin_action";
+          command = "thrawny.project-picker.open";
+          description = "Pick a project";
+        }
+      ];
       reload_config = "prefix+shift+r";
     };
 
