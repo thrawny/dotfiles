@@ -122,7 +122,7 @@ in
             }
             {
               token = "agent";
-              fg = theme.semantic.foreground;
+              fg = theme.semantic.accentAlt;
               dim = false;
             }
           ]
