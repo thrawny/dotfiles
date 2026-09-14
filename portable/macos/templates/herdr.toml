@@ -30,6 +30,7 @@ focus_pane_right = "ctrl+l"
 split_vertical = "prefix+v"
 split_horizontal = "prefix+minus"
 close_pane = "prefix+x"
+open_notification_target = ["prefix+o", "super+o"]
 reload_config = "prefix+shift+r"
 
 [ui]
