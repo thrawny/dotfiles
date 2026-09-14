@@ -28,6 +28,17 @@ in
       keybind = [
         "ctrl+enter=unbind"
         "ctrl+shift+j=unbind"
+        # Let Herdr handle agent selection and navigation on macOS too.
+        "super+1=unbind"
+        "super+2=unbind"
+        "super+3=unbind"
+        "super+4=unbind"
+        "super+5=unbind"
+        "super+6=unbind"
+        "super+7=unbind"
+        "super+8=unbind"
+        "super+9=unbind"
+        "super+k=unbind"
         "super+a=select_all"
         "super+c=copy_to_clipboard"
         "super+v=paste_from_clipboard"
