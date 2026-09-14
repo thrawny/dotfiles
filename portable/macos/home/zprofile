@@ -1,3 +1,4 @@
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 # Homebrew lives here on supported Apple Silicon Macs.
 if [[ -x /opt/homebrew/bin/brew ]]; then
   eval "$(/opt/homebrew/bin/brew shellenv)"

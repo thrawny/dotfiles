@@ -18,6 +18,9 @@ brew "zsh-vi-mode"
 brew "neurosnap/tap/zmx"
 
 # Files, search, and task running
+brew "btop"
+brew "k9s"
+brew "yazi"
 brew "bat"
 brew "eza"
 brew "fd"
@@ -33,6 +36,7 @@ brew "difftastic"
 brew "gh"
 brew "git"
 brew "git-delta"
+brew "hunk"
 brew "lazygit"
 
 # Editor and agent runtimes

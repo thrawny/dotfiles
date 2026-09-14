@@ -113,6 +113,13 @@ render "$template_dir/herdr.toml" "$output_dir/herdr.toml"
 render "$template_dir/tmux.conf" "$output_dir/tmux.conf"
 render "$template_dir/gitconfig" "$output_dir/gitconfig"
 render "$template_dir/lazygit.yml" "$output_dir/lazygit.yml"
+# New templates use canonical document paths directly.
+for template_name in hunk.toml k9s-monokai.yaml; do
+  jq -nr --slurpfile theme "$theme_file" --rawfile template "$template_dir/$template_name" '
+    $template | gsub("\\{\\{(?<key>[A-Za-z0-9_.]+)\\}\\}";
+      (.key | split(".")) as $key | $theme[0] | getpath($key) // error("unknown theme token"))
+  ' >"$output_dir/$template_name"
+done
 cp "$theme_file" "$output_dir/theme.json"
 
 jq '{
@@ -172,6 +179,8 @@ generated_files=(
   eza.zsh
   ghostty.conf
   herdr.toml
+  hunk.toml
+  k9s-monokai.yaml
   gitconfig
   lazygit.yml
   monokai-pi.json

@@ -1,0 +1,81 @@
+k9s:
+  body:
+    bgColor: '{{terminal.background}}'
+    fgColor: '{{terminal.foreground}}'
+    logoColor: '{{semantic.accentAlt}}'
+  dialog:
+    bgColor: '{{applications.k9s.currentLine}}'
+    buttonBgColor: '{{semantic.accentAlt}}'
+    buttonFgColor: '{{terminal.foreground}}'
+    buttonFocusBgColor: '{{syntax.function}}'
+    buttonFocusFgColor: '{{terminal.background}}'
+    fgColor: '{{terminal.foreground}}'
+    fieldFgColor: '{{terminal.foreground}}'
+    labelFgColor: '{{syntax.function}}'
+  frame:
+    border:
+      fgColor: '{{semantic.selection}}'
+      focusColor: '{{semantic.accentAlt}}'
+    crumbs:
+      activeColor: '{{syntax.function}}'
+      bgColor: '{{applications.k9s.currentLine}}'
+      fgColor: '{{terminal.background}}'
+    menu:
+      fgColor: '{{terminal.foreground}}'
+      keyColor: '{{semantic.accent}}'
+      numKeyColor: '{{semantic.accent}}'
+    status:
+      addColor: '{{semantic.success}}'
+      completedColor: '{{applications.k9s.comment}}'
+      errorColor: '{{semantic.accent}}'
+      highlightColor: '{{syntax.function}}'
+      killColor: '{{applications.k9s.comment}}'
+      modifyColor: '{{semantic.accentAlt}}'
+      newColor: '{{syntax.type}}'
+    title:
+      bgColor: '{{applications.k9s.currentLine}}'
+      counterColor: '{{semantic.accentAlt}}'
+      fgColor: '{{terminal.foreground}}'
+      filterColor: '{{semantic.accent}}'
+      highlightColor: '{{syntax.function}}'
+  info:
+    fgColor: '{{semantic.accent}}'
+    sectionColor: '{{terminal.foreground}}'
+  prompt:
+    bgColor: '{{terminal.background}}'
+    fgColor: '{{terminal.foreground}}'
+    suggestColor: '{{semantic.accentAlt}}'
+  views:
+    charts:
+      bgColor: '{{terminal.background}}'
+      defaultChartColors:
+      - '{{semantic.accentAlt}}'
+      - '{{semantic.accent}}'
+      defaultDialColors:
+      - '{{semantic.accentAlt}}'
+      - '{{semantic.accent}}'
+    logs:
+      bgColor: '{{terminal.background}}'
+      fgColor: '{{terminal.foreground}}'
+      indicator:
+        bgColor: '{{applications.k9s.currentLine}}'
+        fgColor: '{{terminal.foreground}}'
+        toggleOffColor: '{{applications.k9s.comment}}'
+        toggleOnColor: '{{semantic.success}}'
+    table:
+      bgColor: '{{terminal.background}}'
+      fgColor: '{{terminal.foreground}}'
+      header:
+        bgColor: '{{applications.k9s.currentLine}}'
+        fgColor: '{{terminal.foreground}}'
+        sorterColor: '{{syntax.type}}'
+    xray:
+      bgColor: '{{terminal.background}}'
+      cursorColor: '{{applications.k9s.currentLine}}'
+      fgColor: '{{terminal.foreground}}'
+      graphicColor: '{{semantic.accentAlt}}'
+      showIcons: false
+    yaml:
+      colonColor: '{{applications.k9s.comment}}'
+      keyColor: '{{semantic.accent}}'
+      valueColor: '{{terminal.foreground}}'

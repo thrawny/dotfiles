@@ -1,0 +1,56 @@
+agent_notes = true
+line_numbers = true
+mode = "stack"
+prompt_save_view_preferences = false
+theme = "custom"
+transparent_background = false
+wrap_lines = true
+
+[custom_theme]
+accent = "#fce566"
+accentMuted = "#34313a"
+addedBg = "#004466"
+addedContentBg = "#005f8e"
+addedSignColor = "#5ad4e6"
+background = "#222222"
+badgeAdded = "#5ad4e6"
+badgeNeutral = "#fce566"
+badgeRemoved = "#fc618d"
+base = "graphite"
+border = "#5f5b63"
+contextBg = "#222222"
+contextContentBg = "#222222"
+fileDeleted = "#fc618d"
+fileModified = "#948ae3"
+fileNew = "#5ad4e6"
+fileRenamed = "#fce566"
+fileUntracked = "#fc9867"
+label = "Monokai Spectrum"
+lineNumberBg = "#222222"
+lineNumberFg = "#78747d"
+movedAddedBg = "#003355"
+movedRemovedBg = "#440100"
+muted = "#78747d"
+noteBackground = "#2b2435"
+noteBorder = "#948ae3"
+noteTitleBackground = "#3a2d4a"
+noteTitleText = "#f7f1ff"
+panel = "#222222"
+panelAlt = "#252525"
+removedBg = "#660100"
+removedContentBg = "#8e0100"
+removedSignColor = "#fc618d"
+selectedHunk = "#004b8f"
+text = "#f7f1ff"
+
+[custom_theme.syntax]
+comment = "#8b888f"
+default = "#f7f1ff"
+function = "#fce566"
+keyword = "#fc618d"
+number = "#948ae3"
+property = "#948ae3"
+punctuation = "#c8c3cf"
+string = "#fce566"
+type = "#5ad4e6"
+

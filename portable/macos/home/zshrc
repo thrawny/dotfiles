@@ -1,3 +1,4 @@
+export XDG_CONFIG_HOME="${XDG_CONFIG_HOME:-$HOME/.config}"
 # Portable macOS counterpart of nix/home/shared/zsh.nix.
 
 export WORDCHARS='_-'
@@ -183,3 +184,5 @@ fi
 
 # Syntax highlighting must be the last plugin loaded because it wraps widgets.
 [[ -n "${syntax_highlighting:-}" && -r "$syntax_highlighting" ]] && source "$syntax_highlighting"
+
+source "$HOME/dotfiles/portable/macos/home/yazi.sh"

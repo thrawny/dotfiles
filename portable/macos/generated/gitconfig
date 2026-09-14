@@ -14,7 +14,7 @@
     editor = "nvim -c 'autocmd VimLeave * call system(\"printf \\033c\")'"
     excludesFile = ~/.config/git/ignore
 [pager]
-    diff = delta
+    diff = hunk pager
 [credential "https://forgejo.tailf85bba.ts.net"]
     helper = store
     username = thrawny

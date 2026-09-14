@@ -43,6 +43,7 @@ from pathlib import Path
 for config_path in (
     Path.home() / ".aerospace.toml",
     Path.home() / ".config/herdr/config.toml",
+    Path.home() / ".config/hunk/config.toml",
     Path.home() / ".config/starship.toml",
 ):
     with config_path.open("rb") as config_file:
@@ -50,6 +51,15 @@ for config_path in (
 PY
 zsh -lic 'brew --version >/dev/null && command -v herdr starship direnv fzf zoxide >/dev/null'
 herdr config check
+hunk --version
+btop --version
+k9s version
+yazi --version
+yq eval '.' "$HOME/.config/k9s/config.yaml" "$HOME/.config/k9s/aliases.yaml" \
+  "$HOME/.config/k9s/views.yaml" "$HOME/.config/k9s/skins/monokai.yaml" >/dev/null
+zsh -lic '[[ "$XDG_CONFIG_HOME" == "$HOME/.config" ]] && typeset -f y >/dev/null'
+git config --file "$HOME/.gitconfig" --get pager.diff | grep -Fx 'hunk pager'
+
 
 tmux -L portable-e2e -f "$HOME/.config/tmux/tmux.conf" new-session -d 'sleep 10'
 [[ $(tmux -L portable-e2e show-options -gv prefix) == C-a ]]

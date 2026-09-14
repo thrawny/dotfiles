@@ -22,8 +22,26 @@ setup="$HOME/dotfiles/bin/setup-macos"
 [[ -L "$HOME/.zshrc" ]] || exit 1
 [[ $(readlink "$HOME/.zshrc") == "$HOME/dotfiles/portable/macos/home/zshrc" ]] || exit 1
 [[ $(readlink "$HOME/.config/herdr/config.toml") == "$HOME/dotfiles/portable/macos/generated/herdr.toml" ]] || exit 1
-[[ $(readlink "$HOME/.config/hunk/config.toml") == "$HOME/dotfiles/portable/macos/home/hunk.toml" ]] || exit 1
+[[ $(readlink "$HOME/.config/hunk/config.toml") == "$HOME/dotfiles/portable/macos/generated/hunk.toml" ]] || exit 1
 grep -qx 'wrap_lines = true' "$HOME/.config/hunk/config.toml" || exit 1
+for config_relative in btop/btop.conf k9s/config.yaml k9s/aliases.yaml k9s/views.yaml k9s/skins/monokai.yaml; do
+  [[ -L "$HOME/.config/$config_relative" && -s "$HOME/.config/$config_relative" ]] || exit 1
+done
+[[ $(git config --file "$HOME/.gitconfig" --get pager.diff) == 'hunk pager' ]] || exit 1
+
+# The wrapper changes directory in the calling shell, including paths with spaces.
+mkdir -p "$HOME/directory with spaces"
+for shell_name in bash zsh; do
+  "$shell_name" -fc '
+    source "$HOME/dotfiles/portable/macos/home/yazi.sh"
+    yazi() { printf "%s\n" "$HOME/directory with spaces" > "${1#--cwd-file=}"; }
+    y || exit 1
+    [[ "$PWD" == "$HOME/directory with spaces" ]] || exit 1
+    yazi() { return 7; }
+    y
+    [[ $? == 7 ]] || exit 1
+  '
+done
 [[ -f "$HOME/dotfiles/config/claude/settings.json" ]] || exit 1
 [[ -f "$HOME/dotfiles/config/codex/config.toml" ]] || exit 1
 [[ -f "$HOME/dotfiles/config/pi/settings.json" ]] || exit 1

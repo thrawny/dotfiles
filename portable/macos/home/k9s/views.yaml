@@ -1,0 +1,48 @@
+views:
+  v1/nodes:
+    columns:
+    - NAME
+    - STATUS
+    - AGE
+    - VERSION
+    - CAPACITY_TYPE:.metadata.labels.karpenter\.sh/capacity-type
+    - INSTANCE_TYPE:.metadata.labels.node\.kubernetes\.io/instance-type
+    - TAINTS
+    - PODS
+    - CPU
+    - CPU/A
+    - '%CPU'
+    - MEM
+    - MEM/A
+    - '%MEM'
+    - ROLE|H
+    - ARCH|H
+    - OS-IMAGE|H
+    - KERNEL|H
+    - INTERNAL-IP|H
+    - EXTERNAL-IP|H
+    - GPU/A|H
+    - GPU/C|H
+    - SH-GPU/A|H
+    - SH-GPU/C|H
+    - LABELS|H
+    - VALID|H
+    sortColumn: NAME:asc
+  v1/pods:
+    columns:
+    - NAMESPACE
+    - NAME
+    - PF
+    - READY
+    - STATUS
+    - RESTARTS
+    - AGE
+    - CPU
+    - MEM
+    - '%CPU/R'
+    - '%CPU/L'
+    - '%MEM/R'
+    - '%MEM/L'
+    - IP
+    - NODE
+    sortColumn: NAMESPACE:asc
