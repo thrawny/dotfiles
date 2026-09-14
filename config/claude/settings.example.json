@@ -13,59 +13,6 @@
     "ask": [],
     "defaultMode": "auto"
   },
-  "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track stop --agent claude; fi'"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track prompt-submit --agent claude; fi'"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "permission_prompt",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track notification --agent claude; fi'"
-          }
-        ]
-      }
-    ],
-    "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-start --agent claude; fi'"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh -lc 'if [ \"${HERDR_ENV:-}\" != \"1\" ] && command -v agent-switch >/dev/null 2>&1; then exec agent-switch track session-end --agent claude; fi'"
-          }
-        ]
-      }
-    ]
-  },
   "statusLine": {
     "type": "command",
     "command": "python3 ~/dotfiles/config/claude/status_line.py",

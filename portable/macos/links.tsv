@@ -29,7 +29,7 @@ config/claude/CLAUDE.local.md	.claude/CLAUDE.local.md
 rules	.claude/rules
 portable/macos/agents/claude.md	.claude/CLAUDE.md
 config/codex/config.toml	.codex/config.toml
-config/codex/hooks.agent-switch.json	.codex/hooks.json
+config/codex/hooks.json	.codex/hooks.json
 config/codex/hooks	.codex/hooks
 portable/macos/agents/codex.md	.codex/AGENTS.md
 config/pi/settings.json	.pi/agent/settings.json

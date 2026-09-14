@@ -53,7 +53,7 @@ for command_name in "${required_commands[@]}"; do
   fi
 done
 
-for optional_command in agent-history agent-switch; do
+for optional_command in agent-history; do
   if command -v "$optional_command" >/dev/null 2>&1; then
     ok "$optional_command"
   else

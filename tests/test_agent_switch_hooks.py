@@ -20,7 +20,7 @@ CONFIGS = [
 def tracking_hooks():
     for config in CONFIGS:
         data = json.loads((ROOT / config).read_text())
-        for event, groups in data["hooks"].items():
+        for event, groups in data.get("hooks", {}).items():
             for group in groups:
                 for hook in group["hooks"]:
                     if "agent-switch track" in hook.get("command", ""):
