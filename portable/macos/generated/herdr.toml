@@ -6,9 +6,9 @@ new_cwd = "follow"
 
 [keys]
 prefix = "ctrl+a"
-focus_agent = "prefix+1..9"
-next_agent = "prefix+j"
-previous_agent = "prefix+k"
+focus_agent = ["prefix+1..9", "super+1..9"]
+next_agent = ["prefix+j", "super+j"]
+previous_agent = ["prefix+k", "super+k"]
 switch_tab = ""
 next_workspace = "ctrl+shift+j"
 previous_workspace = "ctrl+shift+k"
