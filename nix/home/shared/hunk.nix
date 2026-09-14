@@ -16,7 +16,7 @@ in
       mode = "stack";
       prompt_save_view_preferences = false;
       line_numbers = true;
-      wrap_lines = false;
+      wrap_lines = true;
       agent_notes = true;
       transparent_background = false;
 
