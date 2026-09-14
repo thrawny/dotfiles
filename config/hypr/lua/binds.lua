@@ -26,7 +26,7 @@ bind("ALT + Return", function()
 	end
 end)
 bind("SUPER + Space", dsp.exec_cmd("walker"))
-bind("ALT + SHIFT + Space", dsp.exec_cmd("ghostty --title=project-picker -e project-picker"))
+bind("ALT + SHIFT + Space", dsp.exec_cmd("ghostty --title=project-picker -e project-picker --hypr"))
 bind("ALT + Q", scratchpad("term", "pgrep -f GhosttyScratchpad || ghostty --class=com.thrawny.GhosttyScratchpad"))
 bind("ALT + O", scratchpad("1password", "pgrep -x 1password || 1password"))
 bind("ALT + P", scratchpad("spotify", "pgrep -x spotify || spotify"))

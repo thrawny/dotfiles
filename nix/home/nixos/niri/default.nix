@@ -73,6 +73,7 @@ let
         "--title=project-picker"
         "-e"
         "project-picker"
+        "--niri"
       ];
       hotkey-overlay.title = "Open Project";
       repeat = false;

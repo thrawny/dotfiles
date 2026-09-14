@@ -1,36 +1,74 @@
 #!/usr/bin/env bash
-
-[[ "${TRACE}" ]] && set -x
 set -euo pipefail
+[[ -z "${TRACE:-}" ]] || set -x
+
+usage() {
+  echo 'Usage: project-picker --niri|--hypr|--herdr'
+}
+if [[ $# -ne 1 ]]; then
+  usage >&2
+  exit 2
+fi
+case "$1" in
+  --niri|--hypr|--herdr) backend="$1" ;;
+  --help|-h) usage; exit 0 ;;
+  *) usage >&2; exit 2 ;;
+esac
 
 projects=$({
-  zoxide query -l | while read -r d; do
-    git -C "$d" rev-parse --show-toplevel 2>/dev/null || true
+  while IFS= read -r candidate; do
+    git -C "$candidate" rev-parse --show-toplevel 2>/dev/null || true
+  done < <(zoxide query -l 2>/dev/null || true)
+  shopt -s nullglob
+  for root in "$HOME/code" "$HOME"/work/*/code; do
+    [[ -d "$root" ]] || continue
+    while IFS= read -r marker; do
+      marker="${marker%/}"
+      printf '%s\n' "${marker%/.git}"
+    done < <(fd --hidden --no-ignore --max-depth 3 --glob .git "$root")
   done
-  find ~/code ~/work/*/code -maxdepth 3 -name .git 2>/dev/null | while read -r g; do
-    printf '%s\n' "${g%/.git}"
-  done
-} | awk '!seen[$0]++')
+} | awk 'NF && !seen[$0]++')
 
 set +e
-output=$(fzf --prompt="project> " --height=100% --header="Esc to type a path" --expect=esc <<< "$projects")
-rc=$?
+output=$(fzf --prompt='project> ' --height=100% --header='Esc to type a path' --expect=esc <<< "$projects")
+exit_code=$?
 set -e
-
-key=$(head -1 <<< "$output")
-dir=$(sed -n '2p' <<< "$output")
-
-if [[ "$key" == "esc" ]]; then
-  read -rep "path> " dir || exit 0
-  [[ -n "$dir" ]] && dir=$(eval echo "$dir")
-elif [[ $rc -ne 0 ]]; then
+key="${output%%$'\n'*}"
+dir="${output#*$'\n'}"
+if [[ "$key" == esc ]]; then
+  read -rep 'path> ' dir || exit 0
+elif [[ $exit_code -ne 0 ]]; then
   exit 0
 fi
-
-[[ -n "${dir:-}" ]] || exit 0
-
-if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-  hyprland-project --terminals 1 "$dir"
-else
-  niri-project --terminals 1 "$dir"
+[[ -n "$dir" ]] || exit 0
+# Expand only the home shorthand, never execute shell expressions from input.
+case "$dir" in
+  '~') dir="$HOME" ;;
+  '~/'*) dir="$HOME/${dir:2}" ;;
+esac
+if [[ ! -d "$dir" ]]; then
+  printf 'Not a directory: %s\n' "$dir" >&2
+  exit 1
 fi
+dir=$(realpath -- "$dir")
+
+case "$backend" in
+  --niri) exec niri-project --terminals 1 "$dir" ;;
+  --hypr) exec hyprland-project --terminals 1 "$dir" ;;
+  --herdr)
+    herdr_bin="${HERDR_BIN_PATH:-herdr}"
+    # Workspace records have no cwd. Match the saved cwd of their panes,
+    # not foreground_cwd, which changes as programs navigate directories.
+    workspaces=$("$herdr_bin" workspace list)
+    while IFS= read -r workspace; do
+      panes=$("$herdr_bin" pane list --workspace "$workspace")
+      while IFS= read -r pane_cwd; do
+        [[ -d "$pane_cwd" ]] || continue
+        if [[ "$(realpath -- "$pane_cwd")" == "$dir" ]]; then
+          exec "$herdr_bin" workspace focus "$workspace"
+        fi
+      done < <(jq -r '.result.panes[] | .cwd // empty' <<< "$panes")
+    done < <(jq -r '.result.workspaces[].workspace_id' <<< "$workspaces")
+    exec "$herdr_bin" workspace create --cwd "$dir" --label "$(basename "$dir")" --focus
+    ;;
+esac

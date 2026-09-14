@@ -76,7 +76,12 @@ check-theme:
 # === Tests ===
 
 # Run all tests
-test: test-nvim test-aerospace test-niri-layout test-desktop-broker
+test: test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker
+
+# Project selection and backend dispatch
+test-project-picker:
+    bash -n bin/project-picker
+    uv run --locked python -B -m pytest tests/test_project_picker.py
 
 # Run Python tests with the locked development dependencies
 test-python *args:
@@ -113,7 +118,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi check-theme test-aerospace test-niri-layout test-desktop-broker nix::eval
+check-parallel: lint typecheck pi check-theme test-aerospace test-niri-layout test-desktop-broker test-project-picker nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all
