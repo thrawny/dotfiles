@@ -35,7 +35,7 @@
     };
     hunk.url = "github:modem-dev/hunk";
     herdr = {
-      url = "github:herdrdev/herdr";
+      url = "github:herdrdev/herdr-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     nix-index-database.url = "github:Mic92/nix-index-database";
