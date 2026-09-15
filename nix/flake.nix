@@ -418,7 +418,8 @@
             }
           );
 
-      # Retained for migration/rollback; normal Mac switches use nix-darwin.
+      # thrawnym1 is retained for migration/rollback (it switches via nix-darwin);
+      # jonaslergell is Home-Manager-only, with no darwinConfiguration.
       homeConfigurations = {
         thrawnym1 = mkHomeConfiguration {
           pkgs = nixpkgs.legacyPackages.aarch64-darwin;
@@ -427,12 +428,8 @@
         };
         jonaslergell = mkHomeConfiguration {
           pkgs = nixpkgs.legacyPackages.aarch64-darwin;
-          modules = [ ./hosts/jonaslergell/default.nix ];
-          extraSpecialArgs = {
-            username = "jonas.lergell";
-            homeSource = "repo";
-            dotfiles = "/Users/jonas.lergell/dotfiles";
-          };
+          modules = [ ./hosts/jonaslergell/home.nix ];
+          extraSpecialArgs = import ./hosts/jonaslergell/default.nix;
         };
       };
     };

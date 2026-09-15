@@ -1,15 +1,7 @@
-{ pkgs, lib, ... }:
-
 {
-  imports = [
-    ../../home/darwin/default.nix
-  ];
-  nixpkgs.config.allowUnfree = true;
-
-  home.packages = with pkgs; [
-    terraform
-    (google-cloud-sdk.withExtraComponents [ google-cloud-sdk.components.gke-gcloud-auth-plugin ])
-    kubectx
-    pyenv
-  ];
+  username = "jonas.lergell";
+  homeSource = "repo";
+  dotfiles = "/Users/jonas.lergell/dotfiles";
+  # No gitIdentity: the work email stays out of this public repo, so
+  # ~/.gitconfig.local is written by hand on this machine instead.
 }
