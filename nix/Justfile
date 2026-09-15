@@ -79,17 +79,24 @@ switch:
             echo "⚠️  Kernel changed: $running_kernel -> $new_kernel"
             echo "   Reboot before hibernating to avoid resume issues."
         fi
-    # elif [ "$(uname -s)" = Darwin ]; then
-    #     if [ "${SANDBOX:-0}" = 1 ]; then
-    #         echo "Run just switch on the Mac, outside the sandbox." >&2
-    #         exit 1
-    #     fi
-    #     host=$(/usr/sbin/scutil --get LocalHostName)
-    #     if ! command -v darwin-rebuild >/dev/null 2>&1; then
-    #         echo "Run just bootstrap-darwin from the repo root first." >&2
-    #         exit 1
-    #     fi
-    #     sudo nix run .#darwin-rebuild -- switch --flake ".#$host"
+    elif [ "$(uname -s)" = Darwin ]; then
+        if [ "${SANDBOX:-0}" = 1 ]; then
+            echo "Run just switch on the Mac, outside the sandbox." >&2
+            exit 1
+        fi
+        host=$(/usr/sbin/scutil --get LocalHostName)
+        # Macs with a darwinConfiguration switch the whole system; the rest are
+        # Home-Manager-only and fall through to home-manager switch.
+        if nix eval ".#darwinConfigurations" --apply "c: c ? \"$host\"" 2>/dev/null | grep -qx true; then
+            if ! command -v darwin-rebuild >/dev/null 2>&1; then
+                echo "Run just bootstrap-darwin from the repo root first." >&2
+                exit 1
+            fi
+            sudo nix run .#darwin-rebuild -- switch --flake ".#$host"
+        else
+            echo "No nix-darwin configuration for $host, running home-manager switch..."
+            home-manager switch -b bak --flake ".#$host"
+        fi
     else
         echo "Standalone Home Manager detected, running home-manager switch..."
         home-manager switch -b bak --flake ".#$host"
@@ -161,7 +168,13 @@ eval force="--force=false":
             -- nix eval ".#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null
     elif [ "$(uname -s)" = Darwin ]; then
         host=$(/usr/sbin/scutil --get LocalHostName)
-        nix eval ".#darwinConfigurations.$host.system.drvPath" --no-write-lock-file > /dev/null
+        if nix eval ".#darwinConfigurations" --apply "c: c ? \"$host\"" 2>/dev/null | grep -qx true; then
+            echo "Evaluating nix-darwin config for $host..."
+            nix eval ".#darwinConfigurations.$host.system.drvPath" --no-write-lock-file > /dev/null
+        else
+            echo "Evaluating Home Manager config for $host..."
+            nix eval ".#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null
+        fi
     else
         echo "Evaluating Home Manager config for $host..."
         run-if-changed --name "home-eval-$host" "{{ force }}" \
@@ -284,7 +297,7 @@ eval-all:
     nix eval .#darwinConfigurations.thrawnym1.system.drvPath --no-write-lock-file || failed=1
 
     echo "==> Evaluating Home Manager configurations..."
-    for host in thrawnym1; do
+    for host in thrawnym1 jonaslergell; do
         echo -n "  $host: "
         if nix eval ".#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null 2>&1; then
             echo "ok"
