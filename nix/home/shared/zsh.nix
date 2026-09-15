@@ -43,6 +43,28 @@ in
       autosuggestion.enable = true;
       syntaxHighlighting.enable = true;
 
+      # macOS /etc/zprofile runs `path_helper`, which rebuilds PATH as
+      # /etc/paths + /etc/paths.d/* + inherited-PATH-appended. Every nested
+      # login shell therefore demotes the nix dirs and home.sessionPath to the
+      # tail, and nothing restores them: both nix-daemon.sh and
+      # hm-session-vars.sh early-return on their "sourced once" guards.
+      # See nix-community/home-manager#8790 and NixOS/nix#4169.
+      #
+      # ~/.zprofile is read after /etc/zprofile by every login shell,
+      # interactive or not, so re-assert precedence here. `typeset -U` keeps
+      # the FIRST occurrence, so prepending promotes and drops the demoted
+      # copies. Must stay top-level: `typeset` inside a function body would
+      # make `path` function-local and clear the global on return.
+      profileExtra = lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+        typeset -U path PATH
+        path=(
+          "$HOME/.nix-profile/bin"
+          /nix/var/nix/profiles/default/bin
+        ${lib.concatMapStringsSep "\n" (p: "  \"${p}\"") config.home.sessionPath}
+          $path
+        )
+      '';
+
       # Use nixpkgs zsh plugins
       plugins = [
         {
