@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Move Herdr pane focus, unless the focused pane runs a program that owns the
+# key, in which case forward the keypress instead. This is the Herdr equivalent
+# of vim-tmux-navigator: Herdr has no conditional keybindings, so a shell
+# keybinding does the process check through the socket API instead.
+set -euo pipefail
+
+herdr=${HERDR_BIN_PATH:-herdr}
+
+direction=${1:?usage: herdr-nav <left|down|up|right>}
+case "$direction" in
+    left) key=ctrl+h ;;
+    down) key=ctrl+j ;;
+    up) key=ctrl+k ;;
+    right) key=ctrl+l ;;
+    *)
+        echo "unknown direction: $direction" >&2
+        exit 2
+        ;;
+esac
+
+# The keybinding runs detached, so HERDR_PANE_ID is not the focused pane. Ask
+# the server which pane has focus.
+pane=$("$herdr" pane list | jq -r 'first(.result.panes[] | select(.focused) | .pane_id) // empty')
+if [ -z "$pane" ]; then
+    exit 0
+fi
+
+# Programs that own ctrl+hjkl: vim moves its own windows, fzf walks its result
+# list. The vim half matches nvim, vim, vimdiff and the -wrapped variants Nix
+# generates, mirroring the vim-tmux-navigator check.
+#
+# Checked against both the process name and argv0: Nix wrappers rename the
+# process but keep argv0, and login shells do the reverse.
+forward='^[.]?(n?vim(diff)?|fzf(-tmux)?)(-wrapped)?$'
+
+if "$herdr" pane process-info --pane "$pane" |
+    jq -e --arg re "$forward" \
+        'any(.result.process_info.foreground_processes[]; (.name | test($re)) or (.argv0 | test($re)))' \
+        >/dev/null; then
+    exec "$herdr" pane send-keys "$pane" "$key" >/dev/null
+fi
+
+exec "$herdr" pane focus --direction "$direction" --pane "$pane" >/dev/null

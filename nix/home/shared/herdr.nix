@@ -1,4 +1,5 @@
 {
+  config,
   herdr,
   pkgs,
   theme,
@@ -7,6 +8,7 @@
 
 let
   inherit (pkgs.stdenv.hostPlatform) system;
+  herdrNav = "${config.home.homeDirectory}/dotfiles/bin/herdr-nav";
 in
 {
   home.packages = [ herdr.packages.${system}.default ];
@@ -66,10 +68,13 @@ in
       move_tab_previous = "prefix+shift+comma";
       move_tab_next = "prefix+shift+period";
       close_tab = "prefix+shift+x";
-      # focus_pane_left = "ctrl+h";
-      # focus_pane_down = "ctrl+j";
-      # focus_pane_up = "ctrl+k";
-      # focus_pane_right = "ctrl+l";
+      # ctrl+hjkl goes through herdr-nav instead of focus_pane_*, so Vim and fzf
+      # keep those keys when they are running in the focused pane. Herdr has no
+      # conditional keybindings, so the process check lives in the script.
+      focus_pane_left = "";
+      focus_pane_down = "";
+      focus_pane_up = "";
+      focus_pane_right = "";
       split_vertical = "prefix+v";
       split_horizontal = "prefix+minus";
       close_pane = "prefix+x";
@@ -84,6 +89,30 @@ in
           type = "plugin_action";
           command = "thrawny.project-picker.open";
           description = "Pick a project";
+        }
+        {
+          key = "ctrl+h";
+          type = "shell";
+          command = "${herdrNav} left";
+          description = "Focus pane left, or send ctrl+h to Vim or fzf";
+        }
+        {
+          key = "ctrl+j";
+          type = "shell";
+          command = "${herdrNav} down";
+          description = "Focus pane down, or send ctrl+j to Vim or fzf";
+        }
+        {
+          key = "ctrl+k";
+          type = "shell";
+          command = "${herdrNav} up";
+          description = "Focus pane up, or send ctrl+k to Vim or fzf";
+        }
+        {
+          key = "ctrl+l";
+          type = "shell";
+          command = "${herdrNav} right";
+          description = "Focus pane right, or send ctrl+l to Vim or fzf";
         }
       ];
       reload_config = "prefix+shift+r";
