@@ -1,4 +1,4 @@
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, realpathSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +12,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // Keep generated control scripts out of the real user cache directory.
 process.env.XDG_CACHE_HOME = mkdtempSync(join(tmpdir(), "pi-bg-test-"));
+// The extension reads shellPath from real settings via SettingsManager, so
+// without an empty agent dir these tests inherit the host's shellPath and fail
+// wherever that path does not exist (a NixOS store path on a Mac, say).
+process.env.PI_CODING_AGENT_DIR = mkdtempSync(
+	join(tmpdir(), "pi-bg-test-agent-"),
+);
 import backgroundBashExtension, {
 	backgroundSessionName,
 	shouldAlwaysBackground,
@@ -859,7 +865,9 @@ describe("background bash", () => {
 			ctx,
 		);
 
-		expect(result.content[0]?.text.trim()).toBe("/tmp");
+		// This is the one test that runs a real shell, so pwd reports the
+		// resolved path: on macOS /tmp is a symlink to /private/tmp.
+		expect(result.content[0]?.text.trim()).toBe(realpathSync("/tmp"));
 		expect(exec).not.toHaveBeenCalled();
 	});
 
