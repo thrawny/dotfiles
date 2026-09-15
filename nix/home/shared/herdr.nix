@@ -66,11 +66,10 @@ in
       move_tab_previous = "prefix+shift+comma";
       move_tab_next = "prefix+shift+period";
       close_tab = "prefix+shift+x";
-
-      focus_pane_left = "ctrl+h";
-      focus_pane_down = "ctrl+j";
-      focus_pane_up = "ctrl+k";
-      focus_pane_right = "ctrl+l";
+      # focus_pane_left = "ctrl+h";
+      # focus_pane_down = "ctrl+j";
+      # focus_pane_up = "ctrl+k";
+      # focus_pane_right = "ctrl+l";
       split_vertical = "prefix+v";
       split_horizontal = "prefix+minus";
       close_pane = "prefix+x";
