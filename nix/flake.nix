@@ -425,6 +425,15 @@
           modules = [ ./home/darwin/default.nix ];
           extraSpecialArgs = import ./hosts/thrawnym1/default.nix;
         };
+        jonaslergell = mkHomeConfiguration {
+          pkgs = nixpkgs.legacyPackages.aarch64-darwin;
+          modules = [ ./hosts/jonaslergell/default.nix ];
+          extraSpecialArgs = {
+            username = "jonas.lergell";
+            homeSource = "repo";
+            dotfiles = "/Users/jonas.lergell/dotfiles";
+          };
+        };
       };
     };
 }

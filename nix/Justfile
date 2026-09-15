@@ -79,17 +79,17 @@ switch:
             echo "⚠️  Kernel changed: $running_kernel -> $new_kernel"
             echo "   Reboot before hibernating to avoid resume issues."
         fi
-    elif [ "$(uname -s)" = Darwin ]; then
-        if [ "${SANDBOX:-0}" = 1 ]; then
-            echo "Run just switch on the Mac, outside the sandbox." >&2
-            exit 1
-        fi
-        host=$(/usr/sbin/scutil --get LocalHostName)
-        if ! command -v darwin-rebuild >/dev/null 2>&1; then
-            echo "Run just bootstrap-darwin from the repo root first." >&2
-            exit 1
-        fi
-        sudo nix run .#darwin-rebuild -- switch --flake ".#$host"
+    # elif [ "$(uname -s)" = Darwin ]; then
+    #     if [ "${SANDBOX:-0}" = 1 ]; then
+    #         echo "Run just switch on the Mac, outside the sandbox." >&2
+    #         exit 1
+    #     fi
+    #     host=$(/usr/sbin/scutil --get LocalHostName)
+    #     if ! command -v darwin-rebuild >/dev/null 2>&1; then
+    #         echo "Run just bootstrap-darwin from the repo root first." >&2
+    #         exit 1
+    #     fi
+    #     sudo nix run .#darwin-rebuild -- switch --flake ".#$host"
     else
         echo "Standalone Home Manager detected, running home-manager switch..."
         home-manager switch -b bak --flake ".#$host"
