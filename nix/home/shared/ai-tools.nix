@@ -168,6 +168,7 @@ in
 
       ".claude/commands".source = configSource "claude/commands";
       ".claude/agents".source = configSource "claude/agents";
+      ".claude/keybindings.json".source = configSource "claude/keybindings.json";
       ".claude/rules".source = rulesSource;
       ".claude/CLAUDE.md".text =
         agentInstructions.claudeGlobal
