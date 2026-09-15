@@ -47,5 +47,11 @@ return {
     "TmuxNavigateRight",
     "TmuxNavigatePrevious",
   },
+  -- plugin/tmux_navigator.vim maps ctrl+hjkl itself when it loads, which would
+  -- replace the keys above and lose the Herdr handoff. Its own mappings only
+  -- know how to reach tmux, so drop them under Herdr.
+  init = in_herdr and function()
+    vim.g.tmux_navigator_no_mappings = 1
+  end or nil,
   keys = keys,
 }
