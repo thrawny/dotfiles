@@ -28,6 +28,9 @@
     usage
     cowsay
 
+    # Diagrams
+    d2
+
     # Build tools (treesitter)
     cmake
     tree-sitter
