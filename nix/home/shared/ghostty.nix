@@ -1,6 +1,19 @@
-{ pkgs, theme, ... }:
+{
+  lib,
+  pkgs,
+  theme,
+  ...
+}:
 let
   app = theme.applications.ghostty;
+  digits = lib.genList (i: toString (i + 1)) 9;
+  # Ghostty binds each number twice, logically (super+1) and by physical key
+  # (super+digit_1). Unbinding only the logical trigger leaves cmd+1 switching
+  # Ghostty tabs, so both have to go for Herdr to see the key.
+  unbindDigits = lib.concatMap (d: [
+    "super+${d}=unbind"
+    "super+digit_${d}=unbind"
+  ]) digits;
 in
 {
   programs.ghostty = {
@@ -29,16 +42,10 @@ in
         "ctrl+enter=unbind"
         "ctrl+shift+j=unbind"
         "super+shift+j=unbind"
-        # Let Herdr handle agent selection and navigation on macOS too.
-        "super+1=unbind"
-        "super+2=unbind"
-        "super+3=unbind"
-        "super+4=unbind"
-        "super+5=unbind"
-        "super+6=unbind"
-        "super+7=unbind"
-        "super+8=unbind"
-        "super+9=unbind"
+      ]
+      # Let Herdr handle agent selection and navigation on macOS too.
+      ++ unbindDigits
+      ++ [
         # Ghostty's own super+j (scroll_to_selection) and super+k (clear_screen)
         # would otherwise swallow Herdr's next/previous agent bindings.
         "super+j=unbind"
