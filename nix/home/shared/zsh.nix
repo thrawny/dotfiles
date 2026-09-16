@@ -122,6 +122,10 @@ in
       // {
         c = "claude";
         cy = "claude --dangerously-skip-permissions";
+        # Auto-compact cannot be switched off. 1M is the highest window it
+        # accepts and Claude Code clamps it to the model's context window, so
+        # compaction only fires once that window is actually full.
+        cb = "claude --autocompact 1M";
         gp = "git push --force-with-lease --force-if-includes";
         gw = "git worktree";
         tp = "terraform plan";
