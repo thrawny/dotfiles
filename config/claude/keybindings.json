@@ -8,6 +8,13 @@
         "ctrl+x d": "app:toggleReplTab",
         "ctrl+x e": "command:effort"
       }
+    },
+    {
+      "context": "Chat",
+      "bindings": {
+        "ctrl+l": null,
+        "ctrl+x l": "chat:clearInput"
+      }
     }
   ]
 }
