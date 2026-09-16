@@ -1,5 +1,14 @@
 { lib, ... }:
 {
+  # cmd+m belongs to the AppKit "Minimize" menu item, which Ghostty's keybind
+  # system cannot touch, so the shortcut has to be stripped at the macOS level
+  # for Herdr's last_pane binding to see the key. A key equivalent of NUL means
+  # "no shortcut"; the menu item itself stays.
+  home.activation.unbindGhosttyMinimize = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    $DRY_RUN_CMD /usr/bin/defaults write com.mitchellh.ghostty NSUserKeyEquivalents \
+      -dict-add "Minimize" '\0'
+  '';
+
   # Override ghostty settings for macOS
   programs.ghostty.settings = {
     font-size = lib.mkForce 14;

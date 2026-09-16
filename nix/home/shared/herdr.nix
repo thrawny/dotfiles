@@ -11,7 +11,6 @@ let
   inherit (pkgs.stdenv.hostPlatform) system;
   hmLib = lib.hm;
   herdrPackage = herdr.packages.${system}.default;
-  herdrNav = "${config.home.homeDirectory}/dotfiles/bin/herdr-nav";
   pluginDir = "${config.home.homeDirectory}/dotfiles/config/herdr/plugins";
 in
 {
@@ -85,13 +84,19 @@ in
       move_tab_previous = "prefix+shift+comma";
       move_tab_next = "prefix+shift+period";
       close_tab = "prefix+shift+x";
-      # ctrl+hjkl goes through herdr-nav instead of focus_pane_*, so Vim and fzf
-      # keep those keys when they are running in the focused pane. Herdr has no
-      # conditional keybindings, so the process check lives in the script.
+      # ctrl+hjkl always reaches the terminal so Neovim splits and fzf keep
+      # those keys. Two panes plus super+m (last_pane) covers the rest.
       focus_pane_left = "";
       focus_pane_down = "";
       focus_pane_up = "";
       focus_pane_right = "";
+      # cycle_pane_next stays inside the focused tab, unlike last_pane, which is
+      # a global back-and-forth that can land in another workspace. With two
+      # panes, cycling is a toggle.
+      cycle_pane_next = [
+        "prefix+tab"
+        "super+m"
+      ];
       split_vertical = "prefix+v";
       split_horizontal = "prefix+minus";
       close_pane = "prefix+x";
@@ -107,30 +112,6 @@ in
           command = "thrawny.project-picker.open";
           description = "Pick a project";
         }
-        {
-          key = "ctrl+h";
-          type = "shell";
-          command = "${herdrNav} left";
-          description = "Focus pane left, or send ctrl+h to Vim or fzf";
-        }
-        {
-          key = "ctrl+j";
-          type = "shell";
-          command = "${herdrNav} down";
-          description = "Focus pane down, or send ctrl+j to Vim or fzf";
-        }
-        {
-          key = "ctrl+k";
-          type = "shell";
-          command = "${herdrNav} up";
-          description = "Focus pane up, or send ctrl+k to Vim or fzf";
-        }
-        {
-          key = "ctrl+l";
-          type = "shell";
-          command = "${herdrNav} right";
-          description = "Focus pane right, or send ctrl+l to Vim or fzf";
-        }
       ];
       reload_config = "prefix+shift+r";
     };
@@ -138,7 +119,10 @@ in
     ui = {
       tab_bar_position = "bottom";
       prompt_new_tab_name = false;
-      pane_outer_borders = false;
+      # The focused pane gets an accent-colored frame. Shared dividers alone
+      # cannot show focus, so each pane needs its own outer border.
+      pane_borders = "auto";
+      pane_outer_borders = true;
       pane_scrollbars = false;
       pane_gaps = false;
       sidebar_start_collapsed = false;
