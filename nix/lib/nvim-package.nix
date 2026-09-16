@@ -5,7 +5,6 @@
   nvim-codediff,
   nvim-git-conflict,
   nvim-monokai-pro,
-  nvim-tmux-navigator,
   pkgs,
 }:
 let
@@ -93,7 +92,6 @@ lazyNvim.LazyVim.override {
     (pluginSpec "codediff.nvim" nvim-codediff)
     (pluginSpec "git-conflict.nvim" nvim-git-conflict)
     (pluginSpec "monokai-pro.nvim" nvim-monokai-pro)
-    (pluginSpec "vim-tmux-navigator" nvim-tmux-navigator)
     {
       name = "vim-surround";
       dir = toString pkgs.vimPlugins.vim-surround;

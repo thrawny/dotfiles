@@ -31,10 +31,6 @@
       url = "github:loctvl842/monokai-pro.nvim";
       flake = false;
     };
-    nvim-tmux-navigator = {
-      url = "github:christoomey/vim-tmux-navigator";
-      flake = false;
-    };
     hunk.url = "github:modem-dev/hunk";
     herdr = {
       url = "github:herdrdev/herdr-nix";
@@ -101,7 +97,6 @@
       nvim-codediff,
       nvim-git-conflict,
       nvim-monokai-pro,
-      nvim-tmux-navigator,
       hunk,
       herdr,
       nix-index-database,
@@ -170,7 +165,6 @@
           nvim-codediff
           nvim-git-conflict
           nvim-monokai-pro
-          nvim-tmux-navigator
           thrawny-pkgs
           zmx
           voxtype
@@ -401,7 +395,6 @@
                   nvim-codediff
                   nvim-git-conflict
                   nvim-monokai-pro
-                  nvim-tmux-navigator
                   pkgs
                   ;
               };

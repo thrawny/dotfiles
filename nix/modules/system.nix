@@ -26,7 +26,6 @@ let
     git
     gnumake
     ripgrep
-    tmux
     wget
     unzip
   ];

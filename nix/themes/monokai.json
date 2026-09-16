@@ -85,13 +85,6 @@
       "palette0": "#5c5c5c",
       "palette8": "#808080"
     },
-    "tmux": {
-      "bg": "#2d2a2e",
-      "gray": "#5b595c",
-      "darkGray": "#403e41",
-      "dimGray": "#727072",
-      "lightGray": "#939293"
-    },
     "k9s": {
       "currentLine": "#2d2a2e",
       "comment": "#808080"
@@ -174,6 +167,10 @@
       "gitModified": "227",
       "gitDeleted": "204",
       "gitRenamed": "141"
+    },
+    "herdr": {
+      "surface": "#2d2a2e",
+      "activeRowBg": "#403e41"
     }
   }
 }

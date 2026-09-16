@@ -5,7 +5,6 @@
   nvim-codediff,
   nvim-git-conflict,
   nvim-monokai-pro,
-  nvim-tmux-navigator,
   pkgs,
   ...
 }:
@@ -18,7 +17,6 @@ let
       nvim-codediff
       nvim-git-conflict
       nvim-monokai-pro
-      nvim-tmux-navigator
       pkgs
       ;
   };

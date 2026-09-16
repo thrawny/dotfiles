@@ -35,7 +35,5 @@
     cmake
     tree-sitter
 
-    # Shell
-    tmux
   ];
 }

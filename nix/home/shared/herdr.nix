@@ -31,7 +31,7 @@ in
     fi
   '';
 
-  # Tabs and panes mirror tmux where concepts overlap, except number keys
+  # Tabs and panes keep the familiar prefix-based bindings, except number keys
   # select agents. Workspace navigation uses j/k as well as the arrow keys.
   xdg.configFile."herdr/config.toml".source = (pkgs.formats.toml { }).generate "herdr-config.toml" {
     onboarding = false;
@@ -87,7 +87,7 @@ in
       move_tab_next = "prefix+shift+period";
       close_tab = "prefix+shift+x";
       # ctrl+hjkl always reaches the terminal so Neovim splits and fzf keep
-      # those keys. Two panes plus super+m (last_pane) covers the rest.
+      # those keys. Two panes plus super+m (cycle_pane_next) covers the rest.
       focus_pane_left = "";
       focus_pane_down = "";
       focus_pane_up = "";
@@ -193,10 +193,10 @@ in
         accent = theme.semantic.accent;
         panel_bg = theme.semantic.surface;
         sidebar_bg = theme.semantic.background;
-        active_row_bg = theme.applications.tmux.darkGray;
+        active_row_bg = theme.applications.herdr.activeRowBg;
         selection_bg = theme.semantic.selection;
         surface0 = theme.semantic.surface;
-        surface1 = theme.applications.tmux.bg;
+        surface1 = theme.applications.herdr.surface;
         surface_dim = theme.semantic.background;
         overlay0 = theme.semantic.border;
         overlay1 = theme.semantic.muted;

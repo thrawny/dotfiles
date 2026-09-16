@@ -1034,22 +1034,6 @@
         "type": "github"
       }
     },
-    "nvim-tmux-navigator": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1769370258,
-        "narHash": "sha256-efqiRffnidYx+qjgsHyWshCFWgZp/ZrHl+Clt04pfpM=",
-        "owner": "christoomey",
-        "repo": "vim-tmux-navigator",
-        "rev": "e41c431a0c7b7388ae7ba341f01a0d217eb3a432",
-        "type": "github"
-      },
-      "original": {
-        "owner": "christoomey",
-        "repo": "vim-tmux-navigator",
-        "type": "github"
-      }
-    },
     "pyproject-build-systems": {
       "inputs": {
         "nixpkgs": [
@@ -1129,7 +1113,6 @@
         "nvim-codediff": "nvim-codediff",
         "nvim-git-conflict": "nvim-git-conflict",
         "nvim-monokai-pro": "nvim-monokai-pro",
-        "nvim-tmux-navigator": "nvim-tmux-navigator",
         "srvos": "srvos",
         "thrawny-pkgs": "thrawny-pkgs",
         "voxtype": "voxtype",

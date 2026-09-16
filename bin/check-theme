@@ -34,7 +34,6 @@ fi
 
 scoped_files=(
   nix/home/shared/ghostty.nix
-  nix/home/shared/tmux.nix
   nix/home/shared/k9s.nix
   nix/home/shared/btop.nix
   nix/home/shared/git.nix
