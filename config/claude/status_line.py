@@ -36,6 +36,14 @@ def fg(hex_color: str) -> str:
 
 DIVIDER = f" {fg(LINE)}│{RESET} "
 
+EFFORT_COLORS = {
+    "low": GRAY,
+    "medium": LIGHT_GRAY,
+    "high": YELLOW,
+    "xhigh": ORANGE,
+    "max": RED,
+}
+
 
 def get_git_info() -> tuple[str | None, str]:
     """Return (branch, starship-style status symbols) from one porcelain call."""
@@ -126,6 +134,15 @@ def env_flag_set(name: str) -> bool:
     return value.strip().lower() not in {"0", "false"}
 
 
+def get_effort_label(data: dict) -> str | None:
+    """Reasoning effort, absent for models without the effort parameter."""
+    level = data.get("effort", {}).get("level")
+    if not level:
+        return None
+    color = EFFORT_COLORS.get(level, LIGHT_GRAY)
+    return f"{fg(color)}{level}{RESET}"
+
+
 def get_runtime_badge() -> str | None:
     """Badge for the current runtime environment."""
     if env_flag_set("SANDBOX"):
@@ -213,7 +230,11 @@ def main() -> None:
     if not context_info and "transcript_path" in data:
         context_info = get_context_from_transcript(data["transcript_path"], window_size)
 
-    parts = [f"{BOLD}{fg(CYAN)}{model}{RESET}"]
+    model_part = f"{BOLD}{fg(CYAN)}{model}{RESET}"
+    effort = get_effort_label(data)
+    if effort:
+        model_part += f" {effort}"
+    parts = [model_part]
 
     if context_info:
         tokens, percentage = context_info

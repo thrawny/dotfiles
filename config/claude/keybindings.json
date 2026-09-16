@@ -5,7 +5,8 @@
     {
       "context": "Global",
       "bindings": {
-        "ctrl+x d": "app:toggleReplTab"
+        "ctrl+x d": "app:toggleReplTab",
+        "ctrl+x e": "command:effort"
       }
     }
   ]
