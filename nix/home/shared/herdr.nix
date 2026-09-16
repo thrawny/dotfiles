@@ -1,6 +1,7 @@
 {
   config,
   herdr,
+  lib,
   pkgs,
   theme,
   ...
@@ -8,10 +9,26 @@
 
 let
   inherit (pkgs.stdenv.hostPlatform) system;
+  hmLib = lib.hm;
+  herdrPackage = herdr.packages.${system}.default;
   herdrNav = "${config.home.homeDirectory}/dotfiles/bin/herdr-nav";
+  pluginDir = "${config.home.homeDirectory}/dotfiles/config/herdr/plugins";
 in
 {
-  home.packages = [ herdr.packages.${system}.default ];
+  home.packages = [ herdrPackage ];
+
+  # Herdr keeps its plugin registry in ~/.config/herdr/plugins.json, which is
+  # mutable state Nix does not manage, so a machine has no plugins until
+  # something links them even though the manifests are in this repo. Linking
+  # goes over the socket API and rewrites the entry for a plugin_root, so it
+  # needs a running server and is safe to repeat.
+  home.activation.linkHerdrPlugins = hmLib.dag.entryAfter [ "writeBoundary" ] ''
+    if [ -S "$HOME/.config/herdr/herdr.sock" ]; then
+      $DRY_RUN_CMD ${herdrPackage}/bin/herdr plugin link \
+        "${pluginDir}/project-picker" --enabled >/dev/null || \
+        echo "herdr plugin link failed; run it by hand once the server is up" >&2
+    fi
+  '';
 
   # Tabs and panes mirror tmux where concepts overlap, except number keys
   # select agents. Workspace navigation uses j/k as well as the arrow keys.

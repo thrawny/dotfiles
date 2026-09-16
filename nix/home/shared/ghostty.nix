@@ -39,6 +39,9 @@ in
         "super+7=unbind"
         "super+8=unbind"
         "super+9=unbind"
+        # Ghostty's own super+j (scroll_to_selection) and super+k (clear_screen)
+        # would otherwise swallow Herdr's next/previous agent bindings.
+        "super+j=unbind"
         "super+k=unbind"
         "super+a=select_all"
         "super+c=copy_to_clipboard"
