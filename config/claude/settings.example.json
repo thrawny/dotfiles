@@ -9,6 +9,10 @@
   },
   "permissions": {
     "allow": [],
+    "additionalDirectories": [
+      "~/code",
+      "~/dotfiles"
+    ],
     "deny": [],
     "ask": [],
     "defaultMode": "auto"
