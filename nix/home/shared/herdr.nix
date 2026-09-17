@@ -57,6 +57,7 @@ in
         "super+k"
       ];
       switch_tab = "";
+      switch_workspace = "super+shift+1..9";
       next_workspace = "super+shift+j";
       previous_workspace = "super+shift+k";
 
