@@ -147,7 +147,7 @@ in
     };
 
     # ZeroTier VPN
-    zerotierone.enable = true;
+    zerotierone.enable = false;
   };
 
   users.users.${config.dotfiles.username}.extraGroups = [ "incus" ];
