@@ -76,4 +76,6 @@ elif command -v systemctl >/dev/null 2>&1; then
 fi
 
 echo
-nix config show substituters trusted-public-keys
+for setting in substituters trusted-public-keys; do
+  printf '%s = %s\n' "$setting" "$(nix config show "$setting")"
+done
