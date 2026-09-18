@@ -1,0 +1,12 @@
+id = "thrawny.next-agent"
+name = "Next agent"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+platforms = ["linux", "macos"]
+description = "Focus the agent that needs attention most"
+
+[[actions]]
+id = "focus"
+title = "Jump to the agent that needs you most"
+contexts = ["workspace", "pane"]
+command = ["herdr-next-agent"]

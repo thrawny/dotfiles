@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# Focus the Herdr agent that needs attention most, ranked blocked > error >
+# done > idle. Working agents are never targets, so an empty queue is a real
+# signal rather than a shrug. Pressing again advances past the agent you are on,
+# wrapping at the end, which drains the queue without keeping any state: the
+# ranking is recomputed on every invocation.
+set -euo pipefail
+[[ -z "${TRACE:-}" ]] || set -x
+
+herdr="${HERDR_BIN_PATH:-herdr}"
+
+agents=$("$herdr" agent list 2>/dev/null) || exit 0
+
+# The pane that invoked the action is authoritative, and unlike the focused
+# agent it is set even when the current pane runs a plain shell.
+pivot="${HERDR_PANE_ID:-}"
+if [[ -z $pivot ]]; then
+  pivot=$(jq -r '[.result.agents[] | select(.focused) | .pane_id][0] // ""' <<<"$agents")
+fi
+
+target=$(jq -r --arg pivot "$pivot" '
+  def prio: ["blocked", "error", "done", "idle"];
+  [ .result.agents[] | select(.agent_status as $s | prio | index($s) != null) ]
+  # Lowest state_change_seq first, so the agent that has been quiet longest wins
+  # its priority tier and nothing starves behind a fresher interrupt.
+  | sort_by([(.agent_status as $s | prio | index($s)), .state_change_seq])
+  | map(.pane_id)
+  | if length == 0 then
+      ""
+    else
+      (index($pivot)) as $i
+      | if $i == null then .[0] else .[($i + 1) % length] end
+    end
+' <<<"$agents")
+
+if [[ -z $target ]]; then
+  "$herdr" notification show "Nothing needs you" --sound none >/dev/null
+  exit 0
+fi
+
+"$herdr" agent focus "$target" >/dev/null

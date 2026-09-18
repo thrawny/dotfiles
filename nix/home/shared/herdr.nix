@@ -25,9 +25,12 @@ in
   # needs a running server and is safe to repeat.
   home.activation.linkHerdrPlugins = hmLib.dag.entryAfter [ "writeBoundary" ] ''
     if [ -S "$HOME/.config/herdr/herdr.sock" ]; then
-      $DRY_RUN_CMD ${herdrPackage}/bin/herdr plugin link \
-        "${pluginDir}/project-picker" --enabled >/dev/null || \
-        echo "herdr plugin link failed; run it by hand once the server is up" >&2
+      for plugin in "${pluginDir}"/*; do
+        [ -d "$plugin" ] || continue
+        $DRY_RUN_CMD ${herdrPackage}/bin/herdr plugin link \
+          "$plugin" --enabled >/dev/null || \
+          echo "herdr plugin link failed for $plugin; run it by hand once the server is up" >&2
+      done
     fi
   '';
 
@@ -104,11 +107,16 @@ in
       split_horizontal = "prefix+minus";
       close_pane = "prefix+x";
 
-      open_notification_target = [
-        "prefix+o"
-        "super+o"
-      ];
+      # super+o goes to the next-agent plugin instead: a ranked queue beats
+      # jumping to whichever pane happened to raise the last toast.
+      open_notification_target = "";
       command = [
+        {
+          key = "super+o";
+          type = "plugin_action";
+          command = "thrawny.next-agent.focus";
+          description = "Jump to the agent that needs you most";
+        }
         {
           key = "super+p";
           type = "plugin_action";
