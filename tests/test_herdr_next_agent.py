@@ -14,8 +14,11 @@ SCRIPT = Path(__file__).resolve().parents[1] / "bin/herdr-next-agent"
 
 
 def agent(pane_id: str, status: str, seq: int, focused: bool = False) -> dict:
+    workspace, _, pane = pane_id.partition(":")
     return {
         "pane_id": pane_id,
+        "workspace_id": workspace,
+        "tab_id": f"{workspace}:t{pane.lstrip('p')}",
         "agent_status": status,
         "state_change_seq": seq,
         "focused": focused,
@@ -67,7 +70,11 @@ def test_ranks_blocked_over_done_and_idle(jumper: Jumper):
         agent("w3:p1", "blocked", 3),
     )
     assert run().returncode == 0
-    assert log.read_text().splitlines() == ["agent focus w3:p1"]
+    assert log.read_text().splitlines() == [
+        "workspace focus w3",
+        "tab focus w3:t1",
+        "agent focus w3:p1",
+    ]
 
 
 def test_longest_quiet_wins_its_tier(jumper: Jumper):
@@ -77,7 +84,11 @@ def test_longest_quiet_wins_its_tier(jumper: Jumper):
         agent("w2:p1", "blocked", 12),
     )
     assert run().returncode == 0
-    assert log.read_text().splitlines() == ["agent focus w2:p1"]
+    assert log.read_text().splitlines() == [
+        "workspace focus w2",
+        "tab focus w2:t1",
+        "agent focus w2:p1",
+    ]
 
 
 def test_working_agents_are_never_targets(jumper: Jumper):
@@ -100,7 +111,11 @@ def test_invoking_pane_advances_the_queue(jumper: Jumper):
     )
     env["HERDR_PANE_ID"] = "w1:p1"
     assert run().returncode == 0
-    assert log.read_text().splitlines() == ["agent focus w2:p1"]
+    assert log.read_text().splitlines() == [
+        "workspace focus w2",
+        "tab focus w2:t1",
+        "agent focus w2:p1",
+    ]
 
 
 def test_queue_wraps_at_the_end(jumper: Jumper):
@@ -111,7 +126,11 @@ def test_queue_wraps_at_the_end(jumper: Jumper):
     )
     env["HERDR_PANE_ID"] = "w2:p1"
     assert run().returncode == 0
-    assert log.read_text().splitlines() == ["agent focus w1:p1"]
+    assert log.read_text().splitlines() == [
+        "workspace focus w1",
+        "tab focus w1:t1",
+        "agent focus w1:p1",
+    ]
 
 
 def test_falls_back_to_the_focused_agent_as_pivot(jumper: Jumper):
@@ -121,7 +140,11 @@ def test_falls_back_to_the_focused_agent_as_pivot(jumper: Jumper):
         agent("w2:p1", "blocked", 2),
     )
     assert run().returncode == 0
-    assert log.read_text().splitlines() == ["agent focus w2:p1"]
+    assert log.read_text().splitlines() == [
+        "workspace focus w2",
+        "tab focus w2:t1",
+        "agent focus w2:p1",
+    ]
 
 
 def test_unranked_pane_lands_on_the_top_of_the_queue(jumper: Jumper):
@@ -132,4 +155,8 @@ def test_unranked_pane_lands_on_the_top_of_the_queue(jumper: Jumper):
     )
     env["HERDR_PANE_ID"] = "w9:pZ"
     assert run().returncode == 0
-    assert log.read_text().splitlines() == ["agent focus w2:p1"]
+    assert log.read_text().splitlines() == [
+        "workspace focus w2",
+        "tab focus w2:t1",
+        "agent focus w2:p1",
+    ]

@@ -18,24 +18,29 @@ if [[ -z $pivot ]]; then
   pivot=$(jq -r '[.result.agents[] | select(.focused) | .pane_id][0] // ""' <<<"$agents")
 fi
 
-target=$(jq -r --arg pivot "$pivot" '
+read -r workspace tab pane <<<"$(jq -r --arg pivot "$pivot" '
   def prio: ["blocked", "error", "done", "idle"];
   [ .result.agents[] | select(.agent_status as $s | prio | index($s) != null) ]
   # Lowest state_change_seq first, so the agent that has been quiet longest wins
   # its priority tier and nothing starves behind a fresher interrupt.
   | sort_by([(.agent_status as $s | prio | index($s)), .state_change_seq])
-  | map(.pane_id)
   | if length == 0 then
       ""
     else
-      (index($pivot)) as $i
-      | if $i == null then .[0] else .[($i + 1) % length] end
+      (map(.pane_id) | index($pivot)) as $i
+      | (if $i == null then .[0] else .[($i + 1) % length] end)
+      | "\(.workspace_id) \(.tab_id) \(.pane_id)"
     end
-' <<<"$agents")
+' <<<"$agents")"
 
-if [[ -z $target ]]; then
+if [[ -z ${pane:-} ]]; then
   "$herdr" notification show "Nothing needs you" --sound none >/dev/null
   exit 0
 fi
 
-"$herdr" agent focus "$target" >/dev/null
+# Focusing the agent alone only moves the server's idea of focus: herdr 0.9
+# leaves the attached client on whatever workspace and tab it was showing, so
+# the jump has to be spelled out from the outside in.
+"$herdr" workspace focus "$workspace" >/dev/null
+"$herdr" tab focus "$tab" >/dev/null
+"$herdr" agent focus "$pane" >/dev/null
