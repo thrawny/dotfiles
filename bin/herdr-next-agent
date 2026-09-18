@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Focus the Herdr agent that needs attention most, ranked blocked > error > done.
-# Herdr sets done itself when an agent finishes while you are looking elsewhere,
-# and clears it once you look, so the queue needs no state of its own. Working
-# and idle agents are never targets, which keeps an empty queue a real signal.
+# Focus the Herdr agent that needs attention most, ranked blocked > error >
+# done > working. Herdr sets done itself when an agent finishes while you are
+# looking elsewhere, and clears it once you look, so the queue needs no state of
+# its own. Idle agents are never targets: parked work is not waiting on you.
 # Pressing again advances past the agent you are on, wrapping at the end.
 set -euo pipefail
 [[ -z "${TRACE:-}" ]] || set -x
@@ -19,7 +19,7 @@ if [[ -z $pivot ]]; then
 fi
 
 read -r workspace tab pane <<<"$(jq -r --arg pivot "$pivot" '
-  def prio: ["blocked", "error", "done"];
+  def prio: ["blocked", "error", "done", "working"];
   [ .result.agents[] | select(.agent_status as $s | prio | index($s) != null) ]
   # Lowest state_change_seq first, so the agent that has been waiting longest
   # wins its tier and nothing starves behind a fresher interrupt.

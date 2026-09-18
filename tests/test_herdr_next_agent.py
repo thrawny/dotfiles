@@ -86,17 +86,32 @@ def test_longest_waiting_wins_its_tier(jumper: Jumper):
     assert log.read_text().splitlines()[-1] == "agent focus w2:p1"
 
 
-def test_quiet_and_working_agents_are_never_targets(jumper: Jumper):
+def test_quiet_agents_are_never_targets(jumper: Jumper):
     run, env, log = jumper
     env["AGENTS"] = agents(
         agent("w1:p1", "idle", 1),
-        agent("w2:p1", "working", 2),
-        agent("w3:p1", "unknown", 3),
+        agent("w2:p1", "unknown", 3),
     )
     assert run().returncode == 0
     assert log.read_text().splitlines() == [
         "notification show Nothing needs you --sound none"
     ]
+
+
+def test_working_agents_come_last(jumper: Jumper):
+    run, env, log = jumper
+    env["AGENTS"] = agents(
+        agent("w1:p1", "working", 1),
+        agent("w2:p1", "done", 9),
+    )
+    assert run().returncode == 0
+    assert log.read_text().splitlines()[-1] == "agent focus w2:p1"
+
+    # With nothing waiting, working agents are still reachable.
+    log.unlink()
+    env["AGENTS"] = agents(agent("w1:p1", "working", 1))
+    assert run().returncode == 0
+    assert log.read_text().splitlines()[-1] == "agent focus w1:p1"
 
 
 def test_invoking_pane_advances_the_queue(jumper: Jumper):
