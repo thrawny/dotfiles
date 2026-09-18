@@ -149,7 +149,7 @@ in
       pane_borders = "auto";
       pane_outer_borders = true;
       pane_scrollbars = false;
-      pane_gaps = false;
+      pane_gaps = true;
       sidebar_start_collapsed = false;
       sidebar_width = 26;
       sidebar_collapsed_mode = "compact";
