@@ -4,65 +4,9 @@
 default:
     @just --list
 
-# One-off: patch /etc/nix/nix.conf with cache trust settings (for bootstrap cases)
-hack-nix-conf-caches:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    conf="/etc/nix/nix.conf"
-    tmp="$(mktemp)"
-    trap 'rm -f "$tmp" "$tmp.new"' EXIT
-
-    sudo cp "$conf" "$tmp"
-    sudo cp "$conf" "$conf.bak.$(date +%Y%m%d-%H%M%S)"
-
-    add_value() {
-        key="$1"
-        value="$2"
-
-        if grep -Eq "^${key}[[:space:]]*=" "$tmp"; then
-            current="$(grep -E "^${key}[[:space:]]*=" "$tmp" | head -n1 | sed -E "s/^${key}[[:space:]]*=[[:space:]]*//")"
-            if [[ " $current " != *" $value "* ]]; then
-                new="$current $value"
-                awk -v k="$key" -v n="$new" '
-                    BEGIN { done = 0 }
-                    $0 ~ "^" k "[[:space:]]*=" && done == 0 { print k " = " n; done = 1; next }
-                    { print }
-                ' "$tmp" > "$tmp.new"
-                mv "$tmp.new" "$tmp"
-            fi
-        else
-            printf '%s = %s\n' "$key" "$value" >> "$tmp"
-        fi
-    }
-
-    # Needed for daemon/root builds to actually query these caches.
-    add_value substituters "https://cache.numtide.com"
-    add_value substituters "https://niri-epireyn.cachix.org"
-    add_value substituters "https://nix-community.cachix.org"
-    add_value substituters "https://zmx.cachix.org"
-    add_value substituters "https://thrawny.cachix.org"
-
-    # Keep trusted-substituters aligned for explicit extra-substituter usage.
-    add_value trusted-substituters "https://cache.numtide.com"
-    add_value trusted-substituters "https://niri-epireyn.cachix.org"
-    add_value trusted-substituters "https://nix-community.cachix.org"
-    add_value trusted-substituters "https://zmx.cachix.org"
-    add_value trusted-substituters "https://thrawny.cachix.org"
-
-    add_value trusted-public-keys "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g="
-    add_value trusted-public-keys "niri-epireyn.cachix.org-1:tlVyFN7CtsDT+ZcLPS+ekFWeT1X6X4OqvWqbBMyIzFA="
-    add_value trusted-public-keys "nix-community.cachix.org-1:mB9FSh9qf2dCimDSUo8Zy7bkq5CX+/rkCWyvRCYg3Fs="
-    add_value trusted-public-keys "zmx.cachix.org-1:9E7zdDiSiG9PnSl8RFHbZ3AW2NmIy/7SPK9rRwed7r4="
-    add_value trusted-public-keys "thrawny.cachix.org-1:RCPvyTqc1GNCRnAhHAaP2ZOnsWoaZQyhhCqf33lMOcg="
-
-    sudo install -Dm0644 "$tmp" "$conf"
-    if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files | grep -q '^nix-daemon\\.service'; then
-        sudo systemctl restart nix-daemon
-    fi
-
-    echo "Updated $conf"
-    sudo grep -E '^(substituters|trusted-substituters|trusted-public-keys)[[:space:]]*=' "$conf"
+# Install this flake's binary caches into the system nix.conf
+install-nix-caches:
+    "$(git rev-parse --show-toplevel)/bin/install-nix-caches"
 
 # Switch configuration (NixOS, nix-darwin, or standalone Home Manager)
 switch:

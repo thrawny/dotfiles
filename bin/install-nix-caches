@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# Install this flake's binary caches into the system nix.conf.
+#
+# Needed on hosts where no Nix module owns /etc/nix: the work Mac is
+# Home-Manager-only with `nix.enable = false`, and Determinate Nix rewrites
+# /etc/nix/nix.conf on every upgrade. Determinate leaves nix.custom.conf for
+# exactly this, so that is the target when its header is present.
+#
+# The cache list comes from nix/lib/nix-caches.nix, which the NixOS hosts also
+# read, so both paths stay in step. Repeated `extra-*` lines accumulate rather
+# than overwrite, so appending a delimited block is safe alongside whatever the
+# installer already wrote.
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "$0")/.." && pwd -P)
+caches_nix="$repo_root/nix/lib/nix-caches.nix"
+begin='# BEGIN dotfiles caches (just install-nix-caches)'
+end='# END dotfiles caches'
+
+if [[ $# -ne 0 ]]; then
+  echo 'usage: just install-nix-caches' >&2
+  exit 2
+fi
+
+if [[ -r /etc/nix/nix.conf ]] && grep -q 'DETERMINATE NIX CONFIG' /etc/nix/nix.conf; then
+  target=/etc/nix/nix.custom.conf
+else
+  target=/etc/nix/nix.conf
+fi
+
+read_list() {
+  nix eval --raw --file "$caches_nix" "$1" --apply 'builtins.concatStringsSep " "'
+}
+substituters=$(read_list substituters)
+public_keys=$(read_list trustedPublicKeys)
+
+block=$(
+  cat <<EOF
+$begin
+extra-substituters = $substituters
+extra-trusted-substituters = $substituters
+extra-trusted-public-keys = $public_keys
+$end
+EOF
+)
+
+merged=$(mktemp)
+trap 'rm -f "$merged"' EXIT
+
+# Drop any previous block, then re-append. Editing in place leaves unrelated
+# settings such as Determinate's netrc-file and ssl-cert-file untouched.
+if [[ -r "$target" ]]; then
+  sed "/^${begin}\$/,/^${end}\$/d" "$target" >"$merged"
+else
+  : >"$merged"
+fi
+printf '%s\n' "$block" >>"$merged"
+
+if [[ -r "$target" ]] && cmp -s "$merged" "$target"; then
+  echo "$target already up to date"
+  exit 0
+fi
+
+if [[ -r "$target" ]]; then
+  sudo cp "$target" "$target.bak.$(date +%Y%m%d-%H%M%S)"
+fi
+sudo install -m0644 "$merged" "$target"
+echo "Updated $target"
+
+# The daemon reads its config once at startup, so the settings are inert until
+# it restarts.
+if [[ $(uname -s) == Darwin ]]; then
+  sudo launchctl kickstart -k system/systems.determinate.nix-daemon
+elif command -v systemctl >/dev/null 2>&1; then
+  sudo systemctl restart nix-daemon
+fi
+
+echo
+nix config show substituters trusted-public-keys

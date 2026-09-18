@@ -9,6 +9,10 @@ The flake lives in `nix/`, not the repo root — `nix flake update <input>` must
 
 `thrawny-pkgs` reads `github:thrawny/nix-pkgs`. To pick up a change there: commit + push in nix-pkgs → `nix flake update thrawny-pkgs` (from `nix/`) → `just switch`. There is deliberately no local-path override. nix-pkgs has a daily GHA auto-updater that pushes version bumps, so rebase local nix-pkgs commits on top of origin before pushing.
 
+## Binary caches
+
+`lib/nix-caches.nix` holds the one list. `modules/system.nix` reads it for NixOS. On macOS no module can, because Determinate Nix owns `/etc/nix/nix.conf` and the Macs set `nix.enable = false`. There, `just install-nix-caches` appends a delimited block to `/etc/nix/nix.custom.conf`. Run it once per machine, and again after editing the list. If you skip it, every `llm-agents.nix` package (codex, claude-code) builds from source.
+
 ## Waybar quirks (Linux desktops)
 
 - The binary is nix-wrapped: the process comm is `.waybar-wrapped`, so `pgrep -x waybar` finds nothing — use `pgrep -o waybar`.

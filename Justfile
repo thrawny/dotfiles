@@ -23,6 +23,9 @@ build-darwin: nix::build-darwin
 # Push the flake's cache-bundle (selected expensive builds) to Cachix
 cache dry_run="": (nix::cache dry_run)
 
+# Teach the system nix.conf about this flake's binary caches (needs sudo)
+install-nix-caches: nix::install-nix-caches
+
 # Update AI tool flake inputs and switch
 ai: nix::ai
 
