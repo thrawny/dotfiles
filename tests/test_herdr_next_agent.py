@@ -13,7 +13,9 @@ Jumper = tuple[Callable[..., subprocess.CompletedProcess[str]], dict[str, str], 
 SCRIPT = Path(__file__).resolve().parents[1] / "bin/herdr-next-agent"
 
 
-def agent(pane_id: str, status: str, seq: int, focused: bool = False) -> dict:
+def agent(
+    pane_id: str, status: str, seq: int, focused: bool = False
+) -> dict[str, object]:
     workspace, _, pane = pane_id.partition(":")
     return {
         "pane_id": pane_id,
@@ -25,7 +27,7 @@ def agent(pane_id: str, status: str, seq: int, focused: bool = False) -> dict:
     }
 
 
-def agents(*entries: dict) -> str:
+def agents(*entries: dict[str, object]) -> str:
     return json.dumps({"result": {"agents": list(entries)}})
 
 
@@ -38,10 +40,10 @@ def jumper(tmp_path: Path) -> Jumper:
     herdr = tools / "herdr"
     herdr.write_text(
         "#!/usr/bin/env bash\n"
-        'case "$1 $2" in\n'
-        '"agent list") printf "%s" "$AGENTS" ;;\n'
-        '*) printf "%s\\n" "$*" >> "$LOG" ;;\n'
-        "esac\n"
+        + 'case "$1 $2" in\n'
+        + '"agent list") printf "%s" "$AGENTS" ;;\n'
+        + '*) printf "%s\\n" "$*" >> "$LOG" ;;\n'
+        + "esac\n"
     )
     herdr.chmod(0o755)
 
