@@ -18,9 +18,6 @@ let
     rel: if repoBacked then "${dotfiles}/config/${rel}" else containerAssets.config + "/${rel}";
   configSource =
     rel: if repoBacked then config.lib.file.mkOutOfStoreSymlink (configPath rel) else configPath rel;
-  rulesRoot = if repoBacked then ../../../rules else containerAssets.rules;
-  rulesSource =
-    if repoBacked then config.lib.file.mkOutOfStoreSymlink (toString rulesRoot) else rulesRoot;
   instructionBlockOption =
     description:
     lib.mkOption {
@@ -35,7 +32,6 @@ let
     enableShellPortability = instructionConfig.shellPortability.enable;
     enableSandbox = instructionConfig.sandbox.enable;
     enableBackgroundTasks = instructionConfig.backgroundTasks.enable;
-    enableCodeQuality = instructionConfig.codeQuality.enable;
     enablePiWorkflow = instructionConfig.piWorkflow.enable;
   };
   stripAgentSwitchHooks = ''
@@ -97,7 +93,6 @@ in
       shellPortability.enable = instructionBlockOption "Include shell portability instructions";
       sandbox.enable = instructionBlockOption "Include sandbox-specific instructions";
       backgroundTasks.enable = instructionBlockOption "Include background task instructions";
-      codeQuality.enable = instructionBlockOption "Include Codex code quality instructions";
       piWorkflow.enable = instructionBlockOption "Include Pi workflow instructions";
     };
   };
@@ -153,7 +148,6 @@ in
       ".codex/AGENTS.md".text = agentInstructions.codexGlobal;
 
       ".pi/agent/AGENTS.md".text = agentInstructions.piGlobal;
-      ".pi/agent/rules".source = rulesSource;
       ".pi/agent/prompts".source = configSource "pi/prompts";
       # Pi themes have no inheritance mechanism, so the complete document is
       # generated from the central theme (edit nix/themes/monokai.json).
@@ -169,7 +163,6 @@ in
       ".claude/commands".source = configSource "claude/commands";
       ".claude/agents".source = configSource "claude/agents";
       ".claude/keybindings.json".source = configSource "claude/keybindings.json";
-      ".claude/rules".source = rulesSource;
       ".claude/CLAUDE.md".text =
         agentInstructions.claudeGlobal
         + lib.optionalString repoBacked ''

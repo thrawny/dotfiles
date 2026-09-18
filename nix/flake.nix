@@ -132,10 +132,6 @@
           path = ../skills;
           name = "dotfiles-skills";
         };
-        rules = builtins.path {
-          path = ../rules;
-          name = "dotfiles-rules";
-        };
         bin = builtins.path {
           path = ../bin;
           name = "dotfiles-bin";

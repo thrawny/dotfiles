@@ -69,61 +69,6 @@ rec {
     - Before ending a session or handing off, stop background tasks you started; anything deliberately left running must be named in the handoff.
   '';
 
-  codeQuality = ''
-    ## Code Quality Tools
-
-    After editing files, run the appropriate formatting/linting tools. These are fallback defaults when a project has no specific instructions.
-
-    ### Go
-
-    Always follow `modernize` diagnostics when editing Go code. Apply suggested modernizations to use current Go idioms and language features.
-
-    ```bash
-    golangci-lint fmt --enable golines <files>
-    ```
-
-    Prefer `gotestsum` over `go test` for running tests:
-
-    ```bash
-    gotestsum ./...
-    ```
-
-    ### Python
-
-    Prefer Ruff for Python validation and formatting; Ruff is enough for routine syntax/parse checks and avoids writing `__pycache__` files.
-
-    ```bash
-    ruff check --fix <files> && ruff format <files>
-    ```
-
-    Do not run `python -m py_compile` or `compileall` as a routine validation step. Only use them if explicitly requested or investigating interpreter-specific bytecode behavior. Pre-existing type errors can be ignored.
-
-    ### Rust
-
-    ```bash
-    cargo fmt
-    ```
-
-    ### TypeScript/JavaScript
-
-    ```bash
-    biome check --write <files>
-    ```
-
-    For type checking, prefer project task runners (for example `just typecheck`).
-    If no task runner recipe exists, run:
-
-    ```bash
-    tsc --noEmit
-    ```
-
-    ### Nix
-
-    ```bash
-    nixfmt <files>
-    ```
-  '';
-
   piWorkflow = ''
     Prefer `fd` over `find` for file discovery when available; it is faster, respects ignore files by default, and has friendlier syntax.
 
@@ -137,7 +82,6 @@ rec {
       enableShellPortability ? true,
       enableSandbox ? true,
       enableBackgroundTasks ? true,
-      enableCodeQuality ? true,
       enablePiWorkflow ? true,
     }:
     {
@@ -158,7 +102,6 @@ rec {
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
         ++ optionalBlock enableSandbox sandbox
-        ++ optionalBlock enableCodeQuality codeQuality
       );
 
       piGlobal = render "# Global Pi Instructions" (
