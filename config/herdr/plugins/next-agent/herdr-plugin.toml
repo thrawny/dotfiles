@@ -10,13 +10,3 @@ id = "focus"
 title = "Jump to the agent that needs you most"
 contexts = ["workspace", "pane"]
 command = ["herdr-next-agent"]
-
-# Herdr never reports a "done" status, so track finished-while-you-were-away
-# ourselves: a pane going quiet unwatched counts, focusing it clears it.
-[[events]]
-on = "pane.agent_status_changed"
-command = ["herdr-next-agent", "--event"]
-
-[[events]]
-on = "pane.focused"
-command = ["herdr-next-agent", "--event"]

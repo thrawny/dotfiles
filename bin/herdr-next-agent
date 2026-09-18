@@ -1,60 +1,13 @@
 #!/usr/bin/env bash
-# Focus the Herdr agent that needs attention most: blocked first, then agents
-# that finished while you were looking elsewhere. Quiet agents and working ones
-# are never targets, so "nothing needs you" stays a real signal.
-#
-# Herdr only ever reports idle, working, blocked, or unknown (see `herdr pane
-# report-agent`), so the "done" its UI shows never reaches the API. We track it
-# ourselves from events: --event records a pane as finished when it drops to
-# idle while you are looking elsewhere, and clears it once you focus the pane or
-# it starts working again. Plugins cannot run daemons, so these are the
-# [[events]] handlers in the manifest rather than a watcher process.
+# Focus the Herdr agent that needs attention most, ranked blocked > error > done.
+# Herdr sets done itself when an agent finishes while you are looking elsewhere,
+# and clears it once you look, so the queue needs no state of its own. Working
+# and idle agents are never targets, which keeps an empty queue a real signal.
+# Pressing again advances past the agent you are on, wrapping at the end.
 set -euo pipefail
 [[ -z "${TRACE:-}" ]] || set -x
 
 herdr="${HERDR_BIN_PATH:-herdr}"
-state_file="${HERDR_PLUGIN_STATE_DIR:-$HOME/.local/state/herdr-next-agent}/finished.json"
-
-read_state() {
-  local state
-  state=$(cat "$state_file" 2>/dev/null) || state="{}"
-  jq -e 'type == "object"' >/dev/null 2>&1 <<<"$state" || state="{}"
-  printf '%s' "$state"
-}
-
-write_state() {
-  mkdir -p "$(dirname "$state_file")"
-  cat >"$state_file.tmp" && mv "$state_file.tmp" "$state_file"
-}
-
-# Record or forget a single pane, leaving the rest of the set untouched.
-set_finished() {
-  local pane=$1 finished=$2
-  jq --arg pane "$pane" --argjson finished "$finished" \
-    'if $finished then .[$pane] = true else del(.[$pane]) end' <<<"$(read_state)" | write_state
-}
-
-if [[ ${1:-} == --event ]]; then
-  pane=$(jq -r '.data.pane_id // ""' <<<"${HERDR_PLUGIN_EVENT_JSON:-}")
-  [[ -n $pane ]] || exit 0
-
-  case "${HERDR_PLUGIN_EVENT:-}" in
-    # However you arrive — mouse, cmd+1..9, or this plugin — you have now seen it.
-    pane.focused) set_finished "$pane" false ;;
-    pane.agent_status_changed)
-      agents=$("$herdr" agent list 2>/dev/null) || exit 0
-      # Read the pane's status now rather than trusting the payload to carry a
-      # transition: an agent that went quiet unwatched is finished, and one that
-      # picked work back up no longer is.
-      finished=$(jq --arg pane "$pane" '
-        [.result.agents[] | select(.pane_id == $pane)][0] as $agent
-        | ($agent.agent_status == "idle") and ($agent.focused | not)
-      ' <<<"$agents")
-      set_finished "$pane" "$finished"
-      ;;
-  esac
-  exit 0
-fi
 
 agents=$("$herdr" agent list 2>/dev/null) || exit 0
 
@@ -65,14 +18,12 @@ if [[ -z $pivot ]]; then
   pivot=$(jq -r '[.result.agents[] | select(.focused) | .pane_id][0] // ""' <<<"$agents")
 fi
 
-read -r workspace tab pane <<<"$(jq -r --arg pivot "$pivot" --argjson finished "$(read_state)" '
-  def tier: if .agent_status == "blocked" then 0
-    elif .agent_status == "idle" and ($finished[.pane_id] // false) then 1
-    else null end;
-  [ .result.agents[] | . + { tier: tier } | select(.tier != null) ]
+read -r workspace tab pane <<<"$(jq -r --arg pivot "$pivot" '
+  def prio: ["blocked", "error", "done"];
+  [ .result.agents[] | select(.agent_status as $s | prio | index($s) != null) ]
   # Lowest state_change_seq first, so the agent that has been waiting longest
   # wins its tier and nothing starves behind a fresher interrupt.
-  | sort_by([.tier, .state_change_seq])
+  | sort_by([(.agent_status as $s | prio | index($s)), .state_change_seq])
   | if length == 0 then
       ""
     else
@@ -86,10 +37,6 @@ if [[ -z ${pane:-} ]]; then
   "$herdr" notification show "Nothing needs you" --sound none >/dev/null
   exit 0
 fi
-
-# Clear the target here too: the pane.focused event will say the same thing, but
-# only after the jump, and a second press must not land on it again.
-set_finished "$pane" false
 
 # Focusing the agent alone only moves the server's idea of focus: herdr 0.9
 # leaves the attached client on whatever workspace and tab it was showing, so
