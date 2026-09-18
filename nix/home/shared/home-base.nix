@@ -8,6 +8,9 @@
 let
   containerAssets = args.containerAssets or null;
   dotfiles = args.dotfiles or null;
+  # Where personal checkouts live, for consumers that prefer a local clone over
+  # a pinned one. Hosts override it when ~/code is spoken for.
+  devDir = args.devDir or "$HOME/code";
   repoBacked = homeSource == "repo";
   storeBacked = homeSource == "store";
   gitIdentity = {
@@ -87,6 +90,7 @@ in
     ++ lib.optionals storeBacked [ "${containerAssets.bin}" ];
 
     sessionVariables = {
+      DOTFILES_DEV_DIR = devDir;
       FZF_CTRL_R_OPTS = "--bind esc:print-query --bind ctrl-c:print-query";
       PYTHONDONTWRITEBYTECODE = "1";
       PYTHONPYCACHEPREFIX = "${config.xdg.cacheHome}/python-pycache";

@@ -1,6 +1,8 @@
 local diff_theme = require("config.theme").load().diff
 
-local codediff_dir = vim.fn.expand("~/code/codediff.nvim")
+-- Prefer a local checkout when one exists, so edits to the plugin take effect
+-- without bumping the flake pin. DOTFILES_DEV_DIR is set per host in nix.
+local codediff_dir = vim.fn.expand((vim.env.DOTFILES_DEV_DIR or "~/code") .. "/codediff.nvim")
 local codediff_spec = {
   "thrawny/codediff.nvim",
   name = "codediff.nvim",
