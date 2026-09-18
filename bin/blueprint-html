@@ -10,16 +10,17 @@ Usage:
     blueprint-html foo.blueprint.md -o out.html
 
 Source format: markdown with YAML-ish frontmatter (title, tier, description)
-and typed fences — callstack, filetree, contract, signatures, mockup, mermaid.
+and typed fences — callstack, filetree, contract, signatures, mockup, d2.
 See the blueprint skill's ARTIFACT-FORMAT.md for the grammar.
 
-Lenient by design: unknown fence types and missing metadata produce stderr
-warnings, never errors.
+Lenient by design: unknown fence types, missing metadata, and a missing or
+failing d2 binary produce stderr warnings, never errors.
 """
 
 import argparse
 import html
 import re
+import subprocess
 import sys
 from datetime import date
 from pathlib import Path
@@ -45,6 +46,13 @@ DIFF_FENCES = {"callstack", "filetree", "contract", "signatures"}
 MARKER_CLASS = {"+": "add", "-": "del", "~": "mod"}
 COMMENT_RE = re.compile(r"(\s#\s?.*)$")
 ANCHOR_RE = re.compile(r"([\w./-]+\.\w+:\d+)")
+
+# d2 renders at build time and the SVG is inlined, so the page needs no network
+# and no diagram runtime. Light theme only: the page's dark toggle is manual and
+# d2's --dark-theme keys off prefers-color-scheme, which the toggle can't reach.
+D2_THEME = "0"
+D2_PAD = "20"
+D2_TIMEOUT_S = 30
 
 
 def _bp_style(bg: str, muted: str, kw: str, lit: str, ink: str) -> type[Style]:
@@ -149,19 +157,69 @@ def render_mockup(content: str) -> str:
     )
 
 
+def d2_as_text(content: str) -> str:
+    """Fallback view: the d2 source stays readable when rendering is unavailable."""
+    return (
+        '<div class="block"><span class="badge">d2</span>'
+        f'<pre class="diffish">{html.escape(content)}</pre></div>\n'
+    )
+
+
+def render_d2(content: str, salt: str) -> str:
+    cmd = [
+        "d2",
+        "--no-xml-tag",
+        "--omit-version",
+        "--pad",
+        D2_PAD,
+        "--theme",
+        D2_THEME,
+        # natural size instead of fit-to-screen, so CSS can scale down wide
+        # diagrams without stretching small ones up to the column width
+        "--scale",
+        "1",
+        "--salt",
+        salt,
+        "-",
+        "-",
+    ]
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=content,
+            capture_output=True,
+            text=True,
+            timeout=D2_TIMEOUT_S,
+        )
+    except FileNotFoundError:
+        warn("d2 not found on PATH, diagram kept as source text")
+        return d2_as_text(content)
+    except subprocess.TimeoutExpired:
+        warn(f"d2 timed out after {D2_TIMEOUT_S}s, diagram kept as source text")
+        return d2_as_text(content)
+    if proc.returncode != 0:
+        lines = [ln for ln in proc.stderr.strip().splitlines() if ln.strip()]
+        detail = lines[0] if lines else f"exit {proc.returncode}"
+        warn(f"d2 failed, diagram kept as source text: {detail}")
+        return d2_as_text(content)
+    return f'<div class="figure d2-figure">{proc.stdout}</div>\n'
+
+
 def make_fence_renderer(default_fence):
+    diagrams = 0
+
     def fence(self, tokens, idx, options, env):
+        nonlocal diagrams
         token = tokens[idx]
         kind = token.info.strip().split(" ")[0] if token.info else ""
         if kind in DIFF_FENCES:
             return render_diff_block(kind, token.content)
         if kind == "mockup":
             return render_mockup(token.content)
-        if kind == "mermaid":
-            return (
-                '<div class="figure mermaid-figure">'
-                f'<pre class="mermaid">{html.escape(token.content)}</pre></div>\n'
-            )
+        if kind == "d2":
+            # salt keeps generated SVG ids unique across diagrams in one page
+            diagrams += 1
+            return render_d2(token.content, f"bp{diagrams}")
         if kind:
             try:
                 lexer = get_lexer_by_name(kind, stripnl=False)
@@ -223,11 +281,11 @@ main { display:grid; padding:1.5rem 0 4rem;
     minmax(0,4rem) [wide-end] minmax(1.25rem,1fr) [full-end]; }
 main > * { grid-column: content; }
 main > .figure { grid-column: wide; }
-main > .mermaid-figure { grid-column: full; padding-inline:1.25rem; }
+main > .d2-figure { grid-column: full; padding-inline:1.25rem; }
 .figure { position:relative; margin:1.2rem 0; padding:.6rem 0; overflow-x:auto;
   overscroll-behavior-x:contain; }
-.mermaid-figure svg { display:block; margin-inline:auto;
-  max-width:100% !important; height:auto !important; }
+.d2-figure > svg { display:block; margin-inline:auto;
+  max-width:100%; height:auto; }
 .figbtn { position:absolute; top:.2rem; right:.2rem; font:.7rem/1 system-ui;
   padding:.3rem .6rem; border:1px solid var(--line); border-radius:6px;
   background:var(--code-bg); color:var(--muted); cursor:pointer; }
@@ -270,7 +328,6 @@ pre.diffish .ln { display:block; white-space:pre;
   text-decoration:underline dotted; }
 iframe.mockup { width:100%; min-height:22rem; border:1px solid var(--line);
   border-radius:8px; background:#fff; margin-top:1.4rem; }
-pre.mermaid { text-align:left; }
 table { border-collapse:collapse; width:100%; display:block; overflow-x:auto;
   font-size:.92rem; }
 th, td { border:1px solid var(--line); padding:.45rem .7rem; text-align:left; }
@@ -314,57 +371,31 @@ THEME_JS = """
       const next = dark ? "light" : "dark";
       root.dataset.theme = next;
       try { localStorage.setItem("bp-theme", next); } catch {}
-      dispatchEvent(new CustomEvent("bp-theme"));
     };
   });
 </script>
 """
 
-MERMAID_JS = """
-<script type="module">
-try {
-  const { default: mermaid } = await import(
-    "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs");
-  const pres = [...document.querySelectorAll("pre.mermaid")];
-  const srcs = pres.map(p => p.textContent);
-  const natural = { useMaxWidth: false };
-  const dark = () => document.documentElement.dataset.theme
-    ? document.documentElement.dataset.theme === "dark"
-    : matchMedia("(prefers-color-scheme: dark)").matches;
-  const render = async () => {
-    mermaid.initialize({ startOnLoad: false, theme: dark() ? "dark" : "neutral",
-      sequence: { ...natural, actorMargin: 60, messageFontSize: 14 },
-      flowchart: natural, class: natural, state: natural, er: natural,
-      gantt: natural, journey: natural, timeline: natural });
-    pres.forEach((p, i) => {
-      p.textContent = srcs[i];
-      p.removeAttribute("data-processed");
-    });
-    await mermaid.run({ querySelector: "pre.mermaid" });
-  };
-  await render();
-  addEventListener("bp-theme", render);
-  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-    if (!document.documentElement.dataset.theme) render();
-  });
-  const dlg = Object.assign(document.createElement("dialog"), { className: "zoom" });
-  document.body.append(dlg);
-  dlg.addEventListener("click", () => dlg.close());
-  for (const fig of document.querySelectorAll(".mermaid-figure")) {
-    if (!fig.querySelector("svg")) continue;
-    const open = () => {
+# Diagrams are already inline SVG by this point; this only adds zoom-to-fullscreen.
+ZOOM_JS = """
+<script>
+  addEventListener("DOMContentLoaded", () => {
+    const dlg = Object.assign(document.createElement("dialog"), { className: "zoom" });
+    document.body.append(dlg);
+    dlg.addEventListener("click", () => dlg.close());
+    for (const fig of document.querySelectorAll(".d2-figure")) {
       const svg = fig.querySelector("svg");
-      if (svg) { dlg.replaceChildren(svg.cloneNode(true)); dlg.showModal(); }
-    };
-    const b = document.createElement("button");
-    b.className = "figbtn";
-    b.textContent = "\\u26f6";
-    b.title = "Maximize";
-    b.onclick = open;
-    fig.append(b);
-    fig.addEventListener("dblclick", open);
-  }
-} catch { /* offline: diagrams stay readable as text */ }
+      if (!svg) continue;
+      const open = () => { dlg.replaceChildren(svg.cloneNode(true)); dlg.showModal(); };
+      const b = document.createElement("button");
+      b.className = "figbtn";
+      b.textContent = "\\u26f6";
+      b.title = "Maximize";
+      b.onclick = open;
+      fig.append(b);
+      fig.addEventListener("dblclick", open);
+    }
+  });
 </script>
 """
 
@@ -379,7 +410,7 @@ def render_page(meta: dict[str, str], body_html: str, toc, src: Path) -> str:
     if len(toc) >= 4:
         links = "".join(f'<a href="#{s}">{html.escape(t)}</a>' for s, t in toc)
         toc_html = f'<nav class="toc">{links}</nav>'
-    mermaid_js = MERMAID_JS if 'class="mermaid"' in body_html else ""
+    zoom_js = ZOOM_JS if "d2-figure" in body_html else ""
     return f"""<!doctype html>
 <html lang="en">
 <meta charset="utf-8">
@@ -400,7 +431,7 @@ def render_page(meta: dict[str, str], body_html: str, toc, src: Path) -> str:
 <footer>Blueprint rendered from <code>{html.escape(str(src))}</code>
 on {date.today().isoformat()} — source file is the single source of truth.</footer>
 </main>
-{mermaid_js}
+{zoom_js}
 </html>
 """
 

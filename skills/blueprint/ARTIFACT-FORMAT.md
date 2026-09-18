@@ -26,7 +26,7 @@ The renderer treats these fence languages specially; everything else is ordinary
 
 - `callstack`, `filetree`, `contract`, `signatures` — diff-grammar blocks. Line grammar: first character `+` (added, blue), `-` (removed, orange), `~` (modified, neutral gray), anything else is context; the palette is colorblind-safe (no green) and each marker also gets a distinct left-border rail. A trailing ` # comment` renders muted; `file:line` tokens inside comments render as anchor citations. `signatures` bodies are syntax-highlighted as TypeScript.
 - `mockup` — raw HTML, inlined into the page in a sandboxed frame. Use for wsff's "mock, don't describe": a rough screen beats three paragraphs.
-- `mermaid` — progressive enhancement: renders as a diagram online, stays readable as text offline. Architecture sequence diagrams only.
+- `d2` — [D2](https://d2lang.com) source, rendered to inline SVG at build time, so the page needs no network. Architecture sequence diagrams only: `shape: sequence_diagram`, or `sql_table` for a data model. Keep diagrams at architecture level — d2 can express far more than that, and a detailed drawing of the code is the thing "abstract up" forbids. If the `d2` binary is missing or the source fails to compile, the renderer warns and keeps the fence as readable source text.
 
 ## Sections
 
@@ -46,14 +46,16 @@ One paragraph: what is being built and why, the tier, and which sections were sk
 
 How services, endpoints, schemas, queues, and stores talk to each other — and nothing below that level.
 
-```mermaid
-sequenceDiagram
-  participant UI
-  participant API
-  participant ResourceService
-  UI->>API: PUT /resources/:slug
-  API->>ResourceService: create(input)
-  ResourceService-->>UI: 201 resource
+The container name becomes the diagram's title, so name it after the flow it shows:
+
+```d2
+create resource: {
+  shape: sequence_diagram
+  UI; API; ResourceService
+  UI -> API: PUT /resources/:slug
+  API -> ResourceService: create(input)
+  ResourceService -> UI: 201 resource
+}
 ```
 
 ```contract
@@ -66,7 +68,7 @@ Data model changes as real DDL in a `sql` fence, new query shapes as SQL comment
 
 ### 4. Program design
 
-The shape of the code below architecture: what an agent would otherwise get wrong. Light pseudocode visualizations, not mermaid.
+The shape of the code below architecture: what an agent would otherwise get wrong. Light pseudocode visualizations, not diagrams.
 
 One `callstack` fence per changed control flow. Every frame is a callable — a function, method, or endpoint; work sequences ("compare X locally", "capture output") belong in the slices table, never in a callstack. Indentation is the call hierarchy; unchanged frames anchor the tree and must exist in the codebase today, cited in a comment:
 
