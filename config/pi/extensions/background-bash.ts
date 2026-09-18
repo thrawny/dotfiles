@@ -28,7 +28,7 @@ const COMPLETION_BATCH_DELAY_MS = 250;
 const COMPLETION_BATCH_MAX_TASKS = 16;
 const MAX_FOREGROUND_TIMEOUT_SECONDS = 10 * 60;
 const SESSION_RETENTION_SECONDS = 12 * 60 * 60;
-const ALWAYS_BACKGROUND_COMMANDS = new Set(["live-html"]);
+const ALWAYS_BACKGROUND_COMMANDS = new Set<string>();
 
 const bashParameters = Type.Object({
 	command: Type.String({ description: "Bash command to execute" }),
@@ -1050,7 +1050,11 @@ export default function backgroundBashExtension(pi: ExtensionAPI) {
 		promptGuidelines: [
 			"Use foreground Bash by default, including for tests, checks, builds, linting, and formatting.",
 			"Keep the main agent thread responsive: run intentionally asynchronous work such as PR waiters and Gauntlet reviews with background=true; do not use it merely to parallelize validation.",
-			`Bash automatically launches ${[...ALWAYS_BACKGROUND_COMMANDS].join(", ")} in detached background mode; background=true is not required for these applications.`,
+			...(ALWAYS_BACKGROUND_COMMANDS.size > 0
+				? [
+						`Bash automatically launches ${[...ALWAYS_BACKGROUND_COMMANDS].join(", ")} in detached background mode; background=true is not required for these applications.`,
+					]
+				: []),
 			"Background Bash already returns immediately and notifies on completion; omit timeout unless an early wake-up is genuinely useful.",
 			"Never run zmx wait or zmx tail for a pi-bg-* session created by Bash with background=true; the harness already waits for it. Continue independent work or end the turn instead.",
 			"A background-bash-finished message states the authoritative remaining managed-task count; when zero remain, nothing is left to wake the agent — do not assume monitoring continues. Check managed task status with zmx-list (zmx-list --all includes completed exit status).",
