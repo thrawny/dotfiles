@@ -143,6 +143,7 @@
           agent-browser
           anthropic-skills
           cursor-plugins
+          herdr
           lib
           mattpocock-skills
           ;

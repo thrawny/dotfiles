@@ -4,6 +4,7 @@
   anthropic-skills,
   containerAssets,
   cursor-plugins,
+  herdr,
   lib,
   mattpocock-skills,
   ...
@@ -41,13 +42,23 @@ let
   withAgents = selectedAgents: skill: skill // { agents = selectedAgents; };
   validateSkill =
     name: skill:
-    assert lib.assertMsg (builtins.pathExists (
-      skill.source + "/SKILL.md"
-    )) "agent skill '${name}' is missing SKILL.md at ${toString skill.source}";
-    skill;
+    # A skill built from skillCommand has no source to check until it is built.
+    if skill ? skillCommand then
+      skill
+    else
+      assert lib.assertMsg (builtins.pathExists (
+        skill.source + "/SKILL.md"
+      )) "agent skill '${name}' is missing SKILL.md at ${toString skill.source}";
+      skill;
   materializeSkill =
     pkgs: name: skill:
     skill
+    // lib.optionalAttrs (skill ? skillCommand) {
+      source = pkgs.runCommand "agent-skill-${name}" { } ''
+        mkdir -p "$out"
+        ${skill.skillCommand pkgs} > "$out/SKILL.md"
+      '';
+    }
     // lib.optionalAttrs (skill ? patches) {
       source = pkgs.applyPatches {
         name = "agent-skill-${name}";
@@ -74,6 +85,10 @@ let
     frontend-design.source = anthropic-skills + "/skills/frontend-design";
     grill-with-docs.source = mattpocock-skills + "/skills/engineering/grill-with-docs";
     grilling.source = mattpocock-skills + "/skills/productivity/grilling";
+    # The herdr binary prints its own skill, so generate it from the version we
+    # install rather than vendoring a copy that would describe an older herdr.
+    herdr.skillCommand =
+      pkgs: "${herdr.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/herdr --skill";
     writing-for-agents.source = mattpocock-skills + "/skills/productivity/writing-for-agents";
     teach.source = mattpocock-skills + "/skills/productivity/teach";
     improve-codebase-architecture.source =

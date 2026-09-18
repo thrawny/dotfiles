@@ -1,5 +1,4 @@
 {
-  agentAssets,
   config,
   herdr,
   lib,
@@ -15,24 +14,9 @@ let
   herdrPackage = herdr.packages.${system}.default;
   zmxPackage = zmx.packages.${system}.zmx-main;
   pluginDir = "${config.home.homeDirectory}/dotfiles/config/herdr/plugins";
-
-  # The binary ships its own agent skill, so generate it here rather than
-  # vendoring a copy that would silently describe an older herdr.
-  herdrSkill = pkgs.runCommand "herdr-skill" { } ''
-    mkdir -p "$out"
-    ${herdrPackage}/bin/herdr --skill > "$out/SKILL.md"
-  '';
 in
 {
   home.packages = [ herdrPackage ];
-
-  home.file = lib.mapAttrs' (
-    _: target:
-    lib.nameValuePair "${target}/herdr" {
-      source = herdrSkill;
-      force = true;
-    }
-  ) agentAssets.skillTargets;
 
   # Herdr keeps its plugin registry in ~/.config/herdr/plugins.json, which is
   # mutable state Nix does not manage, so a machine has no plugins until
