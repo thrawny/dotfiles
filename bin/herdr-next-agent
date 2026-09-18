@@ -1,23 +1,62 @@
 #!/usr/bin/env bash
-# Focus the Herdr agent that needs attention most, ranked blocked > finished
-# since you last looked > merely quiet. Working agents are never targets, so an
-# empty queue is a real signal rather than a shrug. Pressing again advances past
-# the agent you are on, wrapping at the end, which walks the whole queue.
+# Focus the Herdr agent that needs attention most: blocked first, then agents
+# that finished while you were looking elsewhere. Quiet agents and working ones
+# are never targets, so "nothing needs you" stays a real signal.
 #
 # Herdr only ever reports idle, working, blocked, or unknown (see `herdr pane
-# report-agent`), so the "done" its UI shows never reaches the API. We rebuild
-# it: state_change_seq climbs on every transition, so an idle agent whose seq is
-# higher than when we last sent you there has finished something unseen.
+# report-agent`), so the "done" its UI shows never reaches the API. We track it
+# ourselves from events: --event records a pane as finished when it drops to
+# idle while you are looking elsewhere, and clears it once you focus the pane or
+# it starts working again. Plugins cannot run daemons, so these are the
+# [[events]] handlers in the manifest rather than a watcher process.
 set -euo pipefail
 [[ -z "${TRACE:-}" ]] || set -x
 
 herdr="${HERDR_BIN_PATH:-herdr}"
-state_file="${HERDR_PLUGIN_STATE_DIR:-$HOME/.local/state/herdr-next-agent}/seen.json"
+state_file="${HERDR_PLUGIN_STATE_DIR:-$HOME/.local/state/herdr-next-agent}/finished.json"
+
+read_state() {
+  local state
+  state=$(cat "$state_file" 2>/dev/null) || state="{}"
+  jq -e 'type == "object"' >/dev/null 2>&1 <<<"$state" || state="{}"
+  printf '%s' "$state"
+}
+
+write_state() {
+  mkdir -p "$(dirname "$state_file")"
+  cat >"$state_file.tmp" && mv "$state_file.tmp" "$state_file"
+}
+
+# Record or forget a single pane, leaving the rest of the set untouched.
+set_finished() {
+  local pane=$1 finished=$2
+  jq --arg pane "$pane" --argjson finished "$finished" \
+    'if $finished then .[$pane] = true else del(.[$pane]) end' <<<"$(read_state)" | write_state
+}
+
+if [[ ${1:-} == --event ]]; then
+  pane=$(jq -r '.data.pane_id // ""' <<<"${HERDR_PLUGIN_EVENT_JSON:-}")
+  [[ -n $pane ]] || exit 0
+
+  case "${HERDR_PLUGIN_EVENT:-}" in
+    # However you arrive — mouse, cmd+1..9, or this plugin — you have now seen it.
+    pane.focused) set_finished "$pane" false ;;
+    pane.agent_status_changed)
+      agents=$("$herdr" agent list 2>/dev/null) || exit 0
+      # Read the pane's status now rather than trusting the payload to carry a
+      # transition: an agent that went quiet unwatched is finished, and one that
+      # picked work back up no longer is.
+      finished=$(jq --arg pane "$pane" '
+        [.result.agents[] | select(.pane_id == $pane)][0] as $agent
+        | ($agent.agent_status == "idle") and ($agent.focused | not)
+      ' <<<"$agents")
+      set_finished "$pane" "$finished"
+      ;;
+  esac
+  exit 0
+fi
 
 agents=$("$herdr" agent list 2>/dev/null) || exit 0
-
-seen=$(cat "$state_file" 2>/dev/null) || seen="{}"
-jq -e 'type == "object"' >/dev/null 2>&1 <<<"$seen" || seen="{}"
 
 # The pane that invoked the action is authoritative, and unlike the focused
 # agent it is set even when the current pane runs a plain shell.
@@ -26,16 +65,13 @@ if [[ -z $pivot ]]; then
   pivot=$(jq -r '[.result.agents[] | select(.focused) | .pane_id][0] // ""' <<<"$agents")
 fi
 
-read -r workspace tab pane <<<"$(jq -r --arg pivot "$pivot" --argjson seen "$seen" '
-  # A pane we have never visited counts as unseen: assuming you have already
-  # looked at something you have not is the worse of the two mistakes.
+read -r workspace tab pane <<<"$(jq -r --arg pivot "$pivot" --argjson finished "$(read_state)" '
   def tier: if .agent_status == "blocked" then 0
-    elif .agent_status != "idle" then null
-    elif ($seen[.pane_id] // -1) < .state_change_seq then 1
-    else 2 end;
+    elif .agent_status == "idle" and ($finished[.pane_id] // false) then 1
+    else null end;
   [ .result.agents[] | . + { tier: tier } | select(.tier != null) ]
-  # Lowest state_change_seq first, so the agent that has been quiet longest wins
-  # its tier and nothing starves behind a fresher interrupt.
+  # Lowest state_change_seq first, so the agent that has been waiting longest
+  # wins its tier and nothing starves behind a fresher interrupt.
   | sort_by([.tier, .state_change_seq])
   | if length == 0 then
       ""
@@ -51,14 +87,9 @@ if [[ -z ${pane:-} ]]; then
   exit 0
 fi
 
-# Both the pane you are leaving and the one you are landing on have now been
-# looked at. Panes that no longer exist drop out rather than accumulating.
-mkdir -p "$(dirname "$state_file")"
-jq --arg pivot "$pivot" --arg target "$pane" --argjson seen "$seen" '
-  ([.result.agents[] | { key: .pane_id, value: .state_change_seq }] | from_entries) as $now
-  | ($seen | with_entries(select(.key | in($now))))
-  | reduce ([$pivot, $target] | .[] | select(. != "")) as $id (.; .[$id] = ($now[$id] // .[$id]))
-' <<<"$agents" >"$state_file.tmp" && mv "$state_file.tmp" "$state_file"
+# Clear the target here too: the pane.focused event will say the same thing, but
+# only after the jump, and a second press must not land on it again.
+set_finished "$pane" false
 
 # Focusing the agent alone only moves the server's idea of focus: herdr 0.9
 # leaves the attached client on whatever workspace and tab it was showing, so
