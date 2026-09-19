@@ -22,7 +22,8 @@ if ! command -v nix >/dev/null 2>&1; then
   echo 'bootstrap-darwin: install Determinate Nix first, then open a new terminal' >&2
   exit 1
 fi
-for app_dir in /Applications/Tailscale.app "$HOME/Applications/Tailscale.app"; do
+for app_dir in /Applications/Tailscale.app /Applications/Tailscale\ VPN.app \
+  "$HOME/Applications/Tailscale.app" "$HOME/Applications/Tailscale VPN.app"; do
   if [[ -d "$app_dir" ]]; then
     echo "bootstrap-darwin: remove $app_dir before switching to the CLI daemon" >&2
     echo 'Do this locally; replacing Tailscale disconnects its current connection.' >&2
@@ -30,10 +31,16 @@ for app_dir in /Applications/Tailscale.app "$HOME/Applications/Tailscale.app"; d
   fi
 done
 
+# Determinate owns nix.conf, so install the repo's caches separately before
+# building the system. Otherwise tools such as Codex compile from source.
+"$repo_root/bin/install-nix-caches"
+
 # Use the rebuild tool pinned in this repository, not a separately fetched master.
 sudo nix run "$repo_root/nix#darwin-rebuild" -- \
   switch --flake "$repo_root/nix#thrawnym1"
 
 printf '\nNext steps:\n'
-printf '  Open a new terminal, then run: sudo tailscale up --ssh\n'
+printf '  Open a new terminal, then run: just tailscale-login\n'
 printf '  Check your tailnet SSH policy and test a remote login before closing the lid.\n'
+printf '  For closed-lid use on AC: just clamshell-on\n'
+printf '  Setup and recovery: docs/mac-remote-access.md\n'

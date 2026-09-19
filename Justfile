@@ -10,6 +10,10 @@ default:
 
 # === Shortcuts ===
 
+# Interactive setup for a fresh Apple Silicon Mac
+bootstrap-mac:
+    bin/bootstrap-mac
+
 # Switch nix configuration, or only Home Manager with --hm-only
 switch mode="": (nix::switch mode)
 
@@ -19,6 +23,28 @@ bootstrap-darwin:
 
 # Build the M1 configuration without activating it, on an Apple Silicon Mac
 build-darwin: nix::build-darwin
+
+# Sign this Mac into Tailscale and enable its SSH server
+tailscale-login:
+    sudo /run/current-system/sw/bin/tailscale up --ssh
+
+# Keep this Mac awake with the lid closed; persists until clamshell-off
+clamshell-on:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ "$(uname -s)" = Darwin ]] || { echo "macOS required" >&2; exit 1; }
+    /usr/bin/pmset -g batt | grep -q "AC Power" || { echo "Connect AC power first" >&2; exit 1; }
+    sudo /usr/bin/pmset -a disablesleep 1
+    echo "Sleep disabled, including on battery. Run just clamshell-off before unplugging or packing the Mac."
+    /usr/bin/pmset -g
+
+# Restore lid-close/manual sleep; AC idle sleep stays disabled by nix-darwin
+clamshell-off:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    [[ "$(uname -s)" = Darwin ]] || { echo "macOS required" >&2; exit 1; }
+    sudo /usr/bin/pmset -a disablesleep 0
+    /usr/bin/pmset -g
 
 # Push the flake's cache-bundle (selected expensive builds) to Cachix
 cache dry_run="": (nix::cache dry_run)
@@ -86,7 +112,7 @@ check-theme:
 # === Tests ===
 
 # Run all tests
-test: test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent
+test: test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-bootstrap-mac
 
 # Project selection and backend dispatch
 test-project-picker:
@@ -120,6 +146,10 @@ test-desktop-broker:
 # Validate the active AeroSpace config on macOS without applying it
 check-aerospace:
     aerospace reload-config --dry-run --warnings-as-errors --no-gui
+
+# Test the Mac bootstrap walkthrough without changing this machine
+test-bootstrap-mac:
+    python3 tests/test_bootstrap_mac.py
 
 # Run Neovim config tests
 test-nvim:

@@ -479,7 +479,10 @@ lint:
     #!/usr/bin/env bash
     set -euo pipefail
     root="$(git rev-parse --show-toplevel)"
-    mapfile -d '' nix_files < <(
+    nix_files=()
+    while IFS= read -r -d '' file; do
+        nix_files+=("$file")
+    done < <(
         git -C "$root" ls-files -z 'nix/*.nix' 'nix/**/*.nix' \
             | grep -zv '/hardware-configuration\.nix$'
     )

@@ -23,7 +23,11 @@ skills/   # Local agent skills linked into Claude, Pi, and Codex
 
 ## Usage
 
+Setting up a fresh Mac? Run `bin/bootstrap-mac` from the checkout for an interactive walkthrough, including adding a missing target. See the [new Mac bootstrap guide](docs/new-mac.md) for the initial clone and manual steps.
+
+For this M1 Air's nix-darwin migration, Tailscale SSH, and closed-lid use, follow [Mac remote access](docs/mac-remote-access.md).
+
 ```bash
-just switch   # Apply config (auto-detects NixOS vs Home Manager)
+just switch   # Apply config (NixOS, nix-darwin, or Home Manager)
 just check    # Format, lint, evaluate
 ```

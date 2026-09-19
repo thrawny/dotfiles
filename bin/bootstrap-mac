@@ -1,0 +1,211 @@
+#!/bin/bash
+# Uses macOS Bash 3.2 and system tools until Determinate Nix is installed.
+set -euo pipefail
+
+say() { printf '\n%s\n' "$*"; }
+die() {
+  printf '\nbootstrap-mac: %s\n' "$*" >&2
+  exit 1
+}
+
+ask() {
+  local answer
+  while true; do
+    printf '%s [y/n] ' "$1"
+    IFS= read -r answer || die 'Input closed. Run the script again when ready.'
+    case "$answer" in
+    y | Y | yes | YES) return 0 ;;
+    n | N | no | NO) return 1 ;;
+    *) printf 'Please answer y or n.\n' ;;
+    esac
+  done
+}
+
+pause() {
+  local answer
+  printf '%s Press Enter when ready, or type q to stop: ' "$1"
+  IFS= read -r answer || die 'Input closed. Run the script again when ready.'
+  case "$answer" in q | Q) exit 0 ;; esac
+}
+
+# Escape data as a Nix string, including its interpolation syntax.
+nix_string() {
+  local value=$1
+  value=${value//\\/\\\\}
+  value=${value//\"/\\\"}
+  value=${value//\$\{/\\\$\{}
+  printf '"%s"' "$value"
+}
+
+find_nix() {
+  # Prefer the installer-owned binary over any upstream Nix on PATH.
+  if [ -x /nix/var/nix/profiles/default/bin/nix ]; then
+    nix_bin=/nix/var/nix/profiles/default/bin/nix
+  else
+    nix_bin=$(command -v nix || true)
+  fi
+  [ -n "$nix_bin" ] && [[ $("$nix_bin" --version 2>/dev/null) == *'Determinate Nix'* ]]
+}
+
+create_target() {
+  local target_file="nix/hosts/$mac_target/default.nix" git_name git_email entry
+  [ ! -e "$target_file" ] || die "$target_file already exists. Add its flake entry manually, then rerun."
+  # Refuse to guess where to edit if the flake's layout has changed.
+  [ "$(grep -c '^      homeConfigurations = {$' nix/flake.nix)" = 1 ] ||
+    die 'Cannot locate a unique homeConfigurations block. Add the target manually, then rerun.'
+  printf 'Git author name: '
+  IFS= read -r git_name || die 'Input closed.'
+  printf 'Git author email: '
+  IFS= read -r git_email || die 'Input closed.'
+  [ -n "$git_name" ] && [ -n "$git_email" ] || die 'Git name and email must not be empty.'
+
+  mkdir -p "nix/hosts/$mac_target"
+  {
+    printf '{\n  username = %s;\n  homeSource = "repo";\n  dotfiles = %s;\n' \
+      "$(nix_string "$mac_user")" "$(nix_string "$repo_root")"
+    printf '  gitIdentity = {\n    name = %s;\n    email = %s;\n  };\n}\n' \
+      "$(nix_string "$git_name")" "$(nix_string "$git_email")"
+  } >"$target_file"
+  entry=$(
+    cat <<EOF
+        "$mac_target" = mkHomeConfiguration {
+          pkgs = nixpkgs.legacyPackages.aarch64-darwin;
+          modules = [ ./home/darwin/default.nix ];
+          extraSpecialArgs = import ./hosts/$mac_target/default.nix;
+        };
+EOF
+  )
+  # Pass the entry through a file: awk -v would interpret backslashes in data.
+  printf '%s\n' "$entry" >"$scratch/entry"
+  awk -v entry_file="$scratch/entry" '
+    { print }
+    /^      homeConfigurations = \{$/ {
+      while ((getline entry_line < entry_file) > 0) print entry_line
+      close(entry_file)
+    }
+  ' nix/flake.nix >"$scratch/flake.nix"
+  cat "$scratch/flake.nix" >nix/flake.nix
+  say "Created $target_file and added $mac_target to nix/flake.nix."
+}
+
+main() {
+  case "${1:-}" in
+  -h | --help)
+    printf 'Usage: bin/bootstrap-mac\n\nInteractive Apple Silicon Mac setup. Run as your normal user from a cloned repo.\nPauses for GUI steps and repo edits; asks before creating a target or switching.\n'
+    return 0
+    ;;
+  '') ;;
+  *) die "Unknown argument: $1" ;;
+  esac
+  [ "$#" -le 1 ] || die 'No positional arguments are supported.'
+  [ "$(uname -s)" = Darwin ] || die 'This script is for macOS.'
+  [ "$(uname -m)" = arm64 ] || die 'Run in a native Apple Silicon terminal. Intel targets are not configured here.'
+  [ "$(id -u)" != 0 ] || die 'Run as your normal user, without sudo.'
+  [ -t 0 ] || die 'An interactive terminal is required.'
+
+  repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)
+  cd "$repo_root"
+  mac_user=$(id -un)
+  scratch=$(mktemp -d "${TMPDIR:-/tmp}/bootstrap-mac.XXXXXX")
+  trap 'rm -rf "$scratch"' EXIT
+  say "Bootstrapping $mac_user from $repo_root"
+  say 'You can stop with Ctrl-C or q at a pause and rerun later. Completed prerequisites are checked again.'
+  [ "$repo_root" -ef "$HOME/dotfiles" ] || die 'Move or clone this repo to ~/dotfiles first; shared configuration expects that location.'
+
+  while ! xcode-select -p >/dev/null 2>&1 || ! git --version >/dev/null 2>&1; do
+    say 'Install Apple command line tools in another Terminal with: xcode-select --install'
+    pause 'Finish the Apple installer.'
+  done
+  git rev-parse --show-toplevel >/dev/null || die 'This must be a Git checkout.'
+
+  while ! find_nix; do
+    say 'Install Determinate Nix using the macOS GUI installer at https://docs.determinate.systems/.'
+    say 'Complete its licence, administrator authentication, and permission prompts. Do not uninstall an existing Nix store.'
+    if ask 'Open the download page?'; then open https://docs.determinate.systems/; fi
+    pause 'Finish the Determinate installer.'
+  done
+  # The installer cannot update the environment of this already-running shell.
+  # Home Manager also invokes nix-env/nix-build by name during initialization.
+  PATH="$(dirname "$nix_bin"):$PATH"
+  export PATH
+  "$nix_bin" --version
+  while ! "$nix_bin" store info; do
+    pause 'Nix cannot reach its daemon. Repair the installation using the GUI installer, then retry.'
+  done
+
+  mac_target=$(hostname | sed 's/\.local$//')
+  [[ "$mac_target" =~ ^[a-zA-Z0-9][a-zA-Z0-9_-]*$ ]] ||
+    die 'Use a hostname containing only letters, numbers, hyphens, and underscores, then rerun.'
+  say "Target: $mac_target | User: $mac_user | Checkout: $repo_root"
+
+  # List names without evaluating every host configuration.
+  local target_names
+  while ! target_names=$("$nix_bin" eval --raw --no-write-lock-file './nix#homeConfigurations' \
+    --apply 'configs: builtins.concatStringsSep "\n" (builtins.attrNames configs)'); do
+    pause 'Fix the flake error in the repo, then retry.'
+  done
+  if ! printf '%s\n' "$target_names" | grep -Fxq "$mac_target"; then
+    if ask "Create a new Apple Silicon target named $mac_target?"; then
+      create_target
+    else
+      say "Add homeConfigurations.\"$mac_target\" to nix/flake.nix using docs/new-mac.md."
+    fi
+  fi
+
+  say 'Review nix/flake.nix and your host settings now. You can edit either file in another window.'
+  pause 'Finish any repo changes.'
+  say 'Nix needs new files to be tracked by Git. Stage only the target files you want included, for example:'
+  printf '  git add nix/flake.nix nix/hosts/%s/default.nix\n' "$mac_target"
+  pause 'Stage any new files. No commit is required yet.'
+  local configured_user configured_home configured_repo
+  while true; do
+    if configured_user=$("$nix_bin" eval --raw --no-write-lock-file "./nix#homeConfigurations.$mac_target.config.home.username") &&
+      configured_home=$("$nix_bin" eval --raw --no-write-lock-file "./nix#homeConfigurations.$mac_target.config.home.homeDirectory") &&
+      configured_repo=$("$nix_bin" eval --raw --no-write-lock-file "./nix#homeConfigurations.$mac_target._module.specialArgs.dotfiles"); then
+      if [ "$configured_user" = "$mac_user" ] && [ "$configured_home" -ef "$HOME" ] && [ "$configured_repo" -ef "$repo_root" ]; then
+        break
+      fi
+      say "Target settings do not match this Mac: user=$configured_user, home=$configured_home, checkout=$configured_repo"
+    fi
+    pause 'Correct the target or stage missing files in the repo, then retry.'
+  done
+
+  # Evaluate the complete activation before offering to switch.
+  while ! "$nix_bin" eval --raw --no-write-lock-file "./nix#homeConfigurations.$mac_target.activationPackage.drvPath"; do
+    pause 'Fix the evaluation error or stage missing files, then retry.'
+  done
+  say 'The switch installs your tools, links dotfiles, and applies macOS defaults. Conflicting regular files are backed up.'
+  say 'If an existing symlink conflicts, Home Manager will stop so you can move that link to a backup yourself.'
+  if ! ask "Run the Home Manager switch for $mac_target now?"; then
+    say 'Stopped before switching. Rerun bin/bootstrap-mac when ready.'
+    return 0
+  fi
+  local backup_suffix
+  backup_suffix="bootstrap-$(date +%Y%m%d-%H%M%S)"
+  # Fresh installs may not have created the user's profile directory yet.
+  mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/nix/profiles"
+  until "$nix_bin" run --no-write-lock-file --inputs-from ./nix home-manager -- \
+    switch -b "$backup_suffix" --flake "./nix#$mac_target"; do
+    say 'For a conflicting symlink, move the link to an unused backup name in another Terminal, then retry.'
+    pause 'The switch failed. Read the error and fix it in the repo or another Terminal, then retry.'
+  done
+  "$nix_bin" store info
+  say 'Home Manager switch completed.'
+
+  if ask 'Walk through the remaining app and account setup?'; then
+    say 'Install Ghostty: https://ghostty.org/download'
+    say 'Install AeroSpace and follow its permission prompts: https://nikitabobko.github.io/AeroSpace/guide#installation'
+    say 'The repo supplies their settings, but does not install these Mac apps.'
+    pause 'Install and launch the apps you want.'
+    say 'Install CaskaydiaMono Nerd Font through Font Book for the configured terminal font.'
+    pause 'Finish font setup.'
+    say 'Sign in to your development services and restore credentials outside this script.'
+    say 'Claude, Codex, and Pi settings have been seeded from the repo examples. Adjust local settings as needed.'
+    pause 'Finish account setup.'
+  fi
+  say 'Open a new Terminal and run: nix --version; home-manager --version; just --version'
+  say 'For future changes, run just switch from ~/dotfiles. Commit and push any new target when ready.'
+  say 'Log out and back in when convenient to refresh your session and macOS settings.'
+}
+
+if [[ ${BASH_SOURCE[0]} == "$0" ]]; then main "$@"; fi
