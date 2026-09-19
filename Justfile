@@ -10,8 +10,8 @@ default:
 
 # === Shortcuts ===
 
-# Switch nix configuration
-switch: nix::switch
+# Switch nix configuration, or only Home Manager with --hm-only
+switch mode="": (nix::switch mode)
 
 # First nix-darwin activation on the M1 Air, retaining Determinate Nix
 bootstrap-darwin:

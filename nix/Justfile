@@ -9,11 +9,20 @@ install-nix-caches:
     "$(git rev-parse --show-toplevel)/bin/install-nix-caches"
 
 # Switch configuration (NixOS, nix-darwin, or standalone Home Manager)
-switch:
+switch mode="":
     #!/usr/bin/env bash
     set -euo pipefail
+    mode={{quote(mode)}}
+    case "$mode" in
+        ""|--hm-only) ;;
+        *) echo "Usage: just switch [--hm-only]" >&2; exit 2 ;;
+    esac
     host=$(hostname | sed 's/\.local$//')
-    if [ -f /etc/NIXOS ]; then
+    if [ "$mode" = --hm-only ]; then
+        if [ "$(uname -s)" = Darwin ]; then host=$(/usr/sbin/scutil --get LocalHostName); fi
+        echo "Switching only Home Manager for $host..."
+        nix run --inputs-from . home-manager -- switch -b bak --flake ".#$host"
+    elif [ -f /etc/NIXOS ]; then
         echo "NixOS detected, running nixos-rebuild switch..."
         running_kernel=$(uname -r)
         sudo nixos-rebuild switch --flake ".#$host"
