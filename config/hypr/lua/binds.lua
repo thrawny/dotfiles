@@ -26,6 +26,8 @@ bind("ALT + Return", function()
 	end
 end)
 bind("SUPER + Space", dsp.exec_cmd("walker"))
+-- Re-activate the watched sidebar instance without starting a second runtime.
+bind("ALT + S", dsp.exec_cmd(os.getenv("HOME") .. "/code/agent-switch/target/debug/agent-switch demo-sidebar --live"))
 bind("ALT + SHIFT + Space", dsp.exec_cmd("ghostty --title=project-picker -e project-picker --hypr"))
 -- Anchor to the executable so pgrep cannot match the launcher shell itself.
 bind("ALT + Q", scratchpad("term", "pgrep -f '^[^ ]*ghostty[^ ]* .*GhosttyScratchpad' || ghostty --class=com.thrawny.GhosttyScratchpad"))
@@ -84,8 +86,9 @@ bind("ALT + SHIFT + J", dsp.window.swap({ direction = "d" }))
 bind("ALT + SHIFT + K", dsp.window.swap({ direction = "u" }))
 
 -- Scrolling layout: columns
-bind("ALT + bracketleft", dsp.layout("consume"))
-bind("ALT + bracketright", dsp.layout("expel"))
+bind("ALT + bracketleft", dsp.layout("consume_or_expel prev"))
+bind("ALT + bracketright", dsp.layout("consume_or_expel next"))
+bind("ALT + SHIFT + period", dsp.layout("expel"))
 bind("ALT + backslash", dsp.layout("colresize +conf"))
 bind("ALT + minus", dsp.layout("colresize -0.1"))
 bind("ALT + equal", dsp.layout("colresize +0.1"))
