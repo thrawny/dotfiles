@@ -106,3 +106,19 @@ def test_cancel(picker: Picker):
     stub("fzf", "exit 130\n")
     assert run("--herdr").returncode == 0
     assert not log.exists()
+
+
+@pytest.mark.parametrize("backend", ["niri", "hypr"])
+def test_desktop_failure_notifies(picker: Picker, backend: str):
+    run, env, log, repo, stub = picker
+    stub(
+        f"{backend}land-project" if backend == "hypr" else "niri-project",
+        'echo "compositor rejected request" >&2; exit 7\n',
+    )
+    stub("busctl", 'printf "%s\\n" "$@" > "$LOG"\n')
+    result = run(f"--{backend}")
+    assert result.returncode == 7
+    assert "compositor rejected request" in result.stderr
+    notification = log.read_text()
+    assert "Could not open project" in notification
+    assert "compositor rejected request" in notification

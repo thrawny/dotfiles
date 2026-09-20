@@ -8,6 +8,27 @@ error() {
   exit 1
 }
 
+# Lua long strings preserve quotes and backslashes in project paths.
+lua_string() {
+  local equals=""
+  while [[ "$1" == *"]${equals}]"* ]]; do
+    equals+="="
+  done
+  printf '[%s[%s]%s]' "$equals" "$1" "$equals"
+}
+
+# hyprctl reports Lua errors on stdout; preserve them on failure.
+hypr_request() {
+  local output exit_code
+  if output=$(hyprctl "$@" 2>&1); then
+    return 0
+  else
+    exit_code=$?
+    printf '%s\n' "$output" >&2
+    return "$exit_code"
+  fi
+}
+
 show_usage() {
   echo "Usage: hyprland-project [--name NAME] [--terminals COUNT] [directory]"
   echo ""
@@ -81,23 +102,31 @@ main() {
   # Register in the Lua-owned map (config/hypr/lua/projectdirs.lua). Register
   # before the existing-workspace fast path so reopening a project refreshes
   # the map after a compositor restart.
-  hyprctl eval "set_project_dir(\"$workspace_name\", \"$project_dir\")" >/dev/null
+  hypr_request eval "set_project_dir($(lua_string "$workspace_name"), $(lua_string "$project_dir"))"
 
-  # `workspace name:` focuses the named workspace, creating it if missing.
-  # Only spawn terminals when it didn't exist yet.
-  local existed=""
-  if hyprctl workspaces -j | jq -e --arg n "$workspace_name" \
-    '.[] | select(.name == $n)' >/dev/null; then
-    existed=1
+  # Reuse an existing project; new projects get the first free positive ID.
+  # Creating name:foo directly would assign a negative internal ID instead.
+  local workspaces workspace_id
+  workspaces=$(hyprctl workspaces -j)
+  workspace_id=$(jq -r --arg n "$workspace_name" \
+    '[.[] | select(.name == $n) | .id][0] // empty' <<< "$workspaces")
+  if [[ -n "$workspace_id" ]]; then
+    hypr_request dispatch "hl.dsp.focus({workspace = $(lua_string "$workspace_id")})"
+    exit 0
   fi
 
-  hyprctl dispatch workspace "name:$workspace_name" >/dev/null
+  workspace_id=1
+  while jq -e --argjson id "$workspace_id" \
+    'any(.[]; .id == $id)' <<< "$workspaces" >/dev/null; do
+    workspace_id=$((workspace_id + 1))
+  done
+  hypr_request dispatch "hl.dsp.focus({workspace = $(lua_string "$workspace_id")})"
+  hypr_request dispatch "hl.dsp.workspace.rename({workspace = $workspace_id, name = $(lua_string "$workspace_name")})"
 
-  [[ -n "$existed" ]] && exit 0
-
+  local terminal_cmd
+  printf -v terminal_cmd 'ghostty +new-window --working-directory=%q' "$project_dir"
   for ((i = 0; i < terminals; i++)); do
-    hyprctl dispatch exec -- \
-      "ghostty +new-window --working-directory=$project_dir" >/dev/null
+    hypr_request dispatch "hl.dsp.exec_cmd($(lua_string "$terminal_cmd"))"
   done
 }
 

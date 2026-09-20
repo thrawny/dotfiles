@@ -2,6 +2,44 @@
 set -euo pipefail
 [[ -z "${TRACE:-}" ]] || set -x
 
+# Desktop launchers close immediately, so report failures through notifications.
+failure_detail=""
+show_failure() {
+  local exit_code=$?
+  if (( exit_code != 0 )); then
+    printf '\nProject picker failed (exit %s).\n' "$exit_code" >&2
+    case "${backend:-}" in
+      --hypr|--niri)
+        # busctl is already available on NixOS; no extra notification CLI needed.
+        busctl --user call org.freedesktop.Notifications /org/freedesktop/Notifications \
+          org.freedesktop.Notifications Notify 'susssasa{sv}i' \
+          'Project picker' 0 '' 'Could not open project' \
+          "${failure_detail:-Project picker failed (exit $exit_code).}" \
+          0 1 urgency y 2 -1 >/dev/null || true
+        ;;
+      *)
+        if [[ -t 0 && -t 2 ]]; then
+          read -r -p 'Press Enter to close… ' || true
+        fi
+        ;;
+    esac
+  fi
+  return "$exit_code"
+}
+trap show_failure EXIT
+
+run_desktop_backend() {
+  local output exit_code
+  if output=$("$@" 2>&1); then
+    [[ -z "$output" ]] || printf '%s\n' "$output"
+  else
+    exit_code=$?
+    failure_detail="${output:-$1 failed (exit $exit_code).}"
+    printf '%s\n' "$failure_detail" >&2
+    return "$exit_code"
+  fi
+}
+
 usage() {
   echo 'Usage: project-picker --niri|--hypr|--herdr'
 }
@@ -47,14 +85,15 @@ case "$dir" in
   '~/'*) dir="$HOME/${dir:2}" ;;
 esac
 if [[ ! -d "$dir" ]]; then
-  printf 'Not a directory: %s\n' "$dir" >&2
+  failure_detail="Not a directory: $dir"
+  printf '%s\n' "$failure_detail" >&2
   exit 1
 fi
 dir=$(realpath -- "$dir")
 
 case "$backend" in
-  --niri) exec niri-project --terminals 1 "$dir" ;;
-  --hypr) exec hyprland-project --terminals 1 "$dir" ;;
+  --niri) run_desktop_backend niri-project --terminals 1 "$dir" ;;
+  --hypr) run_desktop_backend hyprland-project --terminals 1 "$dir" ;;
   --herdr)
     herdr_bin="${HERDR_BIN_PATH:-herdr}"
     # Workspace records have no cwd. Match the saved cwd of their panes,
@@ -65,10 +104,11 @@ case "$backend" in
       while IFS= read -r pane_cwd; do
         [[ -d "$pane_cwd" ]] || continue
         if [[ "$(realpath -- "$pane_cwd")" == "$dir" ]]; then
-          exec "$herdr_bin" workspace focus "$workspace"
+          "$herdr_bin" workspace focus "$workspace"
+          exit 0
         fi
       done < <(jq -r '.result.panes[] | .cwd // empty' <<< "$panes")
     done < <(jq -r '.result.workspaces[].workspace_id' <<< "$workspaces")
-    exec "$herdr_bin" workspace create --cwd "$dir" --label "$(basename "$dir")" --focus
+    "$herdr_bin" workspace create --cwd "$dir" --label "$(basename "$dir")" --focus
     ;;
 esac

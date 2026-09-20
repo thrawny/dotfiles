@@ -3,6 +3,7 @@
 
 local home = os.getenv("HOME")
 
+hl.env("XCURSOR_THEME", "Adwaita")
 hl.env("XCURSOR_SIZE", "16")
 hl.env("HYPRCURSOR_SIZE", "16")
 hl.env("GDK_BACKEND", "wayland,x11,*")
@@ -14,10 +15,16 @@ hl.env("NIXOS_OZONE_WL", "1")
 hl.env("EDITOR", "nvim")
 hl.env("HYPRSHOT_DIR", home .. "/Screenshots")
 
--- Auto-detect resolution/position/scale for any monitor; override per host in host.lua.
+-- Preferred resolution and automatic placement; override per host in host.lua.
 hl.monitor({ output = "", mode = "preferred", position = "auto", scale = 1 })
+-- Z13 laptop panel scale; external screens stay at 100%.
+hl.monitor({ output = "eDP-1", mode = "preferred", position = "auto", scale = 5 / 3 })
 
 hl.config({
+	cursor = {
+		enable_hyprcursor = false,
+	},
+
 	general = {
 		layout = "scrolling",
 		gaps_in = 4,
@@ -54,7 +61,7 @@ hl.config({
 		},
 	},
 
-	-- Defaults are fine to start with; tune per-animation later if needed.
+	-- Only window movement is animated; see the animation leaves below.
 	animations = {
 		enabled = true,
 	},
@@ -91,3 +98,11 @@ hl.config({
 		no_update_news = true,
 	},
 })
+
+-- Keep other transitions instant, with a short ease-out for scrolling columns.
+hl.animation({ leaf = "global", enabled = false })
+hl.curve("scrollEase", {
+	type = "bezier",
+	points = { { 0, 0 }, { 0.58, 1 } },
+})
+hl.animation({ leaf = "windowsMove", enabled = true, speed = 1.5, bezier = "scrollEase" })

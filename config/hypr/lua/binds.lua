@@ -27,9 +27,10 @@ bind("ALT + Return", function()
 end)
 bind("SUPER + Space", dsp.exec_cmd("walker"))
 bind("ALT + SHIFT + Space", dsp.exec_cmd("ghostty --title=project-picker -e project-picker --hypr"))
-bind("ALT + Q", scratchpad("term", "pgrep -f GhosttyScratchpad || ghostty --class=com.thrawny.GhosttyScratchpad"))
+-- Anchor to the executable so pgrep cannot match the launcher shell itself.
+bind("ALT + Q", scratchpad("term", "pgrep -f '^[^ ]*ghostty[^ ]* .*GhosttyScratchpad' || ghostty --class=com.thrawny.GhosttyScratchpad"))
 bind("ALT + O", scratchpad("1password", "pgrep -x 1password || 1password"))
-bind("ALT + P", scratchpad("spotify", "pgrep -x spotify || spotify"))
+bind("ALT + P", scratchpad("spotify", "pgrep -f '^[^ ]*/[.]spotify-wrapped( |$)' || pgrep -x spotify || spotify"))
 
 -- Session
 bind("ALT + Escape", dsp.exec_cmd("hyprlock"))

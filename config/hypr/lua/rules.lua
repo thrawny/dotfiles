@@ -31,8 +31,9 @@ hl.window_rule({
 	float = true,
 })
 hl.window_rule({
-	name = "float-btop",
+	name = "scratchpad-btop",
 	match = { title = "^btop\\+\\+$" },
+	workspace = "special:btop",
 	float = true,
 })
 hl.window_rule({
