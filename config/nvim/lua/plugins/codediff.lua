@@ -107,6 +107,7 @@ return {
       },
       diff = {
         layout = "inline",
+        wrap = true,
         show_hunk_navigation_message = false,
         semantic_tokens = false,
         winbar = {
