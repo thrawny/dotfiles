@@ -1,3 +1,4 @@
+local generated_patterns = require("config.generated_patterns")
 local ignored_patterns = require("config.ignored_patterns")
 
 local M = {}
@@ -52,6 +53,10 @@ end
 ---@param overrides? table
 ---@return table
 function M.opts(overrides)
+  -- Re-read gitattributes once per picker, not once per item.
+  generated_patterns.reset()
+  local is_generated = generated_patterns.matcher(vim.fn.getcwd())
+
   local opts = {
     title = "Find + Grep (cwd)",
     live = true,
@@ -68,7 +73,8 @@ function M.opts(overrides)
     },
     format = "file",
     sort = {
-      fields = { "source_id", "score:desc", "#text", "idx" },
+      -- `generated` must be set on every item; the sorter skips nil fields.
+      fields = { "source_id", "generated", "score:desc", "#text", "idx" },
     },
     matcher = {
       cwd_bonus = true,
@@ -76,6 +82,7 @@ function M.opts(overrides)
       sort_empty = true,
     },
     transform = function(item)
+      item.generated = is_generated(item.file) and 1 or 0
       if item.source_id == 1 then
         item.label = "[F]"
       elseif item.source_id == 2 then
