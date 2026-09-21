@@ -3,7 +3,6 @@
   "outputStyle": "Concise",
   "env": {
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "300000",
-    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "true",
     "CLAUDE_CODE_TMPDIR": "/tmp/claude",
     "USE_BUILTIN_RIPGREP": "0"
   },
