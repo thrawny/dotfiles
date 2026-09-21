@@ -34,6 +34,12 @@ in
     fi
   '';
 
+  # Modifier split, held across macOS and Linux: alt belongs to the window
+  # manager, super belongs to applications, alt+super is the window manager
+  # again. So Herdr lives on super, and anything touched often gets a super
+  # binding next to its prefix one. super+c/v/x are copy/paste/cut, and
+  # super+space, super+tab, super+q and super+shift+3/4/5 belong to the OS.
+  #
   # Tabs and panes keep the familiar prefix-based bindings, except number keys
   # select agents. Workspace navigation uses j/k as well as the arrow keys.
   xdg.configFile."herdr/config.toml".source = (pkgs.formats.toml { }).generate "herdr-config.toml" {
@@ -60,9 +66,12 @@ in
         "super+k"
       ];
       switch_tab = "";
-      switch_workspace = "super+shift+1..9";
-      next_workspace = "super+shift+j";
-      previous_workspace = "super+shift+k";
+      # Numbered workspace switching has nowhere to live: super+shift+1..9 is
+      # screenshots on both macOS and Hyprland. Cycling covers it instead, on
+      # super+u/i to match the WM's own previous/next workspace keys.
+      switch_workspace = "";
+      next_workspace = "super+i";
+      previous_workspace = "super+u";
 
       navigate_workspace_down = [
         "j"
@@ -76,7 +85,10 @@ in
       navigate_pane_down = "";
       navigate_pane_up = "";
 
-      new_tab = "prefix+c";
+      new_tab = [
+        "prefix+c"
+        "super+enter"
+      ];
       previous_tab = [
         "ctrl+shift+h"
         "prefix+h"
@@ -89,7 +101,12 @@ in
       ];
       move_tab_previous = "prefix+shift+comma";
       move_tab_next = "prefix+shift+period";
-      close_tab = "prefix+shift+x";
+      # Closing keeps shift on the super variants: a bare super+w or super+x is
+      # muscle memory from every other app and these kill a live agent.
+      close_tab = [
+        "prefix+shift+x"
+        "super+shift+w"
+      ];
       # ctrl+hjkl always reaches the terminal so Neovim splits and fzf keep
       # those keys. Two panes plus super+m (cycle_pane_next) covers the rest.
       focus_pane_left = "";
@@ -105,7 +122,10 @@ in
       ];
       split_vertical = "prefix+v";
       split_horizontal = "prefix+minus";
-      close_pane = "prefix+x";
+      close_pane = [
+        "prefix+x"
+        "super+shift+x"
+      ];
 
       # super+o goes to the next-agent plugin instead: a ranked queue beats
       # jumping to whichever pane happened to raise the last toast.

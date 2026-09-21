@@ -50,6 +50,11 @@ in
         # would otherwise swallow Herdr's next/previous agent bindings.
         "super+j=unbind"
         "super+k=unbind"
+        # Herdr takes super+enter for new_tab and super+shift+w for close_tab.
+        # Ghostty's toggle_fullscreen and close_window go unreplaced: the window
+        # manager owns fullscreen, and super+q already quits.
+        "super+enter=unbind"
+        "super+shift+w=unbind"
         "super+a=select_all"
         "super+c=copy_to_clipboard"
         "super+v=paste_from_clipboard"
