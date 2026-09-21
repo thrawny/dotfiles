@@ -148,6 +148,12 @@ in
           description = "Pick a project";
         }
         {
+          key = "super+r";
+          type = "plugin_action";
+          command = "thrawny.pr-review.open";
+          description = "Review a pull request";
+        }
+        {
           # A popup is session-modal, so this scratchpad is global rather than
           # per workspace. Herdr respawns the popup command on every open and
           # routes every key to it until it exits, so persistence has to come
