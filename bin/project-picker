@@ -98,17 +98,39 @@ case "$backend" in
     herdr_bin="${HERDR_BIN_PATH:-herdr}"
     # Workspace records have no cwd. Match the saved cwd of their panes,
     # not foreground_cwd, which changes as programs navigate directories.
+    #
+    # One matching pane is not enough. A shell that cd'd into another project
+    # leaves a pane pointing somewhere the workspace is not about, and matching
+    # on that focuses the wrong workspace. So a workspace has to carry the
+    # project's name, or hold the project in most of its panes, to count.
+    name=$(basename "$dir")
+    best=""
+    best_matched=0
     workspaces=$("$herdr_bin" workspace list)
-    while IFS= read -r workspace; do
+    while IFS=$'\t' read -r workspace label; do
       panes=$("$herdr_bin" pane list --workspace "$workspace")
+      total=0
+      matched=0
       while IFS= read -r pane_cwd; do
+        total=$((total + 1))
         [[ -d "$pane_cwd" ]] || continue
         if [[ "$(realpath -- "$pane_cwd")" == "$dir" ]]; then
-          "$herdr_bin" workspace focus "$workspace"
-          exit 0
+          matched=$((matched + 1))
         fi
       done < <(jq -r '.result.panes[] | .cwd // empty' <<< "$panes")
-    done < <(jq -r '.result.workspaces[].workspace_id' <<< "$workspaces")
-    "$herdr_bin" workspace create --cwd "$dir" --label "$(basename "$dir")" --focus
+      if [[ "$label" == "$name" ]] && (( matched > 0 )); then
+        "$herdr_bin" workspace focus "$workspace"
+        exit 0
+      fi
+      if (( matched * 2 > total && matched > best_matched )); then
+        best="$workspace"
+        best_matched=$matched
+      fi
+    done < <(jq -r '.result.workspaces[] | [.workspace_id, (.label // "")] | @tsv' <<< "$workspaces")
+    if [[ -n "$best" ]]; then
+      "$herdr_bin" workspace focus "$best"
+      exit 0
+    fi
+    "$herdr_bin" workspace create --cwd "$dir" --label "$name" --focus
     ;;
 esac
