@@ -120,6 +120,10 @@ in
         "prefix+tab"
         "super+m"
       ];
+      # Herdr has no last-workspace action, and landing in another workspace is
+      # exactly what is wanted here. One level up from super+m, matching the
+      # window manager's alt+m focus-last and alt+shift+m previous-workspace.
+      last_pane = "super+shift+m";
       split_vertical = "prefix+v";
       split_horizontal = "prefix+minus";
       close_pane = [
