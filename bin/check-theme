@@ -50,6 +50,10 @@ scoped_files=(
   config/pi/extensions/status-line.ts
 )
 
+while IFS= read -r shell_file; do
+  scoped_files+=("$shell_file")
+done < <(fd --extension qml . shell)
+
 if grep -nE '#[0-9a-fA-F]{6}' "${scoped_files[@]}"; then
   echo "check-theme: color literals found in themed files; move them to $THEME"
   fail=1

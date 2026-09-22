@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+qs_root=$(dirname "$(dirname "$(readlink -f "$(command -v quickshell)")")")
+mapfile -t qml_files < <(fd --extension qml . shell)
+qt_root=$(dirname "$(dirname "$(readlink -f "$(command -v qmllint)")")")
+qmllint --max-warnings 0 -I "$qs_root/lib/qt-6/qml" -I "$qt_root/lib/qt-6/qml" "${qml_files[@]}"

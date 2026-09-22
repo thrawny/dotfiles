@@ -9,9 +9,8 @@ hl.on("hyprland.start", function()
 	hl.exec_cmd("swayosd-server")
 	hl.exec_cmd("wl-paste --watch cliphist store")
 	hl.exec_cmd("mako")
-	hl.exec_cmd(
-		"waybar -c " .. home .. "/.config/waybar/config-hyprland -s " .. home .. "/.config/waybar/style-hyprland.css"
-	)
+	-- The launcher keeps Waybar as a fallback if the custom bar fails to load.
+	hl.exec_cmd("dotfiles-bar")
 
 	hl.dispatch(hl.dsp.exec_cmd("ghostty +new-window --working-directory=" .. home .. "/dotfiles", {
 		workspace = "3",

@@ -68,6 +68,27 @@ pi:
 # Update all flake inputs and switch
 update: nix::update
 
+# Build the pinned Quickshell runtime and QML tooling without switching NixOS
+shell-tools:
+    nix build --inputs-from ./nix nixpkgs#quickshell nixpkgs#qt6.qtdeclarative --no-link --print-out-paths
+
+# Run the editable bar in the foreground, without stopping Waybar
+shell-dev:
+    nix shell --inputs-from ./nix nixpkgs#quickshell -c quickshell -p "{{justfile_directory()}}/shell"
+
+# Replace Waybar once Quickshell is healthy; pass waybar to revert
+shell-use bar="quickshell":
+    nix shell --inputs-from ./nix nixpkgs#quickshell -c bash bin/dotfiles-bar {{quote(bar)}}
+
+# Format the editable QML components
+fmt-shell:
+    nix shell --inputs-from ./nix nixpkgs#qt6.qtdeclarative -c bash -c 'fd -e qml -0 . shell | xargs -0 qmlformat -i'
+
+# Check shell model tests and QML syntax/types
+check-shell:
+    node --test shell/tests/*.test.cjs
+    nix shell --inputs-from ./nix nixpkgs#quickshell nixpkgs#qt6.qtdeclarative -c bash bin/check-shell
+
 # === Formatters ===
 
 # Format all
@@ -163,7 +184,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi check-theme test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent nix::eval
+check-parallel: lint typecheck pi check-theme check-shell test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

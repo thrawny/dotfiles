@@ -11,7 +11,22 @@
   ...
 }:
 {
-  home.packages = [ pkgs.hyprshot ];
+  home.packages = [
+    pkgs.hyprshot
+    pkgs.quickshell
+    (pkgs.writeShellApplication {
+      name = "dotfiles-bar";
+      runtimeInputs = [
+        pkgs.quickshell
+        pkgs.procps
+        pkgs.coreutils
+      ];
+      text = ''
+        export DOTFILES_SHELL_DIR=${pkgs.lib.escapeShellArg "${dotfiles}/shell"}
+        exec ${pkgs.bash}/bin/bash ${../../../bin/dotfiles-bar} "$@"
+      '';
+    })
+  ];
 
   home.file = {
     ".config/hypr/hyprland.lua".source =
