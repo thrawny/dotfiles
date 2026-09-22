@@ -14,36 +14,7 @@ end
 
 local function open_review_for_main_to_worktree()
   require("lazy").load({ plugins = { "codediff.nvim" } })
-
-  -- Builtin review mode has no command yet for "merge-base(origin/main, HEAD)..working tree",
-  -- so open CodeDiff directly while doing the same review store setup.
-  require("codediff.review.storage").clear_revisions()
-  local store = require("codediff.review.store")
-  store.reset()
-  store.load()
-
-  vim.cmd("CodeDiff origin/main...")
-
-  local review = require("codediff.review")
-  local attempts = 0
-  local function apply_review_hooks()
-    attempts = attempts + 1
-    review._check_codediff_session()
-
-    local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
-    if ok and lifecycle.get_session(vim.api.nvim_get_current_tabpage()) then
-      local sess = lifecycle.get_session(vim.api.nvim_get_current_tabpage())
-      if sess then
-        sess.codediff_review_active = true
-      end
-      review._check_codediff_session()
-      return
-    end
-    if attempts < 5 then
-      vim.defer_fn(apply_review_hooks, 100)
-    end
-  end
-  vim.defer_fn(apply_review_hooks, 200)
+  require("codediff.review").open_merge_base("origin/main", "WORKING")
 end
 
 local function smart_review()
