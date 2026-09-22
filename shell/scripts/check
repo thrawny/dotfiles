@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+bash -n bin/dotfiles-bar bin/dotfiles-launcher bin/shell-clipboard
+node --test shell/tests/*.test.cjs
 qs_root=$(dirname "$(dirname "$(readlink -f "$(command -v quickshell)")")")
 mapfile -t qml_files < <(fd --extension qml . shell)
 qt_root=$(dirname "$(dirname "$(readlink -f "$(command -v qmllint)")")")

@@ -1,6 +1,6 @@
 # Central theme loading and adapters. The canonical palette lives in
 # nix/themes/monokai.json; consumers receive it via the `theme` module arg
-# and must not carry their own color literals (enforced by bin/check-theme).
+# and must not carry their own color literals (enforced by scripts/check-theme).
 { lib }:
 let
   hexRegex = "#[0-9a-fA-F]{6}";
@@ -173,7 +173,7 @@ rec {
     };
 
   # Inline diffColors for Pi settings (pi-diff has no external color file
-  # support yet); bin/check-theme keeps settings.example.json aligned.
+  # support yet); scripts/check-theme keeps settings.example.json aligned.
   piDiffColors =
     theme:
     let

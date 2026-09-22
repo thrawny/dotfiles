@@ -11,8 +11,8 @@ addopts = ["--import-mode=importlib"]
 include = [
   ".",
   "bin/desktop-broker",
-  "bin/check-hermes-web",
-  "bin/check-tailscale-serve",
+  "scripts/check-hermes-web",
+  "scripts/check-tailscale-serve",
   "bin/incus-dev",
   "bin/kpf",
   "bin/prctl",
@@ -43,8 +43,8 @@ reportImplicitOverride = false
 [tool.ruff]
 extend-include = [
   "bin/desktop-broker",
-  "bin/check-hermes-web",
-  "bin/check-tailscale-serve",
+  "scripts/check-hermes-web",
+  "scripts/check-tailscale-serve",
   "bin/incus-dev",
   "bin/kpf",
   "bin/prctl",

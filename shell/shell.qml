@@ -1,9 +1,31 @@
 import Quickshell
 import Quickshell.Io
 import "modules/bar"
+import "modules/launcher"
 import "services"
 
 ShellRoot {
+    LauncherWindow {}
+    IpcHandler {
+        target: "launcher"
+        function toggle(): void {
+            Launcher.toggle();
+        }
+        function close(): void {
+            Launcher.close();
+        }
+        // Inspect launcher health without exposing queries or clipboard contents.
+        function state(): string {
+            return JSON.stringify({
+                opened: Launcher.opened,
+                mode: Launcher.mode,
+                pickingMode: Launcher.pickingMode,
+                count: Launcher.results.length,
+                busy: Launcher.busy,
+                error: Launcher.error
+            });
+        }
+    }
     Variants {
         model: Quickshell.screens
         Bar {}

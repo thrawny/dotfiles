@@ -1,0 +1,25 @@
+# Desktop shell tasks, invoked from the repository root as just shell::<recipe>
+set working-directory := ".."
+
+default:
+    @just --list shell
+
+# Build the pinned Quickshell runtime and QML tooling without switching NixOS
+tools:
+    nix build --inputs-from ./nix nixpkgs#quickshell nixpkgs#qt6.qtdeclarative nixpkgs#cliphist --no-link --print-out-paths
+
+# Run the editable bar in the foreground, without stopping Waybar
+dev:
+    nix shell --inputs-from ./nix nixpkgs#quickshell -c quickshell -p shell
+
+# Replace Waybar once Quickshell is healthy; pass waybar to revert
+use bar="quickshell":
+    nix shell --inputs-from ./nix nixpkgs#quickshell -c bash bin/dotfiles-bar {{quote(bar)}}
+
+# Format the editable QML components
+fmt:
+    nix shell --inputs-from ./nix nixpkgs#qt6.qtdeclarative -c bash -c 'fd -e qml -0 . shell | xargs -0 qmlformat -i'
+
+# Check shell model tests and QML syntax/types
+check:
+    nix shell --inputs-from ./nix nixpkgs#quickshell nixpkgs#qt6.qtdeclarative nixpkgs#cliphist -c bash shell/scripts/check

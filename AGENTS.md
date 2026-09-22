@@ -3,7 +3,8 @@
 Cross-platform dotfiles managed with Nix Home Manager (`nix/`). See `nix/AGENTS.md` for nix specifics.
 
 - Task runner is `just`, always from the repo root — if a command is missing, add a recipe rather than `cd`ing into subdirectories.
-- Scripts of 50+ lines go in `bin/` as standalone executables; Nix exposes or configures the script, it does not contain the implementation.
+- `bin/` is for runtime commands needed on `PATH`. Development and validation helpers go in `scripts/` or the owning component's `scripts/` directory, invoked through `just`.
+- Scripts of 50+ lines live in standalone files; Nix exposes or configures them rather than containing the implementation.
 
 ## Source → target
 

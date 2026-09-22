@@ -210,8 +210,8 @@ source-tree/debug paths and has observable restart behavior.
    transparent test surface.
 2. Pin Quickshell through Nix and wire the configuration through Home Manager.
 3. Add a supervised user service, but keep it disabled by default.
-4. Add root recipes such as `just shell-check`, `just shell-mock`,
-   `just shell-dev`, and `just shell-logs`.
+4. Add recipes in `shell/Justfile`, exposed from the root as `just shell::check`,
+   `just shell::mock`, `just shell::dev`, and `just shell::logs`.
 5. Add formatting/static checks and a fixture mode that renders without live
    services.
 6. Run beside Waybar in overlay/no-exclusive-zone development mode so it cannot

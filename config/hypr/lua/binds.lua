@@ -25,7 +25,7 @@ bind("ALT + Return", function()
 		hl.dispatch(dsp.exec_cmd("ghostty"))
 	end
 end)
-bind("SUPER + Space", dsp.exec_cmd("walker"))
+bind("SUPER + Space", dsp.exec_cmd("dotfiles-launcher"))
 -- Re-activate the watched sidebar instance without starting a second runtime.
 bind("ALT + S", dsp.exec_cmd(os.getenv("HOME") .. "/code/agent-switch/target/debug/agent-switch demo-sidebar --live"))
 bind("ALT + SHIFT + Space", dsp.exec_cmd("ghostty --title=project-picker -e project-picker --hypr"))

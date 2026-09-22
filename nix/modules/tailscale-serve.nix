@@ -104,7 +104,7 @@ in
         );
       in
       pkgs.runCommand "tailscale-serve-check" { nativeBuildInputs = [ pkgs.python3 ]; } ''
-        python3 ${../../bin/check-tailscale-serve} ${spec}
+        python3 ${../../scripts/check-tailscale-serve} ${spec}
         touch "$out"
       '';
   };

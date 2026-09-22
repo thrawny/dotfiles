@@ -14,7 +14,7 @@ start_waybar() {
 
 case "$mode" in
   quickshell)
-    # --no-duplicate also recognizes the same config started by shell-dev.
+    # --no-duplicate also recognizes the same config started by shell::dev.
     if ! quickshell -p "$shell_dir" --no-duplicate --daemonize; then
       start_waybar
       exit 1
