@@ -55,6 +55,10 @@ in
         # manager owns fullscreen, and super+q already quits.
         "super+enter=unbind"
         "super+shift+w=unbind"
+        # super+w goes to Herdr's close_tab. super+d (new_split) is freed for
+        # whatever wants it; Herdr splits live on the prefix.
+        "super+w=unbind"
+        "super+d=unbind"
         "super+a=select_all"
         "super+c=copy_to_clipboard"
         "super+v=paste_from_clipboard"

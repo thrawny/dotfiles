@@ -143,11 +143,12 @@ in
           ];
           move_tab_previous = "prefix+shift+comma";
           move_tab_next = "prefix+shift+period";
-          # Closing keeps shift on the super variants: a bare super+w or super+x is
-          # muscle memory from every other app and these kill a live agent.
+          # close_tab takes the bare super+w every other app uses for "close this".
+          # close_pane keeps shift: super+x is not muscle memory anywhere, and an
+          # unprompted pane kill takes a live agent with it.
           close_tab = [
             "prefix+shift+x"
-            "super+shift+w"
+            "super+w"
           ];
           # ctrl+hjkl always reaches the terminal so Neovim splits and fzf keep
           # those keys. Two panes plus super+m (cycle_pane_next) covers the rest.
