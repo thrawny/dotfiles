@@ -54,9 +54,14 @@ def picker(tmp_path: Path) -> Picker:
         "PANES": '{"result":{"panes":[]}}',
     }
 
-    def run(*args: str):
+    def run(*args: str, stdin: str = ""):
         return subprocess.run(
-            [str(SCRIPT), *args], env=env, capture_output=True, text=True, check=False
+            [str(SCRIPT), *args],
+            env=env,
+            input=stdin,
+            capture_output=True,
+            text=True,
+            check=False,
         )
 
     return run, env, log, repo, stub
@@ -85,6 +90,56 @@ def test_herdr_create(picker: Picker):
         repo.name,
         "--focus",
     ]
+
+
+def test_herdr_worktree_from_remote_default(picker: Picker, tmp_path: Path):
+    run, env, log, repo, stub = picker
+    fetches = tmp_path / "fetches"
+    stub(
+        "git",
+        'case "$3 $4" in\n'
+        + '"symbolic-ref --quiet") echo origin/trunk ;;\n'
+        + '"fetch --quiet") printf "%s\\n" "$@" > "$FETCHES" ;;\n'
+        + "*) exit 1 ;;\n"
+        + "esac\n",
+    )
+    stub("fzf", 'printf "ctrl-g\\n%s\\n" "$PICK"\n')
+    env["FETCHES"] = str(fetches)
+    assert run("--herdr", stdin="feature\n").returncode == 0
+    assert log.read_text().splitlines() == [
+        "worktree",
+        "create",
+        "--cwd",
+        str(repo),
+        "--branch",
+        "feature",
+        "--base",
+        "origin/trunk",
+        "--focus",
+    ]
+    assert fetches.read_text().splitlines() == [
+        "-C",
+        str(repo),
+        "fetch",
+        "--quiet",
+        "origin",
+        "trunk",
+    ]
+
+
+def test_herdr_worktree_without_remote(picker: Picker):
+    run, _, log, _, stub = picker
+    stub("git", "exit 1\n")
+    stub("fzf", 'printf "ctrl-g\\n%s\\n" "$PICK"\n')
+    assert run("--herdr", stdin="feature\n").returncode == 0
+    assert log.read_text().splitlines()[-2:] == ["HEAD", "--focus"]
+
+
+def test_herdr_worktree_needs_a_branch(picker: Picker):
+    run, _, log, _, stub = picker
+    stub("fzf", 'printf "ctrl-g\\n%s\\n" "$PICK"\n')
+    assert run("--herdr", stdin="\n").returncode == 0
+    assert not log.exists()
 
 
 def test_herdr_reuse(picker: Picker):

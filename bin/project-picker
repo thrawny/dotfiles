@@ -67,13 +67,20 @@ projects=$({
   done
 } | awk 'NF && !seen[$0]++')
 
+header='Ctrl-O to type a path'
+expect=ctrl-o
+if [[ "$backend" == --herdr ]]; then
+  header+=' · Ctrl-G for a new worktree'
+  expect+=',ctrl-g'
+fi
+
 set +e
-output=$(fzf --prompt='project> ' --height=100% --header='Esc to type a path' --expect=esc <<< "$projects")
+output=$(fzf --prompt='project> ' --height=100% --header="$header" --expect="$expect" <<< "$projects")
 exit_code=$?
 set -e
 key="${output%%$'\n'*}"
 dir="${output#*$'\n'}"
-if [[ "$key" == esc ]]; then
+if [[ "$key" == ctrl-o ]]; then
   read -rep 'path> ' dir || exit 0
 elif [[ $exit_code -ne 0 ]]; then
   exit 0
@@ -96,6 +103,24 @@ case "$backend" in
   --hypr) run_desktop_backend hyprland-project --terminals 1 "$dir" ;;
   --herdr)
     herdr_bin="${HERDR_BIN_PATH:-herdr}"
+    if [[ "$key" == ctrl-g ]]; then
+      read -rep 'branch> ' branch || exit 0
+      [[ -n "$branch" ]] || exit 0
+      # Herdr branches from HEAD, which is whatever the main checkout happens to
+      # be on. Prefer the remote default branch, and fetch so it is not stale.
+      base=HEAD
+      if remote_head=$(git -C "$dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD); then
+        base="$remote_head"
+      elif git -C "$dir" rev-parse --verify --quiet origin/main >/dev/null; then
+        base="origin/main"
+      fi
+      if [[ "$base" != HEAD ]]; then
+        git -C "$dir" fetch --quiet origin "${base#origin/}" || true
+      fi
+      # Keep the popup alive on failure so the trap can report the error.
+      "$herdr_bin" worktree create --cwd "$dir" --branch "$branch" --base "$base" --focus
+      exit 0
+    fi
     # Workspace records have no cwd. Match the saved cwd of their panes,
     # not foreground_cwd, which changes as programs navigate directories.
     #
