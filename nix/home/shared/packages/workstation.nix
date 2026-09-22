@@ -11,6 +11,7 @@
     typescript-language-server
     terraform-ls
     yaml-language-server
+    helm-ls
     vscode-json-languageserver
     nixd
 

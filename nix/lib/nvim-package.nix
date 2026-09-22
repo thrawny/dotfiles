@@ -81,6 +81,7 @@ lazyNvim.LazyVim.override {
     "lazyvim.plugins.extras.lang.sql"
     "lazyvim.plugins.extras.lang.typescript.biome"
     "lazyvim.plugins.extras.lang.nix"
+    "lazyvim.plugins.extras.lang.helm"
   ];
 
   extraSpec = [
