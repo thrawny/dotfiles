@@ -49,7 +49,7 @@ hl.config({
 		rounding = 12,
 		inactive_opacity = 0.9,
 		shadow = {
-			enabled = true,
+			enabled = false,
 			range = 15,
 			render_power = 3,
 			color = "rgba(00000077)",
