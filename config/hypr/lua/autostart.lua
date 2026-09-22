@@ -7,10 +7,8 @@ hl.on("hyprland.start", function()
 	-- Headless session daemon; the GTK overlay (serve --niri) is niri-only.
 	hl.exec_cmd("agent-switch serve")
 	hl.exec_cmd("swayosd-server")
-	hl.exec_cmd("systemctl --user start shell-clipboard-text.service shell-clipboard-image.service")
 	hl.exec_cmd("mako")
-	-- The launcher keeps Waybar as a fallback if the custom bar fails to load.
-	hl.exec_cmd("dotfiles-bar")
+	hl.exec_cmd("systemctl --user start dotfiles-shell.service shell-clipboard-text.service")
 
 	hl.dispatch(hl.dsp.exec_cmd("ghostty +new-window --working-directory=" .. home .. "/dotfiles", {
 		workspace = "3",

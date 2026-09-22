@@ -3,3 +3,4 @@ singleton Workspaces 1.0 Workspaces.qml
 singleton Audio 1.0 Audio.qml
 singleton Network 1.0 Network.qml
 singleton Launcher 1.0 Launcher.qml
+singleton Clipboard 1.0 Clipboard.qml

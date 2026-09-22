@@ -31,21 +31,21 @@ test('terminal applications use Ghostty without interpreting arguments as shell 
     assert.deepEqual(plain(search.appCommand({ command })), command);
     assert.deepEqual(plain(search.appCommand({ command: [], runInTerminal: true })), []);
 });
-test('clipboard parser accepts numeric IDs and preserves tabs and image previews', () => {
-    const rows = plain(search.clipboardRows('9\thello\tworld\n7\t[[ binary data 4 KiB png 20x20 ]]\ninvalid\n;rm\tunsafe\n'));
-    assert.equal(rows.length, 2);
-    assert.equal(rows[0].id, '9');
+test('clipboard rows preserve IDs and tabs while hiding older binary entries', () => {
+    const rows = plain(search.clipboardRows('9\thello\tworld\n7\t[[ binary data 4 KiB png 20x20 ]]\n6\t[[ binary data 3 B ]]\ninvalid\n;rm\tunsafe\n'));
+    assert.deepEqual(rows.map(row => row.id), ['9']);
     assert.equal(rows[0].name, 'hello\tworld');
-    assert.ok(rows[1].name.includes('png'));
+    assert.equal(search.clipboardRows('').length, 0);
+    assert.equal(search.clipboardRows('3\tbad\u0000data\n').length, 0);
 });
-test('clipboard search ignores case, preserves recency, and does not fuzzy match', () => {
+test('clipboard search is case-insensitive and retains recency rather than fuzzy matching', () => {
     const rows = search.clipboardRows('9\tHELLO World\n8\tHello\n7\tHelp Logs\n');
     assert.deepEqual(plain(search.clipboard(rows, ' HELLO ')).map(row => row.id), ['9', '8']);
     assert.equal(search.clipboard(rows, 'hlo').length, 0);
-    assert.equal(search.clipboardRows('').length, 0);
 });
 test('mode chooser searches only the available modes', () => {
     assert.deepEqual(plain(search.modes('')).map(row => row.mode), ['apps', 'clipboard']);
     assert.equal(search.modes('clip')[0].mode, 'clipboard');
+    assert.ok(search.modes('clip')[0].detail.includes('text clipboard'));
     assert.equal(search.modes('not-a-mode').length, 0);
 });

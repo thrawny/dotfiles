@@ -1,79 +1,48 @@
-# Hyprland home config. The compositor itself is enabled at the NixOS level
-# (programs.hyprland in modules/desktop.nix). The config is pure Lua
-# (hyprlang is deprecated since 0.55) and shipped as mutable symlinks:
-# edit config/hypr/ and Hyprland reloads it; no `just switch` needed.
-# ~/.config/hypr/hyprlock.conf stays home-manager generated (hyprlock.nix),
-# which is why the files are linked individually rather than the whole dir.
+# Hyprland uses mutable Lua config; edits reload without a NixOS switch.
+# hyprlock.conf remains Home Manager generated in hyprlock.nix.
 {
   config,
   dotfiles,
   pkgs,
   ...
 }:
-let
-  clipboard = pkgs.writeShellApplication {
-    name = "shell-clipboard";
-    runtimeInputs = [
-      pkgs.cliphist
-      pkgs.wl-clipboard
-      pkgs.coreutils
-    ];
-    text = ''
-      exec ${pkgs.bash}/bin/bash ${../../../bin/shell-clipboard} "$@"
-    '';
-  };
-  clipboardWatcher = type: {
+{
+  home.packages = [
+    pkgs.cliphist
+    pkgs.hyprshot
+    pkgs.quickshell
+  ];
+
+  # Started by Hyprland, not Niri; stopped when the graphical session ends.
+  systemd.user.services.dotfiles-shell = {
     Unit = {
-      Description = "Record ${type} clipboard history for the desktop shell";
+      Description = "Dotfiles Quickshell desktop shell";
       PartOf = [ "graphical-session.target" ];
       After = [ "graphical-session.target" ];
     };
     Service = {
-      ExecStart = "${pkgs.wl-clipboard}/bin/wl-paste --type ${type} --watch ${clipboard}/bin/shell-clipboard store";
+      ExecStart = "${pkgs.quickshell}/bin/quickshell -c dotfiles";
+      Restart = "on-failure";
+      RestartSec = 2;
+    };
+  };
+
+  systemd.user.services.shell-clipboard-text = {
+    Unit = {
+      Description = "Record text clipboard history";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      ExecStart = "${pkgs.wl-clipboard}/bin/wl-paste --type text --watch ${pkgs.cliphist}/bin/cliphist store";
       Restart = "on-failure";
       RestartSec = 2;
       UMask = "0077";
     };
-    # Started by Hyprland, not Niri; stopped when the graphical session ends.
   };
-in
-{
-  systemd.user.services = {
-    shell-clipboard-text = clipboardWatcher "text";
-    shell-clipboard-image = clipboardWatcher "image";
-  };
-
-  home.packages = [
-    pkgs.cliphist
-    clipboard
-    pkgs.hyprshot
-    pkgs.quickshell
-    (pkgs.writeShellApplication {
-      name = "dotfiles-launcher";
-      runtimeInputs = [
-        pkgs.quickshell
-        pkgs.coreutils
-      ];
-      text = ''
-        export DOTFILES_SHELL_DIR=${pkgs.lib.escapeShellArg "${dotfiles}/shell"}
-        exec ${pkgs.bash}/bin/bash ${../../../bin/dotfiles-launcher} "$@"
-      '';
-    })
-    (pkgs.writeShellApplication {
-      name = "dotfiles-bar";
-      runtimeInputs = [
-        pkgs.quickshell
-        pkgs.procps
-        pkgs.coreutils
-      ];
-      text = ''
-        export DOTFILES_SHELL_DIR=${pkgs.lib.escapeShellArg "${dotfiles}/shell"}
-        exec ${pkgs.bash}/bin/bash ${../../../bin/dotfiles-bar} "$@"
-      '';
-    })
-  ];
 
   home.file = {
+    ".config/quickshell/dotfiles".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/shell";
     ".config/hypr/hyprland.lua".source =
       config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/hypr/hyprland.lua";
     ".config/hypr/lua".source = config.lib.file.mkOutOfStoreSymlink "${dotfiles}/config/hypr/lua";

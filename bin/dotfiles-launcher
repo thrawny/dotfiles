@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-set -euo pipefail
-[[ "${SANDBOX:-}" != 1 ]] || { echo 'Run the desktop launcher on the host.' >&2; exit 1; }
-shell_dir="${DOTFILES_SHELL_DIR:-$(dirname "$(dirname "$(readlink -f "$0")")")/shell}"
-# Walker remains usable when the custom shell has been stopped or failed.
-if ! quickshell ipc -p "$shell_dir" call launcher toggle; then
-  exec walker
-fi

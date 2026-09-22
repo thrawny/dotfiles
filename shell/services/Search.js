@@ -39,19 +39,19 @@ function appCommand(entry) {
 function clipboardRows(output) {
     return output.split("\n").filter(line => /^\d+\t/.test(line)).map(line => {
         const tab = line.indexOf("\t");
-        return { kind: "clipboard", id: line.slice(0, tab), name: line.slice(tab + 1), detail: "Copy to clipboard", icon: "" };
-    });
+        return { kind: "clipboard", id: line.slice(0, tab), name: line.slice(tab + 1), detail: "Copy text to clipboard", icon: "" };
+    }).filter(item => !item.name.startsWith("[[ binary data ") && !item.name.includes("\u0000"));
 }
 
 function clipboard(entries, query) {
     const needle = query.trim().toLowerCase();
-    // Keep recency order, and avoid fuzzy matching unrelated clipboard content.
-    return entries.filter(entry => entry.name.toLowerCase().includes(needle)).slice(0, 80);
+    // Preserve recency order. Images from older history are excluded above.
+    return entries.filter(item => item.name.toLowerCase().includes(needle)).slice(0, 80);
 }
 
 function modes(query) {
     return [
         { kind: "mode", mode: "apps", name: "Applications", detail: "Search installed applications", icon: "view-app-grid-symbolic" },
-        { kind: "mode", mode: "clipboard", name: "Clipboard", detail: "Search clipboard history", icon: "edit-paste-symbolic" }
+        { kind: "mode", mode: "clipboard", name: "Clipboard", detail: "Search text clipboard history", icon: "edit-paste-symbolic" }
     ].filter(item => Number.isFinite(score(item.name, query)));
 }

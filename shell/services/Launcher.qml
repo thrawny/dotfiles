@@ -1,22 +1,29 @@
 pragma Singleton
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import Quickshell.Hyprland
 import "Search.js" as Search
 
 Singleton {
     id: root
     property bool opened: false
-    property int generation: 0
     property string mode: "apps"
     property string query: ""
-    property string error: ""
+    property string appError: ""
+    readonly property string error: mode === "clipboard" ? Clipboard.error : appError
+    readonly property bool busy: mode === "clipboard" && Clipboard.busy
     property var screen: null
-    property var clipboardEntries: []
     readonly property bool pickingMode: query.startsWith("?")
-    readonly property bool busy: historyProcess.running || actionProcess.running
-    readonly property var results: pickingMode ? Search.modes(query.slice(1)) : mode === "apps" ? Search.apps(DesktopEntries.applications.values, query) : Search.clipboard(clipboardEntries, query)
+    readonly property var results: pickingMode ? Search.modes(query.slice(1)) : mode === "apps" ? Search.apps(DesktopEntries.applications.values, query) : Search.clipboard(Clipboard.entries, query)
+
+    onOpenedChanged: Clipboard.active = opened && mode === "clipboard"
+    onModeChanged: Clipboard.active = opened && mode === "clipboard"
+    Connections {
+        target: Clipboard
+        function onCopied() {
+            root.close();
+        }
+    }
 
     function toggle(): void {
         if (opened) {
@@ -26,43 +33,32 @@ Singleton {
         screen = Quickshell.screens.find(item => item.name === Hyprland.focusedMonitor?.name) || Quickshell.screens[0];
         mode = "apps";
         query = "";
-        error = "";
+        appError = "";
         opened = true;
     }
     function close(): void {
-        generation++;
         opened = false;
         query = "";
-        clipboardEntries = [];
-        error = "";
+        appError = "";
     }
     function setMode(next: string): void {
-        generation++;
         mode = next;
         query = "";
-        error = "";
-        if (next === "clipboard")
-            refreshClipboard();
+        appError = "";
     }
     function cycleMode(): void {
         setMode(mode === "apps" ? "clipboard" : "apps");
     }
-    function refreshClipboard(): void {
-        if (!historyProcess.running) {
-            historyProcess.generation = generation;
-            historyProcess.running = true;
-        }
-    }
     function activate(index: int): void {
         const item = results[index];
-        if (!item || actionProcess.running)
+        if (!item)
             return;
         if (item.kind === "mode") {
             setMode(item.mode);
         } else if (item.kind === "app") {
             const command = Search.appCommand(item.entry);
             if (!command.length) {
-                error = "This application has no launch command.";
+                appError = "This application has no launch command.";
                 return;
             }
             Quickshell.execDetached({
@@ -70,61 +66,13 @@ Singleton {
                 workingDirectory: item.entry.workingDirectory
             });
             close();
-        } else {
-            actionProcess.generation = generation;
-            actionProcess.command = ["shell-clipboard", "copy", item.id];
-            actionProcess.running = true;
+        } else if (item.kind === "clipboard") {
+            Clipboard.copy(item.id);
         }
     }
     function remove(index: int): void {
         const item = results[index];
-        if (!item || item.kind !== "clipboard" || actionProcess.running)
-            return;
-        actionProcess.generation = generation;
-        actionProcess.command = ["shell-clipboard", "delete", item.id];
-        actionProcess.running = true;
-    }
-    Process {
-        id: historyProcess
-        property int generation: 0
-        command: ["shell-clipboard", "list"]
-        stdout: StdioCollector {
-            id: historyOutput
-            waitForEnd: true
-        }
-        // Do not echo clipboard contents or backend errors into persistent shell logs.
-        stderr: StdioCollector {}
-        // QProcess::ExitStatus is missing from Quickshell's generated qmltypes.
-        // qmllint disable signal-handler-parameters
-        onExited: (exitCode, exitStatus) => {
-            if (!root.opened || root.mode !== "clipboard")
-                return;
-            if (generation !== root.generation) {
-                root.refreshClipboard();
-                return;
-            }
-            if (exitCode === 0 && exitStatus === 0) {
-                root.clipboardEntries = Search.clipboardRows(historyOutput.text);
-            } else {
-                root.error = "Could not read clipboard history. Check the clipboard service.";
-            }
-        }
-    }
-    Process {
-        id: actionProcess
-        property int generation: 0
-        stdout: StdioCollector {}
-        stderr: StdioCollector {}
-        onExited: (exitCode, exitStatus) => {
-            if (!root.opened || generation !== root.generation)
-                return;
-            if (exitCode !== 0 || exitStatus !== 0) {
-                root.error = "Clipboard action failed. The entry may no longer exist.";
-            } else if (command[1] === "copy") {
-                root.close();
-            } else {
-                root.refreshClipboard();
-            }
-        }
+        if (item?.kind === "clipboard")
+            Clipboard.remove(item.id);
     }
 }

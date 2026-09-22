@@ -15,7 +15,7 @@ ShellRoot {
         function close(): void {
             Launcher.close();
         }
-        // Inspect launcher health without exposing queries or clipboard contents.
+        // Inspect launcher state without exposing search queries.
         function state(): string {
             return JSON.stringify({
                 opened: Launcher.opened,
