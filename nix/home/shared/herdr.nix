@@ -129,7 +129,7 @@ in
 
           new_tab = [
             "prefix+c"
-            "super+enter"
+            "super+shift+enter"
           ];
           previous_tab = [
             "ctrl+shift+h"
@@ -167,7 +167,11 @@ in
           # exactly what is wanted here. One level up from super+m, matching the
           # window manager's alt+m focus-last and alt+shift+m previous-workspace.
           last_pane = "super+shift+m";
-          split_vertical = "prefix+v";
+          # Splitting beats a new tab for frequency, so it gets the unshifted key.
+          split_vertical = [
+            "prefix+v"
+            "super+enter"
+          ];
           split_horizontal = "prefix+minus";
           close_pane = [
             "prefix+x"

@@ -50,14 +50,15 @@ in
         # would otherwise swallow Herdr's next/previous agent bindings.
         "super+j=unbind"
         "super+k=unbind"
-        # Herdr takes super+enter for new_tab and super+shift+w for close_tab.
-        # Ghostty's toggle_fullscreen and close_window go unreplaced: the window
-        # manager owns fullscreen, and super+q already quits.
+        # Herdr takes super+enter for split_vertical, super+shift+enter for
+        # new_tab and super+w for close_tab. Ghostty's toggle_fullscreen,
+        # close_surface and close_window go unreplaced: the window manager owns
+        # fullscreen, and super+q already quits.
         "super+enter=unbind"
         "super+shift+w=unbind"
-        # super+w goes to Herdr's close_tab. super+d (new_split) is freed for
-        # whatever wants it; Herdr splits live on the prefix.
         "super+w=unbind"
+        # super+d (new_split) is freed for other apps; Herdr splits live on
+        # super+enter and the prefix.
         "super+d=unbind"
         "super+a=select_all"
         "super+c=copy_to_clipboard"
