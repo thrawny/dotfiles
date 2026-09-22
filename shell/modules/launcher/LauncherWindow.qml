@@ -5,6 +5,7 @@ import QtQuick.Layouts
 import Quickshell
 import Quickshell.Wayland
 import "../../services"
+import "../../components/PickerKeys.js" as PickerKeys
 
 // Quickshell selects its platform window implementation at runtime.
 // qmllint disable uncreatable-type
@@ -110,15 +111,20 @@ PanelWindow {
                     color: Theme.surface
                     radius: 5
                 }
+                // Claim shared navigation before the text field handles editing shortcuts.
+                Keys.priority: Keys.BeforeItem
+                Keys.onShortcutOverride: event => {
+                    if (PickerKeys.direction(event.key, event.modifiers))
+                        event.accepted = true;
+                }
                 Keys.onPressed: event => {
+                    const direction = PickerKeys.direction(event.key, event.modifiers);
                     if (event.key === Qt.Key_Escape || (event.key === Qt.Key_Space && event.modifiers & Qt.MetaModifier))
                         Launcher.close();
                     else if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)
                         Launcher.cycleMode();
-                    else if (event.key === Qt.Key_Down || (event.key === Qt.Key_N && event.modifiers & Qt.ControlModifier))
-                        panel.select(1);
-                    else if (event.key === Qt.Key_Up || (event.key === Qt.Key_P && event.modifiers & Qt.ControlModifier))
-                        panel.select(-1);
+                    else if (direction)
+                        panel.select(direction);
                     else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
                         Launcher.activate(results.currentIndex);
                     else if (event.key === Qt.Key_Delete && event.modifiers & Qt.ControlModifier)

@@ -164,12 +164,12 @@ bind("ALT + mouse_up", dsp.focus({ workspace = "e-1" }))
 -- Voice input is handled by xremap (evdev-level, compositor-agnostic).
 
 -- Screenshots (hyprshot; output dir comes from HYPRSHOT_DIR in options.lua)
-bind("Print", dsp.exec_cmd("hyprshot -m region"))
-bind("CTRL + Print", dsp.exec_cmd("hyprshot -m output"))
-bind("ALT + Print", dsp.exec_cmd("hyprshot -m window"))
-bind("SUPER + SHIFT + 3", dsp.exec_cmd("hyprshot -m output"))
-bind("SUPER + SHIFT + 4", dsp.exec_cmd("hyprshot -m region"))
-bind("SUPER + SHIFT + 5", dsp.exec_cmd("hyprshot -m window"))
+bind("Print", dsp.exec_cmd("hyprshot -m region --freeze"))
+bind("CTRL + Print", dsp.exec_cmd("hyprshot -m output --freeze"))
+bind("ALT + Print", dsp.exec_cmd("hyprshot -m window --freeze"))
+bind("SUPER + SHIFT + 3", dsp.exec_cmd("hyprshot -m output --freeze"))
+bind("SUPER + SHIFT + 4", dsp.exec_cmd("hyprshot -m region --freeze"))
+bind("SUPER + SHIFT + 5", dsp.exec_cmd("hyprshot -m window --freeze"))
 
 -- Volume / brightness / media (swayosd, same as niri)
 bind("XF86AudioRaiseVolume", dsp.exec_cmd("swayosd-client --output-volume raise"), {

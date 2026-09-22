@@ -13,6 +13,9 @@ and theme changes.
   Agree on it with Jonas before implementing; defer the feature meanwhile.
 - Keep process handling and shared state in `services/`; widgets render state
   and invoke service methods. Keep compositor-specific logic out of shared controls.
+- All pickers must use `components/PickerKeys.js` for shared navigation. Keep
+  bindings consistent across modes and future pickers; user-facing keys are
+  documented in the README.
 - Preserve the quiet visual design: no shadows or unsolicited animations.
 
 ## Checks

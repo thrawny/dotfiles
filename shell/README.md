@@ -18,7 +18,8 @@ Walker is still available manually with `walker`.
 ## Use
 
 - Super+Space opens the launcher. Tab switches apps/clipboard; `?` lists modes.
-- Up/Down or Ctrl+P/N selects an entry. Enter launches or copies; Escape closes.
+- Ctrl+K moves up; Ctrl+J moves down in every picker. Up/Down and Ctrl+P/N also work.
+- Enter launches or copies the selected entry; Escape closes.
 - Ctrl+Delete removes a clipboard entry. Copying does not automatically paste.
 - Click volume to mute or scroll to adjust it. Click the clock to lock.
 

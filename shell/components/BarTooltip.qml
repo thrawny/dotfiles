@@ -28,8 +28,9 @@ Item {
         anchor.gravity: Edges.Bottom
         // qmllint enable missing-type
         visible: root.hovered && root.armed && root.text !== "" && Theme.ready
-        implicitWidth: Math.min(label.implicitWidth + 24, 420)
-        implicitHeight: label.implicitHeight + 16
+        // Window sizes use whole pixels; never round below the text's width.
+        implicitWidth: Math.min(Math.ceil(label.implicitWidth) + 24, 420)
+        implicitHeight: Math.ceil(label.implicitHeight) + 16
         color: "transparent"
         // Do not intercept input or steal hover from the bar below the popup.
         mask: Region {}

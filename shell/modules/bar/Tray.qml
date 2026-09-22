@@ -32,8 +32,7 @@ Row {
                 onClicked: event => {
                     if (event.button === Qt.RightButton || entry.modelData.onlyMenu) {
                         if (entry.modelData.hasMenu) {
-                            const point = entry.mapToItem(root.panel.contentItem, 0, entry.height);
-                            entry.modelData.display(root.panel, point.x, point.y);
+                            menu.popup();
                         }
                     } else if (event.button === Qt.MiddleButton) {
                         entry.modelData.secondaryActivate();
@@ -43,9 +42,17 @@ Row {
                 }
                 onWheel: event => entry.modelData.scroll(event.angleDelta.y, false)
             }
+            TrayMenu {
+                id: menu
+                // Quickshell does not export DBusMenuHandle in its qmltypes.
+                // qmllint disable unresolved-type
+                handle: entry.modelData.menu
+                // qmllint enable unresolved-type
+                y: entry.height + 6
+            }
             BarTooltip {
                 targetItem: entry
-                hovered: mouse.containsMouse
+                hovered: mouse.containsMouse && !menu.visible
                 text: entry.modelData.tooltipTitle || entry.modelData.title || entry.modelData.id
             }
         }
