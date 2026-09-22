@@ -109,12 +109,36 @@ bind("ALT + I", dsp.focus({ workspace = "e+1" }))
 bind("ALT + CTRL + U", dsp.window.move({ workspace = "e-1", follow = true }))
 bind("ALT + CTRL + I", dsp.window.move({ workspace = "e+1", follow = true }))
 
-for i = 1, 9 do
-	bind("ALT + " .. i, dsp.focus({ workspace = tostring(i) }))
-	bind("ALT + SHIFT + " .. i, dsp.window.move({ workspace = tostring(i), follow = true }))
+-- Number keys address the current workspace order, not persistent IDs.
+-- Resolve on each keypress so closing a workspace immediately removes its gap.
+local function workspace_at(index, move_window)
+	return function()
+		local workspaces = {}
+		for _, ws in ipairs(hl.get_workspaces()) do
+			if not ws.name:match("^special:") then
+				table.insert(workspaces, ws)
+			end
+		end
+		table.sort(workspaces, function(a, b)
+			return a.id < b.id
+		end)
+		local target = workspaces[index]
+		if not target then
+			return
+		end
+		if move_window then
+			hl.dispatch(dsp.window.move({ workspace = tostring(target.id), follow = true }))
+		else
+			hl.dispatch(dsp.focus({ workspace = tostring(target.id) }))
+		end
+	end
 end
-bind("ALT + 0", dsp.focus({ workspace = "10" }))
-bind("ALT + SHIFT + 0", dsp.window.move({ workspace = "10", follow = true }))
+
+for i = 1, 10 do
+	local key = tostring(i % 10)
+	bind("ALT + " .. key, workspace_at(i, false))
+	bind("ALT + SHIFT + " .. key, workspace_at(i, true))
+end
 
 -- Monitors
 bind("ALT + N", dsp.focus({ monitor = "-1" }))

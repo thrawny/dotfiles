@@ -333,7 +333,9 @@ let
   };
 
   hyprlandWorkspaces = {
-    format = "{icon} {id} {name}";
+    # Number shortcuts use ordinal positions; internal IDs can have gaps.
+    format = "{icon} {name}";
+    "sort-by-number" = true;
     "format-icons" = {
       main = "󰧨";
       web = "󰖟";
