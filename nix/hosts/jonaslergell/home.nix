@@ -4,6 +4,7 @@
   imports = [
     ../../home/darwin/default.nix
     ./gita.nix
+    ./herdr.nix
   ];
 
   # terraform is BUSL-licensed. Setting nixpkgs.config makes Home Manager
