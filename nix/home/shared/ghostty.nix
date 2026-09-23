@@ -53,8 +53,10 @@ in
         # Herdr takes super+enter for split_vertical, super+shift+enter for
         # new_tab and super+w for close_tab. Ghostty's toggle_fullscreen,
         # close_surface and close_window go unreplaced: the window manager owns
-        # fullscreen, and super+q already quits.
+        # fullscreen, and super+q already quits. Ghostty's toggle_split_zoom
+        # goes too, since Herdr owns splits.
         "super+enter=unbind"
+        "super+shift+enter=unbind"
         "super+shift+w=unbind"
         "super+w=unbind"
         # super+d (new_split) is freed for other apps; Herdr splits live on
