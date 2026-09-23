@@ -64,6 +64,7 @@ alt-shift-l = 'swap right'
 
 # Focus monitors, move a window and follow it, or move the entire workspace.
 # No workspace-to-monitor assignments: all workspaces can move freely.
+alt-n = 'focus-monitor --wrap-around prev'   # Matches niri/Hyprland: previous in order, not history.
 alt-ctrl-h = 'focus-monitor left'
 alt-ctrl-j = 'focus-monitor down'
 alt-ctrl-k = 'focus-monitor up'
@@ -106,7 +107,7 @@ alt-shift-8 = 'move-node-to-workspace --focus-follows-window 8'
 alt-shift-9 = 'move-node-to-workspace --focus-follows-window 9'
 alt-shift-0 = 'move-node-to-workspace --focus-follows-window 10'
 
-# Scratchpads, app jumps, monitor history, workspace cycling, project selection,
+# Scratchpads, app jumps, true monitor history, workspace cycling, project selection,
 # bulk-close and niri-only column actions are intentionally unbound.
 alt-shift-semicolon = 'mode service'
 
