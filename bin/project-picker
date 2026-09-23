@@ -70,8 +70,8 @@ projects=$({
 header='Ctrl-O to type a path'
 expect=ctrl-o
 if [[ "$backend" == --herdr ]]; then
-  header+=' · Ctrl-G for a new worktree'
-  expect+=',ctrl-g'
+  header+=' · Ctrl-G for a worktree · Alt-Enter to focus without a new tab'
+  expect+=',ctrl-g,alt-enter'
 fi
 
 set +e
@@ -105,17 +105,25 @@ case "$backend" in
     herdr_bin="${HERDR_BIN_PATH:-herdr}"
     if [[ "$key" == ctrl-g ]]; then
       read -rep 'branch> ' branch || exit 0
+      branch="${branch#origin/}"
       [[ -n "$branch" ]] || exit 0
-      # Herdr branches from HEAD, which is whatever the main checkout happens to
-      # be on. Prefer the remote default branch, and fetch so it is not stale.
-      base=HEAD
-      if remote_head=$(git -C "$dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD); then
-        base="$remote_head"
-      elif git -C "$dir" rev-parse --verify --quiet origin/main >/dev/null; then
-        base="origin/main"
-      fi
-      if [[ "$base" != HEAD ]]; then
-        git -C "$dir" fetch --quiet origin "${base#origin/}" || true
+      # A branch that exists on origin, such as one copied from a GitHub PR,
+      # is checked out from there. Herdr then sets origin as its upstream.
+      if git -C "$dir" fetch --quiet origin \
+          "+refs/heads/$branch:refs/remotes/origin/$branch" 2>/dev/null; then
+        base="origin/$branch"
+      else
+        # Herdr branches from HEAD, which is whatever the main checkout happens
+        # to be on. Prefer the remote default branch, and fetch so it is not stale.
+        base=HEAD
+        if remote_head=$(git -C "$dir" symbolic-ref --quiet --short refs/remotes/origin/HEAD); then
+          base="$remote_head"
+        elif git -C "$dir" rev-parse --verify --quiet origin/main >/dev/null; then
+          base="origin/main"
+        fi
+        if [[ "$base" != HEAD ]]; then
+          git -C "$dir" fetch --quiet origin "${base#origin/}" || true
+        fi
       fi
       # Keep the popup alive on failure so the trap can report the error.
       "$herdr_bin" worktree create --cwd "$dir" --branch "$branch" --base "$base" --focus
@@ -128,6 +136,12 @@ case "$backend" in
     # leaves a pane pointing somewhere the workspace is not about, and matching
     # on that focuses the wrong workspace. So a workspace has to carry the
     # project's name, or hold the project in most of its panes, to count.
+    open_workspace() {
+      "$herdr_bin" workspace focus "$1"
+      if [[ "$key" != alt-enter ]]; then
+        "$herdr_bin" tab create --workspace "$1" --cwd "$dir" --focus
+      fi
+    }
     name=$(basename "$dir")
     best=""
     best_matched=0
@@ -144,7 +158,7 @@ case "$backend" in
         fi
       done < <(jq -r '.result.panes[] | .cwd // empty' <<< "$panes")
       if [[ "$label" == "$name" ]] && (( matched > 0 )); then
-        "$herdr_bin" workspace focus "$workspace"
+        open_workspace "$workspace"
         exit 0
       fi
       if (( matched * 2 > total && matched > best_matched )); then
@@ -153,7 +167,7 @@ case "$backend" in
       fi
     done < <(jq -r '.result.workspaces[] | [.workspace_id, (.label // "")] | @tsv' <<< "$workspaces")
     if [[ -n "$best" ]]; then
-      "$herdr_bin" workspace focus "$best"
+      open_workspace "$best"
       exit 0
     fi
     "$herdr_bin" workspace create --cwd "$dir" --label "$name" --focus

@@ -41,7 +41,7 @@ def picker(tmp_path: Path) -> Picker:
         'case "$1 $2" in\n'
         + '"workspace list") echo \'{"result":{"workspaces":[{"workspace_id":"w9"}]}}\' ;;\n'
         + '"pane list") printf "%s" "$PANES" ;;\n'
-        + '*) printf "%s\\n" "$@" > "$LOG" ;;\n'
+        + '*) printf "%s\\n" "$@" >> "$LOG" ;;\n'
         + "esac\n",
     )
     env = {
@@ -97,9 +97,9 @@ def test_herdr_worktree_from_remote_default(picker: Picker, tmp_path: Path):
     fetches = tmp_path / "fetches"
     stub(
         "git",
-        'case "$3 $4" in\n'
-        + '"symbolic-ref --quiet") echo origin/trunk ;;\n'
-        + '"fetch --quiet") printf "%s\\n" "$@" > "$FETCHES" ;;\n'
+        'case "$3 $4 $6" in\n'
+        + '"symbolic-ref --quiet "*) echo origin/trunk ;;\n'
+        + '"fetch --quiet trunk") printf "%s\\n" "$@" > "$FETCHES" ;;\n'
         + "*) exit 1 ;;\n"
         + "esac\n",
     )
@@ -127,6 +127,30 @@ def test_herdr_worktree_from_remote_default(picker: Picker, tmp_path: Path):
     ]
 
 
+def test_herdr_worktree_from_origin_branch(picker: Picker):
+    run, _, log, repo, stub = picker
+    stub(
+        "git",
+        'case "$3 $4 $6" in\n'
+        + '"fetch --quiet +refs/heads/pr-branch:refs/remotes/origin/pr-branch") ;;\n'
+        + "*) exit 1 ;;\n"
+        + "esac\n",
+    )
+    stub("fzf", 'printf "ctrl-g\\n%s\\n" "$PICK"\n')
+    assert run("--herdr", stdin="origin/pr-branch\n").returncode == 0
+    assert log.read_text().splitlines() == [
+        "worktree",
+        "create",
+        "--cwd",
+        str(repo),
+        "--branch",
+        "pr-branch",
+        "--base",
+        "origin/pr-branch",
+        "--focus",
+    ]
+
+
 def test_herdr_worktree_without_remote(picker: Picker):
     run, _, log, _, stub = picker
     stub("git", "exit 1\n")
@@ -145,6 +169,25 @@ def test_herdr_worktree_needs_a_branch(picker: Picker):
 def test_herdr_reuse(picker: Picker):
     run, env, log, repo, _ = picker
     env["PANES"] = json.dumps({"result": {"panes": [{"cwd": str(repo)}]}})
+    assert run("--herdr").returncode == 0
+    assert log.read_text().splitlines() == [
+        "workspace",
+        "focus",
+        "w9",
+        "tab",
+        "create",
+        "--workspace",
+        "w9",
+        "--cwd",
+        str(repo),
+        "--focus",
+    ]
+
+
+def test_herdr_reuse_focus_only(picker: Picker):
+    run, env, log, repo, stub = picker
+    env["PANES"] = json.dumps({"result": {"panes": [{"cwd": str(repo)}]}})
+    stub("fzf", 'printf "alt-enter\\n%s\\n" "$PICK"\n')
     assert run("--herdr").returncode == 0
     assert log.read_text().splitlines() == ["workspace", "focus", "w9"]
 
