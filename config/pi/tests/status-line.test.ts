@@ -16,7 +16,7 @@ import {
 describe("status line model names", () => {
 	it.each([
 		["gpt-6-astra", "Astra 6"],
-		["gpt-5.6-sol", "Sol 5.6"],
+		["gpt-6-sol", "Sol 6"],
 		["gpt-5.6-terra", "Terra 5.6"],
 		["gpt-5.6-luna", "Luna 5.6"],
 		["unknown-model", "unknown-model"],

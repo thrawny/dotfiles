@@ -265,7 +265,7 @@ fi
 
 # Codex reviewer — scope is in the prompt (see above). Raise the default high
 # effort per-run with GAUNTLET_CODEX_EFFORT if a particular diff warrants it.
-readonly codex_model="${GAUNTLET_CODEX_MODEL:-gpt-5.6-sol}"
+readonly codex_model="${GAUNTLET_CODEX_MODEL:-gpt-6-sol}"
 readonly codex_effort="${GAUNTLET_CODEX_EFFORT:-high}"
 codex_out="$round_dir/codex.out"
 codex_log="$round_dir/codex.log"

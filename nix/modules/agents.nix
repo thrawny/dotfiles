@@ -558,7 +558,7 @@ lib.mkMerge [
 
         model = {
           provider = "openai-codex";
-          default = "gpt-5.6-sol";
+          default = "gpt-6-sol";
         };
 
         agent.reasoning_effort = "low";

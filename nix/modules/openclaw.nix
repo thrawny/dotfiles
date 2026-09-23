@@ -74,14 +74,14 @@ let
     agents = {
       defaults = {
         model = {
-          primary = "openai/gpt-5.6-sol";
+          primary = "openai/gpt-6-sol";
           fallbacks = [ ];
         };
         inherit workspace;
         skipBootstrap = true;
         timeoutSeconds = 900;
         thinkingDefault = "low";
-        models."openai/gpt-5.6-sol" = { };
+        models."openai/gpt-6-sol" = { };
       };
       entries.main = { };
     };

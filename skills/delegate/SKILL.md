@@ -12,7 +12,7 @@ Consult the `acpx` skill for command syntax, permissions, models, and session me
 Only delegate to these models:
 
 - Codex: `gpt-6-astra` for Astra
-- Codex: `gpt-5.6-sol` for Sol
+- Codex: `gpt-6-sol` for Sol
 - Claude Code: `claude-fable-5-1`
 - Claude Code: `claude-opus-5`
 
@@ -21,7 +21,7 @@ Honor an explicit choice from this list. Default to Codex with `gpt-6-astra` whe
 Put global `acpx` options such as `--cwd`, `--model`, and permissions before the agent name. Always ensure the named session exists, then prompt it:
 
 ```bash
-# Codex on GPT-6 Astra. Substitute gpt-5.6-sol when Sol is requested.
+# Codex on GPT-6 Astra. Substitute gpt-6-sol when Sol is requested.
 acpx --cwd <repo root> --model gpt-6-astra --approve-all codex sessions ensure --name <session-name>
 acpx --cwd <repo root> --model gpt-6-astra --approve-all codex -s <session-name> '<work order>'
 
