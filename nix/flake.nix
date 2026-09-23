@@ -59,6 +59,14 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     zmx.url = "github:thrawny/zmx-flake";
+    quotabar = {
+      url = "github:thrawny/quotabar";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    agent-switch = {
+      url = "github:thrawny/agent-switch";
+      flake = false;
+    };
     acpx-skills = {
       url = "github:openclaw/acpx";
       flake = false;
@@ -113,6 +121,8 @@
       hermes-agent,
       thrawny-pkgs,
       zmx,
+      quotabar,
+      agent-switch,
       acpx-skills,
       agent-browser,
       voxtype,
@@ -151,6 +161,8 @@
       };
       flakeArgs = {
         inherit
+          quotabar
+          agent-switch
           agentAssets
           herdr
           hunk
@@ -384,6 +396,8 @@
               pkgs = nixpkgs.legacyPackages.${system};
             in
             {
+              quotabar = quotabar.packages.${system}.default;
+              agent-switch = pkgs.callPackage ./packages/agent-switch.nix { src = agent-switch; };
               nvim = import ./lib/nvim-package.nix {
                 inherit
                   lazy-nvim-nix

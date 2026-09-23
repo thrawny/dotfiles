@@ -105,7 +105,8 @@ diff:
     #!/usr/bin/env bash
     set -euo pipefail
     host=$(hostname)
-    sudo nixos-rebuild build --flake ".#$host" && nvd diff /run/current-system result
+    nix build ".#nixosConfigurations.$host.config.system.build.toplevel"
+    nvd diff /run/current-system result
 
 # Evaluate config without building (NixOS, nix-darwin, or Home Manager)
 eval force="--force=false":

@@ -165,7 +165,7 @@ def test_cancel(picker: Picker):
 
 @pytest.mark.parametrize("backend", ["niri", "hypr"])
 def test_desktop_failure_notifies(picker: Picker, backend: str):
-    run, env, log, repo, stub = picker
+    run, _, log, _, stub = picker
     stub(
         f"{backend}land-project" if backend == "hypr" else "niri-project",
         'echo "compositor rejected request" >&2; exit 7\n',

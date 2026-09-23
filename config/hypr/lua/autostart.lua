@@ -4,8 +4,8 @@
 local home = os.getenv("HOME")
 
 hl.on("hyprland.start", function()
-	-- Headless session daemon; the GTK overlay (serve --niri) is niri-only.
-	hl.exec_cmd("agent-switch serve")
+	-- Systemd owns the headless tracker across Quickshell reloads.
+	hl.exec_cmd("systemctl --user start dotfiles-agent-switch.service")
 	hl.exec_cmd("swayosd-server")
 	hl.exec_cmd("mako")
 	hl.exec_cmd("systemctl --user start dotfiles-shell.service shell-clipboard-text.service")

@@ -4,3 +4,7 @@ singleton Audio 1.0 Audio.qml
 singleton Network 1.0 Network.qml
 singleton Launcher 1.0 Launcher.qml
 singleton Clipboard 1.0 Clipboard.qml
+singleton Caffeine 1.0 Caffeine.qml
+singleton Keyboard 1.0 Keyboard.qml
+singleton Quota 1.0 Quota.qml
+singleton Agents 1.0 Agents.qml

@@ -8,6 +8,10 @@ default:
 tools:
     nix build --inputs-from ./nix nixpkgs#quickshell nixpkgs#qt6.qtdeclarative nixpkgs#cliphist --no-link --print-out-paths
 
+# Build a pinned shell backend without activating the desktop
+build-backend package:
+    nix build './nix#{{package}}' --no-link --print-out-paths
+
 # Run in the foreground unless this config is already running
 dev:
     nix shell --inputs-from ./nix nixpkgs#quickshell -c quickshell -c dotfiles --no-duplicate

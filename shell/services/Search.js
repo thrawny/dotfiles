@@ -36,16 +36,25 @@ function appCommand(entry) {
     return entry.runInTerminal ? ["ghostty", "-e"].concat(command) : command;
 }
 
-function clipboardRows(output) {
+function clipboardRows(output, includeImages) {
     return output.split("\n").filter(line => /^\d+\t/.test(line)).map(line => {
         const tab = line.indexOf("\t");
-        return { kind: "clipboard", id: line.slice(0, tab), name: line.slice(tab + 1), detail: "Copy text to clipboard", icon: "" };
-    }).filter(item => !item.name.startsWith("[[ binary data ") && !item.name.includes("\u0000"));
+        const preview = line.slice(tab + 1);
+        const image = /^\[\[ binary data (\d+(?:\.\d+)? (?:B|KiB|MiB)) (png|jpeg|gif|bmp|tiff) (\d+)x(\d+) \]\]$/.exec(preview);
+        if (image && includeImages) {
+            return { kind: "clipboard", id: line.slice(0, tab),
+                name: image[2].toUpperCase() + " image · " + image[3] + "×" + image[4],
+                detail: image[1] + " · Copy original image", icon: "image-x-generic-symbolic",
+                imageFormat: image[2], imageSource: "" };
+        }
+        if (preview.startsWith("[[ binary data ") || preview.includes("\u0000")) return null;
+        return { kind: "clipboard", id: line.slice(0, tab), name: preview, detail: "Copy text to clipboard", icon: "" };
+    }).filter(item => item !== null);
 }
 
 function clipboard(entries, query) {
     const needle = query.trim().toLowerCase();
-    // Preserve recency order. Images from older history are excluded above.
+    // Preserve recency order across text and images.
     return entries.filter(item => item.name.toLowerCase().includes(needle)).slice(0, 80);
 }
 

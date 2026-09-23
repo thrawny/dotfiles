@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import "../../components"
 import "../../services"
@@ -5,6 +6,7 @@ import "../../services/WorkspaceOrder.js" as Order
 
 Flickable {
     id: root
+    required property var screen
     contentWidth: row.width
     contentHeight: height
     clip: true
@@ -33,14 +35,15 @@ Flickable {
         id: row
         Repeater {
             id: buttons
-            model: Workspaces.items
+            model: Workspaces.onScreen(root.screen)
             BarButton {
                 required property var modelData
                 required property int index
-                readonly property string key: Order.shortcut(index)
+                readonly property string key: Order.shortcut(Workspaces.items.findIndex(workspace => workspace.id === modelData.id))
                 text: (key ? key + "  " : "") + modelData.name
                 hint: modelData.name + (key ? " · Alt+" + key : "")
-                selected: Workspaces.focused?.id === modelData.id
+                selected: modelData.active
+                onSelectedChanged: Qt.callLater(root.revealFocused)
                 attention: modelData.urgent ?? false
                 maxTextWidth: 160
                 onClicked: Workspaces.focus(modelData.id)

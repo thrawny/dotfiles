@@ -12,7 +12,11 @@ for (const scenario of ['roundtrip', 'cancel', 'empty', 'broken-db']) {
         t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
         const db = path.join(dir, 'db');
         // Quickshell resolves QML modules beneath its entrypoint directory.
-        fs.cpSync(path.resolve(__dirname, '../services'), path.join(dir, 'services'), { recursive: true });
+        fs.mkdirSync(path.join(dir, 'services'));
+        for (const name of ['Clipboard.qml', 'Search.js']) {
+            fs.copyFileSync(path.resolve(__dirname, '../services', name), path.join(dir, 'services', name));
+        }
+        fs.writeFileSync(path.join(dir, 'services/qmldir'), 'singleton Clipboard 1.0 Clipboard.qml\n');
         const config = path.join(dir, 'shell.qml');
         fs.writeFileSync(config, fs.readFileSync(smoke, 'utf8').replace('import "../services"', 'import "services"'));
         const env = {
@@ -27,7 +31,7 @@ for (const scenario of ['roundtrip', 'cancel', 'empty', 'broken-db']) {
         } else if (scenario !== 'empty') {
             const fixtures = [
                 Buffer.from('  Clipboard fixture 🙂\nsecond line\n\n'),
-                Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jhLkAAAAASUVORK5CYII=', 'base64'),
+                fs.readFileSync(path.join(__dirname, 'fixtures/clipboard.png')),
                 Buffer.from([0, 0xff, 0x89, 0x50]),
             ];
             for (const input of fixtures) {

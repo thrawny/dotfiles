@@ -26,8 +26,7 @@ bind("ALT + Return", function()
 	end
 end)
 bind("SUPER + Space", dsp.exec_cmd("quickshell ipc -c dotfiles call launcher toggle"))
--- Re-activate the watched sidebar instance without starting a second runtime.
-bind("ALT + S", dsp.exec_cmd(os.getenv("HOME") .. "/code/agent-switch/target/debug/agent-switch demo-sidebar --live"))
+bind("ALT + S", dsp.exec_cmd("quickshell ipc -c dotfiles call agents toggle"))
 bind("ALT + SHIFT + Space", dsp.exec_cmd("ghostty --title=project-picker -e project-picker --hypr"))
 -- Anchor to the executable so pgrep cannot match the launcher shell itself.
 bind(

@@ -43,6 +43,15 @@ test('clipboard search is case-insensitive and retains recency rather than fuzzy
     assert.deepEqual(plain(search.clipboard(rows, ' HELLO ')).map(row => row.id), ['9', '8']);
     assert.equal(search.clipboard(rows, 'hlo').length, 0);
 });
+test('image history keeps order, dimensions, and type while rejecting unsupported binary rows', () => {
+    const output = '9\ttext\n8\t[[ binary data 4 KiB png 20x30 ]]\n7\t[[ binary data 3 B ]]\n6\t[[ binary data 1 MiB jpeg 2048x1536 ]]\n';
+    const rows = plain(search.clipboardRows(output, true));
+    assert.deepEqual(rows.map(row => row.id), ['9', '8', '6']);
+    assert.equal(rows[1].name, 'PNG image · 20×30');
+    assert.equal(rows[1].imageFormat, 'png');
+    assert.equal(rows[1].imageSource, '');
+    assert.deepEqual(plain(search.clipboard(rows, 'image')).map(row => row.id), ['8', '6']);
+});
 test('mode chooser searches only the available modes', () => {
     assert.deepEqual(plain(search.modes('')).map(row => row.mode), ['apps', 'clipboard']);
     assert.equal(search.modes('clip')[0].mode, 'clipboard');

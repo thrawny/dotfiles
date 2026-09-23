@@ -45,7 +45,7 @@ scoped_files=(
   nix/home/nixos/waybar.nix
   nix/home/nixos/niri/default.nix
   config/nvim/lua/plugins/theme.lua
-  config/nvim/lua/plugins/review.lua
+  config/nvim/lua/plugins/codediff.lua
   config/nvim/lua/config/theme.lua
   config/pi/extensions/status-line.ts
 )

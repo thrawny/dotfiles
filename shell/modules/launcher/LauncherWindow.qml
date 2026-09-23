@@ -176,13 +176,15 @@ PanelWindow {
                         anchors.rightMargin: 12
                         spacing: 12
                         Item {
-                            Layout.preferredWidth: 28
-                            Layout.preferredHeight: 28
+                            Layout.preferredWidth: row.modelData.imageFormat ? 42 : 28
+                            Layout.preferredHeight: row.modelData.imageFormat ? 42 : 28
                             Image {
                                 anchors.fill: parent
-                                source: row.modelData.icon ? Quickshell.iconPath(row.modelData.icon, true) : ""
-                                sourceSize: Qt.size(32, 32)
+                                source: row.modelData.imageSource || (row.modelData.icon ? Quickshell.iconPath(row.modelData.icon, true) : "")
+                                sourceSize: Qt.size(84, 84)
                                 fillMode: Image.PreserveAspectFit
+                                asynchronous: true
+                                cache: !row.modelData.imageFormat
                                 visible: status === Image.Ready
                             }
                             Text {

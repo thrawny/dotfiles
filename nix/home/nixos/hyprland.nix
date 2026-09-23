@@ -4,13 +4,21 @@
   config,
   dotfiles,
   pkgs,
+  quotabar,
+  agent-switch,
   ...
 }:
+let
+  agentSwitchPackage = pkgs.callPackage ../../packages/agent-switch.nix { src = agent-switch; };
+  quotabarPackage = quotabar.packages.${pkgs.stdenv.hostPlatform.system}.default;
+in
 {
   home.packages = [
     pkgs.cliphist
     pkgs.hyprshot
     pkgs.quickshell
+    agentSwitchPackage
+    quotabarPackage
   ];
 
   # Started by Hyprland, not Niri; stopped when the graphical session ends.
@@ -18,10 +26,33 @@
     Unit = {
       Description = "Dotfiles Quickshell desktop shell";
       PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
+      Wants = [ "dotfiles-agent-switch.service" ];
+      After = [
+        "graphical-session.target"
+        "dotfiles-agent-switch.service"
+      ];
     };
     Service = {
       ExecStart = "${pkgs.quickshell}/bin/quickshell -c dotfiles";
+      Environment = "PATH=${
+        pkgs.lib.makeBinPath [
+          agentSwitchPackage
+          quotabarPackage
+        ]
+      }:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin";
+      Restart = "on-failure";
+      RestartSec = 2;
+    };
+  };
+
+  systemd.user.services.dotfiles-agent-switch = {
+    Unit = {
+      Description = "Agent tracking and sidebar state";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      ExecStart = "${agentSwitchPackage}/bin/agent-switch serve --sidebar";
       Restart = "on-failure";
       RestartSec = 2;
     };
@@ -38,6 +69,19 @@
       Restart = "on-failure";
       RestartSec = 2;
       UMask = "0077";
+    };
+  };
+
+  # Keep caffeine independent of QML hot reloads, but release it at logout.
+  systemd.user.services.dotfiles-caffeine = {
+    Unit = {
+      Description = "Keep the desktop awake while caffeine is enabled";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      Type = "exec";
+      ExecStart = "${pkgs.systemd}/bin/systemd-inhibit --what=idle --mode=block --who=dotfiles-caffeine --why=Caffeine ${pkgs.coreutils}/bin/sleep infinity";
     };
   };
 

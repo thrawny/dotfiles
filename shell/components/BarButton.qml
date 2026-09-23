@@ -9,6 +9,7 @@ Button {
     property string hint: ""
     property real maxTextWidth: 180
     signal scrolled(real delta)
+    signal secondaryClicked
 
     implicitHeight: Theme.barHeight
     implicitWidth: Math.min(label.implicitWidth, maxTextWidth) + 16
@@ -50,5 +51,9 @@ Button {
             root.scrolled(event.angleDelta.y / 120);
             event.accepted = true;
         }
+    }
+    TapHandler {
+        acceptedButtons: Qt.RightButton
+        onTapped: root.secondaryClicked()
     }
 }
