@@ -397,6 +397,7 @@
             in
             {
               quotabar = quotabar.packages.${system}.default;
+              shell-clipboard-image = pkgs.callPackage ./packages/shell-clipboard-image.nix { };
               agent-switch = pkgs.callPackage ./packages/agent-switch.nix { src = agent-switch; };
               nvim = import ./lib/nvim-package.nix {
                 inherit

@@ -25,6 +25,7 @@ for (const scenario of ['roundtrip', 'cancel', 'empty', 'broken-db']) {
             XDG_RUNTIME_DIR: dir, XDG_CONFIG_HOME: dir,
             XDG_CACHE_HOME: dir, CLIPHIST_DB_PATH: db,
             CLIPBOARD_TEST_CASE: scenario,
+            PATH: path.resolve(__dirname, '../../bin') + path.delimiter + process.env.PATH,
         };
         if (scenario === 'broken-db') {
             fs.writeFileSync(db, 'not a cliphist database');

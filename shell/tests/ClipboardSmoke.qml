@@ -34,11 +34,11 @@ ShellRoot {
                     Qt.exit(0);
                 return;
             }
-            if (Clipboard.entries.length !== 1) {
-                fail("Expected one text entry, got " + Clipboard.entries.length);
+            if (Clipboard.entries.length !== 2 || Clipboard.entries.filter(item => !item.imageFormat).length !== 1) {
+                fail("Expected one text and one image entry");
                 return;
             }
-            selectedId = Clipboard.entries[0].id;
+            selectedId = Clipboard.entries.find(item => !item.imageFormat).id;
             stage = 1;
             Clipboard.copy(selectedId);
             if (scenario === "cancel") {
@@ -46,7 +46,7 @@ ShellRoot {
                 Clipboard.active = false;
             }
         } else if (stage === 2) {
-            if (Clipboard.entries.length !== 0)
+            if (Clipboard.entries.filter(item => !item.imageFormat).length !== 0)
                 fail("Deleted text entry still appears");
             else
                 Qt.exit(0);

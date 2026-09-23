@@ -11,7 +11,7 @@ PanelWindow {
     anchors {
         top: true
         bottom: true
-        right: true
+        left: true
     }
     implicitWidth: 470
     color: Theme.background

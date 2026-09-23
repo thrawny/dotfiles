@@ -12,6 +12,13 @@ tools:
 build-backend package:
     nix build './nix#{{package}}' --no-link --print-out-paths
 
+# Verify the installed image adapter against a private Wayland compositor
+check-image-package:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    package=$(nix build ./nix#shell-clipboard-image --no-link --print-out-paths)
+    nix shell --inputs-from ./nix nixpkgs#sway nixpkgs#wl-clipboard nixpkgs#cliphist -c env SHELL_CLIPBOARD_IMAGE_ADAPTER="$package/bin/shell-clipboard-image" node --test shell/tests/clipboard-wayland.test.cjs
+
 # Run in the foreground unless this config is already running
 dev:
     nix shell --inputs-from ./nix nixpkgs#quickshell -c quickshell -c dotfiles --no-duplicate
@@ -34,4 +41,4 @@ fmt:
 
 # Check shell model tests and QML syntax/types
 check:
-    nix shell --inputs-from ./nix nixpkgs#quickshell nixpkgs#qt6.qtdeclarative nixpkgs#cliphist -c bash shell/scripts/check
+    nix shell --inputs-from ./nix nixpkgs#quickshell nixpkgs#qt6.qtdeclarative nixpkgs#cliphist nixpkgs#python3 nixpkgs#sway nixpkgs#wl-clipboard -c bash shell/scripts/check

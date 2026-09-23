@@ -159,6 +159,11 @@ PanelWindow {
                     id: row
                     required property var modelData
                     required property int index
+                    readonly property string imageSource: modelData.imageFormat ? Clipboard.imageSources[modelData.id] || "" : ""
+                    Component.onCompleted: {
+                        if (modelData.imageFormat)
+                            Clipboard.requestPreview(modelData.id);
+                    }
                     width: results.width
                     height: 54
                     radius: 5
@@ -180,12 +185,16 @@ PanelWindow {
                             Layout.preferredHeight: row.modelData.imageFormat ? 42 : 28
                             Image {
                                 anchors.fill: parent
-                                source: row.modelData.imageSource || (row.modelData.icon ? Quickshell.iconPath(row.modelData.icon, true) : "")
+                                source: row.imageSource && !Clipboard.imageErrors[row.modelData.id] ? row.imageSource : row.modelData.icon ? Quickshell.iconPath(row.modelData.icon, true) : ""
                                 sourceSize: Qt.size(84, 84)
                                 fillMode: Image.PreserveAspectFit
                                 asynchronous: true
                                 cache: !row.modelData.imageFormat
                                 visible: status === Image.Ready
+                                onStatusChanged: {
+                                    if (status === Image.Error && row.imageSource)
+                                        Clipboard.previewFailed(row.modelData.id);
+                                }
                             }
                             Text {
                                 anchors.centerIn: parent
@@ -210,7 +219,7 @@ PanelWindow {
                             }
                             Text {
                                 Layout.fillWidth: true
-                                text: row.modelData.detail
+                                text: row.modelData.imageFormat && Clipboard.imageErrors[row.modelData.id] ? "Preview unavailable · Enter to try copying" : row.modelData.detail
                                 textFormat: Text.PlainText
                                 elide: Text.ElideRight
                                 color: Theme.muted

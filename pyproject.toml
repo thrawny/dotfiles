@@ -11,6 +11,7 @@ addopts = ["--import-mode=importlib"]
 include = [
   ".",
   "bin/desktop-broker",
+  "bin/shell-clipboard-image",
   "scripts/check-hermes-web",
   "scripts/check-tailscale-serve",
   "bin/incus-dev",
@@ -43,6 +44,7 @@ reportImplicitOverride = false
 [tool.ruff]
 extend-include = [
   "bin/desktop-broker",
+  "bin/shell-clipboard-image",
   "scripts/check-hermes-web",
   "scripts/check-tailscale-serve",
   "bin/incus-dev",

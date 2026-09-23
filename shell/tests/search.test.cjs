@@ -55,6 +55,6 @@ test('image history keeps order, dimensions, and type while rejecting unsupporte
 test('mode chooser searches only the available modes', () => {
     assert.deepEqual(plain(search.modes('')).map(row => row.mode), ['apps', 'clipboard']);
     assert.equal(search.modes('clip')[0].mode, 'clipboard');
-    assert.ok(search.modes('clip')[0].detail.includes('text clipboard'));
+    assert.ok(search.modes('clip')[0].detail.includes('text and image clipboard'));
     assert.equal(search.modes('not-a-mode').length, 0);
 });

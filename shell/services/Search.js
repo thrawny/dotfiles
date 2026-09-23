@@ -61,6 +61,6 @@ function clipboard(entries, query) {
 function modes(query) {
     return [
         { kind: "mode", mode: "apps", name: "Applications", detail: "Search installed applications", icon: "view-app-grid-symbolic" },
-        { kind: "mode", mode: "clipboard", name: "Clipboard", detail: "Search text clipboard history", icon: "edit-paste-symbolic" }
+        { kind: "mode", mode: "clipboard", name: "Clipboard", detail: "Search text and image clipboard history", icon: "edit-paste-symbolic" }
     ].filter(item => Number.isFinite(score(item.name, query)));
 }

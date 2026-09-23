@@ -31,10 +31,17 @@ The check runs model tests, offscreen QML/cliphist integration tests, and strict
 QML linting. For Nix wiring changes, also follow [the Nix guide](../nix/AGENTS.md).
 For theme changes, use the root guide's theme check.
 
+For image adapter or packaging changes, also run `just shell::check-image-package`.
+It tests the Nix-built adapter with a private headless Wayland compositor.
+
 Test clipboard changes with isolated databases and offscreen Qt. Do not inspect
 or overwrite the user's live clipboard for testing. Keep clipboard content out
 of logs and command arguments; pass entry IDs through stdin. Preserve decoded
 whitespace and reject asynchronous results from a closed or replaced picker.
+The approved image adapter is `bin/shell-clipboard-image`. Keep binary bytes in
+its file/subprocess path; QML receives metadata and file URLs only. Read headers
+through unbuffered file handles before passing those handles to wl-copy, so
+Python buffering cannot leave the inherited descriptor at the end of the file.
 
 ## Runtime and gotchas
 
@@ -44,8 +51,8 @@ whitespace and reject asynchronous results from a closed or replaced picker.
   Quickshell treats those entrypoint paths as different instance identities.
 - `just shell::dev` leaves an existing instance alone. To run in the foreground,
   first stop `dotfiles-shell.service` with `systemctl --user stop`.
-- Systemd owns the shell and the separate text clipboard watcher. Reloading the
-  UI must not start another watcher. Niri's startup remains independent.
+- Systemd owns the shell and the separate text/image clipboard watchers.
+  Reloading the UI must not start another watcher. Niri's startup remains independent.
 - Inspect logs with `journalctl --user -u dotfiles-shell.service` or
   `quickshell log -c dotfiles`. Check readiness with
   `quickshell ipc -c dotfiles call shell ping`.

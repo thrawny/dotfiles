@@ -11,6 +11,7 @@
 let
   agentSwitchPackage = pkgs.callPackage ../../packages/agent-switch.nix { src = agent-switch; };
   quotabarPackage = quotabar.packages.${pkgs.stdenv.hostPlatform.system}.default;
+  clipboardImagePackage = pkgs.callPackage ../../packages/shell-clipboard-image.nix { };
 in
 {
   home.packages = [
@@ -19,6 +20,7 @@ in
     pkgs.quickshell
     agentSwitchPackage
     quotabarPackage
+    clipboardImagePackage
   ];
 
   # Started by Hyprland, not Niri; stopped when the graphical session ends.
@@ -26,7 +28,11 @@ in
     Unit = {
       Description = "Dotfiles Quickshell desktop shell";
       PartOf = [ "graphical-session.target" ];
-      Wants = [ "dotfiles-agent-switch.service" ];
+      Wants = [
+        "dotfiles-agent-switch.service"
+        "shell-clipboard-text.service"
+        "shell-clipboard-image.service"
+      ];
       After = [
         "graphical-session.target"
         "dotfiles-agent-switch.service"
@@ -38,6 +44,7 @@ in
         pkgs.lib.makeBinPath [
           agentSwitchPackage
           quotabarPackage
+          clipboardImagePackage
         ]
       }:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin";
       Restart = "on-failure";
@@ -66,6 +73,20 @@ in
     };
     Service = {
       ExecStart = "${pkgs.wl-clipboard}/bin/wl-paste --type text --watch ${pkgs.cliphist}/bin/cliphist store";
+      Restart = "on-failure";
+      RestartSec = 2;
+      UMask = "0077";
+    };
+  };
+
+  systemd.user.services.shell-clipboard-image = {
+    Unit = {
+      Description = "Record image clipboard history";
+      PartOf = [ "graphical-session.target" ];
+      After = [ "graphical-session.target" ];
+    };
+    Service = {
+      ExecStart = "${pkgs.wl-clipboard}/bin/wl-paste --type image --watch ${pkgs.cliphist}/bin/cliphist store";
       Restart = "on-failure";
       RestartSec = 2;
       UMask = "0077";

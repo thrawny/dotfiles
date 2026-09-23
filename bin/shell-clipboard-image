@@ -1,0 +1,251 @@
+#!/usr/bin/env python3
+"""Binary clipboard transport for the QML picker. One JSON request on stdin."""
+
+import argparse
+import json
+import os
+import re
+import resource
+import shutil
+import signal
+import stat
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+from types import FrameType
+from typing import Any, Never
+
+CLIPHIST = "@cliphist@"
+WL_COPY = "@wl_copy@"
+MAX_IMAGE_BYTES = 64 * 1024 * 1024
+MAX_CACHE_BYTES = 128 * 1024 * 1024
+MAX_CACHE_IMAGES = 32
+MAX_SESSION_AGE = 3600
+MIME = {
+    "png": "image/png",
+    "jpeg": "image/jpeg",
+    "gif": "image/gif",
+    "bmp": "image/bmp",
+    "tiff": "image/tiff",
+}
+
+
+class AdapterError(Exception):
+    pass
+
+
+class OversizedImage(AdapterError):
+    pass
+
+
+def program(value: str, fallback: str) -> str:
+    return fallback if value.startswith("@") else value
+
+
+def private_directory(directory: Path) -> None:
+    try:
+        directory.mkdir(mode=0o700)
+    except FileExistsError:
+        pass
+    info = directory.lstat()
+    if (
+        not stat.S_ISDIR(info.st_mode)
+        or info.st_uid != os.getuid()
+        or stat.S_IMODE(info.st_mode) != 0o700
+    ):
+        raise AdapterError("Clipboard temporary directory is not private.")
+
+
+def alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+
+
+def prune(root: Path, current: Path) -> None:
+    # Each Quickshell process has one picker. A fresh session supersedes a
+    # session from a QML reload; crashed owners are removed on the next use.
+    for candidate in root.iterdir():
+        if candidate == current or candidate.is_symlink() or not candidate.is_dir():
+            continue
+        try:
+            owner = int((candidate / ".owner").read_text())
+            abandoned = owner == os.getppid() or not alive(owner)
+            expired = time.time() - candidate.stat().st_mtime > MAX_SESSION_AGE
+            if abandoned or expired:
+                shutil.rmtree(candidate)
+        except (OSError, ValueError):
+            if time.time() - candidate.stat().st_mtime > MAX_SESSION_AGE:
+                shutil.rmtree(candidate)
+
+
+def image_format(header: bytes) -> str:
+    if header.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "png"
+    if header.startswith(b"\xff\xd8\xff"):
+        return "jpeg"
+    if header.startswith((b"GIF87a", b"GIF89a")):
+        return "gif"
+    if header.startswith(b"BM"):
+        return "bmp"
+    if header.startswith((b"II*\0", b"MM\0*")):
+        return "tiff"
+    raise AdapterError("This clipboard entry is not a supported image.")
+
+
+def limit_decode_output() -> None:
+    resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_IMAGE_BYTES, MAX_IMAGE_BYTES))
+
+
+def prepare(directory: Path, entry_id: str, database: str) -> dict[str, Any]:
+    private_directory(directory)
+    (directory / ".owner").write_text(str(os.getppid()))
+    os.chmod(directory / ".owner", 0o600)
+    os.utime(directory)
+    # stdout is a binary file descriptor. QML receives only its local URL.
+    with tempfile.NamedTemporaryFile(
+        dir=directory, prefix=".decode-", delete=False
+    ) as output:
+        temporary = Path(output.name)
+        try:
+            result = subprocess.run(
+                [program(CLIPHIST, "cliphist"), "-db-path", database, "decode"],
+                input=entry_id.encode("ascii"),
+                stdout=output,
+                stderr=subprocess.DEVNULL,
+                timeout=5,
+                check=False,
+                preexec_fn=limit_decode_output,
+            )
+            output.flush()
+            size = temporary.stat().st_size
+            if size > MAX_IMAGE_BYTES or (
+                size >= MAX_IMAGE_BYTES and result.returncode != 0
+            ):
+                raise OversizedImage("Clipboard image exceeds the 64 MiB limit.")
+            if result.returncode != 0 or size == 0:
+                raise AdapterError("Could not read the selected clipboard image.")
+            with temporary.open("rb") as original:
+                fmt = image_format(original.read(16))
+            destination = directory / (entry_id + "." + fmt)
+            temporary.replace(destination)
+        finally:
+            temporary.unlink(missing_ok=True)
+    evicted: list[str] = []
+    files = sorted(
+        (p for p in directory.iterdir() if p.suffix[1:] in MIME),
+        key=lambda p: p.stat().st_mtime,
+    )
+    total = sum(p.stat().st_size for p in files)
+    while len(files) > MAX_CACHE_IMAGES or total > MAX_CACHE_BYTES:
+        oldest = files.pop(0)
+        total -= oldest.stat().st_size
+        evicted.append(oldest.stem)
+        oldest.unlink()
+    return {
+        "id": entry_id,
+        "format": fmt,
+        "mime": MIME[fmt],
+        "path": str(destination),
+        "url": destination.as_uri(),
+        "evicted": evicted,
+    }
+
+
+def copy(directory: Path, entry_id: str) -> dict[str, Any]:
+    originals = [directory / (entry_id + "." + fmt) for fmt in MIME]
+    original = next((p for p in originals if p.is_file() and not p.is_symlink()), None)
+    if original is None:
+        raise AdapterError("Clipboard image preview expired. Select the image again.")
+    # A buffered header read can leave the underlying fd ahead of seek(0).
+    # wl-copy inherits that fd, so its offset must be rewound at the OS level.
+    with original.open("rb", buffering=0) as source:
+        fmt = image_format(source.read(16))
+        source.seek(0)
+        # wl-copy's parent exits after the clipboard owner has read the input.
+        # The file can be removed afterwards without changing the selection.
+        result = subprocess.run(
+            [program(WL_COPY, "wl-copy"), "--type", MIME[fmt]],
+            stdin=source,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=5,
+            check=False,
+        )
+    if result.returncode != 0:
+        raise AdapterError("Could not copy the image to the clipboard.")
+    return {"copied": True, "id": entry_id}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--db-path", required=True)
+    args = parser.parse_args()
+    request: dict[str, Any] = json.loads(sys.stdin.read(4097))
+    operation = request.get("operation")
+    token = request.get("session", "")
+    entry_id = request.get("id", "")
+    if (
+        operation not in ("prepare", "copy", "cleanup")
+        or not isinstance(token, str)
+        or not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", token)
+    ):
+        raise AdapterError("Invalid clipboard request.")
+    if operation != "cleanup" and (
+        not isinstance(entry_id, str) or not re.fullmatch(r"[0-9]{1,20}", entry_id)
+    ):
+        raise AdapterError("Invalid clipboard entry ID.")
+    runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if not runtime:
+        raise AdapterError("Clipboard previews need XDG_RUNTIME_DIR.")
+    root = Path(runtime) / "dotfiles-clipboard"
+    private_directory(root)
+    directory = root / token
+    if operation == "cleanup":
+        if directory.is_symlink():
+            raise AdapterError("Invalid clipboard session.")
+        if directory.exists():
+            shutil.rmtree(directory)
+        response = {"cleaned": True}
+    elif operation == "prepare":
+        prune(root, directory)
+        response = prepare(directory, entry_id, args.db_path)
+    else:
+        private_directory(directory)
+        response = copy(directory, entry_id)
+    print(json.dumps(response), flush=True)
+
+
+def interrupted(_signal: int, _frame: FrameType | None) -> Never:
+    raise AdapterError("Clipboard request cancelled.")
+
+
+if __name__ == "__main__":
+    os.umask(0o077)
+    signal.signal(signal.SIGTERM, interrupted)
+    try:
+        main()
+    except (
+        AdapterError,
+        OSError,
+        ValueError,
+        TypeError,
+        AttributeError,
+        subprocess.TimeoutExpired,
+    ) as error:
+        # Do not expose subprocess stderr, database content, or request data.
+        message = (
+            str(error)
+            if isinstance(error, AdapterError)
+            else "Clipboard image operation failed."
+        )
+        if isinstance(error, OversizedImage):
+            print(json.dumps({"error": "image-too-large"}), flush=True)
+        print(message, file=sys.stderr)
+        sys.exit(1)
