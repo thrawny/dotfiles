@@ -17,5 +17,6 @@
     kubectx
     pyenv
     jira-cli-go
+    ffmpeg
   ];
 }

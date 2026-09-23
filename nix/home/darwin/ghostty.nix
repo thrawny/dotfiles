@@ -6,11 +6,12 @@
 
   # cmd+m belongs to the AppKit "Minimize" menu item, which Ghostty's keybind
   # system cannot touch, so the shortcut has to be stripped at the macOS level
-  # for Herdr's last_pane binding to see the key. A key equivalent of NUL means
-  # "no shortcut"; the menu item itself stays.
-  home.activation.unbindGhosttyMinimize = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+  # for Herdr's last_pane binding to see the key. The "Zoom Split" menu item
+  # holds cmd+shift+enter the same way, which Herdr needs for new_tab. A key
+  # equivalent of NUL means "no shortcut"; the menu items themselves stay.
+  home.activation.unbindGhosttyMenuShortcuts = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     $DRY_RUN_CMD /usr/bin/defaults write com.mitchellh.ghostty NSUserKeyEquivalents \
-      -dict-add "Minimize" '\0'
+      -dict-add "Minimize" '\0' "Zoom Split" '\0'
   '';
 
   # Override ghostty settings for macOS

@@ -61,6 +61,7 @@ def test_core_keymap(bindings: dict[str, str]):
         "alt-shift-minus": "resize height -50",
         "alt-shift-equal": "resize height +50",
         "alt-b": "workspace web",
+        "alt-n": "focus-monitor --wrap-around prev",
         "alt-shift-semicolon": "mode service",
     }
     for key, direction in zip("hjkl", ("left", "down", "up", "right")):
