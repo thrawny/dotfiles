@@ -113,7 +113,7 @@ check-theme:
 # === Tests ===
 
 # Run all tests
-test: test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-bootstrap-mac
+test: test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac
 
 # Project selection and backend dispatch
 test-project-picker:
@@ -124,6 +124,14 @@ test-project-picker:
 test-herdr-next-agent:
     bash -n bin/herdr-next-agent
     uv run --locked python -B -m pytest tests/test_herdr_next_agent.py
+
+# PR and Jira sidebar decoration
+test-herdr-decorator:
+    uv run --locked python -B -m pytest tests/test_herdr_decorator.py
+
+# Run the sidebar decorator in the foreground, restarting it on every edit
+herdr-decorator-dev:
+    watchexec --restart --watch bin/herdr-decorator -- bin/herdr-decorator
 
 # Run Python tests with the locked development dependencies
 test-python *args:
@@ -164,7 +172,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent nix::eval
+check-parallel: lint typecheck pi check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

@@ -223,6 +223,52 @@ in
                   dim = false;
                 }
               ]
+              # Reported by bin/herdr-decorator. Values expire if it stops, and
+              # the row disappears when a pane has no PR and no Jira key.
+              [
+                {
+                  token = "$pr";
+                  fg = theme.semantic.foreground;
+                  dim = false;
+                }
+                {
+                  token = "$pr_state";
+                  fg = theme.semantic.warning;
+                  dim = false;
+                  rules = [
+                    {
+                      equals = "approved";
+                      fg = theme.semantic.success;
+                    }
+                    {
+                      equals = "failing";
+                      fg = theme.semantic.error;
+                      bold = true;
+                    }
+                    {
+                      equals = "changes";
+                      fg = theme.semantic.error;
+                    }
+                    {
+                      equals = "merged";
+                      fg = theme.semantic.accentAlt;
+                    }
+                    {
+                      equals = "draft";
+                      fg = theme.semantic.muted;
+                    }
+                    {
+                      equals = "closed";
+                      fg = theme.semantic.muted;
+                    }
+                  ];
+                }
+                {
+                  token = "$jira";
+                  fg = theme.syntax.type;
+                  dim = false;
+                }
+              ]
               [
                 {
                   token = "workspace";

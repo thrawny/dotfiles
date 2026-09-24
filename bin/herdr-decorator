@@ -1,0 +1,483 @@
+#!/usr/bin/env python3
+"""Decorate Herdr agent panes with sidebar tokens: PR state and Jira key.
+
+One long-lived process. It follows pane changes over Herdr's socket, polls
+GitHub on a timer, and reports values with pane.report_metadata so the agent
+sidebar rows can show them as $pr, $pr_state and $jira. Every report carries a
+TTL, so values expire on their own if this process stops.
+
+Pane state for other tools (for example an "open this PR" action) is written to
+$XDG_STATE_HOME/herdr-decorator/panes.json.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import queue
+import re
+import socket
+import subprocess
+import sys
+import threading
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any
+
+SOURCE = "herdr-decorator"
+POLL_SECONDS = int(os.environ.get("HERDR_DECORATOR_POLL", "120"))
+TTL_MS = POLL_SECONDS * 3 * 1000
+JIRA_BASE = "https://jira.example.com/browse/"
+JIRA_KEY = re.compile(r"(?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9]+-\d+)")
+GITHUB_REMOTE = re.compile(r"github\.com[:/]([^/]+)/(.+?)(?:\.git)?/?$")
+DEFAULT_BRANCHES = {"main", "master", "HEAD"}
+LIFECYCLE_EVENTS = [
+    "pane.created",
+    "pane.updated",
+    "pane.closed",
+    "pane.agent_detected",
+]
+TOKENS = ("pr", "pr_state", "jira")
+
+
+def log(message: str) -> None:
+    print(f"{time.strftime('%H:%M:%S')} {message}", flush=True)
+
+
+def socket_path() -> str:
+    return os.environ.get("HERDR_SOCKET_PATH") or os.path.expanduser(
+        "~/.config/herdr/herdr.sock"
+    )
+
+
+def state_file() -> Path:
+    base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    return Path(base) / "herdr-decorator" / "panes.json"
+
+
+class HerdrGone(Exception):
+    """The Herdr server went away; the caller reconnects."""
+
+
+def request(method: str, params: dict[str, Any]) -> dict[str, Any]:
+    """Send one request on its own connection and return the result."""
+    try:
+        with socket.socket(socket.AF_UNIX) as sock:
+            sock.settimeout(10)
+            sock.connect(socket_path())
+            sock.sendall(
+                (
+                    json.dumps({"id": method, "method": method, "params": params})
+                    + "\n"
+                ).encode()
+            )
+            line = sock.makefile().readline()
+    except OSError as exc:
+        raise HerdrGone(str(exc)) from exc
+    if not line:
+        raise HerdrGone(f"no response to {method}")
+    reply = json.loads(line)
+    if "error" in reply:
+        raise RuntimeError(f"{method}: {reply['error'].get('message')}")
+    return reply["result"]
+
+
+class Subscription(threading.Thread):
+    """Stream events from one events.subscribe connection into a queue."""
+
+    def __init__(
+        self,
+        name: str,
+        subscriptions: list[dict[str, str]],
+        inbox: queue.Queue[tuple[str, Any]],
+    ):
+        super().__init__(name=name, daemon=True)
+        self.subscriptions: list[dict[str, str]] = subscriptions
+        self.inbox: queue.Queue[tuple[str, Any]] = inbox
+        self.sock: socket.socket = socket.socket(socket.AF_UNIX)
+        self.ready: threading.Event = threading.Event()
+        self.stopped: bool = False
+
+    def run(self) -> None:
+        reason = "stream closed"
+        try:
+            self.sock.connect(socket_path())
+            params = {"subscriptions": self.subscriptions}
+            self.sock.sendall(
+                (
+                    json.dumps(
+                        {
+                            "id": self.name,
+                            "method": "events.subscribe",
+                            "params": params,
+                        }
+                    )
+                    + "\n"
+                ).encode()
+            )
+            reader = self.sock.makefile()
+            ack = json.loads(reader.readline() or "{}")
+            if "error" in ack or "result" not in ack:
+                raise HerdrGone(f"{self.name} subscribe failed: {ack}")
+            self.ready.set()
+            for line in reader:
+                self.inbox.put(("event", json.loads(line)))
+        except (OSError, ValueError, HerdrGone) as exc:
+            reason = str(exc)
+        finally:
+            self.ready.set()
+        if not self.stopped:
+            self.inbox.put(("gone", f"{self.name}: {reason}"))
+
+    def stop(self) -> None:
+        self.stopped = True
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            pass
+        self.sock.close()
+
+
+@dataclass
+class Pane:
+    pane_id: str
+    cwd: str | None
+    agent: str | None
+    status: str | None = None
+    repo: tuple[str, str] | None = None
+    branch: str | None = None
+    tokens: dict[str, str] = field(default_factory=dict)
+    links: dict[str, str] = field(default_factory=dict)
+
+
+def git(cwd: str, *args: str) -> str | None:
+    try:
+        out = subprocess.run(
+            ["git", "-C", cwd, *args],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return out.stdout.strip() if out.returncode == 0 else None
+
+
+def locate(pane: Pane) -> None:
+    """Fill in the pane's GitHub repo and branch from its working directory."""
+    pane.repo, pane.branch = None, None
+    if not pane.cwd or not os.path.isdir(pane.cwd):
+        return
+    pane.branch = git(pane.cwd, "rev-parse", "--abbrev-ref", "HEAD")
+    remote = git(pane.cwd, "remote", "get-url", "origin") or ""
+    if match := GITHUB_REMOTE.search(remote):
+        pane.repo = (match.group(1), match.group(2))
+
+
+def dig(value: Any, *keys: str | int) -> Any:
+    """Walk nested GraphQL JSON, yielding None at the first missing step."""
+    for key in keys:
+        try:
+            value = value[key]
+        except (KeyError, IndexError, TypeError):
+            return None
+    return value
+
+
+def pr_state(pr: dict[str, Any]) -> str:
+    """One word for the sidebar, most urgent first."""
+    if pr["state"] == "MERGED":
+        return "merged"
+    if pr["state"] == "CLOSED":
+        return "closed"
+    if pr["isDraft"]:
+        return "draft"
+    rollup = dig(pr, "commits", "nodes", 0, "commit", "statusCheckRollup", "state")
+    review = pr.get("reviewDecision")
+    if rollup in ("FAILURE", "ERROR"):
+        return "failing"
+    if review == "CHANGES_REQUESTED":
+        return "changes"
+    if rollup in ("PENDING", "EXPECTED"):
+        return "checks"
+    if review == "APPROVED":
+        return "approved"
+    return "review"
+
+
+PR_FIELDS = " ".join(
+    [
+        "nodes { number url state isDraft reviewDecision",
+        "commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }",
+    ]
+)
+
+
+def build_query(
+    targets: list[tuple[tuple[str, str], str]],
+) -> tuple[str, dict[str, tuple[tuple[str, str], str]]]:
+    """One GraphQL query for every (repo, branch); returns it and alias → target."""
+    by_repo: dict[tuple[str, str], list[str]] = {}
+    for repo, branch in targets:
+        by_repo.setdefault(repo, [])
+        if branch not in by_repo[repo]:
+            by_repo[repo].append(branch)
+    parts: list[str] = []
+    aliases: dict[str, tuple[tuple[str, str], str]] = {}
+    for r, (repo, branches) in enumerate(by_repo.items()):
+        fields: list[str] = []
+        for b, branch in enumerate(branches):
+            alias = f"b{b}"
+            aliases[f"r{r}.{alias}"] = (repo, branch)
+            args = f"headRefName: {json.dumps(branch)}, first: 1, orderBy: {{field: UPDATED_AT, direction: DESC}}"
+            fields.append(f"{alias}: pullRequests({args}) {{ {PR_FIELDS} }}")
+        parts.append(
+            f"r{r}: repository(owner: {json.dumps(repo[0])}, name: {json.dumps(repo[1])}) {{ {' '.join(fields)} }}"
+        )
+    return "query { " + " ".join(parts) + " }", aliases
+
+
+def fetch_prs(
+    targets: list[tuple[tuple[str, str], str]],
+) -> dict[tuple[tuple[str, str], str], dict[str, Any] | None] | None:
+    """Latest PR per (repo, branch), or None when GitHub could not be asked."""
+    if not targets:
+        return {}
+    query, aliases = build_query(targets)
+    try:
+        out = subprocess.run(
+            ["gh", "api", "graphql", "-f", f"query={query}"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        log(f"gh failed: {exc}")
+        return None
+    body = json.loads(out.stdout or "{}")
+    data = body.get("data")
+    if data is None:
+        log(f"gh failed: {(out.stderr or out.stdout).strip()[:300]}")
+        return None
+    if errors := body.get("errors"):
+        log(f"gh partial errors: {[e.get('message') for e in errors][:3]}")
+    found: dict[tuple[tuple[str, str], str], dict[str, Any] | None] = {}
+    for key, target in aliases.items():
+        repo_alias, branch_alias = key.split(".")
+        found[target] = dig(data, repo_alias, branch_alias, "nodes", 0)
+    return found
+
+
+def decorate(
+    pane: Pane, pr: dict[str, Any] | None
+) -> tuple[dict[str, str], dict[str, str]]:
+    tokens: dict[str, str] = {}
+    links: dict[str, str] = {}
+    if pr:
+        tokens["pr"] = f"#{pr['number']}"
+        tokens["pr_state"] = pr_state(pr)
+        links["pr"] = pr["url"]
+    if pane.branch and (match := JIRA_KEY.search(pane.branch)):
+        key = match.group(1).upper()
+        tokens["jira"] = key
+        links["jira"] = JIRA_BASE + key
+    return tokens, links
+
+
+class Decorator:
+    def __init__(self) -> None:
+        self.inbox: queue.Queue[tuple[str, Any]] = queue.Queue()
+        self.panes: dict[str, Pane] = {}
+        self.lifecycle: Subscription | None = None
+        self.status: Subscription | None = None
+        self.status_panes: frozenset[str] = frozenset()
+
+    def run(self) -> None:
+        while True:
+            try:
+                self.session()
+            except HerdrGone as exc:
+                log(f"herdr unavailable ({exc}); retrying")
+            finally:
+                for sub in (self.lifecycle, self.status):
+                    if sub:
+                        sub.stop()
+                self.lifecycle = self.status = None
+                self.status_panes = frozenset()
+                self.inbox = queue.Queue()
+            time.sleep(3)
+
+    def session(self) -> None:
+        # Subscribe before the snapshot so no change falls between them.
+        self.lifecycle = Subscription(
+            "lifecycle", [{"type": t} for t in LIFECYCLE_EVENTS], self.inbox
+        )
+        self.lifecycle.start()
+        self.lifecycle.ready.wait(10)
+        snapshot = request("session.snapshot", {})["snapshot"]
+        self.panes = {}
+        for info in snapshot["panes"]:
+            self.track(info)
+        log(f"connected: {len(self.agent_panes())} agent panes")
+        self.resubscribe_status()
+        self.poll()
+        next_poll = time.monotonic() + POLL_SECONDS
+        while True:
+            timeout = max(0.0, next_poll - time.monotonic())
+            try:
+                kind, payload = self.inbox.get(timeout=timeout)
+            except queue.Empty:
+                self.poll()
+                next_poll = time.monotonic() + POLL_SECONDS
+                continue
+            if kind == "gone":
+                raise HerdrGone(payload)
+            self.handle(payload)
+
+    def agent_panes(self) -> list[Pane]:
+        return [p for p in self.panes.values() if p.agent]
+
+    def track(self, info: dict[str, Any]) -> tuple[Pane, bool]:
+        """Record a pane from an event or snapshot; report whether cwd changed."""
+        cwd = info.get("foreground_cwd") or info.get("cwd")
+        pane = self.panes.get(info["pane_id"])
+        if pane is None:
+            pane = Pane(
+                info["pane_id"], cwd, info.get("agent"), info.get("agent_status")
+            )
+            self.panes[pane.pane_id] = pane
+            locate(pane)
+            return pane, True
+        pane.agent = info.get("agent")
+        if cwd != pane.cwd:
+            pane.cwd = cwd
+            locate(pane)
+            return pane, True
+        return pane, False
+
+    def handle(self, envelope: dict[str, Any]) -> None:
+        event: str | None = envelope.get("event")
+        data: dict[str, Any] = envelope.get("data") or {}
+        if event == "pane.closed":
+            self.panes.pop(str(data.get("pane_id")), None)
+            self.resubscribe_status()
+            self.write_state()
+            return
+        if event == "pane.agent_status_changed":
+            pane = self.panes.get(str(data["pane_id"]))
+            if not pane:
+                return
+            previous, pane.status = pane.status, str(data["agent_status"])
+            # A finished turn is when a push or `gh pr create` has usually just happened.
+            if previous == "working" and pane.status in ("idle", "done", "blocked"):
+                locate(pane)
+                self.refresh([pane], reason=f"{pane.pane_id} finished a turn")
+            return
+        info: dict[str, Any] | None = data.get("pane")
+        if not info:
+            return
+        pane, moved = self.track(info)
+        self.resubscribe_status()
+        if moved and pane.agent:
+            self.refresh([pane], reason=f"{pane.pane_id} moved to {pane.cwd}")
+
+    def resubscribe_status(self) -> None:
+        """agent_status_changed needs one subscription entry per pane."""
+        wanted = frozenset(p.pane_id for p in self.agent_panes())
+        if wanted == self.status_panes:
+            return
+        if self.status:
+            self.status.stop()
+        self.status, self.status_panes = None, wanted
+        if wanted:
+            subs = [
+                {"type": "pane.agent_status_changed", "pane_id": pid}
+                for pid in sorted(wanted)
+            ]
+            self.status = Subscription("status", subs, self.inbox)
+            self.status.start()
+
+    def poll(self) -> None:
+        panes = self.agent_panes()
+        for pane in panes:
+            locate(pane)
+        self.refresh(panes, reason="poll")
+
+    def refresh(self, panes: list[Pane], reason: str) -> None:
+        targets = [
+            (p.repo, p.branch)
+            for p in panes
+            if p.repo and p.branch and p.branch not in DEFAULT_BRANCHES
+        ]
+        prs = fetch_prs(targets)
+        if prs is None:
+            return  # keep what is shown; the TTL clears it if GitHub stays down
+        changed = 0
+        for pane in panes:
+            target = (pane.repo, pane.branch) if pane.repo and pane.branch else None
+            pr = prs.get(target) if target else None
+            tokens, pane.links = decorate(pane, pr)
+            if tokens != pane.tokens:
+                changed += 1
+                where = f"{pane.repo[1] if pane.repo else '?'}@{pane.branch or '?'}"
+                shown = " ".join(tokens.values()) or "(cleared)"
+                log(f"{pane.pane_id} {where}: {shown}")
+            self.report(pane, tokens)
+        log(f"{reason}: {len(panes)} panes, {len(targets)} branches, {changed} changed")
+        self.write_state()
+
+    def report(self, pane: Pane, tokens: dict[str, str]) -> None:
+        stale = {name: None for name in pane.tokens if name not in tokens}
+        try:
+            if stale:
+                request(
+                    "pane.report_metadata",
+                    {"pane_id": pane.pane_id, "source": SOURCE, "tokens": stale},
+                )
+            if tokens:
+                request(
+                    "pane.report_metadata",
+                    {
+                        "pane_id": pane.pane_id,
+                        "source": SOURCE,
+                        "tokens": tokens,
+                        "ttl_ms": TTL_MS,
+                    },
+                )
+        except RuntimeError as exc:
+            log(f"report failed for {pane.pane_id}: {exc}")
+            return
+        pane.tokens = tokens
+
+    def write_state(self) -> None:
+        path = state_file()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        state = {
+            p.pane_id: {
+                "cwd": p.cwd,
+                "repo": "/".join(p.repo) if p.repo else None,
+                "branch": p.branch,
+                "tokens": p.tokens,
+                "links": p.links,
+            }
+            for p in self.agent_panes()
+        }
+        tmp = path.with_suffix(".tmp")
+        tmp.write_text(json.dumps(state, indent=2) + "\n")
+        tmp.replace(path)
+
+
+def main() -> int:
+    log(f"herdr-decorator: poll every {POLL_SECONDS}s, socket {socket_path()}")
+    try:
+        Decorator().run()
+    except KeyboardInterrupt:
+        return 0
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

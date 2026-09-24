@@ -12,6 +12,7 @@ include = [
   ".",
   "bin/desktop-broker",
   "bin/shell-clipboard-image",
+  "bin/herdr-decorator",
   "scripts/check-hermes-web",
   "scripts/check-tailscale-serve",
   "bin/incus-dev",
@@ -45,6 +46,7 @@ reportImplicitOverride = false
 extend-include = [
   "bin/desktop-broker",
   "bin/shell-clipboard-image",
+  "bin/herdr-decorator",
   "scripts/check-hermes-web",
   "scripts/check-tailscale-serve",
   "bin/incus-dev",
