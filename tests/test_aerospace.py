@@ -38,9 +38,13 @@ def test_preferences(config: dict[str, Any]):
 
 
 def test_workspace_policy(config: dict[str, Any]):
-    assert config["persistent-workspaces"] == ["main", "web", "dotfiles"]
+    assert config["persistent-workspaces"] == ["main", "web", "code"]
+    assert config["workspace-to-monitor-force-assignment"] == {
+        "main": ["Q27G2WG4", "built-in"],
+        "web": ["Q27G2WG4", "built-in"],
+        "code": ["U3219Q"],
+    }
     for setting in (
-        "workspace-to-monitor-force-assignment",
         "after-login-command",
         "after-startup-command",
     ):
@@ -72,7 +76,7 @@ def test_core_keymap(bindings: dict[str, str]):
             f"move-node-to-monitor --focus-follows-window {direction}"
         )
         expected[f"alt-cmd-{key}"] = f"move-workspace-to-monitor {direction}"
-    workspaces = ["main", "web", "dotfiles", *map(str, range(4, 11))]
+    workspaces = ["main", "web", "code", *map(str, range(4, 11))]
     for key, workspace in zip("1234567890", workspaces):
         expected[f"alt-{key}"] = f"workspace {workspace}"
         expected[f"alt-shift-{key}"] = (
@@ -112,6 +116,10 @@ def test_only_confirmed_app_rules(config: dict[str, Any]):
         "com.apple.MobileSMS": "move-node-to-workspace main",
         "com.apple.finder": "layout floating",
         "com.apple.Preview": "layout floating",
+        "com.1password.1password": "layout floating",
+        "com.docker.docker": "layout floating",
+        "io.kandji.Self-Service": "layout floating",
+        "com.okta.mobile": "layout floating",
     }
     rules = config["on-window-detected"]
     assert len(rules) == len(expected)

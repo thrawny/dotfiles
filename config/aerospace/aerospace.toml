@@ -5,7 +5,7 @@ start-at-login = true
 auto-reload-config = true
 
 # Only the named workspaces persist when empty. Workspaces 4..10 are on demand.
-persistent-workspaces = ['main', 'web', 'dotfiles']
+persistent-workspaces = ['main', 'web', 'code']
 
 # Keep the tiling tree normalized; this is not a scrolling-column layout.
 enable-normalization-flatten-containers = true
@@ -19,6 +19,13 @@ focus-follows-mouse.enabled = true
 on-focused-monitor-changed = ['move-mouse monitor-lazy-center']
 on-focus-changed = ['move-mouse window-lazy-center']
 automatically-unhide-macos-hidden-apps = false
+
+# Pin the named workspaces to a monitor. The first connected pattern wins.
+# Work: laptop screen + Dell U3219Q. Home (lid closed): AOC Q27G2WG4 + LG.
+[workspace-to-monitor-force-assignment]
+main = ['Q27G2WG4', 'built-in']
+web = ['Q27G2WG4', 'built-in']
+code = ['U3219Q']   # TODO: add the home LG monitor name.
 
 [key-mapping]
 preset = 'qwerty'
@@ -63,7 +70,7 @@ alt-shift-k = 'swap up'
 alt-shift-l = 'swap right'
 
 # Focus monitors, move a window and follow it, or move the entire workspace.
-# No workspace-to-monitor assignments: all workspaces can move freely.
+# Pinned workspaces (see below) cannot move to another monitor; 4..10 can.
 alt-n = 'focus-monitor --wrap-around prev'   # Matches niri/Hyprland: previous in order, not history.
 alt-ctrl-h = 'focus-monitor left'
 alt-ctrl-j = 'focus-monitor down'
@@ -86,7 +93,7 @@ alt-shift-equal = 'resize height +50'
 
 alt-1 = 'workspace main'
 alt-2 = 'workspace web'
-alt-3 = 'workspace dotfiles'
+alt-3 = 'workspace code'
 alt-4 = 'workspace 4'
 alt-5 = 'workspace 5'
 alt-6 = 'workspace 6'
@@ -98,7 +105,7 @@ alt-b = 'workspace web'      # Helium windows stay where launched; move them man
 
 alt-shift-1 = 'move-node-to-workspace --focus-follows-window main'
 alt-shift-2 = 'move-node-to-workspace --focus-follows-window web'
-alt-shift-3 = 'move-node-to-workspace --focus-follows-window dotfiles'
+alt-shift-3 = 'move-node-to-workspace --focus-follows-window code'
 alt-shift-4 = 'move-node-to-workspace --focus-follows-window 4'
 alt-shift-5 = 'move-node-to-workspace --focus-follows-window 5'
 alt-shift-6 = 'move-node-to-workspace --focus-follows-window 6'
@@ -133,11 +140,27 @@ run = 'move-node-to-workspace main'
 if = 'test %{app-bundle-id} = com.apple.MobileSMS'
 run = 'move-node-to-workspace main'
 
-# Finder and Preview float on the workspace where they open.
+# These apps float on the workspace where they open.
 [[on-window-detected]]
 if = 'test %{app-bundle-id} = com.apple.finder'
 run = 'layout floating'
 
 [[on-window-detected]]
 if = 'test %{app-bundle-id} = com.apple.Preview'
+run = 'layout floating'
+
+[[on-window-detected]]
+if = 'test %{app-bundle-id} = com.1password.1password'
+run = 'layout floating'
+
+[[on-window-detected]]
+if = 'test %{app-bundle-id} = com.docker.docker'
+run = 'layout floating'
+
+[[on-window-detected]]
+if = 'test %{app-bundle-id} = io.kandji.Self-Service'
+run = 'layout floating'
+
+[[on-window-detected]]
+if = 'test %{app-bundle-id} = com.okta.mobile'
 run = 'layout floating'
