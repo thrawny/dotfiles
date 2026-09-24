@@ -51,6 +51,7 @@ APPLESCRIPT
 '''
 
 alt-w = 'close'
+cmd-h = []                               # Swallow macOS Hide; it drops windows from the layout.
 alt-f = 'fullscreen'                     # AeroSpace fullscreen, not a separate macOS Space.
 alt-v = 'layout floating tiling'
 alt-m = 'focus-back-and-forth'
