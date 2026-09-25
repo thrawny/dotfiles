@@ -6,6 +6,7 @@ Cross-platform dotfiles managed with Nix Home Manager (`nix/`). See `nix/AGENTS.
 - `bin/` is for runtime commands needed on `PATH`. Development and validation helpers go in `scripts/` or the owning component's `scripts/` directory, invoked through `just`.
 - Scripts of 50+ lines live in standalone files; Nix exposes or configures them rather than containing the implementation.
 - For custom desktop shell changes, including its Nix wiring, read [shell/AGENTS.md](shell/AGENTS.md).
+- This repo is public. Employer values (GitHub org and team, Jira site, internal repo names) live in the private `~/.config/work/config.toml`, read with `bin/work-config`. Code, tests, comments and commit messages use placeholders such as `acme/widgets` and `ABC-123`.
 
 ## Source → target
 

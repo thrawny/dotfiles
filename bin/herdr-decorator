@@ -28,7 +28,6 @@ from typing import Any
 SOURCE = "herdr-decorator"
 POLL_SECONDS = int(os.environ.get("HERDR_DECORATOR_POLL", "120"))
 TTL_MS = POLL_SECONDS * 3 * 1000
-JIRA_BASE = "https://jira.example.com/browse/"
 JIRA_KEY = re.compile(r"(?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9]+-\d+)")
 GITHUB_REMOTE = re.compile(r"github\.com[:/]([^/]+)/(.+?)(?:\.git)?/?$")
 DEFAULT_BRANCHES = {"main", "master", "HEAD"}
@@ -292,8 +291,24 @@ def pr_label(pr: dict[str, Any]) -> str:
     return label
 
 
+def jira_browse_url() -> str | None:
+    """The Jira site's browse URL from the private work config, if any."""
+    work_config = Path(__file__).resolve().parent / "work-config"
+    try:
+        out = subprocess.run(
+            [str(work_config), "jira.browse_url"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    return out.stdout.strip() or None
+
+
 def decorate(
-    pane: Pane, pr: dict[str, Any] | None
+    pane: Pane, pr: dict[str, Any] | None, jira_base: str | None = None
 ) -> tuple[dict[str, str], dict[str, str]]:
     tokens: dict[str, str] = {}
     links: dict[str, str] = {}
@@ -303,7 +318,8 @@ def decorate(
     if pane.branch and (match := JIRA_KEY.search(pane.branch)):
         key = match.group(1).upper()
         tokens["jira"] = key
-        links["jira"] = JIRA_BASE + key
+        if jira_base:
+            links["jira"] = f"{jira_base}/{key}"
     return tokens, links
 
 
@@ -314,6 +330,7 @@ class Decorator:
         self.lifecycle: Subscription | None = None
         self.status: Subscription | None = None
         self.status_panes: frozenset[str] = frozenset()
+        self.jira_base: str | None = jira_browse_url()
 
     def run(self) -> None:
         while True:
@@ -439,7 +456,7 @@ class Decorator:
         for pane in panes:
             target = (pane.repo, pane.branch) if pane.repo and pane.branch else None
             pr = prs.get(target) if target else None
-            tokens, pane.links = decorate(pane, pr)
+            tokens, pane.links = decorate(pane, pr, self.jira_base)
             if tokens != pane.tokens:
                 changed += 1
                 where = f"{pane.repo[1] if pane.repo else '?'}@{pane.branch or '?'}"

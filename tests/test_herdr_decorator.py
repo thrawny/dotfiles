@@ -90,9 +90,19 @@ def test_query_groups_branches_by_repo_and_dedupes(decorator: ModuleType) -> Non
 
 def test_decorate_takes_jira_key_from_branch(decorator: ModuleType) -> None:
     pane = decorator.Pane("w1:p1", "/tmp", "claude", branch="feat/abc-12-fix")
-    tokens, links = decorator.decorate(pane, pr(review="APPROVED"))
+    base = "https://jira.example.com/browse"
+    tokens, links = decorator.decorate(pane, pr(review="APPROVED"), base)
     assert tokens == {"pr": "\uf407 #412 \uf42e", "jira": "ABC-12"}
-    assert links["jira"].endswith("/browse/ABC-12")
+    assert links["jira"] == f"{base}/ABC-12"
+
+
+def test_decorate_without_a_jira_site_keeps_the_key_but_no_link(
+    decorator: ModuleType,
+) -> None:
+    pane = decorator.Pane("w1:p1", "/tmp", "claude", branch="abc-12-fix")
+    tokens, links = decorator.decorate(pane, None)
+    assert tokens == {"jira": "ABC-12"}
+    assert links == {}
 
 
 def test_decorate_without_pr_or_key_is_empty(decorator: ModuleType) -> None:

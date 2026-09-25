@@ -1,0 +1,90 @@
+#!/usr/bin/env python3
+"""Print one value from the private work config.
+
+The work tools here (pr-review, herdr-decorator) are public; the values that
+tie them to an employer are not. Those live in a TOML file outside this repo,
+at $WORK_CONFIG or ~/.config/work/config.toml, and every tool reads them
+through this command so the lookup rules live in one place.
+
+    work-config github.review_team         print a string
+    work-config github.extra_review_repos  print a list, one item per line
+    work-config jira.browse_url            falls back to jira-cli's server
+    work-config --path                     print where the config is read from
+
+Exits 1, printing nothing, when the file or the key is missing, so callers can
+treat "not configured" as an ordinary answer.
+"""
+
+from __future__ import annotations
+
+import os
+import sys
+import tomllib
+from pathlib import Path
+from typing import Any
+
+
+def config_path() -> Path:
+    if explicit := os.environ.get("WORK_CONFIG"):
+        return Path(explicit)
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    return Path(base) / "work" / "config.toml"
+
+
+def load() -> dict[str, Any]:
+    try:
+        with config_path().open("rb") as handle:
+            return tomllib.load(handle)
+    except FileNotFoundError:
+        return {}
+
+
+def lookup(config: dict[str, Any], key: str) -> Any:
+    value: Any = config
+    for part in key.split("."):
+        if not isinstance(value, dict) or part not in value:
+            return None
+        value = value[part]  # pyright: ignore[reportUnknownVariableType]
+    return value  # pyright: ignore[reportUnknownVariableType]
+
+
+def jira_server() -> str | None:
+    """The site jira-cli is logged in to, from its own config."""
+    path = os.environ.get("JIRA_CONFIG_FILE") or os.path.expanduser(
+        "~/.config/.jira/.config.yml"
+    )
+    try:
+        lines = Path(path).read_text().splitlines()
+    except OSError:
+        return None
+    for line in lines:
+        if line.startswith("server:"):
+            return line.split(":", 1)[1].strip().strip("\"'").rstrip("/") or None
+    return None
+
+
+def resolve(key: str) -> Any:
+    value = lookup(load(), key)
+    if value is None and key == "jira.browse_url" and (server := jira_server()):
+        value = f"{server}/browse"
+    return value
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 1 or argv[0] in ("-h", "--help"):
+        print((__doc__ or "").strip(), file=sys.stderr)
+        return 2
+    if argv[0] == "--path":
+        print(config_path())
+        return 0
+    value = resolve(argv[0])
+    if value is None or isinstance(value, dict):
+        return 1
+    items: list[Any] = value if isinstance(value, list) else [value]  # pyright: ignore[reportUnknownVariableType]
+    for item in items:
+        print(item)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
