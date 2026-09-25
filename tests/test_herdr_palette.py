@@ -55,10 +55,10 @@ def test_links_put_the_focused_pane_first_and_skip_closed_panes(
         "w9:p9": saved_pane("#9", "ABC-9"),
     }
     entries = palette.link_entries(saved, SNAPSHOT, "w1:p2")
-    assert [(e.label, e.note) for e in entries] == [
-        ("#2", "fix b · widgets"),
-        ("#1", "fix a · widgets"),
-        ("ABC-1", "fix a · widgets"),
+    assert [(e.tag, e.label, e.note) for e in entries] == [
+        ("gh", "#2", "fix b · widgets"),
+        ("gh", "#1", "fix a · widgets"),
+        ("jira", "ABC-1", "fix a · widgets"),
     ]
     assert entries[2].target == "https://jira.example.com/browse/ABC-1"
 
@@ -73,7 +73,8 @@ def test_actions_leave_out_the_palette_itself(palette: ModuleType) -> None:
         {"plugin_id": "x.picker", "action_id": "open", "title": "Pick a project"},
     ]
     [entry] = palette.action_entries(actions)
-    assert (entry.label, entry.kind, entry.target) == (
+    assert (entry.tag, entry.label, entry.kind, entry.target) == (
+        "cmd",
         "Pick a project",
         "action",
         "x.picker open",
@@ -87,7 +88,8 @@ def test_pick_reads_the_hidden_fields_of_the_chosen_row(
     entries = palette.link_entries({"w1:p1": saved_pane("#1", "ABC-1")}, SNAPSHOT, None)
     line = entries[1].line()
     if strip_ansi:
-        line = line.replace(palette.DIM, "").replace(palette.RESET, "")
+        for code in (palette.DIM, palette.BOLD, palette.RESET):
+            line = line.replace(code, "")
     done = subprocess.CompletedProcess(["fzf"], 0, stdout=line + "\n")
     with patch.object(palette.subprocess, "run", return_value=done):
         assert palette.pick(entries) == entries[1]

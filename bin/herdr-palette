@@ -29,7 +29,7 @@ from pathlib import Path
 from typing import Any, cast
 
 PALETTE_PLUGIN = "thrawny.palette"
-DIM, RESET = "\x1b[2m", "\x1b[0m"
+DIM, BOLD, RESET = "\x1b[2m", "\x1b[1m", "\x1b[0m"
 
 
 def as_dict(value: Any) -> dict[str, Any]:
@@ -75,6 +75,7 @@ def state_file() -> Path:
 
 @dataclass(frozen=True)
 class Entry:
+    tag: str  # "gh", "jira" or "cmd"; typing it in fzf narrows to that kind
     label: str
     note: str
     kind: str  # "action" or "link"
@@ -82,13 +83,18 @@ class Entry:
 
     def line(self) -> str:
         """fzf row: shown text, then hidden kind and target after tabs."""
-        return f"{self.label}  {DIM}{self.note}{RESET}\t{self.kind}\t{self.target}"
+        shown = f"{BOLD}{self.tag:<4}{RESET} {self.label}  {DIM}{self.note}{RESET}"
+        return f"{shown}\t{self.kind}\t{self.target}"
 
 
 def action_entries(actions: list[dict[str, Any]]) -> list[Entry]:
     return [
         Entry(
-            a["title"], a["plugin_id"], "action", f"{a['plugin_id']} {a['action_id']}"
+            "cmd",
+            a["title"],
+            a["plugin_id"],
+            "action",
+            f"{a['plugin_id']} {a['action_id']}",
         )
         for a in actions
         if a.get("plugin_id") != PALETTE_PLUGIN
@@ -115,9 +121,9 @@ def link_entries(
         title = pane.get("terminal_title_stripped") or pane_id
         note = f"{title} · {workspaces.get(pane.get('workspace_id')) or '?'}"
         if url := links.get("pr"):
-            entries.append(Entry(tokens.get("pr", "PR"), note, "link", url))
+            entries.append(Entry("gh", tokens.get("pr", "PR"), note, "link", url))
         if url := links.get("jira"):
-            entries.append(Entry(tokens.get("jira", "Jira"), note, "link", url))
+            entries.append(Entry("jira", tokens.get("jira", "Jira"), note, "link", url))
     return entries
 
 
