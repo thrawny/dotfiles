@@ -125,9 +125,10 @@ test-herdr-next-agent:
     bash -n bin/herdr-next-agent
     uv run --locked python -B -m pytest tests/test_herdr_next_agent.py
 
-# PR and Jira sidebar decoration
+# PR and Jira sidebar decoration, and the private work config it reads
 test-herdr-decorator:
-    uv run --locked python -B -m pytest tests/test_herdr_decorator.py
+    uv run --locked python -B -m pytest tests/test_herdr_decorator.py tests/test_work_config.py
+    bash -n bin/pr-review bin/code-sync
 
 # Run the sidebar decorator in the foreground, restarting it on every edit
 herdr-decorator-dev:

@@ -13,7 +13,9 @@ let
   hmLib = lib.hm;
   herdrPackage = herdr.packages.${system}.default;
   zmxPackage = zmx.packages.${system}.zmx-main;
-  pluginDir = "${config.home.homeDirectory}/dotfiles/config/herdr/plugins";
+  pluginRoot = "${config.home.homeDirectory}/dotfiles/config/herdr";
+  pluginDir = "${pluginRoot}/plugins";
+  extraPlugins = map (name: "${pluginRoot}/extra-plugins/${name}") config.dotfiles.herdr.extraPlugins;
 in
 {
   # Herdr has no per-plugin keybindings and no config drop-in directory, so
@@ -31,6 +33,15 @@ in
     type = lib.types.bool;
     default = true;
     description = "Show the agent kind (claude, codex, ...) in sidebar agent rows.";
+  };
+
+  # Every plugin in config/herdr/plugins is linked on every machine. Ones that
+  # only make sense on some hosts live in config/herdr/extra-plugins, and a
+  # host names the ones it wants here.
+  options.dotfiles.herdr.extraPlugins = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    default = [ ];
+    description = "Directory names under config/herdr/extra-plugins to link on this host.";
   };
 
   config.home.packages = [ herdrPackage ];
@@ -71,7 +82,7 @@ in
   # needs a running server and is safe to repeat.
   config.home.activation.linkHerdrPlugins = hmLib.dag.entryAfter [ "writeBoundary" ] ''
     if [ -S "$HOME/.config/herdr/herdr.sock" ]; then
-      for plugin in "${pluginDir}"/*; do
+      for plugin in "${pluginDir}"/* ${lib.escapeShellArgs extraPlugins}; do
         [ -d "$plugin" ] || continue
         $DRY_RUN_CMD ${herdrPackage}/bin/herdr plugin link \
           "$plugin" --enabled >/dev/null || \

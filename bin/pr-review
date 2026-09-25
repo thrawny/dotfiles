@@ -1,0 +1,428 @@
+#!/usr/bin/env bash
+# Pick an open PR labelled ready-for-review and waiting on your team, and open
+# it as a codediff review in that repo's Herdr workspace. The team, label and
+# extra repos come from the private work config, read with work-config.
+# Nothing is checked out: `:CodeReview pr` fetches refs/pull/N/head into a
+# temporary ref, diffs it against the merge base, and deletes the ref again, so
+# a repo already on a feature branch is left alone.
+set -euo pipefail
+[[ -z "${TRACE:-}" ]] || set -x
+
+# fzf's bindings re-run this script, and a Herdr plugin popup does not get the
+# interactive shell's PATH. Call this script and work-config by path.
+self=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)/$(basename "${BASH_SOURCE[0]}")
+work_config="$(dirname "$self")/work-config"
+
+team=$("$work_config" github.review_team) || {
+  echo "pr-review: set github.review_team (org/team) in $("$work_config" --path)" >&2
+  exit 1
+}
+org=${team%%/*}
+code_dir="${CODE_DIR:-$HOME/code}"
+cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/pr-review"
+cache="$cache_dir/prs.json"
+# The search costs about a second and a half, which is long enough to feel in a
+# popup. Stale by a few minutes is fine for a review queue.
+cache_ttl_minutes=5
+herdr_bin="${HERDR_BIN_PATH:-herdr}"
+jira_base=$("$work_config" jira.browse_url || true)
+# Adding this label is what the team uses to say a PR is open for review, so an
+# unlabelled PR is still being worked on and does not belong in the queue.
+review_label=$("$work_config" github.review_label || echo ready-for-review)
+
+# Repos where CODEOWNERS names the team but the team has no write access, so
+# GitHub never adds it as a reviewer and the team search misses their PRs.
+# Every labelled PR in them joins the queue instead.
+extra_repos=$("$work_config" github.extra_review_repos | tr '\n' ' ' || true)
+
+# Bots open most of the PRs the team is asked to review, and none of them are
+# what this picker is for. -b brings them back for a dependency sweep.
+bot_authors='dependabot[bot] renovate[bot] github-actions[bot]'
+
+usage() {
+  cat <<'USAGE'
+Usage: pr-review [-r] [-b] [REPO] [NUMBER]
+
+Pick a ready-for-review PR requesting review from your team (github.review_team
+in the work config) and open it in codediff, in that repo's Herdr workspace.
+
+  -r, --refresh   Ignore the cached PR list
+  -b, --bots      Include dependabot and other bot PRs
+  -j, --jira      Open the Jira ticket for REPO NUMBER instead of reviewing
+  -w, --worktree  Check the PR branch out in a Herdr worktree, with Claude Code
+                  and Neovim side by side, instead of reviewing
+  -h, --help      Show this help
+
+With REPO and NUMBER, skip the picker and open that PR directly.
+USAGE
+}
+
+refresh=0
+include_bots=0
+print_rows=0
+preview=0
+jira=0
+worktree=0
+args=()
+while (($#)); do
+  case "$1" in
+    -r | --refresh) refresh=1 ;;
+    -b | --bots) include_bots=1 ;;
+    -j | --jira) jira=1 ;;
+    -w | --worktree) worktree=1 ;;
+    # fzf runs the preview as its own process, so it re-enters the script too.
+    --preview) preview=1 ;;
+    # fzf's reload binding re-runs this script for a fresh list, so the row
+    # building has to be reachable without the picker.
+    --print-rows)
+      print_rows=1
+      refresh=1
+      ;;
+    -h | --help)
+      usage
+      exit 0
+      ;;
+    -*)
+      usage >&2
+      exit 2
+      ;;
+    *) args+=("$1") ;;
+  esac
+  shift
+done
+
+die() {
+  printf 'pr-review: %s\n' "$1" >&2
+  exit 1
+}
+
+# fzf's execute-silent swallows output, so a failed keypress inside the picker
+# has nowhere to report except a Herdr toast.
+report() {
+  printf 'pr-review: %s\n' "$1" >&2
+  if "$herdr_bin" status >/dev/null 2>&1; then
+    "$herdr_bin" notification show "$1" --sound none >/dev/null 2>&1 || true
+  fi
+}
+
+# The worktree runs from the picker, which closes as soon as it exits, so a
+# failure there needs the toast to be seen at all.
+fail() {
+  report "$1"
+  exit 1
+}
+
+for tool in gh jq fzf; do
+  command -v "$tool" >/dev/null || die "$tool is not installed"
+done
+
+fetch_prs() {
+  mkdir -p "$cache_dir"
+  local tmp repo repo_flags=()
+  tmp=$(mktemp "$cache.XXXXXX")
+  for repo in $extra_repos; do
+    repo_flags+=(--repo "$org/$repo")
+  done
+  # team-review-requested has no gh flag, so it goes in the raw query. -- keeps
+  # gh from reading a leading qualifier as a flag. A PR you opened yourself
+  # still requests the team, but it is not yours to review. A PR in an extra
+  # repo can match both searches, so keep one copy.
+  if ! {
+    gh search prs --state open --limit 100 --label "$review_label" \
+      --json repository,number,title,author,isDraft,updatedAt \
+      -- "team-review-requested:$team" "-author:@me"
+    gh search prs --state open --limit 100 --label "$review_label" "${repo_flags[@]}" \
+      --json repository,number,title,author,isDraft,updatedAt \
+      -- "-author:@me"
+  } | jq -s 'add | unique_by([.repository.name, .number])' >"$tmp"; then
+    rm -f "$tmp"
+    die 'gh search failed; check gh auth status'
+  fi
+  mv "$tmp" "$cache"
+}
+
+cache_is_fresh() {
+  [[ -s $cache ]] || return 1
+  [[ -z $(find "$cache" -mmin "+$cache_ttl_minutes" -print 2>/dev/null) ]]
+}
+
+open_url() {
+  if command -v open >/dev/null; then
+    open "$1"
+  else
+    xdg-open "$1"
+  fi
+}
+
+# Team convention puts the ticket in the PR title, as in feat(ABC-123): ...
+# Bots and small changes have no ticket, and the branch name is the next best
+# place to look before giving up.
+# No ticket is an ordinary answer here, not a failure, so the empty grep does
+# not take the script down with it.
+ticket_in() {
+  grep -oE '[A-Z][A-Z0-9]+-[0-9]+' <<<"$1" | head -1 || true
+}
+
+open_jira() {
+  local repo=$1 number=$2 ticket
+  [[ $number =~ ^[0-9]+$ ]] || die "not a PR number: $number"
+  ticket=$(ticket_in "$(gh pr view --repo "$org/$repo" "$number" --json title --jq .title)")
+  if [[ -z $ticket ]]; then
+    ticket=$(ticket_in "$(gh pr view --repo "$org/$repo" "$number" --json headRefName --jq .headRefName)")
+  fi
+  if [[ -z $ticket ]]; then
+    report "No Jira ticket in $repo#$number"
+    exit 1
+  fi
+  if [[ -z $jira_base ]]; then
+    report "No Jira site: log in with jira-cli or set jira.browse_url"
+    exit 1
+  fi
+  open_url "$jira_base/$ticket"
+}
+
+# gh prints the PR's fields as key:value lines, then `--`, then the markdown
+# body. The fields read as YAML, so highlight them that way and leave the body
+# to the markdown lexer. bat is optional; without it the preview is plain.
+show_preview() {
+  local repo=$1 number=$2 text head_text body_text
+  text=$(gh pr view --repo "$org/$repo" "$number" 2>&1) || {
+    printf '%s\n' "$text"
+    return 0
+  }
+  if ! command -v bat >/dev/null; then
+    printf '%s\n' "$text"
+    return 0
+  fi
+  # Tabs after the field names would read as indentation to the YAML lexer.
+  head_text=$(sed -n '1,/^--$/p' <<<"$text" | sed '/^--$/d; s/:\t/: /')
+  body_text=$(sed -n '/^--$/,$p' <<<"$text" | sed '1d')
+  bat --color=always --style=plain --language=yaml <<<"$head_text"
+  if [[ -n $body_text ]]; then
+    printf '\n'
+    bat --color=always --style=plain --language=markdown <<<"$body_text"
+  fi
+}
+
+ensure_clone() {
+  local repo=$1 dir=$2
+  if [[ ! -d $dir ]]; then
+    # stderr, since after fzf's become() stdout is the picker's selection.
+    printf 'Cloning %s/%s…\n' "$org" "$repo" >&2
+    gh repo clone "$org/$repo" "$dir" >/dev/null || die "could not clone $org/$repo"
+  fi
+}
+
+open_review() {
+  local repo=$1 number=$2
+  [[ $number =~ ^[0-9]+$ ]] || die "not a PR number: $number"
+  local dir="$code_dir/$repo"
+  ensure_clone "$repo" "$dir"
+
+  # Outside Herdr there is no workspace to open, so review in place.
+  if ! "$herdr_bin" status >/dev/null 2>&1; then
+    cd "$dir"
+    exec nvim "+CodeReview pr $number"
+  fi
+
+  local workspace pane
+  workspace=$(find_workspace "$dir")
+  if [[ -n $workspace ]]; then
+    # A repo's workspace usually has work in progress in it, so a review gets
+    # its own tab rather than taking over a pane.
+    "$herdr_bin" workspace focus "$workspace" >/dev/null
+    pane=$("$herdr_bin" tab create --workspace "$workspace" --cwd "$dir" \
+      --label "$repo#$number" --focus | jq -r '.result.root_pane.pane_id')
+  else
+    pane=$("$herdr_bin" workspace create --cwd "$dir" --label "$repo" --focus |
+      jq -r '.result.root_pane.pane_id')
+  fi
+  [[ -n $pane && $pane != null ]] || die 'Herdr did not report a pane to run in'
+
+  # The shell in a fresh pane may not have drawn its prompt yet. Typed-ahead
+  # input survives that, but a moment's grace keeps the command off the banner.
+  sleep 0.3
+  "$herdr_bin" pane run "$pane" "nvim '+CodeReview pr $number'" >/dev/null
+}
+
+# Check the PR's branch out in a Herdr worktree workspace, grouped under the
+# repo's own, with Claude Code on the left and Neovim on the right. Unlike
+# open_review this leaves a real branch behind, so the review can run tests or
+# push a fix. Herdr puts the checkout under ~/.herdr/worktrees/<repo>/<branch>.
+open_worktree() {
+  local repo=$1 number=$2
+  [[ $number =~ ^[0-9]+$ ]] || fail "not a PR number: $number"
+  local dir="$code_dir/$repo"
+  ensure_clone "$repo" "$dir"
+  "$herdr_bin" status >/dev/null 2>&1 || fail 'a worktree review needs Herdr'
+
+  local pr branch
+  pr=$(gh pr view --repo "$org/$repo" "$number" --json headRefName,isCrossRepository) ||
+    fail "could not read $repo#$number"
+  # A fork's branch is not on origin, and its name can clash with one that is.
+  if [[ $(jq -r .isCrossRepository <<<"$pr") == true ]]; then
+    branch="pr-$number"
+  else
+    branch=$(jq -r .headRefName <<<"$pr")
+  fi
+
+  # A checkout already on the branch may hold unpushed work, so go back to it
+  # rather than moving the branch under it.
+  local existing
+  existing=$("$herdr_bin" worktree list --cwd "$dir" |
+    jq -c --arg b "$branch" '.result.worktrees[] | select(.branch == $b)' | head -1)
+  if [[ -n $existing ]]; then
+    local open_ws
+    open_ws=$(jq -r '.open_workspace_id // empty' <<<"$existing")
+    if [[ -n $open_ws ]]; then
+      "$herdr_bin" workspace focus "$open_ws" >/dev/null
+      return 0
+    fi
+    split_claude_nvim "$("$herdr_bin" worktree open --cwd "$dir" \
+      --path "$(jq -r .path <<<"$existing")" --label "$repo#$number" --focus)" "$number"
+    return 0
+  fi
+
+  local sha
+  if [[ $branch == "pr-$number" ]]; then
+    git -C "$dir" fetch --quiet origin "pull/$number/head" || fail "could not fetch $repo#$number"
+    sha=$(git -C "$dir" rev-parse FETCH_HEAD)
+  else
+    git -C "$dir" fetch --quiet origin "+refs/heads/$branch:refs/remotes/origin/$branch" ||
+      fail "could not fetch $branch"
+    sha=$(git -C "$dir" rev-parse "origin/$branch")
+  fi
+
+  if ! git -C "$dir" show-ref --verify --quiet "refs/heads/$branch"; then
+    git -C "$dir" branch --quiet "$branch" "$sha"
+    [[ $branch == "pr-$number" ]] ||
+      git -C "$dir" branch --quiet --set-upstream-to "origin/$branch" "$branch"
+  elif git -C "$dir" merge-base --is-ancestor "$branch" "$sha"; then
+    git -C "$dir" update-ref "refs/heads/$branch" "$sha"
+  else
+    # Local commits the PR does not have. Keep them and say so.
+    report "$branch has local commits not on the PR; opening it as it is"
+  fi
+
+  split_claude_nvim "$("$herdr_bin" worktree create --cwd "$dir" --branch "$branch" \
+    --label "$repo#$number" --focus)" "$number"
+}
+
+# Takes the JSON Herdr prints for a new worktree workspace, and the PR number
+# for Neovim to open the review on.
+split_claude_nvim() {
+  local number=$2 left right checkout
+  left=$(jq -r '.result.root_pane.pane_id // empty' <<<"$1")
+  checkout=$(jq -r '.result.worktree.path // empty' <<<"$1")
+  [[ -n $left && -n $checkout ]] || fail 'Herdr did not report a pane to run in'
+  right=$("$herdr_bin" pane split "$left" --direction right --cwd "$checkout" --no-focus |
+    jq -r '.result.pane.pane_id')
+  # Same grace as open_review, for the prompts of two fresh shells.
+  sleep 0.3
+  "$herdr_bin" pane run "$left" claude >/dev/null
+  "$herdr_bin" pane run "$right" "nvim '+CodeReview pr $number'" >/dev/null
+}
+
+# Workspaces have no cwd of their own, so match on the saved cwd of their panes.
+# foreground_cwd moves as programs navigate and would match the wrong workspace.
+#
+# One matching pane is not enough. A shell that cd'd into another repo, or a
+# review tab opened here for it, leaves a pane pointing at a repo the workspace
+# is not about, and matching on that lands the next review in the wrong place.
+# So a workspace has to carry the repo's name, or hold the repo in most of its
+# panes, before it counts.
+find_workspace() {
+  local dir=$1 name workspace label pane_cwd total matched best='' best_matched=0
+  name=$(basename "$dir")
+  while IFS=$'\t' read -r workspace label; do
+    total=0
+    matched=0
+    while IFS= read -r pane_cwd; do
+      total=$((total + 1))
+      [[ -d $pane_cwd ]] || continue
+      if [[ "$(cd "$pane_cwd" && pwd -P)" == "$dir" ]]; then
+        matched=$((matched + 1))
+      fi
+    done < <("$herdr_bin" pane list --workspace "$workspace" |
+      jq -r '.result.panes[] | .cwd // empty')
+    if [[ $label == "$name" ]] && ((matched > 0)); then
+      printf '%s\n' "$workspace"
+      return 0
+    fi
+    if ((matched * 2 > total && matched > best_matched)); then
+      best=$workspace
+      best_matched=$matched
+    fi
+  done < <("$herdr_bin" workspace list |
+    jq -r '.result.workspaces[] | [.workspace_id, (.label // "")] | @tsv')
+  [[ -z $best ]] || printf '%s\n' "$best"
+  return 0
+}
+
+if ((${#args[@]} == 2)); then
+  if ((preview)); then
+    show_preview "${args[0]#*/}" "${args[1]}"
+  elif ((jira)); then
+    open_jira "${args[0]#*/}" "${args[1]}"
+  elif ((worktree)); then
+    open_worktree "${args[0]#*/}" "${args[1]}"
+  else
+    open_review "${args[0]#*/}" "${args[1]}"
+  fi
+  exit 0
+elif ((${#args[@]} != 0)); then
+  usage >&2
+  exit 2
+fi
+
+if ((refresh)) || ! cache_is_fresh; then
+  fetch_prs
+fi
+
+build_rows() {
+  jq -r --arg bots "$bot_authors" --argjson include_bots "$include_bots" '
+  ($bots | split(" ")) as $bots
+  | map(select($include_bots == 1 or (.author.login as $a | $bots | index($a) | not)))
+  | sort_by(.updatedAt) | reverse
+  | .[]
+  | [ .repository.name,
+      (.number | tostring),
+      (.updatedAt | fromdateiso8601 | strflocaltime("%Y-%m-%d %H:%M")),
+      .author.login,
+      ((if .isDraft then "[draft] " else "" end) + .title)
+    ] | @tsv
+' "$cache" | column -t -s $'\t'
+}
+
+rows=$(build_rows)
+
+if ((print_rows)); then
+  printf '%s\n' "$rows"
+  exit 0
+fi
+
+if [[ -z $rows ]]; then
+  echo "No $review_label PRs waiting on $team."
+  # In a popup the message would vanish with the pane before it could be read.
+  [[ -t 0 ]] && read -r -n 1 -s -p 'Press any key to close… '
+  exit 0
+fi
+
+bots_suffix=''
+((include_bots)) && bots_suffix=' --bots'
+
+# ctrl-j and ctrl-k move through the list, so the Jira ticket goes on ctrl-t.
+# ctrl-w gives up fzf's delete-word for the worktree; become() replaces fzf so
+# the popup closes when the worktree is open, as it does after enter.
+selection=$(fzf --prompt='review> ' --height=100% \
+  --header='enter review · ctrl-w worktree · ctrl-r refresh · ctrl-o github · ctrl-t jira' \
+  --bind="ctrl-w:become($self --worktree {1} {2})" \
+  --preview="$self --preview {1} {2}" --preview-window=right,55%,wrap \
+  --bind="ctrl-r:reload($self --print-rows$bots_suffix)" \
+  --bind="ctrl-o:execute-silent(gh pr view --repo $org/{1} {2} --web)" \
+  --bind="ctrl-t:execute-silent($self --jira {1} {2})" \
+  <<<"$rows") || exit 0
+
+[[ -n $selection ]] || exit 0
+read -r repo number _ <<<"$selection"
+open_review "$repo" "$number"

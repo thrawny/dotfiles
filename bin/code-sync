@@ -1,0 +1,426 @@
+#!/usr/bin/env bash
+# Reconcile gita's repo list with the git checkouts under ~/code, then
+# fast-forward the default branch of each one.
+#
+# gita tracks a fixed list of repos in ~/.config/gita/repos.csv and never
+# rescans on its own, so a freshly cloned repo is invisible to it and a deleted
+# one lingers as a dead row. Running that reconciliation first, every time, is
+# the only reason this wrapper exists instead of a bare `gita pull -a` alias.
+#
+# Checkouts with no remote are left out of the list: there is nothing to
+# fast-forward them from, and gita skips them in `gita freeze` anyway.
+#
+# Only the default branch is ever updated, and only by fast-forward. A repo
+# sitting on a feature branch keeps that branch checked out and its worktree
+# untouched; the fetch moves the local default branch behind its back. So
+# nothing here switches branches, rewrites history, or touches a dirty tree.
+#
+# The updates are plain git rather than `gita pull`, because gita pull only
+# knows how to pull the checked-out branch. `gita` is still what holds the repo
+# list and prints the status table.
+set -euo pipefail
+
+code_dir=${CODE_DIR:-"$HOME/code"}
+# Same precedence gita uses (gita/common.py).
+repos_csv=${GITA_PROJECT_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}}/gita/repos.csv
+
+usage() {
+  cat <<'EOF'
+Usage: code-sync [-n] [-s]
+
+Sync gita's repo list with the git checkouts under $CODE_DIR (default ~/code),
+then fast-forward each one's default branch. Checkouts with no remote are left
+out, and repos outside $CODE_DIR are left alone.
+
+A repo on some other branch stays on it: only its local default branch moves.
+
+  -n  Print what would change and what would be updated, change nothing.
+  -s  Print the status table (gita ll) when finished.
+  -h  This message.
+EOF
+}
+
+# How many repos to fetch at once. Sequential fetches over ssh dominate the
+# runtime of a ~45 repo sweep; beyond a handful in parallel the remote, not the
+# local machine, is the limit.
+jobs_max=8
+
+# Name of the branch this repo considers its default. origin/HEAD is what
+# `git clone` records, but it goes stale after an upstream rename until someone
+# runs `git remote set-head`, so fall back to the two names that are ever used.
+default_branch() {
+  local repo=$1 head_ref candidate
+  if head_ref=$(git -C "$repo" symbolic-ref --quiet --short refs/remotes/origin/HEAD); then
+    printf '%s\n' "${head_ref#origin/}"
+    return 0
+  fi
+  for candidate in main master; do
+    if git -C "$repo" show-ref --quiet --verify "refs/remotes/origin/$candidate"; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+have_gh=false
+if command -v gh >/dev/null 2>&1; then
+  have_gh=true
+fi
+
+# The one line of a git failure worth reporting. git leads with several hint:
+# lines about how to recover, so the first line of the output is usually not the
+# line that says what went wrong.
+error_line() {
+  local log=$1 line
+  # A rejected refspec says `! [rejected] main -> main (non-fast-forward)`,
+  # which is git's wording for a local default branch that has its own commits.
+  # Say that instead, because the refspec is this script's, not the reader's.
+  if [[ $log == *'(non-fast-forward)'* ]]; then
+    printf 'local branch has diverged from origin\n'
+    return
+  fi
+  while IFS= read -r line; do
+    case $line in
+      *fatal:* | *error:*)
+        printf '%s\n' "${line#"${line%%[![:space:]]*}"}"
+        return
+        ;;
+    esac
+  done <<<"$log"
+  printf '%s\n' "${log%%$'\n'*}"
+}
+
+# Where the checked-out branch stands against the default branch, for a repo
+# that is not on its default branch. Answers one question: is there anything on
+# this branch that the default branch does not already have.
+branch_report() {
+  local repo=$1 default=$2 branch=$3 counts behind ahead pr
+  if [[ $branch == '-' ]]; then
+    printf 'detached HEAD\n'
+    return
+  fi
+  if ! counts=$(git -C "$repo" rev-list --left-right --count \
+    "refs/remotes/origin/$default...HEAD" 2>/dev/null); then
+    printf 'cannot compare with %s\n' "$default"
+    return
+  fi
+  behind=${counts%%[[:space:]]*}
+  ahead=${counts##*[[:space:]]}
+  if ((ahead == 0)); then
+    printf 'merged into %s, branch can go\n' "$default"
+    return
+  fi
+  # A squash merge rewrites the commits, so the branch stays ahead of the
+  # default branch forever and ancestry can never see that the work landed. The
+  # PR state can, when gh is installed. A miss here is cheap: the count below
+  # is still true, it just does not say the work is already in.
+  if [[ $have_gh == true ]]; then
+    pr=$(cd "$repo" && gh pr list --head "$branch" --state merged --limit 1 \
+      --json number --jq '.[0].number' 2>/dev/null) || pr=''
+    if [[ -n $pr ]]; then
+      printf 'PR #%s merged, branch can go\n' "$pr"
+      return
+    fi
+  fi
+  if ((behind > 0)); then
+    printf '%s ahead, %s behind %s\n' "$ahead" "$behind" "$default"
+  else
+    printf '%s ahead of %s\n' "$ahead" "$default"
+  fi
+}
+
+# Where a repo is sitting, for the report. A detached HEAD has no branch name
+# to print, so its note already says everything.
+where_clause() {
+  local branch=$1 note=$2
+  if [[ $branch == '-' ]]; then
+    printf '%s\n' "$note"
+  else
+    printf 'on %s (%s)\n' "$branch" "$note"
+  fi
+}
+
+# Fast-forward one repo's default branch, then write a single tab-separated
+# line: result, default branch, checked-out branch, commits gained, and a note
+# (the branch report, or the git error for a failure). Runs in a background
+# subshell, so that line is how it reports rather than globals or an exit code.
+update_repo() {
+  local repo=$1 default head_branch before after log exit_code=0 gained note result
+  if ! default=$(default_branch "$repo"); then
+    printf 'failed\t-\t-\t0\torigin/HEAD is unset and there is no origin/main or origin/master\n'
+    return
+  fi
+
+  before=$(git -C "$repo" rev-parse --verify --quiet "refs/heads/$default" || true)
+  head_branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD || printf -- '-')
+
+  # The fetches run without --quiet on purpose. Their output is captured either
+  # way and only ever printed for a failure, and --quiet swallows the
+  # `! [rejected]` line that says why a refspec did not apply.
+  if [[ $head_branch == "$default" ]]; then
+    # Fetch and merge by hand instead of `git pull --ff-only`, so the repo's
+    # own pull.rebase and pull.ff settings cannot change what happens here.
+    if log=$(git -C "$repo" fetch origin \
+      "+refs/heads/$default:refs/remotes/origin/$default" 2>&1); then
+      log=$(git -C "$repo" merge --ff-only --quiet "refs/remotes/origin/$default" 2>&1) ||
+        exit_code=$?
+    else
+      exit_code=$?
+    fi
+  else
+    # The default branch is not checked out, so move its ref directly and leave
+    # the worktree on whatever branch it is on. Without a leading + this refspec
+    # rejects a non-fast-forward, which is what we want; the remote-tracking ref
+    # gets the forced one, since it mirrors the remote and holds no local work.
+    log=$(git -C "$repo" fetch origin \
+      "+refs/heads/$default:refs/remotes/origin/$default" \
+      "refs/heads/$default:refs/heads/$default" 2>&1) || exit_code=$?
+  fi
+
+  if ((exit_code != 0)); then
+    # One line, not the transcript: 45 repos' worth of git output buries
+    # everything else the sweep has to say.
+    printf 'failed\t%s\t%s\t0\t%s\n' "$default" "$head_branch" "$(error_line "$log")"
+    return
+  fi
+
+  after=$(git -C "$repo" rev-parse --verify --quiet "refs/heads/$default" || true)
+  gained=0
+  result=current
+  if [[ $after != "$before" ]]; then
+    result=updated
+    if [[ -n $before ]]; then
+      gained=$(git -C "$repo" rev-list --count "$before..$after")
+    else
+      gained=$(git -C "$repo" rev-list --count "$after")
+    fi
+  fi
+
+  note=''
+  if [[ $head_branch != "$default" ]]; then
+    note=$(branch_report "$repo" "$default" "$head_branch")
+  fi
+
+  printf '%s\t%s\t%s\t%s\t%s\n' "$result" "$default" "$head_branch" "$gained" "$note"
+}
+
+dry_run=false
+show_status=false
+while getopts ':nsh' opt; do
+  case $opt in
+    n) dry_run=true ;;
+    s) show_status=true ;;
+    h)
+      usage
+      exit 0
+      ;;
+    *)
+      usage >&2
+      exit 2
+      ;;
+  esac
+done
+
+if ! command -v gita >/dev/null 2>&1; then
+  cat >&2 <<'EOF'
+code-sync: gita is not on PATH.
+It is declared in dotfiles (nix/home/shared/packages/workstation.nix);
+run the dotfiles switch to pick it up.
+EOF
+  exit 1
+fi
+
+if [[ ! -d $code_dir ]]; then
+  printf 'code-sync: %s does not exist\n' "$code_dir" >&2
+  exit 1
+fi
+
+# Enumerate the checkouts explicitly rather than using `gita add -r`, which
+# recurses without limit and would pick up every nested .git it finds (test
+# fixtures, vendored deps, worktrees). `gita add -a` is worse: it also builds a
+# group per directory level, which a flat ~/code does not want.
+names=()
+paths=()
+remoteless=()
+for candidate in "$code_dir"/*/; do
+  repo=${candidate%/}
+  [[ -e ${repo}/.git ]] || continue
+  if [[ -z $(git -C "$repo" remote) ]]; then
+    remoteless+=("${repo##*/}")
+    continue
+  fi
+  names+=("${repo##*/}")
+  paths+=("$repo")
+done
+
+if ((${#names[@]} == 0)); then
+  printf 'code-sync: no git checkouts with a remote found in %s\n' "$code_dir" >&2
+  exit 1
+fi
+
+if ((${#remoteless[@]} > 0)); then
+  printf 'code-sync: ignoring %d checkout(s) with no remote: %s\n' \
+    "${#remoteless[@]}" "${remoteless[*]}"
+fi
+
+wanted=$(printf '%s\n' "${names[@]}")
+
+# Walk the tracked rows to find what the list holds that ~/code no longer does.
+# Rows pointing outside $code_dir belong to something else and are skipped:
+# this command promises to touch only what lives under it.
+tracked=()
+drop_live=() # still a checkout, but unwanted now (usually lost its remote)
+drop_dead=() # path is gone
+if [[ -f $repos_csv ]]; then
+  while IFS=, read -r row_path row_name _; do
+    [[ -n ${row_path:-} && -n ${row_name:-} ]] || continue
+    [[ $row_path == "$code_dir"/* ]] || continue
+    tracked+=("$row_name")
+    if printf '%s\n' "$wanted" | grep -Fxq -- "$row_name"; then
+      continue
+    fi
+    if [[ -e ${row_path}/.git ]]; then
+      drop_live+=("$row_name")
+    else
+      drop_dead+=("$row_name")
+    fi
+  done <"$repos_csv"
+fi
+
+tracked_names=$(printf '%s\n' ${tracked[@]+"${tracked[@]}"})
+add_paths=()
+add_names=()
+for i in "${!names[@]}"; do
+  if ! printf '%s\n' "$tracked_names" | grep -Fxq -- "${names[i]}"; then
+    add_paths+=("${paths[i]}")
+    add_names+=("${names[i]}")
+  fi
+done
+
+if [[ $dry_run == true ]]; then
+  if ((${#add_names[@]} > 0)); then
+    printf 'code-sync: would register %d repo(s):\n' "${#add_names[@]}"
+    printf '  %s\n' "${add_names[@]}"
+  fi
+  drop_all=(${drop_live[@]+"${drop_live[@]}"} ${drop_dead[@]+"${drop_dead[@]}"})
+  if ((${#drop_all[@]} > 0)); then
+    printf 'code-sync: would unregister %d repo(s):\n' "${#drop_all[@]}"
+    printf '  %s\n' "${drop_all[@]}"
+  fi
+  printf 'code-sync: would fast-forward the default branch of %d repo(s) under %s\n' \
+    "${#names[@]}" "$code_dir"
+  exit 0
+fi
+
+if ((${#add_paths[@]} > 0)); then
+  add_log=$(gita add "${add_paths[@]}" 2>&1) || {
+    printf '%s\n' "$add_log" >&2
+    printf 'code-sync: gita add failed\n' >&2
+    exit 1
+  }
+  printf 'code-sync: registered %d repo(s): %s\n' "${#add_names[@]}" "${add_names[*]}"
+fi
+
+if ((${#drop_live[@]} > 0)); then
+  # `gita rm` rather than a hand-edit: it also drops the repo from any group it
+  # belongs to, which editing the csv would leave behind as a dangling name.
+  gita rm "${drop_live[@]}"
+  printf 'code-sync: unregistered %d repo(s): %s\n' "${#drop_live[@]}" "${drop_live[*]}"
+fi
+
+if ((${#drop_dead[@]} > 0)); then
+  # `gita rm` refuses these: it validates its arguments against the repos it can
+  # still find on disk, and these paths are gone. So drop the rows here instead.
+  # A `gita rm` above has often already rewritten them away, which makes this a
+  # no-op rather than a conflict.
+  drop_list=$(printf '%s\n' "${drop_dead[@]}")
+  kept=$(mktemp)
+  while IFS= read -r row || [[ -n $row ]]; do
+    row_name=${row#*,}
+    row_name=${row_name%%,*}
+    if printf '%s\n' "$drop_list" | grep -Fxq -- "$row_name"; then
+      continue
+    fi
+    printf '%s\n' "$row"
+  done <"$repos_csv" >"$kept"
+  mv "$kept" "$repos_csv"
+  printf 'code-sync: dropped %d dead row(s): %s\n' "${#drop_dead[@]}" "${drop_dead[*]}"
+fi
+
+printf 'code-sync: updating %d repo(s) under %s\n' "${#names[@]}" "$code_dir"
+
+scratch=$(mktemp -d)
+trap 'rm -rf "$scratch"' EXIT
+
+# Fetch in batches rather than one repo after another: ~45 round trips to
+# GitHub, run in sequence, is most of the wall clock of a sweep. Each job writes
+# its own file, which the loop below reads back in the original order, so the
+# output does not depend on which fetch finished first.
+running=0
+for i in "${!names[@]}"; do
+  update_repo "${paths[i]}" >"$scratch/$i.out" 2>"$scratch/$i.err" &
+  running=$((running + 1))
+  if ((running >= jobs_max)); then
+    wait
+    running=0
+  fi
+done
+wait
+
+updated=0
+current=0
+failed=0
+off_default=0
+for i in "${!names[@]}"; do
+  result=''
+  IFS=$'\t' read -r result default head_branch gained note <"$scratch/$i.out" || true
+  case $result in
+    updated | current | failed) ;;
+    *)
+      # update_repo itself broke, which leaves no line to parse.
+      result=failed
+      IFS= read -r note <"$scratch/$i.err" || note='no output'
+      ;;
+  esac
+
+  case $result in
+    failed)
+      failed=$((failed + 1))
+      printf '  %-30s failed: %s\n' "${names[i]}" "$note"
+      ;;
+    updated)
+      updated=$((updated + 1))
+      if [[ -n $note ]]; then
+        off_default=$((off_default + 1))
+        printf '  %-30s %s +%s, %s\n' \
+          "${names[i]}" "$default" "$gained" "$(where_clause "$head_branch" "$note")"
+      else
+        printf '  %-30s %s +%s\n' "${names[i]}" "$default" "$gained"
+      fi
+      ;;
+    current)
+      current=$((current + 1))
+      # A repo on its default branch with nothing to pull says nothing worth a
+      # line. One parked on another branch does.
+      if [[ -n $note ]]; then
+        off_default=$((off_default + 1))
+        printf '  %-30s %s\n' "${names[i]}" "$(where_clause "$head_branch" "$note")"
+      fi
+      ;;
+  esac
+done
+
+printf 'code-sync: %d updated, %d already current, %d failed, %d not on the default branch\n' \
+  "$updated" "$current" "$failed" "$off_default"
+
+if [[ $show_status == true ]]; then
+  printf '\n'
+  # `gita ll` takes a group name, not repo names, so this covers everything
+  # tracked rather than just $code_dir. Harmless for a read-only status table.
+  gita ll
+fi
+
+if ((failed > 0)); then
+  exit 1
+fi

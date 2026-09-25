@@ -1,9 +1,8 @@
 {
-  # super+r opens the team's PR review queue. The picker lives in the es-utils
-  # repo under ~/code, which only this machine has, and Herdr keybindings can
-  # only be declared in config.toml. Binding by plugin id keeps that repo's
-  # name and layout out of the shared config; if the plugin is not linked, the
-  # key does nothing.
+  # super+r opens the team's PR review queue. bin/pr-review reads the team from
+  # the private work config, which only this machine has.
+  dotfiles.herdr.extraPlugins = [ "pr-review" ];
+
   dotfiles.herdr.commands = [
     {
       key = "super+r";
