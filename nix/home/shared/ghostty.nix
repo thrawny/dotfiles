@@ -62,6 +62,9 @@ in
         # super+d (new_split) is freed for other apps; Herdr splits live on
         # super+enter and the prefix.
         "super+d=unbind"
+        # super+shift+p opens Herdr's command palette plugin instead of
+        # Ghostty's own.
+        "super+shift+p=unbind"
         "super+a=select_all"
         "super+c=copy_to_clipboard"
         "super+v=paste_from_clipboard"

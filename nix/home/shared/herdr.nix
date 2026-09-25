@@ -60,6 +60,12 @@ in
       description = "Pick a project";
     }
     {
+      key = "super+shift+p";
+      type = "plugin_action";
+      command = "thrawny.palette.open";
+      description = "Command palette";
+    }
+    {
       # A popup is session-modal, so this scratchpad is global rather than per
       # workspace. Herdr respawns the popup command on every open and routes
       # every key to it until it exits, so persistence has to come from the

@@ -1,0 +1,20 @@
+id = "thrawny.palette"
+name = "Command palette"
+version = "0.1.0"
+min_herdr_version = "0.9.0"
+platforms = ["linux", "macos"]
+description = "Fuzzy-pick any plugin action, or open an agent's PR or Jira ticket"
+
+[[actions]]
+id = "open"
+title = "Command palette"
+contexts = ["workspace", "pane"]
+command = ["sh", "-c", 'exec "$HERDR_BIN_PATH" plugin pane open --plugin thrawny.palette --entrypoint picker']
+
+[[panes]]
+id = "picker"
+title = "Command palette"
+placement = "popup"
+width = "70%"
+height = "50%"
+command = ["herdr-palette"]

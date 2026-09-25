@@ -1,0 +1,222 @@
+#!/usr/bin/env python3
+"""Command palette for Herdr: fuzzy-pick a plugin action or an agent's link.
+
+Runs in the palette plugin's popup. The list has two parts:
+
+- every action of every linked plugin, from `herdr plugin action list`, so a
+  new plugin shows up here without touching this script;
+- the PR and Jira links herdr-decorator saved for each open agent pane, with
+  the focused pane's first, so Enter on the top row opens the PR you are
+  looking at.
+
+A link opens in the browser straight from the popup. An action cannot run from
+inside it: Herdr shows one popup at a time, and most actions open one. Herdr
+starts an action's command and returns at once, so the refusal happens inside
+the action where the palette cannot see it. So the palette starts a detached
+`herdr-palette --invoke`, which closes the popup over the socket and then runs
+the action.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import socket
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, cast
+
+PALETTE_PLUGIN = "thrawny.palette"
+DIM, RESET = "\x1b[2m", "\x1b[0m"
+
+
+def as_dict(value: Any) -> dict[str, Any]:
+    """JSON from Herdr or disk, as a dict when it is one and empty otherwise."""
+    return cast(dict[str, Any], value) if isinstance(value, dict) else {}
+
+
+def herdr_bin() -> str:
+    return os.environ.get("HERDR_BIN_PATH") or "herdr"
+
+
+def herdr_json(*args: str) -> dict[str, Any]:
+    out = subprocess.run(
+        [herdr_bin(), *args], capture_output=True, text=True, timeout=10, check=False
+    )
+    try:
+        reply = json.loads(out.stdout or out.stderr or "{}")
+    except ValueError:
+        return {}
+    return as_dict(reply)
+
+
+def close_popup() -> None:
+    """Close Herdr's popup. The CLI has no command for this, so use the socket."""
+    path = os.environ.get("HERDR_SOCKET_PATH") or os.path.expanduser(
+        "~/.config/herdr/herdr.sock"
+    )
+    request: dict[str, Any] = {"id": "palette", "method": "popup.close", "params": {}}
+    try:
+        with socket.socket(socket.AF_UNIX) as sock:
+            sock.settimeout(5)
+            sock.connect(path)
+            sock.sendall((json.dumps(request) + "\n").encode())
+            sock.makefile().readline()
+    except OSError:
+        pass
+
+
+def state_file() -> Path:
+    base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    return Path(base) / "herdr-decorator" / "panes.json"
+
+
+@dataclass(frozen=True)
+class Entry:
+    label: str
+    note: str
+    kind: str  # "action" or "link"
+    target: str  # "plugin_id action_id" for actions, the URL for links
+
+    def line(self) -> str:
+        """fzf row: shown text, then hidden kind and target after tabs."""
+        return f"{self.label}  {DIM}{self.note}{RESET}\t{self.kind}\t{self.target}"
+
+
+def action_entries(actions: list[dict[str, Any]]) -> list[Entry]:
+    return [
+        Entry(
+            a["title"], a["plugin_id"], "action", f"{a['plugin_id']} {a['action_id']}"
+        )
+        for a in actions
+        if a.get("plugin_id") != PALETTE_PLUGIN
+    ]
+
+
+def link_entries(
+    saved: dict[str, Any], snapshot: dict[str, Any], focused_pane: str | None
+) -> list[Entry]:
+    """PR and Jira rows for panes that are still open, focused pane first."""
+    panes = {p["pane_id"]: p for p in snapshot.get("panes", [])}
+    workspaces = {
+        w["workspace_id"]: w.get("label") for w in snapshot.get("workspaces", [])
+    }
+    order = sorted(saved, key=lambda pane_id: (pane_id != focused_pane, pane_id))
+    entries: list[Entry] = []
+    for pane_id in order:
+        pane = panes.get(pane_id)
+        if pane is None:
+            continue
+        info: dict[str, Any] = saved[pane_id]
+        tokens: dict[str, str] = info.get("tokens") or {}
+        links: dict[str, str] = info.get("links") or {}
+        title = pane.get("terminal_title_stripped") or pane_id
+        note = f"{title} · {workspaces.get(pane.get('workspace_id')) or '?'}"
+        if url := links.get("pr"):
+            entries.append(Entry(tokens.get("pr", "PR"), note, "link", url))
+        if url := links.get("jira"):
+            entries.append(Entry(tokens.get("jira", "Jira"), note, "link", url))
+    return entries
+
+
+def load_saved() -> dict[str, Any]:
+    try:
+        saved = json.loads(state_file().read_text())
+    except (OSError, ValueError):
+        return {}
+    return as_dict(saved)
+
+
+def focused_pane() -> str | None:
+    """The pane under the popup, from the plugin context Herdr passes in."""
+    try:
+        context: Any = json.loads(os.environ.get("HERDR_PLUGIN_CONTEXT_JSON") or "{}")
+    except ValueError:
+        return None
+    pane_id = as_dict(context).get("focused_pane_id")
+    return pane_id if isinstance(pane_id, str) else None
+
+
+def pick(entries: list[Entry]) -> Entry | None:
+    # fzf may strip the ANSI codes from the line it prints, so match on the
+    # hidden kind and target fields, which carry none.
+    by_key = {(entry.kind, entry.target): entry for entry in entries}
+    out = subprocess.run(
+        [
+            "fzf",
+            "--ansi",
+            "--delimiter=\t",
+            "--with-nth=1",
+            "--no-sort",
+            "--prompt=> ",
+            "--header=enter run · esc close",
+        ],
+        input="\n".join(entry.line() for entry in entries),
+        stdout=subprocess.PIPE,
+        text=True,
+        check=False,
+    )
+    fields = out.stdout.rstrip("\n").split("\t")
+    return by_key.get((fields[1], fields[2])) if len(fields) == 3 else None
+
+
+def open_url(url: str) -> None:
+    opener = "open" if sys.platform == "darwin" else "xdg-open"
+    subprocess.run([opener, url], check=False)
+
+
+def notify(title: str, body: str) -> None:
+    subprocess.run(
+        [herdr_bin(), "notification", "show", title, "--body", body],
+        capture_output=True,
+        check=False,
+    )
+
+
+def invoke_later(plugin_id: str, action_id: str) -> None:
+    """Hand the action to a detached copy of this script, then let the popup close."""
+    subprocess.Popen(
+        [sys.executable, os.path.abspath(__file__), "--invoke", plugin_id, action_id],
+        start_new_session=True,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
+def invoke(plugin_id: str, action_id: str) -> int:
+    """Close the palette's popup, then run the action."""
+    close_popup()
+    reply = herdr_json("plugin", "action", "invoke", action_id, "--plugin", plugin_id)
+    error = as_dict(reply.get("error"))
+    if error:
+        notify("Palette", f"{plugin_id}.{action_id}: {error.get('message')}")
+        return 1
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if argv[:1] == ["--invoke"] and len(argv) == 3:
+        return invoke(argv[1], argv[2])
+    actions = (
+        herdr_json("plugin", "action", "list").get("result", {}).get("actions", [])
+    )
+    snapshot = herdr_json("api", "snapshot").get("result", {}).get("snapshot", {})
+    entries = link_entries(load_saved(), snapshot, focused_pane()) + action_entries(
+        actions
+    )
+    choice = pick(entries)
+    if choice is None:
+        return 0
+    if choice.kind == "link":
+        open_url(choice.target)
+    else:
+        plugin_id, action_id = choice.target.split(" ", 1)
+        invoke_later(plugin_id, action_id)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
