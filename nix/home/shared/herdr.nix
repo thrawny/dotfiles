@@ -234,40 +234,38 @@ in
               # Reported by bin/herdr-decorator. Values expire if it stops, and
               # the row disappears when a pane has no PR and no Jira key.
               [
+                # The icon's shape is the PR's state and the mark after the
+                # number is checks and review; see PR_ICONS in the decorator.
+                # Waiting on review or checks keeps the default yellow.
                 {
                   token = "$pr";
-                  fg = theme.semantic.foreground;
-                  dim = false;
-                }
-                {
-                  token = "$pr_state";
                   fg = theme.semantic.warning;
                   dim = false;
                   rules = [
                     {
-                      equals = "approved";
-                      fg = theme.semantic.success;
+                      starts_with = "";
+                      fg = theme.semantic.accentAlt;
                     }
                     {
-                      equals = "failing";
+                      starts_with = "";
+                      fg = theme.semantic.muted;
+                    }
+                    {
+                      starts_with = "";
+                      fg = theme.semantic.muted;
+                    }
+                    {
+                      contains = "";
                       fg = theme.semantic.error;
                       bold = true;
                     }
                     {
-                      equals = "changes";
+                      contains = "±";
                       fg = theme.semantic.error;
                     }
                     {
-                      equals = "merged";
-                      fg = theme.semantic.accentAlt;
-                    }
-                    {
-                      equals = "draft";
-                      fg = theme.semantic.muted;
-                    }
-                    {
-                      equals = "closed";
-                      fg = theme.semantic.muted;
+                      contains = "";
+                      fg = theme.semantic.success;
                     }
                   ];
                 }

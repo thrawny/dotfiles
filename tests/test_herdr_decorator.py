@@ -62,6 +62,24 @@ def test_pr_state_reports_the_most_urgent_word(
     assert decorator.pr_state(pr(**fields)) == expected
 
 
+@pytest.mark.parametrize(
+    ("fields", "expected"),
+    [
+        ({"review": "REVIEW_REQUIRED"}, "\uf407 #412"),
+        ({"checks": "PENDING"}, "\uf407 #412 ◷"),
+        ({"checks": "FAILURE"}, "\uf407 #412 \uf467"),
+        ({"review": "CHANGES_REQUESTED"}, "\uf407 #412 ±"),
+        ({"draft": True}, "\uf4dd #412"),
+        ({"state": "MERGED"}, "\uf419 #412"),
+        ({"state": "CLOSED"}, "\uf4dc #412"),
+    ],
+)
+def test_pr_label_puts_state_in_the_icon_and_checks_in_the_mark(
+    decorator: ModuleType, fields: dict[str, Any], expected: str
+) -> None:
+    assert decorator.pr_label(pr(**fields)) == expected
+
+
 def test_query_groups_branches_by_repo_and_dedupes(decorator: ModuleType) -> None:
     a, b = ("acme", "widgets"), ("acme", "gadgets")
     query, aliases = decorator.build_query([(a, "x"), (b, "y"), (a, "x"), (a, 'q"z')])
@@ -73,7 +91,7 @@ def test_query_groups_branches_by_repo_and_dedupes(decorator: ModuleType) -> Non
 def test_decorate_takes_jira_key_from_branch(decorator: ModuleType) -> None:
     pane = decorator.Pane("w1:p1", "/tmp", "claude", branch="feat/abc-12-fix")
     tokens, links = decorator.decorate(pane, pr(review="APPROVED"))
-    assert tokens == {"pr": "#412", "pr_state": "approved", "jira": "ABC-12"}
+    assert tokens == {"pr": "\uf407 #412 \uf42e", "jira": "ABC-12"}
     assert links["jira"].endswith("/browse/ABC-12")
 
 

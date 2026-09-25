@@ -3,7 +3,7 @@
 
 One long-lived process. It follows pane changes over Herdr's socket, polls
 GitHub on a timer, and reports values with pane.report_metadata so the agent
-sidebar rows can show them as $pr, $pr_state and $jira. Every report carries a
+sidebar rows can show them as $pr and $jira. Every report carries a
 TTL, so values expire on their own if this process stops.
 
 Pane state for other tools (for example an "open this PR" action) is written to
@@ -38,7 +38,20 @@ LIFECYCLE_EVENTS = [
     "pane.closed",
     "pane.agent_detected",
 ]
-TOKENS = ("pr", "pr_state", "jira")
+# Nerd Font octicons: the icon's shape is the PR's state, as on GitHub, and the
+# mark after the number is checks and review. Sidebar color rules match on these.
+PR_ICONS = {
+    "merged": "\uf419",  # oct-git_merge
+    "closed": "\uf4dc",  # oct-git_pull_request_closed
+    "draft": "\uf4dd",  # oct-git_pull_request_draft
+}
+PR_OPEN_ICON = "\uf407"  # oct-git_pull_request
+PR_MARKS = {
+    "failing": "\uf467",  # oct-x
+    "changes": "±",
+    "checks": "◷",
+    "approved": "\uf42e",  # oct-check
+}
 
 
 def log(message: str) -> None:
@@ -271,14 +284,21 @@ def fetch_prs(
     return found
 
 
+def pr_label(pr: dict[str, Any]) -> str:
+    state = pr_state(pr)
+    label = f"{PR_ICONS.get(state, PR_OPEN_ICON)} #{pr['number']}"
+    if mark := PR_MARKS.get(state):
+        label += f" {mark}"
+    return label
+
+
 def decorate(
     pane: Pane, pr: dict[str, Any] | None
 ) -> tuple[dict[str, str], dict[str, str]]:
     tokens: dict[str, str] = {}
     links: dict[str, str] = {}
     if pr:
-        tokens["pr"] = f"#{pr['number']}"
-        tokens["pr_state"] = pr_state(pr)
+        tokens["pr"] = pr_label(pr)
         links["pr"] = pr["url"]
     if pane.branch and (match := JIRA_KEY.search(pane.branch)):
         key = match.group(1).upper()
