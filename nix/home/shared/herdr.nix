@@ -27,6 +27,12 @@ in
     description = "[[keys.command]] entries for Herdr's config.toml.";
   };
 
+  options.dotfiles.herdr.showAgentName = lib.mkOption {
+    type = lib.types.bool;
+    default = true;
+    description = "Show the agent kind (claude, codex, ...) in sidebar agent rows.";
+  };
+
   config.home.packages = [ herdrPackage ];
 
   config.dotfiles.herdr.commands = [
@@ -208,21 +214,23 @@ in
                   dim = false;
                 }
               ]
-              [
-                {
-                  token = "state_icon";
-                  dim = false;
-                }
-                {
-                  token = "state_text";
-                  dim = false;
-                }
-                {
+              (
+                [
+                  {
+                    token = "state_icon";
+                    dim = false;
+                  }
+                  {
+                    token = "state_text";
+                    dim = false;
+                  }
+                ]
+                ++ lib.optional config.dotfiles.herdr.showAgentName {
                   token = "agent";
                   fg = theme.semantic.accentAlt;
                   dim = false;
                 }
-              ]
+              )
               # Reported by bin/herdr-decorator. Values expire if it stops, and
               # the row disappears when a pane has no PR and no Jira key.
               [

@@ -12,4 +12,7 @@
       description = "Review a pull request";
     }
   ];
+
+  # Claude is the only agent here, so the agent name on every row says nothing.
+  dotfiles.herdr.showAgentName = false;
 }
