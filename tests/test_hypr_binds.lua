@@ -26,13 +26,14 @@ hl = {
 }
 require("binds")
 require("appjump")
+assert(binds["ALT + P"] == nil, "Alt+P must remain unbound")
 local function opened(window)
 	for _, callback in ipairs(events["window.open"]) do callback(window) end
 end
 for _, case in ipairs({
 	{ "ALT + Q", "term", { class = "com.thrawny.GhosttyScratchpad" } },
 	{ "ALT + O", "1password", { class = "1password" } },
-	{ "ALT + P", "spotify", { class = "Spotify" } },
+	{ "P", "spotify", { class = "Spotify" } },
 	{ "B", "btop", { title = "btop++" } },
 }) do
 	windows, active_special, calls = {}, nil, {}

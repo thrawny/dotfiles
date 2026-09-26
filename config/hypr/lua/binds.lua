@@ -42,12 +42,6 @@ bind(
 		return window.class == "1password"
 	end)
 )
-bind(
-	"ALT + P",
-	scratchpad("spotify", "pgrep -f '^[^ ]*/[.]spotify-wrapped( |$)' || pgrep -x spotify || spotify", function(window)
-		return window.class == "spotify" or window.class == "Spotify"
-	end)
-)
 
 -- Session
 bind("ALT + Escape", dsp.exec_cmd("hyprlock"))
