@@ -15,7 +15,6 @@ let
   runtimePlugins = [
     "codex"
     "discord"
-    "duckduckgo"
     "openai"
     "telegram"
   ];
@@ -37,10 +36,6 @@ let
           "https://openclaw.${config.dotfiles.tailnetDomain}"
         ];
       };
-      http.endpoints = {
-        chatCompletions.enabled = false;
-        responses.enabled = false;
-      };
       tailscale.mode = "off";
       auth = {
         mode = "token";
@@ -58,7 +53,13 @@ let
     # The canonical openai/* route uses the Codex subscription/runtime here,
     # not Platform API-key billing. Fail closed instead of falling back to the
     # embedded OpenClaw runtime.
-    models.providers.openai.agentRuntime.id = "codex";
+    models.providers.openai = {
+      agentRuntime.id = "codex";
+      # New Codex model IDs can precede OpenClaw's static route table. Declare
+      # subscription transport rather than letting unknown IDs select API keys.
+      api = "openai-chatgpt-responses";
+      baseUrl = "https://chatgpt.com/backend-api/codex";
+    };
     tools = {
       profile = "full";
       fs.workspaceOnly = true;
@@ -81,7 +82,11 @@ let
         skipBootstrap = true;
         timeoutSeconds = 900;
         thinkingDefault = "low";
-        models."openai/gpt-6-sol" = { };
+        heartbeat.every = "0m";
+        modelPolicy.allow = [
+          "openai/gpt-6-sol"
+          "openai/gpt-6-luna"
+        ];
       };
       entries.main = { };
     };
@@ -98,19 +103,20 @@ let
         discord.enabled = true;
         telegram.enabled = true;
         canvas.enabled = false;
+        memory-core = {
+          subagent = {
+            allowModelOverride = true;
+            allowedModels = [ "openai/gpt-6-luna" ];
+          };
+          config.dreaming = {
+            model = "openai/gpt-6-luna";
+            timezone = "Europe/Stockholm";
+          };
+        };
       };
       allow = runtimePlugins;
-      # Use the host's compiled runtime tree so plugins retain bundled trust.
-      # Source/dist paths are classified as external and lose channel-state APIs.
-      # Explicit paths also avoid relying on the legacy SQLite discovery setting.
-      load.paths = map (
-        id: "${openclawPackage}/lib/openclaw/dist-runtime/extensions/${id}"
-      ) runtimePlugins;
     };
-    messages = {
-      groupChat.visibleReplies = "automatic";
-      visibleReplies = "automatic";
-    };
+    skills.workshop.autonomous.mode = "off";
     channels = {
       telegram = {
         enabled = true;

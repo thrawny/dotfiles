@@ -415,12 +415,16 @@ lib.mkMerge [
           export OPENCLAW_CONFIG_PATH=${openclaw.configFile}
           export OPENCLAW_STATE_DIR="$HOME/.openclaw"
           test -s ${openclaw.uiSource}/index.html
-          for plugin_dir in $(jq -r '.plugins.load.paths[]' ${openclaw.configFile}); do
+          for plugin_id in $(jq -r '.plugins.allow[]' ${openclaw.configFile}); do
+            plugin_dir=${llmPkgs.openclaw}/lib/openclaw/dist-runtime/extensions/$plugin_id
             test -s "$plugin_dir/openclaw.plugin.json"
             test -s "$plugin_dir/index.js"
           done
           openclaw config validate --json > "$out"
-          jq -e '.valid == true and ((.warnings // []) | length) == 0' "$out"
+          # Discovery warnings can concern unused bundled plugins. Keep them
+          # visible; the live health check rejects active plugin failures.
+          jq -r '.warnings[]? | "Config warning: \(.message)"' "$out" >&2
+          jq -e '.valid == true' "$out"
           if openclaw config set gateway.port 19999 > "$TMPDIR/write-error" 2>&1; then
             echo "Nix mode unexpectedly allowed a config write" >&2
             exit 1
@@ -431,9 +435,19 @@ lib.mkMerge [
             .channels.discord.token.source == "file" and
             .channels.telegram.botToken.source == "env" and
             .models.providers.openai.agentRuntime.id == "codex" and
+            .models.providers.openai.api == "openai-chatgpt-responses" and
+            .models.providers.openai.baseUrl == "https://chatgpt.com/backend-api/codex" and
+            .agents.defaults.model.primary == "openai/gpt-6-sol" and
             .agents.defaults.model.fallbacks == [] and
+            .agents.defaults.thinkingDefault == "low" and
+            .agents.defaults.heartbeat.every == "0m" and
+            .agents.defaults.modelPolicy.allow == ["openai/gpt-6-sol", "openai/gpt-6-luna"] and
+            .plugins.entries["memory-core"].config.dreaming.model == "openai/gpt-6-luna" and
+            .plugins.entries["memory-core"].subagent.allowedModels == ["openai/gpt-6-luna"] and
+            .skills.workshop.autonomous.mode == "off" and
             .agents.entries.main == {} and
-            (.plugins.load.paths | length) == 5
+            .plugins.allow == ["codex", "discord", "openai", "telegram"] and
+            (.plugins | has("load") | not)
           ' ${openclaw.configFile}
         '';
 

@@ -15,9 +15,10 @@ just nix::deploy obelisk
 just nix::openclaw-health
 ```
 
-Allow startup to finish before the health check. It checks configuration warnings,
-plugin failures, channel operation and the local UI. It does not send chat messages
-or invoke a model.
+Allow startup to finish before the health check. It prints configuration warnings
+and checks config validity, active plugin failures, channel operation and the local
+UI. It does not send chat messages or invoke a model. Discovery warnings from an
+unused bundled plugin are advisory; active plugin errors still fail the check.
 
 Use the administrative wrapper on Obelisk, including for interactive commands:
 
@@ -29,8 +30,11 @@ ssh -t root@obelisk 'openclaw-admin models auth login --provider openai --device
 `openclaw-admin` runs as the service user with its Nix mode, config path, tools and
 systemd EnvironmentFile. It does not source that file as shell code. Model login
 updates runtime credentials; do not pass `--set-default`, which changes config.
-Model selection belongs in Nix. Keep the explicit Codex runtime and empty fallback
-list to avoid an unintended switch to API-key billing.
+Model selection belongs in Nix. Keep the explicit Codex runtime, ChatGPT transport
+and empty fallback list to avoid an unintended switch to API-key billing. New
+model names can precede OpenClaw's static routing table; a healthy OAuth status
+does not prove a model turn works. Test through the scheduler after changing
+model routing.
 
 ## Configuration and state
 
@@ -41,9 +45,15 @@ list to avoid an unintended switch to API-key billing.
   uses the existing private JSON token file referenced by the Nix config.
 - Credentials are required for configured channels. Startup no longer silently
   disables channels when credentials are missing.
-- Nix pins runtime plugin paths to the package's `dist-runtime/extensions` tree.
-  Using its source or `dist/extensions` tree changes plugin provenance and can
-  break trusted channel-state APIs.
+- Use normal bundled plugin discovery, with an allowlist for Codex, OpenAI,
+  Discord and Telegram. Do not add source-tree plugin paths or runtime installs.
+- Chat defaults are Sol 6 with low reasoning. Recurring heartbeat and autonomous
+  skill reviews are disabled. Memory dreaming uses Luna 6; its model override is
+  restricted to that model.
+- Operator cron jobs live in the runtime SQLite store, not the Nix config. Use
+  `openclaw-admin cron` or the Gateway API to manage them. Keep their model set to
+  `openai/gpt-6-luna`, thinking low, and fallbacks empty. Use workspace-relative
+  state paths and explicit delivery routes for notification jobs.
 - Systemd tmpfiles copies the prebuilt UI into a package-specific, root-owned
   directory under `/var/lib/openclaw-ui`. This avoids runtime asset retention and
   the custom-UI handler's rejection of hardlinked Nix store files. The service
@@ -52,6 +62,12 @@ list to avoid an unintended switch to API-key billing.
 
 Do not use runtime config setters, plugin installers or self-update commands.
 Change Nix and deploy instead. Nix mode does not make agent memory immutable.
+
+The September 26, 2026 cron cleanup archived job definitions, recent run history,
+validation results and a copy of workspace memory at
+`/srv/backups/openclaw/cron-repair-20260926T163922Z/`. This is a cron-repair snapshot,
+not a full service backup. Recreate archived jobs through the scheduler API rather
+than replacing SQLite files.
 
 ## Release-specific caveat
 

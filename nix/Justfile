@@ -218,7 +218,9 @@ openclaw-health target="obelisk":
     ssh "root@{{ target }}" 'bash -se' <<'REMOTE'
     set -euo pipefail
     systemctl is-active --quiet openclaw.service
-    openclaw-admin config validate --json | jq -e '.valid and ((.warnings // []) | length) == 0'
+    config_json="$(openclaw-admin config validate --json)"
+    printf '%s\n' "$config_json" | jq -r '.warnings[]? | "Config warning: \(.message)"' >&2
+    printf '%s\n' "$config_json" | jq -e '.valid'
     if ! health_json="$(openclaw-admin health --json)"; then
       printf '%s\n' "$health_json" >&2
       exit 1
