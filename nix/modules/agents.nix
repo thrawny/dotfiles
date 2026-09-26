@@ -384,7 +384,10 @@ lib.mkMerge [
     users.manageLingering = true;
     systemd.services.openclaw = {
       # Rootless Podman needs the setuid newuidmap/newgidmap wrappers.
-      path = [ "/run/wrappers" ];
+      path = [
+        "/run/wrappers"
+        openclaw.seedboxCLI
+      ];
       restartTriggers = [ openclaw.configFile ];
       after = [
         "systemd-tmpfiles-setup.service"
@@ -445,7 +448,13 @@ lib.mkMerge [
             .plugins.entries["memory-core"].config.dreaming.model == "openai/gpt-6-luna" and
             .plugins.entries["memory-core"].subagent.allowedModels == ["openai/gpt-6-luna"] and
             .skills.workshop.autonomous.mode == "off" and
-            .agents.entries.main == {} and
+            .agents.entries.main.workspace == "${openclaw.workspace}" and
+            .agents.entries.seedbox.workspace == "${openclaw.seedboxWorkspace}" and
+            .agents.defaults.systemAgent.agentId == "main" and
+            .channels.telegram.groups["-5176945403"].allowFrom == ["781443178"] and
+            .channels.telegram.groups["-5176945403"].requireMention == true and
+            ([.bindings[] | select(.agentId == "seedbox")] | length) == 1 and
+            ([.bindings[] | select(.agentId == "seedbox")][0].match.peer.id == "-5176945403") and
             .plugins.allow == ["codex", "discord", "openai", "telegram"] and
             (.plugins | has("load") | not)
           ' ${openclaw.configFile}
@@ -463,6 +472,7 @@ lib.mkMerge [
     environment.systemPackages = [
       llmPkgs.openclaw
       openclawAdmin
+      openclaw.seedboxCLI
       zmxPkg
       pkgs.podman-compose
     ]
@@ -479,6 +489,8 @@ lib.mkMerge [
       "d /srv/agents/openclaw/home/.openclaw 0750 openclaw openclaw -"
       "d /srv/agents/openclaw/home/.openclaw/secrets 0700 openclaw openclaw -"
       "d /srv/agents/openclaw/workspace 0750 openclaw openclaw -"
+      "d /srv/agents/openclaw/workspaces 0750 openclaw openclaw -"
+      "d ${openclaw.seedboxWorkspace} 0750 openclaw openclaw -"
       "L+ ${openclaw.stateDir}/openclaw.json - - - - ${openclaw.configFile}"
       "d /var/lib/openclaw-ui 0755 root root -"
       "C ${openclaw.uiRoot} - root root - ${openclaw.uiSource}"

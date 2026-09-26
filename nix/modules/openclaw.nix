@@ -9,7 +9,14 @@ let
   json = pkgs.formats.json { };
   home = "/srv/agents/openclaw/home";
   workspace = "/srv/agents/openclaw/workspace";
+  seedboxWorkspace = "/srv/agents/openclaw/workspaces/seedbox";
   stateDir = "${home}/.openclaw";
+  seedboxCLI = pkgs.writeShellApplication {
+    name = "seedbox";
+    text = ''
+      exec ${pkgs.uv}/bin/uv run --frozen --no-dev --project ${seedboxWorkspace} seedbox "$@"
+    '';
+  };
   uiSource = "${openclawPackage}/lib/openclaw/dist/control-ui";
   uiRoot = "/var/lib/openclaw-ui/${builtins.baseNameOf (toString openclawPackage)}";
   runtimePlugins = [
@@ -73,6 +80,7 @@ let
       };
     };
     agents = {
+      ownership = "explicit";
       defaults = {
         model = {
           primary = "openai/gpt-6-sol";
@@ -82,14 +90,53 @@ let
         skipBootstrap = true;
         timeoutSeconds = 900;
         thinkingDefault = "low";
-        heartbeat.every = "0m";
+        heartbeat = {
+          every = "0m";
+          agentId = "main";
+        };
+        systemAgent.agentId = "main";
         modelPolicy.allow = [
           "openai/gpt-6-sol"
           "openai/gpt-6-luna"
         ];
       };
-      entries.main = { };
+      entries = {
+        # Keep the existing workspace when adding a second agent; otherwise
+        # multi-agent defaults derive an agent-id subdirectory.
+        main.workspace = workspace;
+        seedbox = {
+          name = "Seedbox";
+          workspace = seedboxWorkspace;
+        };
+      };
     };
+    bindings = [
+      {
+        agentId = "seedbox";
+        match = {
+          channel = "telegram";
+          accountId = "default";
+          peer = {
+            kind = "group";
+            id = "-5176945403";
+          };
+        };
+      }
+      {
+        agentId = "main";
+        match = {
+          channel = "telegram";
+          accountId = "default";
+        };
+      }
+      {
+        agentId = "main";
+        match = {
+          channel = "discord";
+          accountId = "default";
+        };
+      }
+    ];
     plugins = {
       entries = {
         openai.enabled = true;
@@ -120,6 +167,12 @@ let
     channels = {
       telegram = {
         enabled = true;
+        groupPolicy = "allowlist";
+        groups."-5176945403" = {
+          enabled = true;
+          requireMention = true;
+          allowFrom = [ "781443178" ];
+        };
         botToken = {
           source = "env";
           provider = "default";
@@ -190,6 +243,8 @@ in
     home
     workspace
     stateDir
+    seedboxWorkspace
+    seedboxCLI
     uiSource
     uiRoot
     configFile
