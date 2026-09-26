@@ -43,6 +43,8 @@ hl.config({
 		fullscreen_on_one_column = false,
 		focus_fit_method = 1,
 		follow_focus = true,
+		wrap_focus = false,
+		wrap_swapcol = false,
 	},
 
 	decoration = {
