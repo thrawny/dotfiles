@@ -62,7 +62,7 @@ Flickable {
                 required property var modelData
                 required property int index
                 readonly property string key: Order.shortcut(Workspaces.items.findIndex(workspace => workspace.id === modelData.id))
-                text: (key ? key + "  " : "") + modelData.name
+                text: (key ? key + " " : "") + modelData.name
                 hint: modelData.name + (key ? " · Alt+" + key : "")
                 selected: modelData.active
                 readonly property bool focusedWorkspace: modelData.focused ?? selected
@@ -90,7 +90,7 @@ Flickable {
                 }
                 background: Rectangle {
                     id: pill
-                    radius: height / 2
+                    radius: 6
                     color: workspaceButton.attention ? root.urgentBackground : workspaceButton.visibleWorkspace ? root.translucent(root.accentAlt, 0.14) : workspaceButton.hovered ? root.translucent(root.surface, 0.62) : "transparent"
                     border.color: workspaceButton.attention ? "transparent" : workspaceButton.visibleWorkspace ? root.translucent(root.accentAlt, 0.24) : workspaceButton.selected ? root.translucent(root.accent, 0.34) : workspaceButton.hovered ? root.translucent(root.foreground, 0.12) : "transparent"
                     Shape {
@@ -129,7 +129,7 @@ Flickable {
                                 y: 0.5
                                 width: Math.max(0, pill.width - 1)
                                 height: Math.max(0, pill.height - 1)
-                                radius: height / 2
+                                radius: pill.radius - 0.5
                             }
                         }
                     }
