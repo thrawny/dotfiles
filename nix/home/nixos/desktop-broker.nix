@@ -7,11 +7,11 @@
 let
   containerAssets = args.containerAssets or null;
   dotfiles = args.dotfiles or null;
-  niriOpenUrl =
+  openUrl =
     if homeSource == "repo" then
-      "${dotfiles}/bin/niri-open-url"
+      "${dotfiles}/bin/open-url"
     else
-      "${containerAssets.bin}/niri-open-url";
+      "${containerAssets.bin}/open-url";
 
   # The sandbox can write the checkout. Never execute its mutable scripts on
   # the host in response to a broker request.
@@ -24,11 +24,12 @@ let
         pkgs.gnugrep
         pkgs.jq
         pkgs.niri
+        pkgs.hyprland
         pkgs.wl-clipboard
         pkgs.wtype
       ]
     }:/run/current-system/sw/bin
-    ${builtins.readFile ../../../bin/niri-open-url}
+    ${builtins.readFile ../../../bin/open-url}
   '';
 in
 {
@@ -75,10 +76,10 @@ in
     };
   };
 
-  xdg.desktopEntries.niri-open-url = {
-    name = "Niri URL Router";
+  xdg.desktopEntries.open-url = {
+    name = "URL Router";
     comment = "Open URLs in the nearest Helium window, falling back to web workspace";
-    exec = "${niriOpenUrl} %u";
+    exec = "${openUrl} %u";
     terminal = false;
     type = "Application";
     mimeType = [
@@ -93,10 +94,10 @@ in
   xdg.mimeApps = {
     enable = true;
     defaultApplications = {
-      "x-scheme-handler/http" = [ "niri-open-url.desktop" ];
-      "x-scheme-handler/https" = [ "niri-open-url.desktop" ];
-      "text/html" = [ "niri-open-url.desktop" ];
-      "application/xhtml+xml" = [ "niri-open-url.desktop" ];
+      "x-scheme-handler/http" = [ "open-url.desktop" ];
+      "x-scheme-handler/https" = [ "open-url.desktop" ];
+      "text/html" = [ "open-url.desktop" ];
+      "application/xhtml+xml" = [ "open-url.desktop" ];
     };
   };
 }

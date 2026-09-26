@@ -196,7 +196,7 @@ def test_only_existing_html_inside_roots(broker: ModuleType, tmp_path: Path):
             broker.normalize_target(str(target), [root])
 
 
-@pytest.mark.parametrize("router", ["niri-open-url", "sandbox-xdg-open"])
+@pytest.mark.parametrize("router", ["open-url", "sandbox-xdg-open"])
 def test_router_uses_activated_broker_inside_sandbox(
     desktop_host: dict[str, str], tmp_path: Path, router: str
 ):
@@ -229,7 +229,7 @@ def test_router_uses_activated_broker_inside_sandbox(
         assert end == start.replace("start ", "end ", 1)
 
 
-@pytest.mark.parametrize("router", ["niri-open-url", "sandbox-xdg-open"])
+@pytest.mark.parametrize("router", ["open-url", "sandbox-xdg-open"])
 def test_unavailable_broker_does_not_fall_back_to_helium(tmp_path: Path, router: str):
     helium = tmp_path / "helium"
     helium.write_text("#!/bin/sh\necho 'unexpected browser launch' >&2\nexit 99\n")
@@ -249,6 +249,32 @@ def test_unavailable_broker_does_not_fall_back_to_helium(tmp_path: Path, router:
     assert result.returncode == 1
     assert "broker unavailable" in result.stderr
     assert "unexpected browser launch" not in result.stderr
+
+
+def test_hypr_router_focuses_web_browser(tmp_path: Path):
+    hyprctl = tmp_path / "hyprctl"
+    calls = tmp_path / "calls"
+    hyprctl.write_text(
+        f'''#!/bin/sh
+if [ "$1 $2" = '-j clients' ]; then
+  echo '[{{"class":"helium","address":"0xabc","workspace":{{"name":"web"}},"focusHistoryID":0}}]'
+elif [ "$1 $2" = '-j activeworkspace' ]; then
+  echo '{{"name":"main"}}'
+else echo "$*" >> '{calls}'; fi
+'''
+    )
+    hyprctl.chmod(0o755)
+    for name in ("wtype", "wl-copy", "wl-paste"):
+        executable = tmp_path / name
+        executable.write_text("#!/bin/sh\nexit 0\n")
+        executable.chmod(0o755)
+    result = subprocess.run(
+        ["bash", str(ROOT / "bin/open-url"), "https://example.com"],
+        env={**os.environ, "SANDBOX": "", "HYPRLAND_INSTANCE_SIGNATURE": "test", "PATH": f"{tmp_path}:{os.environ['PATH']}"},
+        capture_output=True, text=True, timeout=5,
+    )
+    assert result.returncode == 0, result.stderr
+    assert calls.read_text().splitlines() == ["eval for _,w in ipairs(hl.get_windows()) do if tostring(w.address) == '0xabc' then hl.dispatch(hl.dsp.focus({window=w})) break end end"]
 
 
 @pytest.mark.parametrize("sandbox", ["1", ""])
