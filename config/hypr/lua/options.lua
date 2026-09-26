@@ -99,6 +99,12 @@ hl.config({
 	},
 })
 
+-- Match Niri's touchpad acceleration without changing the flat mouse profile.
+hl.device({
+	name = "snsl0028:00-2c2f:0028-touchpad",
+	accel_profile = "adaptive",
+})
+
 -- Keep other transitions instant, with a short ease-out for scrolling columns.
 hl.animation({ leaf = "global", enabled = false })
 hl.curve("scrollEase", {
