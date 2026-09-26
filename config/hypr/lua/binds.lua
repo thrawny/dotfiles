@@ -78,11 +78,25 @@ bind("SUPER + L", function()
 	})
 end)
 
+-- Generic directional focus can select another column at the tape's edge.
+-- Scrolling's own focus command respects scrolling.wrap_focus = false.
+local function focus_horizontal(direction)
+	return function()
+		local workspace = hl.get_active_workspace()
+		local window = hl.get_active_window()
+		if workspace and workspace.tiled_layout == "scrolling" and window and not window.floating then
+			hl.dispatch(dsp.layout("focus " .. direction))
+		else
+			hl.dispatch(dsp.focus({ direction = direction }))
+		end
+	end
+end
+
 -- Focus
-bind("ALT + H", dsp.focus({ direction = "l" }))
+bind("ALT + H", focus_horizontal("l"))
 bind("ALT + J", dsp.focus({ direction = "d" }))
 bind("ALT + K", dsp.focus({ direction = "u" }))
-bind("ALT + L", dsp.focus({ direction = "r" }))
+bind("ALT + L", focus_horizontal("r"))
 
 -- Move columns/windows
 bind("ALT + SHIFT + H", dsp.layout("swapcol l"))
