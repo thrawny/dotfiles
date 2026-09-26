@@ -116,7 +116,7 @@ in
         hb = "gh repo view --web";
         gcam = "git add -A && git commit -m";
       }
-      // lib.optionalAttrs pkgs.stdenv.isDarwin {
+      // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
         bu = "brew upgrade";
       }
       // {

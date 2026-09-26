@@ -19,7 +19,7 @@ in
   programs.ghostty = {
     enable = true;
     # Only install package on Linux (macOS users install via Homebrew or direct download)
-    package = if pkgs.stdenv.isLinux then pkgs.ghostty else null;
+    package = if pkgs.stdenv.hostPlatform.isLinux then pkgs.ghostty else null;
     settings = {
       inherit (app) theme background foreground;
       font-family = "CaskaydiaMono Nerd Font";

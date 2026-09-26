@@ -21,7 +21,13 @@ switch mode="":
     if [ "$mode" = --hm-only ]; then
         if [ "$(uname -s)" = Darwin ]; then host=$(/usr/sbin/scutil --get LocalHostName); fi
         echo "Switching only Home Manager for $host..."
-        nix run --inputs-from . home-manager -- switch -b bak --flake ".#$host"
+        if [ -f /etc/NIXOS ]; then
+            hm_user=$(id -un)
+            activation=$(nix build --no-link --print-out-paths ".#nixosConfigurations.\"$host\".config.home-manager.users.\"$hm_user\".home.activationPackage")
+            HOME_MANAGER_BACKUP_EXT=bak "$activation/activate"
+        else
+            nix run --inputs-from . home-manager -- switch -b bak --flake ".#$host"
+        fi
     elif [ -f /etc/NIXOS ]; then
         echo "NixOS detected, running nixos-rebuild switch..."
         running_kernel=$(uname -r)

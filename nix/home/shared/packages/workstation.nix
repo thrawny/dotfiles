@@ -21,6 +21,11 @@
     taplo
     nixfmt
     statix
+    deadnix
+
+    # Nix maintenance
+    nvd
+    cachix
 
     # Diff/analysis tools
     difftastic
@@ -32,9 +37,10 @@
     # Diagrams
     d2
 
-    # Build tools (treesitter)
+    # Build tools
     cmake
     tree-sitter
+    pkg-config
 
   ];
 }

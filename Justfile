@@ -18,6 +18,9 @@ bootstrap-mac:
 # Switch nix configuration, or only Home Manager with --hm-only
 switch mode="": (nix::switch mode)
 
+# Switch only Home Manager
+switch-hm: (nix::switch "--hm-only")
+
 # First nix-darwin activation on the M1 Air, retaining Determinate Nix
 bootstrap-darwin:
     bin/bootstrap-darwin

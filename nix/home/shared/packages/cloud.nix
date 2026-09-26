@@ -4,7 +4,7 @@
 }:
 let
   kubectl134 =
-    if pkgs.stdenv.isLinux && pkgs.stdenv.hostPlatform.isx86_64 then
+    if pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isx86_64 then
       pkgs.stdenvNoCC.mkDerivation {
         pname = "kubectl";
         version = "1.34.5";

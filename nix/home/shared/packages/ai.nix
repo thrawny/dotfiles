@@ -5,8 +5,7 @@
   ...
 }:
 let
-  inherit (pkgs.stdenv) isLinux;
-  inherit (pkgs.stdenv.hostPlatform) system;
+  inherit (pkgs.stdenv.hostPlatform) isLinux system;
   llmPkgs = llm-agents.packages.${system};
   thrawnyPkgs = thrawny-pkgs.packages.${system};
 in
