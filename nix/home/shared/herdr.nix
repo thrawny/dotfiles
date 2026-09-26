@@ -97,14 +97,9 @@ in
     fi
   '';
 
-  # Modifier split, held across macOS and Linux: alt belongs to the window
-  # manager, super belongs to applications, alt+super is the window manager
-  # again. So Herdr lives on super, and anything touched often gets a super
-  # binding next to its prefix one. super+c/v/x are copy/paste/cut, and
-  # super+space, super+tab, super+q and super+shift+3/4/5 belong to the OS.
-  #
-  # Tabs and panes keep the familiar prefix-based bindings, except number keys
-  # select agents. Workspace navigation uses j/k as well as the arrow keys.
+  # Keyboard policy and exceptions: docs/keyboard-rules.md at the repo root.
+  # Frequent actions get direct super bindings alongside prefix bindings;
+  # comments below explain Herdr-specific choices.
   config.xdg.configFile."herdr/config.toml".source =
     (pkgs.formats.toml { }).generate "herdr-config.toml"
       {
@@ -118,6 +113,7 @@ in
         keys = {
           prefix = "ctrl+a";
 
+          # Number keys select agents rather than tabs or workspaces.
           focus_agent = [
             "prefix+1..9"
             "super+1..9"
@@ -131,9 +127,7 @@ in
             "super+k"
           ];
           switch_tab = "";
-          # Numbered workspace switching has nowhere to live: super+shift+1..9 is
-          # screenshots on both macOS and Hyprland. Cycling covers it instead, on
-          # super+u/i to match the WM's own previous/next workspace keys.
+          # Use cycling instead of shifted numbers, which overlap screenshot keys.
           switch_workspace = "";
           next_workspace = "super+i";
           previous_workspace = "super+u";
@@ -166,28 +160,23 @@ in
           ];
           move_tab_previous = "prefix+shift+comma";
           move_tab_next = "prefix+shift+period";
-          # close_pane takes the bare super+w every other app uses for "close this";
-          # close_tab, the bigger hammer, keeps shift.
           close_tab = [
             "prefix+shift+x"
             "super+shift+w"
           ];
-          # ctrl+hjkl always reaches the terminal so Neovim splits and fzf keep
-          # those keys. Two panes plus super+m (cycle_pane_next) covers the rest.
+          # Disable directional pane shortcuts to preserve Ctrl+H/J/K/L for
+          # Neovim and fzf. Use cycle_pane_next for Herdr panes instead.
           focus_pane_left = "";
           focus_pane_down = "";
           focus_pane_up = "";
           focus_pane_right = "";
-          # cycle_pane_next stays inside the focused tab, unlike last_pane, which is
-          # a global back-and-forth that can land in another workspace. With two
-          # panes, cycling is a toggle.
+          # Cycling stays within the tab; with two panes it acts as a toggle.
           cycle_pane_next = [
             "prefix+tab"
             "super+m"
           ];
-          # Herdr has no last-workspace action, and landing in another workspace is
-          # exactly what is wanted here. One level up from super+m, matching the
-          # window manager's alt+m focus-last and alt+shift+m previous-workspace.
+          # Herdr has no last-workspace action. last_pane provides back-and-forth
+          # across tabs and workspaces, unlike cycle_pane_next.
           last_pane = "super+shift+m";
           # Splitting beats a new tab for frequency, so it gets the unshifted key.
           split_vertical = [
@@ -200,8 +189,8 @@ in
             "super+w"
           ];
 
-          # super+o goes to the next-agent plugin instead: a ranked queue beats
-          # jumping to whichever pane happened to raise the last toast.
+          # super+o uses the next-agent plugin's priority order rather than
+          # the most recent notification target.
           open_notification_target = "";
           command = config.dotfiles.herdr.commands;
           reload_config = "prefix+shift+r";
