@@ -226,7 +226,7 @@ in
   home-manager.users.${config.dotfiles.username} = {
     programs.ghostty.settings.font-size = 11;
 
-    programs.niri.settings = {
+    programs.niri.settings = lib.mkIf config.programs.niri.enable {
       # Let the debounced lid event handler below control eDP-1 instead of
       # niri's immediate lid-close handling, which can see close/open/close
       # sensor bounce and crash GTK/Wayland clients.

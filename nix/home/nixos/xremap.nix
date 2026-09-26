@@ -8,7 +8,13 @@
 # matching native build: withNiri for niri, xremap-hypr for Hyprland.
 # The keymaps share everything except the Alt-a app-jump chords, which are
 # nirius-based under niri and native Lua submaps under Hyprland.
-{ pkgs, xremap-flake, ... }:
+{
+  pkgs,
+  lib,
+  osConfig,
+  xremap-flake,
+  ...
+}:
 let
   sharedModmap = [
     {
@@ -166,7 +172,7 @@ let
 in
 {
   services.xremap = {
-    enable = true;
+    enable = osConfig.programs.niri.enable;
     withNiri = true;
     watch = true; # auto-detect newly connected devices (Bluetooth, USB hotplug)
     config = {
@@ -175,7 +181,9 @@ in
     };
   };
 
-  systemd.user.services.xremap.Unit.ConditionEnvironment = "XDG_CURRENT_DESKTOP=niri";
+  systemd.user.services.xremap = lib.mkIf osConfig.programs.niri.enable {
+    Unit.ConditionEnvironment = "XDG_CURRENT_DESKTOP=niri";
+  };
 
   systemd.user.services.xremap-hypr = {
     Unit = {

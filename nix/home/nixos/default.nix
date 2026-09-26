@@ -1,7 +1,9 @@
 # Home Manager config for NixOS desktops
-# Note: xwayland-satellite is spawned on-demand by niri when X11 apps connect
 {
   pkgs,
+  config,
+  lib,
+  osConfig,
   username,
   xremap-flake,
   ...
@@ -15,11 +17,7 @@
     xremap-flake.homeManagerModules.default
     ./xremap.nix
 
-    # Niri window manager
-    ./niri
-    ./niri/switcher.nix
-
-    # Hyprland (Lua config; session selectable at the greeter)
+    # Hyprland (default and sole enabled compositor)
     ./hyprland.nix
 
     # Desktop modules
@@ -34,7 +32,20 @@
     ./gtk.nix
     ./viewers.nix
     ./voxtype.nix
+  ]
+  ++ lib.optionals osConfig.programs.niri.enable [
+    ./niri
+    ./niri/switcher.nix
   ];
+
+  services.wpaperd = {
+    enable = true;
+    settings.any = {
+      path = "${config.home.homeDirectory}/dotfiles/assets";
+      sorting = "ascending";
+      duration = "1h";
+    };
+  };
 
   home = {
     inherit username;
@@ -42,6 +53,7 @@
     stateVersion = "24.05";
 
     packages = with pkgs; [
+      swayosd
       vesktop # Discord client with Wayland screen sharing support
     ];
   };

@@ -165,7 +165,7 @@ in
       programs.ghostty.settings.font-size = lib.mkForce 12;
 
       # Desktop-specific Niri configuration
-      programs.niri.settings = {
+      programs.niri.settings = lib.mkIf config.programs.niri.enable {
         spawn-at-startup = [
           {
             command = [

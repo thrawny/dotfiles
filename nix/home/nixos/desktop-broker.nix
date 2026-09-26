@@ -23,7 +23,6 @@ let
         pkgs.coreutils
         pkgs.gnugrep
         pkgs.jq
-        pkgs.niri
         pkgs.hyprland
         pkgs.wl-clipboard
         pkgs.wtype

@@ -382,10 +382,6 @@ in
 {
   dotfiles.agentSwitch.enable = true;
 
-  home.packages = [
-    pkgs.swayosd
-  ];
-
   programs.niri.settings = {
     # Named workspaces
     workspaces = {
@@ -692,12 +688,4 @@ in
     ''
   );
 
-  services.wpaperd = {
-    enable = true;
-    settings.any = {
-      path = "${config.home.homeDirectory}/dotfiles/assets";
-      sorting = "ascending";
-      duration = "1h";
-    };
-  };
 }

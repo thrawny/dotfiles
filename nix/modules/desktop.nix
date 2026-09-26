@@ -1,6 +1,7 @@
 {
   config,
   pkgs,
+  lib,
   helium-browser,
   walker,
   xremap-flake,
@@ -44,7 +45,7 @@ let
     exec ${config.programs.uwsm.package}/bin/uwsm start -- hyprland-uwsm.desktop
   '';
 
-  # Session picker entries for tuigreet (F3 menu). Both wrap ~/.secrets.
+  # Session picker entries for tuigreet (F3 menu). Keep Niri available in source only.
   mkGreeterSession =
     name: command:
     pkgs.writeTextDir "${name}.desktop" ''
@@ -56,9 +57,9 @@ let
   greeterSessions = pkgs.symlinkJoin {
     name = "greeter-sessions";
     paths = [
-      (mkGreeterSession "niri" niriSessionCommand)
       (mkGreeterSession "hyprland" hyprlandSessionCommand)
-    ];
+    ]
+    ++ lib.optional config.programs.niri.enable (mkGreeterSession "niri" niriSessionCommand);
   };
 
   desktopPackages = with pkgs; [
@@ -132,7 +133,7 @@ in
 
   programs = {
     niri = {
-      enable = true;
+      enable = false;
       package = pkgs.niri;
     };
 
@@ -155,6 +156,7 @@ in
   networking.networkmanager.enable = true;
 
   services = {
+    gnome.gnome-keyring.enable = true;
     pipewire = {
       enable = true;
       alsa.enable = true;
@@ -170,10 +172,10 @@ in
       enable = true;
       settings = {
         initial_session = {
-          command = niriSessionCommand;
+          command = hyprlandSessionCommand;
           user = username;
         };
-        default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --remember-session --sessions ${greeterSessions} --cmd ${niriSessionCommand}";
+        default_session.command = "${pkgs.tuigreet}/bin/tuigreet --time --remember --sessions ${greeterSessions} --cmd ${hyprlandSessionCommand}";
       };
     };
     blueman.enable = true;
@@ -225,7 +227,7 @@ in
     # config.niri overrides that entirely, so replicate the defaults here.
     # Keep the lightweight GTK portal for file chooser dialogs; Nautilus is
     # configured separately as the default directory browser.
-    config.niri = {
+    config.niri = lib.mkIf config.programs.niri.enable {
       default = [
         "gnome"
         "gtk"
