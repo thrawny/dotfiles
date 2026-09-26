@@ -165,7 +165,10 @@ let
         groups."-5176945403" = {
           enabled = true;
           requireMention = true;
-          allowFrom = [ "781443178" ];
+          allowFrom = [
+            "781443178"
+            "718852556"
+          ];
         };
         botToken = {
           source = "env";

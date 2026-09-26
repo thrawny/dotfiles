@@ -448,7 +448,7 @@ lib.mkMerge [
             .agents.entries.main.workspace == "${openclaw.workspace}" and
             .agents.entries.seedbox.workspace == "${openclaw.seedboxWorkspace}" and
             .agents.defaults.systemAgent.agentId == "main" and
-            .channels.telegram.groups["-5176945403"].allowFrom == ["781443178"] and
+            .channels.telegram.groups["-5176945403"].allowFrom == ["781443178", "718852556"] and
             .channels.telegram.groups["-5176945403"].requireMention == true and
             ([.bindings[] | select(.agentId == "seedbox")] | length) == 1 and
             ([.bindings[] | select(.agentId == "seedbox")][0].match.peer.id == "-5176945403") and
