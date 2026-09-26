@@ -53,6 +53,10 @@
         "hooks": [
           {
             "type": "command",
+            "command": "fork-window --claude-session-start"
+          },
+          {
+            "type": "command",
             "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track session-start --agent claude; fi"
           }
         ]

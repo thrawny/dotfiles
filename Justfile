@@ -127,7 +127,11 @@ test-t3ctl:
     @just test-python tests/test_t3ctl.py
 
 # Run all tests
-test: test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv
+test: test-fork-window test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv
+
+# Session forking, exact session selection, and desktop routing
+test-fork-window:
+    @just test-python tests/test_fork_window.py
 
 # Shared direnv helpers, independent of any Home Manager user.
 test-direnv:
@@ -197,7 +201,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv nix::eval
+check-parallel: lint typecheck pi test-fork-window check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

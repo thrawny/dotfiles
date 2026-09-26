@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""Fork an exact agent session into a Herdr tab or a Ghostty window."""
+
+import argparse
+import json
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+import uuid
+from pathlib import Path
+from typing import cast
+
+NOTICE = """This is a new, independent fork of an existing conversation.
+The original session remains active. You share its working directory and files,
+but not its running tools, background tasks, or ownership of those tasks.
+The inherited conversation is context, not a request to continue its pending work
+or to fork again. Acknowledge the fork briefly, then wait for the user's next
+instruction. Do not run tools or change files until that instruction arrives."""
+
+
+class ForkError(Exception):
+    pass
+
+
+def executable(name: str) -> str:
+    resolved = shutil.which(name)
+    if not resolved:
+        raise ForkError(f"Required executable not found: {name}")
+    return resolved
+
+
+def detect_harness() -> str:
+    candidates = [
+        harness
+        for harness, variable in (
+            ("claude", "CLAUDE_SESSION_ID"),
+            ("codex", "CODEX_THREAD_ID"),
+        )
+        if os.environ.get(variable)
+    ]
+    if len(candidates) == 1:
+        return candidates[0]
+    if candidates:
+        raise ForkError(
+            "Ambiguous session environment; specify fork-window claude or fork-window codex"
+        )
+    raise ForkError(
+        "No current session ID. Restart or resume Claude to load its SessionStart hook, or run inside Codex. Pi uses /fork-window."
+    )
+
+
+def claude_session_start() -> None:
+    """Persist the hook's exact session ID for Claude's Bash and ! commands."""
+    env_file = os.environ.get("CLAUDE_ENV_FILE")
+    if not env_file:
+        return  # Non-local hook contexts do not expose a shell environment file.
+    try:
+        payload: object = json.load(sys.stdin)
+        ref = (
+            cast(dict[str, object], payload).get("session_id")
+            if isinstance(payload, dict)
+            else None
+        )
+        if not isinstance(ref, str):
+            raise ValueError("missing session_id")
+        session_id = str(uuid.UUID(ref))
+    except (ValueError, TypeError) as error:
+        raise ForkError("SessionStart hook requires a valid session_id UUID") from error
+    # Append: other hooks may already have populated this session's file.
+    with Path(env_file).open("a") as file:
+        file.write(f"\nexport CLAUDE_SESSION_ID={shlex.quote(session_id)}\n")
+
+
+def session_ref(harness: str, supplied: str | None) -> str:
+    ref = supplied or os.environ.get(
+        {"claude": "CLAUDE_SESSION_ID", "codex": "CODEX_THREAD_ID"}.get(harness, ""),
+        "",
+    )
+    if not ref:
+        raise ForkError(
+            "An exact session ID or Pi session file is required. Use /fork-window inside the agent; never select the latest session."
+        )
+    if harness == "pi":
+        file = Path(ref).expanduser().resolve()
+        if not file.is_file():
+            raise ForkError(f"Pi session file does not exist: {file}")
+        return str(file)
+    try:
+        return str(uuid.UUID(ref))
+    except ValueError as error:
+        raise ForkError(f"{harness} requires a full session UUID") from error
+
+
+def fork_command(harness: str, ref: str) -> list[str]:
+    agent = executable(harness)
+    notice = f"{NOTICE}\n\nSource harness: {harness}\nSource session: {ref}"
+    if harness == "claude":
+        args = [agent, "--resume", ref, "--fork-session", notice]
+    elif harness == "codex":
+        args = [agent, "fork", ref, notice]
+    else:
+        args = [agent, "--fork", ref, "--", notice]
+    # A child terminal must not retain the parent's nested-agent/session markers.
+    return [
+        executable("env"),
+        "-u",
+        "CLAUDECODE",
+        "-u",
+        "CLAUDE_SESSION_ID",
+        "-u",
+        "CODEX_THREAD_ID",
+        *args,
+    ]
+
+
+def run(args: list[str], cwd: Path) -> str:
+    result = subprocess.run(
+        args, cwd=cwd, capture_output=True, text=True, timeout=20, check=False
+    )
+    if result.returncode:
+        raise ForkError(
+            result.stderr.strip() or result.stdout.strip() or f"{args[0]} failed"
+        )
+    return result.stdout
+
+
+def launch(command: list[str], cwd: Path) -> str:
+    if os.environ.get("HERDR_ENV") == "1":
+        workspace = os.environ.get("HERDR_WORKSPACE_ID")
+        if not workspace:
+            raise ForkError(
+                "Herdr caller workspace is missing; refusing to use the focused workspace"
+            )
+        herdr = executable(os.environ.get("HERDR_BIN_PATH") or "herdr")
+        response = run(
+            [
+                herdr,
+                "tab",
+                "create",
+                "--workspace",
+                workspace,
+                "--cwd",
+                str(cwd),
+                "--focus",
+            ],
+            cwd,
+        )
+        try:
+            pane = json.loads(response)["result"]["root_pane"]["pane_id"]
+            if not isinstance(pane, str) or not pane:
+                raise ValueError("missing pane ID")
+        except (ValueError, KeyError, TypeError) as error:
+            raise ForkError(
+                "Herdr created a tab but returned no pane ID; inspect it before retrying"
+            ) from error
+        try:
+            run([herdr, "pane", "run", pane, shlex.join(command)], cwd)
+        except (ForkError, subprocess.TimeoutExpired) as error:
+            raise ForkError(
+                f"Fork launch in {pane} was not confirmed; inspect that pane before retrying: {error}"
+            ) from error
+        return f"Fork launch requested in Herdr pane {pane}."
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        raise ForkError("Run inside Herdr or a Hyprland desktop session")
+    # Ghostty's single-instance action opens a window without leaving a child
+    # attached to the agent's tool process. No compositor shell interpolation.
+    run(
+        [
+            executable("ghostty"),
+            "+new-window",
+            f"--working-directory={cwd}",
+            "-e",
+            *command,
+        ],
+        cwd,
+    )
+    return "Fork launch requested in a new Ghostty window."
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "harness",
+        nargs="?",
+        choices=("pi", "claude", "codex"),
+        help="Detected from the current session environment when omitted",
+    )
+    parser.add_argument(
+        "--claude-session-start",
+        action="store_true",
+        help="Claude SessionStart hook: export the current session ID for shell commands",
+    )
+    parser.add_argument(
+        "session", nargs="?", help="Pi session file or full Claude/Codex UUID"
+    )
+    parser.add_argument(
+        "--cwd", type=Path, default=Path.cwd(), help="Shared working directory"
+    )
+    args = parser.parse_args()
+    try:
+        if args.claude_session_start:
+            if args.harness or args.session:
+                raise ForkError(
+                    "The SessionStart hook does not accept a harness or session argument"
+                )
+            claude_session_start()
+            return 0
+        if os.environ.get("SANDBOX") == "1":
+            raise ForkError(
+                "Desktop session forking is unavailable inside the container sandbox; run from the host session"
+            )
+        cwd = args.cwd.expanduser().resolve()
+        if not cwd.is_dir():
+            raise ForkError(f"Working directory does not exist: {cwd}")
+        harness = args.harness or detect_harness()
+        ref = session_ref(harness, args.session)
+        print(launch(fork_command(harness, ref), cwd))
+        return 0
+    except subprocess.TimeoutExpired:
+        print(
+            "fork-window: Launch timed out; inspect the destination before retrying.",
+            file=sys.stderr,
+        )
+    except (ForkError, OSError) as error:
+        print(f"fork-window: {error}", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

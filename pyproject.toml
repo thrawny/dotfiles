@@ -10,6 +10,7 @@ addopts = ["--import-mode=importlib"]
 [tool.basedpyright]
 include = [
   ".",
+  "bin/fork-window",
   "bin/desktop-broker",
   "bin/shell-clipboard-image",
   "bin/herdr-decorator",
@@ -47,6 +48,7 @@ reportImplicitOverride = false
 
 [tool.ruff]
 extend-include = [
+  "bin/fork-window",
   "bin/desktop-broker",
   "bin/shell-clipboard-image",
   "bin/herdr-decorator",
