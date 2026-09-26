@@ -11,12 +11,6 @@ let
   workspace = "/srv/agents/openclaw/workspace";
   seedboxWorkspace = "/srv/agents/openclaw/workspaces/seedbox";
   stateDir = "${home}/.openclaw";
-  seedboxCLI = pkgs.writeShellApplication {
-    name = "seedbox";
-    text = ''
-      exec ${pkgs.uv}/bin/uv run --frozen --no-dev --project ${seedboxWorkspace} seedbox "$@"
-    '';
-  };
   uiSource = "${openclawPackage}/lib/openclaw/dist/control-ui";
   uiRoot = "/var/lib/openclaw-ui/${builtins.baseNameOf (toString openclawPackage)}";
   runtimePlugins = [
@@ -244,7 +238,6 @@ in
     workspace
     stateDir
     seedboxWorkspace
-    seedboxCLI
     uiSource
     uiRoot
     configFile

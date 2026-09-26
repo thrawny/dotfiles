@@ -384,10 +384,7 @@ lib.mkMerge [
     users.manageLingering = true;
     systemd.services.openclaw = {
       # Rootless Podman needs the setuid newuidmap/newgidmap wrappers.
-      path = [
-        "/run/wrappers"
-        openclaw.seedboxCLI
-      ];
+      path = [ "/run/wrappers" ];
       restartTriggers = [ openclaw.configFile ];
       after = [
         "systemd-tmpfiles-setup.service"
@@ -472,7 +469,6 @@ lib.mkMerge [
     environment.systemPackages = [
       llmPkgs.openclaw
       openclawAdmin
-      openclaw.seedboxCLI
       zmxPkg
       pkgs.podman-compose
     ]
