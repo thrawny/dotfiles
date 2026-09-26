@@ -18,9 +18,19 @@ Walker is still available manually with `walker`.
 
 ## Use
 
-- Super+Space opens the launcher. Tab switches apps/clipboard; `?` lists modes.
+- Super+Space opens the launcher. Tab switches apps/clipboard/projects; `?` lists modes.
+- Left Alt+P opens projects. Enter focuses an existing project workspace or creates
+  one with one terminal. Ctrl+O accepts an absolute directory path or `~/`.
+  Projects come from zoxide Git roots, `~/code`, and `~/work/*/code`.
+- Ctrl+G on a project asks for a worktree branch. Enter reuses an existing checkout
+  or creates `../<project>-worktrees/<branch>`, then opens a workspace named
+  `<project>/<branch>`. Local branches work offline; origin branches are fetched
+  and tracked. New branches start from origin's default branch, or HEAD when
+  there is no origin. Network failures stay visible rather than changing the base.
+  Escape returns from path/branch entry; closing during an operation does not
+  undo a Git command already running. The CLI and Herdr pickers remain available.
 - Ctrl+K moves up; Ctrl+J moves down in every picker. Up/Down and Ctrl+P/N also work.
-- Enter launches or copies the selected entry; Escape closes.
+- Enter opens or copies the selected entry; Escape closes unless entering a path or branch.
 - Ctrl+Delete removes a clipboard entry. Copying does not automatically paste.
 - Images show thumbnails; selecting one copies the original image bytes.
 - Click volume for audio settings, right-click to mute, or scroll to adjust it.

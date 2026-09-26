@@ -52,8 +52,23 @@ test('image history keeps order, dimensions, and type while rejecting unsupporte
     assert.equal(rows[1].imageSource, '');
     assert.deepEqual(plain(search.clipboard(rows, 'image')).map(row => row.id), ['8', '6']);
 });
+test('project search matches names and paths while retaining discovery order for ties', () => {
+    const rows = [
+        { kind: 'project', name: 'Widgets', detail: '~/work/acme/code/widgets', path: '/work/widgets' },
+        { kind: 'project', name: 'Dotfiles', detail: '~/dotfiles', path: '/dotfiles' },
+        { kind: 'project', name: 'Widgets', detail: '~/code/widgets', path: '/code/widgets' },
+    ];
+    assert.deepEqual(plain(search.projects(rows, '')).map(row => row.path), rows.map(row => row.path));
+    assert.deepEqual(plain(search.projects(rows, 'widgets')).map(row => row.path), ['/work/widgets', '/code/widgets']);
+    assert.equal(search.projects(rows, 'acme')[0].path, '/work/widgets');
+    assert.equal(search.projects(rows, 'dtfl')[0].path, '/dotfiles');
+    assert.equal(search.projects(rows, 'missing').length, 0);
+    assert.equal(search.projects(Array.from({ length: 100 }, () => rows[0]), '').length, 80);
+});
+
 test('mode chooser searches only the available modes', () => {
-    assert.deepEqual(plain(search.modes('')).map(row => row.mode), ['apps', 'clipboard']);
+    assert.deepEqual(plain(search.modes('')).map(row => row.mode), ['apps', 'clipboard', 'projects']);
+    assert.equal(search.modes('proj')[0].mode, 'projects');
     assert.equal(search.modes('clip')[0].mode, 'clipboard');
     assert.ok(search.modes('clip')[0].detail.includes('text and image clipboard'));
     assert.equal(search.modes('not-a-mode').length, 0);

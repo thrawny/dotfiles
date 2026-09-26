@@ -58,9 +58,19 @@ function clipboard(entries, query) {
     return entries.filter(item => item.name.toLowerCase().includes(needle)).slice(0, 80);
 }
 
+function projects(entries, query) {
+    // Retain discovery order for ties so zoxide's ranking remains useful.
+    return entries.map((entry, index) => Object.assign({}, entry, {
+        score: Math.min(score(entry.name, query), 50 + score(entry.detail, query)),
+        order: index
+    })).filter(item => Number.isFinite(item.score))
+        .sort((a, b) => a.score - b.score || a.order - b.order).slice(0, 80);
+}
+
 function modes(query) {
     return [
         { kind: "mode", mode: "apps", name: "Applications", detail: "Search installed applications", icon: "view-app-grid-symbolic" },
-        { kind: "mode", mode: "clipboard", name: "Clipboard", detail: "Search text and image clipboard history", icon: "edit-paste-symbolic" }
+        { kind: "mode", mode: "clipboard", name: "Clipboard", detail: "Search text and image clipboard history", icon: "edit-paste-symbolic" },
+        { kind: "mode", mode: "projects", name: "Projects", detail: "Open projects and create worktrees", icon: "folder-symbolic" }
     ].filter(item => Number.isFinite(score(item.name, query)));
 }

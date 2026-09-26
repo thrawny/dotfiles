@@ -33,6 +33,9 @@ ShellRoot {
         function toggle(): void {
             Launcher.toggle();
         }
+        function projects(): void {
+            Launcher.toggleProjects();
+        }
         function close(): void {
             Launcher.close();
         }

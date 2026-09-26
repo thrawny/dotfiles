@@ -44,13 +44,15 @@ in
     };
     Service = {
       ExecStart = "${pkgs.quickshell}/bin/quickshell -c dotfiles";
+      # Systemd does not inherit home.sessionPath. The project picker calls
+      # hyprland-project from the mutable checkout, not the package profile.
       Environment = "PATH=${
         pkgs.lib.makeBinPath [
           agentSwitchPackage
           quotabarPackage
           clipboardImagePackage
         ]
-      }:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin";
+      }:${dotfiles}/bin:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin";
       Restart = "on-failure";
       RestartSec = 2;
     };
