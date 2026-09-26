@@ -92,6 +92,16 @@ deploy target:
 
     exit 1
 
+# Refresh just the shared direnv asset without restarting active T3 Code sessions.
+sync-t3code-direnv target="obelisk":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target={{quote(target)}}
+    system="$(nix eval --raw ".#nixosConfigurations.$target.config.nixpkgs.hostPlatform.system")"
+    rc_file="$(nix build --no-link --print-out-paths ".#packages.$system.direnvrc")"
+    nix copy --no-check-sigs --to "ssh-ng://root@$target" "$rc_file"
+    ssh "root@$target" install -o t3code -g t3code -m 0644 "$rc_file" /srv/t3code/.config/direnv/direnvrc
+
 # Explicitly build on this machine and install a remote NixOS generation for next boot
 deploy-boot target:
     nixos-rebuild boot --flake ".#{{ target }}" --build-host "" --target-host "root@{{ target }}"

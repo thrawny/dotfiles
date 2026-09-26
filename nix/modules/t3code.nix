@@ -1,6 +1,7 @@
 {
   agentAssets,
   config,
+  direnvAssets,
   lib,
   pkgs,
   llm-agents,
@@ -235,12 +236,7 @@ let
     fi
   '';
 
-  direnvrc = pkgs.writeText "t3code-direnvrc" ''
-    source ${pkgs.nix-direnv}/share/nix-direnv/direnvrc
-    dotenv_if_exists .env
-    dotenv_if_exists .env.local
-    dotenv_if_exists .secrets
-  '';
+  direnvrc = direnvAssets.rcFor pkgs;
   direnvConfig = pkgs.writeText "t3code-direnv.toml" ''
     [whitelist]
     prefix = [${builtins.toJSON repos}, ${builtins.toJSON "${state}/worktrees"}]

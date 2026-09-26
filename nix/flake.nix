@@ -159,11 +159,13 @@
           ;
         containerAssets = storeHomeAssets;
       };
+      direnvAssets = import ./lib/direnv-assets.nix;
       flakeArgs = {
         inherit
           quotabar
           agent-switch
           agentAssets
+          direnvAssets
           herdr
           hunk
           lazy-nvim-nix
@@ -200,6 +202,7 @@
               llm-agents
               hermes-agent
               agentAssets
+              direnvAssets
               thrawny-pkgs
               walker
               nurPkgs
@@ -242,6 +245,7 @@
               llm-agents
               hermes-agent
               agentAssets
+              direnvAssets
               thrawny-pkgs
               walker
               nurPkgs
@@ -397,6 +401,7 @@
             in
             {
               quotabar = quotabar.packages.${system}.default;
+              direnvrc = direnvAssets.rcFor pkgs;
               shell-clipboard-image = pkgs.callPackage ./packages/shell-clipboard-image.nix { };
               agent-switch = pkgs.callPackage ./packages/agent-switch.nix { src = agent-switch; };
               nvim = import ./lib/nvim-package.nix {
