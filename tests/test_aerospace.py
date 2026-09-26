@@ -52,7 +52,7 @@ def test_workspace_policy(config: dict[str, Any]):
 
 
 def test_core_keymap(bindings: dict[str, str]):
-    expected = {
+    expected: dict[str, str | list[str]] = {
         "alt-enter": bindings["alt-enter"],  # Checked separately below.
         "alt-w": "close",
         "cmd-h": [],
