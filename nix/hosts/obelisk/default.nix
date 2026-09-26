@@ -24,6 +24,7 @@ in
     ../../modules/forgejo.nix
     ../../modules/agents.nix
     ../../modules/t3code.nix
+    ./backup.nix
     ./hardware-configuration.nix
     ./disko.nix
   ];
