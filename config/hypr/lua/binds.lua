@@ -7,8 +7,38 @@ local dsp = hl.dsp
 
 -- Toggle a special-workspace scratchpad, spawning the app first if it isn't
 -- running. The pgrep guard runs in the shell so no compositor state is needed.
-local function scratchpad(special, spawn_guard)
+local function scratchpad(special, spawn_guard, window_class)
+	local pending = false
+	if window_class then
+		hl.on("window.open", function(window)
+			if not pending or window.class ~= window_class then
+				return
+			end
+			pending = false
+			local active = hl.get_active_special_workspace()
+			if not active or active.name ~= "special:" .. special then
+				hl.dispatch(dsp.workspace.toggle_special(special))
+			end
+		end)
+	end
 	return function()
+		if window_class then
+			local found = false
+			for _, window in ipairs(hl.get_windows()) do
+				if window.class == window_class then
+					found = true
+					break
+				end
+			end
+			if not found then
+				-- Opening an empty special workspace races the asynchronous spawn.
+				-- The process guard also prevents duplicates during startup.
+				pending = true
+				hl.dispatch(dsp.exec_cmd(spawn_guard))
+				return
+			end
+		end
+		pending = false
 		hl.dispatch(dsp.exec_cmd(spawn_guard))
 		hl.dispatch(dsp.workspace.toggle_special(special))
 	end
@@ -33,7 +63,8 @@ bind(
 	"ALT + Q",
 	scratchpad(
 		"term",
-		"pgrep -f '^[^ ]*ghostty[^ ]* .*GhosttyScratchpad' || ghostty --class=com.thrawny.GhosttyScratchpad"
+		"pgrep -f '^[^ ]*ghostty[^ ]* .*GhosttyScratchpad' || ghostty --class=com.thrawny.GhosttyScratchpad",
+		"com.thrawny.GhosttyScratchpad"
 	)
 )
 bind("ALT + O", scratchpad("1password", "pgrep -x 1password || 1password"))
@@ -92,7 +123,24 @@ local function focus_horizontal(direction)
 	end
 end
 
+-- No first/last-column dispatcher exists. With wrap_focus disabled, walking
+-- once per window reaches the edge without crossing into another workspace.
+local function focus_edge(direction)
+	return function()
+		local workspace = hl.get_active_workspace()
+		local window = hl.get_active_window()
+		if not workspace or workspace.tiled_layout ~= "scrolling" or not window or window.floating then
+			return
+		end
+		for _ = 1, #hl.get_windows() do
+			hl.dispatch(dsp.layout("focus " .. direction))
+		end
+	end
+end
+
 -- Focus
+bind("ALT + comma", focus_edge("l"))
+bind("ALT + period", focus_edge("r"))
 bind("ALT + H", focus_horizontal("l"))
 bind("ALT + J", dsp.focus({ direction = "d" }))
 bind("ALT + K", dsp.focus({ direction = "u" }))
