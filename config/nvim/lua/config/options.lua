@@ -17,6 +17,11 @@ vim.opt.number = true
 vim.opt.relativenumber = false
 vim.g.snacks_animate = false
 
+-- Soft-wrap long lines at word boundaries and preserve their indentation
+vim.opt.wrap = true
+vim.opt.linebreak = true
+vim.opt.breakindent = true
+
 -- Auto-reload files when changed externally
 vim.opt.autoread = true
 

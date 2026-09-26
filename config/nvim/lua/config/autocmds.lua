@@ -12,10 +12,8 @@ vim.api.nvim_create_autocmd("FileType", {
   pattern = { "text", "plaintex", "typst", "gitcommit", "markdown" },
   callback = function()
     vim.opt_local.spell = false
-    vim.opt_local.linebreak = true
-    vim.opt_local.breakindent = true
   end,
-  desc = "Disable spell, add word-boundary wrapping for text filetypes",
+  desc = "Disable spell for text filetypes",
 })
 
 -- Auto-reload files when changed externally
