@@ -30,7 +30,7 @@ let
   agentInstructions = agentInstructionLib.mkInstructions {
     enableEphemeralTools = instructionConfig.ephemeralTools.enable;
     enableShellPortability = instructionConfig.shellPortability.enable;
-    enableSandbox = instructionConfig.sandbox.enable;
+    enableSandbox = instructionConfig.sandbox.enable && !pkgs.stdenv.hostPlatform.isDarwin;
     enableBackgroundTasks = instructionConfig.backgroundTasks.enable;
     enablePiWorkflow = instructionConfig.piWorkflow.enable;
   };
