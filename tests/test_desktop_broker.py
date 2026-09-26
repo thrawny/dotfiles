@@ -255,13 +255,13 @@ def test_hypr_router_focuses_web_browser(tmp_path: Path):
     hyprctl = tmp_path / "hyprctl"
     calls = tmp_path / "calls"
     hyprctl.write_text(
-        f'''#!/bin/sh
+        f"""#!/bin/sh
 if [ "$1 $2" = '-j clients' ]; then
   echo '[{{"class":"helium","address":"0xabc","workspace":{{"name":"web"}},"focusHistoryID":0}}]'
 elif [ "$1 $2" = '-j activeworkspace' ]; then
   echo '{{"name":"main"}}'
 else echo "$*" >> '{calls}'; fi
-'''
+"""
     )
     hyprctl.chmod(0o755)
     for name in ("wtype", "wl-copy", "wl-paste"):
@@ -270,11 +270,20 @@ else echo "$*" >> '{calls}'; fi
         executable.chmod(0o755)
     result = subprocess.run(
         ["bash", str(ROOT / "bin/open-url"), "https://example.com"],
-        env={**os.environ, "SANDBOX": "", "HYPRLAND_INSTANCE_SIGNATURE": "test", "PATH": f"{tmp_path}:{os.environ['PATH']}"},
-        capture_output=True, text=True, timeout=5,
+        env={
+            **os.environ,
+            "SANDBOX": "",
+            "HYPRLAND_INSTANCE_SIGNATURE": "test",
+            "PATH": f"{tmp_path}:{os.environ['PATH']}",
+        },
+        capture_output=True,
+        text=True,
+        timeout=5,
     )
     assert result.returncode == 0, result.stderr
-    assert calls.read_text().splitlines() == ["eval for _,w in ipairs(hl.get_windows()) do if tostring(w.address) == '0xabc' then hl.dispatch(hl.dsp.focus({window=w})) break end end"]
+    assert calls.read_text().splitlines() == [
+        "eval for _,w in ipairs(hl.get_windows()) do if tostring(w.address) == '0xabc' then hl.dispatch(hl.dsp.focus({window=w})) break end end"
+    ]
 
 
 @pytest.mark.parametrize("sandbox", ["1", ""])

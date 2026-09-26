@@ -8,10 +8,7 @@ let
   containerAssets = args.containerAssets or null;
   dotfiles = args.dotfiles or null;
   openUrl =
-    if homeSource == "repo" then
-      "${dotfiles}/bin/open-url"
-    else
-      "${containerAssets.bin}/open-url";
+    if homeSource == "repo" then "${dotfiles}/bin/open-url" else "${containerAssets.bin}/open-url";
 
   # The sandbox can write the checkout. Never execute its mutable scripts on
   # the host in response to a broker request.

@@ -38,9 +38,13 @@ hl.define_submap("appjump", "reset", function()
 	)
 	hl.bind(
 		"P",
-		require("scratchpad")("spotify", "pgrep -f '^[^ ]*/[.]spotify-wrapped( |$)' || pgrep -x spotify || spotify", function(window)
-			return window.class == "spotify" or window.class == "Spotify"
-		end)
+		require("scratchpad")(
+			"spotify",
+			"pgrep -f '^[^ ]*/[.]spotify-wrapped( |$)' || pgrep -x spotify || spotify",
+			function(window)
+				return window.class == "spotify" or window.class == "Spotify"
+			end
+		)
 	)
 	hl.bind("Z", jump("discord"))
 	hl.bind("T", jump("org.telegram.desktop"))
