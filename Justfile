@@ -112,8 +112,19 @@ check-theme:
 
 # === Tests ===
 
+# Format and check the T3 Code CLI
+check-t3ctl:
+    ruff check --fix bin/t3ctl tests/test_t3ctl.py
+    ruff format bin/t3ctl tests/test_t3ctl.py
+    @just typecheck-python bin/t3ctl tests/test_t3ctl.py
+    @just test-t3ctl
+
+# Test T3 Code API commands and credential cleanup without a live server
+test-t3ctl:
+    @just test-python tests/test_t3ctl.py
+
 # Run all tests
-test: test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac
+test: test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl
 
 # Project selection and backend dispatch
 test-project-picker:
@@ -173,7 +184,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator nix::eval
+check-parallel: lint typecheck pi check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

@@ -3,7 +3,6 @@
   lib,
   pkgs,
   llm-agents,
-  hermes-agent,
   zmx,
   ...
 }:
@@ -539,14 +538,6 @@ lib.mkMerge [
         "--accept-hooks"
       ];
       extraDependencyGroups = [ "messaging" ];
-      extraPythonPackages = [
-        (import ../lib/hermes-state-modules.nix {
-          inherit lib;
-          # The plugin hook filters by interpreter identity, not just ABI version.
-          pkgs = hermes-agent.inputs.nixpkgs.legacyPackages.${system};
-          source = hermes-agent.outPath;
-        })
-      ];
       extraPackages = commonPath;
       restartSec = 10;
       settings = {

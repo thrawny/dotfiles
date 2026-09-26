@@ -27,6 +27,8 @@ Setting up a fresh Mac? Run `bin/bootstrap-mac` from the checkout for an interac
 
 For this M1 Air's nix-darwin migration, Tailscale SSH, and closed-lid use, follow [Mac remote access](docs/mac-remote-access.md).
 
+Use [`t3ctl`](docs/t3ctl.md) to control T3 Code on obelisk from agents or scripts.
+
 ```bash
 just switch   # Apply config (NixOS, nix-darwin, or Home Manager)
 just check    # Format, lint, evaluate

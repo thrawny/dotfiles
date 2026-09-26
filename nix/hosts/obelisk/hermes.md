@@ -23,12 +23,9 @@ access and an incorrect password, then authenticates and reads sessions.
 ## Packaging and proxy
 
 `nix/modules/agents.nix` gives the dashboard and gateway the same effective
-Hermes package, including messaging dependencies and Python package fixes.
-Hermes 0.21.0 omitted `hermes_state_holders` and `hermes_state_registry` from its
-wheel. `nix/lib/hermes-state-modules.nix` supplies those files from the locked
-upstream source through `extraPythonPackages`. Remove this workaround when
-upstream includes both modules. The helper skips modules already declared by
-upstream so it does not shadow a future packaged copy.
+Hermes package, including messaging dependencies. Upstream's `setup.py` now
+includes all root Python modules in the wheel, including the state modules
+that previously needed a local workaround.
 
 The dashboard listens only on `127.0.0.1:9119`. Nix manages Tailscale Serve's
 `svc:hermes` HTTPS proxy. `dashboard.public_url` declares the browser-facing URL

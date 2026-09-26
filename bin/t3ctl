@@ -1,0 +1,439 @@
+#!/usr/bin/env python3
+"""Control T3 Code over SSH and its authenticated loopback HTTP API."""
+
+import argparse
+import contextlib
+import json
+import os
+import shlex
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, cast
+
+Json = dict[str, Any]
+
+
+class CliError(Exception):
+    pass
+
+
+def now() -> str:
+    return datetime.now(UTC).isoformat().replace("+00:00", "Z")
+
+
+def identifier() -> str:
+    return str(uuid.uuid4())
+
+
+def emit(value: Any) -> None:
+    print(json.dumps(value, ensure_ascii=False), flush=True)
+
+
+class NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self, req: Any, fp: Any, code: int, msg: str, headers: Any, newurl: str
+    ) -> None:
+        raise CliError("API redirected the request; refusing to forward credentials")
+
+
+class Api:
+    def __init__(self, port: int, token: str):
+        self.url: str = f"http://127.0.0.1:{port}/api/orchestration"
+        self.token: str = token
+        self.opener: urllib.request.OpenerDirector = urllib.request.build_opener(
+            urllib.request.ProxyHandler({}), NoRedirect()
+        )
+
+    def request(self, endpoint: str, payload: Json | None = None) -> Json:
+        data = None if payload is None else json.dumps(payload).encode()
+        request = urllib.request.Request(
+            self.url + endpoint,
+            data=data,
+            headers={
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+            },
+        )
+        try:
+            with self.opener.open(request, timeout=15) as response:
+                return json.load(response)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode(errors="replace")[:2000]
+            raise CliError(f"HTTP {exc.code}: {detail}") from exc
+        except (OSError, ValueError) as exc:
+            # Do not retry mutations: dispatch may have committed before disconnect.
+            raise CliError(
+                f"API request failed, outcome may be unknown: {exc}"
+            ) from exc
+
+    def shell(self) -> Json:
+        return self.request("/shell")
+
+    def thread(self, thread_id: str) -> Json:
+        return self.request("/threads/" + urllib.parse.quote(thread_id, safe=""))[
+            "thread"
+        ]
+
+    def dispatch(self, command: Json) -> Json:
+        command.setdefault("commandId", identifier())
+        return self.request("/dispatch", command)
+
+
+@contextlib.contextmanager
+def authenticated_api(args: argparse.Namespace):
+    auth = ["t3", "auth", "session"]
+    location = ["--base-dir", args.base_dir]
+    ttl = f"{getattr(args, 'timeout', 0) + 120}s"
+    issued = subprocess.run(
+        auth + ["issue", *location, "--ttl", ttl, "--label", "t3ctl", "--json"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+    session = json.loads(issued.stdout)
+    try:
+        yield Api(args.port, session["token"])
+    finally:
+        try:
+            subprocess.run(
+                auth + ["revoke", *location, session["sessionId"]],
+                capture_output=True,
+                timeout=30,
+                check=True,
+            )
+        except (OSError, subprocess.SubprocessError):
+            print(
+                "t3ctl: token revocation failed; its TTL still applies", file=sys.stderr
+            )
+
+
+def resolve_project(snapshot: Json, name: str) -> Json:
+    projects = snapshot["projects"]
+    exact = [p for p in projects if p["id"] == name or p["workspaceRoot"] == name]
+    matches = exact or [p for p in projects if p["title"] == name]
+    if len(matches) != 1:
+        raise CliError(
+            f"Project {name!r} is missing or ambiguous; use its ID or server path"
+        )
+    return matches[0]
+
+
+def resolve_thread(snapshot: Json, thread_id: str) -> Json:
+    for thread in snapshot["threads"]:
+        if thread["id"] == thread_id:
+            return thread
+    raise CliError(f"Thread {thread_id!r} not found")
+
+
+def blocked(thread: Json) -> bool:
+    return bool(thread.get("hasPendingApprovals") or thread.get("hasPendingUserInput"))
+
+
+def busy(thread: Json) -> bool:
+    session: Json = thread.get("session") or {}
+    turn: Json = thread.get("latestTurn") or {}
+    return bool(
+        session.get("status") in ("starting", "running")
+        or turn.get("state") == "running"
+        or thread.get("backgroundLiveness")
+        or (
+            thread.get("latestUserMessageAt")
+            and (
+                not turn.get("requestedAt")
+                or datetime.fromisoformat(thread["latestUserMessageAt"])
+                > datetime.fromisoformat(turn["requestedAt"])
+            )
+        )
+    )
+
+
+def prompt_text(value: str) -> str:
+    text = sys.stdin.read() if value == "-" else value
+    if not text.strip():
+        raise CliError("Prompt must not be empty")
+    if len(text) > 120_000:
+        raise CliError("Prompt exceeds the server's 120,000-character limit")
+    return text
+
+
+def send_turn(api: Api, thread: Json, text: str) -> Json:
+    message_id = identifier()
+    command: Json = {
+        "type": "thread.turn.start",
+        "commandId": identifier(),
+        "threadId": thread["id"],
+        "message": {
+            "messageId": message_id,
+            "role": "user",
+            "text": text,
+            "attachments": [],
+        },
+        "modelSelection": thread["modelSelection"],
+        "runtimeMode": thread["runtimeMode"],
+        "interactionMode": thread["interactionMode"],
+        "createdAt": now(),
+    }
+    receipt = api.dispatch(command)
+    return {
+        "threadId": thread["id"],
+        "messageId": message_id,
+        "commandId": command["commandId"],
+        **receipt,
+    }
+
+
+def start(api: Api, args: argparse.Namespace) -> Json:
+    text = prompt_text(args.prompt)
+    if args.provider and not args.model:
+        raise CliError("--provider requires --model")
+    project = resolve_project(api.shell(), args.project)
+    selection = project.get("defaultModelSelection")
+    if args.model:
+        selection = {"instanceId": args.provider or "codex", "model": args.model}
+    if not selection:
+        raise CliError(
+            "Project has no model default; pass --model and optionally --provider"
+        )
+    thread = {
+        "id": identifier(),
+        "projectId": project["id"],
+        "title": args.title or text.strip()[:80],
+        "modelSelection": selection,
+        "runtimeMode": args.runtime_mode,
+        "interactionMode": args.mode,
+        "branch": None,
+        "worktreePath": None,
+        "createdAt": now(),
+    }
+    try:
+        api.dispatch(
+            {
+                "type": "thread.create",
+                "threadId": thread["id"],
+                **{k: v for k, v in thread.items() if k != "id"},
+            }
+        )
+        return send_turn(api, thread, text)
+    except CliError as exc:
+        # Keep it: a lost response does not prove the command was rejected.
+        raise CliError(
+            f"Thread {thread['id']} may have been created or started; inspect it before retrying. {exc}"
+        ) from exc
+
+
+def wait_for_turn(api: Api, args: argparse.Namespace) -> tuple[Json, int]:
+    deadline = time.monotonic() + args.timeout
+    message_id = args.message_id
+    while True:
+        thread = api.thread(args.thread)
+        users = [m for m in thread["messages"] if m["role"] == "user"]
+        if message_id is None:
+            if not users:
+                raise CliError("Thread has no user message to wait for")
+            message_id = users[-1]["id"]
+        message = next((m for m in users if m["id"] == message_id), None)
+        if message is not None and users[-1]["id"] != message_id:
+            raise CliError("A newer prompt superseded this message; inspect the thread")
+        turn: Json = thread.get("latestTurn") or {}
+        # V1 leaves user turnId null. Require the latest user message and a
+        # turn requested no earlier than that message, not the previous turn.
+        matches = False
+        if message is not None:
+            if message.get("turnId") is not None:
+                matches = message["turnId"] == turn.get("turnId")
+            elif turn.get("requestedAt"):
+                matches = datetime.fromisoformat(
+                    turn["requestedAt"]
+                ) >= datetime.fromisoformat(message["createdAt"])
+        summary = resolve_thread(api.shell(), args.thread)
+        if blocked(summary):
+            return {"state": "blocked", "thread": thread}, 2
+        if matches and turn.get("state") in ("completed", "error", "interrupted"):
+            state = turn["state"]
+            return {"state": state, "thread": thread}, 0 if state == "completed" else 1
+        session: Json = thread.get("session") or {}
+        if session.get("status") == "error":
+            return {"state": "error", "thread": thread}, 1
+        if time.monotonic() >= deadline:
+            return {
+                "state": "timeout",
+                "threadId": args.thread,
+                "messageId": message_id,
+            }, 124
+        time.sleep(min(1, max(0, deadline - time.monotonic())))
+
+
+def execute(api: Api, args: argparse.Namespace) -> tuple[Any, int]:
+    match args.command:
+        case "projects":
+            return api.shell()["projects"], 0
+        case "threads":
+            snapshot = api.shell()
+            threads = snapshot["threads"]
+            if args.project:
+                project = resolve_project(snapshot, args.project)
+                threads = [t for t in threads if t["projectId"] == project["id"]]
+            return threads, 0
+        case "show":
+            return api.thread(args.thread), 0
+        case "start":
+            return start(api, args), 0
+        case "send":
+            text = prompt_text(args.prompt)
+            thread = resolve_thread(api.shell(), args.thread)
+            if blocked(thread) or busy(thread):
+                raise CliError(
+                    "Thread is busy or needs input; wait, respond in the UI, or interrupt first"
+                )
+            if thread.get("archivedAt"):
+                raise CliError("Thread is archived; unarchive it in the UI first")
+            return send_turn(api, thread, text), 0
+        case "wait":
+            return wait_for_turn(api, args)
+        case "interrupt" | "archive":
+            return api.dispatch(
+                {
+                    "type": f"thread.{'turn.interrupt' if args.command == 'interrupt' else 'archive'}",
+                    "threadId": args.thread,
+                    "createdAt": now(),
+                }
+            ), 0
+        case "dispatch":
+            command = json.loads(sys.stdin.read() if args.json == "-" else args.json)
+            if not isinstance(command, dict) or not isinstance(
+                cast(Json, command).get("type"), str
+            ):
+                raise CliError("Dispatch requires a JSON object with a command type")
+            return api.dispatch(cast(Json, command)), 0
+        case _:
+            raise CliError("Unknown command")
+
+
+def positive(value: str) -> int:
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be positive")
+    return number
+
+
+def parser() -> argparse.ArgumentParser:
+    result = argparse.ArgumentParser(description=__doc__)
+    result.add_argument("--host", default=os.environ.get("T3CTL_HOST", "root@obelisk"))
+    result.add_argument("--port", type=positive, default=3773)
+    result.add_argument("--base-dir", default="/srv/t3code/.t3code")
+    result.add_argument("--local", action="store_true", help=argparse.SUPPRESS)
+    commands = result.add_subparsers(dest="command", required=True)
+    commands.add_parser("projects", help="List projects as JSON")
+    threads = commands.add_parser("threads", help="List thread summaries as JSON")
+    threads.add_argument("--project")
+    for name in ("show", "interrupt", "archive"):
+        cmd = commands.add_parser(name)
+        cmd.add_argument("thread")
+    begin = commands.add_parser(
+        "start", help="Start in a project's existing checkout, not a new worktree"
+    )
+    begin.add_argument("project", help="Project ID, title, or absolute server path")
+    begin.add_argument("prompt", help="Prompt text, or - for stdin")
+    begin.add_argument(
+        "--model", help="Model ID; otherwise use the explicit project default"
+    )
+    begin.add_argument(
+        "--provider", help="Provider instance ID with --model, default: codex"
+    )
+    begin.add_argument("--title")
+    begin.add_argument(
+        "--runtime-mode",
+        choices=["approval-required", "auto-accept-edits", "auto", "full-access"],
+        default="approval-required",
+    )
+    begin.add_argument("--mode", choices=["default", "plan"], default="default")
+    send = commands.add_parser(
+        "send", help="Send to an idle thread without changing its model or permissions"
+    )
+    send.add_argument("thread")
+    send.add_argument("prompt", help="Prompt text, or - for stdin")
+    wait = commands.add_parser(
+        "wait", help="Wait for completion; exits 2 for input, 124 for timeout"
+    )
+    wait.add_argument("thread")
+    wait.add_argument(
+        "--message-id",
+        help="Message ID returned by start/send; otherwise pin the latest user message",
+    )
+    wait.add_argument("--timeout", type=positive, default=300)
+    dispatch = commands.add_parser(
+        "dispatch", help="Send a raw API command; adds commandId if absent"
+    )
+    dispatch.add_argument("json", help="JSON object, or - for stdin")
+    return result
+
+
+def remote_command(args: argparse.Namespace, argv: list[str]) -> list[str]:
+    if args.host.startswith("-"):
+        raise CliError("Invalid SSH host")
+    source = Path(__file__).read_text()
+    command = shlex.join(
+        [
+            "runuser",
+            "-u",
+            "t3code",
+            "--",
+            "env",
+            "HOME=/srv/t3code",
+            "python3",
+            "-c",
+            source,
+            "--local",
+            *argv,
+        ]
+    )
+    return [
+        "ssh",
+        "-T",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ConnectTimeout=10",
+        "-o",
+        "ServerAliveInterval=15",
+        "-o",
+        "ServerAliveCountMax=3",
+        args.host,
+        command,
+    ]
+
+
+def main() -> int:
+    args = parser().parse_args()
+    try:
+        if not args.local:
+            return subprocess.run(
+                remote_command(args, sys.argv[1:]), check=False
+            ).returncode
+        with authenticated_api(args) as api:
+            value, exit_code = execute(api, args)
+            emit(value)
+            return exit_code
+    except (CliError, OSError, ValueError, subprocess.SubprocessError) as exc:
+        # CalledProcessError can include argv; never print credentials or script source.
+        detail = (
+            "SSH or token command failed"
+            if isinstance(exc, subprocess.SubprocessError)
+            else str(exc)
+        )
+        print(f"t3ctl: {detail}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main())
