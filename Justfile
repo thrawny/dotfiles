@@ -159,6 +159,11 @@ test-python *args:
 test-aerospace:
     @just test-python tests/test_aerospace.py
 
+# Check Hyprland scratchpad callbacks and terminal path quoting without a compositor
+test-hypr-binds:
+    bash -n bin/dpms-on bin/dpms-off
+    nvim --headless -u NONE -l tests/test_hypr_binds.lua
+
 # Check niri layout detection with mocked desktop commands
 test-niri-layout:
     bash -n bin/niri-layout

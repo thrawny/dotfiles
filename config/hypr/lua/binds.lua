@@ -5,43 +5,10 @@
 local bind = hl.bind
 local dsp = hl.dsp
 
--- Toggle a special-workspace scratchpad, spawning the app first if it isn't
--- running. The pgrep guard runs in the shell so no compositor state is needed.
-local function scratchpad(special, spawn_guard, window_class)
-	local pending = false
-	if window_class then
-		hl.on("window.open", function(window)
-			if not pending or window.class ~= window_class then
-				return
-			end
-			pending = false
-			local active = hl.get_active_special_workspace()
-			if not active or active.name ~= "special:" .. special then
-				hl.dispatch(dsp.workspace.toggle_special(special))
-			end
-		end)
-	end
-	return function()
-		if window_class then
-			local found = false
-			for _, window in ipairs(hl.get_windows()) do
-				if window.class == window_class then
-					found = true
-					break
-				end
-			end
-			if not found then
-				-- Opening an empty special workspace races the asynchronous spawn.
-				-- The process guard also prevents duplicates during startup.
-				pending = true
-				hl.dispatch(dsp.exec_cmd(spawn_guard))
-				return
-			end
-		end
-		pending = false
-		hl.dispatch(dsp.exec_cmd(spawn_guard))
-		hl.dispatch(dsp.workspace.toggle_special(special))
-	end
+local scratchpad = require("scratchpad")
+
+local function shell_quote(value)
+	return "'" .. value:gsub("'", "'\"'\"'") .. "'"
 end
 
 -- Launchers
@@ -50,7 +17,7 @@ end
 bind("ALT + Return", function()
 	local dir = project_dir()
 	if dir then
-		hl.dispatch(dsp.exec_cmd("ghostty +new-window --working-directory=" .. dir))
+		hl.dispatch(dsp.exec_cmd("ghostty +new-window --working-directory=" .. shell_quote(dir)))
 	else
 		hl.dispatch(dsp.exec_cmd("ghostty"))
 	end
@@ -64,11 +31,23 @@ bind(
 	scratchpad(
 		"term",
 		"pgrep -f '^[^ ]*ghostty[^ ]* .*GhosttyScratchpad' || ghostty --class=com.thrawny.GhosttyScratchpad",
-		"com.thrawny.GhosttyScratchpad"
+		function(window)
+			return window.class == "com.thrawny.GhosttyScratchpad"
+		end
 	)
 )
-bind("ALT + O", scratchpad("1password", "pgrep -x 1password || 1password"))
-bind("ALT + P", scratchpad("spotify", "pgrep -f '^[^ ]*/[.]spotify-wrapped( |$)' || pgrep -x spotify || spotify"))
+bind(
+	"ALT + O",
+	scratchpad("1password", "pgrep -x 1password || 1password", function(window)
+		return window.class == "1password"
+	end)
+)
+bind(
+	"ALT + P",
+	scratchpad("spotify", "pgrep -f '^[^ ]*/[.]spotify-wrapped( |$)' || pgrep -x spotify || spotify", function(window)
+		return window.class == "spotify" or window.class == "Spotify"
+	end)
+)
 
 -- Session
 bind("ALT + Escape", dsp.exec_cmd("hyprlock"))
@@ -82,7 +61,16 @@ bind("ALT + SUPER + Space", dsp.exec_cmd("hyprctl switchxkblayout all next"))
 
 -- Windows
 bind("ALT + W", dsp.window.close())
-bind("ALT + SHIFT + W", dsp.exec_cmd("hyprland-close-workspace"))
+bind("ALT + SHIFT + W", function()
+	local workspace = hl.get_active_workspace()
+	if not workspace then
+		return
+	end
+	for _, window in ipairs(hl.get_workspace_windows(tostring(workspace.id))) do
+		hl.dispatch(dsp.window.close({ window = window }))
+	end
+	hl.dispatch(dsp.focus({ workspace = "e-1" }))
+end)
 bind("ALT + F", dsp.window.fullscreen({ mode = "maximized", layout_aware = true }))
 bind("ALT + SHIFT + F", dsp.window.fullscreen({ mode = "fullscreen", layout_aware = true }))
 bind("ALT + V", dsp.window.float({ action = "toggle" }))

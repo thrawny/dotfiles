@@ -30,19 +30,12 @@ hl.define_submap("appjump", "reset", function()
 	hl.bind("A", jump("k9s"))
 	hl.bind("S", jump("slack"))
 	hl.bind("D", jump("microsoft teams"))
-	hl.bind("B", function()
-		local found = false
-		for _, w in ipairs(hl.get_windows()) do
-			if w.title == "btop++" then
-				found = true
-				break
-			end
-		end
-		if not found then
-			hl.dispatch(dsp.exec_cmd("ghostty --title=btop++ -e btop"))
-		end
-		hl.dispatch(dsp.workspace.toggle_special("btop"))
-	end)
+	hl.bind(
+		"B",
+		require("scratchpad")("btop", "pgrep -x btop || ghostty --title=btop++ -e btop", function(window)
+			return window.title == "btop++"
+		end)
+	)
 	hl.bind("Z", jump("discord"))
 	hl.bind("T", jump("org.telegram.desktop"))
 	hl.bind("catchall", dsp.submap("reset"))

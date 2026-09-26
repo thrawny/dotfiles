@@ -2,7 +2,7 @@
 # Turn on monitors - works with both Hyprland and niri
 
 if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
-    hyprctl dispatch dpms on
+    hyprctl dispatch 'hl.dsp.dpms({ action = "on" })'
 elif [ -n "$NIRI_SOCKET" ]; then
     niri msg action power-on-monitors
 fi
