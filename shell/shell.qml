@@ -20,6 +20,8 @@ ShellRoot {
         function state(): string {
             return JSON.stringify({
                 opened: Agents.opened,
+                globalScope: Agents.globalScope,
+                scopeLoaded: Agents.scopeLoaded,
                 stale: Agents.stale,
                 counts: Agents.counts,
                 error: Agents.error

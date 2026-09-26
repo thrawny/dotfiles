@@ -28,9 +28,12 @@ Walker is still available manually with `walker`.
   connection speeds and power details. Click the ellipsis to expand the laptop tray.
 - Click the clock to change its display; right-click to lock.
 - Click either quota indicator for usage windows, reset times, pace, spending
-  and reset credits. Failed refreshes keep the last data and label it stale.
+  and reset credits. Both providers appear together in the original Quotabar
+  layout, with their logos. Failed refreshes keep the last data and label it stale.
 - Alt+S or the agents indicator opens the left sidebar. Enter focuses the selected
   thread; Ctrl+J/K moves selection. The footer lists the remaining actions.
+  Provider icons and status colors distinguish approval, input, work and completion.
+  The global/local scope setting survives closing the sidebar and shell restarts.
   Archive and deletion require confirmation. The daemon keeps tracking when
   the sidebar closes or the shell reloads.
 - Click the coffee cup to toggle caffeine. It prevents idle locking, screen-off,

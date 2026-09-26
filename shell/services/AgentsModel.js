@@ -47,3 +47,52 @@ function age(timestamp, now) {
         return Math.floor(seconds / 60) + "m";
     return Math.floor(seconds / 3600) + "h";
 }
+
+// Headers are presentation rows only. Thread jump indexes still refer to the
+// service's visible threads, so opening a shelf cannot steal a keyboard slot.
+function displayRows(threads, counts, settledExpanded, archivedExpanded) {
+    const display = [];
+    for (const lifecycle of ["active", "settled", "archived"]) {
+        if (lifecycle !== "active" && counts[lifecycle] > 0)
+            display.push({kind: "shelf", lifecycle: lifecycle, count: counts[lifecycle], expanded: lifecycle === "settled" ? settledExpanded : archivedExpanded});
+        threads.forEach((thread, index) => {
+            if (thread.lifecycle === lifecycle)
+                display.push({kind: "thread", thread: thread, jumpIndex: index + 1});
+        });
+    }
+    return display;
+}
+
+function locationText(thread, globalScope) {
+    if (globalScope && thread.area && thread.area !== thread.repo)
+        return [thread.area, thread.repo].filter(Boolean).join(" · ");
+    return thread.repo || thread.area;
+}
+
+function relativeTime(timestamp, now) {
+    const minutes = Math.max(0, Math.floor((now - timestamp) / 60));
+    if (minutes === 0)
+        return "now";
+    if (minutes < 60)
+        return minutes + "m";
+    if (minutes < 1440)
+        return Math.floor(minutes / 60) + "h";
+    return Math.floor(minutes / 1440) + "d";
+}
+
+function statusLabel(thread, now) {
+    if (thread.lifecycle !== "active")
+        return relativeTime(thread.settled_at ?? thread.state_updated, now);
+    if (thread.attention === "approval")
+        return "Approval";
+    if (thread.attention === "input")
+        return "Input";
+    if (thread.attention === "done")
+        return "✓ Done";
+    if (thread.attention === "working") {
+        const seconds = Math.max(0, Math.floor(now - thread.state_updated));
+        const duration = seconds < 60 ? seconds + "s" : seconds < 3600 ? Math.floor(seconds / 60) + "m" : Math.floor(seconds / 3600) + "h " + Math.floor(seconds % 3600 / 60) + "m";
+        return "Working " + duration;
+    }
+    return relativeTime(thread.state_updated, now);
+}

@@ -47,13 +47,16 @@ test('agent duration tolerates clock changes', () => {
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-for (const scenario of ['invalid', 'version', 'missing', 'exit', 'timeout', 'action', 'late', 'rename', 'rename-gone']) {
+for (const scenario of ['invalid', 'version', 'missing', 'exit', 'timeout', 'action', 'late', 'rename', 'rename-gone', 'layout']) {
     test(`agent service retains state and reports ${scenario} failure`, t => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-agents-'));
         t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
         fs.cpSync(path.resolve(__dirname, '../services'), path.join(dir, 'services'), {recursive: true});
         fs.cpSync(path.resolve(__dirname, '../modules/agents'), path.join(dir, 'modules/agents'), {recursive: true});
         fs.cpSync(path.resolve(__dirname, '../components'), path.join(dir, 'components'), {recursive: true});
+        fs.cpSync(path.resolve(__dirname, '../assets'), path.join(dir, 'assets'), {recursive: true});
+        fs.mkdirSync(path.join(dir, 'dotfiles'));
+        fs.copyFileSync(path.resolve(__dirname, '../../nix/themes/monokai.json'), path.join(dir, 'dotfiles/theme.json'));
         const config = path.join(dir, 'shell.qml');
         fs.writeFileSync(config, fs.readFileSync(path.join(__dirname, 'AgentsSmoke.qml'), 'utf8').replace('import "../services"', 'import "services"').replace('import "../modules/agents"', 'import "modules/agents"'));
         const fixture = path.join(dir, 'fixture.json');
@@ -63,7 +66,7 @@ for (const scenario of ['invalid', 'version', 'missing', 'exit', 'timeout', 'act
             focused_area: 'work', threads: [{...threads[1], title: 'Updated thread'}]}));
         const result = spawnSync('quickshell', ['-p', config], {
             env: {...process.env, QT_QPA_PLATFORM: 'offscreen', WAYLAND_DISPLAY: '', DISPLAY: '',
-                XDG_RUNTIME_DIR: dir, XDG_CONFIG_HOME: dir, XDG_CACHE_HOME: dir,
+                XDG_RUNTIME_DIR: dir, XDG_CONFIG_HOME: dir, XDG_CACHE_HOME: dir, XDG_STATE_HOME: path.join(dir, 'state'),
                 AGENTS_TEST_CASE: scenario, AGENTS_FIXTURE: fixture},
             encoding: 'utf8', timeout: 10000,
         });
@@ -81,4 +84,52 @@ test('agent shelves sort by most recent settlement rather than active ordering',
         {...threads[4], seq: 13, order: 20, settled_at: 200},
     ];
     assert.deepEqual(Array.from(model.rows(shelf, '', true, true, true), t => t.seq), [11, 10, 13, 12]);
+});
+
+test('agent shelf headers keep jump slots attached to visible threads', () => {
+    const visible = model.rows(threads, 'work', false, true, false);
+    const display = model.displayRows(visible, model.counts(threads), true, false);
+    assert.deepEqual(Array.from(display, row => row.kind === 'thread' ? row.thread.seq : row.lifecycle), [2, 1, 'settled', 4, 'archived']);
+    assert.deepEqual(Array.from(display.filter(row => row.kind === 'thread'), row => row.jumpIndex), [1, 2, 3]);
+    assert.equal(display[4].expanded, false);
+});
+
+test('agent display matches original status labels and scope context', () => {
+    assert.equal(model.statusLabel({...threads[0], state_updated: 100}, 7400), 'Working 2h 1m');
+    assert.equal(model.statusLabel({...threads[0], attention: 'done'}, 7400), '✓ Done');
+    assert.equal(model.statusLabel({...threads[0], attention: 'input'}, 7400), 'Input');
+    assert.equal(model.statusLabel({...threads[0], attention: 'approval'}, 7400), 'Approval');
+    assert.equal(model.statusLabel({...threads[0], attention: 'idle', state_updated: 100}, 110), 'now');
+    assert.equal(model.relativeTime(0, 172800), '2d');
+    assert.equal(model.locationText(threads[0], false), 'fixture');
+    assert.equal(model.locationText(threads[0], true), 'work · fixture');
+    assert.equal(model.locationText({...threads[0], area: 'fixture'}, true), 'fixture');
+});
+
+test('agent scope persists both choices across process restarts without overwriting on load', t => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-agent-scope-'));
+    t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
+    fs.cpSync(path.resolve(__dirname, '../services'), path.join(dir, 'services'), {recursive: true});
+    const config = path.join(dir, 'shell.qml');
+    fs.writeFileSync(config, fs.readFileSync(path.join(__dirname, 'AgentsScopeSmoke.qml'), 'utf8').replace('import "../services"', 'import "services"'));
+    const stateHome = path.join(dir, 'new-state-home');
+    const settings = path.join(stateHome, 'dotfiles-shell/agents.json');
+    function run(expected, choice) {
+        const result = spawnSync('quickshell', ['-p', config], {
+            env: {...process.env, QT_QPA_PLATFORM: 'offscreen', WAYLAND_DISPLAY: '', DISPLAY: '',
+                XDG_RUNTIME_DIR: dir, XDG_CONFIG_HOME: dir, XDG_CACHE_HOME: dir, XDG_STATE_HOME: stateHome,
+                AGENTS_EXPECT_SCOPE: String(expected), AGENTS_SET_SCOPE: choice === undefined ? '' : String(choice)},
+            encoding: 'utf8', timeout: 10000,
+        });
+        assert.equal(result.status, 0, `${result.error || ''}\n${result.stdout}\n${result.stderr}`);
+        assert.doesNotMatch(result.stdout + result.stderr, /ReferenceError|TypeError|Unable to assign|Binding loop/);
+    }
+    run(false, true);
+    assert.equal(JSON.parse(fs.readFileSync(settings)).globalScope, true);
+    const before = fs.statSync(settings).mtimeMs;
+    run(true);
+    assert.equal(fs.statSync(settings).mtimeMs, before, 'read-only startup does not rewrite settings');
+    run(true, false);
+    assert.equal(JSON.parse(fs.readFileSync(settings)).globalScope, false);
+    run(false);
 });

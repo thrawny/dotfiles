@@ -13,7 +13,7 @@ PanelWindow {
         bottom: true
         left: true
     }
-    implicitWidth: 470
+    implicitWidth: 480
     color: Theme.background
     exclusionMode: ExclusionMode.Ignore
     WlrLayershell.namespace: "dotfiles-agents"

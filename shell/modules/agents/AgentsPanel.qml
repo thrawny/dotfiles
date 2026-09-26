@@ -3,6 +3,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import "../../services"
+import "../../services/AgentsModel.js" as AgentModel
+import "../../components"
 import "../../components/PickerKeys.js" as PickerKeys
 
 Item {
@@ -11,6 +13,8 @@ Item {
     property string confirmation: ""
     property bool renaming: false
     property real renameSeq: -1
+    readonly property var displayRows: AgentModel.displayRows(Agents.rows, Agents.scopedCounts, Agents.settledExpanded, Agents.archivedExpanded)
+    onDisplayRowsChanged: Qt.callLater(ensureSelection)
     readonly property var selected: Agents.rows.find(thread => thread.seq === selectedSeq) || null
     onVisibleChanged: {
         if (visible) {
@@ -38,12 +42,13 @@ Item {
             index = 0;
             selectedSeq = Agents.rows.length ? Agents.rows[0].seq : -1;
         }
-        results.currentIndex = index;
+        results.currentIndex = displayRows.findIndex(entry => entry.kind === "thread" && entry.thread.seq === selectedSeq);
     }
     function select(delta: int): void {
         if (!Agents.rows.length)
             return;
-        const index = (results.currentIndex + delta + Agents.rows.length) % Agents.rows.length;
+        const current = Agents.rows.findIndex(thread => thread.seq === selectedSeq);
+        const index = (current + delta + Agents.rows.length) % Agents.rows.length;
         selectedSeq = Agents.rows[index].seq;
         confirmation = "";
         ensureSelection();
@@ -134,6 +139,11 @@ Item {
     }
 
     Rectangle {
+        anchors.fill: parent
+        color: Theme.background
+    }
+    Rectangle {
+        anchors.right: parent.right
         width: 1
         height: parent.height
         color: Theme.border
@@ -182,40 +192,42 @@ Item {
         }
         ColumnLayout {
             anchors.fill: parent
-            anchors.margins: 18
-            spacing: 12
+            anchors.margins: 8
+            anchors.topMargin: 14
+            anchors.bottomMargin: 12
+            spacing: 8
             RowLayout {
                 Layout.fillWidth: true
+                Layout.leftMargin: 8
+                Layout.rightMargin: 8
+                Layout.bottomMargin: 6
+                spacing: 10
                 Text {
-                    text: "Agents"
-                    color: Theme.foreground
-                    font.family: Theme.fontFamily
-                    font.pixelSize: 20
-                }
-                Item {
                     Layout.fillWidth: true
+                    text: Agents.globalScope || !Agents.focusedArea ? "All areas" : Agents.focusedArea
+                    textFormat: Text.PlainText
+                    elide: Text.ElideRight
+                    color: Theme.agentScope
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 15
+                    font.bold: true
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: Agents.globalScope = !Agents.globalScope
+                    }
+                    ToolTip.visible: scopeHover.hovered
+                    ToolTip.text: "G · Switch between this area and all areas"
+                    HoverHandler {
+                        id: scopeHover
+                    }
                 }
-                AgentButton {
-                    text: "+ New"
-                    onClicked: panel.act("new")
-                }
-                AgentButton {
-                    text: "×"
-                    onClicked: Agents.close()
-                }
-            }
-            AgentButton {
-                text: Agents.globalScope || !Agents.focusedArea ? "All areas · G" : Agents.focusedArea + " · G for all areas"
-                onClicked: Agents.globalScope = !Agents.globalScope
-            }
-            RowLayout {
-                AgentButton {
-                    text: "Settled " + Agents.scopedCounts.settled + (Agents.settledExpanded ? " ▾" : " ▸")
-                    onClicked: Agents.settledExpanded = !Agents.settledExpanded
-                }
-                AgentButton {
-                    text: "Archived " + Agents.scopedCounts.archived + (Agents.archivedExpanded ? " ▾" : " ▸")
-                    onClicked: Agents.archivedExpanded = !Agents.archivedExpanded
+                Text {
+                    readonly property int waiting: Agents.counts.approval + Agents.counts.input + Agents.counts.done
+                    text: waiting + " waiting · " + Agents.counts.working + " running"
+                    color: waiting ? Theme.agentApproval : Theme.agentIdle
+                    font.family: Theme.fontFamily
+                    font.pixelSize: 13
                 }
             }
             Text {
@@ -252,70 +264,164 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
-                spacing: 5
-                model: Agents.rows
+                spacing: 4
+                model: panel.displayRows
                 boundsBehavior: Flickable.StopAtBounds
                 onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
-                delegate: Rectangle {
+                delegate: Item {
                     id: row
                     required property var modelData
                     required property int index
+                    readonly property bool shelf: modelData.kind === "shelf"
+                    readonly property var thread: shelf ? null : modelData.thread
+                    readonly property bool active: thread !== null && thread.lifecycle === "active"
+                    readonly property bool selected: thread !== null && panel.selectedSeq === thread.seq
                     width: results.width
-                    height: 100
-                    radius: 4
-                    color: panel.selectedSeq === modelData.seq ? Theme.surface : "transparent"
-                    border.color: panel.selectedSeq === modelData.seq ? Theme.border : "transparent"
-                    ColumnLayout {
+                    height: shelf ? 34 : active ? 88 : 58
+                    Rectangle {
                         anchors.fill: parent
-                        anchors.margins: 10
-                        spacing: 4
+                        radius: 6
+                        color: row.selected ? Theme.agentSelection : rowMouse.containsMouse && !row.shelf ? Theme.surface : "transparent"
+                    }
+                    RowLayout {
+                        visible: row.shelf
+                        anchors.fill: parent
+                        anchors.leftMargin: 8
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        Text {
+                            text: row.shelf ? (row.modelData.expanded ? "▾ " : "▸ ") + (row.modelData.lifecycle === "settled" ? "Settled" : "Archived") + " (" + row.modelData.count + ")" : ""
+                            color: Theme.agentIdle
+                            font.family: Theme.fontFamily
+                            font.pixelSize: 13
+                        }
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: 1
+                            color: Theme.agentIdle
+                            opacity: 0.28
+                        }
+                    }
+                    ColumnLayout {
+                        visible: !row.shelf
+                        anchors.fill: parent
+                        anchors.leftMargin: 16
+                        anchors.rightMargin: 16
+                        anchors.topMargin: row.active ? 10 : 7
+                        anchors.bottomMargin: row.active ? 10 : 7
+                        spacing: 2
+                        opacity: row.active && !row.selected && ["working", "idle"].includes(row.thread.attention) ? 0.62 : 1
                         RowLayout {
                             Layout.fillWidth: true
+                            spacing: 6
                             Text {
-                                text: (row.index < 9 ? (row.index + 1) + "  " : "") + row.modelData.harness
+                                visible: !row.shelf && row.modelData.jumpIndex <= 9
+                                text: row.shelf ? "" : row.modelData.jumpIndex
+                                color: Theme.agentIdle
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 12
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: row.thread ? AgentModel.locationText(row.thread, Agents.globalScope || !Agents.focusedArea) : ""
+                                textFormat: Text.PlainText
+                                elide: Text.ElideRight
                                 color: Theme.muted
                                 font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSize
-                            }
-                            Item {
-                                Layout.fillWidth: true
+                                font.pixelSize: 13
                             }
                             Text {
-                                text: row.modelData.lifecycle !== "active" ? row.modelData.lifecycle + " · " + Agents.elapsed(row.modelData.settled_at || row.modelData.state_updated) : row.modelData.attention + " · " + Agents.elapsed(row.modelData.state_updated)
-                                color: ["input", "approval"].includes(row.modelData.attention) ? Theme.warning : row.modelData.attention === "done" ? Theme.accent : Theme.muted
+                                visible: row.active && row.thread.cold
+                                text: "❆"
+                                color: Theme.agentIdle
                                 font.family: Theme.fontFamily
-                                font.pixelSize: Theme.fontSize
+                                font.pixelSize: 13
+                            }
+                            Text {
+                                text: row.thread ? AgentModel.statusLabel(row.thread, Agents.now) : ""
+                                color: !row.active ? Theme.agentIdle : row.thread.attention === "approval" ? Theme.agentApproval : row.thread.attention === "input" ? Theme.agentInput : row.thread.attention === "working" ? Theme.agentWorking : row.thread.attention === "done" ? Theme.agentDone : Theme.agentIdle
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 13
+                                font.bold: row.active && ["approval", "input", "done"].includes(row.thread.attention)
                             }
                         }
                         Text {
                             Layout.fillWidth: true
-                            text: row.modelData.title
+                            text: row.thread ? row.thread.title : ""
                             textFormat: Text.PlainText
                             elide: Text.ElideRight
-                            color: Theme.foreground
+                            color: row.active ? row.thread.attention === "done" ? Theme.agentDone : Theme.foreground : row.thread && row.thread.lifecycle === "archived" ? Theme.agentIdle : Theme.muted
                             font.family: Theme.fontFamily
-                            font.pixelSize: 14
+                            font.pixelSize: row.active ? 16 : 14
+                            font.bold: row.active && row.thread.attention === "done"
+                            font.italic: row.thread !== null && row.thread.lifecycle === "archived"
                         }
-                        Text {
+                        RowLayout {
+                            visible: row.active
                             Layout.fillWidth: true
-                            text: [row.modelData.area, row.modelData.repo, row.modelData.branch, row.modelData.cold ? "cold" : row.modelData.parked ? "parked" : ""].filter(Boolean).join(" · ")
-                            textFormat: Text.PlainText
-                            elide: Text.ElideRight
-                            color: Theme.muted
-                            font.family: Theme.fontFamily
-                            font.pixelSize: Theme.fontSize
+                            spacing: 6
+                            Text {
+                                Layout.fillWidth: true
+                                text: row.thread ? row.thread.branch : ""
+                                textFormat: Text.PlainText
+                                elide: Text.ElideRight
+                                color: Theme.agentIdle
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 13
+                            }
+                            Text {
+                                visible: row.thread !== null && row.thread.parked
+                                text: "parked"
+                                color: Theme.agentIdle
+                                font.family: Theme.fontFamily
+                                font.pixelSize: 11
+                            }
+                            Item {
+                                Layout.preferredWidth: 16
+                                Layout.preferredHeight: 16
+                                ProviderIcon {
+                                    anchors.centerIn: parent
+                                    visible: row.thread !== null && ["claude", "codex"].includes(row.thread.harness)
+                                    providerId: row.thread ? row.thread.harness : "codex"
+                                    color: row.thread && row.thread.harness === "claude" ? Theme.claudeIcon : Theme.agentHarness
+                                    iconSize: 14
+                                }
+                                Text {
+                                    anchors.centerIn: parent
+                                    visible: row.thread !== null && !["claude", "codex"].includes(row.thread.harness)
+                                    text: row.thread && row.thread.harness === "pi" ? "π" : "·"
+                                    color: Theme.agentHarness
+                                    font.family: Theme.fontFamily
+                                    font.pixelSize: 16
+                                }
+                            }
                         }
                     }
                     MouseArea {
+                        id: rowMouse
                         anchors.fill: parent
+                        hoverEnabled: true
                         onClicked: {
-                            panel.selectedSeq = row.modelData.seq;
+                            if (row.shelf) {
+                                if (row.modelData.lifecycle === "settled")
+                                    Agents.settledExpanded = !Agents.settledExpanded;
+                                else
+                                    Agents.archivedExpanded = !Agents.archivedExpanded;
+                                return;
+                            }
+                            panel.selectedSeq = row.thread.seq;
                             panel.confirmation = "";
                             panel.ensureSelection();
                             content.forceActiveFocus();
                         }
-                        onDoubleClicked: panel.act("summon")
+                        onDoubleClicked: {
+                            if (!row.shelf)
+                                panel.act("summon");
+                        }
                     }
+                    ToolTip.visible: rowMouse.containsMouse && !row.shelf
+                    ToolTip.delay: 700
+                    ToolTip.text: row.thread ? [row.thread.title, row.thread.area, row.thread.repo, row.thread.branch, row.thread.harness].filter(Boolean).join("\n") : ""
                 }
                 Text {
                     anchors.centerIn: parent
@@ -330,12 +436,12 @@ Item {
                 Layout.fillWidth: true
                 spacing: 6
                 Repeater {
-                    model: ["summon", "settle", "archive", "read", "rename", "delete"]
+                    model: ["new", "summon", "settle", "archive", "read", "rename", "delete", "close"]
                     AgentButton {
                         required property string modelData
-                        text: modelData
-                        enabled: panel.selected !== null && !Agents.busy
-                        onClicked: panel.act(modelData)
+                        text: modelData === "new" ? "+ New" : modelData === "close" ? "× Close" : modelData
+                        enabled: ["new", "close"].includes(modelData) || panel.selected !== null && !Agents.busy
+                        onClicked: modelData === "close" ? Agents.close() : panel.act(modelData)
                     }
                 }
             }
@@ -351,7 +457,7 @@ Item {
             }
             Text {
                 Layout.fillWidth: true
-                text: "Enter summon · S settle · A archive · M read · R rename\nJ/K move · Shift+J/K reorder · 1–9 select\nTab settled · Z archived · D delete · Shift+D delete all"
+                text: "Enter summon · S settle · A archive · M read · R rename\nJ/K move · Shift+J/K reorder · 1–9 select\nTab settled · Z archived · D delete · Shift+D delete all\nG scope · N new · Esc close"
                 wrapMode: Text.Wrap
                 color: Theme.muted
                 font.family: Theme.fontFamily

@@ -19,8 +19,9 @@ ShellRoot {
     }
     FloatingWindow {
         visible: true
-        implicitWidth: 470
-        implicitHeight: 800
+        implicitWidth: 480
+        implicitHeight: root.scenario === "layout" ? 940 : 800
+        color: Theme.background
         AgentsPanel {
             id: sidebar
             anchors.fill: parent
@@ -35,6 +36,95 @@ ShellRoot {
                     return;
                 }
                 root.stage = 1;
+                if (root.scenario === "layout") {
+                    const fixtureThread = Agents.threads[0];
+                    Agents.now = 10000;
+                    Agents.globalScope = true;
+                    Agents.settledExpanded = true;
+                    Agents.archivedExpanded = true;
+                    Agents.threads = [Object.assign({}, fixtureThread, {
+                            seq: 1,
+                            order: 9,
+                            harness: "claude",
+                            title: "Approve the deployment change",
+                            repo: "dotfiles",
+                            area: "dotfiles",
+                            branch: "main",
+                            attention: "approval",
+                            state_updated: 9900
+                        }), Object.assign({}, fixtureThread, {
+                            seq: 2,
+                            order: 8,
+                            harness: "codex",
+                            title: "Choose the API response shape",
+                            repo: "agent-switch",
+                            branch: "sidebar-api",
+                            attention: "input",
+                            state_updated: 9700
+                        }), Object.assign({}, fixtureThread, {
+                            seq: 3,
+                            order: 7,
+                            harness: "pi",
+                            title: "All integration checks passed",
+                            repo: "quickshell",
+                            branch: "visual-parity",
+                            attention: "done",
+                            state_updated: 9300
+                        }), Object.assign({}, fixtureThread, {
+                            seq: 4,
+                            order: 6,
+                            harness: "codex",
+                            title: "Building the release package",
+                            repo: "quotabar",
+                            branch: "main",
+                            attention: "working",
+                            state_updated: 9515
+                        }), Object.assign({}, fixtureThread, {
+                            seq: 5,
+                            order: 5,
+                            harness: "claude",
+                            title: "Investigate the startup sequence",
+                            repo: "dotfiles",
+                            branch: "main",
+                            attention: "idle",
+                            state_updated: 8200,
+                            cold: true
+                        }), Object.assign({}, fixtureThread, {
+                            seq: 6,
+                            order: 4,
+                            title: "Clipboard image support",
+                            repo: "dotfiles",
+                            lifecycle: "settled",
+                            attention: "idle",
+                            settled_at: 6400
+                        }), Object.assign({}, fixtureThread, {
+                            seq: 7,
+                            order: 3,
+                            title: "Previous provider status refresh",
+                            repo: "quotabar",
+                            lifecycle: "archived",
+                            attention: "idle",
+                            settled_at: 2000
+                        })];
+                    sidebar.selectedSeq = 5;
+                    sidebar.select(1);
+                    if (sidebar.selectedSeq !== 6) {
+                        root.fail("Shelf header took a thread navigation slot");
+                        return;
+                    }
+                    sidebar.select(1);
+                    if (sidebar.selectedSeq !== 7) {
+                        root.fail("Archived shelf navigation skipped the thread");
+                        return;
+                    }
+                    sidebar.select(1);
+                    if (sidebar.selectedSeq !== 1) {
+                        root.fail("Thread navigation failed to wrap across shelf headers");
+                        return;
+                    }
+                    captureLayout.start();
+                    return;
+                }
                 if (root.scenario === "rename" || root.scenario === "rename-gone") {
                     Agents.threads = [Agents.threads[0], Object.assign({}, Agents.threads[0], {
                             seq: 3
@@ -112,6 +202,17 @@ ShellRoot {
                     Qt.exit(0);
             }
         }
+    }
+    Timer {
+        id: captureLayout
+        interval: 300
+        onTriggered: sidebar.grabToImage(result => {
+            const output = Quickshell.env("AGENTS_VISUAL_OUTPUT");
+            if (output && !result.saveToFile(output))
+                root.fail("Could not save agent visual fixture");
+            else
+                Qt.exit(0);
+        })
     }
     Timer {
         id: actLater

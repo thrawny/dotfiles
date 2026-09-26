@@ -1,4 +1,5 @@
 pragma Singleton
+pragma ComponentBehavior: Bound
 import QtQuick
 import Quickshell
 import Quickshell.Io
@@ -17,13 +18,78 @@ Singleton {
     property var threads: []
     property string focusedArea: ""
     property bool globalScope: false
+    property bool scopeLoaded: false
+    property bool restoringScope: false
+    property bool scopeChangedBeforeLoad: false
+    property string preferenceError: ""
+    readonly property string preferencePath: (Quickshell.env("XDG_STATE_HOME") || Quickshell.env("HOME") + "/.local/state") + "/dotfiles-shell/agents.json"
+    onGlobalScopeChanged: {
+        if (restoringScope)
+            return;
+        if (!scopeLoaded) {
+            scopeChangedBeforeLoad = true;
+            return;
+        }
+        saveScope();
+    }
+    function saveScope(): void {
+        scopeData.globalScope = globalScope;
+        preferences.writeAdapter();
+    }
+    function finishScopeLoad(): void {
+        scopeLoaded = true;
+        if (scopeChangedBeforeLoad)
+            saveScope();
+    }
+    JsonAdapter {
+        id: scopeData
+        property bool globalScope: false
+    }
+    FileView {
+        id: preferences
+        path: root.preferencePath
+        blockLoading: true
+        blockWrites: true
+        atomicWrites: true
+        printErrors: false
+        // Quickshell 0.3.1 qmltypes omits the namespace on FileViewAdapter.
+        // qmllint disable unresolved-type missing-type
+        adapter: scopeData
+        // qmllint enable unresolved-type missing-type
+        onLoaded: {
+            if (root.scopeLoaded)
+                return;
+            try {
+                const saved = JSON.parse(text());
+                if (typeof saved.globalScope !== "boolean")
+                    throw new Error("Invalid scope preference");
+                if (!root.scopeChangedBeforeLoad) {
+                    root.restoringScope = true;
+                    root.globalScope = saved.globalScope;
+                    root.restoringScope = false;
+                }
+            } catch (failure) {
+                root.preferenceError = "Could not read the saved agent sidebar scope.";
+            }
+            root.finishScopeLoad();
+        }
+        onLoadFailed: error => {
+            if (root.scopeLoaded)
+                return;
+            if (error !== FileViewError.FileNotFound)
+                root.preferenceError = "Could not read the saved agent sidebar scope.";
+            root.finishScopeLoad();
+        }
+        onSaved: root.preferenceError = ""
+        onSaveFailed: root.preferenceError = "Could not save the agent sidebar scope."
+    }
     property bool settledExpanded: false
     property bool archivedExpanded: false
     property int revision: 0
     property bool available: false
     property string snapshotError: ""
     property string actionError: ""
-    readonly property string error: actionError || snapshotError
+    readonly property string error: actionError || snapshotError || preferenceError
     property string message: ""
     property real updatedAt: 0
     property real now: Date.now() / 1000

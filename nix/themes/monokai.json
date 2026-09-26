@@ -171,6 +171,23 @@
     "herdr": {
       "surface": "#2d2a2e",
       "activeRowBg": "#403e41"
+    },
+    "quotabar": {
+      "background": "#1c1c1c",
+      "card": "#252521",
+      "cardHover": "#2e2e28",
+      "cardSelected": "#2a2025",
+      "subtle": "#33332c",
+      "surface": "#3a3a34",
+      "elevated": "#49483e",
+      "border": "#555555",
+      "text": "#f8f8f2",
+      "muted": "#75715e",
+      "accent": "#f92672",
+      "success": "#a6e22e",
+      "warning": "#e6db74",
+      "claudeIcon": "#d97757",
+      "codexIcon": "#e8e6df"
     }
   }
 }

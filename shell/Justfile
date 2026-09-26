@@ -42,3 +42,7 @@ fmt:
 # Check shell model tests and QML syntax/types
 check:
     nix shell --inputs-from ./nix nixpkgs#quickshell nixpkgs#qt6.qtdeclarative nixpkgs#cliphist nixpkgs#python3 nixpkgs#sway nixpkgs#wl-clipboard -c bash shell/scripts/check
+
+# Check quota failure handling, provider icons, and popup layout with fixture data
+check-quota:
+    nix shell --inputs-from ./nix nixpkgs#quickshell nixpkgs#qt6.qtdeclarative -c node --test shell/tests/quota*.test.cjs

@@ -9,6 +9,7 @@ for (const scenario of ['invalid', 'version', 'exit', 'missing']) {
     test(`quota service retains last data on ${scenario} failure`, t => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-quota-'));
         t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+        fs.cpSync(path.resolve(__dirname, '../assets'), path.join(dir, 'assets'), { recursive: true });
         fs.cpSync(path.resolve(__dirname, '../services'), path.join(dir, 'services'), { recursive: true });
         fs.cpSync(path.resolve(__dirname, '../components'), path.join(dir, 'components'), { recursive: true });
         const config = path.join(dir, 'shell.qml');

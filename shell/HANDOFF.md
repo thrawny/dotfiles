@@ -11,22 +11,28 @@ Read [AGENTS.md](AGENTS.md). This is the current Hyprland implementation;
 - Quota indicators and details use `quotabar snapshot` schema 1. The Rust backend
   retains caching, expiry, notifications, costs and credit policy. The flake pins
   `5d6b3811303276081f1c510f4c9f3255bd64dffa` from `~/code/quotabar`.
+  The QML presentation follows the original compact indicators and stacked
+  provider popup, including SVG logos and the orange Claude mark.
 - The QML agents sidebar replaces the Hyprland GTK workflow. Its state and actions
   use `agent-switch serve --sidebar`, owned by `dotfiles-agent-switch.service`.
   The flake pins `6f7c9bb1c90cc0087f682a29bb19f03ebb7cc35c` from
   `~/code/agent-switch`. Alt+S toggles the QML sidebar. The old Process Compose
   development stack was stopped through `just watch-stop`; do not restart it
-  alongside the production sidebar daemon. The sidebar opens on the left.
+  alongside the production sidebar daemon. The sidebar opens on the left, with
+  restored provider icons, status colors and compact shelves. Its global/local
+  scope setting persists in `$XDG_STATE_HOME/dotfiles-shell/agents.json`.
+- Workspace pills restore the original Waybar active gradient and state colors.
 - Image clipboard history shows asynchronous thumbnails and copies original
   bytes through the approved Python adapter `bin/shell-clipboard-image`.
   Nix pins its interpreter and commands. Separate systemd text/image watchers
   record history. Private preview files are bounded and cleaned on picker close;
   a later request removes abandoned sessions. See [README.md](README.md) for limits.
-- Caffeine remains ON and survives QML reloads. Preserve that state.
+- Caffeine survives QML reloads. Preserve its live state during development.
 
 `just check`, shell formatting and strict QML lint passed. The shell suite has
-48 tests, including rendered sidebar/rename regressions, failed/late backend
-responses, image cancellation and cleanup. The Nix-built image adapter also
+53 tests, including rendered sidebar/rename regressions, quota layout and SVG
+loading, scope persistence across processes, failed/late backend responses,
+image cancellation and cleanup. The Nix-built image adapter also
 passed PNG and animated GIF round-trips on a private headless Wayland compositor.
 Quotabar has 52 passing Rust tests; agent-switch has 81 Rust and 9
 lifecycle tests. Both Nix packages and the whole system built successfully.
