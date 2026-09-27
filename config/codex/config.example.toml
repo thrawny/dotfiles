@@ -7,6 +7,11 @@ model_verbosity = "low"
 personality = "pragmatic"
 web_search = "live"
 
+[features]
+# The llm-agents.nix package lacks the daemon's codex-package.json.
+# Remove once packaging is fixed: https://github.com/openai/codex/issues/48050
+daemon_auto_start = false
+
 # Status line: project, model, context usage, and Git branch.
 [tui]
 status_line = ["project-root", "model-with-reasoning", "context-used", "git-branch"]
