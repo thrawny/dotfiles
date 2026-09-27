@@ -117,6 +117,7 @@ in
     ];
 
     programs.home-manager.enable = true;
+    dotfiles.privateAgentSkills.enable = true;
 
     home = {
       stateVersion = "24.05";

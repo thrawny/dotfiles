@@ -76,6 +76,14 @@ pi:
 # Update all flake inputs and switch
 update: nix::update
 
+# Fetch private skills and refresh links on hosts that opt in through Home Manager
+private-skills-sync:
+    private-skills-sync
+
+# Refresh private skill links without network access
+private-skills-link:
+    private-skills-sync --link-only
+
 # === Formatters ===
 
 # Format all
@@ -131,11 +139,18 @@ test-t3ctl:
     @just test-python tests/test_t3ctl.py
 
 # Run all tests
-test: test-fork-window test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv
+test: test-fork-window test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills
 
 # Session forking, exact session selection, and desktop routing
 test-fork-window:
     @just test-python tests/test_fork_window.py
+
+# Validate private-skill behavior and the host opt-in list
+check-private-skills: test-private-skills nix::check-private-skills
+
+# Private skill cloning, offline updates, collision handling, and link cleanup
+test-private-skills:
+    @just test-python tests/test_private_skills.py
 
 # Shared direnv helpers, independent of any Home Manager user.
 test-direnv:
@@ -205,7 +220,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi test-fork-window check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv nix::eval
+check-parallel: lint typecheck pi test-fork-window check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv check-private-skills nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

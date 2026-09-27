@@ -124,6 +124,26 @@ diff:
     nix build ".#nixosConfigurations.$host.config.system.build.toplevel"
     nvd diff /run/current-system result
 
+# Check private-skill host opt-ins without accessing the private checkout
+check-private-skills:
+    nix eval --impure --json --expr '\
+      let \
+        flake = builtins.getFlake ("git+file:" + toString ../. + "?dir=nix"); \
+        enabled = c: c.dotfiles.privateAgentSkills.enable or false; \
+        hosts = { \
+          laptop = enabled flake.nixosConfigurations.thrawny-z13.config.home-manager.users.thrawny; \
+          desktop = enabled flake.nixosConfigurations.thrawny-desktop.config.home-manager.users.thrawny; \
+          server = enabled flake.nixosConfigurations.obelisk.config.home-manager.users.thrawny; \
+          mac = enabled flake.darwinConfigurations.thrawnym1.config.home-manager.users.thrawny; \
+          macStandalone = enabled flake.homeConfigurations.thrawnym1.config; \
+          work = enabled flake.homeConfigurations.jonaslergell.config; \
+          container = enabled flake.nixosConfigurations.headless.config.home-manager.users.thrawny; \
+        }; \
+      in assert hosts.laptop && hosts.desktop && hosts.server && hosts.mac && hosts.macStandalone; \
+         assert !hosts.work && !hosts.container; \
+         assert !(flake.homeConfigurations.jonaslergell.config.home.activation ? privateAgentSkills); \
+         hosts'
+
 # Evaluate config without building (NixOS, nix-darwin, or Home Manager)
 eval force="--force=false":
     #!/usr/bin/env bash

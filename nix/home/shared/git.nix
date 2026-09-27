@@ -39,7 +39,11 @@ in
       };
 
       "credential \"https://forgejo.tailf85bba.ts.net\"" = {
-        helper = "store";
+        # Reset macOS's inherited Keychain helper, which can fail over SSH.
+        helper = [
+          ""
+          "store"
+        ];
         username = "thrawny";
       };
 

@@ -10,6 +10,7 @@ addopts = ["--import-mode=importlib"]
 [tool.basedpyright]
 include = [
   ".",
+  "bin/private-skills-sync",
   "bin/fork-window",
   "bin/desktop-broker",
   "bin/shell-clipboard-image",
@@ -48,6 +49,7 @@ reportImplicitOverride = false
 
 [tool.ruff]
 extend-include = [
+  "bin/private-skills-sync",
   "bin/fork-window",
   "bin/desktop-broker",
   "bin/shell-clipboard-image",

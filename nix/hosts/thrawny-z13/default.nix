@@ -224,6 +224,7 @@ in
 
   # Host-specific home-manager overrides
   home-manager.users.${config.dotfiles.username} = {
+    dotfiles.privateAgentSkills.enable = true;
     programs.ghostty.settings.font-size = 11;
 
     programs.niri.settings = lib.mkIf config.programs.niri.enable {

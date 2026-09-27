@@ -287,7 +287,7 @@
           home-manager.darwinModules.home-manager
           {
             home-manager.extraSpecialArgs = flakeArgs // (import ./hosts/thrawnym1/default.nix);
-            home-manager.users.thrawny = import ./home/darwin/default.nix;
+            home-manager.users.thrawny = import ./hosts/thrawnym1/home.nix;
           }
         ];
       };
@@ -433,7 +433,7 @@
       homeConfigurations = {
         thrawnym1 = mkHomeConfiguration {
           pkgs = nixpkgs.legacyPackages.aarch64-darwin;
-          modules = [ ./home/darwin/default.nix ];
+          modules = [ ./hosts/thrawnym1/home.nix ];
           extraSpecialArgs = import ./hosts/thrawnym1/default.nix;
         };
         jonaslergell = mkHomeConfiguration {

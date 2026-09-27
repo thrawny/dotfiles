@@ -160,6 +160,7 @@ in
       ...
     }:
     {
+      dotfiles.privateAgentSkills.enable = true;
       home.packages = [ pkgs.google-chrome ];
 
       programs.ghostty.settings.font-size = lib.mkForce 12;

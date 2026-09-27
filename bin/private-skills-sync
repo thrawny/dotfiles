@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+"""Sync an opt-in private checkout and link its skills without importing it into Nix."""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import signal
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+def warn(message: str) -> None:
+    print(f"private-skills: {message}", file=sys.stderr)
+
+
+def git(*args: str, timeout: int = 20) -> str:
+    environment = os.environ.copy()
+    environment.update(
+        GIT_TERMINAL_PROMPT="0",
+        GCM_INTERACTIVE="never",
+        GIT_SSH_COMMAND="ssh -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=yes",
+    )
+    with subprocess.Popen(
+        [
+            "git",
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "submodule.recurse=false",
+            *args,
+        ],
+        env=environment,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    ) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.communicate()
+            raise RuntimeError(f"Git timed out after {timeout}s") from None
+        if process.returncode:
+            raise RuntimeError(stderr.strip() or stdout.strip() or "Git failed")
+        return stdout.strip()
+
+
+def check_checkout(checkout: Path, repository: str) -> None:
+    if checkout.is_symlink() or not (checkout / ".git").is_dir():
+        raise RuntimeError(f"refusing to use an unmanaged checkout at {checkout}")
+    if git("-C", str(checkout), "remote", "get-url", "origin") != repository:
+        raise RuntimeError(
+            f"origin at {checkout} does not match the configured repository"
+        )
+
+
+def sync(checkout: Path, repository: str) -> bool:
+    try:
+        if not checkout.exists():
+            # Failed clones never leave a partial checkout at the configured path.
+            with tempfile.TemporaryDirectory(
+                prefix=".private-skills-", dir=checkout.parent
+            ) as staging:
+                temporary = Path(staging) / "checkout"
+                git(
+                    "clone",
+                    "--single-branch",
+                    "--branch",
+                    "main",
+                    "--",
+                    repository,
+                    str(temporary),
+                )
+                temporary.rename(checkout)
+        else:
+            if git(
+                "-C", str(checkout), "status", "--porcelain", "--untracked-files=all"
+            ):
+                raise RuntimeError(f"local changes at {checkout}; skipping update")
+            if git("-C", str(checkout), "symbolic-ref", "--short", "HEAD") != "main":
+                raise RuntimeError(f"{checkout} is not on main; skipping update")
+            git("-C", str(checkout), "fetch", "--no-tags", "origin", "main")
+            git(
+                "-C",
+                str(checkout),
+                "merge",
+                "--ff-only",
+                "--no-autostash",
+                "FETCH_HEAD",
+            )
+    except RuntimeError as error:
+        warn(str(error))
+        return False
+    return True
+
+
+def link_skills(checkout: Path, targets: dict[str, list[str]]) -> bool:
+    skills = {
+        entry.name: entry
+        for entry in checkout.iterdir()
+        if not entry.name.startswith(".")
+        and not entry.is_symlink()
+        and entry.is_dir()
+        and (entry / "SKILL.md").is_file()
+        and not (entry / "SKILL.md").is_symlink()
+    }
+    success = True
+    for directory, reserved in targets.items():
+        target = Path(directory)
+        target.mkdir(parents=True, exist_ok=True)
+        # Only remove links this helper could have created. Leave all other files alone.
+        for entry in target.iterdir():
+            if entry.is_symlink() and entry.readlink() == checkout / entry.name:
+                if entry.name not in skills or entry.name in reserved:
+                    entry.unlink()
+        for name, source in skills.items():
+            if name in reserved:
+                warn(f"{name} is a public skill in {target}; skipping private skill")
+                success = False
+                continue
+            destination = target / name
+            if destination.is_symlink() and destination.readlink() == source:
+                continue
+            if destination.exists() or destination.is_symlink():
+                warn(f"refusing to replace {destination}")
+                success = False
+                continue
+            destination.symlink_to(source, target_is_directory=True)
+    return success
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--config",
+        type=Path,
+        default=Path(os.environ.get("XDG_CONFIG_HOME", str(Path.home() / ".config")))
+        / "private-agent-skills/config.json",
+    )
+    parser.add_argument(
+        "--link-only", action="store_true", help="refresh links without fetching"
+    )
+    parser.add_argument(
+        "--dry-run", action="store_true", help="show the action without changing files"
+    )
+    args = parser.parse_args()
+    if not args.config.is_file():
+        warn("not enabled on this host; no configuration found")
+        return 1
+    settings = json.loads(args.config.read_text())
+    checkout = Path(settings["checkout"])
+    repository: str = settings["repository"]
+    targets: dict[str, list[str]] = settings["targets"]
+    if not checkout.is_absolute() or any(
+        not Path(target).is_absolute() for target in targets
+    ):
+        raise RuntimeError("checkout and target paths must be absolute")
+    if args.dry_run:
+        print(
+            f"Would {'link' if args.link_only else 'sync and link'} private skills at {checkout}"
+        )
+        return 0
+    if os.environ.get("SANDBOX") == "1":
+        raise RuntimeError("private skills are not available in sandboxes")
+    os.umask(0o077)
+    if args.link_only and not checkout.exists():
+        warn("checkout missing; no links changed")
+        return 1
+    checkout.parent.mkdir(parents=True, exist_ok=True)
+    with (checkout.parent / f".{checkout.name}.lock").open("a") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            warn("another sync is running; try again later")
+            return 1
+        if checkout.exists() or checkout.is_symlink():
+            check_checkout(checkout, repository)
+        synced = args.link_only or sync(checkout, repository)
+        # Offline machines retain their checkout and can still refresh links.
+        linked = link_skills(checkout, targets) if checkout.exists() else False
+    return 0 if synced and linked else 1
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, RuntimeError, ValueError, KeyError) as error:
+        warn(str(error))
+        sys.exit(1)
