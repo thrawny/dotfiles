@@ -4,7 +4,7 @@
 	"type": "module",
 	"scripts": {
 		"format": "oxfmt --write extensions tests",
-		"lint": "oxlint extensions tests --fix",
+		"lint": "oxlint extensions tests --fix --ignore-pattern '**/node_modules/**'",
 		"test": "vitest run tests",
 		"typecheck": "tsc -p tsconfig.json --noEmit"
 	},
