@@ -17,6 +17,7 @@ in
   imports = [
     ../../modules/default.nix
     ../../modules/laptop.nix
+    ../../modules/remote-mode.nix
     ./hardware-configuration.nix
     ./hibernate.nix
   ];

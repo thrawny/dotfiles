@@ -19,6 +19,7 @@ in
   imports = [
     ../../modules/default.nix
     ./hardware-configuration.nix
+    ../../modules/remote-mode.nix
   ];
 
   dotfiles = {

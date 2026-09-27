@@ -32,23 +32,17 @@ build-darwin: nix::build-darwin
 tailscale-login:
     sudo /run/current-system/sw/bin/tailscale up --ssh
 
-# Keep this Mac awake with the lid closed; persists until clamshell-off
+# Compatibility aliases; remote-mode is also available directly on PATH
 clamshell-on:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    [[ "$(uname -s)" = Darwin ]] || { echo "macOS required" >&2; exit 1; }
-    /usr/bin/pmset -g batt | grep -q "AC Power" || { echo "Connect AC power first" >&2; exit 1; }
-    sudo /usr/bin/pmset -a disablesleep 1
-    echo "Sleep disabled, including on battery. Run just clamshell-off before unplugging or packing the Mac."
-    /usr/bin/pmset -g
+    remote-mode on
 
-# Restore lid-close/manual sleep; AC idle sleep stays disabled by nix-darwin
 clamshell-off:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    [[ "$(uname -s)" = Darwin ]] || { echo "macOS required" >&2; exit 1; }
-    sudo /usr/bin/pmset -a disablesleep 0
-    /usr/bin/pmset -g
+    remote-mode off
+
+# Test remote mode without changing the host's power settings
+test-remote-mode:
+    bash -n bin/remote-mode
+    @just test-python tests/test_remote_mode.py
 
 # Push the flake's cache-bundle (selected expensive builds) to Cachix
 cache dry_run="": (nix::cache dry_run)
@@ -139,7 +133,7 @@ test-t3ctl:
     @just test-python tests/test_t3ctl.py
 
 # Run all tests
-test: test-display-recover test-fork-window test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills
+test: test-display-recover test-fork-window test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills test-remote-mode
 
 # Session forking, exact session selection, and desktop routing
 test-fork-window:
@@ -225,7 +219,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: test-display-recover lint typecheck pi test-fork-window check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv check-private-skills nix::eval
+check-parallel: test-display-recover lint typecheck pi test-fork-window check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv test-remote-mode check-private-skills nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

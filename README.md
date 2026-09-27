@@ -27,6 +27,8 @@ Setting up a fresh Mac? Run `bin/bootstrap-mac` from the checkout for an interac
 
 For this M1 Air's nix-darwin migration, Tailscale SSH, and closed-lid use, follow [Mac remote access](docs/mac-remote-access.md).
 
+On the desktop, Z13, and M1, `remote-mode on` keeps the machine awake for remote access across logouts and reboots. Use `remote-mode off` to restore normal sleep behavior, or `remote-mode status` to check it. See [remote mode](docs/remote-mode.md) for laptop precautions.
+
 Use [`t3ctl`](docs/t3ctl.md) to control T3 Code on obelisk from agents or scripts.
 
 [Private agent skills](docs/private-agent-skills.md) sync from Forgejo on opted-in personal hosts, outside this public checkout and the Nix store.

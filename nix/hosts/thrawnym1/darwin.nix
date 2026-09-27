@@ -18,7 +18,7 @@ in
   launchd.daemons.tailscaled.serviceConfig.KeepAlive = true;
 
   # Keep remote access available on AC without changing battery sleep settings.
-  # Lid-close sleep is separate; see `just clamshell-on` and docs/mac-remote-access.md.
+  # Lid-close sleep is separate; see `remote-mode on` and docs/mac-remote-access.md.
   system.activationScripts.power.text = lib.mkAfter ''
     /usr/bin/pmset -c sleep 0
   '';

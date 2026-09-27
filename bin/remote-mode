@@ -1,0 +1,129 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+    echo 'Usage: remote-mode {on|off|status}' >&2
+    exit 2
+}
+
+[[ $# -eq 1 ]] || usage
+case "$1" in
+    on|off|status) ;;
+    *) usage ;;
+esac
+
+case "$(uname -s)" in
+    Darwin)
+        case "$1" in
+            on)
+                power_source=$(/usr/bin/pmset -g batt)
+                [[ "$power_source" == *"AC Power"* ]] || {
+                    echo 'Connect AC power before enabling remote mode.' >&2
+                    exit 1
+                }
+                /usr/bin/sudo /usr/bin/pmset -a disablesleep 1
+                echo 'Remote mode is on and will survive reboots, including with the lid closed.'
+                echo 'Unplugging does not turn it off. Run remote-mode off before using battery power or packing the laptop.'
+                ;;
+            off)
+                /usr/bin/sudo /usr/bin/pmset -a disablesleep 0
+                echo 'Remote mode is off. Normal lid and manual sleep behavior is restored; configured AC idle sleep settings are unchanged.'
+                ;;
+            status)
+                settings=$(/usr/bin/pmset -g)
+                if [[ "$settings" =~ SleepDisabled[[:space:]]+([01]) ]]; then
+                    if [[ "${BASH_REMATCH[1]}" == 1 ]]; then
+                        echo 'Remote mode is on, including after reboot and on battery. Run remote-mode off before packing the laptop.'
+                    else
+                        echo 'Remote mode is off. Configured AC idle sleep settings still apply.'
+                    fi
+                else
+                    echo 'Could not determine remote mode from pmset -g.' >&2
+                    exit 1
+                fi
+                ;;
+        esac
+        exit 0
+        ;;
+    Linux) ;;
+    *) echo 'Remote mode supports Linux and macOS only.' >&2; exit 1 ;;
+esac
+
+unit=remote-mode.service
+state_dir=/var/lib/remote-mode
+marker=$state_dir/enabled
+
+if ! systemctl cat "$unit" >/dev/null 2>&1; then
+    echo 'Remote mode is not installed on this host. Apply its NixOS configuration first.' >&2
+    exit 1
+fi
+
+if [[ "$1" == status ]]; then
+    if [[ -f "$marker" ]]; then
+        if systemctl is-active --quiet "$unit"; then
+            echo 'Remote mode is on, including after reboot. Screen locking and monitor power-off are unchanged.'
+        else
+            echo 'Remote mode is enabled for boot, but its sleep inhibitor is not running.' >&2
+            exit 1
+        fi
+    elif systemctl is-active --quiet "$unit"; then
+        echo 'Remote mode is running, but is not enabled for boot.' >&2
+        exit 1
+    else
+        echo 'Remote mode is off. Normal sleep behavior applies.'
+    fi
+    exit 0
+fi
+
+# Escalate only to the immutable installed command, never this mutable checkout.
+if (( EUID != 0 )); then
+    exec /run/wrappers/bin/sudo /run/current-system/sw/bin/remote-mode "$1"
+fi
+
+if [[ "$1" == on ]]; then
+    has_battery=false
+    on_ac=false
+    for supply in /sys/class/power_supply/*; do
+        [[ -r "$supply/type" ]] || continue
+        if [[ -r "$supply/scope" && "$(<"$supply/scope")" == Device ]]; then
+            continue
+        fi
+        if [[ "$(<"$supply/type")" == Battery ]]; then
+            has_battery=true
+        elif [[ -r "$supply/online" && "$(<"$supply/online")" == 1 ]]; then
+            on_ac=true
+        fi
+    done
+    if [[ "$has_battery" == true && "$on_ac" == false ]]; then
+        echo 'Connect AC power before enabling remote mode.' >&2
+        exit 1
+    fi
+fi
+
+install -d -m 0755 "$state_dir"
+exec 9>/run/lock/remote-mode.lock
+flock -x 9
+
+case "$1" in
+    on)
+        was_enabled=false
+        [[ ! -f "$marker" ]] || was_enabled=true
+        touch "$marker"
+        if ! systemctl start "$unit"; then
+            if [[ "$was_enabled" == false ]]; then
+                rm -f "$marker"
+            fi
+            echo 'Failed to start remote mode. Check journalctl -u remote-mode.' >&2
+            exit 1
+        fi
+        echo 'Remote mode is on and will survive reboots. Sleep is blocked; screen locking and monitor power-off are unchanged.'
+        if [[ "$has_battery" == true ]]; then
+            echo 'Unplugging does not turn it off. Run remote-mode off before using battery power or packing the laptop.'
+        fi
+        ;;
+    off)
+        systemctl stop "$unit"
+        rm -f "$marker"
+        echo 'Remote mode is off. Normal sleep behavior is restored.'
+        ;;
+esac

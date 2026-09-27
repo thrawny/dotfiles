@@ -86,16 +86,16 @@ lid-close sleep.
 For headless use without an external display, connect power and run:
 
 ```sh
-just clamshell-on
+remote-mode on
 ```
 
-This explicitly sets the system-wide `pmset -a disablesleep 1` flag. The recipe
+This explicitly sets the system-wide `pmset -a disablesleep 1` flag. The command
 checks for AC power before enabling it, but **unplugging does not turn it off**.
 It persists until disabled, including across restarts. Keep the Mac ventilated
 and turn this mode off before putting it in a bag or using it on battery:
 
 ```sh
-just clamshell-off
+remote-mode off
 ```
 
 This restores lid-close and manual sleep. AC idle sleep remains disabled by the
@@ -115,7 +115,7 @@ two minutes, and make a fresh SSH connection from the other device. Check
 ## Recovery and limits
 
 - If closed-lid SSH fails, open the lid and inspect `tailscale status` and
-  `pmset -g`. Use `just clamshell-off` to return to ordinary lid behavior.
+  `pmset -g`. Use `remote-mode off` to return to ordinary lid behavior.
 - Restart a stuck daemon with
   `sudo launchctl kickstart -k system/com.tailscale.tailscaled`. This disconnects
   active Tailscale SSH sessions.
