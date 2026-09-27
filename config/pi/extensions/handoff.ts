@@ -33,7 +33,7 @@ function assistantResult(
 ): { text: string; complete: boolean } | undefined {
 	for (let index = entries.length - 1; index >= startIndex; index--) {
 		const entry = entries[index];
-		if (entry.type !== "message" || !isRecord(entry.message)) continue;
+		if (entry.type !== "message") continue;
 		if (entry.message.role !== "assistant") continue;
 		const text = textFromContent(entry.message.content);
 		const stopReason = entry.message.stopReason;

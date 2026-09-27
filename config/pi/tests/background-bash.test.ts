@@ -106,7 +106,11 @@ const ctx = {
 		setStatus,
 		theme: { fg: (_color: string, text: string) => text },
 	},
-	sessionManager: { getBranch: () => [] },
+	sessionManager: {
+		getBranch: () => [],
+		getSessionId: () => "test-session",
+		getSessionFile: () => undefined,
+	},
 } as unknown as ExtensionContext;
 
 describe("background bash", () => {

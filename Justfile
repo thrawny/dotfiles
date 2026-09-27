@@ -62,6 +62,10 @@ ai: nix::ai
 # Update all flake inputs with AI tool version report and switch
 full-update: nix::full-update
 
+# Update selected Pi extension development dependencies without lifecycle scripts
+pi-update-deps +packages:
+    pnpm --dir config/pi update --ignore-scripts {{packages}}
+
 # Check and typecheck Pi config/extensions
 pi:
     pnpm --dir config/pi run lint
