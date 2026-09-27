@@ -9,6 +9,7 @@ require("options")
 require("rules")
 require("projectdirs")
 require("binds")
+require("lid")
 require("appjump")
 require("autostart")
 

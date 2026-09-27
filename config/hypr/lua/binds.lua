@@ -51,7 +51,7 @@ bind("ALT + SHIFT + CTRL + Delete", dsp.exec_cmd("systemctl poweroff"))
 bind("CTRL + ALT + Delete", dsp.exec_cmd("reboot"))
 bind("ALT + SHIFT + P", dsp.dpms({ action = "off" }))
 bind("ALT + SUPER + M", dsp.exec_cmd("wake-lg"), { locked = true })
-bind("ALT + SUPER + E", dsp.dpms({ action = "on", monitor = "eDP-1" }), { locked = true })
+bind("ALT + SUPER + E", dsp.exec_cmd("hypr-panel-recover"), { locked = true })
 bind("ALT + SUPER + Space", dsp.exec_cmd("hyprctl switchxkblayout all next"))
 
 -- Windows

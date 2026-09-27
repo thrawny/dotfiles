@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Recover eDP after a lid cycle leaves it black while Hyprland reports DPMS on.
+set -euo pipefail
+
+: "${HYPRLAND_INSTANCE_SIGNATURE:?Run in the active Hyprland session}"
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+
+# Repeated key presses must not interleave off/on cycles.
+exec 9>"$XDG_RUNTIME_DIR/hypr-panel-recover.lock"
+flock -n 9 || exit 0
+
+panel_on() {
+    timeout 4s hyprctl dispatch 'hl.dsp.dpms({ action = "on", monitor = "eDP-1" })'
+}
+
+# Still try to restore the panel if the off command or sleep fails.
+trap panel_on EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+timeout 4s hyprctl dispatch 'hl.dsp.dpms({ action = "off", monitor = "eDP-1" })'
+sleep 1
+trap - EXIT
+panel_on
