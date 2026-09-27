@@ -1,15 +1,30 @@
 #!/usr/bin/env bash
-# Find the LG 27GL850 output name and cycle it off/on to wake it from deep sleep
+# Find the LG 27GL850 output and cycle it off/on to wake it from deep sleep.
+set -euo pipefail
 
-output=$(niri msg outputs | grep -B0 'LG Electronics 27GL850' | head -1 | sed 's/Output "\(.*\)" (.*/\1/')
+if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+  output=$(hyprctl monitors all -j | jq -r '.[] | select(.make == "LG Electronics" and .model == "27GL850") | .name' | head -n1)
 
-if [[ -z "$output" ]]; then
-  echo "LG monitor not found" >&2
+  if [[ -z "$output" ]]; then
+    echo "LG monitor not found" >&2
+    exit 1
+  fi
+
+  hyprctl eval "hl.dispatch(hl.dsp.dpms({action=\"off\",monitor=\"$output\"}))" >/dev/null
+  sleep 1
+  hyprctl eval "hl.dispatch(hl.dsp.dpms({action=\"on\",monitor=\"$output\"}))" >/dev/null
+elif [[ -n "${NIRI_SOCKET:-}" ]]; then
+  connector=$(niri msg outputs | grep 'LG Electronics 27GL850' | sed 's/.*(\(.*\))/\1/' | head -n1)
+
+  if [[ -z "$connector" ]]; then
+    echo "LG monitor not found" >&2
+    exit 1
+  fi
+
+  niri msg output "$connector" off
+  sleep 1
+  niri msg output "$connector" on
+else
+  echo "unsupported compositor" >&2
   exit 1
 fi
-
-connector=$(niri msg outputs | grep 'LG Electronics 27GL850' | sed 's/.*(\(.*\))/\1/')
-
-niri msg output "$connector" off
-sleep 1
-niri msg output "$connector" on
