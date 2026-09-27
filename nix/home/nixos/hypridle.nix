@@ -6,7 +6,7 @@
       general = {
         lock_cmd = "pidof hyprlock || hyprlock";
         before_sleep_cmd = "loginctl lock-session";
-        after_sleep_cmd = "${dotfiles}/bin/dpms-on";
+        after_sleep_cmd = "${dotfiles}/bin/hypr-display-recover --after-sleep";
       };
       listener = [
         {

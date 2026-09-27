@@ -1,0 +1,98 @@
+#!/usr/bin/env bash
+# Recover displays which remain stuck despite Hyprland reporting DPMS on.
+set -euo pipefail
+
+script_dir=$(dirname "$(readlink -f "$0")")
+after_sleep=false
+on_only=false
+case "${1:-}" in
+    --after-sleep) after_sleep=true; shift ;;
+    --on-only) on_only=true; shift ;;
+esac
+[[ $# -le 1 ]] || { echo "Usage: hypr-display-recover [--after-sleep|--on-only] [monitor]" >&2; exit 2; }
+
+# Niri keeps its existing wake behavior.
+if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    if $after_sleep; then exec "$script_dir/dpms-on"; fi
+    echo "Run in the active Hyprland session" >&2
+    exit 1
+fi
+: "${XDG_RUNTIME_DIR:?XDG_RUNTIME_DIR is required}"
+exec 9>"$XDG_RUNTIME_DIR/hypr-display-recover.lock"
+if $after_sleep; then
+    # Do not lose resume recovery to an ordinary idle-wake command in flight.
+    flock -w 10 9 || { echo "Display recovery is busy" >&2; exit 1; }
+else
+    flock -n 9 || exit 0
+fi
+
+if $after_sleep; then
+    # PrepareForSleep(false) precedes nvidia-resume.service. Its job can still
+    # be queued with ActiveState=inactive, so checking is-active is not enough.
+    ready=false
+    for ((attempt = 0; attempt < 20; attempt++)); do
+        state=$(timeout 4s systemctl show nvidia-resume.service \
+            -p LoadState -p ActiveState -p Job -p Result)
+        if grep -Eq '^Job=[1-9]|^ActiveState=activating$' <<< "$state"; then
+            sleep 1
+            continue
+        fi
+        if grep -qx 'LoadState=not-found' <<< "$state"; then
+            ready=true
+            break
+        fi
+        if ! grep -qx 'Result=success' <<< "$state"; then
+            echo "NVIDIA resume failed; leaving displays unchanged" >&2
+            exit 1
+        fi
+        ready=true
+        break
+    done
+    $ready || { echo "Timed out waiting for NVIDIA resume" >&2; exit 1; }
+fi
+
+lid_closed() {
+    grep -qs closed /proc/acpi/button/lid/*/state
+}
+
+# Query enabled outputs, not 'monitors all'. Never enable an intentionally
+# disabled output. Missing monitor selectors can affect ALL outputs in 0.56.
+monitors=$(timeout 4s hyprctl monitors -j)
+selected=$(jq -r --arg requested "${1:-}" \
+    '.[] | select(.disabled != true) | .name | select($requested == "" or . == $requested)' <<< "$monitors")
+restore=()
+
+power() {
+    local action=$1 monitor=$2
+    timeout 4s hyprctl dispatch "hl.dsp.dpms({ action = \"$action\", monitor = \"$monitor\" })"
+}
+
+restore_displays() {
+    local monitor current failed=0
+    current=$(timeout 4s hyprctl monitors -j) || return 1
+    for monitor in "${restore[@]}"; do
+        # Recheck hotplug and lid state after the delay, including on errors.
+        jq -e --arg name "$monitor" 'any(.[]; .name == $name and .disabled != true)' \
+            <<< "$current" >/dev/null || continue
+        if [[ "$monitor" =~ ^(eDP|LVDS|DSI)- ]] && lid_closed; then continue; fi
+        power on "$monitor" || failed=1
+    done
+    return "$failed"
+}
+
+trap restore_displays EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+while IFS= read -r monitor; do
+    [[ -n "$monitor" ]] || continue
+    [[ "$monitor" =~ ^[a-zA-Z0-9_-]+$ ]] || { echo "Invalid monitor name" >&2; exit 1; }
+    if [[ "$monitor" =~ ^(eDP|LVDS|DSI)- ]] && lid_closed; then
+        power off "$monitor"
+        continue
+    fi
+    restore+=("$monitor")
+    if ! $on_only; then power off "$monitor"; fi
+done <<< "$selected"
+if ! $on_only && [[ ${#restore[@]} -gt 0 ]]; then sleep 1; fi
+trap - EXIT
+restore_displays

@@ -139,7 +139,7 @@ test-t3ctl:
     @just test-python tests/test_t3ctl.py
 
 # Run all tests
-test: test-fork-window test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills
+test: test-display-recover test-fork-window test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills
 
 # Session forking, exact session selection, and desktop routing
 test-fork-window:
@@ -185,6 +185,11 @@ test-python *args:
 test-aerospace:
     @just test-python tests/test_aerospace.py
 
+# Test display recovery, resume ordering, and closed-lid handling with fake tools
+test-display-recover:
+    bash -n bin/hypr-display-recover bin/hypr-panel-recover bin/wake-lg bin/dpms-on
+    @just test-python tests/test_display_recover.py
+
 # Check Hyprland scratchpad callbacks and terminal path quoting without a compositor
 test-hypr-binds:
     bash -n bin/dpms-on bin/dpms-off
@@ -220,7 +225,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi test-fork-window check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv check-private-skills nix::eval
+check-parallel: test-display-recover lint typecheck pi test-fork-window check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv check-private-skills nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all
