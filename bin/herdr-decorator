@@ -3,7 +3,7 @@
 
 One long-lived process. It follows pane changes over Herdr's socket, polls
 GitHub on a timer, and reports values with pane.report_metadata so the agent
-sidebar rows can show them as $pr and $jira. Every report carries a
+sidebar rows can show them as $pr, $jira and $repo. Every report carries a
 TTL, so values expire on their own if this process stops.
 
 Pane state for other tools (for example an "open this PR" action) is written to
@@ -177,6 +177,7 @@ class Pane:
     status: str | None = None
     repo: tuple[str, str] | None = None
     branch: str | None = None
+    workdir: str | None = None
     tokens: dict[str, str] = field(default_factory=dict)
     links: dict[str, str] = field(default_factory=dict)
 
@@ -197,10 +198,11 @@ def git(cwd: str, *args: str) -> str | None:
 
 def locate(pane: Pane) -> None:
     """Fill in the pane's GitHub repo and branch from its working directory."""
-    pane.repo, pane.branch = None, None
+    pane.repo, pane.branch, pane.workdir = None, None, None
     cwd = reported_cwd(pane.pane_id) or pane.cwd
     if not cwd or not os.path.isdir(cwd):
         return
+    pane.workdir = cwd
     pane.branch = git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
     remote = git(cwd, "remote", "get-url", "origin") or ""
     if match := GITHUB_REMOTE.search(remote):
@@ -331,6 +333,11 @@ def decorate(
 ) -> tuple[dict[str, str], dict[str, str]]:
     tokens: dict[str, str] = {}
     links: dict[str, str] = {}
+    # The remote's name, since a worktree's folder is named after its branch.
+    if pane.repo:
+        tokens["repo"] = pane.repo[1]
+    elif pane.workdir:
+        tokens["repo"] = os.path.basename(pane.workdir.rstrip("/")) or "/"
     if pr:
         tokens["pr"] = pr_label(pr)
         links["pr"] = pr["url"]

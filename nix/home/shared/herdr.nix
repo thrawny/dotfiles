@@ -283,9 +283,11 @@ in
                   dim = false;
                 }
               ]
+              # $repo is also from the decorator: the repo the agent works in,
+              # which can differ from its workspace and its start folder.
               [
                 {
-                  token = "workspace";
+                  token = "$repo";
                   fg = theme.semantic.muted;
                   dim = false;
                 }
