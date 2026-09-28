@@ -122,10 +122,10 @@ in
       // {
         c = "claude";
         cy = "claude --dangerously-skip-permissions";
-        # Auto-compact cannot be switched off. 1M is the highest window it
-        # accepts and Claude Code clamps it to the model's context window, so
-        # compaction only fires once that window is actually full.
-        cb = "claude --autocompact 1M";
+        # Session with a 1M auto-compact window instead of the 300k default.
+        # The env block in ~/.claude/settings.json overrides both a shell
+        # export and --autocompact; only --settings on the command line wins.
+        cb = "claude --settings '{\"env\":{\"CLAUDE_CODE_AUTO_COMPACT_WINDOW\":\"1000000\"}}'";
         gp = "git push --force-with-lease --force-if-includes";
         gw = "git worktree";
         tp = "terraform plan";
