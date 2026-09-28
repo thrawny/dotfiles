@@ -18,5 +18,6 @@
     pyenv
     jira-cli-go
     ffmpeg
+    atlas
   ];
 }
