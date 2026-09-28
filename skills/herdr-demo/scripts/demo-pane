@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Drive a Herdr demo pane: open it left of the calling pane, then type steps into it one at a time.
+set -euo pipefail
+
+label=demo
+pause=${DEMO_PAUSE:-1}
+
+usage() {
+	cat <<'EOF'
+Usage:
+  demo-pane open                          Print the demo pane ID; reuse or create it, then clear it
+  demo-pane run <pane> <command> [secs]   Type <command> into <pane>, wait for the prompt (default 120s),
+                                          and exit with the command's exit status
+
+DEMO_PAUSE sets the seconds to pause after each step (default 1).
+EOF
+}
+
+marker_for() {
+	printf '/tmp/herdr-demo-%s' "${1//:/-}"
+}
+
+shell_idle() {
+	herdr pane process-info --pane "$1" |
+		jq -e '.result.process_info | .foreground_process_group_id == .shell_pid' >/dev/null
+}
+
+wait_marker() {
+	local marker=$1 secs=$2
+	local deadline=$((SECONDS + secs))
+	until [ -s "$marker" ]; do
+		if ((SECONDS >= deadline)); then
+			return 1
+		fi
+		sleep 0.2
+	done
+}
+
+open_pane() {
+	if [ "${HERDR_ENV:-}" != 1 ]; then
+		echo "demo-pane: not running inside Herdr" >&2
+		exit 1
+	fi
+
+	local pane
+	pane=$(herdr pane list --workspace "$HERDR_WORKSPACE_ID" |
+		jq -r --arg tab "$HERDR_TAB_ID" --arg label "$label" \
+			'[.result.panes[] | select(.tab_id == $tab and .label == $label)][0].pane_id // empty')
+
+	if [ -n "$pane" ]; then
+		if ! shell_idle "$pane"; then
+			echo "demo-pane: $pane is running something; stop it or close the pane" >&2
+			exit 1
+		fi
+	else
+		pane=$(herdr pane split --current --direction right --cwd "$PWD" --no-focus | jq -r .result.pane.pane_id)
+		# Herdr splits only right or down; swapping moves the new pane to the left.
+		herdr pane swap --source-pane "$HERDR_PANE_ID" --target-pane "$pane" >/dev/null
+		herdr pane rename "$pane" "$label" >/dev/null
+		herdr pane wait-output "$pane" --source visible --regex '\S' --timeout 20000 >/dev/null
+	fi
+
+	# The precmd hook writes each command's exit status to the marker, which is how `run` knows a step finished.
+	local marker
+	marker=$(marker_for "$pane")
+	rm -f "$marker"
+	herdr pane run "$pane" "setopt interactive_comments; _demo_done() { print -r -- \$? >| $marker }; precmd_functions=(_demo_done \${precmd_functions:#_demo_done}); clear" >/dev/null
+	if ! wait_marker "$marker" 20; then
+		echo "demo-pane: $pane did not return to a zsh prompt" >&2
+		exit 1
+	fi
+	echo "$pane"
+}
+
+run_step() {
+	local pane=$1 cmd=$2 secs=${3:-120}
+	local marker
+	marker=$(marker_for "$pane")
+	rm -f "$marker"
+	herdr pane run "$pane" "$cmd" >/dev/null
+	if ! wait_marker "$marker" "$secs"; then
+		echo "demo-pane: still running after ${secs}s: $cmd" >&2
+		exit 124
+	fi
+	sleep "$pause"
+	return "$(cat "$marker")"
+}
+
+case "${1:-}" in
+open) open_pane ;;
+run)
+	if [ $# -lt 3 ]; then
+		usage >&2
+		exit 2
+	fi
+	run_step "$2" "$3" "${4:-120}"
+	;;
+*)
+	usage >&2
+	exit 2
+	;;
+esac
