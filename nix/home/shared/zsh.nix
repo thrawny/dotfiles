@@ -150,6 +150,7 @@ in
         "HIST_EXPIRE_DUPS_FIRST"
         "HIST_VERIFY"
         "INC_APPEND_HISTORY"
+        "INTERACTIVE_COMMENTS"
       ];
 
       initContent = lib.mkMerge [
