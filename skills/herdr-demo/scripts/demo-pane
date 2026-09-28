@@ -21,8 +21,9 @@ marker_for() {
 }
 
 shell_idle() {
+	# The foreground group stays the shell's while a command runs, so look for any process besides the shell.
 	herdr pane process-info --pane "$1" |
-		jq -e '.result.process_info | .foreground_process_group_id == .shell_pid' >/dev/null
+		jq -e '.result.process_info | [.foreground_processes[].pid] == [.shell_pid]' >/dev/null
 }
 
 wait_marker() {

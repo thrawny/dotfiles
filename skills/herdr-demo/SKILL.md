@@ -12,13 +12,12 @@ The user watches a demo play in a Herdr pane to the right of yours. The pane's *
 
 ## Steps
 
-1. **Write the script.** Explore in your own shell only to learn things (which targets exist, what an endpoint returns). Everything that creates or changes state the demo relies on (clone, pull, generate, start, clean up the last run) goes in the script. Done when every step is a comment line plus the real commands that show it.
+1. **Outline the demo:** the point it makes and the steps that get there from a clean start, each as a `# N. ...` comment line. Explore in your own shell only to learn things (which targets exist, what an endpoint returns). Everything that creates or changes state the demo relies on (clone, pull, generate, start, clean up the last run) runs in the pane.
 2. **Open the pane:** `demo-pane open` prints the pane ID. It reuses this tab's pane labelled `demo`, or creates one right of yours, then clears it. The user's focus stays where it was.
-3. **Play each line**, comments included: `demo-pane run <pane> '<command>' [timeout-secs]`. It types the line, waits for the prompt to come back, pauses `DEMO_PAUSE` seconds (default 1), and exits with the command's status, or 124 on timeout.
-4. **Check the scrollback:** `herdr pane read <pane> --source recent-unwrapped --lines 200`. Done when every step printed what its comment promised. When a step went wrong, fix the script and replay it from step 2, so the scrollback stays one clean run.
-5. **Report:** list the steps, quote the output line that makes the point, and leave the pane open.
+3. **Play one step at a time.** Send the comment line, then each command, with `demo-pane run <pane> '<line>' [timeout-secs]`. It types the line, waits for the prompt to come back, pauses `DEMO_PAUSE` seconds (default 1), and exits with the command's status, or 124 on timeout. After each command, read its output with `herdr pane read <pane> --source recent-unwrapped --lines 30` and write the next command from what it printed: an ID, a port, a file name. When a command surprises you, fix it in the pane under its own comment line; the fix is part of the demo. Done when the last step's output shows the point.
+4. **Report:** list the steps, quote the output line that makes the point, and leave the pane open.
 
-## Writing the script
+## Writing the commands
 
 - **Real commands.** Type what the user would type. The narration lives in comment lines. Commands show real output, not `echo`ed stand-ins.
 - **Scratch folder** is `/tmp/<name>`, one level under `/tmp` (`/tmp/hello-world`). Open with `rm -rf /tmp/<name> && mkdir -p /tmp/<name> && cd /tmp/<name>` so later lines use short relative paths.
