@@ -10,7 +10,6 @@ import subprocess
 import sys
 import uuid
 from pathlib import Path
-from typing import cast
 
 NOTICE = """This is a new, independent fork of an existing conversation.
 The original session remains active. You share its working directory and files,
@@ -35,7 +34,7 @@ def detect_harness() -> str:
     candidates = [
         harness
         for harness, variable in (
-            ("claude", "CLAUDE_SESSION_ID"),
+            ("claude", "CLAUDE_CODE_SESSION_ID"),
             ("codex", "CODEX_THREAD_ID"),
         )
         if os.environ.get(variable)
@@ -47,35 +46,13 @@ def detect_harness() -> str:
             "Ambiguous session environment; specify fork-window claude or fork-window codex"
         )
     raise ForkError(
-        "No current session ID. Restart or resume Claude to load its SessionStart hook, or run inside Codex. Pi uses /fork-window."
+        "No current session ID. Run inside Claude or Codex; Pi uses /fork-window."
     )
-
-
-def claude_session_start() -> None:
-    """Persist the hook's exact session ID for Claude's Bash and ! commands."""
-    env_file = os.environ.get("CLAUDE_ENV_FILE")
-    if not env_file:
-        return  # Non-local hook contexts do not expose a shell environment file.
-    try:
-        payload: object = json.load(sys.stdin)
-        ref = (
-            cast(dict[str, object], payload).get("session_id")
-            if isinstance(payload, dict)
-            else None
-        )
-        if not isinstance(ref, str):
-            raise ValueError("missing session_id")
-        session_id = str(uuid.UUID(ref))
-    except (ValueError, TypeError) as error:
-        raise ForkError("SessionStart hook requires a valid session_id UUID") from error
-    # Append: other hooks may already have populated this session's file.
-    with Path(env_file).open("a") as file:
-        file.write(f"\nexport CLAUDE_SESSION_ID={shlex.quote(session_id)}\n")
 
 
 def session_ref(harness: str, supplied: str | None) -> str:
     ref = supplied or os.environ.get(
-        {"claude": "CLAUDE_SESSION_ID", "codex": "CODEX_THREAD_ID"}.get(harness, ""),
+        {"claude": "CLAUDE_CODE_SESSION_ID", "codex": "CODEX_THREAD_ID"}.get(harness, ""),
         "",
     )
     if not ref:
@@ -108,7 +85,7 @@ def fork_command(harness: str, ref: str) -> list[str]:
         "-u",
         "CLAUDECODE",
         "-u",
-        "CLAUDE_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ID",
         "-u",
         "CODEX_THREAD_ID",
         *args,
@@ -188,11 +165,6 @@ def main() -> int:
         help="Detected from the current session environment when omitted",
     )
     parser.add_argument(
-        "--claude-session-start",
-        action="store_true",
-        help="Claude SessionStart hook: export the current session ID for shell commands",
-    )
-    parser.add_argument(
         "session", nargs="?", help="Pi session file or full Claude/Codex UUID"
     )
     parser.add_argument(
@@ -200,13 +172,6 @@ def main() -> int:
     )
     args = parser.parse_args()
     try:
-        if args.claude_session_start:
-            if args.harness or args.session:
-                raise ForkError(
-                    "The SessionStart hook does not accept a harness or session argument"
-                )
-            claude_session_start()
-            return 0
         if os.environ.get("SANDBOX") == "1":
             raise ForkError(
                 "Desktop session forking is unavailable inside the container sandbox; run from the host session"

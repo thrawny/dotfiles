@@ -33,7 +33,7 @@ Use [`t3ctl`](docs/t3ctl.md) to control T3 Code on obelisk from agents or script
 
 [Private agent skills](docs/private-agent-skills.md) sync from Forgejo on opted-in personal hosts, outside this public checkout and the Nix store.
 
-Use `!fork-window` in Claude or Codex, or `/fork-window` in Pi, to fork the current conversation into a Herdr tab or a new Ghostty window on Hyprland without a model turn in the original session. The fork shares the checkout, acknowledges a fork notice, and waits for instructions. Restart or resume Claude once to load its session-ID hook. From a terminal, use `fork-window pi /path/to/session.jsonl`, `fork-window claude <session-uuid>`, or `fork-window codex <session-uuid>`. Container sandboxes are not supported.
+Use `!fork-window` in Claude or Codex, or `/fork-window` in Pi, to fork the current conversation into a Herdr tab or a new Ghostty window on Hyprland without a model turn in the original session. The fork shares the checkout, acknowledges a fork notice, and waits for instructions. From a terminal, use `fork-window pi /path/to/session.jsonl`, `fork-window claude <session-uuid>`, or `fork-window codex <session-uuid>`. Container sandboxes are not supported.
 
 ```bash
 just switch   # Apply config (NixOS, nix-darwin, or Home Manager)

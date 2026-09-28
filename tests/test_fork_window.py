@@ -1,11 +1,9 @@
 """Fork routing without opening terminals or starting paid model turns."""
 
 import importlib.util
-import io
 import json
 import shlex
 import subprocess
-import sys
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType
@@ -48,7 +46,7 @@ def test_requires_exact_session(fork: ModuleType, harness: str):
 
 
 @pytest.mark.parametrize(
-    "harness,variable", [("claude", "CLAUDE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")]
+    "harness,variable", [("claude", "CLAUDE_CODE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")]
 )
 def test_session_environment(fork: ModuleType, harness: str, variable: str):
     with patch.dict("os.environ", {variable: SESSION}):
@@ -81,7 +79,7 @@ def test_native_fork_and_notice(fork: ModuleType, harness: str, flags: list[str]
         "-u",
         "CLAUDECODE",
         "-u",
-        "CLAUDE_SESSION_ID",
+        "CLAUDE_CODE_SESSION_ID",
         "-u",
         "CODEX_THREAD_ID",
     ]
@@ -211,7 +209,7 @@ def test_sandbox_fails_before_launch(fork: ModuleType):
 
 
 @pytest.mark.parametrize(
-    "harness,variable", [("claude", "CLAUDE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")]
+    "harness,variable", [("claude", "CLAUDE_CODE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")]
 )
 def test_auto_detect(fork: ModuleType, harness: str, variable: str):
     with patch.dict("os.environ", {variable: SESSION}):
@@ -225,14 +223,14 @@ def test_auto_detect_missing(fork: ModuleType):
 
 def test_auto_detect_ambiguous(fork: ModuleType):
     with patch.dict(
-        "os.environ", {"CLAUDE_SESSION_ID": SESSION, "CODEX_THREAD_ID": SESSION}
+        "os.environ", {"CLAUDE_CODE_SESSION_ID": SESSION, "CODEX_THREAD_ID": SESSION}
     ):
         with pytest.raises(fork.ForkError, match="Ambiguous"):
             fork.detect_harness()
 
 
 @pytest.mark.parametrize(
-    "harness,variable", [("claude", "CLAUDE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")]
+    "harness,variable", [("claude", "CLAUDE_CODE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")]
 )
 def test_no_argument_cli(fork: ModuleType, harness: str, variable: str):
     with (
@@ -249,7 +247,7 @@ def test_no_argument_cli(fork: ModuleType, harness: str, variable: str):
 def test_explicit_harness_overrides_ambiguous_environment(fork: ModuleType):
     with (
         patch.dict(
-            "os.environ", {"CLAUDE_SESSION_ID": SESSION, "CODEX_THREAD_ID": SESSION}
+            "os.environ", {"CLAUDE_CODE_SESSION_ID": SESSION, "CODEX_THREAD_ID": SESSION}
         ),
         patch("sys.argv", ["fork-window", "codex"]),
         patch.object(fork, "fork_command", return_value=["native-fork"]) as command,
@@ -257,78 +255,6 @@ def test_explicit_harness_overrides_ambiguous_environment(fork: ModuleType):
     ):
         assert fork.main() == 0
     command.assert_called_once_with("codex", SESSION)
-
-
-def test_claude_hook_appends_exact_id(fork: ModuleType, tmp_path: Path):
-    env_file = tmp_path / "shell env.sh"
-    env_file.write_text("export EXISTING=value\n")
-    with (
-        patch.dict(
-            "os.environ",
-            {"CLAUDE_ENV_FILE": str(env_file), "CLAUDE_SESSION_ID": "stale-parent-id"},
-        ),
-        patch("sys.stdin", io.StringIO(json.dumps({"session_id": SESSION}))),
-    ):
-        fork.claude_session_start()
-    assert (
-        env_file.read_text()
-        == f"export EXISTING=value\n\nexport CLAUDE_SESSION_ID={SESSION}\n"
-    )
-
-
-@pytest.mark.parametrize(
-    "payload",
-    [
-        "not json",
-        "{}",
-        "[]",
-        "null",
-        '{"session_id":12}',
-        '{"session_id":"$(touch /tmp/nope)"}',
-    ],
-)
-def test_claude_hook_rejects_invalid_payload(
-    fork: ModuleType, tmp_path: Path, payload: str
-):
-    env_file = tmp_path / "env.sh"
-    with (
-        patch.dict("os.environ", {"CLAUDE_ENV_FILE": str(env_file)}),
-        patch("sys.stdin", io.StringIO(payload)),
-        pytest.raises(fork.ForkError, match="valid session_id UUID"),
-    ):
-        fork.claude_session_start()
-    assert not env_file.exists()
-
-
-def test_claude_hook_without_env_file(fork: ModuleType):
-    with patch("sys.stdin", io.StringIO("")):
-        fork.claude_session_start()
-
-
-def test_hook_entry_point(tmp_path: Path):
-    env_file = tmp_path / "env.sh"
-    result = subprocess.run(
-        [sys.executable, str(ROOT / "bin/fork-window"), "--claude-session-start"],
-        input=json.dumps({"session_id": SESSION}),
-        env={"CLAUDE_ENV_FILE": str(env_file), "SANDBOX": "1"},
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == ""
-    assert f"export CLAUDE_SESSION_ID={SESSION}" in env_file.read_text()
-
-
-def test_example_config_installs_hook():
-    settings = json.loads((ROOT / "config/claude/settings.example.json").read_text())
-    commands = [
-        hook["command"]
-        for group in settings["hooks"]["SessionStart"]
-        for hook in group["hooks"]
-    ]
-    assert "fork-window --claude-session-start" in commands
-    assert any("agent-switch track session-start" in command for command in commands)
 
 
 def test_missing_executable(fork: ModuleType):
