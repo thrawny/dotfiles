@@ -134,6 +134,29 @@ def env_flag_set(name: str) -> bool:
     return value.strip().lower() not in {"0", "false"}
 
 
+def report_herdr_cwd(cwd: str) -> None:
+    """Tell herdr-decorator where this agent works; its process cwd can be stale."""
+    pane_id = os.getenv("HERDR_PANE_ID")
+    if os.getenv("HERDR_ENV") != "1" or not pane_id:
+        return
+    base = os.getenv("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    target = os.path.join(base, "herdr-decorator", "agent-cwd", pane_id)
+    try:
+        with open(target) as f:
+            if f.read() == cwd:
+                return
+    except OSError:
+        pass
+    try:
+        os.makedirs(os.path.dirname(target), exist_ok=True)
+        tmp = f"{target}.{os.getpid()}.tmp"
+        with open(tmp, "w") as f:
+            f.write(cwd)
+        os.replace(tmp, target)
+    except OSError:
+        pass
+
+
 def get_effort_label(data: dict) -> str | None:
     """Reasoning effort, absent for models without the effort parameter."""
     level = data.get("effort", {}).get("level")
@@ -252,6 +275,7 @@ def main() -> None:
             parts.append(f"{fg(GRAY)}{text}{RESET}")
 
     cwd = get_repo_root() or data.get("workspace", {}).get("current_dir") or os.getcwd()
+    report_herdr_cwd(cwd)
     dirname = os.path.basename(cwd.rstrip("/")) or "/"
     parts.append(f"{fg(PURPLE)}{truncate(dirname)}{RESET}")
 

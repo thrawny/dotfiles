@@ -117,3 +117,37 @@ def test_remote_parsing_handles_ssh_and_https(decorator: ModuleType) -> None:
     ):
         match = decorator.GITHUB_REMOTE.search(remote)
         assert match and match.groups() == ("acme", "widgets")
+
+
+def test_locate_prefers_the_cwd_the_agent_reported(
+    decorator: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    repo = tmp_path / "widgets"
+    repo.mkdir()
+    reported = tmp_path / "state/herdr-decorator/agent-cwd/w1:p1"
+    reported.parent.mkdir(parents=True)
+    reported.write_text(str(repo))
+    seen: list[str] = []
+
+    def fake_git(cwd: str, *args: str) -> str:
+        seen.append(cwd)
+        return (
+            "fix-lint" if args[0] == "rev-parse" else "git@github.com:acme/widgets.git"
+        )
+
+    monkeypatch.setattr(decorator, "git", fake_git)
+    pane = decorator.Pane("w1:p1", str(tmp_path / "deleted-worktree"), "claude")
+    decorator.locate(pane)
+    assert seen == [str(repo), str(repo)]
+    assert (pane.repo, pane.branch) == (("acme", "widgets"), "fix-lint")
+
+
+def test_locate_ignores_a_reported_cwd_that_is_gone(
+    decorator: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path / "state"))
+    reported = tmp_path / "state/herdr-decorator/agent-cwd/w1:p1"
+    reported.parent.mkdir(parents=True)
+    reported.write_text(str(tmp_path / "gone"))
+    assert decorator.reported_cwd("w1:p1") is None

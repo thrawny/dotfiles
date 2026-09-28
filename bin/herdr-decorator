@@ -8,6 +8,11 @@ TTL, so values expire on their own if this process stops.
 
 Pane state for other tools (for example an "open this PR" action) is written to
 $XDG_STATE_HOME/herdr-decorator/panes.json.
+
+An agent's process cwd is where it was started, which can be a deleted worktree
+or another repo than the one it works in. Agents that know their working
+directory write it to $XDG_STATE_HOME/herdr-decorator/agent-cwd/<pane_id>, and
+that path wins over the process cwd.
 """
 
 from __future__ import annotations
@@ -63,9 +68,22 @@ def socket_path() -> str:
     )
 
 
-def state_file() -> Path:
+def state_dir() -> Path:
     base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
-    return Path(base) / "herdr-decorator" / "panes.json"
+    return Path(base) / "herdr-decorator"
+
+
+def state_file() -> Path:
+    return state_dir() / "panes.json"
+
+
+def reported_cwd(pane_id: str) -> str | None:
+    """The working directory the agent in this pane reported, if it still exists."""
+    try:
+        cwd = (state_dir() / "agent-cwd" / pane_id).read_text().strip()
+    except OSError:
+        return None
+    return cwd if os.path.isdir(cwd) else None
 
 
 class HerdrGone(Exception):
@@ -180,10 +198,11 @@ def git(cwd: str, *args: str) -> str | None:
 def locate(pane: Pane) -> None:
     """Fill in the pane's GitHub repo and branch from its working directory."""
     pane.repo, pane.branch = None, None
-    if not pane.cwd or not os.path.isdir(pane.cwd):
+    cwd = reported_cwd(pane.pane_id) or pane.cwd
+    if not cwd or not os.path.isdir(cwd):
         return
-    pane.branch = git(pane.cwd, "rev-parse", "--abbrev-ref", "HEAD")
-    remote = git(pane.cwd, "remote", "get-url", "origin") or ""
+    pane.branch = git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
+    remote = git(cwd, "remote", "get-url", "origin") or ""
     if match := GITHUB_REMOTE.search(remote):
         pane.repo = (match.group(1), match.group(2))
 
@@ -399,7 +418,9 @@ class Decorator:
         event: str | None = envelope.get("event")
         data: dict[str, Any] = envelope.get("data") or {}
         if event == "pane.closed":
-            self.panes.pop(str(data.get("pane_id")), None)
+            pane_id = str(data.get("pane_id"))
+            self.panes.pop(pane_id, None)
+            (state_dir() / "agent-cwd" / pane_id).unlink(missing_ok=True)
             self.resubscribe_status()
             self.write_state()
             return
