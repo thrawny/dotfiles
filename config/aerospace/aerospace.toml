@@ -53,6 +53,8 @@ APPLESCRIPT
 alt-w = 'close'
 alt-f = 'fullscreen'                     # AeroSpace fullscreen, not a separate macOS Space.
 alt-v = 'layout floating tiling'
+alt-s = 'layout tiles accordion'            # Toggle tabbed (accordion) and tiled.
+alt-slash = 'layout tiles horizontal vertical'  # Toggle split direction.
 alt-m = 'focus-back-and-forth'
 alt-tab = 'focus-back-and-forth'
 alt-shift-m = 'workspace-back-and-forth'
