@@ -110,34 +110,6 @@ def test_decorate_without_pr_or_key_is_empty(decorator: ModuleType) -> None:
     assert decorator.decorate(pane, None) == ({}, {})
 
 
-def test_decorate_names_the_repo_from_its_remote_not_its_folder(
-    decorator: ModuleType,
-) -> None:
-    pane = decorator.Pane(
-        "w1:p1",
-        "/wt/fix-lint",
-        "claude",
-        repo=("acme", "widgets"),
-        workdir="/wt/fix-lint",
-    )
-    assert decorator.decorate(pane, None)[0] == {"repo": "widgets"}
-
-
-def test_decorate_leaves_out_a_repo_named_like_its_workspace(
-    decorator: ModuleType,
-) -> None:
-    pane = decorator.Pane("w1:p1", "/code/widgets", "claude", repo=("acme", "widgets"))
-    assert decorator.decorate(pane, None, workspace="widgets")[0] == {}
-    assert decorator.decorate(pane, None, workspace="fix-lint")[0] == {
-        "repo": "widgets"
-    }
-
-
-def test_decorate_outside_github_names_the_folder(decorator: ModuleType) -> None:
-    pane = decorator.Pane("w1:p1", "/notes/", "claude", workdir="/notes/")
-    assert decorator.decorate(pane, None)[0] == {"repo": "notes"}
-
-
 def test_remote_parsing_handles_ssh_and_https(decorator: ModuleType) -> None:
     for remote in (
         "git@github.com:acme/widgets.git",
