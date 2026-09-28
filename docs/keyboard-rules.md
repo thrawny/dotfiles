@@ -45,18 +45,17 @@ These are intentional departures from the ownership defaults, not blanket permis
 | Cmd+Shift+3/4/5, Print variants | OS screenshots | Keep screenshot chords available across environments. Exact capture behavior can differ. |
 | Media, volume, and brightness keys | OS hardware controls | These remain global. |
 | Cmd+Q | Application quit, where supported | Preserve the conventional quit action rather than reusing it for pane or tab operations. |
-| Cmd+H on AeroSpace | Swallowed globally | macOS Hide removes windows from the tiling layout. This deliberately prevents apps from using the chord. |
 | Ctrl+A in Herdr | Prefix | Keep prefix-based access alongside direct Cmd shortcuts. This is an explicit exception to Ctrl passthrough. |
-| Ctrl+Shift+H/L in Herdr | Previous/next tab | Keep the familiar tab shortcuts without taking unshifted Ctrl+H/L from pane programs. |
+| Ctrl+Shift+H/L in Herdr | Previous/next tab | Keep the familiar tab shortcuts without taking unshifted Ctrl+H/L from pane programs. Cmd+H/L do the same and follow the ownership rule. |
 | Right Alt+P and right Super+P on Linux | Global dictation | Right-side modifiers deliberately override normal ownership. Use left Cmd/Super+P for Herdr's project picker. |
 
-Ghostty's macOS Minimize and Zoom Split menu shortcuts are disabled to release Cmd+M and Cmd+Shift+Enter to Herdr. That implements the ownership rule; it is not another exception.
+Ghostty's macOS Minimize, Zoom Split and Hide Ghostty menu shortcuts are disabled to release Cmd+M, Cmd+Shift+Enter and Cmd+H to Herdr. That implements the ownership rule; it is not another exception.
 
 ## Known mismatches and audit gaps
 
 These are follow-up work, not approved exceptions. Recording them does not authorize changing bindings as part of an unrelated task.
 
-- Hyprland uses Super+L to toggle the workspace layout. A WM layout action belongs on an Alt-based chord.
+- Hyprland uses Super+L to toggle the workspace layout. A WM layout action belongs on an Alt-based chord. Until it moves, Herdr's Cmd+L next-tab binding only works on macOS.
 - Linux xremap translates Alt+Super+I to Ctrl+Shift+I for developer tools outside Ghostty. This conflicts with WM ownership of Alt+Cmd.
 - Ghostty removes selected default bindings rather than clearing them all. Audit the effective defaults on both platforms, including native menu shortcuts, before claiming it only handles transport, selection, clipboard, and zoom.
 

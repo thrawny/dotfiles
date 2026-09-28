@@ -52,10 +52,9 @@ def test_workspace_policy(config: dict[str, Any]):
 
 
 def test_core_keymap(bindings: dict[str, str]):
-    expected: dict[str, str | list[str]] = {
+    expected = {
         "alt-enter": bindings["alt-enter"],  # Checked separately below.
         "alt-w": "close",
-        "cmd-h": [],
         "alt-f": "fullscreen",
         "alt-v": "layout floating tiling",
         "alt-m": "focus-back-and-forth",

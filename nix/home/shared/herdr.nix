@@ -149,11 +149,13 @@ in
             "super+shift+enter"
           ];
           previous_tab = [
+            "super+h"
             "ctrl+shift+h"
             "prefix+h"
             "prefix+p"
           ];
           next_tab = [
+            "super+l"
             "ctrl+shift+l"
             "prefix+l"
             "prefix+n"
