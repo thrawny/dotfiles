@@ -20,7 +20,7 @@ The user watches a demo play in a Herdr pane to the right of yours. The pane's *
 ## Writing the commands
 
 - **Real commands.** Type what the user would type. The narration lives in comment lines. Commands show real output, not `echo`ed stand-ins.
-- **Scratch folder** is `/tmp/<name>`, one level under `/tmp` (`/tmp/hello-world`). Open with `rm -rf /tmp/<name> && mkdir -p /tmp/<name> && cd /tmp/<name>` so later lines use short relative paths.
+- **Working directory.** The pane opens in your working directory; run the demo there. Only when the demo writes files (a generated repo, saved responses), make a scratch folder one level under `/tmp` (`/tmp/hello-world`): `rm -rf /tmp/<name> && mkdir -p /tmp/<name> && cd /tmp/<name>`, so later lines use short relative paths.
 - **Short lines.** Put repeated values in shell variables in their own step (`API=http://localhost:8080`), then use `$API`.
 - **Pretty-print** output: `curl -sS ... | jq`, `yq` for YAML, `bat --paging=never` for files, `column -t` for tables, `grep -n` to point at a line, `curl -i` when the status code is the point.
 - **Non-interactive.** A pager, editor, or prompt stalls the step until timeout: pass `--no-pager` / `--paging=never` / `-y`. To free a stuck pane: `herdr pane send-keys <pane> ctrl+c`.
