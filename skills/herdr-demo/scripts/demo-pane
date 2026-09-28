@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Drive a Herdr demo pane: open it left of the calling pane, then type steps into it one at a time.
+# Drive a Herdr demo pane: open it right of the calling pane, then type steps into it one at a time.
 set -euo pipefail
 
 label=demo
@@ -54,8 +54,6 @@ open_pane() {
 		fi
 	else
 		pane=$(herdr pane split --current --direction right --cwd "$PWD" --no-focus | jq -r .result.pane.pane_id)
-		# Herdr splits only right or down; swapping moves the new pane to the left.
-		herdr pane swap --source-pane "$HERDR_PANE_ID" --target-pane "$pane" >/dev/null
 		herdr pane rename "$pane" "$label" >/dev/null
 		herdr pane wait-output "$pane" --source visible --regex '\S' --timeout 20000 >/dev/null
 	fi

@@ -1,19 +1,19 @@
 ---
 name: herdr-demo
-description: Demo something live in a Herdr pane to the left, as real commands narrated by zsh comment lines.
+description: Demo something live in a Herdr pane to the right, as real commands narrated by zsh comment lines.
 disable-model-invocation: true
 ---
 
 # Herdr demo
 
-The user watches a demo play in a Herdr pane to the left of yours. The pane's **scrollback** is the deliverable: read top to bottom, it is a script they could rerun, with every command the demo depends on, each step introduced by a `# N. ...` comment line.
+The user watches a demo play in a Herdr pane to the right of yours. The pane's **scrollback** is the deliverable: read top to bottom, it is a script they could rerun, with every command the demo depends on, each step introduced by a `# N. ...` comment line.
 
 `scripts/demo-pane` in this skill's directory drives the pane. Call it by absolute path.
 
 ## Steps
 
 1. **Write the script.** Explore in your own shell only to learn things (which targets exist, what an endpoint returns). Everything that creates or changes state the demo relies on (clone, pull, generate, start, clean up the last run) goes in the script. Done when every step is a comment line plus the real commands that show it.
-2. **Open the pane:** `demo-pane open` prints the pane ID. It reuses this tab's pane labelled `demo`, or creates one left of yours, then clears it. The user's focus stays where it was.
+2. **Open the pane:** `demo-pane open` prints the pane ID. It reuses this tab's pane labelled `demo`, or creates one right of yours, then clears it. The user's focus stays where it was.
 3. **Play each line**, comments included: `demo-pane run <pane> '<command>' [timeout-secs]`. It types the line, waits for the prompt to come back, pauses `DEMO_PAUSE` seconds (default 1), and exits with the command's status, or 124 on timeout.
 4. **Check the scrollback:** `herdr pane read <pane> --source recent-unwrapped --lines 200`. Done when every step printed what its comment promised. When a step went wrong, fix the script and replay it from step 2, so the scrollback stays one clean run.
 5. **Report:** list the steps, quote the output line that makes the point, and leave the pane open.
