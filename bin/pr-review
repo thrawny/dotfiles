@@ -185,19 +185,28 @@ team_members() {
 # A review from anyone on the team clears the team's request, which is what
 # takes a reviewed PR out of the first search. Extra repos have no request to
 # clear, so a PR a teammate has reviewed there is left out by hand.
+# Each search takes two or three seconds, so they run side by side.
 review_prs() {
-  local repo repo_query='' members
+  local repo repo_query='' members='[]' dir team_pid extra_pid=''
   for repo in $extra_repos; do
     repo_query+=" repo:$org/$repo"
   done
+  dir=$(mktemp -d "$cache_dir/review.XXXXXX")
+  fetch_dir=$dir
+  echo '[]' >"$dir/extra.json"
+  search_prs "team-review-requested:$team" >"$dir/team.json" &
+  team_pid=$!
   if [[ -n $repo_query ]]; then
+    search_prs "$repo_query" >"$dir/extra.json" &
+    extra_pid=$!
     members=$(team_members) || return 1
   fi
-  {
-    search_prs "team-review-requested:$team"
-    [[ -z $repo_query ]] || search_prs "$repo_query" |
-      jq --argjson members "$members" 'map(select(any(.reviewers[]; IN($members[])) | not))'
-  } | jq -s 'add | unique_by([.repository.name, .number])'
+  wait "$team_pid" || return 1
+  [[ -z $extra_pid ]] || wait "$extra_pid" || return 1
+  jq --argjson members "$members" \
+    'map(select(any(.reviewers[]; IN($members[])) | not))' "$dir/extra.json" |
+    jq -s 'add | unique_by([.repository.name, .number])' "$dir/team.json" -
+  rm -rf "$dir"
 }
 
 # The repos the team owns as a whole, where a CODEOWNERS line for * names it.
@@ -516,8 +525,20 @@ elif ((${#args[@]} != 0)); then
   exit 2
 fi
 
-if ((refresh)) || ! cache_is_fresh "$cache" "$cache_ttl_minutes"; then
+# An out-of-date list opens at once and refreshes in the background, since
+# fetching takes a few seconds. The refresh waits for fzf to load the old rows,
+# then reload-sync keeps them on screen until the new ones are in; unbinding
+# load stops the refresh from setting itself off again. fzf's reload asks for
+# rows, so it waits.
+stale=0
+if ((refresh)); then
   fetch_prs
+elif ! cache_is_fresh "$cache" "$cache_ttl_minutes"; then
+  if ((print_rows)) || [[ ! -s $cache ]]; then
+    fetch_prs
+  else
+    stale=1
+  fi
 fi
 
 build_rows() {
@@ -552,6 +573,12 @@ build_rows() {
 }
 
 rows=$(build_rows)
+# An empty old list would close the picker before the refresh could land.
+if [[ -z $rows ]] && ((stale)); then
+  fetch_prs
+  stale=0
+  rows=$(build_rows)
+fi
 
 if ((print_rows)); then
   printf '%s\n' "$rows"
@@ -572,7 +599,13 @@ fi
 bots_suffix=''
 ((include_bots)) && bots_suffix=' --bots'
 prompt='review> '
-((all)) && prompt='all> '
+all_suffix=''
+if ((all)); then
+  prompt='all> '
+  all_suffix=' --all'
+fi
+start=()
+((stale)) && start=(--bind="load:unbind(load)+reload-sync($self --print-rows --refresh$all_suffix$bots_suffix)")
 
 # The prompt is the only state the picker keeps, so the toggle and the refresh
 # read the current list off it.
@@ -588,7 +621,7 @@ refresh_list="[[ \$FZF_PROMPT == 'all> ' ]] &&
 # the popup closes when the worktree is open, as it does after enter.
 selection=$(fzf --prompt="$prompt" --height=100% --ansi \
   --header='enter review · ctrl-w worktree · ctrl-a all · ctrl-r refresh · ctrl-o github · ctrl-t jira' \
-  --bind="ctrl-a:transform:$toggle" \
+  --bind="ctrl-a:transform:$toggle" "${start[@]}" \
   --bind="ctrl-w:become($self --worktree {1} {2})" \
   --preview="$self --preview {1} {2}" --preview-window=right,55%,wrap \
   --bind="ctrl-r:transform:$refresh_list" \
