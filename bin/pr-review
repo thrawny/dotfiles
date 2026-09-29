@@ -439,8 +439,7 @@ bots_suffix=''
 # ctrl-w gives up fzf's delete-word for the worktree; become() replaces fzf so
 # the popup closes when the worktree is open, as it does after enter.
 selection=$(fzf --prompt='review> ' --height=100% --ansi \
-  --header='review ✓ approved ✗ changes ○ waiting · ci ✓ passing ✗ failing ● running
-enter review · ctrl-w worktree · ctrl-r refresh · ctrl-o github · ctrl-t jira' \
+  --header='enter review · ctrl-w worktree · ctrl-r refresh · ctrl-o github · ctrl-t jira' \
   --bind="ctrl-w:become($self --worktree {1} {2})" \
   --preview="$self --preview {1} {2}" --preview-window=right,55%,wrap \
   --bind="ctrl-r:reload($self --print-rows$bots_suffix)" \
