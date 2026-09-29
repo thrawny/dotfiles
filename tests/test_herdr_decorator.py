@@ -155,7 +155,15 @@ def test_locate_ignores_a_reported_cwd_that_is_gone(
 
 def test_decorate_names_a_checkout_the_agent_moved_to(decorator: ModuleType) -> None:
     pane = decorator.Pane("w1:p1", "/tmp", "claude", moved="widgets \ue0a0 fix")
-    assert decorator.decorate(pane, None) == ({"moved": "→ widgets \ue0a0 fix"}, {})
+    tokens, _ = decorator.decorate(pane, None, workspace="acme")
+    assert tokens == {"where": "→ widgets \ue0a0 fix"}
+
+
+def test_decorate_names_the_workspace_when_the_agent_stayed(
+    decorator: ModuleType,
+) -> None:
+    pane = decorator.Pane("w1:p1", "/tmp", "claude", branch="main")
+    assert decorator.decorate(pane, None, workspace="acme") == ({"where": "acme"}, {})
 
 
 def _git_repo(path: Path) -> Path:

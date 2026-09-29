@@ -284,17 +284,19 @@ in
                 }
               ]
               [
+                # Reported by bin/herdr-decorator: the workspace name, or the
+                # checkout the agent moved to, marked with an arrow. Blank if
+                # the decorator stops.
                 {
-                  token = "workspace";
+                  token = "$where";
                   fg = theme.semantic.muted;
                   dim = false;
-                }
-                # Reported by bin/herdr-decorator only when the agent works in
-                # another checkout than the one it started in.
-                {
-                  token = "$moved";
-                  fg = theme.semantic.warning;
-                  dim = false;
+                  rules = [
+                    {
+                      starts_with = "→";
+                      fg = theme.semantic.warning;
+                    }
+                  ];
                 }
                 {
                   token = "machine";

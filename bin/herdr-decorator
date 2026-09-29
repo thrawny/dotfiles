@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Decorate Herdr agent panes with sidebar tokens: PR state, Jira key, and move.
+"""Decorate Herdr agent panes with sidebar tokens: PR state, Jira key, and place.
 
 One long-lived process. It follows pane changes over Herdr's socket, polls
 GitHub on a timer, and reports values with pane.report_metadata so the agent
-sidebar rows can show them as $pr, $jira and $moved. Every report carries a
+sidebar rows can show them as $pr, $jira and $where. Every report carries a
 TTL, so values expire on their own if this process stops.
 
 Pane state for other tools (for example an "open this PR" action) is written to
@@ -13,8 +13,8 @@ An agent's process cwd is where it was started, which can be a deleted worktree
 or another repo than the one it works in. Agents that know their working
 directory write it to $XDG_STATE_HOME/herdr-decorator/agent-cwd/<pane_id>, and
 that path wins over the process cwd. When it is another checkout than the one
-the agent started in, $moved names it, so a session that wandered off to a
-worktree or another repo stands out next to its workspace name.
+the agent started in, $where names it in place of the workspace name, so a
+session that wandered off to a worktree or another repo stands out.
 """
 
 from __future__ import annotations
@@ -86,6 +86,12 @@ def reported_cwd(pane_id: str) -> str | None:
     except OSError:
         return None
     return cwd if os.path.isdir(cwd) else None
+
+
+def workspace_labels() -> dict[str, str]:
+    """Workspace id → label. Read fresh each time, so a rename shows on the next refresh."""
+    snapshot = request("session.snapshot", {})["snapshot"]
+    return {w["workspace_id"]: w["label"] for w in snapshot["workspaces"]}
 
 
 class HerdrGone(Exception):
@@ -176,6 +182,7 @@ class Pane:
     pane_id: str
     cwd: str | None
     agent: str | None
+    workspace_id: str | None = None
     status: str | None = None
     repo: tuple[str, str] | None = None
     branch: str | None = None
@@ -353,12 +360,17 @@ def jira_browse_url() -> str | None:
 
 
 def decorate(
-    pane: Pane, pr: dict[str, Any] | None, jira_base: str | None = None
+    pane: Pane,
+    pr: dict[str, Any] | None,
+    jira_base: str | None = None,
+    workspace: str | None = None,
 ) -> tuple[dict[str, str], dict[str, str]]:
     tokens: dict[str, str] = {}
     links: dict[str, str] = {}
     if pane.moved:
-        tokens["moved"] = f"→ {pane.moved}"
+        tokens["where"] = f"→ {pane.moved}"
+    elif workspace:
+        tokens["where"] = workspace
     if pr:
         tokens["pr"] = pr_label(pr)
         links["pr"] = pr["url"]
@@ -430,12 +442,17 @@ class Decorator:
         pane = self.panes.get(info["pane_id"])
         if pane is None:
             pane = Pane(
-                info["pane_id"], cwd, info.get("agent"), info.get("agent_status")
+                info["pane_id"],
+                cwd,
+                info.get("agent"),
+                info.get("workspace_id"),
+                info.get("agent_status"),
             )
             self.panes[pane.pane_id] = pane
             locate(pane)
             return pane, True
         pane.agent = info.get("agent")
+        pane.workspace_id = info.get("workspace_id") or pane.workspace_id
         if cwd != pane.cwd:
             pane.cwd = cwd
             locate(pane)
@@ -501,11 +518,13 @@ class Decorator:
         prs = fetch_prs(targets)
         if prs is None:
             return  # keep what is shown; the TTL clears it if GitHub stays down
+        workspaces = workspace_labels()
         changed = 0
         for pane in panes:
             target = (pane.repo, pane.branch) if pane.repo and pane.branch else None
             pr = prs.get(target) if target else None
-            tokens, pane.links = decorate(pane, pr, self.jira_base)
+            workspace = workspaces.get(pane.workspace_id or "")
+            tokens, pane.links = decorate(pane, pr, self.jira_base, workspace)
             if tokens != pane.tokens:
                 changed += 1
                 where = f"{pane.repo[1] if pane.repo else '?'}@{pane.branch or '?'}"
