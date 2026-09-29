@@ -20,7 +20,10 @@ team=$("$work_config" github.review_team) || {
 org=${team%%/*}
 code_dir="${CODE_DIR:-$HOME/code}"
 cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/pr-review"
-cache="$cache_dir/prs.json"
+# The team's repos change far less often than their PRs, and finding them
+# takes a code search, which GitHub limits to a few calls a minute.
+repos_cache="$cache_dir/repos.txt"
+repos_ttl_minutes=1440
 # The search costs about a second and a half, which is long enough to feel in a
 # popup. Stale by a few minutes is fine for a review queue.
 cache_ttl_minutes=5
@@ -38,18 +41,21 @@ review_label=$("$work_config" github.review_label || echo ready-for-review)
 extra_repos=$("$work_config" github.extra_review_repos | tr '\n' ' ' || true)
 
 # Bots open most of the PRs the team is asked to review, and none of them are
-# what this picker is for. -b brings them back for a dependency sweep.
-bot_authors='dependabot[bot] renovate[bot] github-actions[bot]'
+# what this picker is for. -b brings them back for a dependency sweep. GraphQL
+# names a bot without the [bot] that REST adds, so match on the bare name.
+bot_authors='dependabot renovate github-actions'
 
 usage() {
   cat <<'USAGE'
-Usage: pr-review [-r] [-b] [REPO] [NUMBER]
+Usage: pr-review [-r] [-b] [-a] [REPO] [NUMBER]
 
 Pick a ready-for-review PR requesting review from your team (github.review_team
 in the work config) and open it in codediff, in that repo's Herdr workspace.
 
   -r, --refresh   Ignore the cached PR list
   -b, --bots      Include dependabot and other bot PRs
+  -a, --all       List every open PR in the team's repos, reviewed, labelled
+                  or not, your own included. ctrl-a toggles it in the picker
   -j, --jira      Open the Jira ticket for REPO NUMBER instead of reviewing
   -w, --worktree  Check the PR branch out in a Herdr worktree, with Claude Code
                   and Neovim side by side, instead of reviewing
@@ -61,6 +67,7 @@ USAGE
 
 refresh=0
 include_bots=0
+all=0
 print_rows=0
 preview=0
 jira=0
@@ -70,16 +77,14 @@ while (($#)); do
   case "$1" in
     -r | --refresh) refresh=1 ;;
     -b | --bots) include_bots=1 ;;
+    -a | --all) all=1 ;;
     -j | --jira) jira=1 ;;
     -w | --worktree) worktree=1 ;;
     # fzf runs the preview as its own process, so it re-enters the script too.
     --preview) preview=1 ;;
-    # fzf's reload binding re-runs this script for a fresh list, so the row
+    # fzf's reload bindings re-run this script for the list, so the row
     # building has to be reachable without the picker.
-    --print-rows)
-      print_rows=1
-      refresh=1
-      ;;
+    --print-rows) print_rows=1 ;;
     -h | --help)
       usage
       exit 0
@@ -92,6 +97,13 @@ while (($#)); do
   esac
   shift
 done
+
+# Each list has its own cache, so toggling between them is instant.
+if ((all)); then
+  cache="$cache_dir/all.json"
+else
+  cache="$cache_dir/prs.json"
+fi
 
 die() {
   printf 'pr-review: %s\n' "$1" >&2
@@ -118,57 +130,140 @@ for tool in gh jq fzf; do
   command -v "$tool" >/dev/null || die "$tool is not installed"
 done
 
-# gh search prs cannot return a PR's review decision or check status, or say
-# whether its repo has the label, so the search goes through GraphQL. The
-# fields keep the shape gh search prints, plus ready for build_rows to filter
-# on. The label filter runs here rather than in the query, since the query
-# cannot tell a PR that is not ready from a repo without the label.
+# gh search prs cannot return a PR's review decision or check status, so both
+# lists go through GraphQL. The PR fields are shared, and flatten turns them
+# into the shape gh search prints.
+pr_fields='number title isDraft updatedAt reviewDecision
+  author { login }
+  labels(first: 20) { nodes { name } }
+  commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }'
+# shellcheck disable=SC2016 # jq, not shell
+flatten='def flatten:
+  . + { checks: .commits.nodes[0].commit.statusCheckRollup.state }
+  | del(.commits, .labels);'
+
+# The search also says whether the repo has the label, which sets ready for
+# build_rows to filter on. The label filter runs here rather than in the
+# query, since the query cannot tell a PR that is not ready from a repo
+# without the label.
 search_prs() {
   # shellcheck disable=SC2016 # $q and $label are GraphQL variables
   gh api graphql -f q="is:pr is:open -author:@me $1" -f label="$review_label" -f query='
     query($q: String!, $label: String!) {
       search(type: ISSUE, query: $q, first: 100) {
         nodes { ... on PullRequest {
-          number title isDraft updatedAt reviewDecision
           repository { name label(name: $label) { name } }
-          author { login }
-          labels(first: 20) { nodes { name } }
-          commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+          '"$pr_fields"'
         } }
       }
-    }' --jq '.data.search.nodes | map(
-      . + { checks: .commits.nodes[0].commit.statusCheckRollup.state,
-            ready: (.repository.label == null
+    }' --jq "$flatten"' .data.search.nodes | map(
+      . + { ready: (.repository.label == null
                     or (.repository.label.name as $l | any(.labels.nodes[]; .name == $l))) }
-      | del(.commits, .labels, .repository.label))'
+      | del(.repository.label) | flatten)'
+}
+
+# A PR you opened yourself still requests the team, but it is not yours to
+# review. A PR in an extra repo can match both searches, so keep one copy.
+# Without extra repos the second search would cover all of GitHub.
+# A review clears the team's request, which is what takes a reviewed PR out
+# of the first search. Extra repos have no request to clear, so a PR you
+# have reviewed there is left out by hand.
+review_prs() {
+  local repo repo_query=''
+  for repo in $extra_repos; do
+    repo_query+=" repo:$org/$repo"
+  done
+  {
+    search_prs "team-review-requested:$team"
+    [[ -z $repo_query ]] || search_prs "-reviewed-by:@me$repo_query"
+  } | jq -s 'add | unique_by([.repository.name, .number])'
+}
+
+# The repos the team owns as a whole, where a CODEOWNERS line for * names it.
+# The team's own repo list is no use here: it holds every repo the team can
+# write to, and misses repos it owns without access. Code search finds those.
+# A shared repo where the team owns a few paths is mostly other teams' PRs, so
+# it stays out. Extra repos always count.
+discover_repos() {
+  local names name q='' i=0 tmp
+  names=$(gh api -X GET search/code -f per_page=100 \
+    -f q="\"@$team\" org:$org filename:CODEOWNERS" --jq '.items[].repository.name' | sort -u) ||
+    die 'gh code search failed; check gh auth status'
+  for name in $names; do
+    q+=" r$i: repository(owner: \"$org\", name: \"$name\") { name isArchived"
+    q+=' a: object(expression: "HEAD:.github/CODEOWNERS") { ... on Blob { text } }'
+    q+=' b: object(expression: "HEAD:CODEOWNERS") { ... on Blob { text } }'
+    q+=' c: object(expression: "HEAD:docs/CODEOWNERS") { ... on Blob { text } } }'
+    i=$((i + 1))
+  done
+  local owned=''
+  if [[ -n $q ]]; then
+    owned=$(gh api graphql -f query="query {$q }" | jq -r --arg owner "@$team" '
+      .data[] | select(.isArchived | not)
+      | select([.a, .b, .c] | map(.text // "") | join("\n") | split("\n")
+               | any(.[]; (startswith("* ") or startswith("*\t"))
+                          and any(splits("\\s+"); . == $owner)))
+      | .name') || die 'could not read CODEOWNERS; check gh auth status'
+  fi
+  tmp=$(mktemp "$repos_cache.XXXXXX")
+  { printf '%s\n' "$owned"; tr ' ' '\n' <<<"$extra_repos"; } | sed '/^$/d' | sort -u >"$tmp"
+  mv "$tmp" "$repos_cache"
+}
+
+# One query for every repo times GitHub out, so each repo gets its own, all at
+# once. That takes about as long as the slowest repo, a second or two.
+all_prs() {
+  cache_is_fresh "$repos_cache" "$repos_ttl_minutes" || discover_repos
+  local repo dir pid pids=() failed=0
+  dir=$(mktemp -d "$cache_dir/all.XXXXXX")
+  fetch_dir=$dir
+  while IFS= read -r repo; do
+    # shellcheck disable=SC2016 # $owner and $name are GraphQL variables
+    gh api graphql -f owner="$org" -f name="$repo" -f query='
+      query($owner: String!, $name: String!) {
+        repository(owner: $owner, name: $name) {
+          pullRequests(states: OPEN, first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
+            nodes { repository { name } '"$pr_fields"' }
+          }
+        }
+      }' --jq '.data.repository.pullRequests.nodes' >"$dir/$repo.json" &
+    pids+=("$!")
+  done <"$repos_cache"
+  for pid in "${pids[@]}"; do
+    wait "$pid" || failed=1
+  done
+  if ((failed)); then
+    rm -rf "$dir"
+    return 1
+  fi
+  if ((${#pids[@]})); then
+    jq -s "$flatten"' add | map(flatten)' "$dir"/*.json
+  else
+    echo '[]'
+  fi
+  rm -rf "$dir"
 }
 
 fetch_prs() {
   mkdir -p "$cache_dir"
-  local tmp repo repo_query=''
-  tmp=$(mktemp "$cache.XXXXXX")
-  for repo in $extra_repos; do
-    repo_query+=" repo:$org/$repo"
-  done
-  # A PR you opened yourself still requests the team, but it is not yours to
-  # review. A PR in an extra repo can match both searches, so keep one copy.
-  # Without extra repos the second search would cover all of GitHub.
-  # A review clears the team's request, which is what takes a reviewed PR out
-  # of the first search. Extra repos have no request to clear, so a PR you
-  # have reviewed there is left out by hand.
-  if ! {
-    search_prs "team-review-requested:$team"
-    [[ -z $repo_query ]] || search_prs "-reviewed-by:@me$repo_query"
-  } | jq -s 'add | unique_by([.repository.name, .number])' >"$tmp"; then
-    rm -f "$tmp"
-    die 'gh search failed; check gh auth status'
+  fetch_tmp=$(mktemp "$cache.XXXXXX")
+  fetch_dir=''
+  # Closing the popup mid-fetch would otherwise leave the temp files behind.
+  trap 'rm -rf "$fetch_tmp" "$fetch_dir"' EXIT
+  trap 'exit 1' HUP INT TERM
+  if ((all)); then
+    all_prs >"$fetch_tmp" || die 'gh query failed; check gh auth status'
+  else
+    review_prs >"$fetch_tmp" || die 'gh search failed; check gh auth status'
   fi
-  mv "$tmp" "$cache"
+  mv "$fetch_tmp" "$cache"
+  trap - EXIT HUP INT TERM
 }
 
+# Takes the file and its TTL in minutes.
 cache_is_fresh() {
-  [[ -s $cache ]] || return 1
-  [[ -z $(find "$cache" -mmin "+$cache_ttl_minutes" -print 2>/dev/null) ]]
+  [[ -s $1 ]] || return 1
+  [[ -z $(find "$1" -mmin "+$2" -print 2>/dev/null) ]]
 }
 
 open_url() {
@@ -400,19 +495,20 @@ elif ((${#args[@]} != 0)); then
   exit 2
 fi
 
-if ((refresh)) || ! cache_is_fresh; then
+if ((refresh)) || ! cache_is_fresh "$cache" "$cache_ttl_minutes"; then
   fetch_prs
 fi
 
 build_rows() {
-  jq -r --arg bots "$bot_authors" --argjson include_bots "$include_bots" '
-  # Every value in a column gets escapes of the same length, so column still
-  # lines the rows up. An old cache without the fields shows "·", and holds
-  # only labelled PRs, so a missing ready counts as ready.
+  jq -r --arg bots "$bot_authors" --argjson include_bots "$include_bots" --argjson all "$all" '
+  # column counts bytes, so the rows line up only while every icon takes the
+  # same number of bytes and every color code the same number of digits. An
+  # old cache without the fields shows "–", and holds only labelled PRs, so a
+  # missing ready counts as ready. The all list shows every PR, ready or not.
   def paint: "\u001b[\(.[0])m\(.[1])\u001b[0m";
   ($bots | split(" ")) as $bots
-  | map(select(.ready != false))
-  | map(select($include_bots == 1 or (.author.login as $a | $bots | index($a) | not)))
+  | map(select($all == 1 or .ready != false))
+  | map(select($include_bots == 1 or (.author.login | sub("\\[bot\\]$"; "") | IN($bots[]) | not)))
   | sort_by(.updatedAt) | reverse
   | .[]
   | [ .repository.name,
@@ -420,13 +516,13 @@ build_rows() {
       ({ APPROVED: ["32", "✓"],
          CHANGES_REQUESTED: ["31", "✗"],
          REVIEW_REQUIRED: ["33", "○"] }[.reviewDecision // ""]
-        // ["2", "·"] | paint),
+        // ["90", "–"] | paint),
       ({ SUCCESS: ["32", "✓"],
          FAILURE: ["31", "✗"],
          ERROR: ["31", "✗"],
          PENDING: ["33", "●"],
          EXPECTED: ["33", "●"] }[.checks // ""]
-        // ["2", "·"] | paint),
+        // ["90", "–"] | paint),
       (.updatedAt | fromdateiso8601 | strflocaltime("%Y-%m-%d %H:%M")),
       .author.login,
       ((if .isDraft then "[draft] " else "" end) + .title)
@@ -442,7 +538,11 @@ if ((print_rows)); then
 fi
 
 if [[ -z $rows ]]; then
-  echo "No $review_label PRs waiting on $team."
+  if ((all)); then
+    echo "No open PRs in $team's repos."
+  else
+    echo "No $review_label PRs waiting on $team."
+  fi
   # In a popup the message would vanish with the pane before it could be read.
   [[ -t 0 ]] && read -r -n 1 -s -p 'Press any key to close… '
   exit 0
@@ -450,15 +550,27 @@ fi
 
 bots_suffix=''
 ((include_bots)) && bots_suffix=' --bots'
+prompt='review> '
+((all)) && prompt='all> '
+
+# The prompt is the only state the picker keeps, so the toggle and the refresh
+# read the current list off it.
+toggle="[[ \$FZF_PROMPT == 'all> ' ]] &&
+  echo 'change-prompt(review> )+reload($self --print-rows$bots_suffix)' ||
+  echo 'change-prompt(all> )+reload($self --print-rows --all$bots_suffix)'"
+refresh_list="[[ \$FZF_PROMPT == 'all> ' ]] &&
+  echo 'reload($self --print-rows --refresh --all$bots_suffix)' ||
+  echo 'reload($self --print-rows --refresh$bots_suffix)'"
 
 # ctrl-j and ctrl-k move through the list, so the Jira ticket goes on ctrl-t.
 # ctrl-w gives up fzf's delete-word for the worktree; become() replaces fzf so
 # the popup closes when the worktree is open, as it does after enter.
-selection=$(fzf --prompt='review> ' --height=100% --ansi \
-  --header='enter review · ctrl-w worktree · ctrl-r refresh · ctrl-o github · ctrl-t jira' \
+selection=$(fzf --prompt="$prompt" --height=100% --ansi \
+  --header='enter review · ctrl-w worktree · ctrl-a all · ctrl-r refresh · ctrl-o github · ctrl-t jira' \
+  --bind="ctrl-a:transform:$toggle" \
   --bind="ctrl-w:become($self --worktree {1} {2})" \
   --preview="$self --preview {1} {2}" --preview-window=right,55%,wrap \
-  --bind="ctrl-r:reload($self --print-rows$bots_suffix)" \
+  --bind="ctrl-r:transform:$refresh_list" \
   --bind="ctrl-o:execute-silent(gh pr view --repo $org/{1} {2} --web)" \
   --bind="ctrl-t:execute-silent($self --jira {1} {2})" \
   <<<"$rows") || exit 0
