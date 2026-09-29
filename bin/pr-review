@@ -23,6 +23,7 @@ cache_dir="${XDG_CACHE_HOME:-$HOME/.cache}/pr-review"
 # The team's repos change far less often than their PRs, and finding them
 # takes a code search, which GitHub limits to a few calls a minute.
 repos_cache="$cache_dir/repos.txt"
+members_cache="$cache_dir/members.txt"
 repos_ttl_minutes=1440
 # The search costs about a second and a half, which is long enough to feel in a
 # popup. Stale by a few minutes is fine for a review queue.
@@ -153,29 +154,49 @@ search_prs() {
       search(type: ISSUE, query: $q, first: 100) {
         nodes { ... on PullRequest {
           repository { name label(name: $label) { name } }
+          latestReviews(first: 50) { nodes { author { login } } }
           '"$pr_fields"'
         } }
       }
     }' --jq "$flatten"' .data.search.nodes | map(
       . + { ready: (.repository.label == null
-                    or (.repository.label.name as $l | any(.labels.nodes[]; .name == $l))) }
-      | del(.repository.label) | flatten)'
+                    or (.repository.label.name as $l | any(.labels.nodes[]; .name == $l))),
+            reviewers: [.latestReviews.nodes[].author.login] }
+      | del(.repository.label, .latestReviews) | flatten)'
+}
+
+# The team's members change about as often as its repos.
+team_members() {
+  if ! cache_is_fresh "$members_cache" "$repos_ttl_minutes"; then
+    local tmp
+    tmp=$(mktemp "$members_cache.XXXXXX")
+    gh api "orgs/$org/teams/${team#*/}/members" --paginate --jq '.[].login' >"$tmp" || {
+      rm -f "$tmp"
+      return 1
+    }
+    mv "$tmp" "$members_cache"
+  fi
+  jq -R . "$members_cache" | jq -s .
 }
 
 # A PR you opened yourself still requests the team, but it is not yours to
 # review. A PR in an extra repo can match both searches, so keep one copy.
 # Without extra repos the second search would cover all of GitHub.
-# A review clears the team's request, which is what takes a reviewed PR out
-# of the first search. Extra repos have no request to clear, so a PR you
-# have reviewed there is left out by hand.
+# A review from anyone on the team clears the team's request, which is what
+# takes a reviewed PR out of the first search. Extra repos have no request to
+# clear, so a PR a teammate has reviewed there is left out by hand.
 review_prs() {
-  local repo repo_query=''
+  local repo repo_query='' members
   for repo in $extra_repos; do
     repo_query+=" repo:$org/$repo"
   done
+  if [[ -n $repo_query ]]; then
+    members=$(team_members) || return 1
+  fi
   {
     search_prs "team-review-requested:$team"
-    [[ -z $repo_query ]] || search_prs "-reviewed-by:@me$repo_query"
+    [[ -z $repo_query ]] || search_prs "$repo_query" |
+      jq --argjson members "$members" 'map(select(any(.reviewers[]; IN($members[])) | not))'
   } | jq -s 'add | unique_by([.repository.name, .number])'
 }
 
