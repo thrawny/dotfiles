@@ -26,7 +26,7 @@ def test_preferences(config: dict[str, Any]):
     assert config["config-version"] == 2
     for setting in ("start-at-login", "auto-reload-config"):
         assert config[setting] is True
-    assert config["focus-follows-mouse"]["enabled"] is True
+    assert config["focus-follows-mouse"]["enabled"] is False
     assert config["on-focus-changed"] == ["move-mouse window-lazy-center"]
     assert config["on-focused-monitor-changed"] == ["move-mouse monitor-lazy-center"]
     assert config["default-root-container-layout"] == "tiles"
