@@ -393,7 +393,7 @@ fi
 build_rows() {
   jq -r --arg bots "$bot_authors" --argjson include_bots "$include_bots" '
   # Every value in a column gets escapes of the same length, so column still
-  # lines the rows up. An old cache without the fields shows "-".
+  # lines the rows up. An old cache without the fields shows "·".
   def paint: "\u001b[\(.[0])m\(.[1])\u001b[0m";
   ($bots | split(" ")) as $bots
   | map(select($include_bots == 1 or (.author.login as $a | $bots | index($a) | not)))
@@ -401,16 +401,16 @@ build_rows() {
   | .[]
   | [ .repository.name,
       (.number | tostring),
-      ({ APPROVED: ["32", "approved"],
-         CHANGES_REQUESTED: ["31", "changes"],
-         REVIEW_REQUIRED: ["33", "review"] }[.reviewDecision // ""]
-        // ["2", "-"] | paint),
-      ({ SUCCESS: ["32", "passing"],
-         FAILURE: ["31", "failing"],
-         ERROR: ["31", "failing"],
-         PENDING: ["33", "running"],
-         EXPECTED: ["33", "running"] }[.checks // ""]
-        // ["2", "-"] | paint),
+      ({ APPROVED: ["32", "✓"],
+         CHANGES_REQUESTED: ["31", "✗"],
+         REVIEW_REQUIRED: ["33", "○"] }[.reviewDecision // ""]
+        // ["2", "·"] | paint),
+      ({ SUCCESS: ["32", "✓"],
+         FAILURE: ["31", "✗"],
+         ERROR: ["31", "✗"],
+         PENDING: ["33", "●"],
+         EXPECTED: ["33", "●"] }[.checks // ""]
+        // ["2", "·"] | paint),
       (.updatedAt | fromdateiso8601 | strflocaltime("%Y-%m-%d %H:%M")),
       .author.login,
       ((if .isDraft then "[draft] " else "" end) + .title)
@@ -439,7 +439,8 @@ bots_suffix=''
 # ctrl-w gives up fzf's delete-word for the worktree; become() replaces fzf so
 # the popup closes when the worktree is open, as it does after enter.
 selection=$(fzf --prompt='review> ' --height=100% --ansi \
-  --header='enter review · ctrl-w worktree · ctrl-r refresh · ctrl-o github · ctrl-t jira' \
+  --header='review ✓ approved ✗ changes ○ waiting · ci ✓ passing ✗ failing ● running
+enter review · ctrl-w worktree · ctrl-r refresh · ctrl-o github · ctrl-t jira' \
   --bind="ctrl-w:become($self --worktree {1} {2})" \
   --preview="$self --preview {1} {2}" --preview-window=right,55%,wrap \
   --bind="ctrl-r:reload($self --print-rows$bots_suffix)" \
