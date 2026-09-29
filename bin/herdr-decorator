@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Decorate Herdr agent panes with sidebar tokens: PR state and Jira key.
+"""Decorate Herdr agent panes with sidebar tokens: PR state, Jira key, and move.
 
 One long-lived process. It follows pane changes over Herdr's socket, polls
 GitHub on a timer, and reports values with pane.report_metadata so the agent
-sidebar rows can show them as $pr and $jira. Every report carries a
+sidebar rows can show them as $pr, $jira and $moved. Every report carries a
 TTL, so values expire on their own if this process stops.
 
 Pane state for other tools (for example an "open this PR" action) is written to
@@ -12,7 +12,9 @@ $XDG_STATE_HOME/herdr-decorator/panes.json.
 An agent's process cwd is where it was started, which can be a deleted worktree
 or another repo than the one it works in. Agents that know their working
 directory write it to $XDG_STATE_HOME/herdr-decorator/agent-cwd/<pane_id>, and
-that path wins over the process cwd.
+that path wins over the process cwd. When it is another checkout than the one
+the agent started in, $moved names it, so a session that wandered off to a
+worktree or another repo stands out next to its workspace name.
 """
 
 from __future__ import annotations
@@ -177,6 +179,7 @@ class Pane:
     status: str | None = None
     repo: tuple[str, str] | None = None
     branch: str | None = None
+    moved: str | None = None
     tokens: dict[str, str] = field(default_factory=dict)
     links: dict[str, str] = field(default_factory=dict)
 
@@ -197,14 +200,37 @@ def git(cwd: str, *args: str) -> str | None:
 
 def locate(pane: Pane) -> None:
     """Fill in the pane's GitHub repo and branch from its working directory."""
-    pane.repo, pane.branch = None, None
-    cwd = reported_cwd(pane.pane_id) or pane.cwd
+    pane.repo, pane.branch, pane.moved = None, None, None
+    reported = reported_cwd(pane.pane_id)
+    cwd = reported or pane.cwd
     if not cwd or not os.path.isdir(cwd):
         return
     pane.branch = git(cwd, "rev-parse", "--abbrev-ref", "HEAD")
     remote = git(cwd, "remote", "get-url", "origin") or ""
     if match := GITHUB_REMOTE.search(remote):
         pane.repo = (match.group(1), match.group(2))
+    if reported:
+        pane.moved = moved_to(reported, pane.cwd, pane.branch)
+
+
+def moved_to(reported: str, started: str | None, branch: str | None) -> str | None:
+    """Name the checkout the agent works in, if it is not the one it started in.
+
+    A linked worktree gets its branch after the repo name, since the repo alone
+    reads the same as the main checkout.
+    """
+    here = git(reported, "rev-parse", "--show-toplevel")
+    if not here:
+        return None
+    if started and os.path.isdir(started):
+        if git(started, "rev-parse", "--show-toplevel") == here:
+            return None
+    common = git(reported, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    main = os.path.dirname(common) if common else here
+    name = os.path.basename(main)
+    if main != here and branch:
+        return f"{name} \ue0a0 {branch}"
+    return name
 
 
 def dig(value: Any, *keys: str | int) -> Any:
@@ -331,6 +357,8 @@ def decorate(
 ) -> tuple[dict[str, str], dict[str, str]]:
     tokens: dict[str, str] = {}
     links: dict[str, str] = {}
+    if pane.moved:
+        tokens["moved"] = f"→ {pane.moved}"
     if pr:
         tokens["pr"] = pr_label(pr)
         links["pr"] = pr["url"]

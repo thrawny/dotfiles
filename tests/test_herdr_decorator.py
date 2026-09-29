@@ -139,7 +139,7 @@ def test_locate_prefers_the_cwd_the_agent_reported(
     monkeypatch.setattr(decorator, "git", fake_git)
     pane = decorator.Pane("w1:p1", str(tmp_path / "deleted-worktree"), "claude")
     decorator.locate(pane)
-    assert seen == [str(repo), str(repo)]
+    assert seen[:2] == [str(repo), str(repo)]
     assert (pane.repo, pane.branch) == (("acme", "widgets"), "fix-lint")
 
 
@@ -151,3 +151,61 @@ def test_locate_ignores_a_reported_cwd_that_is_gone(
     reported.parent.mkdir(parents=True)
     reported.write_text(str(tmp_path / "gone"))
     assert decorator.reported_cwd("w1:p1") is None
+
+
+def test_decorate_names_a_checkout_the_agent_moved_to(decorator: ModuleType) -> None:
+    pane = decorator.Pane("w1:p1", "/tmp", "claude", moved="widgets \ue0a0 fix")
+    assert decorator.decorate(pane, None) == ({"moved": "→ widgets \ue0a0 fix"}, {})
+
+
+def _git_repo(path: Path) -> Path:
+    import subprocess
+
+    path.mkdir()
+    subprocess.run(["git", "init", "-q", "-b", "main", str(path)], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(path),
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "commit",
+            "-q",
+            "--allow-empty",
+            "-m",
+            "init",
+        ],
+        check=True,
+    )
+    return path
+
+
+def test_moved_to_is_empty_inside_the_starting_checkout(
+    decorator: ModuleType, tmp_path: Path
+) -> None:
+    repo = _git_repo(tmp_path / "widgets")
+    (repo / "src").mkdir()
+    assert decorator.moved_to(str(repo / "src"), str(repo), "main") is None
+
+
+def test_moved_to_names_another_repo(decorator: ModuleType, tmp_path: Path) -> None:
+    start = _git_repo(tmp_path / "widgets")
+    other = _git_repo(tmp_path / "gadgets")
+    assert decorator.moved_to(str(other), str(start), "main") == "gadgets"
+
+
+def test_moved_to_names_a_worktree_by_repo_and_branch(
+    decorator: ModuleType, tmp_path: Path
+) -> None:
+    import subprocess
+
+    repo = _git_repo(tmp_path / "widgets")
+    tree = tmp_path / "trees/fix"
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-q", "-b", "fix", str(tree)],
+        check=True,
+    )
+    assert decorator.moved_to(str(tree), str(repo), "fix") == "widgets \ue0a0 fix"

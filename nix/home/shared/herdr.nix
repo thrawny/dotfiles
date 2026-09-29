@@ -289,6 +289,13 @@ in
                   fg = theme.semantic.muted;
                   dim = false;
                 }
+                # Reported by bin/herdr-decorator only when the agent works in
+                # another checkout than the one it started in.
+                {
+                  token = "$moved";
+                  fg = theme.semantic.warning;
+                  dim = false;
+                }
                 {
                   token = "machine";
                   fg = theme.semantic.muted;
