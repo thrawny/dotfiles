@@ -116,24 +116,35 @@ for tool in gh jq fzf; do
   command -v "$tool" >/dev/null || die "$tool is not installed"
 done
 
+# gh search prs cannot return a PR's review decision or check status, so the
+# search goes through GraphQL. The fields keep the shape gh search prints.
+search_prs() {
+  # shellcheck disable=SC2016 # $q is a GraphQL variable, not a shell one
+  gh api graphql -f q="is:pr is:open label:\"$review_label\" -author:@me $1" -f query='
+    query($q: String!) {
+      search(type: ISSUE, query: $q, first: 100) {
+        nodes { ... on PullRequest {
+          number title isDraft updatedAt reviewDecision
+          repository { name } author { login }
+          commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+        } }
+      }
+    }' --jq '.data.search.nodes | map(. + {checks: .commits.nodes[0].commit.statusCheckRollup.state} | del(.commits))'
+}
+
 fetch_prs() {
   mkdir -p "$cache_dir"
-  local tmp repo repo_flags=()
+  local tmp repo repo_query=''
   tmp=$(mktemp "$cache.XXXXXX")
   for repo in $extra_repos; do
-    repo_flags+=(--repo "$org/$repo")
+    repo_query+=" repo:$org/$repo"
   done
-  # team-review-requested has no gh flag, so it goes in the raw query. -- keeps
-  # gh from reading a leading qualifier as a flag. A PR you opened yourself
-  # still requests the team, but it is not yours to review. A PR in an extra
-  # repo can match both searches, so keep one copy.
+  # A PR you opened yourself still requests the team, but it is not yours to
+  # review. A PR in an extra repo can match both searches, so keep one copy.
+  # Without extra repos the second search would cover all of GitHub.
   if ! {
-    gh search prs --state open --limit 100 --label "$review_label" \
-      --json repository,number,title,author,isDraft,updatedAt \
-      -- "team-review-requested:$team" "-author:@me"
-    gh search prs --state open --limit 100 --label "$review_label" "${repo_flags[@]}" \
-      --json repository,number,title,author,isDraft,updatedAt \
-      -- "-author:@me"
+    search_prs "team-review-requested:$team"
+    [[ -z $repo_query ]] || search_prs "$repo_query"
   } | jq -s 'add | unique_by([.repository.name, .number])' >"$tmp"; then
     rm -f "$tmp"
     die 'gh search failed; check gh auth status'
@@ -381,12 +392,25 @@ fi
 
 build_rows() {
   jq -r --arg bots "$bot_authors" --argjson include_bots "$include_bots" '
+  # Every value in a column gets escapes of the same length, so column still
+  # lines the rows up. An old cache without the fields shows "-".
+  def paint: "\u001b[\(.[0])m\(.[1])\u001b[0m";
   ($bots | split(" ")) as $bots
   | map(select($include_bots == 1 or (.author.login as $a | $bots | index($a) | not)))
   | sort_by(.updatedAt) | reverse
   | .[]
   | [ .repository.name,
       (.number | tostring),
+      ({ APPROVED: ["32", "approved"],
+         CHANGES_REQUESTED: ["31", "changes"],
+         REVIEW_REQUIRED: ["33", "review"] }[.reviewDecision // ""]
+        // ["2", "-"] | paint),
+      ({ SUCCESS: ["32", "passing"],
+         FAILURE: ["31", "failing"],
+         ERROR: ["31", "failing"],
+         PENDING: ["33", "running"],
+         EXPECTED: ["33", "running"] }[.checks // ""]
+        // ["2", "-"] | paint),
       (.updatedAt | fromdateiso8601 | strflocaltime("%Y-%m-%d %H:%M")),
       .author.login,
       ((if .isDraft then "[draft] " else "" end) + .title)
@@ -414,7 +438,7 @@ bots_suffix=''
 # ctrl-j and ctrl-k move through the list, so the Jira ticket goes on ctrl-t.
 # ctrl-w gives up fzf's delete-word for the worktree; become() replaces fzf so
 # the popup closes when the worktree is open, as it does after enter.
-selection=$(fzf --prompt='review> ' --height=100% \
+selection=$(fzf --prompt='review> ' --height=100% --ansi \
   --header='enter review · ctrl-w worktree · ctrl-r refresh · ctrl-o github · ctrl-t jira' \
   --bind="ctrl-w:become($self --worktree {1} {2})" \
   --preview="$self --preview {1} {2}" --preview-window=right,55%,wrap \
