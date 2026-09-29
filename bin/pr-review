@@ -27,12 +27,14 @@ cache_ttl_minutes=5
 herdr_bin="${HERDR_BIN_PATH:-herdr}"
 jira_base=$("$work_config" jira.browse_url || true)
 # Adding this label is what the team uses to say a PR is open for review, so an
-# unlabelled PR is still being worked on and does not belong in the queue.
+# unlabelled PR is still being worked on and does not belong in the queue. The
+# label is a per-team convention, not an org rule, so a repo that has never
+# created it cannot use it; there every PR that asks for a review counts.
 review_label=$("$work_config" github.review_label || echo ready-for-review)
 
 # Repos where CODEOWNERS names the team but the team has no write access, so
 # GitHub never adds it as a reviewer and the team search misses their PRs.
-# Every labelled PR in them joins the queue instead.
+# Every PR in them that is ready for review joins the queue instead.
 extra_repos=$("$work_config" github.extra_review_repos | tr '\n' ' ' || true)
 
 # Bots open most of the PRs the team is asked to review, and none of them are
@@ -116,20 +118,29 @@ for tool in gh jq fzf; do
   command -v "$tool" >/dev/null || die "$tool is not installed"
 done
 
-# gh search prs cannot return a PR's review decision or check status, so the
-# search goes through GraphQL. The fields keep the shape gh search prints.
+# gh search prs cannot return a PR's review decision or check status, or say
+# whether its repo has the label, so the search goes through GraphQL. The
+# fields keep the shape gh search prints, plus ready for build_rows to filter
+# on. The label filter runs here rather than in the query, since the query
+# cannot tell a PR that is not ready from a repo without the label.
 search_prs() {
-  # shellcheck disable=SC2016 # $q is a GraphQL variable, not a shell one
-  gh api graphql -f q="is:pr is:open label:\"$review_label\" -author:@me $1" -f query='
-    query($q: String!) {
+  # shellcheck disable=SC2016 # $q and $label are GraphQL variables
+  gh api graphql -f q="is:pr is:open -author:@me $1" -f label="$review_label" -f query='
+    query($q: String!, $label: String!) {
       search(type: ISSUE, query: $q, first: 100) {
         nodes { ... on PullRequest {
           number title isDraft updatedAt reviewDecision
-          repository { name } author { login }
+          repository { name label(name: $label) { name } }
+          author { login }
+          labels(first: 20) { nodes { name } }
           commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
         } }
       }
-    }' --jq '.data.search.nodes | map(. + {checks: .commits.nodes[0].commit.statusCheckRollup.state} | del(.commits))'
+    }' --jq '.data.search.nodes | map(
+      . + { checks: .commits.nodes[0].commit.statusCheckRollup.state,
+            ready: (.repository.label == null
+                    or (.repository.label.name as $l | any(.labels.nodes[]; .name == $l))) }
+      | del(.commits, .labels, .repository.label))'
 }
 
 fetch_prs() {
@@ -393,9 +404,11 @@ fi
 build_rows() {
   jq -r --arg bots "$bot_authors" --argjson include_bots "$include_bots" '
   # Every value in a column gets escapes of the same length, so column still
-  # lines the rows up. An old cache without the fields shows "·".
+  # lines the rows up. An old cache without the fields shows "·", and holds
+  # only labelled PRs, so a missing ready counts as ready.
   def paint: "\u001b[\(.[0])m\(.[1])\u001b[0m";
   ($bots | split(" ")) as $bots
+  | map(select(.ready != false))
   | map(select($include_bots == 1 or (.author.login as $a | $bots | index($a) | not)))
   | sort_by(.updatedAt) | reverse
   | .[]
