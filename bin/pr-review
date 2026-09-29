@@ -153,9 +153,12 @@ fetch_prs() {
   # A PR you opened yourself still requests the team, but it is not yours to
   # review. A PR in an extra repo can match both searches, so keep one copy.
   # Without extra repos the second search would cover all of GitHub.
+  # A review clears the team's request, which is what takes a reviewed PR out
+  # of the first search. Extra repos have no request to clear, so a PR you
+  # have reviewed there is left out by hand.
   if ! {
     search_prs "team-review-requested:$team"
-    [[ -z $repo_query ]] || search_prs "$repo_query"
+    [[ -z $repo_query ]] || search_prs "-reviewed-by:@me$repo_query"
   } | jq -s 'add | unique_by([.repository.name, .number])' >"$tmp"; then
     rm -f "$tmp"
     die 'gh search failed; check gh auth status'
