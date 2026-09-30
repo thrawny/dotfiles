@@ -350,13 +350,13 @@ in
             # blue/yellow axis only. Herdr colors agent states from these
             # slots (idle=green, working=yellow, blocked=red, done=teal), so
             # the slot names no longer match their colors. Idle goes gray,
-            # working blue, blocked yellow and done white. Online endpoints and
+            # working blue, blocked yellow and done green. Online endpoints and
             # installed integrations also use green, so they go gray too.
             green = theme.semantic.muted;
             yellow = theme.syntax.type;
             red = theme.syntax.function;
             blue = theme.syntax.type;
-            teal = theme.semantic.foreground;
+            teal = theme.semantic.success;
             peach = theme.semantic.warning;
           };
         };
