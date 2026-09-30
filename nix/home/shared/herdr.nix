@@ -4,7 +4,6 @@
   lib,
   pkgs,
   theme,
-  zmx,
   ...
 }:
 
@@ -12,7 +11,6 @@ let
   inherit (pkgs.stdenv.hostPlatform) system;
   hmLib = lib.hm;
   herdrPackage = herdr.packages.${system}.default;
-  zmxPackage = zmx.packages.${system}.zmx-main;
   pluginRoot = "${config.home.homeDirectory}/dotfiles/config/herdr";
   pluginDir = "${pluginRoot}/plugins";
   extraPlugins = map (name: "${pluginRoot}/extra-plugins/${name}") config.dotfiles.herdr.extraPlugins;
@@ -72,20 +70,6 @@ in
       type = "plugin_action";
       command = "thrawny.palette.open";
       description = "Command palette";
-    }
-    {
-      # A popup is session-modal, so this scratchpad is global rather than per
-      # workspace. Herdr respawns the popup command on every open and routes
-      # every key to it until it exits, so persistence has to come from the
-      # command: zmx reattaches the same session, keeping the shell, its
-      # scrollback, and anything still running. Detach with ctrl+\, which also
-      # closes the popup.
-      key = "super+s";
-      type = "popup";
-      command = "${zmxPackage}/bin/zmx attach scratch";
-      width = "80%";
-      height = "80%";
-      description = "Scratchpad terminal";
     }
   ];
 

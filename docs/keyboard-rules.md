@@ -59,7 +59,7 @@ These are follow-up work, not approved exceptions. Recording them does not autho
 - Linux xremap translates Alt+Super+I to Ctrl+Shift+I for developer tools outside Ghostty. This conflicts with WM ownership of Alt+Cmd.
 - Ghostty removes selected default bindings rather than clearing them all. Audit the effective defaults on both platforms, including native menu shortcuts, before claiming it only handles transport, selection, clipboard, and zoom.
 
-Known platform differences are not necessarily ownership violations. Hyprland's Alt+number selects by current workspace order, while AeroSpace uses fixed workspace names. Alt+F requests layout-aware maximization in Hyprland and AeroSpace fullscreen on macOS. AeroSpace deliberately leaves several actions unbound, including workspace cycling and scratchpads. Treat these as differences to account for, not evidence of exact cross-platform behavior.
+Known platform differences are not necessarily ownership violations. Hyprland's Alt+number selects by current workspace order, while AeroSpace uses fixed workspace names. Alt+F requests layout-aware maximization in Hyprland and AeroSpace fullscreen on macOS. AeroSpace deliberately leaves several actions unbound, including workspace cycling and scratchpads. On macOS, Ghostty's quick terminal takes Alt+Q instead, so the scratch terminal key matches Hyprland. Treat these as differences to account for, not evidence of exact cross-platform behavior.
 
 ## When changing bindings
 

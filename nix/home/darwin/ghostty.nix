@@ -22,5 +22,11 @@
     font-thicken-strength = 50;
     window-padding-y = lib.mkForce 2;
     macos-option-as-alt = true;
+    # Alt+Q toggles a dropdown scratch terminal from any app, the same key as
+    # the Hyprland scratchpad. Hiding it keeps the shell running until Ghostty
+    # quits. A global keybind needs macOS Accessibility permission.
+    quick-terminal-position = "center";
+    quick-terminal-autohide = true;
+    keybind = [ "global:alt+q=toggle_quick_terminal" ];
   };
 }
