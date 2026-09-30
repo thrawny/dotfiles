@@ -12,8 +12,11 @@
 #
 # Only the default branch is ever updated, and only by fast-forward. A repo
 # sitting on a feature branch keeps that branch checked out and its worktree
-# untouched; the fetch moves the local default branch behind its back. So
-# nothing here switches branches, rewrites history, or touches a dirty tree.
+# untouched; the fetch moves the local default branch behind its back. The one
+# exception is a branch whose PR has merged: the repo switches to the freshly
+# updated default branch and the merged branch is deleted, as long as the tree
+# is clean and the branch holds nothing the PR did not. Nothing here rewrites
+# history or touches a dirty tree.
 #
 # The updates are plain git rather than `gita pull`, because gita pull only
 # knows how to pull the checked-out branch. `gita` is still what holds the repo
@@ -33,6 +36,9 @@ then fast-forward each one's default branch. Checkouts with no remote are left
 out, and repos outside $CODE_DIR are left alone.
 
 A repo on some other branch stays on it: only its local default branch moves.
+If that branch's PR has merged, the repo switches to the default branch and
+deletes the merged one, unless the tree is dirty or the branch has commits the
+PR did not.
 
   -n  Print what would change and what would be updated, change nothing.
   -s  Print the status table (gita ll) when finished.
@@ -95,7 +101,7 @@ error_line() {
 # that is not on its default branch. Answers one question: is there anything on
 # this branch that the default branch does not already have.
 branch_report() {
-  local repo=$1 default=$2 branch=$3 counts behind ahead pr
+  local repo=$1 default=$2 branch=$3 counts behind ahead
   if [[ $branch == '-' ]]; then
     printf 'detached HEAD\n'
     return
@@ -111,23 +117,57 @@ branch_report() {
     printf 'merged into %s, branch can go\n' "$default"
     return
   fi
-  # A squash merge rewrites the commits, so the branch stays ahead of the
-  # default branch forever and ancestry can never see that the work landed. The
-  # PR state can, when gh is installed. A miss here is cheap: the count below
-  # is still true, it just does not say the work is already in.
-  if [[ $have_gh == true ]]; then
-    pr=$(cd "$repo" && gh pr list --head "$branch" --state merged --limit 1 \
-      --json number --jq '.[0].number' 2>/dev/null) || pr=''
-    if [[ -n $pr ]]; then
-      printf 'PR #%s merged, branch can go\n' "$pr"
-      return
-    fi
-  fi
   if ((behind > 0)); then
     printf '%s ahead, %s behind %s\n' "$ahead" "$behind" "$default"
   else
     printf '%s ahead of %s\n' "$ahead" "$default"
   fi
+}
+
+# Leave a branch whose PR has merged: switch to the default branch, which the
+# fetch has just brought up to date, and delete the branch. Prints a note and
+# returns 0 when it did, prints why not and returns 1 when the PR merged but the
+# branch stays, and returns 2 with no output when there is no merged PR.
+#
+# The PR state is the only reliable signal. A squash merge rewrites the commits,
+# so the branch stays ahead of the default branch forever and ancestry never
+# sees that the work landed. Branches without a PR are never touched.
+retire_branch() {
+  local repo=$1 default=$2 branch=$3 pr number head_oid tip log
+  [[ $have_gh == true ]] || return 2
+  pr=$(cd "$repo" && gh pr list --head "$branch" --state merged --limit 1 \
+    --json number,headRefOid --jq '.[0] // empty | "\(.number) \(.headRefOid)"' \
+    2>/dev/null) || return 2
+  [[ -n $pr ]] || return 2
+  number=${pr%% *}
+  head_oid=${pr#* }
+
+  # A branch name can be reused after its PR merged, or get commits pushed
+  # later. Delete only when every local commit is in what the PR merged. If git
+  # does not have the PR's head commit, the ancestry check fails and the branch
+  # stays.
+  tip=$(git -C "$repo" rev-parse HEAD)
+  if [[ $tip != "$head_oid" ]] &&
+    ! git -C "$repo" merge-base --is-ancestor "$tip" "$head_oid" 2>/dev/null; then
+    printf 'PR #%s merged, but the branch has commits the PR did not, kept\n' "$number"
+    return 1
+  fi
+  if [[ -n $(git -C "$repo" status --porcelain) ]]; then
+    printf 'PR #%s merged, but the tree has uncommitted changes, kept\n' "$number"
+    return 1
+  fi
+  if ! log=$(git -C "$repo" switch --quiet "$default" 2>&1); then
+    printf 'PR #%s merged, but switching to %s failed: %s\n' \
+      "$number" "$default" "$(error_line "$log")"
+    return 1
+  fi
+  # -D rather than -d: after a squash merge git cannot tell the branch is merged.
+  if ! log=$(git -C "$repo" branch -D "$branch" 2>&1); then
+    printf 'PR #%s merged, switched to %s, but deleting %s failed: %s\n' \
+      "$number" "$default" "$branch" "$(error_line "$log")"
+    return 0
+  fi
+  printf 'PR #%s merged, switched to %s and deleted %s\n' "$number" "$default" "$branch"
 }
 
 # Where a repo is sitting, for the report. A detached HEAD has no branch name
@@ -142,13 +182,16 @@ where_clause() {
 }
 
 # Fast-forward one repo's default branch, then write a single tab-separated
-# line: result, default branch, checked-out branch, commits gained, and a note
-# (the branch report, or the git error for a failure). Runs in a background
+# line: result, default branch, checked-out branch, commits gained, whether a
+# merged branch was retired (yes or -), and a note (the branch report, or the
+# git error for a failure). The retired field is never empty, because read
+# collapses consecutive tabs and would shift the note into it. Runs in a background
 # subshell, so that line is how it reports rather than globals or an exit code.
 update_repo() {
   local repo=$1 default head_branch before after log exit_code=0 gained note result
+  local retired=- retire_status
   if ! default=$(default_branch "$repo"); then
-    printf 'failed\t-\t-\t0\torigin/HEAD is unset and there is no origin/main or origin/master\n'
+    printf 'failed\t-\t-\t0\t-\torigin/HEAD is unset and there is no origin/main or origin/master\n'
     return
   fi
 
@@ -181,7 +224,7 @@ update_repo() {
   if ((exit_code != 0)); then
     # One line, not the transcript: 45 repos' worth of git output buries
     # everything else the sweep has to say.
-    printf 'failed\t%s\t%s\t0\t%s\n' "$default" "$head_branch" "$(error_line "$log")"
+    printf 'failed\t%s\t%s\t0\t-\t%s\n' "$default" "$head_branch" "$(error_line "$log")"
     return
   fi
 
@@ -198,11 +241,20 @@ update_repo() {
   fi
 
   note=''
-  if [[ $head_branch != "$default" ]]; then
+  if [[ $head_branch != "$default" && $head_branch != '-' ]]; then
+    retire_status=0
+    note=$(retire_branch "$repo" "$default" "$head_branch") || retire_status=$?
+    if ((retire_status == 0)); then
+      retired=yes
+      head_branch=$default
+    fi
+  fi
+  if [[ $head_branch != "$default" && -z $note ]]; then
     note=$(branch_report "$repo" "$default" "$head_branch")
   fi
 
-  printf '%s\t%s\t%s\t%s\t%s\n' "$result" "$default" "$head_branch" "$gained" "$note"
+  printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
+    "$result" "$default" "$head_branch" "$gained" "$retired" "$note"
 }
 
 dry_run=false
@@ -372,9 +424,10 @@ updated=0
 current=0
 failed=0
 off_default=0
+retired_count=0
 for i in "${!names[@]}"; do
   result=''
-  IFS=$'\t' read -r result default head_branch gained note <"$scratch/$i.out" || true
+  IFS=$'\t' read -r result default head_branch gained retired note <"$scratch/$i.out" || true
   case $result in
     updated | current | failed) ;;
     *)
@@ -391,7 +444,10 @@ for i in "${!names[@]}"; do
       ;;
     updated)
       updated=$((updated + 1))
-      if [[ -n $note ]]; then
+      if [[ $retired == yes ]]; then
+        retired_count=$((retired_count + 1))
+        printf '  %-30s %s +%s, %s\n' "${names[i]}" "$default" "$gained" "$note"
+      elif [[ -n $note ]]; then
         off_default=$((off_default + 1))
         printf '  %-30s %s +%s, %s\n' \
           "${names[i]}" "$default" "$gained" "$(where_clause "$head_branch" "$note")"
@@ -403,7 +459,10 @@ for i in "${!names[@]}"; do
       current=$((current + 1))
       # A repo on its default branch with nothing to pull says nothing worth a
       # line. One parked on another branch does.
-      if [[ -n $note ]]; then
+      if [[ $retired == yes ]]; then
+        retired_count=$((retired_count + 1))
+        printf '  %-30s %s\n' "${names[i]}" "$note"
+      elif [[ -n $note ]]; then
         off_default=$((off_default + 1))
         printf '  %-30s %s\n' "${names[i]}" "$(where_clause "$head_branch" "$note")"
       fi
@@ -411,8 +470,8 @@ for i in "${!names[@]}"; do
   esac
 done
 
-printf 'code-sync: %d updated, %d already current, %d failed, %d not on the default branch\n' \
-  "$updated" "$current" "$failed" "$off_default"
+printf 'code-sync: %d updated, %d already current, %d failed, %d not on the default branch, %d merged branch(es) cleaned up\n' \
+  "$updated" "$current" "$failed" "$off_default" "$retired_count"
 
 if [[ $show_status == true ]]; then
   printf '\n'
