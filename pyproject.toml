@@ -12,6 +12,7 @@ include = [
   ".",
   "bin/private-skills-sync",
   "bin/fork-window",
+  "bin/spawn-session",
   "bin/desktop-broker",
   "bin/shell-clipboard-image",
   "bin/herdr-decorator",
@@ -51,6 +52,7 @@ reportImplicitOverride = false
 extend-include = [
   "bin/private-skills-sync",
   "bin/fork-window",
+  "bin/spawn-session",
   "bin/desktop-broker",
   "bin/shell-clipboard-image",
   "bin/herdr-decorator",

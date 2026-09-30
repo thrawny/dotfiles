@@ -35,6 +35,8 @@ Use [`t3ctl`](docs/t3ctl.md) to control T3 Code on obelisk from agents or script
 
 Use `!fork-window` in Claude or Codex, or `/fork-window` in Pi, to fork the current conversation into a Herdr tab or a new Ghostty window on Hyprland without a model turn in the original session. The fork shares the checkout, acknowledges a fork notice, and waits for instructions. From a terminal, use `fork-window pi /path/to/session.jsonl`, `fork-window claude <session-uuid>`, or `fork-window codex <session-uuid>`. Container sandboxes are not supported.
 
+Use `/spawn <task>` in Claude to start a new session in a Herdr tab that begins work on a task from the current conversation. A fork of the conversation writes the task brief and picks the repo and worktree, then runs `spawn-session`, which opens the tab and starts the agent.
+
 ```bash
 just switch   # Apply config (NixOS, nix-darwin, or Home Manager)
 just check    # Format, lint, evaluate

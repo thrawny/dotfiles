@@ -1,0 +1,289 @@
+#!/usr/bin/env python3
+"""Start a new agent session in a Herdr tab and give it a task brief.
+
+The brief is read from stdin. The session opens in the repo's Herdr workspace,
+or in a linked worktree workspace with --worktree, and starts on the brief
+right away.
+"""
+
+import argparse
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from pathlib import Path
+from typing import Any
+
+CODE_DIR = Path.home() / "code"
+# Local files a fresh worktree needs but git does not carry, as in git-worktree-new.
+LOCAL_FILES = r"^\.(env|env\..*|envrc|envrc\..*|secrets.*)$"
+NAME_PATTERN = re.compile(r"[a-z][a-z0-9_-]{0,31}")
+
+
+class SpawnError(Exception):
+    pass
+
+
+def run(args: list[str], cwd: Path | None = None, timeout: int = 30) -> str:
+    result = subprocess.run(
+        args, cwd=cwd, capture_output=True, text=True, timeout=timeout, check=False
+    )
+    if result.returncode:
+        raise SpawnError(
+            result.stderr.strip() or result.stdout.strip() or f"{args[0]} failed"
+        )
+    return result.stdout
+
+
+def herdr_text(*args: str, timeout: int = 30) -> str:
+    binary = os.environ.get("HERDR_BIN_PATH") or shutil.which("herdr")
+    if not binary:
+        raise SpawnError("Required executable not found: herdr")
+    return run([binary, *args], timeout=timeout)
+
+
+def herdr(*args: str, timeout: int = 30) -> dict[str, Any]:
+    output = herdr_text(*args, timeout=timeout)
+    try:
+        return json.loads(output)["result"]
+    except (ValueError, KeyError, TypeError) as error:
+        raise SpawnError(f"herdr {args[0]} {args[1]} returned no result") from error
+
+
+def resolve_repo(repo: str | None) -> Path:
+    if repo is None:
+        start = Path.cwd()
+    elif "/" in repo or repo.startswith("~"):
+        start = Path(repo).expanduser()
+    else:
+        start = CODE_DIR / repo
+    if not start.is_dir():
+        raise SpawnError(f"Repository not found: {start}")
+    try:
+        root = run(["git", "rev-parse", "--show-toplevel"], cwd=start).strip()
+    except SpawnError as error:
+        raise SpawnError(f"Not a git repository: {start}") from error
+    return Path(root).resolve()
+
+
+def default_base(repo: Path) -> str | None:
+    """The remote default branch, fetched, so a worktree never starts from a stale or feature HEAD."""
+    try:
+        ref = run(
+            ["git", "symbolic-ref", "--short", "refs/remotes/origin/HEAD"], cwd=repo
+        ).strip()
+    except SpawnError:
+        return None
+    try:
+        run(
+            ["git", "fetch", "--quiet", "origin", ref.removeprefix("origin/")],
+            cwd=repo,
+            timeout=60,
+        )
+    except (SpawnError, subprocess.TimeoutExpired):
+        pass
+    return ref
+
+
+def copy_local_files(source: Path, target: Path) -> None:
+    fd = shutil.which("fd")
+    found = (
+        run([fd, "-H", "-I", "-0", "-t", "f", "-E", ".git", LOCAL_FILES, str(source)])
+        if fd
+        else ""
+    )
+    files = [Path(p) for p in found.split("\0") if p]
+    files.append(source / ".claude/settings.local.json")
+    for file in files:
+        if file.is_file():
+            destination = target / file.relative_to(source)
+            if not destination.exists():
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(file, destination)
+
+
+def allow_direnv(worktree: Path) -> bool:
+    """Allow a new worktree's .envrc; the checkout it comes from is already allowed."""
+    envrc = worktree / ".envrc"
+    direnv = shutil.which("direnv")
+    if not direnv or not envrc.is_file():
+        return False
+    run([direnv, "allow", str(envrc)])
+    return True
+
+
+def open_tab(workspace: str, cwd: Path) -> dict[str, Any]:
+    return herdr(
+        "tab", "create", "--workspace", workspace, "--cwd", str(cwd), "--no-focus"
+    )["root_pane"]
+
+
+def repo_pane(repo: Path) -> dict[str, Any]:
+    """A new tab in the repo's main-checkout workspace, creating the workspace if needed."""
+    caller = os.environ.get("HERDR_WORKSPACE_ID")
+    if caller and Path.cwd().resolve().is_relative_to(repo):
+        return open_tab(caller, repo)
+    for workspace in herdr("workspace", "list")["workspaces"]:
+        worktree: dict[str, Any] = workspace.get("worktree") or {}
+        checkout: str | None = worktree.get("checkout_path")
+        if checkout and Path(checkout).resolve() == repo:
+            return open_tab(workspace["workspace_id"], repo)
+    return herdr(
+        "workspace", "create", "--cwd", str(repo), "--label", repo.name, "--no-focus"
+    )["root_pane"]
+
+
+def worktree_pane(repo: Path, branch: str, base: str | None) -> dict[str, Any]:
+    """A pane in the branch's linked worktree workspace, creating the worktree if needed."""
+    listing = herdr("worktree", "list", "--cwd", str(repo))["worktrees"]
+    existing = next((w for w in listing if w.get("branch") == branch), None)
+    if existing and existing.get("open_workspace_id"):
+        pane = open_tab(existing["open_workspace_id"], Path(existing["path"]))
+    elif existing:
+        pane = herdr(
+            "worktree", "open", "--cwd", str(repo), "--branch", branch, "--no-focus"
+        )["root_pane"]
+    else:
+        args = [
+            "worktree",
+            "create",
+            "--cwd",
+            str(repo),
+            "--branch",
+            branch,
+            "--no-focus",
+        ]
+        base = base or default_base(repo)
+        if base:
+            args += ["--base", base]
+        pane = herdr(*args, timeout=120)["root_pane"]
+        copy_local_files(repo, Path(pane["cwd"]))
+    if allow_direnv(Path(pane["cwd"])):
+        # The shell may already be at a prompt that ran the hook while .envrc was blocked.
+        herdr_text("pane", "send-keys", pane["pane_id"], "enter")
+    return pane
+
+
+def start_agent(name: str, kind: str, pane: str) -> None:
+    """Start the agent, accepting Claude's folder trust prompt for a new worktree path."""
+    deadline = time.monotonic() + 60
+    while True:
+        try:
+            herdr(
+                "agent",
+                "start",
+                name,
+                "--kind",
+                kind,
+                "--pane",
+                pane,
+                "--timeout",
+                "60000",
+                timeout=90,
+            )
+            return
+        except SpawnError as error:
+            # A new pane's shell can still be loading direnv or the prompt.
+            if "agent_pane_busy" in str(error) and time.monotonic() < deadline:
+                time.sleep(1)
+                continue
+            if "agent_not_ready" not in str(error):
+                raise
+            break
+    screen = herdr_text("agent", "read", name, "--source", "visible")
+    if "Yes, I trust this folder" not in screen:
+        raise SpawnError(f"Agent {name} is blocked during startup")
+    herdr_text("agent", "send-keys", name, "down", "enter")
+    herdr("agent", "wait", name, "--until", "idle", "--timeout", "60000", timeout=90)
+
+
+def agent_name(requested: str | None, fallback: str) -> str:
+    if requested:
+        if not NAME_PATTERN.fullmatch(requested):
+            raise SpawnError(
+                f"Agent name must match {NAME_PATTERN.pattern}: {requested}"
+            )
+        return requested
+    base = re.sub(r"[^a-z0-9_-]+", "-", fallback.lower()).strip("-_")
+    if not base or not base[0].isalpha():
+        base = f"agent-{base}".rstrip("-")
+    base = base[:28]
+    taken = {a.get("name") for a in herdr("agent", "list")["agents"]}
+    name, suffix = base, 2
+    while name in taken:
+        name, suffix = f"{base}-{suffix}", suffix + 1
+    return name
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--repo", help=f"Repo name under {CODE_DIR} or a path; default: current repo"
+    )
+    parser.add_argument(
+        "--worktree", metavar="BRANCH", help="Work in a linked worktree"
+    )
+    parser.add_argument(
+        "--base", help="Base ref for a new worktree; default: origin/HEAD"
+    )
+    parser.add_argument("--name", help="Herdr agent name; default: from branch or repo")
+    parser.add_argument("--kind", default="claude", help="Herdr agent kind")
+    parser.add_argument(
+        "--focus", action="store_true", help="Switch to the new session"
+    )
+    args = parser.parse_args()
+    try:
+        if os.environ.get("SANDBOX") == "1":
+            raise SpawnError(
+                "Unavailable inside the container sandbox; run from the host"
+            )
+        if os.environ.get("HERDR_ENV") != "1":
+            raise SpawnError("Not running inside Herdr")
+        brief = sys.stdin.read().strip()
+        if not brief:
+            raise SpawnError("Pass the task brief on stdin")
+        repo = resolve_repo(args.repo)
+        pane = (
+            worktree_pane(repo, args.worktree, args.base)
+            if args.worktree
+            else repo_pane(repo)
+        )
+        name = agent_name(args.name, args.worktree or repo.name)
+        location = f"{pane['workspace_id']} tab {pane['tab_id']} at {pane['cwd']}"
+        try:
+            start_agent(name, args.kind, pane["pane_id"])
+            herdr(
+                "agent",
+                "prompt",
+                name,
+                brief,
+                "--wait",
+                "--until",
+                "working",
+                "--timeout",
+                "30000",
+                timeout=60,
+            )
+        except (SpawnError, subprocess.TimeoutExpired) as error:
+            raise SpawnError(
+                f"Launch in {location} was not confirmed; inspect it before retrying: {error}"
+            ) from error
+        if args.focus:
+            herdr("agent", "focus", name)
+        print(f"Started {args.kind} agent {name} in {location}")
+        return 0
+    except subprocess.TimeoutExpired:
+        print(
+            "spawn-session: Herdr timed out; inspect it before retrying.",
+            file=sys.stderr,
+        )
+    except (SpawnError, OSError) as error:
+        print(f"spawn-session: {error}", file=sys.stderr)
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
