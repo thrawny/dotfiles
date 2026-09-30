@@ -133,7 +133,7 @@ test-t3ctl:
     @just test-python tests/test_t3ctl.py
 
 # Run all tests
-test: test-display-recover test-fork-window test-spawn-session test-orch test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills test-remote-mode
+test: test-display-recover test-fork-window test-spawn-session test-moto test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills test-remote-mode
 
 # Session forking, exact session selection, and desktop routing
 test-fork-window:
@@ -143,8 +143,8 @@ test-fork-window:
 test-spawn-session:
     @just test-python tests/test_spawn_session.py
 
-test-orch:
-    @just test-python tests/test_orch.py
+test-moto:
+    @just test-python tests/test_moto.py
 
 # Validate private-skill behavior and the host opt-in list
 check-private-skills: test-private-skills nix::check-private-skills
@@ -226,7 +226,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: test-display-recover lint typecheck pi test-fork-window test-spawn-session test-orch check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv test-remote-mode check-private-skills nix::eval
+check-parallel: test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv test-remote-mode check-private-skills nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

@@ -16,8 +16,8 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 @pytest.fixture
-def orch() -> ModuleType:
-    loader = SourceFileLoader("orch", str(ROOT / "bin/orch"))
+def moto() -> ModuleType:
+    loader = SourceFileLoader("moto", str(ROOT / "bin/moto"))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
@@ -55,125 +55,125 @@ def live(status: str, seq: int, pane_id: str = "w1:p1") -> dict[str, dict[str, A
     }
 
 
-def test_turn_end_wakes_once(orch: ModuleType):
+def test_turn_end_wakes_once(moto: ModuleType):
     tasks = {"abc-1": task()}
-    assert orch.check(tasks, live("working", 1), 0) == []
-    assert orch.check(tasks, live("done", 2), 0) == [
+    assert moto.check(tasks, live("working", 1), 0) == []
+    assert moto.check(tasks, live("done", 2), 0) == [
         "abc-1: turn ended without a report"
     ]
-    assert orch.check(tasks, live("done", 2), 0) == []
+    assert moto.check(tasks, live("done", 2), 0) == []
 
 
-def test_looking_at_a_done_worker_is_not_news(orch: ModuleType):
+def test_looking_at_a_done_worker_is_not_news(moto: ModuleType):
     tasks = {"abc-1": task(seen={"status": "done", "seq": 2})}
-    assert orch.check(tasks, live("idle", 3), 0) == []
+    assert moto.check(tasks, live("idle", 3), 0) == []
 
 
-def test_watched_turn_that_ends_idle_wakes(orch: ModuleType):
+def test_watched_turn_that_ends_idle_wakes(moto: ModuleType):
     tasks = {"abc-1": task()}
-    assert orch.check(tasks, live("idle", 2), 0) == [
+    assert moto.check(tasks, live("idle", 2), 0) == [
         "abc-1: turn ended without a report"
     ]
 
 
-def test_turn_that_ended_while_nobody_watched_wakes(orch: ModuleType):
+def test_turn_that_ended_while_nobody_watched_wakes(moto: ModuleType):
     # Answered in its tab, then finished, all between two watches.
     tasks = {"abc-1": task(seen={"status": "done", "seq": 2})}
-    assert orch.check(tasks, live("done", 4), 0) == [
+    assert moto.check(tasks, live("done", 4), 0) == [
         "abc-1: turn ended without a report"
     ]
 
 
-def test_report_waits_for_the_turn_to_end(orch: ModuleType):
+def test_report_waits_for_the_turn_to_end(moto: ModuleType):
     report = {"kind": "question", "text": "Which base?", "at": 100.0}
     tasks = {"abc-1": task(report=report)}
-    assert orch.check(tasks, live("working", 1), 105) == []
-    assert orch.check(tasks, live("done", 2), 106) == ["abc-1 question: Which base?"]
-    assert orch.check(tasks, live("done", 2), 107) == []
+    assert moto.check(tasks, live("working", 1), 105) == []
+    assert moto.check(tasks, live("done", 2), 106) == ["abc-1 question: Which base?"]
+    assert moto.check(tasks, live("done", 2), 107) == []
 
 
-def test_report_from_a_turn_that_runs_on_wakes_after_settling(orch: ModuleType):
+def test_report_from_a_turn_that_runs_on_wakes_after_settling(moto: ModuleType):
     report = {"kind": "blocked", "text": "no creds", "at": 100.0}
     tasks = {"abc-1": task(report=report)}
-    settled = 100 + orch.REPORT_SETTLE_SECONDS
-    assert orch.check(tasks, live("working", 1), settled) == ["abc-1 blocked: no creds"]
+    settled = 100 + moto.REPORT_SETTLE_SECONDS
+    assert moto.check(tasks, live("working", 1), settled) == ["abc-1 blocked: no creds"]
 
 
-def test_prompt_and_closed_pane_wake(orch: ModuleType):
+def test_prompt_and_closed_pane_wake(moto: ModuleType):
     tasks = {"abc-1": task()}
-    assert orch.check(tasks, live("blocked", 2), 0) == [
+    assert moto.check(tasks, live("blocked", 2), 0) == [
         "abc-1 blocked: waiting at an approval or question prompt"
     ]
-    assert orch.check(tasks, {}, 0) == ["abc-1: pane closed"]
-    assert orch.check(tasks, {}, 0) == []
+    assert moto.check(tasks, {}, 0) == ["abc-1: pane closed"]
+    assert moto.check(tasks, {}, 0) == []
 
 
-def test_unknown_state_is_skipped(orch: ModuleType):
+def test_unknown_state_is_skipped(moto: ModuleType):
     tasks = {"abc-1": task()}
-    assert orch.check(tasks, live("unknown", 2), 0) == []
+    assert moto.check(tasks, live("unknown", 2), 0) == []
     assert tasks["abc-1"]["seen"] == {"status": "working"}
 
 
-def test_report_finds_its_task_by_pane_and_keeps_the_pr(orch: ModuleType):
-    with orch.tasks_for_update() as tasks:
+def test_report_finds_its_task_by_pane_and_keeps_the_pr(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
         tasks["abc-1"] = task()
     args = argparse.Namespace(
         kind="done", text=["PR", "https://github.com/o/r/pull/7", "ready"], agent=None
     )
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
-        assert orch.cmd_report(args) == 0
-    saved = orch.read_tasks()["abc-1"]
+        assert moto.cmd_report(args) == 0
+    saved = moto.read_tasks()["abc-1"]
     assert saved["report"]["kind"] == "done"
     assert saved["pr"] == "https://github.com/o/r/pull/7"
 
 
 def test_report_from_an_untracked_pane_tells_the_worker_to_ask_directly(
-    orch: ModuleType, capsys: pytest.CaptureFixture[str]
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
 ):
     args = argparse.Namespace(kind="done", text=["x"], agent=None)
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w9:p9"}):
-        assert orch.cmd_report(args) == 0
+        assert moto.cmd_report(args) == 0
     assert "Tell the user directly" in capsys.readouterr().out
-    assert orch.read_tasks() == {}
+    assert moto.read_tasks() == {}
 
 
-def test_held_task_never_wakes(orch: ModuleType):
+def test_held_task_never_wakes(moto: ModuleType):
     report = {"kind": "question", "text": "Which base?", "at": 100.0}
     tasks = {"abc-1": task(held=True, report=report)}
-    assert orch.check(tasks, live("done", 2), 200) == []
-    assert orch.check(tasks, {}, 200) == []
+    assert moto.check(tasks, live("done", 2), 200) == []
+    assert moto.check(tasks, {}, 200) == []
 
 
-def test_resume_treats_what_happened_while_held_as_seen(orch: ModuleType):
+def test_resume_treats_what_happened_while_held_as_seen(moto: ModuleType):
     report = {"kind": "question", "text": "Which base?", "at": 100.0}
     tasks = {"abc-1": task(held=True, report=report)}
-    orch.resume(tasks["abc-1"], live("done", 5))
+    moto.resume(tasks["abc-1"], live("done", 5))
     assert tasks["abc-1"]["held"] is False
-    assert orch.check(tasks, live("done", 5), 200) == []
-    assert orch.check(tasks, live("done", 7), 200) == [
+    assert moto.check(tasks, live("done", 5), 200) == []
+    assert moto.check(tasks, live("done", 7), 200) == [
         "abc-1: turn ended without a report"
     ]
 
 
 def test_watch_with_only_held_tasks_exits(
-    orch: ModuleType, capsys: pytest.CaptureFixture[str]
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
 ):
-    with orch.tasks_for_update() as tasks:
+    with moto.tasks_for_update() as tasks:
         tasks["abc-1"] = task(held=True)
-    with patch.object(orch, "live_agents", side_effect=AssertionError("no poll")):
-        assert orch.cmd_watch(argparse.Namespace(timeout=5)) == 0
+    with patch.object(moto, "live_agents", side_effect=AssertionError("no poll")):
+        assert moto.cmd_watch(argparse.Namespace(timeout=5)) == 0
     assert "1 held by the user" in capsys.readouterr().out
 
 
-def test_failed_update_writes_nothing(orch: ModuleType, state_home: Path):
-    with pytest.raises(orch.OrchError):
-        with orch.tasks_for_update() as tasks:
+def test_failed_update_writes_nothing(moto: ModuleType, state_home: Path):
+    with pytest.raises(moto.MotoError):
+        with moto.tasks_for_update() as tasks:
             tasks["abc-1"] = task()
-            raise orch.OrchError("boom")
-    assert not (state_home / "orch/tasks.json").exists()
+            raise moto.MotoError("boom")
+    assert not (state_home / "moto/tasks.json").exists()
 
 
-def test_spawn_adds_the_report_footer_and_records_the_task(orch: ModuleType):
+def test_spawn_adds_the_report_footer_and_records_the_task(moto: ModuleType):
     details = {
         "agent": "abc-1",
         "repo": "/code/widgets",
@@ -188,9 +188,9 @@ def test_spawn_adds_the_report_footer_and_records_the_task(orch: ModuleType):
     )
     with (
         patch("sys.stdin.read", return_value="Fix it."),
-        patch.object(orch, "run", return_value=json.dumps(details)) as run,
+        patch.object(moto, "run", return_value=json.dumps(details)) as run,
     ):
-        assert orch.cmd_spawn(args) == 0
+        assert moto.cmd_spawn(args) == 0
     command = run.call_args.args[0]
     assert command == [
         "spawn-session",
@@ -201,9 +201,9 @@ def test_spawn_adds_the_report_footer_and_records_the_task(orch: ModuleType):
         "ABC-1-fix",
     ]
     assert run.call_args.kwargs["stdin"].startswith(
-        "Fix it.\n\norch started this session"
+        "Fix it.\n\nA driver session started you"
     )
-    assert orch.read_tasks()["abc-1"]["seen"] == {"status": "working"}
+    assert moto.read_tasks()["abc-1"]["seen"] == {"status": "working"}
 
 
 def git(cwd: Path, *args: str) -> None:
@@ -233,19 +233,19 @@ def pushed_clone(tmp_path: Path) -> Path:
     return clone
 
 
-def test_pushed_clean_checkout_is_safe_to_remove(orch: ModuleType, pushed_clone: Path):
-    assert orch.unsaved_work(str(pushed_clone)) is None
+def test_pushed_clean_checkout_is_safe_to_remove(moto: ModuleType, pushed_clone: Path):
+    assert moto.unsaved_work(str(pushed_clone)) is None
 
 
-def test_uncommitted_changes_block_removal(orch: ModuleType, pushed_clone: Path):
+def test_uncommitted_changes_block_removal(moto: ModuleType, pushed_clone: Path):
     (pushed_clone / "new.txt").write_text("x")
     assert (
-        orch.unsaved_work(str(pushed_clone)) == "the worktree has uncommitted changes"
+        moto.unsaved_work(str(pushed_clone)) == "the worktree has uncommitted changes"
     )
 
 
 def test_unpushed_commits_block_removal_unless_merged(
-    orch: ModuleType, pushed_clone: Path
+    moto: ModuleType, pushed_clone: Path
 ):
     git(
         pushed_clone,
@@ -265,7 +265,7 @@ def test_unpushed_commits_block_removal_unless_merged(
         text=True,
         check=True,
     ).stdout.strip()
-    real_run = orch.run
+    real_run = moto.run
 
     def fake_gh(pr: dict[str, str]):
         def run(args: list[str], **kwargs: Any) -> str:
@@ -273,10 +273,10 @@ def test_unpushed_commits_block_removal_unless_merged(
 
         return run
 
-    with patch.object(orch, "run", fake_gh({"state": "OPEN", "headRefOid": head})):
+    with patch.object(moto, "run", fake_gh({"state": "OPEN", "headRefOid": head})):
         assert (
-            orch.unsaved_work(str(pushed_clone))
+            moto.unsaved_work(str(pushed_clone))
             == "1 commit is on no remote and in no merged PR"
         )
-    with patch.object(orch, "run", fake_gh({"state": "MERGED", "headRefOid": head})):
-        assert orch.unsaved_work(str(pushed_clone)) is None
+    with patch.object(moto, "run", fake_gh({"state": "MERGED", "headRefOid": head})):
+        assert moto.unsaved_work(str(pushed_clone)) is None

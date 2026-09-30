@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Decorate Herdr agent panes with sidebar tokens: PR state, Jira key, place,
-and an orch worker's open question.
+and a moto worker's open question.
 
 One long-lived process. It follows pane changes over Herdr's socket, polls
 GitHub on a timer, and reports values with pane.report_metadata so the agent
@@ -17,8 +17,8 @@ that path wins over the process cwd. When it is another checkout than the one
 the agent started in, $where names it in place of the workspace name, so a
 session that wandered off to a worktree or another repo stands out.
 
-A worker that bin/orch started reports questions and blockers to
-$XDG_STATE_HOME/orch/tasks.json, and $orch shows the latest one while the worker
+A worker that bin/moto started reports questions and blockers to
+$XDG_STATE_HOME/moto/tasks.json, and $moto shows the latest one while the worker
 waits. It clears once the worker starts working again.
 """
 
@@ -64,8 +64,8 @@ PR_MARKS = {
     "approved": "\uf42e",  # oct-check
 }
 # Only reports that wait on the user; a done report's PR already has a token.
-ORCH_MARKS = {"question": "?", "blocked": "!"}
-ORCH_NOTE_CHARS = 60
+MOTO_MARKS = {"question": "?", "blocked": "!"}
+MOTO_NOTE_CHARS = 60
 
 
 def log(message: str) -> None:
@@ -87,33 +87,33 @@ def state_file() -> Path:
     return state_dir() / "panes.json"
 
 
-def orch_reports() -> dict[str, dict[str, Any]]:
-    """Pane id → the last report its orch worker made, if it waits on the user."""
+def moto_reports() -> dict[str, dict[str, Any]]:
+    """Pane id → the last report its moto worker made, if it waits on the user."""
     base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
     try:
         tasks: dict[str, dict[str, Any]] = json.loads(
-            (Path(base) / "orch/tasks.json").read_text()
+            (Path(base) / "moto/tasks.json").read_text()
         )["tasks"]
     except (OSError, ValueError, KeyError, TypeError):
         return {}
     reports: dict[str, dict[str, Any]] = {}
     for task in tasks.values():
         report: dict[str, Any] = task.get("report") or {}
-        if report.get("kind") in ORCH_MARKS and task.get("pane_id"):
+        if report.get("kind") in MOTO_MARKS and task.get("pane_id"):
             reports[task["pane_id"]] = report
     return reports
 
 
-def orch_note(pane: Pane, report: dict[str, Any] | None) -> str | None:
+def moto_note(pane: Pane, report: dict[str, Any] | None) -> str | None:
     """The sidebar note for a waiting worker, or None once it has moved on."""
     if not report or pane.status == "working":
         return None
     if pane.working_since is not None and pane.working_since > report.get("at", 0):
         return None
     text = str(report.get("text", ""))
-    if len(text) > ORCH_NOTE_CHARS:
-        text = text[: ORCH_NOTE_CHARS - 1] + "…"
-    return f"{ORCH_MARKS[report['kind']]} {text}"
+    if len(text) > MOTO_NOTE_CHARS:
+        text = text[: MOTO_NOTE_CHARS - 1] + "…"
+    return f"{MOTO_MARKS[report['kind']]} {text}"
 
 
 def reported_cwd(pane_id: str) -> str | None:
@@ -408,7 +408,7 @@ def decorate(
     tokens: dict[str, str] = {}
     links: dict[str, str] = {}
     if note:
-        tokens["orch"] = note
+        tokens["moto"] = note
     if pane.moved:
         tokens["where"] = f"→ {pane.moved}"
     elif workspace:
@@ -519,9 +519,9 @@ class Decorator:
             if pane.status == "working":
                 pane.working_since = time.time()
                 # An answered question should not wait for the next GitHub poll.
-                if "orch" in pane.tokens:
+                if "moto" in pane.tokens:
                     self.report(
-                        pane, {k: v for k, v in pane.tokens.items() if k != "orch"}
+                        pane, {k: v for k, v in pane.tokens.items() if k != "moto"}
                     )
             # A finished turn is when a push or `gh pr create` has usually just happened.
             if previous == "working" and pane.status in ("idle", "done", "blocked"):
@@ -568,13 +568,13 @@ class Decorator:
         if prs is None:
             return  # keep what is shown; the TTL clears it if GitHub stays down
         workspaces = workspace_labels()
-        reports = orch_reports()
+        reports = moto_reports()
         changed = 0
         for pane in panes:
             target = (pane.repo, pane.branch) if pane.repo and pane.branch else None
             pr = prs.get(target) if target else None
             workspace = workspaces.get(pane.workspace_id or "")
-            note = orch_note(pane, reports.get(pane.pane_id))
+            note = moto_note(pane, reports.get(pane.pane_id))
             tokens, pane.links = decorate(pane, pr, self.jira_base, workspace, note)
             if tokens != pane.tokens:
                 changed += 1

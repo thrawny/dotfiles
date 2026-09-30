@@ -220,18 +220,18 @@ def test_moved_to_names_a_worktree_by_repo_and_branch(
     assert decorator.moved_to(str(tree), str(repo), "fix") == "widgets \ue0a0 fix"
 
 
-def write_orch_tasks(state_home: Path, tasks: dict[str, Any]) -> None:
-    path = state_home / "orch/tasks.json"
+def write_moto_tasks(state_home: Path, tasks: dict[str, Any]) -> None:
+    path = state_home / "moto/tasks.json"
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps({"tasks": tasks}))
 
 
-def test_orch_reports_keep_only_what_waits_on_the_user(
+def test_moto_reports_keep_only_what_waits_on_the_user(
     decorator: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
     question = {"kind": "question", "text": "Which base?", "at": 10.0}
-    write_orch_tasks(
+    write_moto_tasks(
         tmp_path,
         {
             "a": {"pane_id": "w1:p1", "report": question},
@@ -242,30 +242,30 @@ def test_orch_reports_keep_only_what_waits_on_the_user(
             "c": {"pane_id": "w1:p3", "report": None},
         },
     )
-    assert decorator.orch_reports() == {"w1:p1": question}
+    assert decorator.moto_reports() == {"w1:p1": question}
 
 
-def test_orch_reports_without_a_task_file_is_empty(
+def test_moto_reports_without_a_task_file_is_empty(
     decorator: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    assert decorator.orch_reports() == {}
+    assert decorator.moto_reports() == {}
 
 
-def test_orch_note_shows_while_the_worker_waits(decorator: ModuleType) -> None:
+def test_moto_note_shows_while_the_worker_waits(decorator: ModuleType) -> None:
     pane = decorator.Pane("w1:p1", "/code/widgets", "claude", status="done")
     report = {"kind": "blocked", "text": "x" * 80, "at": 10.0}
-    note = decorator.orch_note(pane, report)
+    note = decorator.moto_note(pane, report)
     assert note is not None and note.startswith("! x") and len(note) == 62
     tokens, _ = decorator.decorate(pane, None, note="? Which base?")
-    assert tokens["orch"] == "? Which base?"
+    assert tokens["moto"] == "? Which base?"
 
 
-def test_orch_note_clears_once_the_worker_moves_on(decorator: ModuleType) -> None:
+def test_moto_note_clears_once_the_worker_moves_on(decorator: ModuleType) -> None:
     report = {"kind": "question", "text": "Which base?", "at": 10.0}
     working = decorator.Pane("w1:p1", None, "claude", status="working")
-    assert decorator.orch_note(working, report) is None
+    assert decorator.moto_note(working, report) is None
     answered = decorator.Pane(
         "w1:p1", None, "claude", status="done", working_since=20.0
     )
-    assert decorator.orch_note(answered, report) is None
+    assert decorator.moto_note(answered, report) is None

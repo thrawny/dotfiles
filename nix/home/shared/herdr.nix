@@ -60,11 +60,11 @@ in
       description = "Jump to the agent that needs you most";
     }
     {
-      # Shift widens super+o's "who needs me" to the orchestrator itself.
+      # Shift widens super+o's "who needs me" to the driver session.
       key = "super+shift+o";
       type = "shell";
-      command = "orch focus";
-      description = "Jump to the orch session";
+      command = "moto focus";
+      description = "Jump to the driver session";
     }
     {
       key = "super+p";
@@ -297,10 +297,10 @@ in
                 }
               ]
               [
-                # Reported by bin/herdr-decorator from bin/orch: the question or
+                # Reported by bin/herdr-decorator from bin/moto: the question or
                 # blocker a worker is waiting on. Yellow, because it needs you.
                 {
-                  token = "$orch";
+                  token = "$moto";
                   fg = theme.syntax.function;
                   bold = true;
                   dim = false;
