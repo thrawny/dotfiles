@@ -48,6 +48,14 @@ in
 
   config.dotfiles.herdr.commands = [
     {
+      # Pressing the prefix twice already sends a literal ctrl+a. This adds
+      # tmux's send-prefix on prefix+a.
+      key = "prefix+a";
+      type = "shell";
+      command = ''"$HERDR_BIN_PATH" pane send-keys "$HERDR_ACTIVE_PANE_ID" ctrl+a'';
+      description = "Send ctrl+a to the pane";
+    }
+    {
       key = "super+o";
       type = "plugin_action";
       command = "thrawny.next-agent.focus";

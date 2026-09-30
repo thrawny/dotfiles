@@ -45,7 +45,7 @@ These are intentional departures from the ownership defaults, not blanket permis
 | Cmd+Shift+3/4/5, Print variants | OS screenshots | Keep screenshot chords available across environments. Exact capture behavior can differ. |
 | Media, volume, and brightness keys | OS hardware controls | These remain global. |
 | Cmd+Q | Application quit, where supported | Preserve the conventional quit action rather than reusing it for pane or tab operations. |
-| Ctrl+A in Herdr | Prefix | Keep prefix-based access alongside direct Cmd shortcuts. This is an explicit exception to Ctrl passthrough. |
+| Ctrl+A in Herdr | Prefix | Keep prefix-based access alongside direct Cmd shortcuts. This is an explicit exception to Ctrl passthrough. Ctrl+A twice, or Ctrl+A then A, sends a literal Ctrl+A to the pane. |
 | Ctrl+Shift+H/L in Herdr | Previous/next tab | Keep the familiar tab shortcuts without taking unshifted Ctrl+H/L from pane programs. Cmd+H/L do the same and follow the ownership rule. |
 | Right Alt+P and right Super+P on Linux | Global dictation | Right-side modifiers deliberately override normal ownership. Use left Cmd/Super+P for Herdr's project picker. |
 
