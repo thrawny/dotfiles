@@ -236,9 +236,21 @@ in
                     token = "state_icon";
                     dim = false;
                   }
+                  # Colors come from the palette slots remapped in theme.custom.
+                  # Bold marks the states that wait on you.
                   {
                     token = "state_text";
                     dim = false;
+                    rules = [
+                      {
+                        equals = "blocked";
+                        bold = true;
+                      }
+                      {
+                        equals = "done";
+                        bold = true;
+                      }
+                    ];
                   }
                 ]
                 ++ lib.optional config.dotfiles.herdr.showAgentName {
@@ -252,10 +264,11 @@ in
               [
                 # The icon's shape is the PR's state and the mark after the
                 # number is checks and review; see PR_ICONS in the decorator.
-                # Waiting on review or checks keeps the default yellow.
+                # Waiting on review or checks stays gray. Yellow means it needs
+                # you, blue means approved, purple is GitHub's merged color.
                 {
                   token = "$pr";
-                  fg = theme.semantic.warning;
+                  fg = theme.semantic.muted;
                   dim = false;
                   rules = [
                     {
@@ -264,30 +277,31 @@ in
                     }
                     {
                       starts_with = "";
-                      fg = theme.semantic.muted;
+                      fg = theme.semantic.dim;
                     }
                     {
                       starts_with = "";
-                      fg = theme.semantic.muted;
+                      fg = theme.semantic.dim;
                     }
                     {
                       contains = "";
-                      fg = theme.semantic.error;
+                      fg = theme.syntax.function;
                       bold = true;
                     }
                     {
                       contains = "±";
-                      fg = theme.semantic.error;
+                      fg = theme.syntax.function;
+                      bold = true;
                     }
                     {
                       contains = "";
-                      fg = theme.semantic.success;
+                      fg = theme.syntax.type;
                     }
                   ];
                 }
                 {
                   token = "$jira";
-                  fg = theme.syntax.type;
+                  fg = theme.semantic.muted;
                   dim = false;
                 }
               ]
@@ -302,7 +316,7 @@ in
                   rules = [
                     {
                       starts_with = "→";
-                      fg = theme.semantic.warning;
+                      fg = theme.semantic.foreground;
                     }
                   ];
                 }
@@ -332,11 +346,17 @@ in
             text = theme.semantic.foreground;
             subtext0 = theme.semantic.muted;
             mauve = theme.semantic.accentAlt;
-            green = theme.semantic.success;
-            yellow = theme.syntax.function;
-            red = theme.semantic.error;
+            # Red-green color-blind safe: color means "look here", on a
+            # blue/yellow axis only. Herdr colors agent states from these
+            # slots (idle=green, working=yellow, blocked=red, done=teal), so
+            # the slot names no longer match their colors. Idle goes gray,
+            # working blue, blocked yellow and done white. Online endpoints and
+            # installed integrations also use green, so they go gray too.
+            green = theme.semantic.muted;
+            yellow = theme.syntax.type;
+            red = theme.syntax.function;
             blue = theme.syntax.type;
-            teal = theme.syntax.type;
+            teal = theme.semantic.foreground;
             peach = theme.semantic.warning;
           };
         };
