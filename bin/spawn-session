@@ -234,6 +234,9 @@ def main() -> int:
     parser.add_argument(
         "--focus", action="store_true", help="Switch to the new session"
     )
+    parser.add_argument(
+        "--json", action="store_true", help="Print the new session's details as JSON"
+    )
     args = parser.parse_args()
     try:
         if os.environ.get("SANDBOX") == "1":
@@ -273,7 +276,20 @@ def main() -> int:
             ) from error
         if args.focus:
             herdr("agent", "focus", name)
-        print(f"Started {args.kind} agent {name} in {location}")
+        if args.json:
+            details = {
+                "agent": name,
+                "kind": args.kind,
+                "repo": str(repo),
+                "branch": args.worktree,
+                "cwd": pane["cwd"],
+                "pane_id": pane["pane_id"],
+                "tab_id": pane["tab_id"],
+                "workspace_id": pane["workspace_id"],
+            }
+            print(json.dumps(details))
+        else:
+            print(f"Started {args.kind} agent {name} in {location}")
         return 0
     except subprocess.TimeoutExpired:
         print(

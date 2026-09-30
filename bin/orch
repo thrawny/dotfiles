@@ -1,0 +1,494 @@
+#!/usr/bin/env python3
+"""Track the worker sessions an orchestrator session starts in Herdr.
+
+orch is a Claude session that hands each task to a worker: a Claude session in
+its own Herdr tab, usually in its own worktree. This command is orch's toolbelt.
+It starts workers, lists them with their live Herdr state, takes reports from
+workers, waits until a worker needs orch, and cleans up after a merge.
+
+Tasks live in $XDG_STATE_HOME/orch/tasks.json. herdr-decorator reads the same
+file to show a worker's open question under its sidebar row.
+"""
+
+from __future__ import annotations
+
+import argparse
+import fcntl
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from collections.abc import Generator
+from contextlib import contextmanager
+from pathlib import Path
+from typing import Any
+
+ORCH_HOME = Path(os.environ.get("ORCH_HOME") or Path.home() / "code/orch")
+POLL_SECONDS = 2.0
+WATCH_TIMEOUT = 1800
+# A report lands a moment before the worker's turn ends. Holding it back this
+# long lets the turn end first, so one wake covers both.
+REPORT_SETTLE_SECONDS = 20
+REPORT_KINDS = ("done", "question", "blocked")
+PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
+
+BRIEF_FOOTER = """\
+orch started this session and tracks it for the user. When a turn ends with \
+the task finished, with a question only the user can answer, or with the work \
+blocked, make your last action `orch report done|question|blocked "<one line>"`. \
+Put the PR URL in a done line when there is one. The user merges every PR, so \
+stop once yours is ready."""
+
+
+class OrchError(Exception):
+    pass
+
+
+def state_dir() -> Path:
+    base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    return Path(base) / "orch"
+
+
+def run(
+    args: list[str],
+    cwd: str | Path | None = None,
+    timeout: int = 30,
+    stdin: str | None = None,
+) -> str:
+    try:
+        result = subprocess.run(
+            args,
+            cwd=cwd,
+            input=stdin,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+            check=False,
+        )
+    except FileNotFoundError as error:
+        raise OrchError(f"Required executable not found: {args[0]}") from error
+    if result.returncode:
+        raise OrchError(
+            result.stderr.strip() or result.stdout.strip() or f"{args[0]} failed"
+        )
+    return result.stdout
+
+
+def herdr(*args: str, timeout: int = 30) -> dict[str, Any]:
+    binary = os.environ.get("HERDR_BIN_PATH") or shutil.which("herdr") or "herdr"
+    output = run([binary, *args], timeout=timeout)
+    try:
+        return json.loads(output)["result"]
+    except (ValueError, KeyError, TypeError) as error:
+        raise OrchError(f"herdr {' '.join(args[:2])} returned no result") from error
+
+
+def live_agents() -> dict[str, dict[str, Any]]:
+    """Herdr's agents by pane id."""
+    return {a["pane_id"]: a for a in herdr("agent", "list")["agents"]}
+
+
+def read_tasks() -> dict[str, dict[str, Any]]:
+    try:
+        data = json.loads((state_dir() / "tasks.json").read_text())
+    except FileNotFoundError:
+        return {}
+    except ValueError as error:
+        raise OrchError(f"{state_dir() / 'tasks.json'} is not valid JSON") from error
+    return data.get("tasks", {})
+
+
+@contextmanager
+def tasks_for_update() -> Generator[dict[str, dict[str, Any]]]:
+    """The task table under an exclusive lock, written back on exit if it changed."""
+    directory = state_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    with open(directory / "tasks.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        tasks = read_tasks()
+        before = json.dumps(tasks, sort_keys=True)
+        yield tasks
+        if json.dumps(tasks, sort_keys=True) != before:
+            path = directory / "tasks.json"
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"tasks": tasks}, indent=2) + "\n")
+            tmp.replace(path)
+
+
+def find_task(tasks: dict[str, dict[str, Any]], agent: str) -> dict[str, Any]:
+    if agent not in tasks:
+        raise OrchError(f"No orch task named {agent}")
+    return tasks[agent]
+
+
+def decorator_links() -> dict[str, dict[str, str]]:
+    """Pane id → the PR and Jira links herdr-decorator found for it."""
+    base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
+    try:
+        panes = json.loads((Path(base) / "herdr-decorator/panes.json").read_text())
+    except (OSError, ValueError):
+        return {}
+    return {pane_id: info.get("links") or {} for pane_id, info in panes.items()}
+
+
+def age(seconds: float) -> str:
+    seconds = max(0, int(seconds))
+    for unit, size in (("d", 86400), ("h", 3600), ("m", 60)):
+        if seconds >= size:
+            return f"{seconds // size}{unit}"
+    return f"{seconds}s"
+
+
+def cmd_spawn(args: argparse.Namespace) -> int:
+    brief = sys.stdin.read().strip()
+    if not brief:
+        raise OrchError("Pass the task brief on stdin")
+    command = ["spawn-session", "--json", "--repo", args.repo]
+    for flag in ("worktree", "base", "name"):
+        if value := getattr(args, flag):
+            command += [f"--{flag}", value]
+    # Worktree creation, agent startup and the first prompt each wait on Herdr.
+    output = run(command, timeout=600, stdin=f"{brief}\n\n{BRIEF_FOOTER}\n")
+    try:
+        info: dict[str, Any] = json.loads(output)
+    except ValueError as error:
+        raise OrchError(f"spawn-session printed no JSON: {output.strip()}") from error
+    with tasks_for_update() as tasks:
+        tasks[info["agent"]] = {
+            "agent": info["agent"],
+            "repo": info["repo"],
+            "branch": info.get("branch"),
+            "pane_id": info["pane_id"],
+            "workspace_id": info["workspace_id"],
+            "tab_id": info["tab_id"],
+            "cwd": info["cwd"],
+            "started": time.time(),
+            "report": None,
+            "pr": None,
+            "seen": {"status": "working"},
+        }
+    where = f"{Path(info['repo']).name} {info.get('branch') or '(main checkout)'}"
+    print(f"Started {info['agent']} on {where}")
+    return 0
+
+
+def cmd_list(args: argparse.Namespace) -> int:
+    tasks = read_tasks()
+    try:
+        live: dict[str, dict[str, Any]] | None = live_agents()
+    except OrchError:
+        live = None
+    links = decorator_links()
+    now = time.time()
+    rows: list[dict[str, Any]] = []
+    for name, task in sorted(tasks.items()):
+        agent = live.get(task["pane_id"]) if live is not None else None
+        status = (
+            "unknown" if live is None else (agent or {}).get("agent_status", "gone")
+        )
+        pr = task.get("pr") or links.get(task["pane_id"], {}).get("pr")
+        rows.append({**task, "name": name, "status": status, "pr": pr})
+    if args.json:
+        print(json.dumps(rows, indent=2))
+        return 0
+    if not rows:
+        print("No orch tasks.")
+        return 0
+    if live is None:
+        print("Herdr is unavailable, so live states are unknown.")
+    for row in rows:
+        branch = row.get("branch") or "main checkout"
+        print(f"{row['name']} · {Path(row['repo']).name} · {branch} · {row['status']}")
+        if row["pr"]:
+            print(f"  PR: {row['pr']}")
+        if report := row.get("report"):
+            ago = age(now - report["at"])
+            print(f"  {report['kind']} ({ago} ago): {report['text']}")
+    return 0
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    pane_id = os.environ.get("HERDR_PANE_ID")
+    text = " ".join(args.text).strip()
+    with tasks_for_update() as tasks:
+        if args.agent:
+            task = find_task(tasks, args.agent)
+        else:
+            task = next((t for t in tasks.values() if t["pane_id"] == pane_id), None)
+            if task is None:
+                raise OrchError("This pane is not an orch task; pass --agent")
+        task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
+        if match := PR_URL.search(text):
+            task["pr"] = match.group(0)
+    print(f"Reported {args.kind} to orch.")
+    return 0
+
+
+def check(
+    tasks: dict[str, dict[str, Any]], live: dict[str, dict[str, Any]], now: float
+) -> list[str]:
+    """One line per task that needs orch, updating each task's seen marker.
+
+    A worker needs orch when it reports, when its turn ends, when it waits at a
+    prompt, and when its pane closes. Herdr's state_change_seq catches a turn
+    that ended while nothing was watching. A done worker that someone looked at
+    turns idle, and that is not news.
+    """
+    lines: list[str] = []
+    for name, task in sorted(tasks.items()):
+        seen: dict[str, Any] = task.setdefault("seen", {})
+        report: dict[str, Any] | None = task.get("report")
+        fresh = report is not None and report["at"] != seen.get("report_at")
+        agent = live.get(task["pane_id"])
+        status = agent.get("agent_status") if agent else "gone"
+        seq = agent.get("state_change_seq") if agent else None
+        if status == "unknown":
+            continue
+        if status == "working":
+            changed = False
+            fresh = (
+                fresh
+                and report is not None
+                and now - report["at"] >= REPORT_SETTLE_SECONDS
+            )
+        elif status == "gone":
+            changed = seen.get("status") != "gone"
+        elif status == "idle":
+            changed = seen.get("status") == "working"
+        else:
+            changed = seq != seen.get("seq")
+        seen["status"], seen["seq"] = status, seq
+        if not (changed or fresh):
+            continue
+        if fresh and report is not None:
+            seen["report_at"] = report["at"]
+            line = f"{name} {report['kind']}: {report['text']}"
+            if status == "gone":
+                line += " (pane closed)"
+        elif status == "gone":
+            line = f"{name}: pane closed"
+        elif status == "blocked":
+            line = f"{name} blocked: waiting at an approval or question prompt"
+        else:
+            line = f"{name}: turn ended without a report"
+        lines.append(line)
+    return lines
+
+
+@contextmanager
+def single_watcher() -> Generator[bool]:
+    directory = state_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    with open(directory / "watch.lock", "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        yield True
+
+
+def cmd_watch(args: argparse.Namespace) -> int:
+    with single_watcher() as alone:
+        if not alone:
+            print("Another orch watch is already running.")
+            return 0
+        deadline = time.monotonic() + args.timeout
+        while True:
+            with tasks_for_update() as tasks:
+                if not tasks:
+                    print("No orch tasks to watch.")
+                    return 0
+                lines = check(tasks, live_agents(), time.time())
+            if lines:
+                print("\n".join(lines))
+                return 0
+            if time.monotonic() >= deadline:
+                print(f"No worker needed orch in {age(args.timeout)}.")
+                return 0
+            time.sleep(POLL_SECONDS)
+
+
+def unsaved_work(cwd: str) -> str | None:
+    """Why removing this checkout would lose work, or None when it is safe."""
+    if run(["git", "status", "--porcelain"], cwd=cwd).strip():
+        return "the worktree has uncommitted changes"
+    unpushed = int(
+        run(["git", "rev-list", "--count", "HEAD", "--not", "--remotes"], cwd=cwd)
+    )
+    if unpushed == 0:
+        return None
+    # A squash merge leaves the branch's own commits off every remote branch.
+    pr: dict[str, Any]
+    try:
+        pr = json.loads(
+            run(["gh", "pr", "view", "--json", "state,headRefOid"], cwd=cwd)
+        )
+    except (OrchError, ValueError):
+        pr = {}
+    head = run(["git", "rev-parse", "HEAD"], cwd=cwd).strip()
+    if pr.get("state") == "MERGED" and pr.get("headRefOid") == head:
+        return None
+    commits = "1 commit is" if unpushed == 1 else f"{unpushed} commits are"
+    return f"{commits} on no remote and in no merged PR"
+
+
+def checkout_workspace(path: str) -> str | None:
+    """The Herdr workspace opened on this checkout, if any."""
+    for workspace in herdr("workspace", "list")["workspaces"]:
+        worktree: dict[str, Any] = workspace.get("worktree") or {}
+        if worktree.get("checkout_path") == path:
+            return workspace["workspace_id"]
+    return None
+
+
+def cmd_close(args: argparse.Namespace) -> int:
+    with tasks_for_update() as tasks:
+        task = find_task(tasks, args.agent)
+        cwd, branch, repo = task["cwd"], task.get("branch"), task["repo"]
+        exists = os.path.isdir(cwd)
+        if branch and exists and not args.force:
+            if problem := unsaved_work(cwd):
+                raise OrchError(
+                    f"{args.agent}: {problem}; pass --force to remove anyway"
+                )
+        if branch:
+            workspace = checkout_workspace(cwd)
+            force = ["--force"] if args.force else []
+            if workspace:
+                herdr(
+                    "worktree", "remove", "--workspace", workspace, *force, timeout=120
+                )
+            elif exists:
+                run(["git", "worktree", "remove", *force, cwd], cwd=repo, timeout=120)
+            # Its commits are pushed or merged, so the local branch is a copy.
+            if not args.force:
+                try:
+                    run(["git", "branch", "-D", branch], cwd=repo)
+                except OrchError:
+                    pass
+        else:
+            try:
+                herdr("tab", "close", task["tab_id"])
+            except OrchError:
+                pass  # the tab is already gone
+        del tasks[args.agent]
+    print(f"Closed {args.agent}")
+    return 0
+
+
+def cmd_drop(args: argparse.Namespace) -> int:
+    with tasks_for_update() as tasks:
+        find_task(tasks, args.agent)
+        del tasks[args.agent]
+    print(f"Dropped {args.agent}; its tab and worktree are untouched")
+    return 0
+
+
+def cmd_focus(_: argparse.Namespace) -> int:
+    """Focus orch's own session, starting it in its home folder if none is open."""
+    home = ORCH_HOME.resolve()
+    workspace = checkout_workspace(str(home))
+    if workspace is None:
+        if not home.is_dir():
+            raise OrchError(f"orch home not found: {home}")
+        pane = herdr("workspace", "create", "--cwd", str(home), "--label", "orch")[
+            "root_pane"
+        ]
+        workspace = pane["workspace_id"]
+        try:
+            herdr(
+                "agent",
+                "start",
+                "orch",
+                "--kind",
+                "claude",
+                "--pane",
+                pane["pane_id"],
+                timeout=90,
+            )
+        except OrchError:
+            pass  # a first start stops at Claude's trust prompt, which is now in view
+    herdr("workspace", "focus", workspace)
+    agents = [
+        a
+        for a in herdr("agent", "list")["agents"]
+        if a.get("workspace_id") == workspace
+    ]
+    agents.sort(key=lambda a: a.get("name") != "orch")
+    if agents:
+        # Focusing the agent alone leaves the client on its current tab.
+        herdr("tab", "focus", agents[0]["tab_id"])
+        herdr("agent", "focus", agents[0]["pane_id"])
+    return 0
+
+
+def parser() -> argparse.ArgumentParser:
+    root = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    commands = root.add_subparsers(dest="command", required=True)
+
+    spawn = commands.add_parser("spawn", help="Start a worker; brief on stdin")
+    spawn.add_argument("--repo", required=True, help="Repo name under ~/code or a path")
+    spawn.add_argument("--worktree", metavar="BRANCH", help="Work in a linked worktree")
+    spawn.add_argument("--base", help="Base ref for a new worktree")
+    spawn.add_argument("--name", help="Herdr agent name")
+    spawn.set_defaults(handler=cmd_spawn)
+
+    listing = commands.add_parser(
+        "list", help="Workers with live state, PR and last report"
+    )
+    listing.add_argument("--json", action="store_true")
+    listing.set_defaults(handler=cmd_list)
+
+    report = commands.add_parser("report", help="Run by a worker to report to orch")
+    report.add_argument("kind", choices=REPORT_KINDS)
+    report.add_argument("text", nargs="+")
+    report.add_argument("--agent", help="Task name; default: the task in this pane")
+    report.set_defaults(handler=cmd_report)
+
+    watch = commands.add_parser("watch", help="Exit when a worker needs orch")
+    watch.add_argument("--timeout", type=int, default=WATCH_TIMEOUT, help="Seconds")
+    watch.set_defaults(handler=cmd_watch)
+
+    close = commands.add_parser("close", help="Remove a worker's tab and worktree")
+    close.add_argument("agent")
+    close.add_argument(
+        "--force", action="store_true", help="Remove even with unsaved work"
+    )
+    close.set_defaults(handler=cmd_close)
+
+    drop = commands.add_parser("drop", help="Stop tracking a worker, leaving it open")
+    drop.add_argument("agent")
+    drop.set_defaults(handler=cmd_drop)
+
+    focus = commands.add_parser("focus", help="Jump to orch's own session")
+    focus.set_defaults(handler=cmd_focus)
+    return root
+
+
+def main() -> int:
+    args = parser().parse_args()
+    try:
+        return args.handler(args)
+    except subprocess.TimeoutExpired as error:
+        print(
+            f"orch: {error.cmd[0]} timed out; inspect Herdr before retrying",
+            file=sys.stderr,
+        )
+    except (OrchError, OSError) as error:
+        print(f"orch: {error}", file=sys.stderr)
+        if args.command == "focus":
+            try:
+                herdr("notification", "show", f"orch: {error}", "--sound", "none")
+            except (OrchError, OSError, subprocess.TimeoutExpired):
+                pass
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

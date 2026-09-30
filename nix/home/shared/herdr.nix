@@ -60,6 +60,13 @@ in
       description = "Jump to the agent that needs you most";
     }
     {
+      # Shift widens super+o's "who needs me" to the orchestrator itself.
+      key = "super+shift+o";
+      type = "shell";
+      command = "orch focus";
+      description = "Jump to the orch session";
+    }
+    {
       key = "super+p";
       type = "plugin_action";
       command = "thrawny.project-picker.open";
@@ -286,6 +293,16 @@ in
                 {
                   token = "$jira";
                   fg = theme.semantic.accent;
+                  dim = false;
+                }
+              ]
+              [
+                # Reported by bin/herdr-decorator from bin/orch: the question or
+                # blocker a worker is waiting on. Yellow, because it needs you.
+                {
+                  token = "$orch";
+                  fg = theme.syntax.function;
+                  bold = true;
                   dim = false;
                 }
               ]
