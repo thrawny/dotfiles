@@ -416,23 +416,6 @@ open_worktree() {
     branch=$(jq -r .headRefName <<<"$pr")
   fi
 
-  # A checkout already on the branch may hold unpushed work, so go back to it
-  # rather than moving the branch under it.
-  local existing
-  existing=$("$herdr_bin" worktree list --cwd "$dir" |
-    jq -c --arg b "$branch" '.result.worktrees[] | select(.branch == $b)' | head -1)
-  if [[ -n $existing ]]; then
-    local open_ws
-    open_ws=$(jq -r '.open_workspace_id // empty' <<<"$existing")
-    if [[ -n $open_ws ]]; then
-      "$herdr_bin" workspace focus "$open_ws" >/dev/null
-      return 0
-    fi
-    split_claude_nvim "$("$herdr_bin" worktree open --cwd "$dir" \
-      --path "$(jq -r .path <<<"$existing")" --label "$repo#$number" --focus)" "$number"
-    return 0
-  fi
-
   local sha
   if [[ $branch == "pr-$number" ]]; then
     git -C "$dir" fetch --quiet origin "pull/$number/head" || fail "could not fetch $repo#$number"
@@ -441,6 +424,26 @@ open_worktree() {
     git -C "$dir" fetch --quiet origin "+refs/heads/$branch:refs/remotes/origin/$branch" ||
       fail "could not fetch $branch"
     sha=$(git -C "$dir" rev-parse "origin/$branch")
+  fi
+
+  # A checkout already on the branch may hold unpushed work, so only
+  # fast-forward it to the PR, and leave it be when that is not possible.
+  local existing
+  existing=$("$herdr_bin" worktree list --cwd "$dir" |
+    jq -c --arg b "$branch" '.result.worktrees[] | select(.branch == $b)' | head -1)
+  if [[ -n $existing ]]; then
+    local open_ws checkout
+    checkout=$(jq -r .path <<<"$existing")
+    git -C "$checkout" merge --quiet --ff-only "$sha" >/dev/null 2>&1 ||
+      report "$branch could not fast-forward to the PR; opening it as it is"
+    open_ws=$(jq -r '.open_workspace_id // empty' <<<"$existing")
+    if [[ -n $open_ws ]]; then
+      "$herdr_bin" workspace focus "$open_ws" >/dev/null
+      return 0
+    fi
+    split_claude_nvim "$("$herdr_bin" worktree open --cwd "$dir" \
+      --path "$checkout" --label "$repo#$number" --focus)" "$number"
+    return 0
   fi
 
   if ! git -C "$dir" show-ref --verify --quiet "refs/heads/$branch"; then
