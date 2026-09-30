@@ -265,7 +265,7 @@ in
                 # The icon's shape is the PR's state and the mark after the
                 # number is checks and review; see PR_ICONS in the decorator.
                 # Waiting on review or checks stays white. Yellow means it needs
-                # you, blue means approved, purple is GitHub's merged color.
+                # you, green means approved, purple is GitHub's merged color.
                 {
                   token = "$pr";
                   fg = theme.semantic.foreground;
@@ -295,7 +295,7 @@ in
                     }
                     {
                       contains = "";
-                      fg = theme.syntax.type;
+                      fg = theme.semantic.success;
                     }
                   ];
                 }
