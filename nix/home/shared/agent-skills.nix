@@ -1,13 +1,26 @@
 {
   agentAssets,
+  config,
+  lib,
   pkgs,
   ...
 }:
+let
+  enabledSkillsFor =
+    agent:
+    builtins.removeAttrs (agentAssets.skillEntriesFor pkgs agent) config.dotfiles.agentSkills.disabled;
+in
 {
   imports = [ ./private-agent-skills.nix ];
 
-  home.file =
-    agentAssets.skillFiles "claude" (agentAssets.skillEntriesFor pkgs "claude")
-    // agentAssets.skillFiles "codex" (agentAssets.skillEntriesFor pkgs "codex")
-    // agentAssets.skillFiles "pi" (agentAssets.skillEntriesFor pkgs "pi");
+  options.dotfiles.agentSkills.disabled = lib.mkOption {
+    type = lib.types.listOf lib.types.str;
+    default = [ ];
+    description = "Skill names to leave out for every agent on this host.";
+  };
+
+  config.home.file =
+    agentAssets.skillFiles "claude" (enabledSkillsFor "claude")
+    // agentAssets.skillFiles "codex" (enabledSkillsFor "codex")
+    // agentAssets.skillFiles "pi" (enabledSkillsFor "pi");
 }

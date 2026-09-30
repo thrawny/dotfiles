@@ -52,7 +52,9 @@ def detect_harness() -> str:
 
 def session_ref(harness: str, supplied: str | None) -> str:
     ref = supplied or os.environ.get(
-        {"claude": "CLAUDE_CODE_SESSION_ID", "codex": "CODEX_THREAD_ID"}.get(harness, ""),
+        {"claude": "CLAUDE_CODE_SESSION_ID", "codex": "CODEX_THREAD_ID"}.get(
+            harness, ""
+        ),
         "",
     )
     if not ref:

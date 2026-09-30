@@ -46,7 +46,8 @@ def test_requires_exact_session(fork: ModuleType, harness: str):
 
 
 @pytest.mark.parametrize(
-    "harness,variable", [("claude", "CLAUDE_CODE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")]
+    "harness,variable",
+    [("claude", "CLAUDE_CODE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")],
 )
 def test_session_environment(fork: ModuleType, harness: str, variable: str):
     with patch.dict("os.environ", {variable: SESSION}):
@@ -209,7 +210,8 @@ def test_sandbox_fails_before_launch(fork: ModuleType):
 
 
 @pytest.mark.parametrize(
-    "harness,variable", [("claude", "CLAUDE_CODE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")]
+    "harness,variable",
+    [("claude", "CLAUDE_CODE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")],
 )
 def test_auto_detect(fork: ModuleType, harness: str, variable: str):
     with patch.dict("os.environ", {variable: SESSION}):
@@ -230,7 +232,8 @@ def test_auto_detect_ambiguous(fork: ModuleType):
 
 
 @pytest.mark.parametrize(
-    "harness,variable", [("claude", "CLAUDE_CODE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")]
+    "harness,variable",
+    [("claude", "CLAUDE_CODE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")],
 )
 def test_no_argument_cli(fork: ModuleType, harness: str, variable: str):
     with (
@@ -247,7 +250,8 @@ def test_no_argument_cli(fork: ModuleType, harness: str, variable: str):
 def test_explicit_harness_overrides_ambiguous_environment(fork: ModuleType):
     with (
         patch.dict(
-            "os.environ", {"CLAUDE_CODE_SESSION_ID": SESSION, "CODEX_THREAD_ID": SESSION}
+            "os.environ",
+            {"CLAUDE_CODE_SESSION_ID": SESSION, "CODEX_THREAD_ID": SESSION},
         ),
         patch("sys.argv", ["fork-window", "codex"]),
         patch.object(fork, "fork_command", return_value=["native-fork"]) as command,
