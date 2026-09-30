@@ -79,7 +79,7 @@
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,
   "attribution": {
-    "commit": "",
+    "commit": "🤖 Generated with Claude Code",
     "pr": ""
   }
 }
