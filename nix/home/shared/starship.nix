@@ -12,7 +12,7 @@ _: {
 
       kubernetes = {
         disabled = false;
-        symbol = "☸ ";
+        symbol = "☸";
         format = "on [$symbol $context]($style) ";
       };
 
