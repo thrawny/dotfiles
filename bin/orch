@@ -44,6 +44,12 @@ Put the PR URL in a done line when there is one. The user merges every PR, so \
 stop once yours is ready."""
 
 
+UNTRACKED = (
+    "orch is not tracking this session, so there is nothing to report to. "
+    + "Tell the user directly."
+)
+
+
 class OrchError(Exception):
     pass
 
@@ -221,7 +227,10 @@ def cmd_list(args: argparse.Namespace) -> int:
         print("Herdr is unavailable, so live states are unknown.")
     for row in rows:
         branch = row.get("branch") or "main checkout"
-        print(f"{row['name']} · {Path(row['repo']).name} · {branch} · {row['status']}")
+        held = " · held by the user" if row.get("held") else ""
+        print(
+            f"{row['name']} · {Path(row['repo']).name} · {branch} · {row['status']}{held}"
+        )
         if row["pr"]:
             print(f"  PR: {row['pr']}")
         if report := row.get("report"):
@@ -239,7 +248,9 @@ def cmd_report(args: argparse.Namespace) -> int:
         else:
             task = next((t for t in tasks.values() if t["pane_id"] == pane_id), None)
             if task is None:
-                raise OrchError("This pane is not an orch task; pass --agent")
+                # Dropped tasks keep the brief that asks for reports.
+                print(UNTRACKED)
+                return 0
         task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
         if match := PR_URL.search(text):
             task["pr"] = match.group(0)
@@ -255,10 +266,13 @@ def check(
     A worker needs orch when it reports, when its turn ends, when it waits at a
     prompt, and when its pane closes. Herdr's state_change_seq catches a turn
     that ended while nothing was watching. A done worker that someone looked at
-    turns idle, and that is not news.
+    turns idle, and that is not news. A held task is the user's, so it never
+    needs orch.
     """
     lines: list[str] = []
     for name, task in sorted(tasks.items()):
+        if task.get("held"):
+            continue
         seen: dict[str, Any] = task.setdefault("seen", {})
         report: dict[str, Any] | None = task.get("report")
         fresh = report is not None and report["at"] != seen.get("report_at")
@@ -319,8 +333,9 @@ def cmd_watch(args: argparse.Namespace) -> int:
         deadline = time.monotonic() + args.timeout
         while True:
             with tasks_for_update() as tasks:
-                if not tasks:
-                    print("No orch tasks to watch.")
+                if all(t.get("held") for t in tasks.values()):
+                    held = sum(1 for t in tasks.values() if t.get("held"))
+                    print(f"No orch tasks to watch ({held} held by the user).")
                     return 0
                 lines = check(tasks, live_agents(), time.time())
             if lines:
@@ -405,6 +420,33 @@ def cmd_drop(args: argparse.Namespace) -> int:
         find_task(tasks, args.agent)
         del tasks[args.agent]
     print(f"Dropped {args.agent}; its tab and worktree are untouched")
+    return 0
+
+
+def cmd_hold(args: argparse.Namespace) -> int:
+    with tasks_for_update() as tasks:
+        find_task(tasks, args.agent)["held"] = True
+    print(f"Holding {args.agent}: orch watch skips it until orch resume")
+    return 0
+
+
+def resume(task: dict[str, Any], live: dict[str, dict[str, Any]]) -> None:
+    """Hand a held task back, treating what happened while held as seen."""
+    task["held"] = False
+    agent = live.get(task["pane_id"])
+    report: dict[str, Any] = task.get("report") or {}
+    task["seen"] = {
+        "status": agent.get("agent_status") if agent else "gone",
+        "seq": agent.get("state_change_seq") if agent else None,
+        "report_at": report.get("at"),
+    }
+
+
+def cmd_resume(args: argparse.Namespace) -> int:
+    live = live_agents()
+    with tasks_for_update() as tasks:
+        resume(find_task(tasks, args.agent), live)
+    print(f"Resumed {args.agent}: orch watch covers it again")
     return 0
 
 
@@ -494,6 +536,14 @@ def parser() -> argparse.ArgumentParser:
         "--force", action="store_true", help="Remove even with unsaved work"
     )
     close.set_defaults(handler=cmd_close)
+
+    hold = commands.add_parser("hold", help="Keep a task but stop watching it")
+    hold.add_argument("agent")
+    hold.set_defaults(handler=cmd_hold)
+
+    resume_ = commands.add_parser("resume", help="Watch a held task again")
+    resume_.add_argument("agent")
+    resume_.set_defaults(handler=cmd_resume)
 
     drop = commands.add_parser("drop", help="Stop tracking a worker, leaving it open")
     drop.add_argument("agent")

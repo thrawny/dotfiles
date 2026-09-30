@@ -127,11 +127,42 @@ def test_report_finds_its_task_by_pane_and_keeps_the_pr(orch: ModuleType):
     assert saved["pr"] == "https://github.com/o/r/pull/7"
 
 
-def test_report_from_a_pane_orch_did_not_start_fails(orch: ModuleType):
+def test_report_from_an_untracked_pane_tells_the_worker_to_ask_directly(
+    orch: ModuleType, capsys: pytest.CaptureFixture[str]
+):
     args = argparse.Namespace(kind="done", text=["x"], agent=None)
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w9:p9"}):
-        with pytest.raises(orch.OrchError, match="not an orch task"):
-            orch.cmd_report(args)
+        assert orch.cmd_report(args) == 0
+    assert "Tell the user directly" in capsys.readouterr().out
+    assert orch.read_tasks() == {}
+
+
+def test_held_task_never_wakes(orch: ModuleType):
+    report = {"kind": "question", "text": "Which base?", "at": 100.0}
+    tasks = {"abc-1": task(held=True, report=report)}
+    assert orch.check(tasks, live("done", 2), 200) == []
+    assert orch.check(tasks, {}, 200) == []
+
+
+def test_resume_treats_what_happened_while_held_as_seen(orch: ModuleType):
+    report = {"kind": "question", "text": "Which base?", "at": 100.0}
+    tasks = {"abc-1": task(held=True, report=report)}
+    orch.resume(tasks["abc-1"], live("done", 5))
+    assert tasks["abc-1"]["held"] is False
+    assert orch.check(tasks, live("done", 5), 200) == []
+    assert orch.check(tasks, live("done", 7), 200) == [
+        "abc-1: turn ended without a report"
+    ]
+
+
+def test_watch_with_only_held_tasks_exits(
+    orch: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with orch.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
+    with patch.object(orch, "live_agents", side_effect=AssertionError("no poll")):
+        assert orch.cmd_watch(argparse.Namespace(timeout=5)) == 0
+    assert "1 held by the user" in capsys.readouterr().out
 
 
 def test_failed_update_writes_nothing(orch: ModuleType, state_home: Path):
