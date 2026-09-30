@@ -26,7 +26,8 @@
     # the Hyprland scratchpad. Hiding it keeps the shell running until Ghostty
     # quits. A global keybind needs macOS Accessibility permission.
     quick-terminal-position = "center";
-    # Width, then height, for the center position.
+    # Both axes, since one value only sizes the primary axis. macOS reads
+    # position and size once, so they need a full Ghostty restart.
     quick-terminal-size = "80%,80%";
     quick-terminal-autohide = true;
     keybind = [ "global:alt+q=toggle_quick_terminal" ];
