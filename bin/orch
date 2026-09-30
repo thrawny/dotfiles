@@ -18,6 +18,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -84,6 +85,25 @@ def herdr(*args: str, timeout: int = 30) -> dict[str, Any]:
         return json.loads(output)["result"]
     except (ValueError, KeyError, TypeError) as error:
         raise OrchError(f"herdr {' '.join(args[:2])} returned no result") from error
+
+
+def herdr_request(method: str, params: dict[str, Any]) -> dict[str, Any]:
+    """One socket API call, for methods the herdr CLI has no command for."""
+    path = os.environ.get("HERDR_SOCKET_PATH") or os.path.expanduser(
+        "~/.config/herdr/herdr.sock"
+    )
+    request = {"id": method, "method": method, "params": params}
+    try:
+        with socket.socket(socket.AF_UNIX) as sock:
+            sock.settimeout(10)
+            sock.connect(path)
+            sock.sendall((json.dumps(request) + "\n").encode())
+            reply = json.loads(sock.makefile().readline() or "{}")
+    except (OSError, ValueError) as error:
+        raise OrchError(f"herdr {method}: {error}") from error
+    if "result" not in reply:
+        raise OrchError(f"herdr {method}: {reply.get('error') or 'no result'}")
+    return reply["result"]
 
 
 def live_agents() -> dict[str, dict[str, Any]]:
@@ -388,6 +408,18 @@ def cmd_drop(args: argparse.Namespace) -> int:
     return 0
 
 
+def put_first(workspace: str) -> None:
+    """Make this workspace the top of the sidebar, so its agent is number 1."""
+    herdr_request("workspace.move", {"workspace_id": workspace, "insert_index": 0})
+
+
+def cmd_pin(_: argparse.Namespace) -> int:
+    """Move orch's workspace to the top of the sidebar, if it is open."""
+    if workspace := checkout_workspace(str(ORCH_HOME.resolve())):
+        put_first(workspace)
+    return 0
+
+
 def cmd_focus(_: argparse.Namespace) -> int:
     """Focus orch's own session, starting it in its home folder if none is open."""
     home = ORCH_HOME.resolve()
@@ -412,6 +444,7 @@ def cmd_focus(_: argparse.Namespace) -> int:
             )
         except OrchError:
             pass  # a first start stops at Claude's trust prompt, which is now in view
+    put_first(workspace)
     herdr("workspace", "focus", workspace)
     agents = [
         a
@@ -468,6 +501,9 @@ def parser() -> argparse.ArgumentParser:
 
     focus = commands.add_parser("focus", help="Jump to orch's own session")
     focus.set_defaults(handler=cmd_focus)
+
+    pin = commands.add_parser("pin", help="Move orch's workspace to the top")
+    pin.set_defaults(handler=cmd_pin)
     return root
 
 
