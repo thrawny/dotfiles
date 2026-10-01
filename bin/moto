@@ -260,6 +260,24 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_ask(args: argparse.Namespace) -> int:
+    """Show the driver's question under its own sidebar row, or clear it."""
+    path = state_dir() / "driver.json"
+    if args.clear:
+        path.unlink(missing_ok=True)
+        print("Cleared the driver's question.")
+        return 0
+    text = " ".join(args.text).strip()
+    pane_id = os.environ.get("HERDR_PANE_ID")
+    if not text or not pane_id:
+        raise MotoError("Pass the question, from inside the driver's Herdr pane")
+    state_dir().mkdir(parents=True, exist_ok=True)
+    ask = {"pane_id": pane_id, "kind": "question", "text": text, "at": time.time()}
+    path.write_text(json.dumps(ask) + "\n")
+    print("The question shows under the driver's sidebar row until moto ask --clear.")
+    return 0
+
+
 def check(
     tasks: dict[str, dict[str, Any]], live: dict[str, dict[str, Any]], now: float
 ) -> list[str]:
@@ -528,6 +546,13 @@ def parser() -> argparse.ArgumentParser:
         help="Resume an earlier Claude session as the worker",
     )
     spawn.set_defaults(handler=cmd_spawn)
+
+    ask = commands.add_parser(
+        "ask", help="Show the driver's question to the user in the sidebar"
+    )
+    ask.add_argument("text", nargs="*")
+    ask.add_argument("--clear", action="store_true", help="Remove the question")
+    ask.set_defaults(handler=cmd_ask)
 
     listing = commands.add_parser(
         "list", help="Workers with live state, PR and last report"

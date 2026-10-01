@@ -269,3 +269,16 @@ def test_moto_note_clears_once_the_worker_moves_on(decorator: ModuleType) -> Non
         "w1:p1", None, "claude", status="done", working_since=20.0
     )
     assert decorator.moto_note(answered, report) is None
+
+
+def test_the_driver_question_stays_while_the_driver_works(
+    decorator: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
+    write_moto_tasks(tmp_path, {})
+    ask = {"pane_id": "w1:p9", "kind": "question", "text": "Merge #12?", "at": 10.0}
+    (tmp_path / "moto/driver.json").write_text(json.dumps(ask))
+    report = decorator.moto_reports()["w1:p9"]
+    assert report["sticky"] is True
+    busy = decorator.Pane("w1:p9", None, "claude", status="working", working_since=20.0)
+    assert decorator.moto_note(busy, report) == "? Merge #12?"

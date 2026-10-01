@@ -19,7 +19,10 @@ session that wandered off to a worktree or another repo stands out.
 
 A worker that bin/moto started reports questions and blockers to
 $XDG_STATE_HOME/moto/tasks.json, and $moto shows the latest one while the worker
-waits. It clears once the worker starts working again.
+waits. It clears once the worker starts working again. The driver's own
+question, from `moto ask`, is in $XDG_STATE_HOME/moto/driver.json. It stays
+until the driver clears it, since the driver also works on turns that are
+not the user's answer.
 """
 
 from __future__ import annotations
@@ -101,14 +104,23 @@ def moto_reports() -> dict[str, dict[str, Any]]:
         report: dict[str, Any] = task.get("report") or {}
         if report.get("kind") in MOTO_MARKS and task.get("pane_id"):
             reports[task["pane_id"]] = report
+    try:
+        ask: dict[str, Any] = json.loads((Path(base) / "moto/driver.json").read_text())
+    except (OSError, ValueError):
+        ask = {}
+    if ask.get("kind") in MOTO_MARKS and ask.get("pane_id"):
+        reports[ask["pane_id"]] = {**ask, "sticky": True}
     return reports
 
 
 def moto_note(pane: Pane, report: dict[str, Any] | None) -> str | None:
     """The sidebar note for a waiting worker, or None once it has moved on."""
-    if not report or pane.status == "working":
+    if not report:
         return None
-    if pane.working_since is not None and pane.working_since > report.get("at", 0):
+    moved_on = pane.status == "working" or (
+        pane.working_since is not None and pane.working_since > report.get("at", 0)
+    )
+    if moved_on and not report.get("sticky"):
         return None
     text = str(report.get("text", ""))
     if len(text) > MOTO_NOTE_CHARS:
@@ -519,7 +531,8 @@ class Decorator:
             if pane.status == "working":
                 pane.working_since = time.time()
                 # An answered question should not wait for the next GitHub poll.
-                if "moto" in pane.tokens:
+                sticky = moto_reports().get(pane.pane_id, {}).get("sticky")
+                if "moto" in pane.tokens and not sticky:
                     self.report(
                         pane, {k: v for k, v in pane.tokens.items() if k != "moto"}
                     )

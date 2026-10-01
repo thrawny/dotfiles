@@ -303,3 +303,19 @@ def test_workspace_without_checkout_is_found_by_pane_cwd(moto: ModuleType):
     with patch.object(moto, "herdr", side_effect=herdr):
         assert moto.checkout_workspace("/home/moto") == "w1"
         assert moto.checkout_workspace("/elsewhere") is None
+
+
+def test_ask_writes_and_clears_the_driver_question(
+    moto: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("HERDR_PANE_ID", "w1:p9")
+    path = moto.state_dir() / "driver.json"
+    assert moto.cmd_ask(argparse.Namespace(text=["Merge", "#12?"], clear=False)) == 0
+    ask = json.loads(path.read_text())
+    assert (ask["pane_id"], ask["kind"], ask["text"]) == (
+        "w1:p9",
+        "question",
+        "Merge #12?",
+    )
+    assert moto.cmd_ask(argparse.Namespace(text=[], clear=True)) == 0
+    assert not path.exists()
