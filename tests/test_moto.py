@@ -220,7 +220,7 @@ def test_spawn_adds_the_report_footer_and_records_the_task(moto: ModuleType):
         "ABC-1 fix",
     ]
     assert run.call_args.kwargs["stdin"].startswith(
-        "Fix it.\n\nA driver session started you"
+        "[driver] Fix it.\n\nA driver session started you"
     )
     assert moto.read_tasks()["abc-1"]["seen"] == {"status": "working"}
 
@@ -331,3 +331,16 @@ def test_ask_writes_and_clears_the_driver_question(
     )
     assert moto.cmd_ask(argparse.Namespace(text=[], clear=True)) == 0
     assert not path.exists()
+
+
+def test_tell_marks_the_prompt_as_the_driver_s(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    args = argparse.Namespace(agent="abc-1", text=["Ports", "are", "free."])
+    with patch.object(moto, "herdr", return_value={}) as herdr:
+        assert moto.cmd_tell(args) == 0
+    herdr.assert_called_once_with(
+        "agent", "prompt", "abc-1", "[driver] Ports are free."
+    )
+    with pytest.raises(moto.MotoError, match="No task named"):
+        moto.cmd_tell(argparse.Namespace(agent="nope", text=["x"]))

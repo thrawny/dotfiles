@@ -37,13 +37,20 @@ REPORT_SETTLE_SECONDS = 20
 REPORT_KINDS = ("done", "question", "blocked")
 PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
 
-BRIEF_FOOTER = """\
+# Marks every prompt the driver sends, so a worker can tell it from the user's own typing.
+DRIVER_TAG = "[driver]"
+BRIEF_FOOTER = f"""\
 A driver session started you and tracks this task for the user. When a turn \
 ends with the task finished, with a question only the user can answer, or with \
 the work blocked, make your last action \
 `moto report done|question|blocked "<one line>"`. \
 Put the PR URL in a done line when there is one. The user merges every PR, so \
-stop once yours is ready."""
+stop once yours is ready.
+
+Every message from the driver starts with {DRIVER_TAG}, as this one does. A \
+message without it is from the user, typing in this pane. Answer the user here, \
+and when the user and the driver disagree, follow the user. Still report to the \
+driver when the task finishes, gets stuck or needs a decision."""
 
 
 UNTRACKED = (
@@ -179,7 +186,8 @@ def cmd_spawn(args: argparse.Namespace) -> int:
         if value := getattr(args, flag):
             command += [f"--{flag}", value]
     # Worktree creation, agent startup and the first prompt each wait on Herdr.
-    output = run(command, timeout=600, stdin=f"{brief}\n\n{BRIEF_FOOTER}\n")
+    stdin = f"{DRIVER_TAG} {brief}\n\n{BRIEF_FOOTER}\n"
+    output = run(command, timeout=600, stdin=stdin)
     try:
         info: dict[str, Any] = json.loads(output)
     except ValueError as error:
@@ -265,6 +273,17 @@ def cmd_report(args: argparse.Namespace) -> int:
         )
     else:
         print(f"Reported {args.kind} to the driver.")
+    return 0
+
+
+def cmd_tell(args: argparse.Namespace) -> int:
+    """Send a worker a prompt marked as the driver's."""
+    text = " ".join(args.text).strip() or sys.stdin.read().strip()
+    if not text:
+        raise MotoError("Pass the message as arguments or on stdin")
+    agent = find_task(read_tasks(), args.agent)["agent"]
+    herdr("agent", "prompt", agent, f"{DRIVER_TAG} {text}")
+    print(f"Sent to {agent}.")
     return 0
 
 
@@ -554,6 +573,11 @@ def parser() -> argparse.ArgumentParser:
         help="Resume an earlier Claude session as the worker",
     )
     spawn.set_defaults(handler=cmd_spawn)
+
+    tell = commands.add_parser("tell", help="Prompt a worker as the driver")
+    tell.add_argument("agent")
+    tell.add_argument("text", nargs="*", help="The message; default: stdin")
+    tell.set_defaults(handler=cmd_tell)
 
     ask = commands.add_parser(
         "ask", help="Show the driver's question to the user in the sidebar"
