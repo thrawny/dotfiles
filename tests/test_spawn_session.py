@@ -87,3 +87,13 @@ def test_agent_args_follow_a_separator(spawn: ModuleType):
     with patch.object(spawn, "herdr") as herdr:
         spawn.start_agent("abc-1", "claude", "w1:p1", ["--name", "ABC-1 fix"])
     assert herdr.call_args.args[-3:] == ("--", "--name", "ABC-1 fix")
+
+
+def test_resume_passes_the_session_id(spawn: ModuleType):
+    session = "01234567-89ab-cdef-0123-456789abcdef"
+    assert spawn.resume_args(None, "codex") == []
+    assert spawn.resume_args(session, "claude") == ["--resume", session]
+    with pytest.raises(spawn.SpawnError, match="Not a Claude session id"):
+        spawn.resume_args("latest", "claude")
+    with pytest.raises(spawn.SpawnError, match="--kind claude"):
+        spawn.resume_args(session, "codex")

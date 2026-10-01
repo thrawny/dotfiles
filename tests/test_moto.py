@@ -184,7 +184,12 @@ def test_spawn_adds_the_report_footer_and_records_the_task(moto: ModuleType):
         "workspace_id": "w1",
     }
     args = argparse.Namespace(
-        repo="widgets", worktree="ABC-1-fix", base=None, name=None, title="ABC-1 fix"
+        repo="widgets",
+        worktree="ABC-1-fix",
+        base=None,
+        name=None,
+        title="ABC-1 fix",
+        resume=None,
     )
     with (
         patch("sys.stdin.read", return_value="Fix it."),
@@ -286,7 +291,9 @@ def test_unpushed_commits_block_removal_unless_merged(
 
 def test_workspace_without_checkout_is_found_by_pane_cwd(moto: ModuleType):
     replies: dict[tuple[str, ...], dict[str, Any]] = {
-        ("workspace", "list"): {"workspaces": [{"workspace_id": "w1", "label": "moto"}]},
+        ("workspace", "list"): {
+            "workspaces": [{"workspace_id": "w1", "label": "moto"}]
+        },
         ("pane", "list"): {"panes": [{"workspace_id": "w1", "cwd": "/home/moto"}]},
     }
 

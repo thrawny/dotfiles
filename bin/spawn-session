@@ -24,6 +24,7 @@ NAME_PATTERN = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 # One to three lowercase words; a ticket key such as ABC-123 keeps its case.
 TITLE_WORD = r"(?:[A-Z][A-Z0-9]*-[0-9]+|[a-z0-9][a-z0-9-]*)"
 TITLE_PATTERN = re.compile(rf"{TITLE_WORD}(?: {TITLE_WORD}){{0,2}}")
+SESSION_ID_PATTERN = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 
 
 class SpawnError(Exception):
@@ -238,6 +239,17 @@ def title_args(title: str | None, kind: str) -> list[str]:
     return ["--name", title]
 
 
+def resume_args(session_id: str | None, kind: str) -> list[str]:
+    """The agent arguments that resume an earlier Claude session in the new pane."""
+    if session_id is None:
+        return []
+    if kind != "claude":
+        raise SpawnError(f"--resume only works with --kind claude, not {kind}")
+    if not SESSION_ID_PATTERN.fullmatch(session_id):
+        raise SpawnError(f"Not a Claude session id: {session_id}")
+    return ["--resume", session_id]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -256,6 +268,11 @@ def main() -> int:
         help="Claude session name: one to three lowercase words, a ticket key keeps its case",
     )
     parser.add_argument(
+        "--resume",
+        metavar="SESSION_ID",
+        help="Resume this Claude session; it must belong to the repo or worktree folder",
+    )
+    parser.add_argument(
         "--focus", action="store_true", help="Switch to the new session"
     )
     parser.add_argument(
@@ -272,7 +289,9 @@ def main() -> int:
         brief = sys.stdin.read().strip()
         if not brief:
             raise SpawnError("Pass the task brief on stdin")
-        agent_args = title_args(args.title, args.kind)
+        agent_args = resume_args(args.resume, args.kind) + title_args(
+            args.title, args.kind
+        )
         repo = resolve_repo(args.repo)
         pane = (
             worktree_pane(repo, args.worktree, args.base)
