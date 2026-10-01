@@ -12,7 +12,6 @@
     {
       "context": "Chat",
       "bindings": {
-        "ctrl+enter": "chat:queueSubmit",
         "ctrl+l": null,
         "ctrl+x l": "chat:clearInput"
       }
