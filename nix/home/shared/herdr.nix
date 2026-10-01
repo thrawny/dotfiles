@@ -307,9 +307,10 @@ in
                 }
               ]
               [
-                # Reported by bin/herdr-decorator: the workspace name, or the
-                # checkout the agent moved to, marked with an arrow. Blank if
-                # the decorator stops.
+                # Reported by bin/herdr-decorator: the repo, wt:<repo> for a
+                # worktree, or the workspace name outside a repo. A checkout the
+                # agent moved to is marked with an arrow. Blank if the decorator
+                # stops.
                 {
                   token = "$where";
                   fg = theme.semantic.muted;
@@ -318,6 +319,10 @@ in
                     {
                       starts_with = "→";
                       fg = theme.semantic.accentAlt;
+                    }
+                    {
+                      starts_with = "wt:";
+                      fg = theme.semantic.dim;
                     }
                   ];
                 }

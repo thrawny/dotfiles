@@ -13,9 +13,11 @@ $XDG_STATE_HOME/herdr-decorator/panes.json.
 An agent's process cwd is where it was started, which can be a deleted worktree
 or another repo than the one it works in. Agents that know their working
 directory write it to $XDG_STATE_HOME/herdr-decorator/agent-cwd/<pane_id>, and
-that path wins over the process cwd. When it is another checkout than the one
-the agent started in, $where names it in place of the workspace name, so a
-session that wandered off to a worktree or another repo stands out.
+that path wins over the process cwd. $where names the checkout: the repo, or
+wt:<repo> for a linked worktree. Outside a git repo it is the workspace name.
+When the agent works in another checkout than the one it started in, an arrow
+marks it, so a session that wandered off to a worktree or another repo stands
+out.
 
 A worker that bin/moto started reports questions and blockers to
 $XDG_STATE_HOME/moto/tasks.json, and $moto shows the latest one while the worker
@@ -235,6 +237,7 @@ class Pane:
     status: str | None = None
     repo: tuple[str, str] | None = None
     branch: str | None = None
+    place: str | None = None
     moved: str | None = None
     # When the agent last started a turn, as seen by this process.
     working_since: float | None = None
@@ -258,7 +261,7 @@ def git(cwd: str, *args: str) -> str | None:
 
 def locate(pane: Pane) -> None:
     """Fill in the pane's GitHub repo and branch from its working directory."""
-    pane.repo, pane.branch, pane.moved = None, None, None
+    pane.repo, pane.branch, pane.place, pane.moved = None, None, None, None
     reported = reported_cwd(pane.pane_id)
     cwd = reported or pane.cwd
     if not cwd or not os.path.isdir(cwd):
@@ -267,28 +270,35 @@ def locate(pane: Pane) -> None:
     remote = git(cwd, "remote", "get-url", "origin") or ""
     if match := GITHUB_REMOTE.search(remote):
         pane.repo = (match.group(1), match.group(2))
+    pane.place = checkout_name(cwd)
     if reported:
-        pane.moved = moved_to(reported, pane.cwd, pane.branch)
+        pane.moved = moved_to(reported, pane.cwd)
 
 
-def moved_to(reported: str, started: str | None, branch: str | None) -> str | None:
-    """Name the checkout the agent works in, if it is not the one it started in.
+def checkout_name(cwd: str) -> str | None:
+    """Name the checkout cwd is in: the repo, or wt:<repo> for a linked worktree.
 
-    A linked worktree gets its branch after the repo name, since the repo alone
-    reads the same as the main checkout.
+    The repo name comes from the main checkout, since a worktree's folder is
+    usually named after its branch.
     """
+    here = git(cwd, "rev-parse", "--show-toplevel")
+    if not here:
+        return None
+    common = git(cwd, "rev-parse", "--path-format=absolute", "--git-common-dir")
+    main = os.path.dirname(common) if common else here
+    name = os.path.basename(main)
+    return f"wt:{name}" if main != here else name
+
+
+def moved_to(reported: str, started: str | None) -> str | None:
+    """Name the checkout the agent works in, if it is not the one it started in."""
     here = git(reported, "rev-parse", "--show-toplevel")
     if not here:
         return None
     if started and os.path.isdir(started):
         if git(started, "rev-parse", "--show-toplevel") == here:
             return None
-    common = git(reported, "rev-parse", "--path-format=absolute", "--git-common-dir")
-    main = os.path.dirname(common) if common else here
-    name = os.path.basename(main)
-    if main != here and branch:
-        return f"{name} \ue0a0 {branch}"
-    return name
+    return checkout_name(reported)
 
 
 def dig(value: Any, *keys: str | int) -> Any:
@@ -423,6 +433,8 @@ def decorate(
         tokens["moto"] = note
     if pane.moved:
         tokens["where"] = f"→ {pane.moved}"
+    elif pane.place:
+        tokens["where"] = pane.place
     elif workspace:
         tokens["where"] = workspace
     if pr:

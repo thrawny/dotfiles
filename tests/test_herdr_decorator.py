@@ -155,15 +155,25 @@ def test_locate_ignores_a_reported_cwd_that_is_gone(
 
 
 def test_decorate_names_a_checkout_the_agent_moved_to(decorator: ModuleType) -> None:
-    pane = decorator.Pane("w1:p1", "/tmp", "claude", moved="widgets \ue0a0 fix")
+    pane = decorator.Pane(
+        "w1:p1", "/tmp", "claude", place="wt:widgets", moved="wt:widgets"
+    )
     tokens, _ = decorator.decorate(pane, None, workspace="acme")
-    assert tokens == {"where": "→ widgets \ue0a0 fix"}
+    assert tokens == {"where": "→ wt:widgets"}
 
 
-def test_decorate_names_the_workspace_when_the_agent_stayed(
+def test_decorate_names_the_checkout_over_the_workspace(
     decorator: ModuleType,
 ) -> None:
-    pane = decorator.Pane("w1:p1", "/tmp", "claude", branch="main")
+    pane = decorator.Pane("w1:p1", "/tmp", "claude", branch="fix", place="wt:widgets")
+    tokens, _ = decorator.decorate(pane, None, workspace="fix")
+    assert tokens == {"where": "wt:widgets"}
+
+
+def test_decorate_names_the_workspace_outside_a_repo(
+    decorator: ModuleType,
+) -> None:
+    pane = decorator.Pane("w1:p1", "/tmp", "claude")
     assert decorator.decorate(pane, None, workspace="acme") == ({"where": "acme"}, {})
 
 
@@ -192,32 +202,58 @@ def _git_repo(path: Path) -> Path:
     return path
 
 
+def _worktree(repo: Path, tree: Path) -> Path:
+    import subprocess
+
+    subprocess.run(
+        ["git", "-C", str(repo), "worktree", "add", "-q", "-b", "fix", str(tree)],
+        check=True,
+    )
+    return tree
+
+
+def test_checkout_name_is_the_repo_in_the_main_checkout(
+    decorator: ModuleType, tmp_path: Path
+) -> None:
+    repo = _git_repo(tmp_path / "widgets")
+    (repo / "src").mkdir()
+    assert decorator.checkout_name(str(repo / "src")) == "widgets"
+
+
+def test_checkout_name_marks_a_worktree_with_the_main_repo_name(
+    decorator: ModuleType, tmp_path: Path
+) -> None:
+    repo = _git_repo(tmp_path / "widgets")
+    tree = _worktree(repo, tmp_path / "trees/fix")
+    assert decorator.checkout_name(str(tree)) == "wt:widgets"
+
+
+def test_checkout_name_is_empty_outside_a_repo(
+    decorator: ModuleType, tmp_path: Path
+) -> None:
+    assert decorator.checkout_name(str(tmp_path)) is None
+
+
 def test_moved_to_is_empty_inside_the_starting_checkout(
     decorator: ModuleType, tmp_path: Path
 ) -> None:
     repo = _git_repo(tmp_path / "widgets")
     (repo / "src").mkdir()
-    assert decorator.moved_to(str(repo / "src"), str(repo), "main") is None
+    assert decorator.moved_to(str(repo / "src"), str(repo)) is None
 
 
 def test_moved_to_names_another_repo(decorator: ModuleType, tmp_path: Path) -> None:
     start = _git_repo(tmp_path / "widgets")
     other = _git_repo(tmp_path / "gadgets")
-    assert decorator.moved_to(str(other), str(start), "main") == "gadgets"
+    assert decorator.moved_to(str(other), str(start)) == "gadgets"
 
 
-def test_moved_to_names_a_worktree_by_repo_and_branch(
+def test_moved_to_names_a_worktree_without_its_branch(
     decorator: ModuleType, tmp_path: Path
 ) -> None:
-    import subprocess
-
     repo = _git_repo(tmp_path / "widgets")
-    tree = tmp_path / "trees/fix"
-    subprocess.run(
-        ["git", "-C", str(repo), "worktree", "add", "-q", "-b", "fix", str(tree)],
-        check=True,
-    )
-    assert decorator.moved_to(str(tree), str(repo), "fix") == "widgets \ue0a0 fix"
+    tree = _worktree(repo, tmp_path / "trees/fix")
+    assert decorator.moved_to(str(tree), str(repo)) == "wt:widgets"
 
 
 def write_moto_tasks(state_home: Path, tasks: dict[str, Any]) -> None:
