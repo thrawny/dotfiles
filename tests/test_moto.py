@@ -184,7 +184,7 @@ def test_spawn_adds_the_report_footer_and_records_the_task(moto: ModuleType):
         "workspace_id": "w1",
     }
     args = argparse.Namespace(
-        repo="widgets", worktree="ABC-1-fix", base=None, name=None
+        repo="widgets", worktree="ABC-1-fix", base=None, name=None, title="ABC-1 fix"
     )
     with (
         patch("sys.stdin.read", return_value="Fix it."),
@@ -199,6 +199,8 @@ def test_spawn_adds_the_report_footer_and_records_the_task(moto: ModuleType):
         "widgets",
         "--worktree",
         "ABC-1-fix",
+        "--title",
+        "ABC-1 fix",
     ]
     assert run.call_args.kwargs["stdin"].startswith(
         "Fix it.\n\nA driver session started you"

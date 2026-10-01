@@ -175,7 +175,7 @@ def cmd_spawn(args: argparse.Namespace) -> int:
     if not brief:
         raise MotoError("Pass the task brief on stdin")
     command = ["spawn-session", "--json", "--repo", args.repo]
-    for flag in ("worktree", "base", "name"):
+    for flag in ("worktree", "base", "name", "title"):
         if value := getattr(args, flag):
             command += [f"--{flag}", value]
     # Worktree creation, agent startup and the first prompt each wait on Herdr.
@@ -517,6 +517,11 @@ def parser() -> argparse.ArgumentParser:
     spawn.add_argument("--worktree", metavar="BRANCH", help="Work in a linked worktree")
     spawn.add_argument("--base", help="Base ref for a new worktree")
     spawn.add_argument("--name", help="Herdr agent name")
+    spawn.add_argument(
+        "--title",
+        required=True,
+        help="Claude session name: up to three lowercase words, as in 'ABC-123 summary'",
+    )
     spawn.set_defaults(handler=cmd_spawn)
 
     listing = commands.add_parser(

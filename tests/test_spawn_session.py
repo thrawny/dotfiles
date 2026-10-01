@@ -64,3 +64,26 @@ def test_requested_agent_name_is_validated(spawn: ModuleType):
     assert spawn.agent_name("reviewer", "ignored") == "reviewer"
     with pytest.raises(spawn.SpawnError, match="must match"):
         spawn.agent_name("Bad Name", "ignored")
+
+
+def test_title_becomes_the_claude_session_name(spawn: ModuleType):
+    assert spawn.title_args(None, "codex") == []
+    assert spawn.title_args("ABC-123 summary", "claude") == [
+        "--name",
+        "ABC-123 summary",
+    ]
+    assert spawn.title_args("fix retry timeouts", "claude") == [
+        "--name",
+        "fix retry timeouts",
+    ]
+    for bad in ("Fix retry", "one two three four", "two  spaces", " lead", ""):
+        with pytest.raises(spawn.SpawnError, match="one to three"):
+            spawn.title_args(bad, "claude")
+    with pytest.raises(spawn.SpawnError, match="--kind claude"):
+        spawn.title_args("ABC-123 summary", "codex")
+
+
+def test_agent_args_follow_a_separator(spawn: ModuleType):
+    with patch.object(spawn, "herdr") as herdr:
+        spawn.start_agent("abc-1", "claude", "w1:p1", ["--name", "ABC-1 fix"])
+    assert herdr.call_args.args[-3:] == ("--", "--name", "ABC-1 fix")

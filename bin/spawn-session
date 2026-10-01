@@ -21,6 +21,9 @@ CODE_DIR = Path.home() / "code"
 # Local files a fresh worktree needs but git does not carry, as in git-worktree-new.
 LOCAL_FILES = r"^\.(env|env\..*|envrc|envrc\..*|secrets.*)$"
 NAME_PATTERN = re.compile(r"[a-z][a-z0-9_-]{0,31}")
+# One to three lowercase words; a ticket key such as ABC-123 keeps its case.
+TITLE_WORD = r"(?:[A-Z][A-Z0-9]*-[0-9]+|[a-z0-9][a-z0-9-]*)"
+TITLE_PATTERN = re.compile(rf"{TITLE_WORD}(?: {TITLE_WORD}){{0,2}}")
 
 
 class SpawnError(Exception):
@@ -167,9 +170,12 @@ def worktree_pane(repo: Path, branch: str, base: str | None) -> dict[str, Any]:
     return pane
 
 
-def start_agent(name: str, kind: str, pane: str) -> None:
+def start_agent(
+    name: str, kind: str, pane: str, agent_args: list[str] | None = None
+) -> None:
     """Start the agent, accepting Claude's folder trust prompt for a new worktree path."""
     deadline = time.monotonic() + 60
+    extra = ["--", *agent_args] if agent_args else []
     while True:
         try:
             herdr(
@@ -182,6 +188,7 @@ def start_agent(name: str, kind: str, pane: str) -> None:
                 pane,
                 "--timeout",
                 "60000",
+                *extra,
                 timeout=90,
             )
             return
@@ -218,6 +225,19 @@ def agent_name(requested: str | None, fallback: str) -> str:
     return name
 
 
+def title_args(title: str | None, kind: str) -> list[str]:
+    """The agent arguments that show this title as the Claude session name."""
+    if title is None:
+        return []
+    if kind != "claude":
+        raise SpawnError(f"--title only works with --kind claude, not {kind}")
+    if not TITLE_PATTERN.fullmatch(title):
+        raise SpawnError(
+            f"Title must be one to three lowercase words, such as 'ABC-123 summary': {title}"
+        )
+    return ["--name", title]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -231,6 +251,10 @@ def main() -> int:
     )
     parser.add_argument("--name", help="Herdr agent name; default: from branch or repo")
     parser.add_argument("--kind", default="claude", help="Herdr agent kind")
+    parser.add_argument(
+        "--title",
+        help="Claude session name: one to three lowercase words, a ticket key keeps its case",
+    )
     parser.add_argument(
         "--focus", action="store_true", help="Switch to the new session"
     )
@@ -248,6 +272,7 @@ def main() -> int:
         brief = sys.stdin.read().strip()
         if not brief:
             raise SpawnError("Pass the task brief on stdin")
+        agent_args = title_args(args.title, args.kind)
         repo = resolve_repo(args.repo)
         pane = (
             worktree_pane(repo, args.worktree, args.base)
@@ -257,7 +282,7 @@ def main() -> int:
         name = agent_name(args.name, args.worktree or repo.name)
         location = f"{pane['workspace_id']} tab {pane['tab_id']} at {pane['cwd']}"
         try:
-            start_agent(name, args.kind, pane["pane_id"])
+            start_agent(name, args.kind, pane["pane_id"], agent_args)
             herdr(
                 "agent",
                 "prompt",
