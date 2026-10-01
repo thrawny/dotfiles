@@ -8,15 +8,18 @@
 # the only reason this wrapper exists instead of a bare `gita pull -a` alias.
 #
 # Checkouts with no remote are left out of the list: there is nothing to
-# fast-forward them from, and gita skips them in `gita freeze` anyway.
+# fast-forward them from, and gita skips them in `gita freeze` anyway. So are
+# linked worktrees: their main checkout updates the branches they share.
 #
 # Only the default branch is ever updated, and only by fast-forward. A repo
 # sitting on a feature branch keeps that branch checked out and its worktree
 # untouched; the fetch moves the local default branch behind its back. The one
 # exception is a branch whose PR has merged: the repo switches to the freshly
 # updated default branch and the merged branch is deleted, as long as the tree
-# is clean and the branch holds nothing the PR did not. Nothing here rewrites
-# history or touches a dirty tree.
+# is clean and the branch holds nothing the PR did not. Linked worktrees get the
+# same treatment: one whose branch's PR has merged is removed along with the
+# branch, under the same conditions. Nothing here rewrites history or touches a
+# dirty tree.
 #
 # The updates are plain git rather than `gita pull`, because gita pull only
 # knows how to pull the checked-out branch. `gita` is still what holds the repo
@@ -33,12 +36,13 @@ Usage: code-sync [-n] [-s]
 
 Sync gita's repo list with the git checkouts under $CODE_DIR (default ~/code),
 then fast-forward each one's default branch. Checkouts with no remote are left
-out, and repos outside $CODE_DIR are left alone.
+out, and so are linked worktrees and repos outside $CODE_DIR.
 
 A repo on some other branch stays on it: only its local default branch moves.
 If that branch's PR has merged, the repo switches to the default branch and
 deletes the merged one, unless the tree is dirty or the branch has commits the
-PR did not.
+PR did not. Linked worktrees on a merged PR's branch are removed, with the
+same conditions, unless Herdr has them open or they live under $CODE_DIR.
 
   -n  Print what would change and what would be updated, change nothing.
   -s  Print the status table (gita ll) when finished.
@@ -124,36 +128,51 @@ branch_report() {
   fi
 }
 
-# Leave a branch whose PR has merged: switch to the default branch, which the
-# fetch has just brought up to date, and delete the branch. Prints a note and
-# returns 0 when it did, prints why not and returns 1 when the PR merged but the
-# branch stays, and returns 2 with no output when there is no merged PR.
+# The merged PR whose head is this branch, as "number head_oid". Fails when
+# there is none, or when gh is missing or cannot answer.
 #
 # The PR state is the only reliable signal. A squash merge rewrites the commits,
 # so the branch stays ahead of the default branch forever and ancestry never
 # sees that the work landed. Branches without a PR are never touched.
-retire_branch() {
-  local repo=$1 default=$2 branch=$3 pr number head_oid tip log
-  [[ $have_gh == true ]] || return 2
+merged_pr() {
+  local repo=$1 branch=$2 pr
+  [[ $have_gh == true ]] || return 1
   pr=$(cd "$repo" && gh pr list --head "$branch" --state merged --limit 1 \
     --json number,headRefOid --jq '.[0] // empty | "\(.number) \(.headRefOid)"' \
-    2>/dev/null) || return 2
-  [[ -n $pr ]] || return 2
+    2>/dev/null) || return 1
+  [[ -n $pr ]] || return 1
+  printf '%s\n' "$pr"
+}
+
+# Why a checkout of a merged PR's branch has to stay, or nothing when it can go.
+#
+# A branch name can be reused after its PR merged, or get commits pushed later.
+# Delete only when every local commit is in what the PR merged. If git does not
+# have the PR's head commit, the ancestry check fails and the branch stays.
+keep_reason() {
+  local checkout=$1 head_oid=$2 tip
+  tip=$(git -C "$checkout" rev-parse HEAD)
+  if [[ $tip != "$head_oid" ]] &&
+    ! git -C "$checkout" merge-base --is-ancestor "$tip" "$head_oid" 2>/dev/null; then
+    printf 'the branch has commits the PR did not\n'
+  elif [[ -n $(git -C "$checkout" status --porcelain) ]]; then
+    printf 'the tree has uncommitted changes\n'
+  fi
+}
+
+# Leave a branch whose PR has merged: switch to the default branch, which the
+# fetch has just brought up to date, and delete the branch. Prints a note and
+# returns 0 when it did, prints why not and returns 1 when the PR merged but the
+# branch stays, and returns 2 with no output when there is no merged PR.
+retire_branch() {
+  local repo=$1 default=$2 branch=$3 pr number head_oid reason log
+  pr=$(merged_pr "$repo" "$branch") || return 2
   number=${pr%% *}
   head_oid=${pr#* }
 
-  # A branch name can be reused after its PR merged, or get commits pushed
-  # later. Delete only when every local commit is in what the PR merged. If git
-  # does not have the PR's head commit, the ancestry check fails and the branch
-  # stays.
-  tip=$(git -C "$repo" rev-parse HEAD)
-  if [[ $tip != "$head_oid" ]] &&
-    ! git -C "$repo" merge-base --is-ancestor "$tip" "$head_oid" 2>/dev/null; then
-    printf 'PR #%s merged, but the branch has commits the PR did not, kept\n' "$number"
-    return 1
-  fi
-  if [[ -n $(git -C "$repo" status --porcelain) ]]; then
-    printf 'PR #%s merged, but the tree has uncommitted changes, kept\n' "$number"
+  reason=$(keep_reason "$repo" "$head_oid")
+  if [[ -n $reason ]]; then
+    printf 'PR #%s merged, but %s, kept\n' "$number" "$reason"
     return 1
   fi
   if ! log=$(git -C "$repo" switch --quiet "$default" 2>&1); then
@@ -170,6 +189,87 @@ retire_branch() {
   printf 'PR #%s merged, switched to %s and deleted %s\n' "$number" "$default" "$branch"
 }
 
+# Remove the linked worktrees whose branch's PR has merged, and their branches.
+# Writes one line per worktree with a merged PR: "worktree", then removed or
+# kept, then a note. Worktrees without a merged PR say nothing.
+#
+# Two kinds of worktree are never removed. One Herdr has open as a workspace
+# would leave that workspace pointing at a missing directory. One under
+# $code_dir, outside this repo's own directory, was put there on purpose: a
+# checkout code-sync tracks as a repo of its own, or part of a multi-service
+# stack grouped in one folder.
+retire_worktrees() {
+  local repo=$1 line wt_path='' wt_branch='' open_paths='' pr number head_oid reason log
+  local i git_dirs main_seen=false
+  local -a wt_paths=() wt_branches=()
+
+  # Only the main checkout does this. A linked worktree under $code_dir is a
+  # repo here too, and both would otherwise act on the same worktrees at once.
+  git_dirs=$(git -C "$repo" rev-parse --path-format=absolute --git-dir --git-common-dir) ||
+    return 0
+  [[ ${git_dirs%%$'\n'*} == "${git_dirs#*$'\n'}" ]] || return 0
+
+  git -C "$repo" worktree prune || true
+  while IFS= read -r line; do
+    case $line in
+      'worktree '*) wt_path=${line#worktree } wt_branch='' ;;
+      'branch refs/heads/'*) wt_branch=${line#branch refs/heads/} ;;
+      '')
+        # The first entry is always the main checkout, whatever its path says.
+        if [[ $main_seen == false ]]; then
+          main_seen=true
+        elif [[ -n $wt_path && -n $wt_branch ]]; then
+          wt_paths+=("$wt_path")
+          wt_branches+=("$wt_branch")
+        fi
+        wt_path='' wt_branch=''
+        ;;
+    esac
+  done < <(git -C "$repo" worktree list --porcelain; printf '\n')
+  ((${#wt_paths[@]} > 0)) || return 0
+
+  if command -v herdr >/dev/null 2>&1; then
+    open_paths=$(herdr worktree list --cwd "$repo" 2>/dev/null |
+      jq -r '.result.worktrees[]? | select(.open_workspace_id) | .path' 2>/dev/null) || true
+  fi
+
+  for i in "${!wt_paths[@]}"; do
+    wt_path=${wt_paths[i]}
+    wt_branch=${wt_branches[i]}
+    if [[ $wt_path == "$code_dir"/* && $wt_path != "$repo"/* ]]; then
+      continue
+    fi
+    pr=$(merged_pr "$repo" "$wt_branch") || continue
+    number=${pr%% *}
+    head_oid=${pr#* }
+
+    if printf '%s\n' "$open_paths" | grep -Fxq -- "$wt_path"; then
+      reason='Herdr has it open'
+    else
+      reason=$(keep_reason "$wt_path" "$head_oid")
+    fi
+    if [[ -n $reason ]]; then
+      printf 'worktree\tkept\tPR #%s merged, but %s, kept worktree %s\n' \
+        "$number" "$reason" "$wt_path"
+      continue
+    fi
+    # No --force: git refuses a worktree with untracked files or a lock, and
+    # either one is a reason to keep it.
+    if ! log=$(git -C "$repo" worktree remove "$wt_path" 2>&1); then
+      printf 'worktree\tkept\tPR #%s merged, but removing worktree %s failed: %s\n' \
+        "$number" "$wt_path" "$(error_line "$log")"
+      continue
+    fi
+    if ! log=$(git -C "$repo" branch -D "$wt_branch" 2>&1); then
+      printf 'worktree\tremoved\tPR #%s merged, removed worktree %s, but deleting %s failed: %s\n' \
+        "$number" "$wt_path" "$wt_branch" "$(error_line "$log")"
+      continue
+    fi
+    printf 'worktree\tremoved\tPR #%s merged, removed worktree %s and deleted %s\n' \
+      "$number" "$wt_path" "$wt_branch"
+  done
+}
+
 # Where a repo is sitting, for the report. A detached HEAD has no branch name
 # to print, so its note already says everything.
 where_clause() {
@@ -181,15 +281,32 @@ where_clause() {
   fi
 }
 
+# The worktree that has this branch checked out, the main checkout included, or
+# nothing when no worktree does. git refuses to move a branch's ref from the
+# outside while some worktree has it checked out.
+checkout_of() {
+  local repo=$1 branch=$2 line wt_path=''
+  while IFS= read -r line; do
+    case $line in
+      'worktree '*) wt_path=${line#worktree } ;;
+      "branch refs/heads/$branch")
+        printf '%s\n' "$wt_path"
+        return
+        ;;
+    esac
+  done < <(git -C "$repo" worktree list --porcelain)
+}
+
 # Fast-forward one repo's default branch, then write a single tab-separated
 # line: result, default branch, checked-out branch, commits gained, whether a
 # merged branch was retired (yes or -), and a note (the branch report, or the
 # git error for a failure). The retired field is never empty, because read
-# collapses consecutive tabs and would shift the note into it. Runs in a background
-# subshell, so that line is how it reports rather than globals or an exit code.
+# collapses consecutive tabs and would shift the note into it. The worktree lines
+# from retire_worktrees follow it. Runs in a background subshell, so these lines
+# are how it reports rather than globals or an exit code.
 update_repo() {
   local repo=$1 default head_branch before after log exit_code=0 gained note result
-  local retired=- retire_status
+  local retired=- retire_status default_checkout
   if ! default=$(default_branch "$repo"); then
     printf 'failed\t-\t-\t0\t-\torigin/HEAD is unset and there is no origin/main or origin/master\n'
     return
@@ -197,23 +314,26 @@ update_repo() {
 
   before=$(git -C "$repo" rev-parse --verify --quiet "refs/heads/$default" || true)
   head_branch=$(git -C "$repo" symbolic-ref --quiet --short HEAD || printf -- '-')
+  default_checkout=$(checkout_of "$repo" "$default")
 
   # The fetches run without --quiet on purpose. Their output is captured either
   # way and only ever printed for a failure, and --quiet swallows the
   # `! [rejected]` line that says why a refspec did not apply.
-  if [[ $head_branch == "$default" ]]; then
-    # Fetch and merge by hand instead of `git pull --ff-only`, so the repo's
-    # own pull.rebase and pull.ff settings cannot change what happens here.
+  if [[ -n $default_checkout ]]; then
+    # Some worktree has the default branch checked out: this one, or a linked
+    # worktree when this one is on another branch. Fast-forward it in that
+    # worktree. Fetch and merge by hand instead of `git pull --ff-only`, so the
+    # repo's own pull.rebase and pull.ff settings cannot change what happens here.
     if log=$(git -C "$repo" fetch origin \
       "+refs/heads/$default:refs/remotes/origin/$default" 2>&1); then
-      log=$(git -C "$repo" merge --ff-only --quiet "refs/remotes/origin/$default" 2>&1) ||
-        exit_code=$?
+      log=$(git -C "$default_checkout" merge --ff-only --quiet \
+        "refs/remotes/origin/$default" 2>&1) || exit_code=$?
     else
       exit_code=$?
     fi
   else
-    # The default branch is not checked out, so move its ref directly and leave
-    # the worktree on whatever branch it is on. Without a leading + this refspec
+    # No worktree has the default branch checked out, so move its ref directly
+    # and leave the worktree on whatever branch it is on. Without a leading + this refspec
     # rejects a non-fast-forward, which is what we want; the remote-tracking ref
     # gets the forced one, since it mirrors the remote and holds no local work.
     log=$(git -C "$repo" fetch origin \
@@ -255,6 +375,7 @@ update_repo() {
 
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$result" "$default" "$head_branch" "$gained" "$retired" "$note"
+  retire_worktrees "$repo"
 }
 
 dry_run=false
@@ -295,9 +416,16 @@ fi
 names=()
 paths=()
 remoteless=()
+linked=()
 for candidate in "$code_dir"/*/; do
   repo=${candidate%/}
-  [[ -e ${repo}/.git ]] || continue
+  # Only main checkouts, where .git is a directory. A linked worktree has a
+  # .git file instead, and its main checkout already updates it.
+  if [[ -f ${repo}/.git ]]; then
+    linked+=("${repo##*/}")
+    continue
+  fi
+  [[ -d ${repo}/.git ]] || continue
   if [[ -z $(git -C "$repo" remote) ]]; then
     remoteless+=("${repo##*/}")
     continue
@@ -316,13 +444,18 @@ if ((${#remoteless[@]} > 0)); then
     "${#remoteless[@]}" "${remoteless[*]}"
 fi
 
+if ((${#linked[@]} > 0)); then
+  printf 'code-sync: ignoring %d linked worktree(s): %s\n' \
+    "${#linked[@]}" "${linked[*]}"
+fi
+
 wanted=$(printf '%s\n' "${names[@]}")
 
 # Walk the tracked rows to find what the list holds that ~/code no longer does.
 # Rows pointing outside $code_dir belong to something else and are skipped:
 # this command promises to touch only what lives under it.
 tracked=()
-drop_live=() # still a checkout, but unwanted now (usually lost its remote)
+drop_live=() # still a checkout, but unwanted now (lost its remote, or a linked worktree)
 drop_dead=() # path is gone
 if [[ -f $repos_csv ]]; then
   while IFS=, read -r row_path row_name _; do
@@ -360,7 +493,7 @@ if [[ $dry_run == true ]]; then
     printf 'code-sync: would unregister %d repo(s):\n' "${#drop_all[@]}"
     printf '  %s\n' "${drop_all[@]}"
   fi
-  printf 'code-sync: would fast-forward the default branch of %d repo(s) under %s\n' \
+  printf 'code-sync: would fast-forward the default branch of %d repo(s) under %s and clean up merged branches and worktrees\n' \
     "${#names[@]}" "$code_dir"
   exit 0
 fi
@@ -425,6 +558,7 @@ current=0
 failed=0
 off_default=0
 retired_count=0
+worktrees_removed=0
 for i in "${!names[@]}"; do
   result=''
   IFS=$'\t' read -r result default head_branch gained retired note <"$scratch/$i.out" || true
@@ -468,10 +602,18 @@ for i in "${!names[@]}"; do
       fi
       ;;
   esac
+
+  while IFS=$'\t' read -r kind wt_result wt_note; do
+    [[ $kind == worktree ]] || continue
+    if [[ $wt_result == removed ]]; then
+      worktrees_removed=$((worktrees_removed + 1))
+    fi
+    printf '  %-30s %s\n' "${names[i]}" "$wt_note"
+  done < <(tail -n +2 "$scratch/$i.out")
 done
 
-printf 'code-sync: %d updated, %d already current, %d failed, %d not on the default branch, %d merged branch(es) cleaned up\n' \
-  "$updated" "$current" "$failed" "$off_default" "$retired_count"
+printf 'code-sync: %d updated, %d already current, %d failed, %d not on the default branch, %d merged branch(es) cleaned up, %d worktree(s) removed\n' \
+  "$updated" "$current" "$failed" "$off_default" "$retired_count" "$worktrees_removed"
 
 if [[ $show_status == true ]]; then
   printf '\n'
