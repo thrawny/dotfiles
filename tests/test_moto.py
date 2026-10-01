@@ -137,6 +137,18 @@ def test_report_from_an_untracked_pane_tells_the_worker_to_ask_directly(
     assert moto.read_tasks() == {}
 
 
+def test_report_from_a_held_task_tells_the_worker_to_ask_in_its_pane(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
+    args = argparse.Namespace(kind="question", text=["Next", "URL?"], agent=None)
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
+        assert moto.cmd_report(args) == 0
+    assert "ask the user directly in this pane" in capsys.readouterr().out
+    assert moto.read_tasks()["abc-1"]["report"]["text"] == "Next URL?"
+
+
 def test_held_task_never_wakes(moto: ModuleType):
     report = {"kind": "question", "text": "Which base?", "at": 100.0}
     tasks = {"abc-1": task(held=True, report=report)}

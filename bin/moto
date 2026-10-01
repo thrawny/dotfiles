@@ -256,7 +256,15 @@ def cmd_report(args: argparse.Namespace) -> int:
         task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
         if match := PR_URL.search(text):
             task["pr"] = match.group(0)
-    print(f"Reported {args.kind} to the driver.")
+        held = bool(task.get("held"))
+    if held:
+        # The driver's watch skips a held task, so nobody answers there.
+        print(
+            "Recorded. The user is driving this session and the driver is not"
+            " watching it, so ask the user directly in this pane."
+        )
+    else:
+        print(f"Reported {args.kind} to the driver.")
     return 0
 
 
