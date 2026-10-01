@@ -379,6 +379,10 @@ def checkout_workspace(path: str) -> str | None:
         worktree: dict[str, Any] = workspace.get("worktree") or {}
         if worktree.get("checkout_path") == path:
             return workspace["workspace_id"]
+    # `workspace create --cwd` records no checkout, so fall back to a pane there.
+    for pane in herdr("pane", "list")["panes"]:
+        if pane.get("cwd") == path:
+            return pane["workspace_id"]
     return None
 
 

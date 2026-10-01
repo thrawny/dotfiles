@@ -280,3 +280,17 @@ def test_unpushed_commits_block_removal_unless_merged(
         )
     with patch.object(moto, "run", fake_gh({"state": "MERGED", "headRefOid": head})):
         assert moto.unsaved_work(str(pushed_clone)) is None
+
+
+def test_workspace_without_checkout_is_found_by_pane_cwd(moto: ModuleType):
+    replies: dict[tuple[str, ...], dict[str, Any]] = {
+        ("workspace", "list"): {"workspaces": [{"workspace_id": "w1", "label": "moto"}]},
+        ("pane", "list"): {"panes": [{"workspace_id": "w1", "cwd": "/home/moto"}]},
+    }
+
+    def herdr(*args: str) -> dict[str, Any]:
+        return replies[args]
+
+    with patch.object(moto, "herdr", side_effect=herdr):
+        assert moto.checkout_workspace("/home/moto") == "w1"
+        assert moto.checkout_workspace("/elsewhere") is None
