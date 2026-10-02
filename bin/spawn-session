@@ -3,7 +3,7 @@
 
 The brief is read from stdin. The session opens in the repo's Herdr workspace,
 or in a linked worktree workspace with --worktree, and starts on the brief
-right away.
+right away. A resumed session may take no brief and wait for the user instead.
 """
 
 import argparse
@@ -140,7 +140,9 @@ def repo_pane(repo: Path) -> dict[str, Any]:
     )["root_pane"]
 
 
-def worktree_pane(repo: Path, branch: str, base: str | None) -> dict[str, Any]:
+def worktree_pane(
+    repo: Path, branch: str, base: str | None, path: str | None
+) -> dict[str, Any]:
     """A pane in the branch's linked worktree workspace, creating the worktree if needed."""
     listing = herdr("worktree", "list", "--cwd", str(repo))["worktrees"]
     existing = next((w for w in listing if w.get("branch") == branch), None)
@@ -160,6 +162,8 @@ def worktree_pane(repo: Path, branch: str, base: str | None) -> dict[str, Any]:
             branch,
             "--no-focus",
         ]
+        if path:
+            args += ["--path", path]
         base = base or default_base(repo)
         if base:
             args += ["--base", base]
@@ -261,6 +265,9 @@ def main() -> int:
     parser.add_argument(
         "--base", help="Base ref for a new worktree; default: origin/HEAD"
     )
+    parser.add_argument(
+        "--path", help="Folder for a new worktree; default: where Herdr puts it"
+    )
     parser.add_argument("--name", help="Herdr agent name; default: from branch or repo")
     parser.add_argument("--kind", default="claude", help="Herdr agent kind")
     parser.add_argument(
@@ -287,14 +294,14 @@ def main() -> int:
         if os.environ.get("HERDR_ENV") != "1":
             raise SpawnError("Not running inside Herdr")
         brief = sys.stdin.read().strip()
-        if not brief:
+        if not brief and not args.resume:
             raise SpawnError("Pass the task brief on stdin")
         agent_args = resume_args(args.resume, args.kind) + title_args(
             args.title, args.kind
         )
         repo = resolve_repo(args.repo)
         pane = (
-            worktree_pane(repo, args.worktree, args.base)
+            worktree_pane(repo, args.worktree, args.base, args.path)
             if args.worktree
             else repo_pane(repo)
         )
@@ -302,18 +309,19 @@ def main() -> int:
         location = f"{pane['workspace_id']} tab {pane['tab_id']} at {pane['cwd']}"
         try:
             start_agent(name, args.kind, pane["pane_id"], agent_args)
-            herdr(
-                "agent",
-                "prompt",
-                name,
-                brief,
-                "--wait",
-                "--until",
-                "working",
-                "--timeout",
-                "30000",
-                timeout=60,
-            )
+            if brief:
+                herdr(
+                    "agent",
+                    "prompt",
+                    name,
+                    brief,
+                    "--wait",
+                    "--until",
+                    "working",
+                    "--timeout",
+                    "30000",
+                    timeout=60,
+                )
         except (SpawnError, subprocess.TimeoutExpired) as error:
             raise SpawnError(
                 f"Launch in {location} was not confirmed; inspect it before retrying: {error}"

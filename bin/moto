@@ -5,7 +5,8 @@ The driver is a Claude session that hands each task to a worker: a Claude
 session in its own Herdr tab, usually in its own worktree. This command is the
 driver's toolbelt. It starts workers, lists them with their live Herdr state,
 takes reports from workers, waits until a worker needs the driver, and cleans
-up after a merge.
+up after a merge. A task blocked for a while can be snoozed: its worktree and
+workspace go away, and wake brings them back on the same Claude session.
 
 Tasks live in $XDG_STATE_HOME/moto/tasks.json. herdr-decorator reads the same
 file to show a worker's open question under its sidebar row.
@@ -36,6 +37,7 @@ WATCH_TIMEOUT = 1800
 REPORT_SETTLE_SECONDS = 20
 REPORT_KINDS = ("done", "question", "blocked")
 PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
+CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
 
 # Marks every prompt the driver sends, so a worker can tell it from the user's own typing.
 DRIVER_TAG = "[driver]"
@@ -201,6 +203,7 @@ def cmd_spawn(args: argparse.Namespace) -> int:
             "workspace_id": info["workspace_id"],
             "tab_id": info["tab_id"],
             "cwd": info["cwd"],
+            "title": args.title,
             "started": time.time(),
             "report": None,
             "pr": None,
@@ -225,6 +228,8 @@ def cmd_list(args: argparse.Namespace) -> int:
         status = (
             "unknown" if live is None else (agent or {}).get("agent_status", "gone")
         )
+        if task.get("snoozed"):
+            status = "snoozed"
         pr = task.get("pr") or links.get(task["pane_id"], {}).get("pr")
         rows.append({**task, "name": name, "status": status, "pr": pr})
     if args.json:
@@ -235,7 +240,10 @@ def cmd_list(args: argparse.Namespace) -> int:
         return 0
     if live is None:
         print("Herdr is unavailable, so live states are unknown.")
+    snoozed = [row for row in rows if row.get("snoozed")]
     for row in rows:
+        if row.get("snoozed"):
+            continue
         branch = row.get("branch") or "main checkout"
         held = " · held by the user" if row.get("held") else ""
         print(
@@ -246,6 +254,16 @@ def cmd_list(args: argparse.Namespace) -> int:
         if report := row.get("report"):
             ago = age(now - report["at"])
             print(f"  {report['kind']} ({ago} ago): {report['text']}")
+    if snoozed:
+        print("\nSnoozed:")
+    for row in snoozed:
+        snooze = row["snoozed"]
+        branch = snooze.get("branch") or row.get("branch") or "main checkout"
+        ago = age(now - snooze["at"])
+        print(f"{row['name']} · {Path(row['repo']).name} · {branch} · {ago}")
+        print(f"  {snooze.get('reason') or 'no reason recorded'}")
+        if row["pr"]:
+            print(f"  PR: {row['pr']}")
     return 0
 
 
@@ -281,7 +299,10 @@ def cmd_tell(args: argparse.Namespace) -> int:
     text = " ".join(args.text).strip() or sys.stdin.read().strip()
     if not text:
         raise MotoError("Pass the message as arguments or on stdin")
-    agent = find_task(read_tasks(), args.agent)["agent"]
+    task = find_task(read_tasks(), args.agent)
+    if task.get("snoozed"):
+        raise MotoError(f"{args.agent} is snoozed; pass the message to moto wake")
+    agent = task["agent"]
     herdr("agent", "prompt", agent, f"{DRIVER_TAG} {text}")
     print(f"Sent to {agent}.")
     return 0
@@ -313,12 +334,12 @@ def check(
     A worker needs the driver when it reports, when its turn ends, when it waits at a
     prompt, and when its pane closes. Herdr's state_change_seq catches a turn
     that ended while nothing was watching. A done worker that someone looked at
-    turns idle, and that is not news. A held task is the user's, so it never
-    needs the driver.
+    turns idle, and that is not news. A held task is the user's, and a snoozed
+    one has no pane, so neither ever needs the driver.
     """
     lines: list[str] = []
     for name, task in sorted(tasks.items()):
-        if task.get("held"):
+        if unwatched(task):
             continue
         seen: dict[str, Any] = task.setdefault("seen", {})
         report: dict[str, Any] | None = task.get("report")
@@ -359,6 +380,10 @@ def check(
     return lines
 
 
+def unwatched(task: dict[str, Any]) -> bool:
+    return bool(task.get("held") or task.get("snoozed"))
+
+
 @contextmanager
 def single_watcher() -> Generator[bool]:
     directory = state_dir()
@@ -380,9 +405,12 @@ def cmd_watch(args: argparse.Namespace) -> int:
         deadline = time.monotonic() + args.timeout
         while True:
             with tasks_for_update() as tasks:
-                if all(t.get("held") for t in tasks.values()):
+                if all(unwatched(t) for t in tasks.values()):
                     held = sum(1 for t in tasks.values() if t.get("held"))
-                    print(f"No tasks to watch ({held} held by the user).")
+                    snoozed = sum(1 for t in tasks.values() if t.get("snoozed"))
+                    print(
+                        f"No tasks to watch ({held} held by the user, {snoozed} snoozed)."
+                    )
                     return 0
                 lines = check(tasks, live_agents(), time.time())
             if lines:
@@ -394,12 +422,17 @@ def cmd_watch(args: argparse.Namespace) -> int:
             time.sleep(POLL_SECONDS)
 
 
-def unsaved_work(cwd: str) -> str | None:
-    """Why removing this checkout would lose work, or None when it is safe."""
-    if run(["git", "status", "--porcelain"], cwd=cwd).strip():
+def unsaved_work(cwd: str, branch: str | None = None) -> str | None:
+    """Why removing this checkout would lose work, or None when it is safe.
+
+    With a branch, cwd is the repo and the check covers that branch's commits,
+    for a branch no worktree has checked out.
+    """
+    if branch is None and run(["git", "status", "--porcelain"], cwd=cwd).strip():
         return "the worktree has uncommitted changes"
+    ref = f"refs/heads/{branch}" if branch else "HEAD"
     unpushed = int(
-        run(["git", "rev-list", "--count", "HEAD", "--not", "--remotes"], cwd=cwd)
+        run(["git", "rev-list", "--count", ref, "--not", "--remotes"], cwd=cwd)
     )
     if unpushed == 0:
         return None
@@ -407,11 +440,15 @@ def unsaved_work(cwd: str) -> str | None:
     pr: dict[str, Any]
     try:
         pr = json.loads(
-            run(["gh", "pr", "view", "--json", "state,headRefOid"], cwd=cwd)
+            run(
+                ["gh", "pr", "view", *([branch] if branch else [])]
+                + ["--json", "state,headRefOid"],
+                cwd=cwd,
+            )
         )
     except (MotoError, ValueError):
         pr = {}
-    head = run(["git", "rev-parse", "HEAD"], cwd=cwd).strip()
+    head = run(["git", "rev-parse", ref], cwd=cwd).strip()
     if pr.get("state") == "MERGED" and pr.get("headRefOid") == head:
         return None
     commits = "1 commit is" if unpushed == 1 else f"{unpushed} commits are"
@@ -436,8 +473,10 @@ def cmd_close(args: argparse.Namespace) -> int:
         task = find_task(tasks, args.agent)
         cwd, branch, repo = task["cwd"], task.get("branch"), task["repo"]
         exists = os.path.isdir(cwd)
-        if branch and exists and not args.force:
-            if problem := unsaved_work(cwd):
+        if branch and not args.force:
+            # A snoozed task's branch has no worktree, so check the branch itself.
+            problem = unsaved_work(cwd) if exists else unsaved_work(repo, branch)
+            if problem:
                 raise MotoError(
                     f"{args.agent}: {problem}; pass --force to remove anyway"
                 )
@@ -496,8 +535,145 @@ def resume(task: dict[str, Any], live: dict[str, dict[str, Any]]) -> None:
 def cmd_resume(args: argparse.Namespace) -> int:
     live = live_agents()
     with tasks_for_update() as tasks:
-        resume(find_task(tasks, args.agent), live)
+        task = find_task(tasks, args.agent)
+        if task.get("snoozed"):
+            raise MotoError(f"{args.agent} is snoozed; bring it back with moto wake")
+        resume(task, live)
     print(f"Resumed {args.agent}: moto watch covers it again")
+    return 0
+
+
+def session_dir(cwd: str) -> Path:
+    """Where Claude keeps the sessions that ran in this folder."""
+    return CLAUDE_HOME / "projects" / re.sub(r"[^A-Za-z0-9]", "-", cwd)
+
+
+def last_title(session: Path) -> str | None:
+    title = None
+    with session.open(errors="replace") as lines:
+        for line in lines:
+            if '"customTitle"' not in line:
+                continue
+            try:
+                title = json.loads(line).get("customTitle") or title
+            except ValueError:
+                pass
+    return title
+
+
+def find_session(cwd: str, title: str) -> str:
+    """The id of the newest Claude session in this folder that is named title."""
+    directory = session_dir(cwd)
+    if not directory.is_dir():
+        raise MotoError(f"No Claude sessions recorded for {cwd} in {directory}")
+    named = [s for s in directory.glob("*.jsonl") if last_title(s) == title]
+    if not named:
+        raise MotoError(f"No Claude session in {directory} is named {title!r}")
+    return max(named, key=lambda s: s.stat().st_mtime).stem
+
+
+def task_title(task: dict[str, Any], agent: dict[str, Any] | None) -> str:
+    """The worker's Claude session name, which spawn records and Claude shows as the pane title."""
+    if title := task.get("title"):
+        return title
+    if agent and (title := agent.get("terminal_title_stripped")):
+        return title
+    raise MotoError(
+        f"{task['agent']} has no recorded title and no live pane to read one from"
+    )
+
+
+def cmd_snooze(args: argparse.Namespace) -> int:
+    reason = " ".join(args.reason).strip()
+    live = live_agents()
+    with tasks_for_update() as tasks:
+        task = find_task(tasks, args.agent)
+        if task.get("snoozed"):
+            raise MotoError(f"{args.agent} is already snoozed")
+        agent = live.get(task["pane_id"])
+        if agent and agent.get("agent_status") == "working":
+            raise MotoError(f"{args.agent} is mid-turn; snooze it once the turn ends")
+        cwd, repo, linked = task["cwd"], task["repo"], bool(task.get("branch"))
+        title = task_title(task, agent)
+        session = find_session(cwd, title)
+        if linked:
+            branch = task["branch"]
+            if os.path.isdir(cwd):
+                if run(["git", "status", "--porcelain"], cwd=cwd).strip():
+                    raise MotoError(
+                        f"{args.agent}: the worktree has uncommitted changes"
+                    )
+                # Both keep the branch; wake checks it out again at the same path.
+                if workspace := checkout_workspace(cwd):
+                    herdr("worktree", "remove", "--workspace", workspace, timeout=120)
+                else:
+                    run(["git", "worktree", "remove", cwd], cwd=repo, timeout=120)
+        else:
+            # The main checkout stays as it is, on whatever branch it is on.
+            try:
+                branch = run(
+                    ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=cwd
+                ).strip()
+            except MotoError:
+                branch = None  # detached HEAD
+            try:
+                herdr("tab", "close", task["tab_id"])
+            except MotoError:
+                pass  # the tab is already gone
+        task["snoozed"] = {
+            "session": session,
+            "title": title,
+            "reason": reason,
+            "repo": repo,
+            "cwd": cwd,
+            "branch": branch,
+            "worktree": linked,
+            "at": time.time(),
+        }
+    print(f"Snoozed {args.agent} (session {session}); bring it back with moto wake")
+    return 0
+
+
+def cmd_wake(args: argparse.Namespace) -> int:
+    task = find_task(read_tasks(), args.agent)
+    snooze: dict[str, Any] | None = task.get("snoozed")
+    if not snooze:
+        raise MotoError(f"{args.agent} is not snoozed")
+    session = snooze["session"]
+    repo = snooze.get("repo") or task["repo"]
+    cwd = snooze.get("cwd") or task["cwd"]
+    linked = snooze.get("worktree", bool(task.get("branch")))
+    # claude --resume finds a session only from the folder it ran in.
+    if not (session_dir(cwd) / f"{session}.jsonl").is_file():
+        raise MotoError(f"Session {session} is not in {session_dir(cwd)}")
+    command = ["spawn-session", "--json", "--repo", repo, "--name", task["agent"]]
+    if linked:
+        command += ["--worktree", snooze.get("branch") or task["branch"], "--path", cwd]
+    elif not os.path.isdir(cwd):
+        raise MotoError(f"The checkout {cwd} is gone")
+    if title := snooze.get("title") or task.get("title"):
+        command += ["--title", title]
+    command += ["--resume", session]
+    text = " ".join(args.text).strip()
+    stdin = f"{DRIVER_TAG} {text}\n" if text else ""
+    output = run(command, timeout=600, stdin=stdin)
+    try:
+        info: dict[str, Any] = json.loads(output)
+    except ValueError as error:
+        raise MotoError(f"spawn-session printed no JSON: {output.strip()}") from error
+    if info["cwd"] != cwd:
+        print(
+            f"moto: the worktree came back at {info['cwd']}, not {cwd}", file=sys.stderr
+        )
+    live = live_agents()
+    with tasks_for_update() as tasks:
+        task = find_task(tasks, args.agent)
+        for key in ("pane_id", "workspace_id", "tab_id", "cwd"):
+            task[key] = info[key]
+        task["title"] = title or task.get("title")
+        del task["snoozed"]
+        resume(task, live)
+    print(f"Woke {args.agent} on session {session}: moto watch covers it again")
     return 0
 
 
@@ -615,9 +791,28 @@ def parser() -> argparse.ArgumentParser:
     hold.add_argument("agent")
     hold.set_defaults(handler=cmd_hold)
 
-    resume_ = commands.add_parser("resume", help="Watch a held task again")
+    resume_ = commands.add_parser(
+        "resume", help="Watch a held task again; a snoozed one needs wake"
+    )
     resume_.add_argument("agent")
     resume_.set_defaults(handler=cmd_resume)
+
+    snooze = commands.add_parser(
+        "snooze",
+        help="Park a blocked task: save its Claude session, remove its worktree"
+        + " (keeping the branch) and close its workspace",
+    )
+    snooze.add_argument("agent")
+    snooze.add_argument("reason", nargs="+", help="Why it waits, shown in moto list")
+    snooze.set_defaults(handler=cmd_snooze)
+
+    wake = commands.add_parser(
+        "wake",
+        help="Bring a snoozed task back: restore its worktree, resume its session",
+    )
+    wake.add_argument("agent")
+    wake.add_argument("text", nargs="*", help="What changed, sent as the driver")
+    wake.set_defaults(handler=cmd_wake)
 
     drop = commands.add_parser("drop", help="Stop tracking a worker, leaving it open")
     drop.add_argument("agent")

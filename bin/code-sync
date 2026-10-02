@@ -19,7 +19,8 @@
 # is clean and the branch holds nothing the PR did not. Linked worktrees get the
 # same treatment: one whose branch's PR has merged is removed along with the
 # branch, under the same conditions. Nothing here rewrites history or touches a
-# dirty tree.
+# dirty tree. A branch moto has snoozed always stays, merged or not: its task
+# comes back on it.
 #
 # The updates are plain git rather than `gita pull`, because gita pull only
 # knows how to pull the checked-out branch. `gita` is still what holds the repo
@@ -43,6 +44,7 @@ If that branch's PR has merged, the repo switches to the default branch and
 deletes the merged one, unless the tree is dirty or the branch has commits the
 PR did not. Linked worktrees on a merged PR's branch are removed, with the
 same conditions, unless Herdr has them open or they live under $CODE_DIR.
+Branches of tasks snoozed with `moto snooze` are always kept.
 
   -n  Print what would change and what would be updated, change nothing.
   -s  Print the status table (gita ll) when finished.
@@ -71,6 +73,24 @@ default_branch() {
     fi
   done
   return 1
+}
+
+# The branches of snoozed moto tasks, one "repo<TAB>branch" line each. moto wake
+# checks such a branch out again, so it must outlive even a merged PR.
+moto_tasks=${XDG_STATE_HOME:-$HOME/.local/state}/moto/tasks.json
+snoozed_branches=''
+if [[ -f $moto_tasks ]]; then
+  if ! snoozed_branches=$(jq -r '.tasks[]? | select(.snoozed)
+      | [.snoozed.repo // .repo, .snoozed.branch // .branch]
+      | select(.[1] != null) | @tsv' "$moto_tasks"); then
+    printf 'code-sync: cannot read the snoozed branches in %s\n' "$moto_tasks" >&2
+    exit 1
+  fi
+fi
+
+snoozed() {
+  local repo=$1 branch=$2
+  printf '%s\n' "$snoozed_branches" | grep -Fxq -- "$repo"$'\t'"$branch"
 }
 
 have_gh=false
@@ -170,7 +190,11 @@ retire_branch() {
   number=${pr%% *}
   head_oid=${pr#* }
 
-  reason=$(keep_reason "$repo" "$head_oid")
+  if snoozed "$repo" "$branch"; then
+    reason='moto has it snoozed'
+  else
+    reason=$(keep_reason "$repo" "$head_oid")
+  fi
   if [[ -n $reason ]]; then
     printf 'PR #%s merged, but %s, kept\n' "$number" "$reason"
     return 1
@@ -245,6 +269,8 @@ retire_worktrees() {
 
     if printf '%s\n' "$open_paths" | grep -Fxq -- "$wt_path"; then
       reason='Herdr has it open'
+    elif snoozed "$repo" "$wt_branch"; then
+      reason='moto has it snoozed'
     else
       reason=$(keep_reason "$wt_path" "$head_oid")
     fi

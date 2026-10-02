@@ -97,3 +97,22 @@ def test_resume_passes_the_session_id(spawn: ModuleType):
         spawn.resume_args("latest", "claude")
     with pytest.raises(spawn.SpawnError, match="--kind claude"):
         spawn.resume_args(session, "codex")
+
+
+def test_new_worktree_goes_to_the_path_asked_for(spawn: ModuleType, tmp_path: Path):
+    pane = {"pane_id": "w1:p1", "cwd": str(tmp_path / "wt")}
+    replies: dict[str, dict[str, object]] = {
+        "list": {"worktrees": []},
+        "create": {"root_pane": pane},
+    }
+
+    def herdr(*args: str, **_: object) -> dict[str, object]:
+        return replies[args[1]]
+
+    with (
+        patch.object(spawn, "herdr", side_effect=herdr) as fake,
+        patch.object(spawn, "copy_local_files"),
+    ):
+        spawn.worktree_pane(tmp_path, "ABC-1-fix", "origin/main", str(tmp_path / "wt"))
+    create = fake.call_args_list[1].args
+    assert create[create.index("--path") + 1] == str(tmp_path / "wt")

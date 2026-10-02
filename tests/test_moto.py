@@ -3,6 +3,7 @@
 import argparse
 import importlib.util
 import json
+import os
 import subprocess
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
@@ -344,3 +345,151 @@ def test_tell_marks_the_prompt_as_the_driver_s(moto: ModuleType):
     )
     with pytest.raises(moto.MotoError, match="No task named"):
         moto.cmd_tell(argparse.Namespace(agent="nope", text=["x"]))
+
+
+def session_file(directory: Path, session: str, *titles: str, mtime: float) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{session}.jsonl"
+    lines = [json.dumps({"type": "user", "message": "hi"})]
+    lines += [json.dumps({"type": "custom-title", "customTitle": t}) for t in titles]
+    path.write_text("\n".join(lines) + "\n")
+    os.utime(path, (mtime, mtime))
+
+
+def test_session_is_the_newest_whose_last_title_matches(
+    moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(moto, "CLAUDE_HOME", tmp_path / "claude")
+    directory = moto.session_dir("/code/widgets.x/ABC-1")
+    assert directory == tmp_path / "claude/projects/-code-widgets-x-ABC-1"
+    session_file(directory, "old", "ABC-1 fix", mtime=100)
+    session_file(directory, "new", "ABC-1 fix", mtime=200)
+    session_file(directory, "renamed", "ABC-1 fix", "other", mtime=300)
+    assert moto.find_session("/code/widgets.x/ABC-1", "ABC-1 fix") == "new"
+    with pytest.raises(moto.MotoError, match="is named 'nope'"):
+        moto.find_session("/code/widgets.x/ABC-1", "nope")
+    with pytest.raises(moto.MotoError, match="No Claude sessions recorded"):
+        moto.find_session("/code/elsewhere", "ABC-1 fix")
+
+
+SNOOZE = {"session": "s1", "reason": "waiting on infra", "at": 100.0}
+
+
+def test_snoozed_task_never_wakes_and_resume_refuses_it(moto: ModuleType):
+    tasks = {"abc-1": task(snoozed=SNOOZE)}
+    assert moto.check(tasks, {}, 200) == []
+    with moto.tasks_for_update() as saved:
+        saved.update(tasks)
+    with (
+        patch.object(moto, "live_agents", return_value={}),
+        pytest.raises(moto.MotoError, match="moto wake"),
+    ):
+        moto.cmd_resume(argparse.Namespace(agent="abc-1"))
+
+
+def test_watch_with_only_snoozed_tasks_exits(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(snoozed=SNOOZE)
+    with patch.object(moto, "live_agents", side_effect=AssertionError("no poll")):
+        assert moto.cmd_watch(argparse.Namespace(timeout=5)) == 0
+    assert "1 snoozed" in capsys.readouterr().out
+
+
+def test_list_shows_snoozed_tasks_apart(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+        tasks["abc-2"] = task(pane_id="w2:p1", snoozed=SNOOZE)
+    with (
+        patch.object(moto, "live_agents", return_value=live("idle", 1)),
+        patch.object(moto.time, "time", return_value=100.0 + 7200),
+    ):
+        assert moto.cmd_list(argparse.Namespace(json=False)) == 0
+    out = capsys.readouterr().out
+    awake, snoozed = out.split("Snoozed:")
+    assert "abc-1" in awake and "abc-2" not in awake
+    assert "abc-2 · widgets · ABC-1-fix · 2h\n  waiting on infra" in snoozed
+
+
+def test_wake_resumes_the_session_at_the_same_worktree_path(
+    moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(moto, "CLAUDE_HOME", tmp_path / "claude")
+    cwd = "/code/widgets-ABC-1-fix"
+    session_file(moto.session_dir(cwd), "s1", "ABC-1 fix", mtime=100)
+    snooze = {**SNOOZE, "title": "ABC-1 fix", "cwd": cwd, "worktree": True}
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(snoozed=snooze, held=True)
+    details = {"cwd": cwd, "pane_id": "w5:p1", "tab_id": "w5:t1", "workspace_id": "w5"}
+    args = argparse.Namespace(agent="abc-1", text=["Infra", "is", "done."])
+    with (
+        patch.object(moto, "run", return_value=json.dumps(details)) as run,
+        patch.object(moto, "live_agents", return_value=live("working", 3, "w5:p1")),
+    ):
+        assert moto.cmd_wake(args) == 0
+    assert run.call_args.args[0] == [
+        "spawn-session",
+        "--json",
+        "--repo",
+        "/code/widgets",
+        "--name",
+        "abc-1",
+        "--worktree",
+        "ABC-1-fix",
+        "--path",
+        cwd,
+        "--title",
+        "ABC-1 fix",
+        "--resume",
+        "s1",
+    ]
+    assert run.call_args.kwargs["stdin"] == "[driver] Infra is done.\n"
+    saved = moto.read_tasks()["abc-1"]
+    assert "snoozed" not in saved and saved["held"] is False
+    assert (saved["pane_id"], saved["seen"]["status"]) == ("w5:p1", "working")
+
+
+def test_wake_refuses_a_session_missing_from_its_folder(
+    moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(moto, "CLAUDE_HOME", tmp_path / "claude")
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(snoozed=SNOOZE)
+    with pytest.raises(moto.MotoError, match="Session s1 is not in"):
+        moto.cmd_wake(argparse.Namespace(agent="abc-1", text=[]))
+
+
+def test_unpushed_branch_without_a_worktree_blocks_removal(
+    moto: ModuleType, pushed_clone: Path
+):
+    git(pushed_clone, "branch", "parked")
+    assert moto.unsaved_work(str(pushed_clone), "parked") is None
+    git(pushed_clone, "switch", "-q", "parked")
+    git(
+        pushed_clone,
+        "-c",
+        "user.name=t",
+        "-c",
+        "user.email=t@t",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "two",
+    )
+    git(pushed_clone, "switch", "-q", "-")
+    real_run = moto.run
+
+    def run(args: list[str], **kwargs: Any) -> str:
+        if args[0] == "gh":
+            raise moto.MotoError("no PR")
+        return real_run(args, **kwargs)
+
+    with patch.object(moto, "run", run):
+        assert (
+            moto.unsaved_work(str(pushed_clone), "parked")
+            == "1 commit is on no remote and in no merged PR"
+        )
