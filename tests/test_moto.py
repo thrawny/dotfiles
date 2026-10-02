@@ -16,14 +16,36 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.fixture
-def moto() -> ModuleType:
+def load_moto() -> ModuleType:
     loader = SourceFileLoader("moto", str(ROOT / "bin/moto"))
     spec = importlib.util.spec_from_loader(loader.name, loader)
     assert spec is not None
     module = importlib.util.module_from_spec(spec)
     loader.exec_module(module)
     return module
+
+
+@pytest.fixture
+def moto() -> ModuleType:
+    module = load_moto()
+    # Unit tests never read a real pane or transcript.
+    footer_says(module, None)
+    turn_in(module, None, None)
+    return module
+
+
+def footer_says(moto: ModuleType, work: str | None) -> None:
+    def background_work(_pane_id: str) -> str | None:
+        return work
+
+    setattr(moto, "background_work", background_work)
+
+
+def turn_in(moto: ModuleType, turn: str | None, prompt: str | None) -> None:
+    def last_turn(_task: Any, _agent: Any) -> tuple[str | None, str | None]:
+        return turn, prompt
+
+    setattr(moto, "last_turn", last_turn)
 
 
 @pytest.fixture(autouse=True)
@@ -550,3 +572,232 @@ def test_drop_keeps_the_whole_task_in_the_log(moto: ModuleType):
     drop = events(moto)[-1]
     assert drop["event"] == "drop"
     assert drop["task"] == task(pr="https://github.com/o/r/pull/7")
+
+
+def absorbed(moto: ModuleType) -> list[str]:
+    return [e["reason"] for e in moto.pending_events if e["event"] == "absorb"]
+
+
+def test_turn_answering_the_user_is_absorbed_and_logged(moto: ModuleType):
+    tasks = {"abc-1": task()}
+    turn_in(moto, "t1", "what does this do?")
+    assert moto.check(tasks, live("done", 2), 0) == []
+    assert absorbed(moto) == ["the user is talking to the worker"]
+    assert "pending" not in tasks["abc-1"]["seen"]
+
+
+def test_turn_answering_the_driver_without_a_report_wakes(moto: ModuleType):
+    tasks = {"abc-1": task(told=50.0)}
+    turn_in(moto, "t1", "[driver] fix it")
+    assert moto.check(tasks, live("done", 2), 0) == [
+        "abc-1: turn ended without a report"
+    ]
+
+
+def test_herdr_announcing_a_handled_turn_again_is_absorbed(moto: ModuleType):
+    tasks = {"abc-1": task()}
+    turn_in(moto, "t1", "[driver] fix it")
+    assert moto.check(tasks, live("done", 2), 0) == [
+        "abc-1: turn ended without a report"
+    ]
+    # Reading the pane bumped Herdr's state, but the transcript has no new turn.
+    assert moto.check(tasks, live("done", 3), 100) == []
+    assert moto.check(tasks, live("done", 3), 100 + moto.TURN_SETTLE_SECONDS) == []
+    assert absorbed(moto) == ["Herdr announced a turn the watch already handled"]
+    turn_in(moto, "t2", "[driver] fix it")
+    assert moto.check(tasks, live("done", 4), 200) == [
+        "abc-1: turn ended without a report"
+    ]
+
+
+def test_turn_end_after_a_report_to_the_driver_is_absorbed(moto: ModuleType):
+    report = {"kind": "question", "text": "Which base?", "at": 100.0}
+    tasks = {"abc-1": task(report=report, told=50.0)}
+    turn_in(moto, "t1", "[driver] fix it")
+    settled = 100 + moto.REPORT_SETTLE_SECONDS
+    assert moto.check(tasks, live("working", 1), settled) == [
+        "abc-1 question: Which base?"
+    ]
+    assert moto.check(tasks, live("done", 2), settled + 5) == []
+    assert absorbed(moto) == ["it reported since the driver last wrote to it"]
+
+
+def test_background_work_defers_the_turn_end_until_it_stops(moto: ModuleType):
+    tasks = {"abc-1": task(told=0.0)}
+    turn_in(moto, "t1", "[driver] fix it")
+    footer_says(moto, "1 shell")
+    assert moto.check(tasks, live("done", 2), 0) == []
+    assert moto.check(tasks, live("done", 2), 60) == []
+    assert absorbed(moto) == ["1 shell still running"]
+    footer_says(moto, None)
+    # The next turn may be about to start, so the watch waits a moment.
+    assert moto.check(tasks, live("done", 2), 61) == []
+    late = 60 + moto.TURN_SETTLE_SECONDS
+    assert moto.check(tasks, live("done", 2), late) == [
+        "abc-1: turn ended without a report"
+    ]
+
+
+def test_new_turn_after_background_work_is_judged_afresh(moto: ModuleType):
+    tasks = {"abc-1": task(told=0.0)}
+    turn_in(moto, "t1", "[driver] fix it")
+    footer_says(moto, "1 shell")
+    assert moto.check(tasks, live("done", 2), 0) == []
+    assert moto.check(tasks, live("working", 3), 90) == []
+    footer_says(moto, None)
+    turn_in(moto, "t2", "[driver] fix it")
+    assert moto.check(tasks, live("done", 4), 95) == [
+        "abc-1: turn ended without a report"
+    ]
+
+
+def test_long_background_work_wakes_the_driver(moto: ModuleType):
+    tasks = {"abc-1": task(told=0.0)}
+    footer_says(moto, "1 shell")
+    assert moto.check(tasks, live("done", 2), 0) == []
+    assert moto.check(tasks, live("done", 2), moto.BUSY_LIMIT) == [
+        "abc-1: turn ended without a report; 1 shell still running after 15m"
+    ]
+
+
+def screen_shows(screen: str) -> Any:
+    def run(*_args: Any, **_kwargs: Any) -> str:
+        return screen
+
+    return run
+
+
+def test_footer_counts_background_work(monkeypatch: pytest.MonkeyPatch):
+    real = load_moto()
+    footer = (
+        "\n  Opus │ main\n  ⏵⏵ auto mode on · 1 shell · 2 monitors · ← for agents\n"
+    )
+    monkeypatch.setattr(real, "run", screen_shows(footer))
+    assert real.background_work("w1:p1") == "1 shell and 2 monitors"
+    monkeypatch.setattr(real, "run", screen_shows("  ⏵⏵ auto mode on · ← for agents"))
+    assert real.background_work("w1:p1") is None
+
+
+def test_transcript_gives_the_last_reply_and_prompt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    real = load_moto()
+    monkeypatch.setattr(real, "CLAUDE_HOME", tmp_path / "claude")
+    directory = real.session_dir("/code/widgets-ABC-1-fix")
+    directory.mkdir(parents=True)
+    entries = [
+        {"type": "custom-title", "customTitle": "ABC-1 fix"},
+        {"type": "user", "promptSource": "typed", "message": {"content": "hi"}},
+        {
+            "type": "user",
+            "promptSource": "typed",
+            "message": {"content": '\n<pasted_content id="1a">\n[driver] fix it'},
+        },
+        {"type": "assistant", "uuid": "a1"},
+        {
+            "type": "user",
+            "promptSource": "system",
+            "message": {"content": "<task-notification>"},
+        },
+        {"type": "assistant", "uuid": "a2"},
+        {"type": "assistant", "uuid": "side", "isSidechain": True},
+        {"type": "system", "subtype": "away_summary", "uuid": "s1"},
+    ]
+    (directory / "s.jsonl").write_text("".join(json.dumps(e) + "\n" for e in entries))
+    assert real.last_turn(task(title="ABC-1 fix"), None) == ("a2", "[driver] fix it")
+    assert real.last_turn(task(title="other"), None) == (None, None)
+
+
+def test_task_a_worker_started_is_left_to_that_worker(moto: ModuleType):
+    details = {
+        "agent": "abc-2",
+        "repo": "/code/widgets",
+        "cwd": "/code/widgets",
+        "pane_id": "w2:p1",
+        "tab_id": "w2:t1",
+        "workspace_id": "w2",
+    }
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    args = argparse.Namespace(
+        repo="widgets", worktree=None, base=None, name=None, title="t", resume=None
+    )
+    with (
+        patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}),
+        patch("sys.stdin.read", return_value="Test it."),
+        patch.object(moto, "run", return_value=json.dumps(details)),
+    ):
+        assert moto.cmd_spawn(args) == 0
+    tasks = moto.read_tasks()
+    assert tasks["abc-2"]["parent"] == "abc-1"
+    assert moto.check({"abc-2": tasks["abc-2"]}, {}, 0) == []
+
+
+def stop(moto: ModuleType, active: bool = False) -> dict[str, Any]:
+    """What the hook prints, or {} when it lets the turn end silently."""
+    return moto.stop_hook({"session_id": "s1", "stop_hook_active": active}) or {}
+
+
+def test_stop_hook_ignores_a_driver_with_nothing_to_watch(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
+    assert stop(moto) == {}
+
+
+def no_sleep(_seconds: float) -> None:
+    pass
+
+
+def test_stop_hook_blocks_until_a_watch_runs_then_gives_up(
+    moto: ModuleType, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(moto.time, "sleep", no_sleep)
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    first = stop(moto)
+    assert first["decision"] == "block"
+    assert "no moto watch is running" in first["reason"]
+    assert "run_in_background" in first["reason"]
+    for _ in range(moto.STOP_BLOCK_BUDGET - 1):
+        assert stop(moto, active=True)["decision"] == "block"
+    gave_up = stop(moto, active=True)
+    assert "decision" not in gave_up
+    assert "nothing watches abc-1" in gave_up["systemMessage"]
+    # A new prompt starts the count again.
+    assert stop(moto)["decision"] == "block"
+
+
+def test_stop_hook_lets_the_turn_end_while_a_watch_beats(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    moto.beat_path().write_text(f"{os.getpid()}\n")
+    with patch.object(moto, "run", return_value="python3 /bin/moto watch"):
+        assert stop(moto) == {}
+
+
+def test_stop_hook_names_a_watch_that_stopped_polling(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    beat = moto.beat_path()
+    beat.write_text(f"{os.getpid()}\n")
+    old = moto.time.time() - moto.BEAT_STALE_SECONDS - 5
+    os.utime(beat, (old, old))
+    with patch.object(moto, "run", return_value="python3 /bin/moto watch"):
+        reason = stop(moto)["reason"]
+    assert f"kill {os.getpid()} first" in reason
+
+
+def test_stop_hook_fails_open(moto: ModuleType, capsys: pytest.CaptureFixture[str]):
+    with patch.object(moto, "stop_hook", side_effect=RuntimeError("boom")):
+        with patch("sys.stdin.read", return_value="{}"):
+            assert moto.cmd_stop_hook(argparse.Namespace()) == 0
+    out = json.loads(capsys.readouterr().out)
+    assert "decision" not in out and "boom" in out["systemMessage"]
+
+
+def test_stop_hook_counts_a_watch_from_before_heartbeats(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    with moto.single_watcher() as alone:
+        assert alone
+        assert stop(moto) == {}
