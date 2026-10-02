@@ -801,3 +801,81 @@ def test_stop_hook_counts_a_watch_from_before_heartbeats(moto: ModuleType):
     with moto.single_watcher() as alone:
         assert alone
         assert stop(moto) == {}
+
+
+def afk(moto: ModuleType, *words: str) -> None:
+    assert moto.cmd_afk(argparse.Namespace(text=list(words))) == 0
+
+
+def test_afk_keeps_the_note_word_for_word_and_logs_replacements(moto: ModuleType):
+    afk(moto, "merge #194 if green; otherwise wait")
+    first = moto.read_afk()
+    afk(moto)  # no words while away changes nothing
+    assert moto.read_afk() == first
+    afk(moto, "just watch")
+    assert moto.read_afk() == {"since": first["since"], "note": "just watch"}
+    logged = [(e["note"], e["previous"]) for e in events(moto) if e["event"] == "afk"]
+    assert logged == [
+        ("merge #194 if green; otherwise wait", None),
+        ("just watch", "merge #194 if green; otherwise wait"),
+    ]
+
+
+def test_afk_without_words_is_an_entry_without_instructions(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    afk(moto)
+    assert moto.read_afk()["note"] == ""
+    assert "no instructions" in capsys.readouterr().out
+
+
+def report(moto: ModuleType, agent: str, kind: str, text: str) -> None:
+    moto.cmd_report(argparse.Namespace(kind=kind, text=[text], agent=agent))
+
+
+def test_back_prints_what_happened_while_away(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        for n in (1, 2, 3):
+            tasks[f"abc-{n}"] = task(pane_id=f"w{n}:p1", agent=f"abc-{n}")
+    report(moto, "abc-1", "question", "before afk")
+    afk(moto, "merge green PRs")
+    report(moto, "abc-1", "done", "https://github.com/o/r/pull/7")
+    report(moto, "abc-2", "question", "Which base?")
+    report(moto, "abc-3", "blocked", "no creds")
+    with patch.object(moto, "herdr"):
+        moto.cmd_tell(argparse.Namespace(agent="abc-3", text=["use the vault"]))
+    moto.cmd_log_action(
+        argparse.Namespace(text=["per the note: merged #7"], agent="abc-1")
+    )
+    with moto.tasks_for_update():
+        moto.record("close", "abc-9", force=False, task={})
+    capsys.readouterr()
+    assert moto.cmd_back(argparse.Namespace()) == 0
+    out = capsys.readouterr().out
+    assert moto.read_afk() is None
+    head, prs, questions, actions, finished = out.strip().split("\n\n")
+    assert head.startswith("Away ") and head.endswith("Note: merge green PRs")
+    assert "abc-1: https://github.com/o/r/pull/7" in prs
+    assert "abc-2 question: Which base?" in questions
+    assert "no creds" not in questions  # the driver answered it
+    assert "before afk" not in out
+    assert "abc-1: per the note: merged #7" in actions
+    assert "abc-1 done: https://github.com/o/r/pull/7" in finished
+    assert "abc-9: closed" in finished
+    assert [e["event"] for e in events(moto)][-1] == "back"
+
+
+def test_back_refuses_when_not_away(moto: ModuleType):
+    with pytest.raises(moto.MotoError, match="Not away"):
+        moto.cmd_back(argparse.Namespace())
+
+
+def test_list_shows_the_away_note(moto: ModuleType, capsys: pytest.CaptureFixture[str]):
+    afk(moto, "back at 5")
+    capsys.readouterr()
+    with patch.object(moto, "live_agents", return_value={}):
+        assert moto.cmd_list(argparse.Namespace(json=False)) == 0
+    out = capsys.readouterr().out
+    assert "The user is away since" in out and "Note: back at 5" in out
