@@ -10,6 +10,11 @@ workspace go away, and wake brings them back on the same Claude session.
 
 Tasks live in $XDG_STATE_HOME/moto/tasks.json. herdr-decorator reads the same
 file to show a worker's open question under its sidebar row.
+
+Every command that changes a task also appends a line to events.jsonl in the
+same folder, which nothing rewrites: a task's history outlives the task.
+close and drop copy the whole task into their line before deleting it.
+moto log prints those lines.
 """
 
 from __future__ import annotations
@@ -61,8 +66,15 @@ UNTRACKED = (
 )
 
 
+EVENTS_VERSION = 1
+
+
 class MotoError(Exception):
     pass
+
+
+# Events recorded during the current tasks_for_update, appended when it commits.
+pending_events: list[dict[str, Any]] = []
 
 
 def state_dir() -> Path:
@@ -138,16 +150,52 @@ def read_tasks() -> dict[str, dict[str, Any]]:
     return data.get("tasks", {})
 
 
+def record(event: str, agent: str, **fields: Any) -> None:
+    """Log an event; the enclosing tasks_for_update appends it if it commits."""
+    pending_events.append(
+        {"v": EVENTS_VERSION, "ts": time.time(), "event": event, "agent": agent}
+        | fields
+    )
+
+
+def append_events(
+    directory: Path, events: list[dict[str, Any]], tasks: dict[str, dict[str, Any]]
+) -> None:
+    """Append to the event log, opening it with a snapshot of every task."""
+    path = directory / "events.jsonl"
+    if not path.exists():
+        now = time.time()
+        events = [
+            {"v": EVENTS_VERSION, "ts": now, "event": "snapshot", "agent": name}
+            | {"task": task}
+            for name, task in sorted(tasks.items())
+        ] + events
+    if events:
+        with path.open("a") as log:
+            log.write("".join(json.dumps(e) + "\n" for e in events))
+
+
 @contextmanager
 def tasks_for_update() -> Generator[dict[str, dict[str, Any]]]:
-    """The task table under an exclusive lock, written back on exit if it changed."""
+    """The task table under an exclusive lock, written back on exit if it changed.
+
+    Events recorded inside are appended under the same lock, so log lines never
+    interleave and a failed update logs nothing.
+    """
     directory = state_dir()
     directory.mkdir(parents=True, exist_ok=True)
     with open(directory / "tasks.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
+        pending_events.clear()
         tasks = read_tasks()
         before = json.dumps(tasks, sort_keys=True)
-        yield tasks
+        try:
+            yield tasks
+        except BaseException:
+            pending_events.clear()
+            raise
+        append_events(directory, pending_events, json.loads(before))
+        pending_events.clear()
         if json.dumps(tasks, sort_keys=True) != before:
             path = directory / "tasks.json"
             tmp = path.with_suffix(".tmp")
@@ -209,6 +257,15 @@ def cmd_spawn(args: argparse.Namespace) -> int:
             "pr": None,
             "seen": {"status": "working"},
         }
+        record(
+            "spawn",
+            info["agent"],
+            repo=info["repo"],
+            branch=info.get("branch"),
+            worktree=info["cwd"] if info.get("branch") else None,
+            title=args.title,
+            session=args.resume,
+        )
     where = f"{Path(info['repo']).name} {info.get('branch') or '(main checkout)'}"
     print(f"Started {info['agent']} on {where}")
     return 0
@@ -280,8 +337,10 @@ def cmd_report(args: argparse.Namespace) -> int:
                 print(UNTRACKED)
                 return 0
         task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
-        if match := PR_URL.search(text):
+        record("report", task["agent"], kind=args.kind, text=text)
+        if (match := PR_URL.search(text)) and match.group(0) != task.get("pr"):
             task["pr"] = match.group(0)
+            record("pr", task["agent"], pr=task["pr"])
         held = bool(task.get("held"))
     if held:
         # The driver's watch skips a held task, so nobody answers there.
@@ -304,6 +363,8 @@ def cmd_tell(args: argparse.Namespace) -> int:
         raise MotoError(f"{args.agent} is snoozed; pass the message to moto wake")
     agent = task["agent"]
     herdr("agent", "prompt", agent, f"{DRIVER_TAG} {text}")
+    with tasks_for_update():
+        record("tell", agent, text=text)
     print(f"Sent to {agent}.")
     return 0
 
@@ -500,7 +561,7 @@ def cmd_close(args: argparse.Namespace) -> int:
                 herdr("tab", "close", task["tab_id"])
             except MotoError:
                 pass  # the tab is already gone
-        del tasks[args.agent]
+        record("close", args.agent, force=args.force, task=tasks.pop(args.agent))
     print(f"Closed {args.agent}")
     return 0
 
@@ -508,7 +569,7 @@ def cmd_close(args: argparse.Namespace) -> int:
 def cmd_drop(args: argparse.Namespace) -> int:
     with tasks_for_update() as tasks:
         find_task(tasks, args.agent)
-        del tasks[args.agent]
+        record("drop", args.agent, task=tasks.pop(args.agent))
     print(f"Dropped {args.agent}; its tab and worktree are untouched")
     return 0
 
@@ -516,6 +577,7 @@ def cmd_drop(args: argparse.Namespace) -> int:
 def cmd_hold(args: argparse.Namespace) -> int:
     with tasks_for_update() as tasks:
         find_task(tasks, args.agent)["held"] = True
+        record("hold", args.agent)
     print(f"Holding {args.agent}: moto watch skips it until moto resume")
     return 0
 
@@ -539,6 +601,7 @@ def cmd_resume(args: argparse.Namespace) -> int:
         if task.get("snoozed"):
             raise MotoError(f"{args.agent} is snoozed; bring it back with moto wake")
         resume(task, live)
+        record("resume", args.agent)
     print(f"Resumed {args.agent}: moto watch covers it again")
     return 0
 
@@ -630,6 +693,7 @@ def cmd_snooze(args: argparse.Namespace) -> int:
             "worktree": linked,
             "at": time.time(),
         }
+        record("snooze", args.agent, **task["snoozed"])
     print(f"Snoozed {args.agent} (session {session}); bring it back with moto wake")
     return 0
 
@@ -673,7 +737,31 @@ def cmd_wake(args: argparse.Namespace) -> int:
         task["title"] = title or task.get("title")
         del task["snoozed"]
         resume(task, live)
+        record(
+            "wake",
+            args.agent,
+            session=session,
+            message=text or None,
+            cwd=info["cwd"],
+            pane_id=info["pane_id"],
+        )
     print(f"Woke {args.agent} on session {session}: moto watch covers it again")
+    return 0
+
+
+def cmd_log(args: argparse.Namespace) -> int:
+    """Print the event log, or one task's lines of it."""
+    try:
+        lines = (state_dir() / "events.jsonl").read_text().splitlines()
+    except FileNotFoundError:
+        lines = []
+    for line in lines:
+        try:
+            event = json.loads(line)
+        except ValueError:
+            continue
+        if args.agent in (None, event.get("agent")):
+            print(line)
     return 0
 
 
@@ -817,6 +905,12 @@ def parser() -> argparse.ArgumentParser:
     drop = commands.add_parser("drop", help="Stop tracking a worker, leaving it open")
     drop.add_argument("agent")
     drop.set_defaults(handler=cmd_drop)
+
+    log = commands.add_parser(
+        "log", help="Print events.jsonl, the append-only history of every task"
+    )
+    log.add_argument("agent", nargs="?", help="Only this task's events")
+    log.set_defaults(handler=cmd_log)
 
     focus = commands.add_parser("focus", help="Jump to the driver session")
     focus.set_defaults(handler=cmd_focus)

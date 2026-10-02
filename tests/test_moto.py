@@ -493,3 +493,60 @@ def test_unpushed_branch_without_a_worktree_blocks_removal(
             moto.unsaved_work(str(pushed_clone), "parked")
             == "1 commit is on no remote and in no merged PR"
         )
+
+
+def events(moto: ModuleType) -> list[dict[str, Any]]:
+    path = moto.state_dir() / "events.jsonl"
+    return [json.loads(line) for line in path.read_text().splitlines()]
+
+
+def test_first_write_snapshots_the_existing_tasks(moto: ModuleType):
+    path = moto.state_dir() / "tasks.json"
+    path.parent.mkdir(parents=True)
+    path.write_text(json.dumps({"tasks": {"abc-1": task()}}))
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"]["held"] = True
+        moto.record("hold", "abc-1")
+    first, hold = events(moto)
+    assert (first["v"], first["event"], first["agent"]) == (1, "snapshot", "abc-1")
+    assert "held" not in first["task"]
+    assert hold["event"] == "hold"
+    with moto.tasks_for_update():
+        moto.record("resume", "abc-1")
+    assert [e["event"] for e in events(moto)] == ["snapshot", "hold", "resume"]
+
+
+def test_failed_update_logs_nothing(moto: ModuleType):
+    with pytest.raises(moto.MotoError):
+        with moto.tasks_for_update():
+            moto.record("hold", "abc-1")
+            raise moto.MotoError("boom")
+    with moto.tasks_for_update():
+        pass
+    assert not (moto.state_dir() / "events.jsonl").exists()
+
+
+def test_report_logs_its_text_and_a_new_pr_once(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    args = argparse.Namespace(
+        kind="done", text=["PR", "https://github.com/o/r/pull/7"], agent="abc-1"
+    )
+    assert moto.cmd_report(args) == 0
+    assert moto.cmd_report(args) == 0
+    logged = [(e["event"], e.get("text") or e.get("pr")) for e in events(moto)]
+    assert logged[1:] == [
+        ("report", "PR https://github.com/o/r/pull/7"),
+        ("pr", "https://github.com/o/r/pull/7"),
+        ("report", "PR https://github.com/o/r/pull/7"),
+    ]
+
+
+def test_drop_keeps_the_whole_task_in_the_log(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(pr="https://github.com/o/r/pull/7")
+    assert moto.cmd_drop(argparse.Namespace(agent="abc-1")) == 0
+    assert moto.read_tasks() == {}
+    drop = events(moto)[-1]
+    assert drop["event"] == "drop"
+    assert drop["task"] == task(pr="https://github.com/o/r/pull/7")
