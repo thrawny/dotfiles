@@ -106,6 +106,50 @@ def test_decorate_without_a_jira_site_keeps_the_key_but_no_link(
     assert links == {}
 
 
+def test_decorate_falls_back_to_the_pr_title_for_the_jira_key(
+    decorator: ModuleType,
+) -> None:
+    pane = decorator.Pane("w1:p1", "/tmp", "claude", title="ABC-9 other", branch="docs")
+    titled = {**pr(), "title": "docs(ABC-12): add a guide"}
+    tokens, links = decorator.decorate(pane, titled, "https://jira.example.com/browse")
+    assert tokens["jira"] == "ABC-12"
+    assert links["jira"] == "https://jira.example.com/browse/ABC-12"
+
+
+def test_decorate_falls_back_to_the_pane_title_for_the_jira_key(
+    decorator: ModuleType,
+) -> None:
+    pane = decorator.Pane("w1:p1", "/tmp", "claude", title="ABC-12 widget guide")
+    tokens, _ = decorator.decorate(pane, {**pr(), "title": "docs: add a guide"})
+    assert tokens["jira"] == "ABC-12"
+
+
+def test_decorate_prefers_the_branch_key_over_titles(decorator: ModuleType) -> None:
+    pane = decorator.Pane(
+        "w1:p1", "/tmp", "claude", title="ABC-9 x", branch="abc-12-fix"
+    )
+    tokens, _ = decorator.decorate(pane, {**pr(), "title": "fix(ABC-7): y"})
+    assert tokens["jira"] == "ABC-12"
+
+
+def test_titles_only_count_uppercase_keys(decorator: ModuleType) -> None:
+    pane = decorator.Pane("w1:p1", "/tmp", "claude", title="fix utf-8 decoding")
+    assert "jira" not in decorator.decorate(pane, None)[0]
+
+
+def test_track_reports_a_title_with_a_new_jira_key(
+    decorator: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(decorator, "locate", lambda pane: None)
+    monkeypatch.setattr(decorator, "jira_browse_url", lambda: None)
+    d = decorator.Decorator()
+    info = {"pane_id": "w1:p1", "cwd": "/tmp", "agent": "claude"}
+    d.track({**info, "terminal_title_stripped": "widget guide"})
+    assert d.track({**info, "terminal_title_stripped": "widget docs"})[1] is False
+    pane, changed = d.track({**info, "terminal_title_stripped": "ABC-12 widget docs"})
+    assert changed and pane.title == "ABC-12 widget docs"
+
+
 def test_decorate_without_pr_or_key_is_empty(decorator: ModuleType) -> None:
     pane = decorator.Pane("w1:p1", "/tmp", "claude", branch="tidy-readme")
     assert decorator.decorate(pane, None) == ({}, {})

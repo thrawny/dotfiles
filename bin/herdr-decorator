@@ -19,6 +19,9 @@ When the agent works in another checkout than the one it started in, an arrow
 marks it, so a session that wandered off to a worktree or another repo stands
 out.
 
+$jira is the first Jira key in the branch name, then the PR title, then the
+pane's terminal title, which a Claude session sets to its session title.
+
 A worker that bin/moto started reports questions and blockers to
 $XDG_STATE_HOME/moto/tasks.json, and $moto shows the latest one while the worker
 waits. It clears once the worker starts working again. The driver's own
@@ -46,6 +49,8 @@ SOURCE = "herdr-decorator"
 POLL_SECONDS = int(os.environ.get("HERDR_DECORATOR_POLL", "120"))
 TTL_MS = POLL_SECONDS * 3 * 1000
 JIRA_KEY = re.compile(r"(?<![A-Za-z0-9])([A-Za-z][A-Za-z0-9]+-\d+)")
+# Titles are prose, so only an uppercase key counts there: "utf-8" is not one.
+TITLE_JIRA_KEY = re.compile(r"(?<![A-Za-z0-9])([A-Z][A-Z0-9]+-\d+)")
 GITHUB_REMOTE = re.compile(r"github\.com[:/]([^/]+)/(.+?)(?:\.git)?/?$")
 DEFAULT_BRANCHES = {"main", "master", "HEAD"}
 LIFECYCLE_EVENTS = [
@@ -235,6 +240,7 @@ class Pane:
     agent: str | None
     workspace_id: str | None = None
     status: str | None = None
+    title: str | None = None
     repo: tuple[str, str] | None = None
     branch: str | None = None
     place: str | None = None
@@ -334,7 +340,7 @@ def pr_state(pr: dict[str, Any]) -> str:
 
 PR_FIELDS = " ".join(
     [
-        "nodes { number url state isDraft reviewDecision",
+        "nodes { number url title state isDraft reviewDecision",
         "commits(last: 1) { nodes { commit { statusCheckRollup { state } } } } }",
     ]
 )
@@ -420,6 +426,21 @@ def jira_browse_url() -> str | None:
     return out.stdout.strip() or None
 
 
+def jira_key(pane: Pane, pr: dict[str, Any] | None) -> str | None:
+    """The first Jira key in the branch, then the PR title, then the pane title."""
+    if pane.branch and (match := JIRA_KEY.search(pane.branch)):
+        return match.group(1).upper()
+    for title in ((pr or {}).get("title"), pane.title):
+        if key := title_key(title):
+            return key
+    return None
+
+
+def title_key(title: str | None) -> str | None:
+    match = TITLE_JIRA_KEY.search(title) if title else None
+    return match.group(1) if match else None
+
+
 def decorate(
     pane: Pane,
     pr: dict[str, Any] | None,
@@ -440,8 +461,7 @@ def decorate(
     if pr:
         tokens["pr"] = pr_label(pr)
         links["pr"] = pr["url"]
-    if pane.branch and (match := JIRA_KEY.search(pane.branch)):
-        key = match.group(1).upper()
+    if key := jira_key(pane, pr):
         tokens["jira"] = key
         if jira_base:
             links["jira"] = f"{jira_base}/{key}"
@@ -503,8 +523,9 @@ class Decorator:
         return [p for p in self.panes.values() if p.agent]
 
     def track(self, info: dict[str, Any]) -> tuple[Pane, bool]:
-        """Record a pane from an event or snapshot; report whether cwd changed."""
+        """Record a pane from an event or snapshot; report whether its tokens may change."""
         cwd = info.get("foreground_cwd") or info.get("cwd")
+        title = info.get("terminal_title_stripped")
         pane = self.panes.get(info["pane_id"])
         if pane is None:
             pane = Pane(
@@ -513,17 +534,21 @@ class Decorator:
                 info.get("agent"),
                 info.get("workspace_id"),
                 info.get("agent_status"),
+                title,
             )
             self.panes[pane.pane_id] = pane
             locate(pane)
             return pane, True
         pane.agent = info.get("agent")
         pane.workspace_id = info.get("workspace_id") or pane.workspace_id
+        # Only a new Jira key is worth a refresh, which asks GitHub again.
+        retitled = title_key(title) != title_key(pane.title)
+        pane.title = title
         if cwd != pane.cwd:
             pane.cwd = cwd
             locate(pane)
             return pane, True
-        return pane, False
+        return pane, retitled
 
     def handle(self, envelope: dict[str, Any]) -> None:
         event: str | None = envelope.get("event")
@@ -556,10 +581,10 @@ class Decorator:
         info: dict[str, Any] | None = data.get("pane")
         if not info:
             return
-        pane, moved = self.track(info)
+        pane, changed = self.track(info)
         self.resubscribe_status()
-        if moved and pane.agent:
-            self.refresh([pane], reason=f"{pane.pane_id} moved to {pane.cwd}")
+        if changed and pane.agent:
+            self.refresh([pane], reason=f"{pane.pane_id} changed in {pane.cwd}")
 
     def resubscribe_status(self) -> None:
         """agent_status_changed needs one subscription entry per pane."""
