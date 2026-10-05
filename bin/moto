@@ -22,6 +22,10 @@ the driver with the moto-handback skill, which reports handback: what the user
 and the worker settled, for the driver to act on. Both end a hold, so the driver
 hears of them.
 
+moto list shows what happened in a held or snoozed task since its last
+report, because the driver sees none of it: the user's turns in the worker's
+pane, the user's new commits on its branch, and the last change to its PR.
+
 moto afk records that the user is away, with their note word for word, and
 moto back ends it with a brief of what happened meanwhile. moto stores and
 shows the note but never reads it; the driver's own instructions decide what
@@ -59,6 +63,7 @@ import subprocess
 import sys
 import time
 from collections.abc import Generator
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
@@ -94,6 +99,8 @@ QUIET = (
 REPORT_KINDS = ("done", "question", "blocked", "wrap", "handback")
 # Reports that end the task's work, so it needs no watch once the driver saw them.
 FINISHED = ("done", "wrap")
+# moto list asks GitHub when a held task's PR last changed, and gives up after this.
+PR_TIMEOUT = 3
 PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
 # The generic moto skills, next to this script in dotfiles.
@@ -334,6 +341,134 @@ def age(seconds: float) -> str:
     return f"{seconds}s"
 
 
+def timestamp(text: Any) -> float | None:
+    try:
+        return datetime.fromisoformat(text).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def since_report(
+    task: dict[str, Any],
+    agent: dict[str, Any] | None,
+    pr: str | None,
+    events: list[dict[str, Any]],
+) -> dict[str, Any] | None:
+    """What happened in a held or snoozed task since its last report.
+
+    The driver sees none of it, so the report may be stale. A task with no
+    report counts from the hold. Every source is optional: a missing
+    transcript, checkout or answer from GitHub leaves its count out.
+    """
+    if report := task.get("report"):
+        mark, since = "report", report["at"]
+    else:
+        holds = [
+            e["ts"]
+            for e in events
+            if e.get("event") == "hold" and e.get("agent") == task["agent"]
+        ]
+        if not holds:
+            return None
+        mark, since = "hold", holds[-1]
+    turns = user_turns(task, agent, since)
+    updated = pr_updated(pr) if pr else None
+    return {
+        "since": mark,
+        "at": since,
+        "turns": len(turns),
+        "last_turn_at": max(turns, default=None),
+        "commits": commits_since(task, since),
+        "pr_updated_at": updated if updated and updated > since else None,
+    }
+
+
+def user_turns(
+    task: dict[str, Any], agent: dict[str, Any] | None, since: float
+) -> list[float]:
+    """When the user typed each prompt into the worker's pane after since.
+
+    Prompts from the driver, or from the worker that started this one, carry
+    their sender's tag and do not count.
+    """
+    snooze = task.get("snoozed")
+    try:
+        if snooze:
+            cwd = snooze.get("cwd") or task["cwd"]
+            path: Path | None = session_dir(cwd) / f"{snooze['session']}.jsonl"
+        else:
+            path = newest_session(task["cwd"], task_title(task, agent))
+        lines = path.read_text(errors="replace").splitlines() if path else []
+    except (MotoError, OSError):
+        return []
+    tags = (DRIVER_TAG,) + ((f"[{task['parent']}]",) if task.get("parent") else ())
+    times: list[float] = []
+    for line in lines:
+        if '"typed"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if entry.get("promptSource") != "typed" or entry.get("isSidechain"):
+            continue
+        at = timestamp(entry.get("timestamp"))
+        if at is not None and at > since and not typed_text(entry).startswith(tags):
+            times.append(at)
+    return times
+
+
+def commits_since(task: dict[str, Any], since: float) -> int | None:
+    """How many commits the user made on the task's branch after since.
+
+    Counting only the user's own commits leaves out what a merge or rebase
+    brings in from the base branch. A snoozed worktree is gone, so its branch
+    is read from the repo.
+    """
+    snooze: dict[str, Any] = task.get("snoozed") or {}
+    cwd = task["cwd"] if os.path.isdir(task["cwd"]) else task["repo"]
+    ref = snooze.get("branch") or "HEAD"
+    try:
+        email = run(["git", "config", "user.email"], cwd=cwd, timeout=5).strip()
+        log = run(
+            ["git", "log", f"--since=@{int(since)}", "--format=%ct"]
+            + ["--fixed-strings", f"--author=<{email}>", ref, "--"],
+            cwd=cwd,
+            timeout=5,
+        )
+    except (MotoError, subprocess.TimeoutExpired):
+        return None
+    return len(log.split())
+
+
+def pr_updated(url: str) -> float | None:
+    """When the PR last changed, or None when GitHub does not answer in time."""
+    try:
+        output = run(
+            ["gh", "pr", "view", url, "--json", "updatedAt", "--jq", ".updatedAt"],
+            timeout=PR_TIMEOUT,
+        )
+    except (MotoError, subprocess.TimeoutExpired):
+        return None
+    return timestamp(output.strip())
+
+
+def activity_line(info: dict[str, Any] | None, now: float) -> str | None:
+    """since_report as one line, or None when nothing happened."""
+    if not info:
+        return None
+    parts: list[str] = []
+    if turns := info["turns"]:
+        plural = "s" if turns != 1 else ""
+        last = age(now - info["last_turn_at"])
+        parts.append(f"{turns} turn{plural} with the user, last {last} ago")
+    if commits := info["commits"]:
+        parts.append(f"{commits} commit{'s' if commits != 1 else ''}")
+    if updated := info["pr_updated_at"]:
+        parts.append(f"PR updated {age(now - updated)} ago")
+    return f"since the {info['since']}: " + " · ".join(parts) if parts else None
+
+
 def cmd_spawn(args: argparse.Namespace) -> int:
     brief = sys.stdin.read().strip()
     if not brief:
@@ -395,6 +530,8 @@ def cmd_list(args: argparse.Namespace) -> int:
     links = decorator_links()
     now = time.time()
     rows: list[dict[str, Any]] = []
+    # Held and snoozed tasks, whose last report may be stale.
+    stale: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]] = []
     for name, task in sorted(tasks.items()):
         agent = live.get(task["pane_id"]) if live is not None else None
         status = (
@@ -404,6 +541,18 @@ def cmd_list(args: argparse.Namespace) -> int:
             status = "snoozed"
         pr = task.get("pr") or links.get(task["pane_id"], {}).get("pr")
         rows.append({**task, "name": name, "status": status, "pr": pr})
+        if task.get("held") or task.get("snoozed"):
+            stale.append((rows[-1], task, agent))
+    if stale:
+        # Each task's checks run side by side, so a slow GitHub costs PR_TIMEOUT once.
+        events = read_events()
+        with ThreadPoolExecutor() as pool:
+            found = [
+                pool.submit(since_report, task, agent, row["pr"], events)
+                for row, task, agent in stale
+            ]
+        for (row, _, _), future in zip(stale, found, strict=True):
+            row["since_report"] = future.result()
     if args.json:
         print(json.dumps(rows, indent=2))
         return 0
@@ -433,6 +582,8 @@ def cmd_list(args: argparse.Namespace) -> int:
         if report := row.get("report"):
             ago = age(now - report["at"])
             print(f"  {report['kind']} ({ago} ago): {report['text']}")
+        if line := activity_line(row.get("since_report"), now):
+            print(f"  {line}")
     if snoozed:
         print("\nSnoozed:")
     for row in snoozed:
@@ -443,6 +594,8 @@ def cmd_list(args: argparse.Namespace) -> int:
         print(f"  {snooze.get('reason') or 'no reason recorded'}")
         if row["pr"]:
             print(f"  PR: {row['pr']}")
+        if line := activity_line(row.get("since_report"), now):
+            print(f"  {line}")
     return 0
 
 
@@ -661,14 +814,19 @@ def last_turn(
         if turn is None and entry.get("type") == "assistant":
             turn = entry.get("uuid")
         elif prompt is None and entry.get("promptSource") == "typed":
-            message: dict[str, Any] = entry.get("message") or {}
-            content: str | list[dict[str, Any]] = message.get("content") or ""
-            if isinstance(content, list):
-                content = "".join(str(b.get("text") or "") for b in content)
-            prompt = PASTED.sub("", content, count=1)
+            prompt = typed_text(entry)
         if turn is not None and prompt is not None:
             break
     return turn, prompt
+
+
+def typed_text(entry: dict[str, Any]) -> str:
+    """A typed prompt's text, unwrapped from a pasted_content tag."""
+    message: dict[str, Any] = entry.get("message") or {}
+    content: str | list[dict[str, Any]] = message.get("content") or ""
+    if isinstance(content, list):
+        content = "".join(str(b.get("text") or "") for b in content)
+    return PASTED.sub("", content, count=1)
 
 
 def background_work(pane_id: str) -> str | None:

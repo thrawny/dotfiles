@@ -13,7 +13,7 @@ from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType
 from typing import Any
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -35,7 +35,12 @@ def moto() -> ModuleType:
     # Unit tests never read a real pane or transcript.
     footer_says(module, None)
     turn_in(module, None, None)
+    setattr(module, "pr_updated", no_pr_update)
     return module
+
+
+def no_pr_update(_url: str) -> None:
+    return None
 
 
 def footer_says(moto: ModuleType, work: str | None) -> None:
@@ -1136,3 +1141,151 @@ def test_link_refuses_to_replace_what_it_did_not_make(
     assert moto.cmd_link(argparse.Namespace()) == 1
     assert "skipped" in capsys.readouterr().err
     assert not (tmp_path / "claude/skills/moto-wrap").is_symlink()
+
+
+def iso(ts: float) -> str:
+    return datetime.fromtimestamp(ts, UTC).isoformat()
+
+
+def typed(at: float, text: str | list[dict[str, str]], **fields: Any) -> dict[str, Any]:
+    message = {"content": text}
+    return (
+        {"type": "user", "promptSource": "typed", "timestamp": iso(at)}
+        | {"message": message}
+        | fields
+    )
+
+
+def test_user_turns_skip_tagged_prompts_and_those_before_the_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    real = load_moto()
+    monkeypatch.setattr(real, "CLAUDE_HOME", tmp_path / "claude")
+    directory = real.session_dir("/code/widgets-ABC-1-fix")
+    directory.mkdir(parents=True)
+    entries = [
+        {"type": "custom-title", "customTitle": "ABC-1 fix"},
+        typed(100, "before the report"),
+        typed(300, "[driver] carry on"),
+        typed(400, '<pasted_content id="1">\n[abc-0] from my parent'),
+        typed(500, "rebase it"),
+        typed(600, "a subagent's prompt", isSidechain=True),
+        {"type": "user", "promptSource": "system", "timestamp": iso(700)},
+        typed(800, [{"type": "text", "text": "push it"}]),
+    ]
+    (directory / "s.jsonl").write_text("".join(json.dumps(e) + "\n" for e in entries))
+    held = task(title="ABC-1 fix", parent="abc-0")
+    assert real.user_turns(held, None, 200) == [500, 800]
+    snoozed = task(snoozed={"session": "s", "cwd": "/code/widgets-ABC-1-fix"})
+    assert real.user_turns(snoozed, None, 200) == [400, 500, 800]
+    assert real.user_turns(task(title="other"), None, 200) == []
+
+
+def commit(cwd: Path, message: str, at: int, email: str = "t@t") -> None:
+    dated = {"GIT_AUTHOR_DATE": f"@{at}", "GIT_COMMITTER_DATE": f"@{at}"}
+    subprocess.run(
+        ["git", "-C", str(cwd), "-c", "user.name=t", "-c", f"user.email={email}"]
+        + ["commit", "-q", "--allow-empty", "-m", message],
+        check=True,
+        capture_output=True,
+        env=os.environ | dated,
+    )
+
+
+def test_commits_since_counts_the_user_s_own_on_the_branch(
+    moto: ModuleType, pushed_clone: Path
+):
+    git(pushed_clone, "config", "user.email", "t@t")
+    git(pushed_clone, "checkout", "-q", "-b", "ABC-1-fix")
+    # Git reads a number of nine digits or more as a Unix time.
+    commit(pushed_clone, "before", 1_700_001_000)
+    commit(pushed_clone, "mine", 1_700_003_000)
+    commit(pushed_clone, "from main", 1_700_003_500, email="other@t")
+    commit(pushed_clone, "mine again", 1_700_004_000)
+    here = task(cwd=str(pushed_clone), repo=str(pushed_clone))
+    assert moto.commits_since(here, 1_700_002_000) == 2
+    git(pushed_clone, "checkout", "-q", "-")
+    gone = task(
+        cwd=str(pushed_clone / "gone"),
+        repo=str(pushed_clone),
+        snoozed={"branch": "ABC-1-fix"},
+    )
+    assert moto.commits_since(gone, 1_700_002_000) == 2
+    assert moto.commits_since(task(), 1_700_002_000) is None
+
+
+def test_pr_check_gives_up_when_github_is_slow(monkeypatch: pytest.MonkeyPatch):
+    real = load_moto()
+
+    def slow(args: list[str], **_: Any) -> str:
+        raise subprocess.TimeoutExpired(args, real.PR_TIMEOUT)
+
+    monkeypatch.setattr(real, "run", slow)
+    assert real.pr_updated("https://github.com/acme/widgets/pull/1") is None
+    monkeypatch.setattr(real, "run", MagicMock(return_value="2026-10-05T08:27:53Z\n"))
+    assert real.pr_updated("https://github.com/acme/widgets/pull/1") == 1791188873.0
+
+
+def list_output(
+    moto: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    now: float,
+    turns: list[float],
+    commits: int | None,
+    pr_at: float,
+) -> str:
+    capsys.readouterr()
+    with (
+        patch.object(moto, "live_agents", return_value=live("idle", 1)),
+        patch.object(moto.time, "time", return_value=now),
+        patch.object(moto, "user_turns", return_value=turns),
+        patch.object(moto, "commits_since", return_value=commits),
+        patch.object(moto, "pr_updated", return_value=pr_at),
+    ):
+        assert moto.cmd_list(argparse.Namespace(json=False)) == 0
+    return capsys.readouterr().out
+
+
+def test_list_shows_what_happened_in_a_held_task_since_its_report(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    report = {"kind": "done", "text": "Fixed.", "at": 1000.0}
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True, report=report, pr="https://x/pull/1")
+        tasks["abc-2"] = task(pane_id="w2:p1", report=report)
+    out = list_output(moto, capsys, 7300, [2000.0, 7000.0], 3, 6000.0)
+    held, watched = out.split("abc-2")
+    assert (
+        "  done (1h ago): Fixed.\n  since the report: 2 turns with the user, last 5m"
+        + " ago · 3 commits · PR updated 21m ago\n"
+    ) in held
+    assert "since the" not in watched
+
+
+def test_list_adds_nothing_when_nothing_happened_since_the_report(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    report = {"kind": "done", "text": "Fixed.", "at": 1000.0}
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True, report=report, pr="https://x/pull/1")
+    # The PR changed before the report.
+    assert "since the" not in list_output(moto, capsys, 7300, [], None, 900.0)
+
+
+def test_held_task_without_a_report_counts_from_the_hold(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    moto.cmd_hold(argparse.Namespace(agent="abc-1"))
+    held_at = events(moto)[-1]["ts"]
+    held = moto.read_tasks()["abc-1"]
+    with (
+        patch.object(moto, "user_turns", return_value=[]) as turns,
+        patch.object(moto, "commits_since", return_value=1),
+    ):
+        info = moto.since_report(held, None, None, moto.read_events())
+    turns.assert_called_once_with(held, None, held_at)
+    assert info["since"] == "hold"
+    assert moto.activity_line(info, held_at) == "since the hold: 1 commit"
+    assert (
+        moto.since_report(task(agent="other"), None, None, moto.read_events()) is None
+    )
