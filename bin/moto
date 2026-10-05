@@ -10,9 +10,11 @@ workspace go away, and wake brings them back on the same Claude session.
 
 The watch stays quiet about a turn end that is not the driver's business: the
 user talking to a worker, a worker whose background shells still run, or a
-turn it already reported. It logs each one as an absorb event instead. The
-driver's Claude Stop hook runs moto stop-hook, which keeps the driver's turn
-from ending while open tasks have no live watch.
+turn it already reported. It logs each one as an absorb event instead. With no
+news it exits after 25 minutes, before Claude Code's limit on background
+commands stops it. The driver's Claude Stop hook runs moto stop-hook, which
+keeps the driver's turn from ending while open tasks have no live watch. A task
+that reported done needs no watch until the driver messages it.
 
 moto afk records that the user is away, with their note word for word, and
 moto back ends it with a brief of what happened meanwhile. moto stores and
@@ -36,18 +38,22 @@ import json
 import os
 import re
 import shutil
+import signal
 import socket
 import subprocess
 import sys
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 MOTO_HOME = Path(os.environ.get("MOTO_HOME") or Path.home() / "code/moto")
 POLL_SECONDS = 2.0
-WATCH_TIMEOUT = 1800
+# Claude Code stops a background command at its Bash timeout, 30 minutes by
+# default and counting time the laptop sleeps. The watch ends itself first.
+WATCH_MAX = 25 * 60
 # A report lands a moment before the worker's turn ends. Holding it back this
 # long lets the turn end first, so one wake covers both.
 REPORT_SETTLE_SECONDS = 20
@@ -66,6 +72,10 @@ BACKGROUND_WORK = re.compile(
 BEAT_STALE_SECONDS = 120
 STOP_BLOCK_BUDGET = 3
 NO_WATCH = "no moto watch is running"
+QUIET = (
+    "Every watched task has reported done, so moto watch need not run again"
+    + " until you start a task or message one."
+)
 REPORT_KINDS = ("done", "question", "blocked")
 PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
@@ -596,8 +606,26 @@ def unwatched(task: dict[str, Any]) -> bool:
     return bool(task.get("held") or task.get("snoozed") or task.get("parent"))
 
 
+def settled(task: dict[str, Any]) -> bool:
+    """Whether the worker's last report is a done the driver has seen and not
+    answered. Such a task needs no watch of its own: the Stop hook does not ask
+    for one, and a later report from it waits for the next watch."""
+    report: dict[str, Any] | None = task.get("report")
+    told = task.get("told")
+    return (
+        report is not None
+        and report["kind"] == "done"
+        and task.get("seen", {}).get("report_at") == report["at"]
+        and (told is None or told <= report["at"])
+    )
+
+
 def beat_path() -> Path:
     return state_dir() / "watch.beat"
+
+
+def ended_path() -> Path:
+    return state_dir() / "watch.ended"
 
 
 def watch_locked() -> bool:
@@ -657,9 +685,17 @@ def single_watcher() -> Generator[bool]:
             yield True
         finally:
             beat_path().unlink(missing_ok=True)
+            ended_path().write_text(f"{time.time()}\n")
+
+
+def exit_on_signal(number: int, _frame: object) -> None:
+    sys.exit(128 + number)
 
 
 def cmd_watch(args: argparse.Namespace) -> int:
+    # Claude Code stops a background command with SIGTERM. Exiting through
+    # Python still records when the watch ended, for the Stop hook.
+    signal.signal(signal.SIGTERM, exit_on_signal)
     with single_watcher() as alone:
         if not alone:
             problem = watch_problem()
@@ -668,7 +704,8 @@ def cmd_watch(args: argparse.Namespace) -> int:
             else:
                 print("Another moto watch is already running.")
             return 0
-        deadline = time.monotonic() + args.timeout
+        # Wall-clock time, because Claude's limit counts time the laptop slept.
+        deadline = time.time() + args.max
         while True:
             beat_path().write_text(f"{os.getpid()}\n")
             with tasks_for_update() as tasks:
@@ -685,11 +722,13 @@ def cmd_watch(args: argparse.Namespace) -> int:
                     print(f"No tasks to watch ({skipped or 'none open'}).")
                     return 0
                 lines = check(tasks, live_agents(), time.time())
+                quiet = all(settled(t) for t in tasks.values() if not unwatched(t))
             if lines:
-                print("\n".join(lines))
+                print("\n".join([*lines, QUIET] if quiet else lines))
                 return 0
-            if time.monotonic() >= deadline:
-                print(f"No worker needed the driver in {age(args.timeout)}.")
+            if time.time() >= deadline:
+                then = QUIET if quiet else "Start moto watch again."
+                print(f"No news in {age(args.max)}. {then}")
                 return 0
             time.sleep(POLL_SECONDS)
 
@@ -698,8 +737,10 @@ def cmd_stop_hook(_: argparse.Namespace) -> int:
     """The driver's Claude Stop hook: keep a turn from ending while nothing watches.
 
     Prints a block decision telling the driver to start moto watch, or nothing.
-    It never traps the driver: it gives up after STOP_BLOCK_BUDGET blocks in a
-    row with no watch started, and on any error it lets the turn end.
+    Settled tasks need no watch, and neither does a turn whose next turn will
+    bring the news that the watch ended. It never traps the driver: it gives up
+    after STOP_BLOCK_BUDGET blocks in a row with no watch started, and on any
+    error it lets the turn end.
     """
     try:
         message = stop_hook(json.loads(sys.stdin.read() or "{}"))
@@ -712,10 +753,51 @@ def cmd_stop_hook(_: argparse.Namespace) -> int:
     return 0
 
 
+def watch_end_queued(transcript: str | None) -> bool:
+    """Whether the notification that the last watch ended still waits in the
+    driver's queue, so it will start the driver's next turn.
+
+    Claude logs each message it queues for a session as an enqueue line in the
+    transcript, and its delivery as a dequeue, oldest first, or a remove. A
+    notification the driver already received does not count: that turn was the
+    driver's chance to start a new watch.
+    """
+    try:
+        ended = float(ended_path().read_text())
+        lines = Path(transcript or "").read_text(errors="replace").splitlines()
+    except (OSError, ValueError):
+        return False
+    queued: list[tuple[float, str]] = []
+    for line in lines:
+        if '"queue-operation"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+            at = datetime.fromisoformat(entry["timestamp"]).timestamp()
+        except (ValueError, KeyError, TypeError):
+            continue
+        content = str(entry.get("content") or "")
+        operation = entry.get("operation")
+        if operation == "enqueue":
+            queued.append((at, content))
+        elif operation == "dequeue" and queued:
+            queued.pop(0)
+        elif operation == "remove":
+            queued = [item for item in queued if item[1] != content]
+    # The notification follows the watch's exit, so it cannot be older.
+    return any(
+        "<task-notification>" in content and at >= ended - 1 for at, content in queued
+    )
+
+
 def stop_hook(payload: dict[str, Any]) -> dict[str, Any] | None:
     budget_path = state_dir() / "stop-hook.json"
     tasks = read_tasks()
-    watched = sorted(name for name, task in tasks.items() if not unwatched(task))
+    watched = sorted(
+        name
+        for name, task in tasks.items()
+        if not unwatched(task) and not settled(task)
+    )
     problem = watch_problem() if watched else None
     # A watch started in the turn's last tool call may not have polled yet.
     for _ in range(12):
@@ -726,6 +808,8 @@ def stop_hook(payload: dict[str, Any]) -> dict[str, Any] | None:
     if problem is None:
         budget_path.unlink(missing_ok=True)
         return None
+    if problem == NO_WATCH and watch_end_queued(payload.get("transcript_path")):
+        return None  # the next turn starts with the watch's notification
     try:
         last: dict[str, Any] = json.loads(budget_path.read_text())
     except (OSError, ValueError):
@@ -1271,7 +1355,14 @@ def parser() -> argparse.ArgumentParser:
     report.set_defaults(handler=cmd_report)
 
     watch = commands.add_parser("watch", help="Exit when a worker needs the driver")
-    watch.add_argument("--timeout", type=int, default=WATCH_TIMEOUT, help="Seconds")
+    watch.add_argument(
+        "--max",
+        "--timeout",
+        type=int,
+        default=WATCH_MAX,
+        metavar="SECONDS",
+        help="Exit after this long with no news (default: %(default)s)",
+    )
     watch.set_defaults(handler=cmd_watch)
 
     stop_hook = commands.add_parser(
