@@ -371,6 +371,34 @@ def test_tell_marks_the_prompt_as_the_driver_s(moto: ModuleType):
     )
     with pytest.raises(moto.MotoError, match="No task named"):
         moto.cmd_tell(argparse.Namespace(agent="nope", text=["x"]))
+    assert events(moto)[-1]["from"] == "driver"
+
+
+def test_worker_tells_only_its_own_children_under_its_name(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+        tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1")
+        tasks["abc-3"] = task(pane_id="w3:p1", agent="abc-3")
+    with (
+        patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}),
+        patch.object(moto, "herdr", return_value={}) as herdr,
+    ):
+        assert moto.cmd_tell(argparse.Namespace(agent="abc-2", text=["Retry."])) == 0
+        for agent in ("abc-3", "abc-1"):
+            with pytest.raises(moto.MotoError, match="only the tasks it started"):
+                moto.cmd_tell(argparse.Namespace(agent=agent, text=["x"]))
+        with pytest.raises(moto.MotoError, match="To reach the driver"):
+            moto.cmd_tell(argparse.Namespace(agent="driver", text=["x"]))
+        with pytest.raises(moto.MotoError, match=r"tags yours \[abc-1\]"):
+            moto.cmd_tell(argparse.Namespace(agent="abc-2", text=["[driver]", "x"]))
+    with (
+        patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}),
+        pytest.raises(moto.MotoError, match="abc-1 started you and reads your pane"),
+    ):
+        moto.cmd_tell(argparse.Namespace(agent="abc-1", text=["x"]))
+    herdr.assert_called_once_with("agent", "prompt", "abc-2", "[abc-1] Retry.")
+    tell = events(moto)[-1]
+    assert (tell["event"], tell["agent"], tell["from"]) == ("tell", "abc-2", "abc-1")
 
 
 def session_file(directory: Path, session: str, *titles: str, mtime: float) -> None:
@@ -729,9 +757,12 @@ def test_task_a_worker_started_is_left_to_that_worker(moto: ModuleType):
     with (
         patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}),
         patch("sys.stdin.read", return_value="Test it."),
-        patch.object(moto, "run", return_value=json.dumps(details)),
+        patch.object(moto, "run", return_value=json.dumps(details)) as run,
     ):
         assert moto.cmd_spawn(args) == 0
+    brief = run.call_args.kwargs["stdin"]
+    assert brief.startswith("[abc-1] Test it.\n\nAnother worker, abc-1, started you")
+    assert "follow the user first, then the driver, then abc-1" in brief
     tasks = moto.read_tasks()
     assert tasks["abc-2"]["parent"] == "abc-1"
     assert moto.check({"abc-2": tasks["abc-2"]}, {}, 0) == []

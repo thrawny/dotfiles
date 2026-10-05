@@ -28,6 +28,10 @@ Every command that changes a task also appends a line to events.jsonl in the
 same folder, which nothing rewrites: a task's history outlives the task.
 close and drop copy the whole task into their line before deleting it.
 moto log prints those lines.
+
+A worker can start workers of its own, which the driver's watch skips. moto
+tell and wake from a worker's pane reach only the tasks it started, and tag the
+message with the worker's name instead of [driver].
 """
 
 from __future__ import annotations
@@ -81,19 +85,29 @@ PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
 
 # Marks every prompt the driver sends, so a worker can tell it from the user's own typing.
+# A worker's prompts to the workers it started carry its own name instead.
 DRIVER_TAG = "[driver]"
-BRIEF_FOOTER = f"""\
-A driver session started you and tracks this task for the user. When a turn \
-ends with the task finished, with a question only the user can answer, or with \
-the work blocked, make your last action \
+REPORT_RULES = """\
+When a turn ends with the task finished, with a question only the user can \
+answer, or with the work blocked, make your last action \
 `moto report done|question|blocked "<one line>"`. \
 Put the PR URL in a done line when there is one. The user merges every PR, so \
-stop once yours is ready.
+stop once yours is ready."""
+BRIEF_FOOTER = f"""\
+A driver session started you and tracks this task for the user. {REPORT_RULES}
 
 Every message from the driver starts with {DRIVER_TAG}, as this one does. A \
 message without it is from the user, typing in this pane. Answer the user here, \
 and when the user and the driver disagree, follow the user. Still report to the \
 driver when the task finishes, gets stuck or needs a decision."""
+CHILD_FOOTER = f"""\
+Another worker, {{parent}}, started you and watches this task. A driver session \
+tracks {{parent}} for the user. {REPORT_RULES}
+
+Every message from {{parent}} starts with [{{parent}}], as this one does. A \
+message that starts with {DRIVER_TAG} is from the driver, and a message with \
+neither tag is from the user, typing in this pane. Answer the user here. When \
+they disagree, follow the user first, then the driver, then {{parent}}."""
 
 
 UNTRACKED = (
@@ -248,6 +262,45 @@ def find_task(tasks: dict[str, dict[str, Any]], agent: str) -> dict[str, Any]:
     return tasks[agent]
 
 
+def caller(tasks: dict[str, dict[str, Any]]) -> str | None:
+    """The task in the caller's Herdr pane, or None when the driver calls."""
+    pane_id = os.environ.get("HERDR_PANE_ID")
+    return next((n for n, t in tasks.items() if t["pane_id"] == pane_id), None)
+
+
+def message_sender(
+    tasks: dict[str, dict[str, Any]], agent: str, text: str
+) -> str | None:
+    """The worker sending a message to agent, or None for the driver.
+
+    A worker can message only the tasks it started.
+    """
+    sender = caller(tasks)
+    if sender is None:
+        return None
+    if parent := tasks[sender].get("parent"):
+        hint = f"{parent} started you and reads your pane, so answer there"
+    else:
+        hint = "To reach the driver, use moto report"
+    if agent not in tasks:
+        raise MotoError(f"No task named {agent}. {hint}")
+    if tasks[agent].get("parent") != sender:
+        raise MotoError(
+            f"{sender} can message only the tasks it started, and {agent} is not one"
+            + f" of them. {hint}"
+        )
+    if text.startswith(DRIVER_TAG):
+        raise MotoError(
+            f"Only the driver's messages start with {DRIVER_TAG}; moto tags yours"
+            + f" [{sender}]"
+        )
+    return sender
+
+
+def tag(sender: str | None) -> str:
+    return f"[{sender}]" if sender else DRIVER_TAG
+
+
 def decorator_links() -> dict[str, dict[str, str]]:
     """Pane id → the PR and Jira links herdr-decorator found for it."""
     base = os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
@@ -274,18 +327,18 @@ def cmd_spawn(args: argparse.Namespace) -> int:
     for flag in ("worktree", "base", "name", "title", "resume"):
         if value := getattr(args, flag):
             command += [f"--{flag}", value]
+    # A worker that starts its own worker watches it itself.
+    parent = caller(read_tasks())
+    footer = CHILD_FOOTER.format(parent=parent) if parent else BRIEF_FOOTER
     # Worktree creation, agent startup and the first prompt each wait on Herdr.
-    stdin = f"{DRIVER_TAG} {brief}\n\n{BRIEF_FOOTER}\n"
+    stdin = f"{tag(parent)} {brief}\n\n{footer}\n"
     output = run(command, timeout=600, stdin=stdin)
     try:
         info: dict[str, Any] = json.loads(output)
     except ValueError as error:
         raise MotoError(f"spawn-session printed no JSON: {output.strip()}") from error
-    pane_id = os.environ.get("HERDR_PANE_ID")
     now = time.time()
     with tasks_for_update() as tasks:
-        # A worker that starts its own worker watches it itself.
-        parent = next((n for n, t in tasks.items() if t["pane_id"] == pane_id), None)
         tasks[info["agent"]] = {
             "agent": info["agent"],
             "repo": info["repo"],
@@ -414,19 +467,21 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 
 def cmd_tell(args: argparse.Namespace) -> int:
-    """Send a worker a prompt marked as the driver's."""
+    """Send a worker a prompt tagged with its sender: the driver or its parent."""
     text = " ".join(args.text).strip() or sys.stdin.read().strip()
     if not text:
         raise MotoError("Pass the message as arguments or on stdin")
-    task = find_task(read_tasks(), args.agent)
+    tasks = read_tasks()
+    sender = message_sender(tasks, args.agent, text)
+    task = find_task(tasks, args.agent)
     if task.get("snoozed"):
         raise MotoError(f"{args.agent} is snoozed; pass the message to moto wake")
     agent = task["agent"]
-    herdr("agent", "prompt", agent, f"{DRIVER_TAG} {text}")
+    herdr("agent", "prompt", agent, f"{tag(sender)} {text}")
     with tasks_for_update() as tasks:
         if agent in tasks:
             tasks[agent]["told"] = time.time()
-        record("tell", agent, text=text)
+        record("tell", agent, text=text, **{"from": sender or "driver"})
     print(f"Sent to {agent}.")
     return 0
 
@@ -1065,7 +1120,10 @@ def cmd_snooze(args: argparse.Namespace) -> int:
 
 
 def cmd_wake(args: argparse.Namespace) -> int:
-    task = find_task(read_tasks(), args.agent)
+    text = " ".join(args.text).strip()
+    tasks = read_tasks()
+    sender = message_sender(tasks, args.agent, text)
+    task = find_task(tasks, args.agent)
     snooze: dict[str, Any] | None = task.get("snoozed")
     if not snooze:
         raise MotoError(f"{args.agent} is not snoozed")
@@ -1084,8 +1142,7 @@ def cmd_wake(args: argparse.Namespace) -> int:
     if title := snooze.get("title") or task.get("title"):
         command += ["--title", title]
     command += ["--resume", session]
-    text = " ".join(args.text).strip()
-    stdin = f"{DRIVER_TAG} {text}\n" if text else ""
+    stdin = f"{tag(sender)} {text}\n" if text else ""
     output = run(command, timeout=600, stdin=stdin)
     try:
         info: dict[str, Any] = json.loads(output)
@@ -1111,6 +1168,7 @@ def cmd_wake(args: argparse.Namespace) -> int:
             session=session,
             message=text or None,
             cwd=info["cwd"],
+            **{"from": sender or "driver"},
             pane_id=info["pane_id"],
         )
     print(f"Woke {args.agent} on session {session}: moto watch covers it again")
@@ -1328,7 +1386,10 @@ def parser() -> argparse.ArgumentParser:
     )
     spawn.set_defaults(handler=cmd_spawn)
 
-    tell = commands.add_parser("tell", help="Prompt a worker as the driver")
+    tell = commands.add_parser(
+        "tell",
+        help="Prompt a worker, tagged [driver] or with the worker that started it",
+    )
     tell.add_argument("agent")
     tell.add_argument("text", nargs="*", help="The message; default: stdin")
     tell.set_defaults(handler=cmd_tell)
@@ -1402,7 +1463,7 @@ def parser() -> argparse.ArgumentParser:
         help="Bring a snoozed task back: restore its worktree, resume its session",
     )
     wake.add_argument("agent")
-    wake.add_argument("text", nargs="*", help="What changed, sent as the driver")
+    wake.add_argument("text", nargs="*", help="What changed, sent as with tell")
     wake.set_defaults(handler=cmd_wake)
 
     drop = commands.add_parser("drop", help="Stop tracking a worker, leaving it open")
