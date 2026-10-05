@@ -16,6 +16,12 @@ commands stops it. The driver's Claude Stop hook runs moto stop-hook, which
 keeps the driver's turn from ending while open tasks have no live watch. A task
 that reported done needs no watch until the driver messages it.
 
+The user ends a worker's work by running the moto-wrap skill in its pane, which
+reports wrap, a done that also lists what still runs. A held worker goes back to
+the driver with the moto-handback skill, which reports handback: what the user
+and the worker settled, for the driver to act on. Both end a hold, so the driver
+hears of them.
+
 moto afk records that the user is away, with their note word for word, and
 moto back ends it with a brief of what happened meanwhile. moto stores and
 shows the note but never reads it; the driver's own instructions decide what
@@ -80,7 +86,9 @@ QUIET = (
     "Every watched task has reported done, so moto watch need not run again"
     + " until you start a task or message one."
 )
-REPORT_KINDS = ("done", "question", "blocked")
+REPORT_KINDS = ("done", "question", "blocked", "wrap", "handback")
+# Reports that end the task's work, so it needs no watch once the driver saw them.
+FINISHED = ("done", "wrap")
 PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
 
@@ -443,6 +451,16 @@ def cmd_report(args: argparse.Namespace) -> int:
                 # Dropped tasks keep the brief that asks for reports.
                 print(UNTRACKED)
                 return 0
+        handed_back = args.kind in ("wrap", "handback") and bool(task.get("held"))
+        if handed_back:
+            # The watch takes the task back from here, so this report is news to
+            # it and whatever happened while held is not.
+            task["held"] = False
+            previous: dict[str, Any] = task.get("report") or {}
+            task["seen"] = {
+                k: v for k, v in task.get("seen", {}).items() if k != "pending"
+            } | {"report_at": previous.get("at")}
+            record("resume", task["agent"], by=args.kind)
         task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
         record("report", task["agent"], kind=args.kind, text=text)
         if (match := PR_URL.search(text)) and match.group(0) != task.get("pr"):
@@ -462,7 +480,8 @@ def cmd_report(args: argparse.Namespace) -> int:
             " watching it, so ask the user directly in this pane."
         )
     else:
-        print(f"Reported {args.kind} to the driver.")
+        again = "; moto watch covers this task again" if handed_back else ""
+        print(f"Reported {args.kind} to the driver{again}.")
     return 0
 
 
@@ -662,14 +681,14 @@ def unwatched(task: dict[str, Any]) -> bool:
 
 
 def settled(task: dict[str, Any]) -> bool:
-    """Whether the worker's last report is a done the driver has seen and not
-    answered. Such a task needs no watch of its own: the Stop hook does not ask
+    """Whether the worker's last report is a done or wrap the driver has seen
+    and not answered. Such a task needs no watch of its own: the Stop hook does not ask
     for one, and a later report from it waits for the next watch."""
     report: dict[str, Any] | None = task.get("report")
     told = task.get("told")
     return (
         report is not None
-        and report["kind"] == "done"
+        and report["kind"] in FINISHED
         and task.get("seen", {}).get("report_at") == report["at"]
         and (told is None or told <= report["at"])
     )
@@ -1233,8 +1252,10 @@ def return_brief(
         name, kind, at = event["agent"], event["event"], clock(event["ts"])
         if kind == "pr" and name in tasks:
             prs[event["pr"]] = f"{at} {name}: {event['pr']}"
-        elif kind == "report" and event.get("kind") == "done":
-            finished.append(f"{at} {name} done: {event['text']}")
+        # A handback is addressed to the driver, whose actions on it show as
+        # log-action lines, so it gets no line of its own.
+        elif kind == "report" and event.get("kind") in FINISHED:
+            finished.append(f"{at} {name} {event['kind']}: {event['text']}")
             if (match := PR_URL.search(event["text"])) and name in tasks:
                 prs.setdefault(match.group(0), f"{at} {name}: {match.group(0)}")
         elif kind in ("close", "drop"):
@@ -1408,7 +1429,9 @@ def parser() -> argparse.ArgumentParser:
     listing.set_defaults(handler=cmd_list)
 
     report = commands.add_parser(
-        "report", help="Run by a worker to report to the driver"
+        "report",
+        help="Run by a worker to report to the driver; wrap and handback also"
+        + " end a hold",
     )
     report.add_argument("kind", choices=REPORT_KINDS)
     report.add_argument("text", nargs="+")

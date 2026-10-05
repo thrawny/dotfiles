@@ -194,6 +194,36 @@ def test_resume_treats_what_happened_while_held_as_seen(moto: ModuleType):
     ]
 
 
+def test_handback_ends_the_hold_and_wakes_the_driver(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    old = {"kind": "question", "text": "Which base?", "at": 100.0}
+    seen = {"status": "working", "seq": 1, "pending": {"since": 90.0}}
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True, report=old, seen=seen)
+    args = argparse.Namespace(kind="handback", text=["Ship", "it"], agent=None)
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
+        assert moto.cmd_report(args) == 0
+    assert "moto watch covers this task again" in capsys.readouterr().out
+    tasks = moto.read_tasks()
+    assert tasks["abc-1"]["held"] is False
+    now = moto.time.time()
+    assert moto.check(tasks, live("done", 5), now) == ["abc-1 handback: Ship it"]
+    assert [(e["event"], e.get("by")) for e in events(moto)][-2:] == [
+        ("resume", "handback"),
+        ("report", None),
+    ]
+
+
+def test_wrap_counts_as_finished_and_handback_does_not(moto: ModuleType):
+    def reported(kind: str) -> dict[str, Any]:
+        report = {"kind": kind, "text": "x", "at": 100.0}
+        return task(report=report, seen={"status": "done", "report_at": 100.0})
+
+    assert moto.settled(reported("wrap"))
+    assert not moto.settled(reported("handback"))
+
+
 def test_watch_with_only_held_tasks_exits(
     moto: ModuleType, capsys: pytest.CaptureFixture[str]
 ):
@@ -900,6 +930,24 @@ def test_back_prints_what_happened_while_away(
     assert "abc-1 done: https://github.com/o/r/pull/7" in finished
     assert "abc-9: closed" in finished
     assert [e["event"] for e in events(moto)][-1] == "back"
+
+
+def test_back_lists_a_wrap_as_finished_and_leaves_a_handback_to_the_driver(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        for n in (1, 2):
+            tasks[f"abc-{n}"] = task(pane_id=f"w{n}:p1", agent=f"abc-{n}")
+    afk(moto, "")
+    report(moto, "abc-1", "wrap", "merged https://github.com/o/r/pull/8")
+    report(moto, "abc-2", "handback", "ship it")
+    capsys.readouterr()
+    assert moto.cmd_back(argparse.Namespace()) == 0
+    out = capsys.readouterr().out
+    _, prs, _, _, finished = out.strip().split("\n\n")
+    assert "abc-1: https://github.com/o/r/pull/8" in prs
+    assert "abc-1 wrap: merged https://github.com/o/r/pull/8" in finished
+    assert "ship it" not in out
 
 
 def test_back_refuses_when_not_away(moto: ModuleType):
