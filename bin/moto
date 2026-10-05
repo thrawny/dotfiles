@@ -35,6 +35,11 @@ same folder, which nothing rewrites: a task's history outlives the task.
 close and drop copy the whole task into their line before deleting it.
 moto log prints those lines.
 
+moto link puts the moto-* skills in ~/.claude/skills as symlinks, outside Home
+Manager: the generic ones from moto/skills in dotfiles, and the Epidemic ones
+from skills/ in MOTO_HOME. An Epidemic skill replaces a generic one of the same
+name.
+
 A worker can start workers of its own, which the driver's watch skips. moto
 tell and wake from a worker's pane reach only the tasks it started, and tag the
 message with the worker's name instead of [driver].
@@ -91,6 +96,8 @@ REPORT_KINDS = ("done", "question", "blocked", "wrap", "handback")
 FINISHED = ("done", "wrap")
 PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+# The generic moto skills, next to this script in dotfiles.
+CORE_SKILLS = Path(__file__).resolve().parents[1] / "moto/skills"
 
 # Marks every prompt the driver sends, so a worker can tell it from the user's own typing.
 # A worker's prompts to the workers it started carry its own name instead.
@@ -1384,6 +1391,56 @@ def cmd_focus(_: argparse.Namespace) -> int:
     return 0
 
 
+def skill_folders() -> list[Path]:
+    """Where moto skills live, the folder whose skills win last."""
+    return [CORE_SKILLS, MOTO_HOME / "skills"]
+
+
+def cmd_link(_: argparse.Namespace) -> int:
+    """Symlink every moto-* skill into Claude's skills folder.
+
+    A link is moto's when it points into a skill folder. moto replaces or
+    removes only its own links and links whose target is gone, so Home
+    Manager's links and anything else stay as they are.
+    """
+    folders = [folder.resolve() for folder in skill_folders()]
+    wanted: dict[str, Path] = {}
+    for folder in folders:
+        for skill in sorted(folder.glob("moto-*/SKILL.md")):
+            wanted[skill.parent.name] = skill.parent
+    target = CLAUDE_HOME / "skills"
+    target.mkdir(parents=True, exist_ok=True)
+    changes: list[str] = []
+    refused: list[str] = []
+    for entry in sorted(target.glob("moto-*")):
+        if not entry.is_symlink():
+            if entry.name in wanted:
+                refused.append(f"{entry} is not a symlink")
+            continue
+        points_to = entry.readlink()
+        mine = points_to.parent in folders
+        home_manager = points_to.is_relative_to("/nix/store")
+        if not mine and (entry.exists() or home_manager):
+            if entry.name in wanted:
+                refused.append(f"{entry} points to {points_to}, not a moto skill")
+            continue
+        if wanted.get(entry.name) == points_to:
+            continue
+        entry.unlink()
+        if entry.name not in wanted:
+            changes.append(f"Removed {entry.name}, which pointed to {points_to}")
+    for name, source in wanted.items():
+        link = target / name
+        if link.is_symlink() or link.exists():
+            continue  # already right, or refused above
+        link.symlink_to(source, target_is_directory=True)
+        changes.append(f"Linked {name} to {source}")
+    print("\n".join(changes) or f"All {len(wanted)} moto skills were already linked.")
+    for line in refused:
+        print(f"moto link: skipped, {line}", file=sys.stderr)
+    return 1 if refused else 0
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -1524,6 +1581,11 @@ def parser() -> argparse.ArgumentParser:
 
     pin = commands.add_parser("pin", help="Move the driver's workspace to the top")
     pin.set_defaults(handler=cmd_pin)
+
+    link = commands.add_parser(
+        "link", help="Symlink the moto-* skills into ~/.claude/skills"
+    )
+    link.set_defaults(handler=cmd_link)
     return root
 
 

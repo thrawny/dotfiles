@@ -1084,3 +1084,55 @@ def test_watch_stopped_by_claude_records_its_end(state_home: Path, tmp_path: Pat
     assert watch.wait(5) == 128 + signal.SIGTERM
     assert (state_home / "moto/watch.ended").exists()
     assert not beat.exists()
+
+
+def skill(folder: Path, name: str) -> Path:
+    (folder / name).mkdir(parents=True)
+    (folder / name / "SKILL.md").write_text(f"---\nname: {name}\n---\n")
+    return folder / name
+
+
+def test_link_prefers_the_epidemic_skill_and_leaves_other_links_alone(
+    moto: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    core, home, claude = tmp_path / "core", tmp_path / "moto", tmp_path / "claude"
+    setattr(moto, "CORE_SKILLS", core)
+    setattr(moto, "MOTO_HOME", home)
+    setattr(moto, "CLAUDE_HOME", claude)
+    skill(core, "moto-wrap")
+    skill(core, "moto-brief")
+    epidemic = skill(home / "skills", "moto-brief")
+    skill(core, "not-moto")
+    links = claude / "skills"
+    links.mkdir(parents=True)
+    (links / "moto-gone").symlink_to(core / "moto-gone")
+    (links / "moto-store").symlink_to("/nix/store/abc-home-manager-files/moto-store")
+    (links / "moto-mine").symlink_to(tmp_path)
+    assert moto.cmd_link(argparse.Namespace()) == 0
+    out = capsys.readouterr().out
+    assert (links / "moto-wrap").readlink() == (core / "moto-wrap").resolve()
+    assert (links / "moto-brief").readlink() == epidemic.resolve()
+    assert "Removed moto-gone" in out
+    assert not (links / "moto-gone").is_symlink()
+    assert (links / "moto-store").is_symlink() and (links / "moto-mine").is_symlink()
+    assert not (links / "not-moto").exists()
+    assert moto.cmd_link(argparse.Namespace()) == 0
+    assert capsys.readouterr().out == "All 2 moto skills were already linked.\n"
+    # The Epidemic copy goes, so the generic one takes its place.
+    (epidemic / "SKILL.md").unlink()
+    epidemic.rmdir()
+    assert moto.cmd_link(argparse.Namespace()) == 0
+    assert (links / "moto-brief").readlink() == (core / "moto-brief").resolve()
+
+
+def test_link_refuses_to_replace_what_it_did_not_make(
+    moto: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+):
+    setattr(moto, "CORE_SKILLS", tmp_path / "core")
+    setattr(moto, "MOTO_HOME", tmp_path / "moto")
+    setattr(moto, "CLAUDE_HOME", tmp_path / "claude")
+    skill(tmp_path / "core", "moto-wrap")
+    (tmp_path / "claude/skills/moto-wrap").mkdir(parents=True)
+    assert moto.cmd_link(argparse.Namespace()) == 1
+    assert "skipped" in capsys.readouterr().err
+    assert not (tmp_path / "claude/skills/moto-wrap").is_symlink()

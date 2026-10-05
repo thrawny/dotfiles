@@ -17,6 +17,8 @@ Two symlink styles, and the difference matters:
 - **Mutable** (`mkOutOfStoreSymlink`, edit takes effect immediately): `config/claude/` → `~/.claude/`, `config/codex/` → `~/.codex/`, `config/pi/` → `~/.pi/agent/`, `config/hypr/` → `~/.config/hypr/{hyprland.lua,lua/}` (Hyprland Lua config; `hyprlock.conf` stays Nix-generated).
 - **Immutable** (store-backed, needs `just switch` to take effect): `config/nvim/lua` is copied into the nix-built Neovim package (`nix/lib/nvim-package.nix`); each folder in `skills/` → `~/.claude/skills/<skill>`, `~/.pi/agent/skills/<skill>`, `~/.codex/skills/<skill>` per the selection in `nix/lib/agent-skills.nix`; `config/codex/commands/` → `~/.codex/skills/` only.
 
+`moto/skills/` is outside Home Manager: `moto link` symlinks each `moto-*` skill into `~/.claude/skills/`, and a skill of the same name in `$MOTO_HOME/skills/` replaces it. Run `moto link` after adding or renaming one.
+
 Zsh, ghostty, direnv, starship etc. are generated entirely by Nix — no files in `config/`; edit the module in `nix/`.
 
 ## Theme
