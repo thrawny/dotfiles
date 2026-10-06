@@ -62,6 +62,8 @@ in the work config) and open it in codediff, in that repo's Herdr workspace.
   -j, --jira      Open the Jira ticket for REPO NUMBER instead of reviewing
   -w, --worktree  Check the PR branch out in a Herdr worktree, with Claude Code
                   and Neovim side by side, instead of reviewing
+      --no-focus  Open the review in the background, leaving focus where it
+                  is, for a caller such as a scheduled job
   -h, --help      Show this help
 
 With REPO and NUMBER, skip the picker and open that PR directly.
@@ -76,6 +78,9 @@ print_json=0
 preview=0
 jira=0
 worktree=0
+# A review the user opens should take focus; one a scheduled job opens should
+# not pull them out of what they are doing.
+focus=--focus
 args=()
 while (($#)); do
   case "$1" in
@@ -84,6 +89,7 @@ while (($#)); do
     -a | --all) all=1 ;;
     -j | --jira) jira=1 ;;
     -w | --worktree) worktree=1 ;;
+    --no-focus) focus=--no-focus ;;
     # fzf runs the preview as its own process, so it re-enters the script too.
     --preview) preview=1 ;;
     # fzf's reload bindings re-run this script for the list, so the row
@@ -384,11 +390,11 @@ open_review() {
   if [[ -n $workspace ]]; then
     # A repo's workspace usually has work in progress in it, so a review gets
     # its own tab rather than taking over a pane.
-    "$herdr_bin" workspace focus "$workspace" >/dev/null
+    [[ $focus == --focus ]] && "$herdr_bin" workspace focus "$workspace" >/dev/null
     pane=$("$herdr_bin" tab create --workspace "$workspace" --cwd "$dir" \
-      --label "$repo#$number" --focus | jq -r '.result.root_pane.pane_id')
+      --label "$repo#$number" "$focus" | jq -r '.result.root_pane.pane_id')
   else
-    pane=$("$herdr_bin" workspace create --cwd "$dir" --label "$repo" --focus |
+    pane=$("$herdr_bin" workspace create --cwd "$dir" --label "$repo" "$focus" |
       jq -r '.result.root_pane.pane_id')
   fi
   [[ -n $pane && $pane != null ]] || die 'Herdr did not report a pane to run in'
@@ -442,11 +448,11 @@ open_worktree() {
       report "$branch could not fast-forward to the PR; opening it as it is"
     open_ws=$(jq -r '.open_workspace_id // empty' <<<"$existing")
     if [[ -n $open_ws ]]; then
-      "$herdr_bin" workspace focus "$open_ws" >/dev/null
+      [[ $focus == --focus ]] && "$herdr_bin" workspace focus "$open_ws" >/dev/null
       return 0
     fi
     split_claude_nvim "$("$herdr_bin" worktree open --cwd "$dir" \
-      --path "$checkout" --label "$repo#$number" --focus)" "$number" "$repo" "$branch"
+      --path "$checkout" --label "$repo#$number" "$focus")" "$number" "$repo" "$branch"
     return 0
   fi
 
@@ -462,7 +468,7 @@ open_worktree() {
   fi
 
   split_claude_nvim "$("$herdr_bin" worktree create --cwd "$dir" --branch "$branch" \
-    --label "$repo#$number" --focus)" "$number" "$repo" "$branch"
+    --label "$repo#$number" "$focus")" "$number" "$repo" "$branch"
 }
 
 # Start the review agent through moto when moto is installed, so the session is
