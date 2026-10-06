@@ -89,6 +89,7 @@ let
     # install rather than vendoring a copy that would describe an older herdr.
     herdr.skillCommand =
       pkgs: "${herdr.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/herdr --skill";
+    retro.source = mattpocock-skills + "/skills/engineering/retro";
     writing-for-agents.source = mattpocock-skills + "/skills/productivity/writing-for-agents";
     teach.source = mattpocock-skills + "/skills/productivity/teach";
     improve-codebase-architecture.source =
