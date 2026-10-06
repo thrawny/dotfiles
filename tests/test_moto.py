@@ -551,6 +551,143 @@ def test_wake_refuses_a_session_missing_from_its_folder(
         moto.cmd_wake(argparse.Namespace(agent="abc-1", text=[]))
 
 
+def claude_in(pane_id: str, status: str = "idle", **fields: Any) -> dict[str, Any]:
+    workspace = pane_id.split(":")[0]
+    return {
+        "pane_id": pane_id,
+        "agent": "claude",
+        "agent_status": status,
+        "state_change_seq": 9,
+        "workspace_id": workspace,
+        "tab_id": f"{workspace}:t1",
+        **fields,
+    }
+
+
+def test_attach_moves_a_task_to_its_resumed_pane(moto: ModuleType):
+    report = {"kind": "done", "text": "PR ready", "at": 100.0}
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True, report=report, seen={"status": "gone"})
+    # The closed pane's process lingers in Herdr under the task's name.
+    live = {
+        "w1:p1": claude_in("w1:p1", name="abc-1"),
+        "w1:p7": claude_in("w1:p7", "done"),
+    }
+    turn_in(moto, "t9", "what next?")
+    with (
+        patch.object(moto, "live_agents", return_value=live),
+        patch.object(moto, "herdr") as herdr,
+    ):
+        assert (
+            moto.cmd_attach(argparse.Namespace(agent="abc-1", pane="w1:p7", hook=False))
+            == 0
+        )
+    assert [c.args for c in herdr.call_args_list] == [
+        ("agent", "rename", "w1:p1", "--clear"),
+        ("agent", "rename", "w1:p7", "abc-1"),
+    ]
+    saved = moto.read_tasks()["abc-1"]
+    assert (saved["pane_id"], saved["tab_id"], saved["held"]) == (
+        "w1:p7",
+        "w1:t1",
+        True,
+    )
+    assert saved["seen"] == {
+        "status": "done",
+        "seq": 9,
+        "report_at": 100.0,
+        "turn": "t9",
+    }
+    assert events(moto)[-1] | {"ts": 0} == {
+        "v": 1,
+        "ts": 0,
+        "event": "attach",
+        "agent": "abc-1",
+        "pane_id": "w1:p7",
+        "previous": "w1:p1",
+    }
+    # Once resumed, the old turn and the done status are not news to the watch.
+    saved["held"] = False
+    assert moto.check({"abc-1": saved}, {"w1:p7": live["w1:p7"]}, 1000) == []
+
+
+def test_attach_refuses_a_pane_without_claude_or_owned_by_another_task(
+    moto: ModuleType,
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+        tasks["abc-2"] = task(pane_id="w2:p1")
+    live = {"w2:p1": claude_in("w2:p1"), "w3:p1": claude_in("w3:p1", agent="codex")}
+    with (
+        patch.object(moto, "live_agents", return_value=live),
+        patch.object(moto, "herdr", side_effect=AssertionError("no rename")),
+    ):
+        for pane, error in (
+            ("w2:p1", "belongs to abc-2"),
+            ("w3:p1", "No live Claude agent"),
+            ("w4:p1", "No live Claude agent"),
+        ):
+            args = argparse.Namespace(agent="abc-1", pane=pane, hook=False)
+            with pytest.raises(moto.MotoError, match=error):
+                moto.cmd_attach(args)
+    assert moto.read_tasks()["abc-1"]["pane_id"] == "w1:p1"
+
+
+def attach_hook(moto: ModuleType, pane_id: str | None, session: str) -> int:
+    env = {"HERDR_PANE_ID": pane_id} if pane_id else {}
+    stdin = json.dumps({"session_id": session, "source": "resume"})
+    with (
+        patch.dict("os.environ", env),
+        patch("sys.stdin.read", return_value=stdin),
+    ):
+        return moto.cmd_attach(argparse.Namespace(agent=None, pane=None, hook=True))
+
+
+def test_session_start_hook_records_the_session_and_follows_it_to_a_new_pane(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    with patch.object(moto, "live_agents", side_effect=AssertionError("no poll")):
+        assert attach_hook(moto, "w1:p1", "s1") == 0
+    assert moto.read_tasks()["abc-1"]["session"] == "s1"
+    with (
+        patch.object(moto, "live_agents", return_value={"w1:p7": claude_in("w1:p7")}),
+        patch.object(moto, "herdr") as herdr,
+    ):
+        assert attach_hook(moto, "w1:p7", "s1") == 0
+    herdr.assert_called_once_with("agent", "rename", "w1:p7", "abc-1")
+    assert moto.read_tasks()["abc-1"]["pane_id"] == "w1:p7"
+    assert capsys.readouterr().out == ""
+
+
+def test_session_start_hook_ignores_other_sessions_and_never_fails(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(session="s1")
+        tasks["abc-2"] = task(pane_id="w2:p1", session="s2", snoozed=SNOOZE)
+    before = moto.read_tasks()
+    with patch.object(moto, "live_agents", side_effect=AssertionError("no poll")):
+        assert attach_hook(moto, "w9:p1", "s3") == 0  # the driver, say
+        assert attach_hook(moto, None, "s1") == 0  # outside Herdr
+        assert attach_hook(moto, "w9:p1", "s2") == 0  # wake handles a snoozed task
+    with patch.object(moto, "live_agents", side_effect=moto.MotoError("no Herdr")):
+        assert attach_hook(moto, "w9:p1", "s1") == 0
+    assert moto.read_tasks() == before
+    assert capsys.readouterr().out == ""
+
+
+def test_report_records_the_worker_s_session(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    args = argparse.Namespace(kind="done", text=["ok"], agent=None)
+    env = {"HERDR_PANE_ID": "w1:p1", "CLAUDE_CODE_SESSION_ID": "s1"}
+    with patch.dict("os.environ", env):
+        assert moto.cmd_report(args) == 0
+    assert moto.read_tasks()["abc-1"]["session"] == "s1"
+
+
 def test_unpushed_branch_without_a_worktree_blocks_removal(
     moto: ModuleType, pushed_clone: Path
 ):

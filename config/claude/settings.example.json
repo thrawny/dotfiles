@@ -56,6 +56,15 @@
             "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track session-start --agent claude; fi"
           }
         ]
+      },
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -n \"${HERDR_PANE_ID:-}\" ]; then moto attach --hook; fi"
+          }
+        ]
       }
     ],
     "SessionEnd": [
