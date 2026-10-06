@@ -119,6 +119,19 @@ def allow_direnv(worktree: Path) -> bool:
     return True
 
 
+def existing_pane(pane_id: str) -> dict[str, Any]:
+    """A pane Herdr already has, for a caller that opened its own.
+
+    pr-review builds a PR's worktree workspace itself, with Neovim beside the
+    agent, and hands the agent's pane here rather than having a second one
+    opened for it.
+    """
+    pane = herdr("pane", "get", pane_id)["pane"]
+    if pane.get("agent"):
+        raise SpawnError(f"Pane {pane_id} already runs {pane['agent']}")
+    return {key: pane[key] for key in ("pane_id", "tab_id", "workspace_id", "cwd")}
+
+
 def open_tab(workspace: str, cwd: Path) -> dict[str, Any]:
     return herdr(
         "tab", "create", "--workspace", workspace, "--cwd", str(cwd), "--no-focus"
@@ -268,6 +281,12 @@ def main() -> int:
     parser.add_argument(
         "--path", help="Folder for a new worktree; default: where Herdr puts it"
     )
+    parser.add_argument(
+        "--pane",
+        metavar="PANE_ID",
+        help="Start in this existing pane instead of opening one;"
+        + " --worktree then only names the branch for the caller's records",
+    )
     parser.add_argument("--name", help="Herdr agent name; default: from branch or repo")
     parser.add_argument("--kind", default="claude", help="Herdr agent kind")
     parser.add_argument(
@@ -300,11 +319,12 @@ def main() -> int:
             args.title, args.kind
         )
         repo = resolve_repo(args.repo)
-        pane = (
-            worktree_pane(repo, args.worktree, args.base, args.path)
-            if args.worktree
-            else repo_pane(repo)
-        )
+        if args.pane:
+            pane = existing_pane(args.pane)
+        elif args.worktree:
+            pane = worktree_pane(repo, args.worktree, args.base, args.path)
+        else:
+            pane = repo_pane(repo)
         name = agent_name(args.name, args.worktree or repo.name)
         location = f"{pane['workspace_id']} tab {pane['tab_id']} at {pane['cwd']}"
         try:

@@ -177,6 +177,12 @@ test-herdr-decorator:
 herdr-decorator-dev:
     watchexec --restart --watch bin/herdr-decorator -- bin/herdr-decorator
 
+# Run the moto job scheduler in the foreground, restarting it on every edit.
+# Start it in a background-workspace tab, where it has Herdr's socket, and keep
+# its cwd out of ~/code/<repo> so job workers open in their own workspaces.
+moto-jobs-dev:
+    watchexec --restart --watch bin/moto -- bin/moto job loop
+
 # Run Python tests with the locked development dependencies
 test-python *args:
     uv run --locked python -B -m pytest {{args}}

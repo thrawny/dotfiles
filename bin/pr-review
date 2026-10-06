@@ -54,6 +54,8 @@ Pick a ready-for-review PR requesting review from your team (github.review_team
 in the work config) and open it in codediff, in that repo's Herdr workspace.
 
   -r, --refresh   Ignore the cached PR list
+      --json      Print the same PRs as JSON and exit, for a caller that reads
+                  them rather than a person picking one
   -b, --bots      Include dependabot and other bot PRs
   -a, --all       List every open PR in the team's repos, reviewed, labelled
                   or not, your own included. ctrl-a toggles it in the picker
@@ -70,6 +72,7 @@ refresh=0
 include_bots=0
 all=0
 print_rows=0
+print_json=0
 preview=0
 jira=0
 worktree=0
@@ -86,6 +89,7 @@ while (($#)); do
     # fzf's reload bindings re-run this script for the list, so the row
     # building has to be reachable without the picker.
     --print-rows) print_rows=1 ;;
+    --json) print_json=1 ;;
     -h | --help)
       usage
       exit 0
@@ -442,7 +446,7 @@ open_worktree() {
       return 0
     fi
     split_claude_nvim "$("$herdr_bin" worktree open --cwd "$dir" \
-      --path "$checkout" --label "$repo#$number" --focus)" "$number"
+      --path "$checkout" --label "$repo#$number" --focus)" "$number" "$repo" "$branch"
     return 0
   fi
 
@@ -458,13 +462,43 @@ open_worktree() {
   fi
 
   split_claude_nvim "$("$herdr_bin" worktree create --cwd "$dir" --branch "$branch" \
-    --label "$repo#$number" --focus)" "$number"
+    --label "$repo#$number" --focus)" "$number" "$repo" "$branch"
+}
+
+# Start the review agent through moto when moto is installed, so the session is
+# a task the driver can see, report to and clean up. Without moto, or when the
+# spawn fails, the pane still gets a plain Claude: a review the driver cannot
+# track beats no review.
+start_review_agent() {
+  local pane=$1 number=$2 repo=$3 branch=$4 title word='[a-z0-9][a-z0-9-]*'
+  if ! command -v moto >/dev/null 2>&1; then
+    "$herdr_bin" pane run "$pane" claude >/dev/null
+    return 0
+  fi
+  title="review $repo $number"
+  # moto titles are one to three lowercase words; an odd repo name falls back.
+  [[ $title =~ ^$word\ $word\ $word$ ]] || title="pr review $number"
+  if moto spawn --json --repo "$repo" --worktree "$branch" --pane "$pane" \
+    --title "$title" >/dev/null <<BRIEF
+Review pull request $org/$repo#$number. Its branch is checked out in this
+worktree, and Neovim is open on the diff in the pane beside you.
+
+Run the \`tono\` skill on the PR and report what it finds. Post nothing to
+GitHub: the user reads the findings here and decides what to say on the PR.
+
+Report done once the review is written, then wait for the user in this pane.
+BRIEF
+  then
+    return 0
+  fi
+  report 'moto could not take this review, so it runs as an untracked session'
+  "$herdr_bin" pane run "$pane" claude >/dev/null
 }
 
 # Takes the JSON Herdr prints for a new worktree workspace, and the PR number
 # for Neovim to open the review on.
 split_claude_nvim() {
-  local number=$2 left right checkout
+  local number=$2 repo=$3 branch=$4 left right checkout
   left=$(jq -r '.result.root_pane.pane_id // empty' <<<"$1")
   checkout=$(jq -r '.result.worktree.path // empty' <<<"$1")
   [[ -n $left && -n $checkout ]] || fail 'Herdr did not report a pane to run in'
@@ -472,8 +506,8 @@ split_claude_nvim() {
     jq -r '.result.pane.pane_id')
   # Same grace as open_review, for the prompts of two fresh shells.
   sleep 0.3
-  "$herdr_bin" pane run "$left" claude >/dev/null
   "$herdr_bin" pane run "$right" "nvim '+CodeReview pr $number'" >/dev/null
+  start_review_agent "$left" "$number" "$repo" "$branch"
 }
 
 # Workspaces have no cwd of their own, so match on the saved cwd of their panes.
@@ -537,12 +571,34 @@ stale=0
 if ((refresh)); then
   fetch_prs
 elif ! cache_is_fresh "$cache" "$cache_ttl_minutes"; then
-  if ((print_rows)) || [[ ! -s $cache ]]; then
+  if ((print_rows)) || ((print_json)) || [[ ! -s $cache ]]; then
     fetch_prs
   else
     stale=1
   fi
 fi
+
+# The PRs build_rows shows, as JSON rather than a table of icons and colors.
+# A scheduled job hands these to an agent, which needs the fields, not columns.
+build_json() {
+  jq --arg bots "$bot_authors" --arg org "$org" \
+    --argjson include_bots "$include_bots" --argjson all "$all" '
+  ($bots | split(" ")) as $bots
+  | map(select($all == 1 or .ready != false))
+  | map(select($include_bots == 1 or (.author.login | sub("\\[bot\\]$"; "") | IN($bots[]) | not)))
+  | sort_by(.updatedAt) | reverse
+  | map({ repo: .repository.name,
+          number,
+          title,
+          author: .author.login,
+          updatedAt,
+          isDraft,
+          ready,
+          reviewDecision,
+          checks,
+          url: "https://github.com/\($org)/\(.repository.name)/pull/\(.number)" })
+' "$cache"
+}
 
 build_rows() {
   jq -r --arg bots "$bot_authors" --argjson include_bots "$include_bots" --argjson all "$all" '
@@ -581,6 +637,11 @@ if [[ -z $rows ]] && ((stale)); then
   fetch_prs
   stale=0
   rows=$(build_rows)
+fi
+
+if ((print_json)); then
+  build_json
+  exit 0
 fi
 
 if ((print_rows)); then

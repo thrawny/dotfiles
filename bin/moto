@@ -48,6 +48,10 @@ Manager: the generic ones from moto/skills in dotfiles, and the Epidemic ones
 from skills/ in MOTO_HOME. An Epidemic skill replaces a generic one of the same
 name.
 
+moto job runs work on a clock: a job file in MOTO_HOME/jobs names a time,
+a cheap check, and whether the result wakes the driver or starts a worker.
+moto job loop is the scheduler, and its state is jobs.json beside tasks.json.
+
 A worker can start workers of its own, which the driver's watch skips. moto
 tell and wake from a worker's pane reach only the tasks it started, and tag the
 message with the worker's name instead of [driver].
@@ -70,12 +74,14 @@ import socket
 import subprocess
 import sys
 import time
+import tomllib
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import contextmanager
-from datetime import datetime
+from contextlib import contextmanager, suppress
+from datetime import datetime, timedelta
+from datetime import time as dt_time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 MOTO_HOME = Path(os.environ.get("MOTO_HOME") or Path.home() / "code/moto")
 POLL_SECONDS = 2.0
@@ -147,6 +153,46 @@ UNTRACKED = (
 # What a fork may run: commands that only read, and hooks that skip forks.
 FORK_SAFE = ("list", "log", "focus", "pin", "link", "stop-hook")
 
+
+# Scheduled jobs. The gate's exit codes are shepherd's, deliberately: a broken
+# gate runs the job anyway, because a schedule that dies quietly is worse.
+GATE_TIMEOUT = 120
+GATE_SKIP = 75
+JOB_TICK_SECONDS = 60
+# A tick takes seconds; a loop silent for longer than this has stopped.
+JOB_BEAT_STALE_SECONDS = 180
+WEEKDAYS = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+JOB_FIELDS = {
+    "name",
+    "at",
+    "days",
+    "gate",
+    "deliver",
+    "brief",
+    "enabled",
+    "stale_after",
+    "repo",
+    "worktree",
+    "base",
+    "agent",
+    "title",
+}
+# Marks a scheduled job's prompt, so the driver and a worker can tell it from
+# the driver's own messages and from the user's typing. It outranks neither.
+JOB_TAG = "[job]"
+NOTE_RULES = (
+    "A scheduled job left this while you were working, so act on it now and"
+    + " then end the turn. It is not the user talking."
+)
+JOB_FOOTER = f"""\
+A scheduled moto job started you, and a driver session tracks this task for the \
+user. {REPORT_RULES}
+
+Messages from the driver start with {DRIVER_TAG}. A message without it is from \
+the user, typing in this pane. Answer the user here, and when the user and the \
+driver disagree, follow the user. A job is a trigger, not an authority: follow \
+exactly the rules a worker the driver started follows, the user's away rules \
+included."""
 
 EVENTS_VERSION = 1
 
@@ -484,20 +530,21 @@ def activity_line(info: dict[str, Any] | None, now: float) -> str | None:
     return f"since the {info['since']}: " + " · ".join(parts) if parts else None
 
 
-def cmd_spawn(args: argparse.Namespace) -> int:
-    brief = sys.stdin.read().strip()
-    if not brief:
-        raise MotoError("Pass the task brief on stdin")
-    command = ["spawn-session", "--json", "--repo", args.repo]
-    for flag in ("worktree", "base", "name", "title", "resume"):
-        if value := getattr(args, flag):
-            command += [f"--{flag}", value]
-    # A worker that starts its own worker watches it itself.
-    parent = caller(read_tasks())
-    footer = CHILD_FOOTER.format(parent=parent) if parent else BRIEF_FOOTER
+def start_worker(
+    spec: dict[str, Any], prompt: str, parent: str | None
+) -> dict[str, Any]:
+    """Open a worker's pane on this prompt and record its task.
+
+    spec holds the spawn flags; prompt is the whole first message, its tag and
+    footer included, because a scheduled job tags and footers its workers
+    differently from the driver.
+    """
+    command = ["spawn-session", "--json", "--repo", str(spec["repo"])]
+    for flag in ("worktree", "base", "name", "title", "resume", "pane"):
+        if value := spec.get(flag):
+            command += [f"--{flag}", str(value)]
     # Worktree creation, agent startup and the first prompt each wait on Herdr.
-    stdin = f"{tag(parent)} {brief}\n\n{footer}\n"
-    output = run(command, timeout=600, stdin=stdin)
+    output = run(command, timeout=600, stdin=prompt)
     try:
         info: dict[str, Any] = json.loads(output)
     except ValueError as error:
@@ -512,7 +559,7 @@ def cmd_spawn(args: argparse.Namespace) -> int:
             "workspace_id": info["workspace_id"],
             "tab_id": info["tab_id"],
             "cwd": info["cwd"],
-            "title": args.title,
+            "title": spec.get("title"),
             "started": now,
             "told": now,
             "report": None,
@@ -525,10 +572,28 @@ def cmd_spawn(args: argparse.Namespace) -> int:
             repo=info["repo"],
             branch=info.get("branch"),
             worktree=info["cwd"] if info.get("branch") else None,
-            title=args.title,
-            session=args.resume,
+            title=spec.get("title"),
+            session=spec.get("resume"),
             parent=parent,
         )
+    return info
+
+
+def cmd_spawn(args: argparse.Namespace) -> int:
+    brief = sys.stdin.read().strip()
+    if not brief:
+        raise MotoError("Pass the task brief on stdin")
+    # A worker that starts its own worker watches it itself.
+    parent = caller(read_tasks())
+    footer = CHILD_FOOTER.format(parent=parent) if parent else BRIEF_FOOTER
+    spec = {
+        flag: getattr(args, flag, None)
+        for flag in ("repo", "worktree", "base", "name", "title", "resume", "pane")
+    }
+    info = start_worker(spec, f"{tag(parent)} {brief}\n\n{footer}\n", parent)
+    if getattr(args, "json", False):
+        print(json.dumps(info))
+        return 0
     where = f"{Path(info['repo']).name} {info.get('branch') or '(main checkout)'}"
     print(f"Started {info['agent']} on {where}")
     if parent:
@@ -578,6 +643,7 @@ def cmd_list(args: argparse.Namespace) -> int:
         print(f"  Note: {away['note'] or 'none, so no instructions'}")
     if not rows:
         print("No tasks.")
+        print_jobs(now)
         return 0
     if live is None:
         print("Herdr is unavailable, so live states are unknown.")
@@ -611,6 +677,7 @@ def cmd_list(args: argparse.Namespace) -> int:
             print(f"  PR: {row['pr']}")
         if line := activity_line(row.get("since_report"), now):
             print(f"  {line}")
+    print_jobs(now)
     return 0
 
 
@@ -685,19 +752,27 @@ def cmd_tell(args: argparse.Namespace) -> int:
 
 
 def cmd_ask(args: argparse.Namespace) -> int:
-    """Show the driver's question under its own sidebar row, or clear it."""
-    path = state_dir() / "driver.json"
+    """Show the driver's question under its own sidebar row, or clear it.
+
+    Clearing drops the question's own fields and keeps the rest, because
+    driver.json also records where the driver is, which a scheduled job needs
+    long after a question is answered.
+    """
     if args.clear:
-        path.unlink(missing_ok=True)
+        driver = read_driver()
+        for field in ("kind", "text", "at"):
+            driver.pop(field, None)
+        if driver:
+            driver_path().write_text(json.dumps(driver) + "\n")
+        else:
+            driver_path().unlink(missing_ok=True)
         print("Cleared the driver's question.")
         return 0
     text = " ".join(args.text).strip()
     pane_id = os.environ.get("HERDR_PANE_ID")
     if not text or not pane_id:
         raise MotoError("Pass the question, from inside the driver's Herdr pane")
-    state_dir().mkdir(parents=True, exist_ok=True)
-    ask = {"pane_id": pane_id, "kind": "question", "text": text, "at": time.time()}
-    path.write_text(json.dumps(ask) + "\n")
+    write_driver(pane_id=pane_id, kind="question", text=text, at=time.time())
     print("The question shows under the driver's sidebar row until moto ask --clear.")
     return 0
 
@@ -1051,6 +1126,11 @@ def watch_end_queued(transcript: str | None) -> bool:
 def stop_hook(payload: dict[str, Any]) -> dict[str, Any] | None:
     if forked():
         return None  # a fork of the driver is not the driver
+    # A job that fired while the driver worked left a note rather than steering
+    # its turn. This is the turn end it was waiting for. take_notes removes each
+    # note as it hands it over, so the same note never blocks twice.
+    if not caller(read_tasks()) and (notes := take_notes()):
+        return {"decision": "block", "reason": f"{notes}\n\n{NOTE_RULES}"}
     budget_path = state_dir() / "stop-hook.json"
     tasks = read_tasks()
     watched = sorted(
@@ -1301,6 +1381,10 @@ def attach_hook(payload: dict[str, Any]) -> None:
         return
     tasks = read_tasks()
     owner = pane_owner(tasks, pane_id)
+    if not owner and driver_cwd(payload):
+        # A pane no task owns, running in MOTO_HOME, is the driver. A scheduled
+        # job needs this to know where to send what it finds.
+        write_driver(pane_id=pane_id, session=session)
     if owner:
         if tasks[owner].get("session") != session:
             with tasks_for_update() as tasks:
@@ -1735,6 +1819,504 @@ def cmd_link(_: argparse.Namespace) -> int:
     return 1 if refused else 0
 
 
+def jobs_dir() -> Path:
+    """Where job files live, beside the Epidemic skills in MOTO_HOME."""
+    return MOTO_HOME / "jobs"
+
+
+def read_jobs() -> dict[str, dict[str, Any]]:
+    """Each job's scheduling state: last run, last outcome and pending note."""
+    try:
+        data = json.loads((state_dir() / "jobs.json").read_text())
+    except FileNotFoundError:
+        return {}
+    except ValueError as error:
+        raise MotoError(f"{state_dir() / 'jobs.json'} is not valid JSON") from error
+    return data.get("jobs", {})
+
+
+@contextmanager
+def jobs_for_update() -> Generator[dict[str, dict[str, Any]]]:
+    """Job state under its own lock, written back on exit if it changed.
+
+    Its own lock, not the task lock, because a job's state changes while it
+    spawns a worker, and spawning takes the task lock itself.
+    """
+    directory = state_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    with open(directory / "jobs.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        jobs = read_jobs()
+        before = json.dumps(jobs, sort_keys=True)
+        yield jobs
+        if json.dumps(jobs, sort_keys=True) != before:
+            path = directory / "jobs.json"
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text(json.dumps({"jobs": jobs}, indent=2) + "\n")
+            tmp.replace(path)
+
+
+def job_event(event: str, name: str, **fields: Any) -> None:
+    """Append a job event to the same log the tasks use, so moto log prints it."""
+    with tasks_for_update():
+        record(event, name, **fields)
+
+
+def parse_times(values: Any) -> list[tuple[int, int]]:
+    """The HH:MM strings in a job's `at`, as hour and minute pairs."""
+    if not isinstance(values, list) or not values:
+        raise ValueError("at must be a non-empty list of HH:MM times")
+    given = cast("list[Any]", values)
+    times: list[tuple[int, int]] = []
+    for value in given:
+        hour, _, minute = str(value).partition(":")
+        if not hour.isdigit() or not minute.isdigit():
+            raise ValueError(f"{value!r} is not an HH:MM time")
+        if not (0 <= int(hour) <= 23 and 0 <= int(minute) <= 59):
+            raise ValueError(f"{value!r} is not a time of day")
+        times.append((int(hour), int(minute)))
+    return sorted(set(times))
+
+
+def parse_days(values: Any) -> set[int]:
+    """The weekdays a job may run on, as Monday 0 to Sunday 6.
+
+    Takes names, comma lists and ranges: mon, mon-fri, "sat,sun". A range reads
+    forwards and wraps, so fri-mon is Friday through Monday.
+    """
+    if values is None:
+        return set(range(7))
+    if not isinstance(values, list):
+        raise ValueError('days must be a list, as in ["mon-fri"]')
+    given = cast("list[Any]", values)
+    days: set[int] = set()
+    for value in given:
+        for part in str(value).replace(" ", "").lower().split(","):
+            if not part:
+                continue
+            start, _, end = part.partition("-")
+            if start not in WEEKDAYS or (end and end not in WEEKDAYS):
+                raise ValueError(f"{part!r} is not a weekday or a range of them")
+            first = WEEKDAYS[start]
+            span = (WEEKDAYS[end] - first) % 7 if end else 0
+            days.update((first + step) % 7 for step in range(span + 1))
+    if not days:
+        raise ValueError("days names no weekday")
+    return days
+
+
+def job_problem(job: dict[str, Any]) -> str | None:
+    """Why a job file cannot be used, or None. Rejects rather than guesses."""
+    try:
+        parse_times(job.get("at"))
+        parse_days(job.get("days"))
+    except ValueError as error:
+        return str(error)
+    deliver = job.get("deliver")
+    if deliver not in ("driver", "worker"):
+        return 'deliver must be "driver" or "worker"'
+    if not str(job.get("brief") or "").strip():
+        return "brief is empty"
+    if deliver == "worker" and not job.get("repo"):
+        return "a worker job needs a repo"
+    if deliver == "worker" and not job.get("title"):
+        return "a worker job needs a title, the Claude session name"
+    stale = job.get("stale_after")
+    if stale is not None and (not isinstance(stale, int) or stale <= 0):
+        return "stale_after must be a whole number of minutes"
+    unknown = set(job) - JOB_FIELDS
+    if unknown:
+        return f"unknown field(s): {', '.join(sorted(unknown))}"
+    return None
+
+
+def load_jobs() -> tuple[dict[str, dict[str, Any]], list[str]]:
+    """Every usable job file, and one line per file that is not.
+
+    A broken file is reported and skipped rather than stopping the tick, so one
+    bad edit cannot silence every other job.
+    """
+    jobs: dict[str, dict[str, Any]] = {}
+    problems: list[str] = []
+    directory = jobs_dir()
+    if not directory.is_dir():
+        return jobs, problems
+    for path in sorted(directory.glob("*.toml")):
+        try:
+            job = tomllib.loads(path.read_text())
+        except (OSError, ValueError) as error:
+            problems.append(f"{path.name}: {error}")
+            continue
+        job["name"] = str(job.get("name") or path.stem)
+        if problem := job_problem(job):
+            problems.append(f"{path.name}: {problem}")
+            continue
+        jobs[job["name"]] = job
+    return jobs, problems
+
+
+def occurrence(job: dict[str, Any], now: float, ahead: bool) -> float | None:
+    """The job's next run after now, or its last one at or before it."""
+    times = parse_times(job.get("at"))
+    days = parse_days(job.get("days"))
+    today = datetime.fromtimestamp(now)
+    for step in range(8):
+        day = (today + timedelta(days=step if ahead else -step)).date()
+        if day.weekday() not in days:
+            continue
+        for hour, minute in sorted(times, reverse=not ahead):
+            when = datetime.combine(day, dt_time(hour, minute)).timestamp()
+            if (when > now) if ahead else (when <= now):
+                return when
+    return None
+
+
+def due(
+    job: dict[str, Any], state: dict[str, Any], now: float
+) -> tuple[float | None, str | None]:
+    """The occurrence a job owes, and why it will be recorded missed instead.
+
+    A job whose time passed while the laptop slept runs on the next tick, since
+    the occurrence is read off the wall clock. stale_after opts out of that.
+    """
+    when = occurrence(job, now, ahead=False)
+    if when is None or float(state.get("ran_at") or 0) >= when:
+        return None, None
+    stale = job.get("stale_after")
+    if stale and now - when > float(stale) * 60:
+        return when, f"missed by {age(now - when)}"
+    return when, None
+
+
+def run_gate(job: dict[str, Any]) -> tuple[str, str]:
+    """A job's gate verdict and the text it produced.
+
+    Shepherd's contract, copied deliberately: exit 0 runs the job, exit 75
+    skips this occurrence, and anything else is a broken gate. A broken gate
+    must not silently kill a schedule, so it is never treated as a skip; what
+    happens instead depends on the delivery mode. The gate's stdout is kept and
+    handed to the job, so a check that queried GitHub is not run twice.
+    """
+    gate = str(job.get("gate") or "").strip()
+    if not gate:
+        return "run", ""
+    cwd = MOTO_HOME if MOTO_HOME.is_dir() else None
+    try:
+        # Its own process group, so a timeout kills what the gate started too.
+        process = subprocess.Popen(
+            ["sh", "-c", gate],
+            cwd=cwd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            start_new_session=True,
+        )
+    except OSError as error:
+        return "broken", f"the gate could not start: {error}"
+    try:
+        out, err = process.communicate(timeout=GATE_TIMEOUT)
+    except subprocess.TimeoutExpired:
+        with suppress(OSError, ProcessLookupError):
+            os.killpg(os.getpgid(process.pid), signal.SIGKILL)
+        process.communicate()
+        return "broken", f"the gate still ran after {GATE_TIMEOUT}s, so it was killed"
+    if process.returncode == 0:
+        return "run", out.strip()
+    if process.returncode == GATE_SKIP:
+        return "skip", out.strip()
+    detail = (err or out).strip() or "no output"
+    return "broken", f"the gate exited {process.returncode}: {detail}"
+
+
+def driver_path() -> Path:
+    return state_dir() / "driver.json"
+
+
+def read_driver() -> dict[str, Any]:
+    """Where the driver is, and its open question if it has one."""
+    try:
+        return json.loads(driver_path().read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def write_driver(**fields: Any) -> None:
+    """Merge into the driver record, keeping the fields already there.
+
+    The pane and session outlive a question, so moto ask --clear drops the
+    question's own fields rather than the file.
+    """
+    state_dir().mkdir(parents=True, exist_ok=True)
+    driver_path().write_text(json.dumps(read_driver() | fields) + "\n")
+
+
+def driver_cwd(payload: dict[str, Any]) -> bool:
+    """Whether a Claude session started in the driver's own checkout."""
+    try:
+        return Path(str(payload.get("cwd") or "")).resolve() == MOTO_HOME.resolve()
+    except OSError:
+        return False
+
+
+def driver_idle() -> str | None:
+    """The driver's pane id when it is idle and can take a prompt, or None.
+
+    A prompt typed into a Claude session mid-turn steers that turn instead of
+    queueing behind it, so a job must never prompt a working driver.
+    """
+    pane = read_driver().get("pane_id")
+    if not pane:
+        return None
+    try:
+        agent = live_agents().get(pane)
+    except (MotoError, subprocess.TimeoutExpired, OSError):
+        return None
+    return pane if agent and agent.get("agent_status") in ("idle", "done") else None
+
+
+def wake_driver(name: str, text: str) -> str:
+    """Prompt the driver if it is idle, otherwise leave it a note.
+
+    One note per job: a newer run replaces an unread one, because a review
+    queue's value is the current list and two stale lists are worse than one
+    fresh one. The replaced note stays in the event log.
+    """
+    message = f"{JOB_TAG} {text}"
+    if pane := driver_idle():
+        try:
+            run([herdr_binary(), "agent", "prompt", pane, message], timeout=60)
+            return "prompted the driver"
+        except (MotoError, subprocess.TimeoutExpired):
+            pass  # fall back to the note, which the Stop hook delivers
+    replaced = False
+    with jobs_for_update() as jobs:
+        state = jobs.setdefault(name, {})
+        replaced = bool(state.get("note"))
+        state["note"] = {"text": message, "at": time.time()}
+    if replaced:
+        job_event("note-replaced", name)
+    return "left a note for the driver"
+
+
+def pending_notes() -> list[tuple[str, dict[str, Any]]]:
+    return [
+        (name, state["note"])
+        for name, state in sorted(read_jobs().items())
+        if state.get("note")
+    ]
+
+
+def take_notes() -> str | None:
+    """Every pending note, removed as it is handed over, or None if there are none.
+
+    Removing on delivery is what keeps the Stop hook from blocking twice on the
+    same note.
+    """
+    notes = pending_notes()
+    if not notes:
+        return None
+    with jobs_for_update() as jobs:
+        for name, _ in notes:
+            jobs.get(name, {}).pop("note", None)
+    for name, _ in notes:
+        job_event("note-read", name)
+    return "\n\n".join(note["text"] for _, note in notes)
+
+
+def job_brief(job: dict[str, Any], gate_output: str, broken: str | None) -> str:
+    """What a job hands the driver or a worker: its brief, then what it found."""
+    parts = [str(job["brief"]).strip()]
+    if broken:
+        parts.append(f"The job's check failed, so this ran anyway: {broken}")
+    elif gate_output:
+        parts.append(f"What the job's check found:\n\n{gate_output}")
+    return "\n\n".join(parts)
+
+
+def deliver(name: str, job: dict[str, Any], verdict: str, output: str) -> str:
+    """Hand a due job to the driver or to a new worker, and say what happened.
+
+    A broken gate wakes the driver either way. For a worker job it leaves a note
+    instead of spawning, because starting an agent on a broken premise is worse
+    than not starting one.
+    """
+    broken = output if verdict == "broken" else None
+    text = job_brief(job, output, broken)
+    if job["deliver"] == "driver" or broken:
+        lead = f"The scheduled job {name} fired."
+        return wake_driver(name, f"{lead}\n\n{text}")
+    spec = {key: job.get(key) for key in ("repo", "worktree", "base", "name", "title")}
+    spec["name"] = job.get("agent") or name
+    info = start_worker(spec, f"{JOB_TAG} {text}\n\n{JOB_FOOTER}\n", None)
+    return f"started {info['agent']}"
+
+
+def run_job(name: str, job: dict[str, Any], when: float, trigger: str) -> str:
+    """Run one job: stamp it, gate it, deliver it, and record the outcome.
+
+    The stamp and the lock come before the gate, never after, so a loop killed
+    between the check and the spawn cannot fire the same occurrence twice.
+    """
+    directory = state_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    with open(directory / f"job-{name}.lock", "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return "still running, so this occurrence is skipped"
+        with jobs_for_update() as jobs:
+            jobs.setdefault(name, {})["ran_at"] = when
+        verdict, output = run_gate(job)
+        if verdict == "skip":
+            outcome = "nothing to do"
+        else:
+            try:
+                outcome = deliver(name, job, verdict, output)
+            except (MotoError, OSError, subprocess.TimeoutExpired) as error:
+                outcome = f"failed: {error}"
+            if verdict == "broken":
+                outcome = f"broken gate, {outcome}"
+        with jobs_for_update() as jobs:
+            jobs.setdefault(name, {})["outcome"] = {"text": outcome, "at": time.time()}
+        job_event("job", name, outcome=outcome, verdict=verdict, trigger=trigger)
+        return outcome
+
+
+def tick(now: float) -> list[str]:
+    """One pass over the job files: everything due, run. One line per thing done."""
+    jobs, problems = load_jobs()
+    lines = [f"job file {problem}" for problem in problems]
+    state = read_jobs()
+    for name, job in sorted(jobs.items()):
+        if job.get("enabled") is False:
+            continue
+        when, missed = due(job, state.get(name, {}), now)
+        if when is None:
+            continue
+        if missed:
+            with jobs_for_update() as live:
+                live.setdefault(name, {})["ran_at"] = when
+                live[name]["outcome"] = {"text": missed, "at": now}
+            job_event("job", name, outcome=missed, verdict="missed", trigger="schedule")
+            lines.append(f"{name}: {missed}")
+            continue
+        lines.append(f"{name}: {run_job(name, job, when, 'schedule')}")
+    return lines
+
+
+def job_beat_path() -> Path:
+    return state_dir() / "jobs.beat"
+
+
+def job_loop_problem() -> str | None:
+    """Why no job loop is ticking, or None when one is.
+
+    The loop runs in a Herdr pane and nothing restarts it, so a dead loop has to
+    look different from a quiet morning.
+    """
+    try:
+        pid = int(job_beat_path().read_text().split()[0])
+        silent = time.time() - job_beat_path().stat().st_mtime
+    except (OSError, ValueError, IndexError):
+        return "no moto job loop is running"
+    try:
+        if "moto" not in run(["ps", "-p", str(pid), "-o", "command="]):
+            return "no moto job loop is running"
+    except MotoError:
+        return "no moto job loop is running"
+    if silent > JOB_BEAT_STALE_SECONDS:
+        return f"moto job loop (pid {pid}) last ticked {age(silent)} ago"
+    return None
+
+
+def job_rows(now: float) -> list[dict[str, Any]]:
+    jobs, problems = load_jobs()
+    state = read_jobs()
+    rows = [
+        {
+            "name": name,
+            "enabled": job.get("enabled") is not False,
+            "deliver": job["deliver"],
+            "next": occurrence(job, now, ahead=True),
+            "outcome": state.get(name, {}).get("outcome"),
+            "note": state.get(name, {}).get("note"),
+        }
+        for name, job in sorted(jobs.items())
+    ]
+    return rows + [{"name": problem, "broken": True} for problem in problems]
+
+
+def print_jobs(now: float) -> None:
+    rows = job_rows(now)
+    if not rows:
+        return
+    print("\nJobs:")
+    if problem := job_loop_problem():
+        print(f"  {problem}")
+    for row in rows:
+        if row.get("broken"):
+            print(f"{row['name']} · unusable job file")
+            continue
+        when = row["next"]
+        nxt = clock(when) if when else "never"
+        state = "" if row["enabled"] else " · disabled"
+        print(f"{row['name']} · {row['deliver']} · next {nxt}{state}")
+        if outcome := row["outcome"]:
+            print(f"  last ({age(now - outcome['at'])} ago): {outcome['text']}")
+        if row["note"]:
+            print("  a note is waiting for the driver")
+
+
+def cmd_job_list(args: argparse.Namespace) -> int:
+    now = time.time()
+    if args.json:
+        print(json.dumps(job_rows(now), indent=2))
+        return 0
+    rows = job_rows(now)
+    if not rows:
+        print(f"No job files in {jobs_dir()}.")
+        return 0
+    print_jobs(now)
+    return 0
+
+
+def cmd_job_run(args: argparse.Namespace) -> int:
+    jobs, problems = load_jobs()
+    if args.name not in jobs:
+        hint = f" ({'; '.join(problems)})" if problems else ""
+        raise MotoError(f"No job named {args.name} in {jobs_dir()}{hint}")
+    print(f"{args.name}: {run_job(args.name, jobs[args.name], time.time(), 'manual')}")
+    return 0
+
+
+def cmd_job_tick(_: argparse.Namespace) -> int:
+    for line in tick(time.time()) or ["nothing due"]:
+        print(line)
+    return 0
+
+
+def cmd_job_loop(args: argparse.Namespace) -> int:
+    """The long-lived scheduler, which watchexec restarts on every edit."""
+    signal.signal(signal.SIGTERM, exit_on_signal)
+    directory = state_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    with open(directory / "job-loop.lock", "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print("Another moto job loop is already running.")
+            return 0
+        print(f"moto job loop: every {args.every}s over {jobs_dir()}", flush=True)
+        try:
+            while True:
+                job_beat_path().write_text(f"{os.getpid()}\n")
+                for line in tick(time.time()):
+                    print(f"{clock(time.time())} {line}", flush=True)
+                time.sleep(args.every)
+        finally:
+            job_beat_path().unlink(missing_ok=True)
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -1756,6 +2338,13 @@ def parser() -> argparse.ArgumentParser:
         metavar="SESSION_ID",
         help="Resume an earlier Claude session as the worker",
     )
+    spawn.add_argument(
+        "--pane",
+        metavar="PANE_ID",
+        help="Adopt this pane instead of opening one, for a caller that built"
+        + " the workspace itself, such as pr-review --worktree",
+    )
+    spawn.add_argument("--json", action="store_true", help="Print the new task as JSON")
     spawn.set_defaults(handler=cmd_spawn)
 
     tell = commands.add_parser(
@@ -1894,6 +2483,32 @@ def parser() -> argparse.ArgumentParser:
         "link", help="Symlink the moto-* skills into ~/.claude/skills"
     )
     link.set_defaults(handler=cmd_link)
+
+    job = commands.add_parser("job", help="Scheduled jobs: work that starts on a clock")
+    job_commands = job.add_subparsers(dest="job_command", required=True)
+    job_loop = job_commands.add_parser(
+        "loop", help="The scheduler; ticks until stopped"
+    )
+    job_loop.add_argument(
+        "--every",
+        type=int,
+        default=JOB_TICK_SECONDS,
+        metavar="SECONDS",
+        help="Seconds between ticks (default: %(default)s)",
+    )
+    job_loop.set_defaults(handler=cmd_job_loop)
+    job_tick = job_commands.add_parser("tick", help="One pass: run everything due")
+    job_tick.set_defaults(handler=cmd_job_tick)
+    job_run = job_commands.add_parser(
+        "run", help="Run a job now, whatever its schedule says"
+    )
+    job_run.add_argument("name")
+    job_run.set_defaults(handler=cmd_job_run)
+    job_list = job_commands.add_parser(
+        "list", help="Jobs with next run and last outcome"
+    )
+    job_list.add_argument("--json", action="store_true")
+    job_list.set_defaults(handler=cmd_job_list)
     return root
 
 

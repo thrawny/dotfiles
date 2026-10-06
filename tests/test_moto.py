@@ -392,7 +392,8 @@ def test_ask_writes_and_clears_the_driver_question(
         "Merge #12?",
     )
     assert moto.cmd_ask(argparse.Namespace(text=[], clear=True)) == 0
-    assert not path.exists()
+    # The question goes; where the driver is stays, for a scheduled job to find.
+    assert json.loads(path.read_text()) == {"pane_id": "w1:p9"}
 
 
 def test_tell_marks_the_prompt_as_the_driver_s(moto: ModuleType):
@@ -1503,3 +1504,188 @@ def test_held_task_without_a_report_counts_from_the_hold(moto: ModuleType):
     assert (
         moto.since_report(task(agent="other"), None, None, moto.read_events()) is None
     )
+
+
+# Scheduled jobs: schedules, gates and how a due job reaches the driver.
+
+
+@pytest.fixture
+def jobs_home(moto: ModuleType, tmp_path: Path) -> Path:
+    home = tmp_path / "moto-home"
+    (home / "jobs").mkdir(parents=True)
+    setattr(moto, "MOTO_HOME", home)
+    return home / "jobs"
+
+
+def write_job(jobs_home: Path, name: str, body: str) -> None:
+    (jobs_home / f"{name}.toml").write_text(body)
+
+
+MONDAY_NOON = datetime(2026, 10, 5, 12, 0).timestamp()
+
+
+def test_weekday_ranges_wrap(moto: ModuleType):
+    assert moto.parse_days(["mon-fri"]) == {0, 1, 2, 3, 4}
+    assert moto.parse_days(["sat,sun"]) == {5, 6}
+    # A range reads forwards, so fri-mon is the weekend and its edges.
+    assert moto.parse_days(["fri-mon"]) == {4, 5, 6, 0}
+    assert moto.parse_days(None) == set(range(7))
+    with pytest.raises(ValueError):
+        moto.parse_days(["funday"])
+
+
+def test_times_are_rejected_not_guessed(moto: ModuleType):
+    assert moto.parse_times(["09:00", "14:30"]) == [(9, 0), (14, 30)]
+    for bad in (["25:00"], ["9"], [], "09:00"):
+        with pytest.raises(ValueError):
+            moto.parse_times(bad)
+
+
+def test_occurrence_skips_days_the_job_does_not_run(moto: ModuleType):
+    job = {"at": ["09:00", "14:00"], "days": ["mon-fri"]}
+    assert (
+        moto.occurrence(job, MONDAY_NOON, ahead=False)
+        == datetime(2026, 10, 5, 9, 0).timestamp()
+    )
+    assert (
+        moto.occurrence(job, MONDAY_NOON, ahead=True)
+        == datetime(2026, 10, 5, 14, 0).timestamp()
+    )
+    saturday = datetime(2026, 10, 10, 12, 0).timestamp()
+    # Friday's last run behind it, Monday's first ahead of it.
+    assert (
+        moto.occurrence(job, saturday, ahead=False)
+        == datetime(2026, 10, 9, 14, 0).timestamp()
+    )
+    assert (
+        moto.occurrence(job, saturday, ahead=True)
+        == datetime(2026, 10, 12, 9, 0).timestamp()
+    )
+
+
+def test_a_job_runs_once_per_occurrence(moto: ModuleType):
+    job = {"at": ["09:00"], "days": ["mon-fri"]}
+    nine = datetime(2026, 10, 5, 9, 0).timestamp()
+    assert moto.due(job, {}, MONDAY_NOON) == (nine, None)
+    assert moto.due(job, {"ran_at": nine}, MONDAY_NOON) == (None, None)
+
+
+def test_stale_after_records_a_missed_run_instead(moto: ModuleType):
+    job = {"at": ["09:00"], "days": ["mon-fri"], "stale_after": 60}
+    when, missed = moto.due(job, {}, MONDAY_NOON)
+    assert when and missed and "missed by" in missed
+    # Without the window the same occurrence simply runs late.
+    assert (
+        moto.due({k: v for k, v in job.items() if k != "stale_after"}, {}, MONDAY_NOON)[
+            1
+        ]
+        is None
+    )
+
+
+def test_gate_verdicts_follow_the_exit_code(moto: ModuleType):
+    assert moto.run_gate({"gate": "echo two waiting"}) == ("run", "two waiting")
+    assert moto.run_gate({"gate": "exit 75"}) == ("skip", "")
+    verdict, detail = moto.run_gate({"gate": "echo boom >&2; exit 3"})
+    assert verdict == "broken" and "exited 3" in detail and "boom" in detail
+    # No gate at all means the job always runs.
+    assert moto.run_gate({}) == ("run", "")
+
+
+def test_a_quiet_gate_spends_nothing(moto: ModuleType, jobs_home: Path):
+    write_job(
+        jobs_home,
+        "quiet",
+        'at = ["09:00"]\ngate = "exit 75"\ndeliver = "driver"\nbrief = "Look."\n',
+    )
+    assert moto.tick(MONDAY_NOON) == ["quiet: nothing to do"]
+    assert not moto.pending_notes()
+
+
+def test_a_busy_gate_leaves_the_driver_a_note(moto: ModuleType, jobs_home: Path):
+    write_job(
+        jobs_home,
+        "queue",
+        'at = ["09:00"]\ngate = "echo widgets#7"\ndeliver = "driver"\nbrief = "Look."\n',
+    )
+    assert moto.tick(MONDAY_NOON) == ["queue: left a note for the driver"]
+    ((name, note),) = moto.pending_notes()
+    assert name == "queue"
+    assert note["text"].startswith(moto.JOB_TAG)
+    assert "widgets#7" in note["text"] and "Look." in note["text"]
+
+
+def test_a_newer_run_replaces_an_unread_note(moto: ModuleType, jobs_home: Path):
+    write_job(
+        jobs_home,
+        "queue",
+        'at = ["09:00", "14:00"]\ngate = "echo now"\ndeliver = "driver"\nbrief = "Look."\n',
+    )
+    moto.tick(MONDAY_NOON)
+    moto.tick(datetime(2026, 10, 5, 14, 30).timestamp())
+    assert len(moto.pending_notes()) == 1
+
+
+def test_the_stop_hook_hands_a_note_over_once(moto: ModuleType, jobs_home: Path):
+    write_job(
+        jobs_home,
+        "queue",
+        'at = ["09:00"]\ngate = "echo widgets#7"\ndeliver = "driver"\nbrief = "Look."\n',
+    )
+    moto.tick(MONDAY_NOON)
+    blocked = moto.stop_hook({"session_id": "s1"})
+    assert blocked and blocked["decision"] == "block"
+    assert "widgets#7" in blocked["reason"]
+    assert not moto.pending_notes()
+
+
+def test_a_broken_gate_never_spawns_a_worker(moto: ModuleType, jobs_home: Path):
+    write_job(
+        jobs_home,
+        "hunt",
+        """
+at = ["09:00"]
+gate = "exit 3"
+deliver = "worker"
+repo = "widgets"
+title = "bug hunt"
+brief = "Hunt."
+""",
+    )
+    spawned: list[Any] = []
+
+    def never(*args: Any) -> dict[str, Any]:
+        spawned.append(args)
+        return {}
+
+    setattr(moto, "start_worker", never)
+    assert moto.tick(MONDAY_NOON) == ["hunt: broken gate, left a note for the driver"]
+    assert not spawned
+    ((_, note),) = moto.pending_notes()
+    assert "check failed" in note["text"]
+
+
+def test_a_broken_job_file_does_not_silence_the_others(
+    moto: ModuleType, jobs_home: Path
+):
+    write_job(jobs_home, "bad", 'at = ["25:00"]\ndeliver = "driver"\nbrief = "x"\n')
+    write_job(
+        jobs_home,
+        "good",
+        'at = ["09:00"]\ngate = "exit 75"\ndeliver = "driver"\nbrief = "Look."\n',
+    )
+    lines = moto.tick(MONDAY_NOON)
+    assert any("bad.toml" in line for line in lines)
+    assert "good: nothing to do" in lines
+
+
+def test_unknown_fields_are_rejected(moto: ModuleType):
+    job = {"at": ["09:00"], "deliver": "driver", "brief": "x", "evry": 5}
+    assert "evry" in (moto.job_problem(job) or "")
+
+
+def test_clearing_a_question_keeps_where_the_driver_is(moto: ModuleType):
+    moto.write_driver(pane_id="w9:p1", session="abc")
+    moto.write_driver(kind="question", text="Which base?", at=1.0)
+    moto.cmd_ask(argparse.Namespace(text=[], clear=True))
+    assert moto.read_driver() == {"pane_id": "w9:p1", "session": "abc"}
