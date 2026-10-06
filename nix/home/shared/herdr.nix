@@ -63,7 +63,9 @@ in
       # Shift widens super+o's "who needs me" to the driver session.
       key = "super+shift+o";
       type = "shell";
-      command = "moto focus";
+      # Herdr runs shell bindings with the server's bare PATH, which has
+      # neither moto nor the nix python it needs.
+      command = ''PATH="${config.home.homeDirectory}/.nix-profile/bin:${config.home.homeDirectory}/dotfiles/bin:$PATH" moto focus'';
       description = "Jump to the driver session";
     }
     {
