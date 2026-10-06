@@ -75,7 +75,7 @@ def test_pi_file(fork: ModuleType, tmp_path: Path):
 def test_native_fork_and_notice(fork: ModuleType, harness: str, flags: list[str]):
     with patch.object(fork.shutil, "which", side_effect=fake_binary):
         command = fork.fork_command(harness, SESSION)
-    assert command[:7] == [
+    assert command[:8] == [
         "/bin/env",
         "-u",
         "CLAUDECODE",
@@ -83,12 +83,42 @@ def test_native_fork_and_notice(fork: ModuleType, harness: str, flags: list[str]
         "CLAUDE_CODE_SESSION_ID",
         "-u",
         "CODEX_THREAD_ID",
+        "MOTO_FORK=1",
     ]
-    assert command[7:-1] == [f"/bin/{harness}", *flags]
+    assert command[8:-1] == [f"/bin/{harness}", *flags]
     assert "wait for the user's next" in command[-1]
     assert "Do not run tools" in command[-1]
     assert "original session remains active" in command[-1]
+    assert "neither a moto worker nor the moto driver" in command[-1]
+    assert "Do not run moto report, moto tell, moto watch" in command[-1]
     assert f"Source session: {SESSION}" in command[-1]
+
+
+def test_named_claude_fork_gets_a_name_of_its_own(fork: ModuleType, tmp_path: Path):
+    project = tmp_path / "projects/-code-widgets"
+    project.mkdir(parents=True)
+    titles = ["ABC-1 old", "ABC-1 fix"]
+    (project / f"{SESSION}.jsonl").write_text(
+        "".join(
+            json.dumps({"type": "custom-title", "customTitle": t}) + "\n"
+            for t in titles
+        )
+    )
+    with (
+        patch.dict("os.environ", {"CLAUDE_CONFIG_DIR": str(tmp_path)}),
+        patch.object(fork.shutil, "which", side_effect=fake_binary),
+    ):
+        named = fork.fork_command("claude", SESSION)
+        assert named[8:-1] == [
+            "/bin/claude",
+            "--resume",
+            SESSION,
+            "--fork-session",
+            "--name",
+            "ABC-1 fix fork",
+        ]
+        (project / f"{SESSION}.jsonl").write_text('{"type":"user"}\n')
+        assert "--name" not in fork.fork_command("claude", SESSION)
 
 
 def test_herdr_precedes_hypr_and_quotes_once(fork: ModuleType, tmp_path: Path):

@@ -51,6 +51,10 @@ name.
 A worker can start workers of its own, which the driver's watch skips. moto
 tell and wake from a worker's pane reach only the tasks it started, and tag the
 message with the worker's name instead of [driver].
+
+fork-window starts a fork of a worker or the driver with MOTO_FORK set. A fork
+is neither: the hooks skip it, and every command that changes a task or speaks
+for the driver refuses to run in it.
 """
 
 from __future__ import annotations
@@ -140,6 +144,8 @@ UNTRACKED = (
     "No driver session is tracking this one, so there is nothing to report to. "
     + "Tell the user directly."
 )
+# What a fork may run: commands that only read, and hooks that skip forks.
+FORK_SAFE = ("list", "log", "focus", "pin", "link", "stop-hook")
 
 
 EVENTS_VERSION = 1
@@ -282,6 +288,11 @@ def tasks_for_update() -> Generator[dict[str, dict[str, Any]]]:
             tmp.replace(path)
 
 
+def forked() -> bool:
+    """Whether this runs in a session fork-window forked, which owns no task."""
+    return bool(os.environ.get("MOTO_FORK"))
+
+
 def find_task(tasks: dict[str, dict[str, Any]], agent: str) -> dict[str, Any]:
     if agent not in tasks:
         raise MotoError(f"No task named {agent}")
@@ -401,7 +412,7 @@ def user_turns(
             cwd = snooze.get("cwd") or task["cwd"]
             path: Path | None = session_dir(cwd) / f"{snooze['session']}.jsonl"
         else:
-            path = newest_session(task["cwd"], task_title(task, agent))
+            path = transcript(task, agent)
         lines = path.read_text(errors="replace").splitlines() if path else []
     except (MotoError, OSError):
         return []
@@ -807,7 +818,7 @@ def last_turn(
     notification. A pasted prompt comes wrapped in a pasted_content tag.
     """
     try:
-        path = newest_session(task["cwd"], task_title(task, agent))
+        path = transcript(task, agent)
         lines = path.read_text(errors="replace").splitlines() if path else []
     except (MotoError, OSError):
         return None, None
@@ -1038,6 +1049,8 @@ def watch_end_queued(transcript: str | None) -> bool:
 
 
 def stop_hook(payload: dict[str, Any]) -> dict[str, Any] | None:
+    if forked():
+        return None  # a fork of the driver is not the driver
     budget_path = state_dir() / "stop-hook.json"
     tasks = read_tasks()
     watched = sorted(
@@ -1280,10 +1293,11 @@ def attach_hook(payload: dict[str, Any]) -> None:
     A task's own pane records its Claude session id. A session resumed in a
     pane no task owns moves the task with that session id to the pane. Reads
     tasks.json without the lock first, so the usual case costs no Herdr call.
+    A fork gets a session id of its own, and the hook skips it anyway.
     """
     pane_id = os.environ.get("HERDR_PANE_ID")
     session = payload.get("session_id")
-    if not pane_id or not session:
+    if not pane_id or not session or forked():
         return
     tasks = read_tasks()
     owner = pane_owner(tasks, pane_id)
@@ -1340,6 +1354,16 @@ def newest_session(cwd: str, title: str) -> Path | None:
     return next((s for s in sessions if last_title(s) == title), None)
 
 
+def transcript(task: dict[str, Any], agent: dict[str, Any] | None) -> Path | None:
+    """The worker's transcript: its recorded session's, else the newest one named
+    after it. A fork of the worker copies the name, so the session id comes first."""
+    session = task.get("session")
+    path = session_dir(task["cwd"]) / f"{session}.jsonl"
+    if session and path.is_file():
+        return path
+    return newest_session(task["cwd"], task_title(task, agent))
+
+
 def find_session(cwd: str, title: str) -> str:
     """The id of the newest Claude session in this folder that is named title."""
     directory = session_dir(cwd)
@@ -1373,7 +1397,8 @@ def cmd_snooze(args: argparse.Namespace) -> int:
             raise MotoError(f"{args.agent} is mid-turn; snooze it once the turn ends")
         cwd, repo, linked = task["cwd"], task["repo"], bool(task.get("branch"))
         title = task_title(task, agent)
-        session = find_session(cwd, title)
+        path = transcript(task, agent)
+        session = path.stem if path else find_session(cwd, title)
         if linked:
             branch = task["branch"]
             if os.path.isdir(cwd):
@@ -1875,6 +1900,15 @@ def parser() -> argparse.ArgumentParser:
 def main() -> int:
     args = parser().parse_args()
     try:
+        if (
+            forked()
+            and args.command not in FORK_SAFE
+            and not getattr(args, "hook", False)
+        ):
+            raise MotoError(
+                "This session is a fork, neither the driver nor a moto worker, so it"
+                + f" cannot run moto {args.command}. Answer the user in this pane."
+            )
         return args.handler(args)
     except subprocess.TimeoutExpired as error:
         print(

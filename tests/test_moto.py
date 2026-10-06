@@ -688,6 +688,83 @@ def test_report_records_the_worker_s_session(moto: ModuleType):
     assert moto.read_tasks()["abc-1"]["session"] == "s1"
 
 
+def moto_main(moto: ModuleType, *argv: str) -> int:
+    with patch("sys.argv", ["moto", *argv]):
+        return moto.main()
+
+
+def test_a_fork_runs_no_task_commands(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(session="s1")
+    before = moto.read_tasks()
+    # A fork of abc-1, in a pane of its own.
+    env = {"MOTO_FORK": "1", "HERDR_PANE_ID": "w1:p7", "CLAUDE_CODE_SESSION_ID": "s9"}
+    with (
+        patch.dict("os.environ", env),
+        patch.object(moto, "herdr", side_effect=AssertionError("no Herdr")),
+    ):
+        for argv in (
+            ["report", "done", "PR ready"],
+            ["report", "done", "PR ready", "--agent", "abc-1"],
+            ["tell", "abc-1", "go on"],
+            ["watch"],
+            ["ask", "which one?"],
+            ["attach", "abc-1"],
+            ["hold", "abc-1"],
+        ):
+            assert moto_main(moto, *argv) == 1
+            err = capsys.readouterr().err
+            assert f"cannot run moto {argv[0]}" in err
+            assert "Answer the user in this pane" in err
+        with patch.object(moto, "live_agents", return_value={}):
+            assert moto_main(moto, "list") == 0
+    assert "abc-1" in capsys.readouterr().out
+    assert moto.read_tasks() == before
+    assert moto.read_events() == []
+    assert not (moto.state_dir() / "driver.json").exists()
+    assert not (moto.state_dir() / "watch.lock").exists()
+
+
+def test_session_start_hook_skips_a_fork(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(session="s1")
+    before = moto.read_tasks()
+    with (
+        patch.dict("os.environ", {"MOTO_FORK": "1"}),
+        patch.object(moto, "live_agents", side_effect=AssertionError("no poll")),
+    ):
+        # Claude gives a fork its own session id, but even the worker's must not
+        # move the task, nor a fork in the task's own pane replace its session.
+        assert attach_hook(moto, "w1:p7", "s1") == 0
+        assert attach_hook(moto, "w1:p1", "s9") == 0
+    assert moto.read_tasks() == before
+
+
+def test_stop_hook_lets_a_fork_of_the_driver_end_its_turns(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    with patch.dict("os.environ", {"MOTO_FORK": "1"}):
+        assert stop(moto) == {}
+    assert not (moto.state_dir() / "stop-hook.json").exists()
+
+
+def test_transcript_is_the_recorded_session_not_a_fork_with_its_name(
+    moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(moto, "CLAUDE_HOME", tmp_path / "claude")
+    worker = task(title="ABC-1 fix")
+    directory = moto.session_dir(worker["cwd"])
+    session_file(directory, "s1", "ABC-1 fix", mtime=100)
+    # A fork copies the worker's name into the same folder, and is newer.
+    session_file(directory, "fork", "ABC-1 fix", mtime=200)
+    assert moto.transcript(worker, None) == directory / "fork.jsonl"
+    assert moto.transcript(worker | {"session": "s1"}, None) == directory / "s1.jsonl"
+    # A recorded session with no transcript falls back to the name.
+    assert moto.transcript(worker | {"session": "s0"}, None) == directory / "fork.jsonl"
+
+
 def test_unpushed_branch_without_a_worktree_blocks_removal(
     moto: ModuleType, pushed_clone: Path
 ):

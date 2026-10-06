@@ -16,7 +16,10 @@ The original session remains active. You share its working directory and files,
 but not its running tools, background tasks, or ownership of those tasks.
 The inherited conversation is context, not a request to continue its pending work
 or to fork again. Acknowledge the fork briefly, then wait for the user's next
-instruction. Do not run tools or change files until that instruction arrives."""
+instruction. Do not run tools or change files until that instruction arrives.
+This fork is neither a moto worker nor the moto driver, even if the conversation
+was one. Do not run moto report, moto tell, moto watch or any other moto task
+command; moto refuses them here. Answer the user in this pane."""
 
 
 class ForkError(Exception):
@@ -72,16 +75,36 @@ def session_ref(harness: str, supplied: str | None) -> str:
         raise ForkError(f"{harness} requires a full session UUID") from error
 
 
+def claude_title(ref: str) -> str | None:
+    """The Claude session's name: the last title its transcript records."""
+    home = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+    title = None
+    for transcript in home.glob(f"projects/*/{ref}.jsonl"):
+        for line in transcript.read_text(errors="replace").splitlines():
+            if '"customTitle"' not in line:
+                continue
+            try:
+                title = json.loads(line).get("customTitle") or title
+            except ValueError:
+                pass
+    return title
+
+
 def fork_command(harness: str, ref: str) -> list[str]:
     agent = executable(harness)
     notice = f"{NOTICE}\n\nSource harness: {harness}\nSource session: {ref}"
     if harness == "claude":
-        args = [agent, "--resume", ref, "--fork-session", notice]
+        # A fork copies the session's name, and moto finds a worker's transcript
+        # by that name, so a fork under the same name would stand in for it.
+        title = claude_title(ref)
+        name = ["--name", f"{title} fork"] if title else []
+        args = [agent, "--resume", ref, "--fork-session", *name, notice]
     elif harness == "codex":
         args = [agent, "fork", ref, notice]
     else:
         args = [agent, "--fork", ref, "--", notice]
     # A child terminal must not retain the parent's nested-agent/session markers.
+    # MOTO_FORK makes moto's hooks skip the fork and its task commands refuse it.
     return [
         executable("env"),
         "-u",
@@ -90,6 +113,7 @@ def fork_command(harness: str, ref: str) -> list[str]:
         "CLAUDE_CODE_SESSION_ID",
         "-u",
         "CODEX_THREAD_ID",
+        "MOTO_FORK=1",
         *args,
     ]
 
