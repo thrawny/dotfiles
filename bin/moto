@@ -59,6 +59,7 @@ name.
 
 moto job runs work on a clock: a job file in MOTO_HOME/jobs names a time,
 a cheap check, and whether the result wakes the driver or starts a worker.
+Without a brief, the job follows the .md file of the same name beside it.
 moto job loop is the scheduler, and its state is jobs.json beside tasks.json.
 
 A worker can start workers of its own, which the driver's watch skips. moto
@@ -1779,7 +1780,7 @@ def job_problem(job: dict[str, Any]) -> str | None:
     if deliver not in ("driver", "worker"):
         return 'deliver must be "driver" or "worker"'
     if not str(job.get("brief") or "").strip():
-        return "brief is empty"
+        return "no brief, and no .md file of the same name beside it"
     if deliver == "worker" and not job.get("repo"):
         return "a worker job needs a repo"
     if deliver == "worker" and not job.get("title"):
@@ -1796,6 +1797,8 @@ def job_problem(job: dict[str, Any]) -> str | None:
 def load_jobs() -> tuple[dict[str, dict[str, Any]], list[str]]:
     """Every usable job file, and one line per file that is not.
 
+    A job without a brief follows the .md file of the same name beside it, so
+    the brief points the agent at that file rather than inlining it.
     A broken file is reported and skipped rather than stopping the tick, so one
     bad edit cannot silence every other job.
     """
@@ -1811,9 +1814,16 @@ def load_jobs() -> tuple[dict[str, dict[str, Any]], list[str]]:
             problems.append(f"{path.name}: {error}")
             continue
         job["name"] = str(job.get("name") or path.stem)
+        source = "inline"
+        notes = path.with_suffix(".md")
+        if not str(job.get("brief") or "").strip() and notes.is_file():
+            job["brief"] = f"Follow {directory.name}/{notes.name}."
+            source = notes.name
         if problem := job_problem(job):
             problems.append(f"{path.name}: {problem}")
             continue
+        # Set after the check, which rejects fields a job file may not carry.
+        job["brief_source"] = source
         jobs[job["name"]] = job
     return jobs, problems
 
@@ -2076,6 +2086,7 @@ def job_rows(now: float) -> list[dict[str, Any]]:
             "name": name,
             "enabled": job.get("enabled") is not False,
             "deliver": job["deliver"],
+            "brief": job["brief_source"],
             "next": occurrence(job, now, ahead=True),
             "outcome": state.get(name, {}).get("outcome"),
             "note": state.get(name, {}).get("note"),
@@ -2099,7 +2110,8 @@ def print_jobs(now: float) -> None:
         when = row["next"]
         nxt = clock(when) if when else "never"
         state = "" if row["enabled"] else " · disabled"
-        print(f"{row['name']} · {row['deliver']} · next {nxt}{state}")
+        brief = f"brief {row['brief']}"
+        print(f"{row['name']} · {row['deliver']} · {brief} · next {nxt}{state}")
         if outcome := row["outcome"]:
             print(f"  last ({age(now - outcome['at'])} ago): {outcome['text']}")
         if row["note"]:

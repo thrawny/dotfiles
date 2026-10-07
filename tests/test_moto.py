@@ -1607,6 +1607,49 @@ def test_a_broken_job_file_does_not_silence_the_others(
     assert "good: nothing to do" in lines
 
 
+def test_a_job_without_a_brief_follows_its_markdown_file(
+    moto: ModuleType, jobs_home: Path
+):
+    write_job(
+        jobs_home,
+        "queue",
+        'at = ["09:00"]\ngate = "echo widgets#7"\ndeliver = "driver"\n',
+    )
+    (jobs_home / "queue.md").write_text("Nag about the queue.\n")
+    jobs, problems = moto.load_jobs()
+    assert not problems
+    assert jobs["queue"]["brief"] == "Follow jobs/queue.md."
+    assert moto.job_rows(MONDAY_NOON)[0]["brief"] == "queue.md"
+    moto.tick(MONDAY_NOON)
+    ((_, note),) = moto.pending_notes()
+    # The gate output still follows the brief.
+    assert (
+        "Follow jobs/queue.md.\n\nWhat the job's check found:\n\nwidgets#7"
+        in note["text"]
+    )
+
+
+def test_an_explicit_brief_beats_the_markdown_file(moto: ModuleType, jobs_home: Path):
+    write_job(
+        jobs_home, "queue", 'at = ["09:00"]\ndeliver = "driver"\nbrief = "Look."\n'
+    )
+    (jobs_home / "queue.md").write_text("Nag about the queue.\n")
+    jobs, _ = moto.load_jobs()
+    assert jobs["queue"]["brief"] == "Look."
+    assert moto.job_rows(MONDAY_NOON)[0]["brief"] == "inline"
+
+
+def test_a_job_with_neither_brief_nor_markdown_is_unusable(
+    moto: ModuleType, jobs_home: Path
+):
+    write_job(jobs_home, "queue", 'at = ["09:00"]\ndeliver = "driver"\n')
+    jobs, problems = moto.load_jobs()
+    assert not jobs
+    assert problems == [
+        "queue.toml: no brief, and no .md file of the same name beside it"
+    ]
+
+
 def test_unknown_fields_are_rejected(moto: ModuleType):
     job = {"at": ["09:00"], "deliver": "driver", "brief": "x", "evry": 5}
     assert "evry" in (moto.job_problem(job) or "")
