@@ -341,6 +341,79 @@ def test_unpushed_commits_block_removal_unless_merged(
         assert moto.unsaved_work(str(pushed_clone)) is None
 
 
+def close(
+    moto: ModuleType,
+    status: str,
+    turns: list[float],
+    force: bool = False,
+    **fields: Any,
+) -> tuple[MagicMock, MagicMock]:
+    """Run moto close on a main-checkout task, which skips the unsaved-work check."""
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(branch=None, started=500.0, **fields)
+    with (
+        patch.object(moto, "live_agents", return_value=live(status, 1)),
+        patch.object(moto.time, "time", return_value=1015.0),
+        patch.object(moto, "user_turns", return_value=turns) as user_turns,
+        patch.object(moto, "herdr") as herdr,
+    ):
+        moto.cmd_close(argparse.Namespace(agent="abc-1", force=force))
+    return herdr, user_turns
+
+
+DONE = {"kind": "done", "text": "Fixed.", "at": 900.0}
+
+
+@pytest.mark.parametrize("status", ["working", "blocked"])
+def test_close_refuses_a_busy_worker(moto: ModuleType, status: str):
+    with pytest.raises(moto.MotoError, match=f"^abc-1 is {status}; wait for it"):
+        close(moto, status, [], report=DONE)
+    assert "abc-1" in moto.read_tasks()
+
+
+def test_close_refuses_a_worker_the_user_typed_to_since_its_report(
+    moto: ModuleType,
+):
+    with pytest.raises(moto.MotoError) as error:
+        close(moto, "idle", [950.0, 1000.0], report=DONE)
+    assert str(error.value).startswith(
+        "the user typed in abc-1's pane 2 times since its last report, last 15s ago;"
+    )
+    assert "abc-1" in moto.read_tasks()
+
+
+def test_close_without_a_report_counts_the_user_s_prompts_since_the_start(
+    moto: ModuleType,
+):
+    with pytest.raises(moto.MotoError, match="1 time since it started"):
+        close(moto, "done", [1000.0])
+    herdr, user_turns = close(moto, "done", [])
+    user_turns.assert_called_once()
+    assert user_turns.call_args.args[2] == 500.0
+    herdr.assert_called_once_with("tab", "close", "w1:t1")
+
+
+def test_close_lets_a_wrapped_worker_finish_its_turn(moto: ModuleType):
+    wrap = {**DONE, "kind": "wrap"}
+    herdr, _ = close(moto, "working", [], report=wrap)
+    herdr.assert_called_once_with("tab", "close", "w1:t1")
+    assert "abc-1" not in moto.read_tasks()
+    # A prompt after the wrap still means the user changed their mind.
+    with pytest.raises(moto.MotoError, match="since its last report"):
+        close(moto, "working", [1000.0], report=wrap)
+
+
+def test_close_ignores_the_pane_of_a_snoozed_task(moto: ModuleType):
+    herdr, _ = close(moto, "working", [], report=DONE, snoozed=SNOOZE)
+    herdr.assert_called_once_with("tab", "close", "w1:t1")
+
+
+def test_forced_close_skips_the_busy_checks(moto: ModuleType):
+    herdr, user_turns = close(moto, "working", [1000.0], force=True, report=DONE)
+    user_turns.assert_not_called()
+    herdr.assert_called_once_with("tab", "close", "w1:t1")
+
+
 def test_workspace_without_checkout_is_found_by_pane_cwd(moto: ModuleType):
     replies: dict[tuple[str, ...], dict[str, Any]] = {
         ("workspace", "list"): {

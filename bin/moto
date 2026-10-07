@@ -40,6 +40,8 @@ file to show a worker's open question under its sidebar row.
 Every command that changes a task also appends a line to events.jsonl in the
 same folder, which nothing rewrites: a task's history outlives the task.
 close and drop copy the whole task into their line before deleting it.
+close refuses a worker that is mid-turn, or that the user typed to since its
+last report, because a done report can be stale by then.
 moto log prints those lines.
 
 moto link puts the moto-* skills in ~/.claude/skills as symlinks, outside Home
@@ -101,6 +103,10 @@ BACKGROUND_WORK = re.compile(
 REPORT_KINDS = ("done", "question", "blocked", "wrap", "handback")
 # Reports that end the task's work, so it needs no watch once the driver saw them.
 FINISHED = ("done", "wrap")
+# Reports from the user ending the worker on purpose, so close needs no idle pane.
+ENDED_BY_USER = ("wrap",)
+# Herdr states of an agent that is mid-turn or waiting at a prompt.
+BUSY = ("working", "blocked")
 # moto list asks GitHub when a held task's PR last changed, and gives up after this.
 PR_TIMEOUT = 3
 PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
@@ -993,10 +999,48 @@ def checkout_workspace(path: str) -> str | None:
     return None
 
 
+def still_working(
+    name: str, task: dict[str, Any], agent: dict[str, Any] | None
+) -> str | None:
+    """Why closing this worker could cut off its work, or None when it is safe.
+
+    A done report alone is not enough: the user may have typed a new prompt
+    into the pane since. A wrap report means the user ended the worker, so a
+    busy pane is the wrap turn finishing, but prompts after it still count.
+    """
+    report: dict[str, Any] = task.get("report") or {}
+    problems: list[str] = []
+    status = agent.get("agent_status") if agent else None
+    if status in BUSY and report.get("kind") not in ENDED_BY_USER:
+        problems.append(f"{name} is {status}")
+    since = report.get("at") or task.get("started") or 0
+    if turns := user_turns(task, agent, since):
+        times = "time" if len(turns) == 1 else "times"
+        mark = "its last report" if report else "it started"
+        last = age(time.time() - max(turns))
+        problems.append(
+            f"the user typed in {name}'s pane {len(turns)} {times} since {mark},"
+            + f" last {last} ago"
+        )
+    return "; ".join(problems) or None
+
+
 def cmd_close(args: argparse.Namespace) -> int:
+    live = {} if args.force else live_agents()
     with tasks_for_update() as tasks:
         task = find_task(tasks, args.agent)
         cwd, branch, repo = task["cwd"], task.get("branch"), task["repo"]
+        if not args.force and (
+            # A snoozed task has no pane; Herdr may have reused its id.
+            busy := still_working(
+                args.agent,
+                task,
+                None if task.get("snoozed") else live.get(task["pane_id"]),
+            )
+        ):
+            raise MotoError(
+                f"{busy}; wait for it or ask the user, or pass --force to close anyway"
+            )
         exists = os.path.isdir(cwd)
         if branch and not args.force:
             # A snoozed task's branch has no worktree, so check the branch itself.
@@ -2130,7 +2174,9 @@ def parser() -> argparse.ArgumentParser:
     close = commands.add_parser("close", help="Remove a worker's tab and worktree")
     close.add_argument("agent")
     close.add_argument(
-        "--force", action="store_true", help="Remove even with unsaved work"
+        "--force",
+        action="store_true",
+        help="Remove even with unsaved work, a busy pane or the user's new prompts",
     )
     close.set_defaults(handler=cmd_close)
 
