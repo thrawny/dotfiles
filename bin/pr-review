@@ -48,7 +48,7 @@ bot_authors='dependabot renovate github-actions'
 
 usage() {
   cat <<'USAGE'
-Usage: pr-review [-r] [-b] [-a] [-c] [REPO] [NUMBER]
+Usage: pr-review [-r] [-b] [-a] [-c] [--review] [REPO] [NUMBER]
 
 Pick a ready-for-review PR requesting review from your team (github.review_team
 in the work config) and open it in codediff, in that repo's Herdr workspace.
@@ -65,6 +65,9 @@ in the work config) and open it in codediff, in that repo's Herdr workspace.
   -j, --jira      Open the Jira ticket for REPO NUMBER instead of reviewing
   -w, --worktree  Check the PR branch out in a Herdr worktree, with Claude Code
                   and Neovim side by side, instead of reviewing
+      --review    With --worktree, have Claude write the PR explainer and the
+                  tono findings at once, as a moto task the driver tracks.
+                  Without it Claude starts idle, as plain `claude`
       --no-focus  Open the review in the background, leaving focus where it
                   is, for a caller such as a scheduled job
   -h, --help      Show this help
@@ -82,6 +85,7 @@ print_json=0
 preview=0
 jira=0
 worktree=0
+brief=0
 # A review the user opens should take focus; one a scheduled job opens should
 # not pull them out of what they are doing.
 focus=--focus
@@ -94,6 +98,7 @@ while (($#)); do
     -a | --all) all=1 ;;
     -j | --jira) jira=1 ;;
     -w | --worktree) worktree=1 ;;
+    --review) brief=1 ;;
     --no-focus) focus=--no-focus ;;
     # fzf runs the preview as its own process, so it re-enters the script too.
     --preview) preview=1 ;;
@@ -481,9 +486,14 @@ open_worktree() {
 # Start the review agent through moto when moto is installed, so the session is
 # a task the driver can see, report to and clean up. Without moto, or when the
 # spawn fails, the pane still gets a plain Claude: a review the driver cannot
-# track beats no review.
+# track beats no review. Only --review sends the brief; a review the user opens
+# starts idle and waits for them to type.
 start_review_agent() {
   local pane=$1 number=$2 repo=$3 branch=$4 title word='[a-z0-9][a-z0-9-]*'
+  if ((!brief)); then
+    "$herdr_bin" pane run "$pane" claude >/dev/null
+    return 0
+  fi
   if ! command -v moto >/dev/null 2>&1; then
     "$herdr_bin" pane run "$pane" claude >/dev/null
     return 0
