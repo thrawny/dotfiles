@@ -196,23 +196,24 @@ def test_resume_treats_what_happened_while_held_as_seen(moto: ModuleType):
     ]
 
 
-def test_handback_ends_the_hold_and_wakes_the_driver(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize("kind", ["handback", "snooze"])
+def test_handback_and_snooze_end_the_hold_and_wake_the_driver(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str], kind: str
 ):
     old = {"kind": "question", "text": "Which base?", "at": 100.0}
     seen = {"status": "working", "seq": 1, "pending": {"since": 90.0}}
     with moto.tasks_for_update() as tasks:
         tasks["abc-1"] = task(held=True, report=old, seen=seen)
-    args = argparse.Namespace(kind="handback", text=["Ship", "it"], agent=None)
+    args = argparse.Namespace(kind=kind, text=["Ship", "it"], agent=None)
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
         assert moto.cmd_report(args) == 0
     assert "moto watch covers this task again" in capsys.readouterr().out
     tasks = moto.read_tasks()
     assert tasks["abc-1"]["held"] is False
     now = moto.time.time()
-    assert moto.check(tasks, live("done", 5), now) == ["abc-1 handback: Ship it"]
+    assert moto.check(tasks, live("done", 5), now) == [f"abc-1 {kind}: Ship it"]
     assert [(e["event"], e.get("by")) for e in events(moto)][-2:] == [
-        ("resume", "handback"),
+        ("resume", kind),
         ("report", None),
     ]
 
@@ -393,12 +394,15 @@ def test_close_without_a_report_counts_the_user_s_prompts_since_the_start(
     herdr.assert_called_once_with("tab", "close", "w1:t1")
 
 
-def test_close_lets_a_wrapped_worker_finish_its_turn(moto: ModuleType):
-    wrap = {**DONE, "kind": "wrap"}
+@pytest.mark.parametrize("kind", ["wrap", "snooze"])
+def test_close_lets_a_worker_the_user_ended_finish_its_turn(
+    moto: ModuleType, kind: str
+):
+    wrap = {**DONE, "kind": kind}
     herdr, _ = close(moto, "working", [], report=wrap)
     herdr.assert_called_once_with("tab", "close", "w1:t1")
     assert "abc-1" not in moto.read_tasks()
-    # A prompt after the wrap still means the user changed their mind.
+    # A prompt after the report still means the user changed their mind.
     with pytest.raises(moto.MotoError, match="since its last report"):
         close(moto, "working", [1000.0], report=wrap)
 

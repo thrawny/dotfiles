@@ -22,8 +22,10 @@ driver with the news. Notes that scheduled jobs left ride along.
 The user ends a worker's work by running the moto-wrap skill in its pane, which
 reports wrap, a done that also lists what still runs. A held worker goes back to
 the driver with the moto-handback skill, which reports handback: what the user
-and the worker settled, for the driver to act on. Both end a hold, so the driver
-hears of them.
+and the worker settled, for the driver to act on. The moto-snooze skill parks a
+worker that waits on something: it reports snooze with what the task waits on,
+and the driver runs moto snooze, since a worker that snoozes itself closes its
+own pane mid-turn. All three end a hold, so the driver hears of them.
 
 moto list shows what happened in a held or snoozed task since its last
 report, because the driver sees none of it: the user's turns in the worker's
@@ -100,11 +102,11 @@ PASTED = re.compile(r"^\s*(<pasted_content[^>]*>\s*)?")
 BACKGROUND_WORK = re.compile(
     r"· (\d+ (?:shells?|monitors?|local agents?))(?= ·|$)", re.M
 )
-REPORT_KINDS = ("done", "question", "blocked", "wrap", "handback")
+REPORT_KINDS = ("done", "question", "blocked", "wrap", "handback", "snooze")
 # Reports that end the task's work, so it needs no watch once the driver saw them.
 FINISHED = ("done", "wrap")
 # Reports from the user ending the worker on purpose, so close needs no idle pane.
-ENDED_BY_USER = ("wrap",)
+ENDED_BY_USER = ("wrap", "snooze")
 # Herdr states of an agent that is mid-turn or waiting at a prompt.
 BUSY = ("working", "blocked")
 # moto list asks GitHub when a held task's PR last changed, and gives up after this.
@@ -689,7 +691,9 @@ def cmd_report(args: argparse.Namespace) -> int:
             # new worker's session id arrives with its first report.
             if session := os.environ.get("CLAUDE_CODE_SESSION_ID"):
                 task["session"] = session
-        handed_back = args.kind in ("wrap", "handback") and bool(task.get("held"))
+        handed_back = args.kind in ("wrap", "handback", "snooze") and bool(
+            task.get("held")
+        )
         if handed_back:
             # The watch takes the task back from here, so this report is news to
             # it and whatever happened while held is not.
@@ -1005,8 +1009,9 @@ def still_working(
     """Why closing this worker could cut off its work, or None when it is safe.
 
     A done report alone is not enough: the user may have typed a new prompt
-    into the pane since. A wrap report means the user ended the worker, so a
-    busy pane is the wrap turn finishing, but prompts after it still count.
+    into the pane since. A wrap or snooze report means the user ended the
+    worker, so a busy pane is that turn finishing, but prompts after it still
+    count.
     """
     report: dict[str, Any] = task.get("report") or {}
     problems: list[str] = []
@@ -2158,8 +2163,8 @@ def parser() -> argparse.ArgumentParser:
 
     report = commands.add_parser(
         "report",
-        help="Run by a worker to report to the driver; wrap and handback also"
-        + " end a hold",
+        help="Run by a worker to report to the driver; wrap, handback and"
+        + " snooze also end a hold",
     )
     report.add_argument("kind", choices=REPORT_KINDS)
     report.add_argument("text", nargs="+")
