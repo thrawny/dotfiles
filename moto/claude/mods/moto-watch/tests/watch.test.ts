@@ -41,7 +41,7 @@ test('news reaches an idle driver as one tagged prompt', async ($, on) => {
   await $.session.start({ cwd: '/moto', surface: 'terminal', isInteractive: true })
   await clock.advance(3000)
   expect(seen.prompts).toEqual(['[moto watch]\nabc-1 question: which?'])
-  expect(seen.status).toEqual(['moto: watching 2'])
+  expect(seen.status).toEqual(['watching 2'])
   await clock.advance(3000)
   expect(seen.prompts.length).toBe(1)
 })

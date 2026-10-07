@@ -47,11 +47,11 @@ async function poll($: EngineInterface) {
   try {
     const { exitCode, stdout, stderr } = await $.process.run(['moto', 'watch'])
     if (exitCode !== 0) {
-      $.ui.status(`moto watch: ${stderr.trim().split('\n')[0] || `exit ${exitCode}`}`)
+      $.ui.status(stderr.trim().split('\n')[0] || `moto watch exited ${exitCode}`)
       return
     }
     const pass = JSON.parse(stdout) as Pass
-    $.ui.status(`moto: watching ${pass.watching}`)
+    $.ui.status(`watching ${pass.watching}`)
     if (pass.lines.length > 0) {
       await update($, lines, before => [...before, ...pass.lines])
     }
@@ -61,7 +61,7 @@ async function poll($: EngineInterface) {
     }
     await deliver($)
   } catch (error) {
-    $.ui.status(`moto watch: ${error instanceof Error ? error.message : String(error)}`)
+    $.ui.status(error instanceof Error ? error.message : String(error))
   } finally {
     isPolling = false
   }
