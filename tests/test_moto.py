@@ -133,8 +133,63 @@ def test_prompt_and_closed_pane_wake(moto: ModuleType):
     assert moto.check(tasks, live("blocked", 2), 0) == [
         "abc-1 blocked: waiting at an approval or question prompt"
     ]
-    assert moto.check(tasks, {}, 0) == ["abc-1: pane closed"]
+    grace = moto.PANE_GONE_GRACE
+    assert moto.check(tasks, {}, 10) == []
+    assert moto.check(tasks, {}, 10 + grace) == ["abc-1: pane closed"]
+    assert moto.check(tasks, {}, 20 + grace) == []
+    assert tasks["abc-1"]["closed_at"] == 10
+
+
+def test_held_task_s_closed_pane_wakes_once_and_nothing_else(moto: ModuleType):
+    report = {"kind": "question", "text": "Which base?", "at": 100.0}
+    grace = moto.PANE_GONE_GRACE
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True, report=report)
+        assert moto.check(tasks, live("done", 2), 200) == []
+        assert moto.check(tasks, {}, 300) == []
+        assert moto.check(tasks, {}, 300 + grace) == ["abc-1: pane closed"]
+        assert moto.check(tasks, {}, 400 + grace) == []
+    assert moto.read_tasks()["abc-1"]["closed_at"] == 300
+    assert events(moto)[-1] | {"ts": 0} == {
+        "v": 1,
+        "ts": 0,
+        "event": "pane_closed",
+        "agent": "abc-1",
+        "pane_id": "w1:p1",
+        "at": 300,
+    }
+
+
+def test_pane_back_within_the_grace_period_is_not_news(moto: ModuleType):
+    tasks = {"abc-1": task(held=True), "abc-2": task(pane_id="w2:p1")}
+    grace = moto.PANE_GONE_GRACE
     assert moto.check(tasks, {}, 0) == []
+    both = live("done", 2) | live("working", 1, "w2:p1")
+    assert moto.check(tasks, both, grace - 1) == []
+    assert moto.check(tasks, {}, grace) == []
+    assert "closed_at" not in tasks["abc-1"]
+
+
+def test_closed_mark_clears_when_the_pane_comes_back(moto: ModuleType):
+    tasks = {"abc-1": task(held=True)}
+    grace = moto.PANE_GONE_GRACE
+    moto.check(tasks, {}, 0)
+    assert moto.check(tasks, {}, grace) == ["abc-1: pane closed"]
+    assert moto.check(tasks, live("idle", 2), grace + 1) == []
+    assert "closed_at" not in tasks["abc-1"]
+    moto.check(tasks, {}, grace + 2)
+    assert moto.check(tasks, {}, 2 * grace + 2) == ["abc-1: pane closed"]
+
+
+def test_closed_pane_is_left_to_the_worker_that_started_it_and_to_a_snooze(
+    moto: ModuleType,
+):
+    tasks = {
+        "abc-1": task(parent="abc-9"),
+        "abc-2": task(pane_id="w2:p1", snoozed=SNOOZE),
+    }
+    moto.check(tasks, {}, 0)
+    assert moto.check(tasks, {}, moto.PANE_GONE_GRACE) == []
 
 
 def test_unknown_state_is_skipped(moto: ModuleType):
@@ -407,6 +462,17 @@ def test_close_lets_a_worker_the_user_ended_finish_its_turn(
         close(moto, "working", [1000.0], report=wrap)
 
 
+def test_close_counts_a_pane_closed_after_the_last_prompt_as_done(
+    moto: ModuleType,
+):
+    herdr, _ = close(moto, "gone", [950.0, 1000.0], report=DONE, closed_at=1005.0)
+    herdr.assert_called_once_with("tab", "close", "w1:t1")
+    assert "abc-1" not in moto.read_tasks()
+    # A prompt after the pane closed came from a session resumed elsewhere.
+    with pytest.raises(moto.MotoError, match="2 times since its last report"):
+        close(moto, "gone", [950.0, 1010.0], report=DONE, closed_at=1005.0)
+
+
 def test_close_ignores_the_pane_of_a_snoozed_task(moto: ModuleType):
     herdr, _ = close(moto, "working", [], report=DONE, snoozed=SNOOZE)
     herdr.assert_called_once_with("tab", "close", "w1:t1")
@@ -613,7 +679,9 @@ def claude_in(pane_id: str, status: str = "idle", **fields: Any) -> dict[str, An
 def test_attach_moves_a_task_to_its_resumed_pane(moto: ModuleType):
     report = {"kind": "done", "text": "PR ready", "at": 100.0}
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True, report=report, seen={"status": "gone"})
+        tasks["abc-1"] = task(
+            held=True, report=report, seen={"status": "gone"}, closed_at=50.0
+        )
     # The closed pane's process lingers in Herdr under the task's name.
     live = {
         "w1:p1": claude_in("w1:p1", name="abc-1"),
@@ -644,6 +712,7 @@ def test_attach_moves_a_task_to_its_resumed_pane(moto: ModuleType):
         "report_at": 100.0,
         "turn": "t9",
     }
+    assert "closed_at" not in saved
     assert events(moto)[-1] | {"ts": 0} == {
         "v": 1,
         "ts": 0,
@@ -1338,6 +1407,17 @@ def test_list_shows_what_happened_in_a_held_task_since_its_report(
     assert "since the" not in watched
 
 
+def test_list_shows_a_pane_closed_by_hand(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True, closed_at=7000.0, pane_id="w9:p1")
+        tasks["abc-2"] = task(pane_id="w8:p1")
+    out = list_output(moto, capsys, 7300, [], None, 0.0)
+    assert "abc-1 · widgets · ABC-1-fix · pane closed by hand 5m ago" in out
+    assert "abc-2 · widgets · ABC-1-fix · gone\n" in out
+
+
 def test_list_adds_nothing_when_nothing_happened_since_the_report(
     moto: ModuleType, capsys: pytest.CaptureFixture[str]
 ):
@@ -1539,12 +1619,24 @@ def test_clearing_a_question_keeps_where_the_driver_is(moto: ModuleType):
     assert moto.read_driver() == {"pane_id": "w9:p1", "session": "abc"}
 
 
-def test_watch_skips_held_and_snoozed_tasks(moto: ModuleType):
+def test_watch_skips_snoozed_tasks_and_those_a_worker_started(moto: ModuleType):
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True)
+        tasks["abc-1"] = task(parent="abc-9")
         tasks["abc-2"] = task(pane_id="w1:p2", snoozed=SNOOZE)
     with patch.object(moto, "live_agents", side_effect=AssertionError("no poll")):
         assert moto.watch() == {"watching": 0, "lines": [], "notes": None}
+
+
+def test_watch_checks_a_held_task_s_pane_without_counting_it(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True, seen={"status": "done", "gone_since": 0.0})
+    with patch.object(moto, "live_agents", return_value={}):
+        assert moto.watch() == {
+            "watching": 0,
+            "lines": ["abc-1: pane closed"],
+            "notes": None,
+        }
+    assert moto.read_tasks()["abc-1"]["closed_at"] == 0.0
 
 
 def test_watch_reports_news_once(moto: ModuleType):
