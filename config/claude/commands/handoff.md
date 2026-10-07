@@ -1,6 +1,7 @@
 ---
 allowed-tools: Read, Write(handoff.md), Glob, Grep, Bash(git status:*), Bash(git diff:*), Bash(git log:*), Bash(git branch:*), Bash(remove-handoff), Bash(acpx * sessions*), TaskList, TaskStop
 description: Hand off work to another session
+argument-hint: "[goal] [--stay]"
 ---
 
 $ARGUMENTS

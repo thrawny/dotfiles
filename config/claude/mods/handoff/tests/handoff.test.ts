@@ -1,14 +1,15 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-type World = { commands: string[]; toasts: string[] }
+type World = { commands: string[]; args: string[]; toasts: string[] }
 
 // The engine beneath the mod: /handoff writes handoff.md at `writes` (or never),
 // and every other command just records its name.
 function world(on: On, writes: number | null): World {
-  const seen: World = { commands: [], toasts: [] }
+  const seen: World = { commands: [], args: [], toasts: [] }
   on('command.run', ($, e) => {
     seen.commands.push(e.command)
+    seen.args.push(e.args)
     return {}
   })
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
@@ -75,4 +76,15 @@ test('other turns never take off', async ($, on) => {
   await $.turn.complete(ended('t1'))
   await clock.advance(0)
   expect(seen.commands).toEqual([])
+})
+
+test('--stay hands off without clearing, and the command never sees the flag', async ($, on) => {
+  const clock = mock.clock(on, { now: 1000 })
+  const seen = world(on, 2000)
+  await $.command.run({ ...TYPED, args: 'ship the fix --stay' })
+  await $.turn.start({ text: 'Hand off', turnId: 't1' })
+  await $.turn.complete(ended('t1'))
+  await clock.advance(0)
+  expect(seen.commands).toEqual(['handoff'])
+  expect(seen.args).toEqual(['ship the fix'])
 })

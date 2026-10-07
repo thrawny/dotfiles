@@ -1,5 +1,7 @@
 import type { EngineInterface, Register } from 'claude-code'
 
+const STAY = '--stay'
+
 // /handoff is a prompt command, so its work is the turn that starts after it runs.
 let startedAt: number | undefined
 let handoffTurn: string | undefined
@@ -27,10 +29,13 @@ async function takeOff($: EngineInterface, since: number) {
 }
 
 export const register: Register = on => {
+  // `--stay` writes the handoff and keeps the session; the command never sees the flag.
   on('command.run', { command: 'handoff' }, async ($, e, next) => {
-    startedAt = await $.clock.now()
+    const words = e.args.split(/\s+/).filter(word => word !== '')
+    const isStaying = words.includes(STAY)
+    startedAt = isStaying ? undefined : await $.clock.now()
     handoffTurn = undefined
-    return next(e)
+    return next(isStaying ? { ...e, args: words.filter(word => word !== STAY).join(' ') } : e)
   }).catch(($, e, next) => next(e))
 
   on('turn.start', ($, e, next) => {
