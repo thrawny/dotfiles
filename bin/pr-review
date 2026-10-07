@@ -146,12 +146,14 @@ done
 # into the shape gh search prints.
 pr_fields='number title isDraft updatedAt reviewDecision
   author { login }
+  comments(last: 100) { nodes { viewerDidAuthor } }
   labels(first: 20) { nodes { name } }
   commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }'
 # shellcheck disable=SC2016 # jq, not shell
 flatten='def flatten:
-  . + { checks: .commits.nodes[0].commit.statusCheckRollup.state }
-  | del(.commits, .labels);'
+  . + { checks: .commits.nodes[0].commit.statusCheckRollup.state,
+        commented: any(.comments.nodes[]?; .viewerDidAuthor) }
+  | del(.commits, .labels, .comments);'
 
 # The search also says whether the repo has the label, which sets ready for
 # build_rows to filter on. The label filter runs here rather than in the
@@ -586,12 +588,17 @@ fi
 
 # The PRs build_rows shows, as JSON rather than a table of icons and colors.
 # A scheduled job hands these to an agent, which needs the fields, not columns.
+# A plain comment does not clear the team's review request the way a review
+# does, so a PR you have already looked at and commented on stays in the
+# search. A caller reading the JSON wants PRs you have not looked at yet; the
+# picker keeps them, so you can go back to one.
 build_json() {
   jq --arg bots "$bot_authors" --arg org "$org" \
     --argjson include_bots "$include_bots" --argjson all "$all" '
   ($bots | split(" ")) as $bots
   | map(select($all == 1 or .ready != false))
   | map(select($include_bots == 1 or (.author.login | sub("\\[bot\\]$"; "") | IN($bots[]) | not)))
+  | map(select($all == 1 or .commented != true))
   | sort_by(.updatedAt) | reverse
   | map({ repo: .repository.name,
           number,
