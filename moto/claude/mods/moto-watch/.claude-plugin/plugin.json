@@ -1,0 +1,6 @@
+{
+  "name": "moto-watch",
+  "version": "0.1.0",
+  "description": "Watches moto's workers from inside the driver session and prompts it when one needs it.",
+  "types": "./types/index.d.ts"
+}

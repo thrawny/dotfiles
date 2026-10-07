@@ -104,6 +104,8 @@ BACKGROUND_WORK = re.compile(
 )
 # A watch touches its beat every poll; herdr calls can take 30 seconds each.
 BEAT_STALE_SECONDS = 120
+# The beat the moto-watch mod's passes write: no process holds the lock between them.
+ONCE_BEAT = "once"
 STOP_BLOCK_BUDGET = 3
 NO_WATCH = "no moto watch is running"
 QUIET = (
@@ -119,6 +121,8 @@ PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
 # The generic moto skills, next to this script in dotfiles.
 CORE_SKILLS = Path(__file__).resolve().parents[1] / "moto/skills"
+# The Claude Code mod that watches workers from inside the driver session.
+WATCH_MOD = Path(__file__).resolve().parents[1] / "moto/claude/mods/moto-watch"
 
 # Marks every prompt the driver sends, so a worker can tell it from the user's own typing.
 # A worker's prompts to the workers it started carry its own name instead.
@@ -980,8 +984,11 @@ def watch_problem() -> str | None:
     """Why no moto watch is watching, with what to do about it, or None if one is."""
     try:
         beat = beat_path()
-        pid = int(beat.read_text().split()[0])
+        owner = beat.read_text().split()[0]
         silent = time.time() - beat.stat().st_mtime
+        if owner == ONCE_BEAT:
+            return None if silent <= BEAT_STALE_SECONDS else NO_WATCH
+        pid = int(owner)
     except (OSError, ValueError, IndexError):
         # A watch started before moto had heartbeats holds the lock but never beats.
         return None if watch_locked() else NO_WATCH
@@ -1025,7 +1032,32 @@ def exit_on_signal(number: int, _frame: object) -> None:
     sys.exit(128 + number)
 
 
+def watch_once() -> dict[str, Any]:
+    """One pass for the moto-watch mod, which polls from inside the driver session.
+
+    Its beat names no process, so the Stop hook counts the mod as a watch while
+    its passes keep coming. A moto watch that holds the lock handles the news
+    itself, so the pass leaves it alone.
+    """
+    directory = state_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    with open(directory / "watch.lock", "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            return {"state": "busy", "watching": 0, "lines": []}
+        beat_path().write_text(f"{ONCE_BEAT}\n")
+        with tasks_for_update() as tasks:
+            watching = sum(1 for t in tasks.values() if not unwatched(t))
+            lines = check(tasks, live_agents(), time.time()) if watching else []
+    state = "news" if lines else "quiet" if watching else "idle"
+    return {"state": state, "watching": watching, "lines": lines}
+
+
 def cmd_watch(args: argparse.Namespace) -> int:
+    if getattr(args, "once", False):
+        print(json.dumps(watch_once()))
+        return 0
     # Claude Code stops a background command with SIGTERM. Exiting through
     # Python still records when the watch ended, for the Stop hook.
     signal.signal(signal.SIGTERM, exit_on_signal)
@@ -1751,6 +1783,9 @@ def cmd_focus(_: argparse.Namespace) -> int:
                 "claude",
                 "--pane",
                 pane["pane_id"],
+                "--",
+                "--plugin-dir",
+                str(WATCH_MOD),
                 timeout=90,
             )
         except MotoError:
@@ -2386,6 +2421,11 @@ def parser() -> argparse.ArgumentParser:
         default=WATCH_MAX,
         metavar="SECONDS",
         help="Exit after this long with no news (default: %(default)s)",
+    )
+    watch.add_argument(
+        "--once",
+        action="store_true",
+        help="One pass, printed as JSON, for the moto-watch mod",
     )
     watch.set_defaults(handler=cmd_watch)
 

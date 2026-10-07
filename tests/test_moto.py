@@ -1689,3 +1689,42 @@ def test_clearing_a_question_keeps_where_the_driver_is(moto: ModuleType):
     moto.write_driver(kind="question", text="Which base?", at=1.0)
     moto.cmd_ask(argparse.Namespace(text=[], clear=True))
     assert moto.read_driver() == {"pane_id": "w9:p1", "session": "abc"}
+
+
+def watch_once(moto: ModuleType, status: str = "working") -> dict[str, Any]:
+    with patch.object(moto, "live_agents", return_value=live(status, 1)):
+        return moto.watch_once()
+
+
+def test_watch_once_reports_news_and_counts_as_a_watch(
+    moto: ModuleType, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(moto.time, "sleep", no_sleep)
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(report={"kind": "question", "text": "which?", "at": 1})
+    assert watch_once(moto, "done") == {
+        "state": "news",
+        "watching": 1,
+        "lines": ["abc-1 question: which?"],
+    }
+    assert watch_once(moto, "done")["state"] == "quiet"
+    assert stop(moto) == {}
+    # The mod stopped polling: the Stop hook asks for a watch again.
+    old = moto.time.time() - moto.BEAT_STALE_SECONDS - 5
+    os.utime(moto.beat_path(), (old, old))
+    assert "no moto watch is running" in stop(moto)["reason"]
+
+
+def test_watch_once_leaves_a_running_watch_alone(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(report={"kind": "done", "text": "PR ready", "at": 1})
+    with moto.single_watcher() as alone:
+        assert alone
+        assert watch_once(moto, "done")["state"] == "busy"
+    assert watch_once(moto, "done")["lines"] == ["abc-1 done: PR ready"]
+
+
+def test_watch_once_with_nothing_to_watch_is_idle(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
+    assert watch_once(moto) == {"state": "idle", "watching": 0, "lines": []}

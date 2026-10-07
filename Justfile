@@ -145,6 +145,7 @@ test-spawn-session:
 
 test-moto:
     @just test-python tests/test_moto.py
+    @claude plugin test moto/claude/mods/moto-watch
 
 # Validate private-skill behavior and the host opt-in list
 check-private-skills: test-private-skills nix::check-private-skills
