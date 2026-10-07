@@ -496,8 +496,16 @@ start_review_agent() {
 Review pull request $org/$repo#$number. Its branch is checked out in this
 worktree, and Neovim is open on the diff in the pane beside you.
 
-Run the \`tono\` skill on the PR and report what it finds. Post nothing to
-GitHub: the user reads the findings here and decides what to say on the PR.
+Write both parts below in the pane, in this order:
+
+1. What the PR does: a plain explainer of the change, its purpose and how it
+   works, for someone new to the codebase. Use the \`unslop\` skill and keep it
+   simple.
+2. Findings: run the \`tono\` skill on the PR, then summarise what it found,
+   most severe first, one or two lines each with file:line.
+
+Post nothing to GitHub: the user reads this here and decides what to say on
+the PR.
 
 Report done once the review is written, then wait for the user in this pane.
 BRIEF
