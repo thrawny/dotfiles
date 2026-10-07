@@ -3,8 +3,9 @@ import { expect, mock, test } from 'claude-code/testing'
 
 type World = { commands: string[]; args: string[]; toasts: string[]; removed: string[] }
 
-// The engine beneath the mod: /handoff writes handoff.md at `writes` (or never),
-// and every other command just records its name.
+// The engine beneath the mod: the session started in /repo/sub (git's root is
+// /repo), /handoff writes handoff.md at `writes` (or never), and every other
+// command just records its name.
 function world(on: On, writes: number | null): World {
   const seen: World = { commands: [], args: [], toasts: [], removed: [] }
   on('command.run', ($, e) => {
@@ -12,15 +13,15 @@ function world(on: On, writes: number | null): World {
     seen.args.push(e.args)
     return {}
   })
+  on('session.root', () => ({ value: '/repo/sub' }))
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', ($, e) => ({ text: e.answer }))
   on('process.run', ($, e) => {
     if (e.argv[0] === 'rm') {
       seen.removed.push(`${e.argv.at(-1)} before ${seen.commands.length} commands`)
     }
-    return {
-      value: { exitCode: 0, stdout: '/repo\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
-    }
+    const stdout = e.argv[0] === 'git' && e.init?.cwd === '/repo/sub' ? '/repo\n' : ''
+    return { value: { exitCode: stdout ? 0 : 1, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
   })
   on('fs.exists', () => ({ value: writes !== null }))
   on('fs.stat', () => ({ value: { kind: 'file', size: 1, mtimeMs: writes ?? 0, isLink: false } }))
@@ -51,6 +52,7 @@ test('a finished handoff clears the session and takes off', async ($, on) => {
   await $.turn.complete(ended('t1'))
   await clock.advance(0)
   expect(seen.commands).toEqual(['handoff', 'clear', 'takeoff'])
+  expect(seen.args).toEqual(['Handoff file: /repo/handoff.md', '', '/repo/handoff.md'])
 })
 
 test('the old handoff is removed before the command runs', async ($, on) => {
@@ -97,5 +99,5 @@ test('--stay hands off without clearing, and the command never sees the flag', a
   await $.turn.complete(ended('t1'))
   await clock.advance(0)
   expect(seen.commands).toEqual(['handoff'])
-  expect(seen.args).toEqual(['ship the fix'])
+  expect(seen.args).toEqual(['Handoff file: /repo/handoff.md\n\nship the fix'])
 })
