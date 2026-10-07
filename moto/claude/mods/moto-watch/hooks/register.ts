@@ -3,32 +3,40 @@ import type { EngineInterface, Register } from 'claude-code'
 
 import type { Pass } from '../types'
 
-// Each pass is one short `moto watch --once`; the Stop hook counts the passes as a watch.
+// Each pass is one short `moto watch`, which hands over what changed since the last.
 const POLL_MS = 3000
 const TAG = '[moto watch]'
 const SECTION = {
   id: 'moto-watch:watching',
   scope: 'session',
   text: [
-    'The moto-watch mod watches the workers for this session, so never start `moto watch`.',
-    `When a worker needs you, a prompt starting with ${TAG} arrives with one line per worker,`,
-    'the lines `moto watch` would print. Act on them as the Watching section says.',
+    'The moto-watch mod runs `moto watch` every 3 seconds for this session, so never run it yourself:',
+    'a pass hands its news over once. When a worker needs you, a prompt starting with',
+    `${TAG} arrives after your turn, with one line per worker. Notes from scheduled jobs`,
+    'arrive in the same prompt, each starting with [job].',
   ].join(' '),
 } as const
 
-const pending = atom({ plugin: 'moto-watch', key: 'pending' } as const, [] as readonly string[])
+const lines = atom({ plugin: 'moto-watch', key: 'lines' } as const, [] as readonly string[])
+const notes = atom({ plugin: 'moto-watch', key: 'notes' } as const, [] as readonly string[])
 
 // Turns under way. News waits for the last to end, then arrives as one prompt.
 const turns = new Set<string>()
 let isPolling = false
 
 async function deliver($: EngineInterface) {
-  const lines = await read($, pending)
-  if (turns.size > 0 || lines.length === 0) {
+  if (turns.size > 0) {
     return
   }
-  await update($, pending, () => [])
-  void $.prompt.submit({ text: [TAG, ...lines].join('\n') })
+  const held = await read($, lines)
+  const left = await read($, notes)
+  if (held.length === 0 && left.length === 0) {
+    return
+  }
+  await update($, lines, () => [])
+  await update($, notes, () => [])
+  const parts = held.length > 0 ? [[TAG, ...held].join('\n'), ...left] : left
+  void $.prompt.submit({ text: parts.join('\n\n') })
 }
 
 async function poll($: EngineInterface) {
@@ -37,7 +45,7 @@ async function poll($: EngineInterface) {
   }
   isPolling = true
   try {
-    const { exitCode, stdout, stderr } = await $.process.run(['moto', 'watch', '--once'])
+    const { exitCode, stdout, stderr } = await $.process.run(['moto', 'watch'])
     if (exitCode !== 0) {
       $.ui.status(`moto watch: ${stderr.trim().split('\n')[0] || `exit ${exitCode}`}`)
       return
@@ -45,7 +53,11 @@ async function poll($: EngineInterface) {
     const pass = JSON.parse(stdout) as Pass
     $.ui.status(pass.watching > 0 ? `moto: watching ${pass.watching}` : undefined)
     if (pass.lines.length > 0) {
-      await update($, pending, held => [...held, ...pass.lines])
+      await update($, lines, before => [...before, ...pass.lines])
+    }
+    const note = pass.notes
+    if (note !== null) {
+      await update($, notes, before => [...before, note])
     }
     await deliver($)
   } catch (error) {

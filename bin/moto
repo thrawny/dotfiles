@@ -14,11 +14,10 @@ move by itself.
 
 The watch stays quiet about a turn end that is not the driver's business: the
 user talking to a worker, a worker whose background shells still run, or a
-turn it already reported. It logs each one as an absorb event instead. With no
-news it exits after 25 minutes, before Claude Code's limit on background
-commands stops it. The driver's Claude Stop hook runs moto stop-hook, which
-keeps the driver's turn from ending while open tasks have no live watch. A task
-that reported done needs no watch until the driver messages it.
+turn it already reported. It logs each one as an absorb event instead. Each
+moto watch is one pass, printed as JSON. The moto-watch Claude Code mod, which
+moto focus loads into the driver, runs a pass every few seconds and prompts the
+driver with the news. Notes that scheduled jobs left ride along.
 
 The user ends a worker's work by running the moto-wrap skill in its pane, which
 reports wrap, a done that also lists what still runs. A held worker goes back to
@@ -84,10 +83,7 @@ from pathlib import Path
 from typing import Any, cast
 
 MOTO_HOME = Path(os.environ.get("MOTO_HOME") or Path.home() / "code/moto")
-POLL_SECONDS = 2.0
 # Claude Code stops a background command at its Bash timeout, 30 minutes by
-# default and counting time the laptop sleeps. The watch ends itself first.
-WATCH_MAX = 25 * 60
 # A report lands a moment before the worker's turn ends. Holding it back this
 # long lets the turn end first, so one wake covers both.
 REPORT_SETTLE_SECONDS = 20
@@ -101,16 +97,6 @@ PASTED = re.compile(r"^\s*(<pasted_content[^>]*>\s*)?")
 # Claude's footer counts background work Herdr does not, as in "· 1 shell ·".
 BACKGROUND_WORK = re.compile(
     r"· (\d+ (?:shells?|monitors?|local agents?))(?= ·|$)", re.M
-)
-# A watch touches its beat every poll; herdr calls can take 30 seconds each.
-BEAT_STALE_SECONDS = 120
-# The beat the moto-watch mod's passes write: no process holds the lock between them.
-ONCE_BEAT = "once"
-STOP_BLOCK_BUDGET = 3
-NO_WATCH = "no moto watch is running"
-QUIET = (
-    "Every watched task has reported done, so moto watch need not run again"
-    + " until you start a task or message one."
 )
 REPORT_KINDS = ("done", "question", "blocked", "wrap", "handback")
 # Reports that end the task's work, so it needs no watch once the driver saw them.
@@ -155,7 +141,7 @@ UNTRACKED = (
     + "Tell the user directly."
 )
 # What a fork may run: commands that only read, and hooks that skip forks.
-FORK_SAFE = ("list", "log", "focus", "pin", "link", "stop-hook")
+FORK_SAFE = ("list", "log", "focus", "pin", "link")
 
 
 # Scheduled jobs. The gate's exit codes are shepherd's, deliberately: a broken
@@ -184,10 +170,6 @@ JOB_FIELDS = {
 # Marks a scheduled job's prompt, so the driver and a worker can tell it from
 # the driver's own messages and from the user's typing. It outranks neither.
 JOB_TAG = "[job]"
-NOTE_RULES = (
-    "A scheduled job left this while you were working, so act on it now and"
-    + " then end the turn. It is not the user talking."
-)
 JOB_FOOTER = f"""\
 A scheduled moto job started you, and a driver session tracks this task for the \
 user. {REPORT_RULES}
@@ -727,7 +709,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         # The driver's watch skips a held task, so nobody answers there.
         print(
             "Recorded. The user is driving this session and the driver is not"
-            " watching it, so ask the user directly in this pane."
+            + " watching it, so ask the user directly in this pane."
         )
     else:
         again = "; moto watch covers this task again" if handed_back else ""
@@ -943,275 +925,26 @@ def unwatched(task: dict[str, Any]) -> bool:
     return bool(task.get("held") or task.get("snoozed") or task.get("parent"))
 
 
-def settled(task: dict[str, Any]) -> bool:
-    """Whether the worker's last report is a done or wrap the driver has seen
-    and not answered. Such a task needs no watch of its own: the Stop hook does not ask
-    for one, and a later report from it waits for the next watch."""
-    report: dict[str, Any] | None = task.get("report")
-    told = task.get("told")
-    return (
-        report is not None
-        and report["kind"] in FINISHED
-        and task.get("seen", {}).get("report_at") == report["at"]
-        and (told is None or told <= report["at"])
-    )
+def watch() -> dict[str, Any]:
+    """One pass for the moto-watch mod, which runs it every few seconds in the driver.
+
+    watching counts the tasks the pass covers, lines has one line per worker that
+    needs the driver, and notes holds what scheduled jobs left, removed as the
+    pass hands them over, or None.
+    """
+    with tasks_for_update() as tasks:
+        watching = sum(1 for t in tasks.values() if not unwatched(t))
+        lines = check(tasks, live_agents(), time.time()) if watching else []
+    return {"watching": watching, "lines": lines, "notes": take_notes()}
 
 
-def beat_path() -> Path:
-    return state_dir() / "watch.beat"
-
-
-def ended_path() -> Path:
-    return state_dir() / "watch.ended"
-
-
-def watch_locked() -> bool:
-    """Whether a moto watch holds the lock. A watch that starts during this
-    probe retries the lock, so the probe never turns it away."""
-    path = state_dir() / "watch.lock"
-    if not path.exists():
-        return False
-    with path.open("a") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return True
-        fcntl.flock(lock, fcntl.LOCK_UN)
-    return False
-
-
-def watch_problem() -> str | None:
-    """Why no moto watch is watching, with what to do about it, or None if one is."""
-    try:
-        beat = beat_path()
-        owner = beat.read_text().split()[0]
-        silent = time.time() - beat.stat().st_mtime
-        if owner == ONCE_BEAT:
-            return None if silent <= BEAT_STALE_SECONDS else NO_WATCH
-        pid = int(owner)
-    except (OSError, ValueError, IndexError):
-        # A watch started before moto had heartbeats holds the lock but never beats.
-        return None if watch_locked() else NO_WATCH
-    try:
-        command = run(["ps", "-p", str(pid), "-o", "command="])
-    except MotoError:
-        return NO_WATCH  # it died without cleaning up
-    if "moto" not in command:
-        return NO_WATCH
-    if silent > BEAT_STALE_SECONDS:
-        return (
-            f"moto watch (pid {pid}) holds the lock but last polled {age(silent)} ago;"
-            f" kill {pid} first"
-        )
-    return None
-
-
-@contextmanager
-def single_watcher() -> Generator[bool]:
-    directory = state_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    with open(directory / "watch.lock", "w") as lock:
-        deadline = time.monotonic() + 1  # outlasts the stop hook's probe
-        while True:
-            try:
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-                break
-            except BlockingIOError:
-                if time.monotonic() >= deadline:
-                    yield False
-                    return
-                time.sleep(0.05)
-        try:
-            yield True
-        finally:
-            beat_path().unlink(missing_ok=True)
-            ended_path().write_text(f"{time.time()}\n")
+def cmd_watch(_: argparse.Namespace) -> int:
+    print(json.dumps(watch()))
+    return 0
 
 
 def exit_on_signal(number: int, _frame: object) -> None:
     sys.exit(128 + number)
-
-
-def watch_once() -> dict[str, Any]:
-    """One pass for the moto-watch mod, which polls from inside the driver session.
-
-    Its beat names no process, so the Stop hook counts the mod as a watch while
-    its passes keep coming. A moto watch that holds the lock handles the news
-    itself, so the pass leaves it alone.
-    """
-    directory = state_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    with open(directory / "watch.lock", "w") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return {"state": "busy", "watching": 0, "lines": []}
-        beat_path().write_text(f"{ONCE_BEAT}\n")
-        with tasks_for_update() as tasks:
-            watching = sum(1 for t in tasks.values() if not unwatched(t))
-            lines = check(tasks, live_agents(), time.time()) if watching else []
-    state = "news" if lines else "quiet" if watching else "idle"
-    return {"state": state, "watching": watching, "lines": lines}
-
-
-def cmd_watch(args: argparse.Namespace) -> int:
-    if getattr(args, "once", False):
-        print(json.dumps(watch_once()))
-        return 0
-    # Claude Code stops a background command with SIGTERM. Exiting through
-    # Python still records when the watch ended, for the Stop hook.
-    signal.signal(signal.SIGTERM, exit_on_signal)
-    with single_watcher() as alone:
-        if not alone:
-            problem = watch_problem()
-            if problem and problem != NO_WATCH:
-                print(f"Another {problem}, then start moto watch again.")
-            else:
-                print("Another moto watch is already running.")
-            return 0
-        # Wall-clock time, because Claude's limit counts time the laptop slept.
-        deadline = time.time() + args.max
-        while True:
-            beat_path().write_text(f"{os.getpid()}\n")
-            with tasks_for_update() as tasks:
-                if all(unwatched(t) for t in tasks.values()):
-                    counts = [
-                        (sum(1 for t in tasks.values() if t.get(key)), label)
-                        for key, label in (
-                            ("held", "held by the user"),
-                            ("snoozed", "snoozed"),
-                            ("parent", "started by a worker"),
-                        )
-                    ]
-                    skipped = ", ".join(f"{n} {label}" for n, label in counts if n)
-                    print(f"No tasks to watch ({skipped or 'none open'}).")
-                    return 0
-                lines = check(tasks, live_agents(), time.time())
-                quiet = all(settled(t) for t in tasks.values() if not unwatched(t))
-            if lines:
-                print("\n".join([*lines, QUIET] if quiet else lines))
-                return 0
-            if time.time() >= deadline:
-                then = QUIET if quiet else "Start moto watch again."
-                print(f"No news in {age(args.max)}. {then}")
-                return 0
-            time.sleep(POLL_SECONDS)
-
-
-def cmd_stop_hook(_: argparse.Namespace) -> int:
-    """The driver's Claude Stop hook: keep a turn from ending while nothing watches.
-
-    Prints a block decision telling the driver to start moto watch, or nothing.
-    Settled tasks need no watch, and neither does a turn whose next turn will
-    bring the news that the watch ended. It never traps the driver: it gives up
-    after STOP_BLOCK_BUDGET blocks in a row with no watch started, and on any
-    error it lets the turn end.
-    """
-    try:
-        message = stop_hook(json.loads(sys.stdin.read() or "{}"))
-    except Exception as error:  # a broken hook must never trap the driver
-        message = {
-            "systemMessage": f"moto stop-hook failed, so nothing checked the watch: {error}"
-        }
-    if message:
-        print(json.dumps(message))
-    return 0
-
-
-def watch_end_queued(transcript: str | None) -> bool:
-    """Whether the notification that the last watch ended still waits in the
-    driver's queue, so it will start the driver's next turn.
-
-    Claude logs each message it queues for a session as an enqueue line in the
-    transcript, and its delivery as a dequeue, oldest first, or a remove. A
-    notification the driver already received does not count: that turn was the
-    driver's chance to start a new watch.
-    """
-    try:
-        ended = float(ended_path().read_text())
-        lines = Path(transcript or "").read_text(errors="replace").splitlines()
-    except (OSError, ValueError):
-        return False
-    queued: list[tuple[float, str]] = []
-    for line in lines:
-        if '"queue-operation"' not in line:
-            continue
-        try:
-            entry = json.loads(line)
-            at = datetime.fromisoformat(entry["timestamp"]).timestamp()
-        except (ValueError, KeyError, TypeError):
-            continue
-        content = str(entry.get("content") or "")
-        operation = entry.get("operation")
-        if operation == "enqueue":
-            queued.append((at, content))
-        elif operation == "dequeue" and queued:
-            queued.pop(0)
-        elif operation == "remove":
-            queued = [item for item in queued if item[1] != content]
-    # The notification follows the watch's exit, so it cannot be older.
-    return any(
-        "<task-notification>" in content and at >= ended - 1 for at, content in queued
-    )
-
-
-def stop_hook(payload: dict[str, Any]) -> dict[str, Any] | None:
-    if forked():
-        return None  # a fork of the driver is not the driver
-    # A job that fired while the driver worked left a note rather than steering
-    # its turn. This is the turn end it was waiting for. take_notes removes each
-    # note as it hands it over, so the same note never blocks twice.
-    if not caller(read_tasks()) and (notes := take_notes()):
-        return {"decision": "block", "reason": f"{notes}\n\n{NOTE_RULES}"}
-    budget_path = state_dir() / "stop-hook.json"
-    tasks = read_tasks()
-    watched = sorted(
-        name
-        for name, task in tasks.items()
-        if not unwatched(task) and not settled(task)
-    )
-    problem = watch_problem() if watched else None
-    # A watch started in the turn's last tool call may not have polled yet.
-    for _ in range(12):
-        if problem != NO_WATCH:
-            break
-        time.sleep(0.25)
-        problem = watch_problem()
-    if problem is None:
-        budget_path.unlink(missing_ok=True)
-        return None
-    if problem == NO_WATCH and watch_end_queued(payload.get("transcript_path")):
-        return None  # the next turn starts with the watch's notification
-    try:
-        last: dict[str, Any] = json.loads(budget_path.read_text())
-    except (OSError, ValueError):
-        last = {}
-    now = time.time()
-    # Blocks count while the driver keeps not starting a watch; a new prompt,
-    # another session or a long gap starts the count again.
-    same_run = (
-        payload.get("stop_hook_active")
-        and last.get("session") == payload.get("session_id")
-        and now - float(last.get("at", 0)) <= 600
-    )
-    blocks = int(last.get("blocks", 0)) + 1 if same_run else 1
-    budget_path.parent.mkdir(parents=True, exist_ok=True)
-    budget_path.write_text(
-        json.dumps({"session": payload.get("session_id"), "blocks": blocks, "at": now})
-        + "\n"
-    )
-    names = ", ".join(watched)
-    if blocks > STOP_BLOCK_BUDGET:
-        return {
-            "systemMessage": f"moto: {problem}, and the driver started none after"
-            + f" {STOP_BLOCK_BUDGET} reminders, so nothing watches {names}."
-        }
-    return {
-        "decision": "block",
-        "reason": f"moto: {problem}, and {names} {'needs' if len(watched) == 1 else 'need'}"
-        + " watching. Start `moto watch`"
-        + " with the Bash tool's run_in_background set, then end the turn.",
-    }
 
 
 def unsaved_work(cwd: str, branch: str | None = None) -> str | None:
@@ -2093,41 +1826,18 @@ def driver_cwd(payload: dict[str, Any]) -> bool:
         return False
 
 
-def driver_idle() -> str | None:
-    """The driver's pane id when it is idle and can take a prompt, or None.
-
-    A prompt typed into a Claude session mid-turn steers that turn instead of
-    queueing behind it, so a job must never prompt a working driver.
-    """
-    pane = read_driver().get("pane_id")
-    if not pane:
-        return None
-    try:
-        agent = live_agents().get(pane)
-    except (MotoError, subprocess.TimeoutExpired, OSError):
-        return None
-    return pane if agent and agent.get("agent_status") in ("idle", "done") else None
-
-
 def wake_driver(name: str, text: str) -> str:
-    """Prompt the driver if it is idle, otherwise leave it a note.
+    """Leave the driver a note, which the moto-watch mod's next pass hands over.
 
     One note per job: a newer run replaces an unread one, because a review
     queue's value is the current list and two stale lists are worse than one
     fresh one. The replaced note stays in the event log.
     """
-    message = f"{JOB_TAG} {text}"
-    if pane := driver_idle():
-        try:
-            run([herdr_binary(), "agent", "prompt", pane, message], timeout=60)
-            return "prompted the driver"
-        except (MotoError, subprocess.TimeoutExpired):
-            pass  # fall back to the note, which the Stop hook delivers
     replaced = False
     with jobs_for_update() as jobs:
         state = jobs.setdefault(name, {})
         replaced = bool(state.get("note"))
-        state["note"] = {"text": message, "at": time.time()}
+        state["note"] = {"text": f"{JOB_TAG} {text}", "at": time.time()}
     if replaced:
         job_event("note-replaced", name)
     return "left a note for the driver"
@@ -2144,8 +1854,7 @@ def pending_notes() -> list[tuple[str, dict[str, Any]]]:
 def take_notes() -> str | None:
     """Every pending note, removed as it is handed over, or None if there are none.
 
-    Removing on delivery is what keeps the Stop hook from blocking twice on the
-    same note.
+    Removing on delivery is what keeps a note from reaching the driver twice.
     """
     notes = pending_notes()
     if not notes:
@@ -2413,27 +2122,10 @@ def parser() -> argparse.ArgumentParser:
     report.add_argument("--agent", help="Task name; default: the task in this pane")
     report.set_defaults(handler=cmd_report)
 
-    watch = commands.add_parser("watch", help="Exit when a worker needs the driver")
-    watch.add_argument(
-        "--max",
-        "--timeout",
-        type=int,
-        default=WATCH_MAX,
-        metavar="SECONDS",
-        help="Exit after this long with no news (default: %(default)s)",
-    )
-    watch.add_argument(
-        "--once",
-        action="store_true",
-        help="One pass, printed as JSON, for the moto-watch mod",
+    watch = commands.add_parser(
+        "watch", help="One pass, as JSON, of what needs the driver"
     )
     watch.set_defaults(handler=cmd_watch)
-
-    stop_hook = commands.add_parser(
-        "stop-hook",
-        help="The driver's Claude Stop hook: block the turn end while no watch runs",
-    )
-    stop_hook.set_defaults(handler=cmd_stop_hook)
 
     close = commands.add_parser("close", help="Remove a worker's tab and worktree")
     close.add_argument("agent")

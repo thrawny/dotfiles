@@ -19,7 +19,7 @@ function world(on: On, passes: Pass[], env: Record<string, string> = {}): World 
   })
   on('process.run', () => {
     seen.runs += 1
-    const pass = passes.shift() ?? { state: 'quiet', watching: 1, lines: [] }
+    const pass = passes.shift() ?? { watching: 1, lines: [], notes: null }
     const stdout = JSON.stringify(pass)
     return {
       value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
@@ -32,8 +32,8 @@ function world(on: On, passes: Pass[], env: Record<string, string> = {}): World 
   return seen
 }
 
-const NEWS: Pass = { state: 'news', watching: 2, lines: ['abc-1 question: which?'] }
-const MORE: Pass = { state: 'news', watching: 2, lines: ['abc-2: pane closed'] }
+const NEWS: Pass = { watching: 2, lines: ['abc-1 question: which?'], notes: null }
+const MORE: Pass = { watching: 2, lines: ['abc-2: pane closed'], notes: '[job] Review widgets#7.' }
 
 test('news reaches an idle driver as one tagged prompt', async ($, on) => {
   const clock = mock.clock(on)
@@ -46,7 +46,7 @@ test('news reaches an idle driver as one tagged prompt', async ($, on) => {
   expect(seen.prompts.length).toBe(1)
 })
 
-test('news found during a turn waits for its end', async ($, on) => {
+test('news and job notes found during a turn wait for its end', async ($, on) => {
   const clock = mock.clock(on)
   const seen = world(on, [NEWS, MORE])
   await $.session.start({ cwd: '/moto', surface: 'terminal', isInteractive: true })
@@ -61,7 +61,9 @@ test('news found during a turn waits for its end', async ($, on) => {
     turnId: 't1',
     reason: 'answer',
   })
-  expect(seen.prompts).toEqual(['[moto watch]\nabc-1 question: which?\nabc-2: pane closed'])
+  expect(seen.prompts).toEqual([
+    '[moto watch]\nabc-1 question: which?\nabc-2: pane closed\n\n[job] Review widgets#7.',
+  ])
 })
 
 test('a fork of the driver never polls', async ($, on) => {

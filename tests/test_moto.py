@@ -4,10 +4,7 @@ import argparse
 import importlib.util
 import json
 import os
-import signal
 import subprocess
-import sys
-import time
 from datetime import UTC, datetime
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
@@ -218,25 +215,6 @@ def test_handback_ends_the_hold_and_wakes_the_driver(
         ("resume", "handback"),
         ("report", None),
     ]
-
-
-def test_wrap_counts_as_finished_and_handback_does_not(moto: ModuleType):
-    def reported(kind: str) -> dict[str, Any]:
-        report = {"kind": kind, "text": "x", "at": 100.0}
-        return task(report=report, seen={"status": "done", "report_at": 100.0})
-
-    assert moto.settled(reported("wrap"))
-    assert not moto.settled(reported("handback"))
-
-
-def test_watch_with_only_held_tasks_exits(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True)
-    with patch.object(moto, "live_agents", side_effect=AssertionError("no poll")):
-        assert moto.cmd_watch(argparse.Namespace(max=5)) == 0
-    assert "1 held by the user" in capsys.readouterr().out
 
 
 def test_failed_update_writes_nothing(moto: ModuleType, state_home: Path):
@@ -475,16 +453,6 @@ def test_snoozed_task_never_wakes_and_resume_refuses_it(moto: ModuleType):
         pytest.raises(moto.MotoError, match="moto wake"),
     ):
         moto.cmd_resume(argparse.Namespace(agent="abc-1"))
-
-
-def test_watch_with_only_snoozed_tasks_exits(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(snoozed=SNOOZE)
-    with patch.object(moto, "live_agents", side_effect=AssertionError("no poll")):
-        assert moto.cmd_watch(argparse.Namespace(max=5)) == 0
-    assert "1 snoozed" in capsys.readouterr().out
 
 
 def test_list_shows_snoozed_tasks_apart(
@@ -741,14 +709,6 @@ def test_session_start_hook_skips_a_fork(moto: ModuleType):
         assert attach_hook(moto, "w1:p7", "s1") == 0
         assert attach_hook(moto, "w1:p1", "s9") == 0
     assert moto.read_tasks() == before
-
-
-def test_stop_hook_lets_a_fork_of_the_driver_end_its_turns(moto: ModuleType):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    with patch.dict("os.environ", {"MOTO_FORK": "1"}):
-        assert stop(moto) == {}
-    assert not (moto.state_dir() / "stop-hook.json").exists()
 
 
 def test_transcript_is_the_recorded_session_not_a_fork_with_its_name(
@@ -1018,76 +978,6 @@ def test_task_a_worker_started_is_left_to_that_worker(moto: ModuleType):
     assert moto.check({"abc-2": tasks["abc-2"]}, {}, 0) == []
 
 
-def stop(moto: ModuleType, active: bool = False) -> dict[str, Any]:
-    """What the hook prints, or {} when it lets the turn end silently."""
-    return moto.stop_hook({"session_id": "s1", "stop_hook_active": active}) or {}
-
-
-def test_stop_hook_ignores_a_driver_with_nothing_to_watch(moto: ModuleType):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True)
-    assert stop(moto) == {}
-
-
-def no_sleep(_seconds: float) -> None:
-    pass
-
-
-def test_stop_hook_blocks_until_a_watch_runs_then_gives_up(
-    moto: ModuleType, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(moto.time, "sleep", no_sleep)
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    first = stop(moto)
-    assert first["decision"] == "block"
-    assert "no moto watch is running" in first["reason"]
-    assert "run_in_background" in first["reason"]
-    for _ in range(moto.STOP_BLOCK_BUDGET - 1):
-        assert stop(moto, active=True)["decision"] == "block"
-    gave_up = stop(moto, active=True)
-    assert "decision" not in gave_up
-    assert "nothing watches abc-1" in gave_up["systemMessage"]
-    # A new prompt starts the count again.
-    assert stop(moto)["decision"] == "block"
-
-
-def test_stop_hook_lets_the_turn_end_while_a_watch_beats(moto: ModuleType):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    moto.beat_path().write_text(f"{os.getpid()}\n")
-    with patch.object(moto, "run", return_value="python3 /bin/moto watch"):
-        assert stop(moto) == {}
-
-
-def test_stop_hook_names_a_watch_that_stopped_polling(moto: ModuleType):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    beat = moto.beat_path()
-    beat.write_text(f"{os.getpid()}\n")
-    old = moto.time.time() - moto.BEAT_STALE_SECONDS - 5
-    os.utime(beat, (old, old))
-    with patch.object(moto, "run", return_value="python3 /bin/moto watch"):
-        reason = stop(moto)["reason"]
-    assert f"kill {os.getpid()} first" in reason
-
-
-def test_stop_hook_fails_open(moto: ModuleType, capsys: pytest.CaptureFixture[str]):
-    with patch.object(moto, "stop_hook", side_effect=RuntimeError("boom")):
-        with patch("sys.stdin.read", return_value="{}"):
-            assert moto.cmd_stop_hook(argparse.Namespace()) == 0
-    out = json.loads(capsys.readouterr().out)
-    assert "decision" not in out and "boom" in out["systemMessage"]
-
-
-def test_stop_hook_counts_a_watch_from_before_heartbeats(moto: ModuleType):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    with moto.single_watcher() as alone:
-        assert alone
-        assert stop(moto) == {}
-
-
 def afk(moto: ModuleType, *words: str) -> None:
     assert moto.cmd_afk(argparse.Namespace(text=list(words))) == 0
 
@@ -1184,57 +1074,6 @@ def test_list_shows_the_away_note(moto: ModuleType, capsys: pytest.CaptureFixtur
     assert "The user is away since" in out and "Note: back at 5" in out
 
 
-def watch_output(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str], status: str = "working"
-) -> str:
-    with patch.object(moto, "live_agents", return_value=live(status, 1)):
-        assert moto.cmd_watch(argparse.Namespace(max=0)) == 0
-    return capsys.readouterr().out
-
-
-def test_watch_with_no_news_ends_before_claude_stops_it(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    assert watch_output(moto, capsys) == "No news in 0s. Start moto watch again.\n"
-    assert float(moto.ended_path().read_text()) <= moto.time.time()
-
-
-def done(at: float = 100, **fields: Any) -> dict[str, Any]:
-    report = {"kind": "done", "text": "PR ready", "at": at}
-    return task(report=report, seen={"status": "done", "report_at": at}, **fields)
-
-
-def test_watch_says_when_every_task_has_reported_done(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(report={"kind": "done", "text": "PR ready", "at": 100})
-    out = watch_output(moto, capsys, status="done")
-    assert out == f"abc-1 done: PR ready\n{moto.QUIET}\n"
-    assert watch_output(moto, capsys, status="done") == f"No news in 0s. {moto.QUIET}\n"
-
-
-def test_stop_hook_needs_no_watch_for_settled_tasks(
-    moto: ModuleType, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(moto.time, "sleep", no_sleep)
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = done()
-        tasks["abc-2"] = done(agent="abc-2", pane_id="w1:p2", told=50)
-    assert stop(moto) == {}
-    # A message to a done worker makes its next turn the driver's business.
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-2"]["told"] = 150
-    assert "abc-2 needs watching" in stop(moto)["reason"]
-    # So does a done report the driver has not seen yet.
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"]["seen"] = {"status": "working"}
-        tasks["abc-2"]["told"] = 50
-    assert "abc-1 needs watching" in stop(moto)["reason"]
-
-
 def queue(operation: str, at: float, task_id: str = "b1") -> dict[str, Any]:
     """A queue line as Claude writes it to the driver's transcript."""
     stamp = datetime.fromtimestamp(at, UTC).isoformat().replace("+00:00", "Z")
@@ -1249,61 +1088,6 @@ def queue(operation: str, at: float, task_id: str = "b1") -> dict[str, Any]:
             + "<status>completed</status>\n</task-notification>"
         )
     return entry
-
-
-def test_stop_hook_waits_for_the_watch_s_queued_notification(
-    moto: ModuleType, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
-):
-    monkeypatch.setattr(moto.time, "sleep", no_sleep)
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    ended = moto.time.time() - 2
-    moto.ended_path().write_text(f"{ended}\n")
-    transcript = tmp_path / "driver.jsonl"
-
-    def stop_with(*entries: dict[str, Any]) -> dict[str, Any]:
-        lines = [json.dumps({"type": "assistant", "uuid": "a1"})]
-        transcript.write_text("\n".join(lines + [json.dumps(e) for e in entries]))
-        payload = {"session_id": "s1", "transcript_path": str(transcript)}
-        return moto.stop_hook(payload) or {}
-
-    # The watch ended during the turn's last reply: its notification starts the next turn.
-    assert stop_with(queue("enqueue", ended + 0.5)) == {}
-    # Delivered, as the next turn or mid-turn, and still no watch: block.
-    delivered = stop_with(queue("enqueue", ended + 0.5), queue("dequeue", ended + 3))
-    assert delivered["decision"] == "block"
-    absorbed = stop_with(queue("enqueue", ended + 0.5), queue("remove", ended + 1))
-    assert absorbed["decision"] == "block"
-    # A queued notification from before the watch ended is about something else.
-    assert stop_with(queue("enqueue", ended - 60))["decision"] == "block"
-    # With no transcript to read, the hook asks for a watch as before.
-    payload = {"session_id": "s1", "transcript_path": str(tmp_path / "missing")}
-    assert (moto.stop_hook(payload) or {})["decision"] == "block"
-
-
-def test_watch_stopped_by_claude_records_its_end(state_home: Path, tmp_path: Path):
-    herdr = tmp_path / "herdr"
-    herdr.write_text(
-        "#!/bin/sh\necho '"
-        + json.dumps({"result": {"agents": [live("working", 1)["w1:p1"]]}})
-        + "'\n"
-    )
-    herdr.chmod(0o755)
-    (state_home / "moto").mkdir(parents=True)
-    (state_home / "moto/tasks.json").write_text(
-        json.dumps({"tasks": {"abc-1": task()}})
-    )
-    env = {**os.environ, "HERDR_BIN_PATH": str(herdr), "PATH": "/usr/bin:/bin"}
-    watch = subprocess.Popen([sys.executable, str(ROOT / "bin/moto"), "watch"], env=env)
-    beat = state_home / "moto/watch.beat"
-    for _ in range(100):
-        if beat.exists():
-            break
-        time.sleep(0.05)
-    watch.send_signal(signal.SIGTERM)
-    assert watch.wait(5) == 128 + signal.SIGTERM
-    assert (state_home / "moto/watch.ended").exists()
-    assert not beat.exists()
 
 
 def skill(folder: Path, name: str) -> Path:
@@ -1626,19 +1410,6 @@ def test_a_newer_run_replaces_an_unread_note(moto: ModuleType, jobs_home: Path):
     assert len(moto.pending_notes()) == 1
 
 
-def test_the_stop_hook_hands_a_note_over_once(moto: ModuleType, jobs_home: Path):
-    write_job(
-        jobs_home,
-        "queue",
-        'at = ["09:00"]\ngate = "echo widgets#7"\ndeliver = "driver"\nbrief = "Look."\n',
-    )
-    moto.tick(MONDAY_NOON)
-    blocked = moto.stop_hook({"session_id": "s1"})
-    assert blocked and blocked["decision"] == "block"
-    assert "widgets#7" in blocked["reason"]
-    assert not moto.pending_notes()
-
-
 def test_a_broken_gate_never_spawns_a_worker(moto: ModuleType, jobs_home: Path):
     write_job(
         jobs_home,
@@ -1691,40 +1462,29 @@ def test_clearing_a_question_keeps_where_the_driver_is(moto: ModuleType):
     assert moto.read_driver() == {"pane_id": "w9:p1", "session": "abc"}
 
 
-def watch_once(moto: ModuleType, status: str = "working") -> dict[str, Any]:
-    with patch.object(moto, "live_agents", return_value=live(status, 1)):
-        return moto.watch_once()
-
-
-def test_watch_once_reports_news_and_counts_as_a_watch(
-    moto: ModuleType, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(moto.time, "sleep", no_sleep)
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(report={"kind": "question", "text": "which?", "at": 1})
-    assert watch_once(moto, "done") == {
-        "state": "news",
-        "watching": 1,
-        "lines": ["abc-1 question: which?"],
-    }
-    assert watch_once(moto, "done")["state"] == "quiet"
-    assert stop(moto) == {}
-    # The mod stopped polling: the Stop hook asks for a watch again.
-    old = moto.time.time() - moto.BEAT_STALE_SECONDS - 5
-    os.utime(moto.beat_path(), (old, old))
-    assert "no moto watch is running" in stop(moto)["reason"]
-
-
-def test_watch_once_leaves_a_running_watch_alone(moto: ModuleType):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(report={"kind": "done", "text": "PR ready", "at": 1})
-    with moto.single_watcher() as alone:
-        assert alone
-        assert watch_once(moto, "done")["state"] == "busy"
-    assert watch_once(moto, "done")["lines"] == ["abc-1 done: PR ready"]
-
-
-def test_watch_once_with_nothing_to_watch_is_idle(moto: ModuleType):
+def test_watch_skips_held_and_snoozed_tasks(moto: ModuleType):
     with moto.tasks_for_update() as tasks:
         tasks["abc-1"] = task(held=True)
-    assert watch_once(moto) == {"state": "idle", "watching": 0, "lines": []}
+        tasks["abc-2"] = task(pane_id="w1:p2", snoozed=SNOOZE)
+    with patch.object(moto, "live_agents", side_effect=AssertionError("no poll")):
+        assert moto.watch() == {"watching": 0, "lines": [], "notes": None}
+
+
+def test_watch_reports_news_once(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(report={"kind": "question", "text": "which?", "at": 1})
+    with patch.object(moto, "live_agents", return_value=live("done", 1)):
+        assert moto.watch()["lines"] == ["abc-1 question: which?"]
+        assert moto.watch() == {"watching": 1, "lines": [], "notes": None}
+
+
+def test_watch_hands_a_job_note_over_once(moto: ModuleType, jobs_home: Path):
+    write_job(
+        jobs_home,
+        "queue",
+        'at = ["09:00"]\ngate = "echo widgets#7"\ndeliver = "driver"\nbrief = "Look."\n',
+    )
+    assert moto.tick(MONDAY_NOON) == ["queue: left a note for the driver"]
+    notes = moto.watch()["notes"]
+    assert notes.startswith(moto.JOB_TAG) and "widgets#7" in notes
+    assert moto.watch()["notes"] is None
