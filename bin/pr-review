@@ -48,7 +48,7 @@ bot_authors='dependabot renovate github-actions'
 
 usage() {
   cat <<'USAGE'
-Usage: pr-review [-r] [-b] [-a] [REPO] [NUMBER]
+Usage: pr-review [-r] [-b] [-a] [-c] [REPO] [NUMBER]
 
 Pick a ready-for-review PR requesting review from your team (github.review_team
 in the work config) and open it in codediff, in that repo's Herdr workspace.
@@ -57,6 +57,9 @@ in the work config) and open it in codediff, in that repo's Herdr workspace.
       --json      Print the same PRs as JSON and exit, for a caller that reads
                   them rather than a person picking one
   -b, --bots      Include dependabot and other bot PRs
+  -c, --skip-commented
+                  Leave out PRs you have commented on. A plain comment does
+                  not clear the team's review request the way a review does
   -a, --all       List every open PR in the team's repos, reviewed, labelled
                   or not, your own included. ctrl-a toggles it in the picker
   -j, --jira      Open the Jira ticket for REPO NUMBER instead of reviewing
@@ -72,6 +75,7 @@ USAGE
 
 refresh=0
 include_bots=0
+skip_commented=0
 all=0
 print_rows=0
 print_json=0
@@ -86,6 +90,7 @@ while (($#)); do
   case "$1" in
     -r | --refresh) refresh=1 ;;
     -b | --bots) include_bots=1 ;;
+    -c | --skip-commented) skip_commented=1 ;;
     -a | --all) all=1 ;;
     -j | --jira) jira=1 ;;
     -w | --worktree) worktree=1 ;;
@@ -588,17 +593,13 @@ fi
 
 # The PRs build_rows shows, as JSON rather than a table of icons and colors.
 # A scheduled job hands these to an agent, which needs the fields, not columns.
-# A plain comment does not clear the team's review request the way a review
-# does, so a PR you have already looked at and commented on stays in the
-# search. A caller reading the JSON wants PRs you have not looked at yet; the
-# picker keeps them, so you can go back to one.
 build_json() {
-  jq --arg bots "$bot_authors" --arg org "$org" \
-    --argjson include_bots "$include_bots" --argjson all "$all" '
+  jq --arg bots "$bot_authors" --arg org "$org" --argjson include_bots "$include_bots" \
+    --argjson all "$all" --argjson skip_commented "$skip_commented" '
   ($bots | split(" ")) as $bots
   | map(select($all == 1 or .ready != false))
   | map(select($include_bots == 1 or (.author.login | sub("\\[bot\\]$"; "") | IN($bots[]) | not)))
-  | map(select($all == 1 or .commented != true))
+  | map(select($skip_commented == 0 or .commented != true))
   | sort_by(.updatedAt) | reverse
   | map({ repo: .repository.name,
           number,
@@ -614,15 +615,18 @@ build_json() {
 }
 
 build_rows() {
-  jq -r --arg bots "$bot_authors" --argjson include_bots "$include_bots" --argjson all "$all" '
+  jq -r --arg bots "$bot_authors" --argjson include_bots "$include_bots" \
+    --argjson all "$all" --argjson skip_commented "$skip_commented" '
   # column counts bytes, so the rows line up only while every icon takes the
   # same number of bytes and every color code the same number of digits. An
   # old cache without the fields shows "–", and holds only labelled PRs, so a
   # missing ready counts as ready. The all list shows every PR, ready or not.
+  # A missing commented counts as not commented, until the next refresh.
   def paint: "\u001b[\(.[0])m\(.[1])\u001b[0m";
   ($bots | split(" ")) as $bots
   | map(select($all == 1 or .ready != false))
   | map(select($include_bots == 1 or (.author.login | sub("\\[bot\\]$"; "") | IN($bots[]) | not)))
+  | map(select($skip_commented == 0 or .commented != true))
   | sort_by(.updatedAt) | reverse
   | .[]
   | [ .repository.name,
@@ -673,8 +677,10 @@ if [[ -z $rows ]]; then
   exit 0
 fi
 
-bots_suffix=''
-((include_bots)) && bots_suffix=' --bots'
+# The picker's reloads re-run this script, so they pass the same filters on.
+flags_suffix=''
+((include_bots)) && flags_suffix=' --bots'
+((skip_commented)) && flags_suffix+=' --skip-commented'
 prompt='review> '
 all_suffix=''
 if ((all)); then
@@ -682,16 +688,16 @@ if ((all)); then
   all_suffix=' --all'
 fi
 start=()
-((stale)) && start=(--bind="load:unbind(load)+reload-sync($self --print-rows --refresh$all_suffix$bots_suffix)")
+((stale)) && start=(--bind="load:unbind(load)+reload-sync($self --print-rows --refresh$all_suffix$flags_suffix)")
 
 # The prompt is the only state the picker keeps, so the toggle and the refresh
 # read the current list off it.
 toggle="[[ \$FZF_PROMPT == 'all> ' ]] &&
-  echo 'change-prompt(review> )+reload($self --print-rows$bots_suffix)' ||
-  echo 'change-prompt(all> )+reload($self --print-rows --all$bots_suffix)'"
+  echo 'change-prompt(review> )+reload($self --print-rows$flags_suffix)' ||
+  echo 'change-prompt(all> )+reload($self --print-rows --all$flags_suffix)'"
 refresh_list="[[ \$FZF_PROMPT == 'all> ' ]] &&
-  echo 'reload($self --print-rows --refresh --all$bots_suffix)' ||
-  echo 'reload($self --print-rows --refresh$bots_suffix)'"
+  echo 'reload($self --print-rows --refresh --all$flags_suffix)' ||
+  echo 'reload($self --print-rows --refresh$flags_suffix)'"
 
 # ctrl-j and ctrl-k move through the list, so the Jira ticket goes on ctrl-t.
 # ctrl-w gives up fzf's delete-word for the worktree; become() replaces fzf so
