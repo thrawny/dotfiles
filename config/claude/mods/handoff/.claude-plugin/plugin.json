@@ -1,0 +1,5 @@
+{
+  "name": "handoff",
+  "version": "0.1.0",
+  "description": "Ends /handoff by clearing the session and running /takeoff."
+}

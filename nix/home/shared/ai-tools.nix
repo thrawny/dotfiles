@@ -161,6 +161,7 @@ in
       ".pi/agent/extensions".source = configSource "pi/extensions";
 
       ".claude/commands".source = configSource "claude/commands";
+      ".claude/mods".source = configSource "claude/mods";
       ".claude/agents".source = configSource "claude/agents";
       ".claude/keybindings.json".source = configSource "claude/keybindings.json";
       ".claude/CLAUDE.md".text =

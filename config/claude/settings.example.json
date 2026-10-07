@@ -4,7 +4,8 @@
   "env": {
     "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "300000",
     "CLAUDE_CODE_TMPDIR": "/tmp/claude",
-    "USE_BUILTIN_RIPGREP": "0"
+    "USE_BUILTIN_RIPGREP": "0",
+    "CLAUDE_CODE_PLUGIN_DIRS": "~/.claude/mods/handoff"
   },
   "permissions": {
     "allow": [],

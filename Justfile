@@ -133,7 +133,7 @@ test-t3ctl:
     @just test-python tests/test_t3ctl.py
 
 # Run all tests
-test: test-display-recover test-fork-window test-spawn-session test-moto test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills test-remote-mode
+test: test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills test-remote-mode
 
 # Session forking, exact session selection, and desktop routing
 test-fork-window:
@@ -142,6 +142,10 @@ test-fork-window:
 # Herdr session launcher repo lookup and agent naming
 test-spawn-session:
     @just test-python tests/test_spawn_session.py
+
+# Claude Code mods' own tests
+test-claude-mods:
+    @claude plugin test config/claude/mods/handoff
 
 test-moto:
     @just test-python tests/test_moto.py
