@@ -51,7 +51,7 @@ async function poll($: EngineInterface) {
       return
     }
     const pass = JSON.parse(stdout) as Pass
-    $.ui.status(pass.watching > 0 ? `moto: watching ${pass.watching}` : undefined)
+    $.ui.status(`moto: watching ${pass.watching}`)
     if (pass.lines.length > 0) {
       await update($, lines, before => [...before, ...pass.lines])
     }
