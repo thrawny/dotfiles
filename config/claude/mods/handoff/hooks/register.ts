@@ -29,8 +29,10 @@ async function takeOff($: EngineInterface, since: number) {
 }
 
 export const register: Register = on => {
+  // The old handoff goes first, so the agent writes a fresh one instead of editing it.
   // `--stay` writes the handoff and keeps the session; the command never sees the flag.
   on('command.run', { command: 'handoff' }, async ($, e, next) => {
+    await $.process.run(['rm', '-f', '--', await handoffPath($)])
     const words = e.args.split(/\s+/).filter(word => word !== '')
     const isStaying = words.includes(STAY)
     startedAt = isStaying ? undefined : await $.clock.now()

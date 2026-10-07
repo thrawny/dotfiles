@@ -1,12 +1,12 @@
 import type { On } from 'claude-code'
 import { expect, mock, test } from 'claude-code/testing'
 
-type World = { commands: string[]; args: string[]; toasts: string[] }
+type World = { commands: string[]; args: string[]; toasts: string[]; removed: string[] }
 
 // The engine beneath the mod: /handoff writes handoff.md at `writes` (or never),
 // and every other command just records its name.
 function world(on: On, writes: number | null): World {
-  const seen: World = { commands: [], args: [], toasts: [] }
+  const seen: World = { commands: [], args: [], toasts: [], removed: [] }
   on('command.run', ($, e) => {
     seen.commands.push(e.command)
     seen.args.push(e.args)
@@ -14,9 +14,14 @@ function world(on: On, writes: number | null): World {
   })
   on('turn.start', ($, e) => ({ turnId: e.turnId }))
   on('turn.complete', ($, e) => ({ text: e.answer }))
-  on('process.run', () => ({
-    value: { exitCode: 0, stdout: '/repo\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
-  }))
+  on('process.run', ($, e) => {
+    if (e.argv[0] === 'rm') {
+      seen.removed.push(`${e.argv.at(-1)} before ${seen.commands.length} commands`)
+    }
+    return {
+      value: { exitCode: 0, stdout: '/repo\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
+    }
+  })
   on('fs.exists', () => ({ value: writes !== null }))
   on('fs.stat', () => ({ value: { kind: 'file', size: 1, mtimeMs: writes ?? 0, isLink: false } }))
   on('ui.toast', ($, e) => {
@@ -46,6 +51,12 @@ test('a finished handoff clears the session and takes off', async ($, on) => {
   await $.turn.complete(ended('t1'))
   await clock.advance(0)
   expect(seen.commands).toEqual(['handoff', 'clear', 'takeoff'])
+})
+
+test('the old handoff is removed before the command runs', async ($, on) => {
+  const seen = world(on, 2000)
+  await $.command.run({ ...TYPED, args: '--stay' })
+  expect(seen.removed).toEqual(['/repo/handoff.md before 0 commands'])
 })
 
 test('a handoff that wrote nothing keeps the session', async ($, on) => {
