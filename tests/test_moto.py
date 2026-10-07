@@ -653,6 +653,50 @@ def test_wake_resumes_the_session_at_the_same_worktree_path(
     assert (saved["pane_id"], saved["seen"]["status"]) == ("w5:p1", "working")
 
 
+def test_spawn_passes_the_model_on_and_wake_keeps_it(
+    moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(moto, "CLAUDE_HOME", tmp_path / "claude")
+    cwd = str(tmp_path / "widgets")
+    os.mkdir(cwd)
+    details = {
+        "agent": "abc-1",
+        "repo": cwd,
+        "cwd": cwd,
+        "pane_id": "w1:p1",
+        "tab_id": "w1:t1",
+        "workspace_id": "w1",
+    }
+    args = argparse.Namespace(
+        repo="widgets", title="ABC-1 fix", model="sonnet", effort="low"
+    )
+    with (
+        patch("sys.stdin.read", return_value="Fix it."),
+        patch.object(moto, "run", return_value=json.dumps(details)) as run,
+    ):
+        assert moto.cmd_spawn(args) == 0
+    assert run.call_args.args[0][-4:] == ["--model", "sonnet", "--effort", "low"]
+    saved = moto.read_tasks()["abc-1"]
+    assert (saved["model"], saved["effort"]) == ("sonnet", "low")
+
+    session_file(moto.session_dir(cwd), "s1", "ABC-1 fix", mtime=100)
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"]["snoozed"] = {**SNOOZE, "cwd": cwd, "worktree": False}
+    with (
+        patch.object(moto, "run", return_value=json.dumps(details)) as run,
+        patch.object(moto, "live_agents", return_value=live("working", 3, "w1:p1")),
+    ):
+        assert moto.cmd_wake(argparse.Namespace(agent="abc-1", text=[])) == 0
+    assert run.call_args.args[0][-6:] == [
+        "--resume",
+        "s1",
+        "--model",
+        "sonnet",
+        "--effort",
+        "low",
+    ]
+
+
 def test_wake_refuses_a_session_missing_from_its_folder(
     moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):

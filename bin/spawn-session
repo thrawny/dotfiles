@@ -25,6 +25,9 @@ NAME_PATTERN = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 TITLE_WORD = r"(?:[A-Z][A-Z0-9]*-[0-9]+|[a-z0-9][a-z0-9-]*)"
 TITLE_PATTERN = re.compile(rf"{TITLE_WORD}(?: {TITLE_WORD}){{0,2}}")
 SESSION_ID_PATTERN = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
+# An alias such as sonnet, or a full name such as claude-opus-5-5[1m].
+MODEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\[\]-]*")
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 
 class SpawnError(Exception):
@@ -267,6 +270,26 @@ def resume_args(session_id: str | None, kind: str) -> list[str]:
     return ["--resume", session_id]
 
 
+def model_args(model: str | None, effort: str | None, kind: str) -> list[str]:
+    """The agent arguments that pick Claude's model and effort level."""
+    if model is None and effort is None:
+        return []
+    if kind != "claude":
+        raise SpawnError(
+            f"--model and --effort only work with --kind claude, not {kind}"
+        )
+    args: list[str] = []
+    if model is not None:
+        if not MODEL_PATTERN.fullmatch(model):
+            raise SpawnError(f"Not a Claude model alias or name: {model}")
+        args += ["--model", model]
+    if effort is not None:
+        if effort not in EFFORTS:
+            raise SpawnError(f"Effort must be one of {', '.join(EFFORTS)}: {effort}")
+        args += ["--effort", effort]
+    return args
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -299,6 +322,10 @@ def main() -> int:
         help="Resume this Claude session; it must belong to the repo or worktree folder",
     )
     parser.add_argument(
+        "--model", help="Claude model: an alias such as sonnet, or a full model name"
+    )
+    parser.add_argument("--effort", choices=EFFORTS, help="Claude effort level")
+    parser.add_argument(
         "--focus", action="store_true", help="Switch to the new session"
     )
     parser.add_argument(
@@ -315,8 +342,10 @@ def main() -> int:
         brief = sys.stdin.read().strip()
         if not brief and not args.resume:
             raise SpawnError("Pass the task brief on stdin")
-        agent_args = resume_args(args.resume, args.kind) + title_args(
-            args.title, args.kind
+        agent_args = (
+            resume_args(args.resume, args.kind)
+            + title_args(args.title, args.kind)
+            + model_args(args.model, args.effort, args.kind)
         )
         repo = resolve_repo(args.repo)
         if args.pane:

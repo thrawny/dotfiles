@@ -534,6 +534,11 @@ def activity_line(info: dict[str, Any] | None, now: float) -> str | None:
     return f"since the {info['since']}: " + " · ".join(parts) if parts else None
 
 
+# The worker's Claude model and effort, which spawn-session passes to claude.
+MODEL_FLAGS = ("model", "effort")
+EFFORTS = ("low", "medium", "high", "xhigh", "max")
+
+
 def start_worker(
     spec: dict[str, Any], prompt: str, parent: str | None
 ) -> dict[str, Any]:
@@ -544,7 +549,7 @@ def start_worker(
     differently from the driver.
     """
     command = ["spawn-session", "--json", "--repo", str(spec["repo"])]
-    for flag in ("worktree", "base", "name", "title", "resume", "pane"):
+    for flag in ("worktree", "base", "name", "title", "resume", "pane", *MODEL_FLAGS):
         if value := spec.get(flag):
             command += [f"--{flag}", str(value)]
     # Worktree creation, agent startup and the first prompt each wait on Herdr.
@@ -570,6 +575,10 @@ def start_worker(
             "pr": None,
             "seen": {"status": "working"},
         } | ({"parent": parent} if parent else {})
+        # Kept so wake resumes the session on the model it started with.
+        for flag in MODEL_FLAGS:
+            if value := spec.get(flag):
+                tasks[info["agent"]][flag] = value
         record(
             "spawn",
             info["agent"],
@@ -579,6 +588,8 @@ def start_worker(
             title=spec.get("title"),
             session=spec.get("resume"),
             parent=parent,
+            model=spec.get("model"),
+            effort=spec.get("effort"),
         )
     return info
 
@@ -592,7 +603,16 @@ def cmd_spawn(args: argparse.Namespace) -> int:
     footer = CHILD_FOOTER.format(parent=parent) if parent else BRIEF_FOOTER
     spec = {
         flag: getattr(args, flag, None)
-        for flag in ("repo", "worktree", "base", "name", "title", "resume", "pane")
+        for flag in (
+            "repo",
+            "worktree",
+            "base",
+            "name",
+            "title",
+            "resume",
+            "pane",
+            *MODEL_FLAGS,
+        )
     }
     info = start_worker(spec, f"{tag(parent)} {brief}\n\n{footer}\n", parent)
     if getattr(args, "json", False):
@@ -1405,6 +1425,10 @@ def cmd_wake(args: argparse.Namespace) -> int:
     if title := snooze.get("title") or task.get("title"):
         command += ["--title", title]
     command += ["--resume", session]
+    # claude --resume starts on the default model, not the one the session used.
+    for flag in MODEL_FLAGS:
+        if value := task.get(flag):
+            command += [f"--{flag}", value]
     stdin = f"{tag(sender)} {text}\n" if text else ""
     output = run(command, timeout=600, stdin=stdin)
     try:
@@ -2189,6 +2213,11 @@ def parser() -> argparse.ArgumentParser:
         metavar="SESSION_ID",
         help="Resume an earlier Claude session as the worker",
     )
+    spawn.add_argument(
+        "--model",
+        help="Claude model for the worker: an alias such as sonnet, or a full name",
+    )
+    spawn.add_argument("--effort", choices=EFFORTS, help="Claude effort level")
     spawn.add_argument(
         "--pane",
         metavar="PANE_ID",

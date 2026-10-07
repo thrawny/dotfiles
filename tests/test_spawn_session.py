@@ -99,6 +99,26 @@ def test_resume_passes_the_session_id(spawn: ModuleType):
         spawn.resume_args(session, "codex")
 
 
+def test_model_and_effort_pass_through_to_claude(spawn: ModuleType):
+    assert spawn.model_args(None, None, "codex") == []
+    assert spawn.model_args("sonnet", "low", "claude") == [
+        "--model",
+        "sonnet",
+        "--effort",
+        "low",
+    ]
+    assert spawn.model_args("claude-opus-5-5[1m]", None, "claude") == [
+        "--model",
+        "claude-opus-5-5[1m]",
+    ]
+    with pytest.raises(spawn.SpawnError, match="Not a Claude model"):
+        spawn.model_args("--dangerous", None, "claude")
+    with pytest.raises(spawn.SpawnError, match="Effort must be"):
+        spawn.model_args(None, "turbo", "claude")
+    with pytest.raises(spawn.SpawnError, match="--kind claude"):
+        spawn.model_args("sonnet", None, "codex")
+
+
 def test_new_worktree_goes_to_the_path_asked_for(spawn: ModuleType, tmp_path: Path):
     pane = {"pane_id": "w1:p1", "cwd": str(tmp_path / "wt")}
     replies: dict[str, dict[str, object]] = {
