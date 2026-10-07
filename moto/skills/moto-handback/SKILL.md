@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Handback
 
-The user runs this in a held moto worker, a session they took over from the driver (a grill, say), to give it back. The driver never saw your conversation with the user, so your summary is all it knows of it.
+The user runs this to give a session to the driver: a held moto worker they took over (a grill, say), or a session they started by hand. The driver never saw your conversation with the user, so your summary is all it knows of it.
 
 1. **Write the summary.** Draw it from the conversation since the user took over, in a few sentences:
    - the decision you and the user reached;
@@ -18,4 +18,4 @@ The user runs this in a held moto worker, a session they took over from the driv
 
 2. **Report.** Run `moto report handback "<summary>"`. This ends the hold, so the driver's watch covers you again.
 
-3. **Carry on.** If the summary says to wait, end the turn. Otherwise start the next step now, and report to the driver as your brief says once the turn ends with the work finished, a question or a blocker.
+3. **Carry on.** If the summary says to wait, end the turn. Otherwise start the next step now, and report to the driver as your brief says, or as `moto report` told you if you have no brief, once the turn ends with the work finished, a question or a blocker.

@@ -1,14 +1,14 @@
 ---
 name: moto-wrap
-description: End a moto worker's work, stop what it started, and report wrap to the driver.
+description: End a session's work, stop what it started, and report wrap to the driver. For a moto worker or a session the user started by hand.
 disable-model-invocation: true
 ---
 
 # Wrap
 
-The user runs this in a moto worker's pane when the worker's work is over. Close out the work in order, then report `wrap` to the driver. Leave the task's tickets as they are: the driver updates them.
+The user runs this in a session whose work is over: a moto worker, or a session they started by hand, which `moto report` makes a task so the driver can clean up after it. Close out the work in order, then report `wrap` to the driver. Leave the task's tickets as they are: the driver updates them.
 
-1. **Check the agreed work is finished.** Compare what you did against your brief and everything you agreed with the user since. If any of it is unfinished, stop and ask the user how to proceed, then start again from this step. Done when every agreed item is finished or the user has said what to do with it.
+1. **Check the agreed work is finished.** Compare what you did against your brief, if the driver gave you one, and against everything you agreed with the user. If any of it is unfinished, stop and ask the user how to proceed, then start again from this step. Done when every agreed item is finished or the user has said what to do with it.
 
 2. **Stop what you started.** Your scope is what this session started: background shells, servers, Herdr tabs you opened for a stack, and workers you spawned with `moto spawn` (`moto list` shows them as "started by" you). Stop each one, and close spawned workers with `moto close <agent>`. Keep running only what the user asks to keep, and note why for each. Done when everything you stopped has exited and everything still running is on that keep list.
 

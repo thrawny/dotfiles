@@ -7,7 +7,7 @@ disable-model-invocation: true
 
 # Snooze
 
-The user runs this in a moto worker's pane when the task has to wait, for example on a review or on another team. Get the worker ready to park, then report `snooze` to the driver, which runs `moto snooze`. Never run `moto snooze` on yourself: it closes your own pane mid-turn.
+The user runs this in a moto worker's pane, or in a session they started by hand, when the task has to wait, for example on a review or on another team. Get the worker ready to park, then report `snooze` to the driver, which runs `moto snooze`. Never run `moto snooze` on yourself: it closes your own pane mid-turn.
 
 1. **Know what the task waits on.** The user's argument says it:
 

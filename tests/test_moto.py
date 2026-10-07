@@ -500,6 +500,249 @@ def test_workspace_without_checkout_is_found_by_pane_cwd(moto: ModuleType):
         assert moto.checkout_workspace("/elsewhere") is None
 
 
+@pytest.fixture
+def worktree(pushed_clone: Path) -> Path:
+    """A pushed linked worktree of pushed_clone, on ABC-7-fix."""
+    path = pushed_clone.parent / "clone-ABC-7-fix"
+    git(pushed_clone, "worktree", "add", "-q", "-b", "ABC-7-fix", str(path))
+    git(path, "push", "-q", "-u", "origin", "ABC-7-fix")
+    return path
+
+
+@pytest.fixture
+def claude_home(moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    monkeypatch.setattr(moto, "CLAUDE_HOME", tmp_path / "claude")
+
+
+def report_from(
+    moto: ModuleType,
+    kind: str,
+    cwd: Path,
+    pane_id: str = "w4:p2",
+    session: str | None = "s7",
+    **fields: Any,
+) -> MagicMock:
+    """Run moto report in a Claude session the user started in cwd."""
+    agent = claude_in(
+        pane_id,
+        "working",
+        cwd=str(cwd),
+        terminal_title_stripped="Widgets research notes",
+        **fields,
+    )
+    env = {"HERDR_PANE_ID": pane_id} | (
+        {"CLAUDE_CODE_SESSION_ID": session} if session else {}
+    )
+    args = argparse.Namespace(kind=kind, text=["All", "done."], agent=None)
+    with (
+        patch.dict("os.environ", env),
+        patch.object(moto, "live_agents", return_value={pane_id: agent}),
+        patch.object(moto, "herdr") as herdr,
+    ):
+        assert moto.cmd_report(args) == 0
+    return herdr
+
+
+def panes_in(*panes: tuple[str, Path]) -> Any:
+    """A herdr stand-in whose pane list holds these (tab, cwd) panes."""
+    listing = {"panes": [{"tab_id": tab, "cwd": str(cwd)} for tab, cwd in panes]}
+
+    def herdr(*args: str, **_: Any) -> dict[str, Any]:
+        return listing if args == ("pane", "list") else {}
+
+    return MagicMock(side_effect=herdr)
+
+
+def close_adopted(moto: ModuleType, name: str, herdr: MagicMock) -> None:
+    with (
+        patch.object(moto, "live_agents", return_value=live("idle", 1, "w4:p2")),
+        patch.object(moto, "user_turns", return_value=[]),
+        patch.object(moto, "herdr", herdr),
+    ):
+        moto.cmd_close(argparse.Namespace(agent=name, force=False))
+
+
+def branch_exists(repo: Path, branch: str) -> bool:
+    found = subprocess.run(
+        ["git", "-C", str(repo), "show-ref", "--quiet", f"refs/heads/{branch}"]
+    )
+    return found.returncode == 0
+
+
+@pytest.mark.usefixtures("claude_home")
+def test_wrap_from_a_session_the_user_started_adopts_it(
+    moto: ModuleType,
+    pushed_clone: Path,
+    worktree: Path,
+    capsys: pytest.CaptureFixture[str],
+):
+    herdr = report_from(moto, "wrap", worktree)
+    herdr.assert_called_once_with("agent", "rename", "w4:p2", "abc-7")
+    out = capsys.readouterr().out
+    assert "moto now tracks this session as abc-7" in out
+    assert "Reported wrap to the driver." in out
+    saved = moto.read_tasks()["abc-7"]
+    assert (saved["repo"], saved["branch"], saved["cwd"]) == (
+        str(pushed_clone),
+        "ABC-7-fix",
+        str(worktree),
+    )
+    assert (saved["tab_id"], saved["session"], saved["adopted"]) == (
+        "w4:t1",
+        "s7",
+        True,
+    )
+    assert [e["event"] for e in events(moto)] == ["adopt", "report"]
+    # The driver hears of the wrap like any worker's.
+    now = moto.time.time()
+    assert moto.check(moto.read_tasks(), live("done", 10, "w4:p2"), now) == [
+        "abc-7 wrap: All done."
+    ]
+
+
+@pytest.mark.usefixtures("claude_home")
+def test_handback_from_an_adopted_session_tells_it_how_to_report(
+    moto: ModuleType, pushed_clone: Path, capsys: pytest.CaptureFixture[str]
+):
+    report_from(moto, "handback", pushed_clone)
+    assert "moto report done|question|blocked" in capsys.readouterr().out
+    assert moto.read_tasks()["widgets-research-notes"]["report"]["kind"] == "handback"
+
+
+@pytest.mark.usefixtures("claude_home")
+def test_only_a_user_s_own_session_ending_its_work_is_adopted(
+    moto: ModuleType,
+    pushed_clone: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+):
+    untracked = [
+        report_from(moto, "done", pushed_clone),
+        report_from(moto, "question", pushed_clone),
+        report_from(moto, "wrap", pushed_clone, session=None),
+        report_from(moto, "wrap", pushed_clone, agent="codex"),
+    ]
+    moto.write_driver(pane_id="w4:p2")
+    untracked.append(report_from(moto, "wrap", pushed_clone))
+    moto.driver_path().unlink()
+    monkeypatch.setattr(moto, "MOTO_HOME", pushed_clone)
+    untracked.append(report_from(moto, "snooze", pushed_clone, pane_id="w4:p3"))
+    for herdr in untracked:
+        herdr.assert_not_called()
+    assert capsys.readouterr().out.count("Tell the user directly") == len(untracked)
+    assert moto.read_tasks() == {}
+
+
+@pytest.mark.usefixtures("claude_home")
+def test_a_session_a_task_owns_moves_its_task_instead_of_a_second_one(
+    moto: ModuleType, pushed_clone: Path
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(session="s7")
+    report_from(moto, "wrap", pushed_clone)
+    saved = moto.read_tasks()
+    assert list(saved) == ["abc-1"]
+    assert saved["abc-1"]["pane_id"] == "w4:p2"
+    assert "adopted" not in saved["abc-1"]
+
+
+def test_adopted_name_prefers_a_jira_key_and_stays_unique(moto: ModuleType):
+    tasks: dict[str, Any] = {"abc-242": {}}
+    agents = {"w1:p1": {"name": "widgets-and-gadgets"}}
+    assert moto.adopted_name(tasks, agents, [None, "ABC-242-retry"]) == "abc-242-2"
+    assert (
+        moto.adopted_name(tasks, agents, [None, "Widgets and gadgets research"])
+        == "widgets-and-gadgets-2"
+    )
+    assert moto.adopted_name({}, {}, ["", "42 things"]) == "session-42-things"
+
+
+@pytest.mark.usefixtures("claude_home")
+def test_closing_an_adopted_main_checkout_session_closes_only_its_tab(
+    moto: ModuleType, pushed_clone: Path
+):
+    report_from(moto, "wrap", pushed_clone)
+    assert moto.read_tasks()["widgets-research-notes"]["branch"] is None
+    herdr = MagicMock()
+    close_adopted(moto, "widgets-research-notes", herdr)
+    herdr.assert_called_once_with("tab", "close", "w4:t1")
+    assert pushed_clone.is_dir()
+    assert moto.read_tasks() == {}
+
+
+@pytest.mark.usefixtures("claude_home")
+def test_closing_an_adopted_session_removes_a_worktree_of_its_own(
+    moto: ModuleType, pushed_clone: Path, worktree: Path
+):
+    report_from(moto, "wrap", worktree)
+    # Neovim beside it in its tab, and another session in the main checkout.
+    herdr = panes_in(("w4:t1", worktree), ("w4:t1", worktree), ("w2:t1", pushed_clone))
+    close_adopted(moto, "abc-7", herdr)
+    herdr.assert_any_call("tab", "close", "w4:t1")
+    assert not worktree.exists()
+    assert not branch_exists(pushed_clone, "ABC-7-fix")
+
+
+@pytest.mark.usefixtures("claude_home")
+def test_closing_an_adopted_session_keeps_a_worktree_another_tab_uses(
+    moto: ModuleType, pushed_clone: Path, worktree: Path
+):
+    report_from(moto, "wrap", worktree)
+    (worktree / "web").mkdir()
+    herdr = panes_in(("w4:t1", worktree), ("w4:t2", worktree / "web"))
+    close_adopted(moto, "abc-7", herdr)
+    assert [c.args for c in herdr.call_args_list] == [
+        ("pane", "list"),
+        ("tab", "close", "w4:t1"),
+    ]
+    assert worktree.is_dir()
+    assert branch_exists(pushed_clone, "ABC-7-fix")
+
+
+@pytest.mark.parametrize("shared", [True, False])
+@pytest.mark.usefixtures("claude_home")
+def test_snoozing_an_adopted_session_removes_only_a_worktree_of_its_own(
+    moto: ModuleType, pushed_clone: Path, worktree: Path, shared: bool
+):
+    report_from(moto, "snooze", worktree)
+    session_file(moto.session_dir(str(worktree)), "s7", mtime=100)
+    others = [("w4:t2", worktree)] if shared else []
+    herdr = panes_in(("w4:t1", worktree), *others)
+    with (
+        patch.object(moto, "live_agents", return_value=live("idle", 1, "w4:p2")),
+        patch.object(moto, "herdr", herdr),
+    ):
+        moto.cmd_snooze(argparse.Namespace(agent="abc-7", reason=["review"]))
+    herdr.assert_any_call("tab", "close", "w4:t1")
+    snooze = moto.read_tasks()["abc-7"]["snoozed"]
+    assert (snooze["worktree"], snooze["branch"]) == (not shared, "ABC-7-fix")
+    assert worktree.is_dir() == shared
+    assert branch_exists(pushed_clone, "ABC-7-fix")
+    if not shared:
+        return
+    # Wake reopens the worktree it shared, not the main checkout.
+    details = {
+        "cwd": str(worktree),
+        "pane_id": "w5:p1",
+        "tab_id": "w5:t1",
+        "workspace_id": "w5",
+    }
+    with (
+        patch.object(moto, "run", return_value=json.dumps(details)) as run,
+        patch.object(moto, "live_agents", return_value=live("idle", 3, "w5:p1")),
+    ):
+        moto.cmd_wake(argparse.Namespace(agent="abc-7", text=[]))
+    assert run.call_args.args[0][:6] == [
+        "spawn-session",
+        "--json",
+        "--repo",
+        str(worktree),
+        "--name",
+        "abc-7",
+    ]
+    assert "--worktree" not in run.call_args.args[0]
+
+
 def test_ask_writes_and_clears_the_driver_question(
     moto: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -867,6 +1110,7 @@ def test_a_fork_runs_no_task_commands(
         for argv in (
             ["report", "done", "PR ready"],
             ["report", "done", "PR ready", "--agent", "abc-1"],
+            ["report", "wrap", "all done"],
             ["tell", "abc-1", "go on"],
             ["watch"],
             ["ask", "which one?"],

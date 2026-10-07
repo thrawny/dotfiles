@@ -33,6 +33,14 @@ worker that waits on something: it reports snooze with what the task waits on,
 and the driver runs moto snooze, since a worker that snoozes itself closes its
 own pane mid-turn. All three end a hold, so the driver hears of them.
 
+The user also runs those skills in Claude sessions they started by hand, which
+no task owns. A wrap, snooze or handback from one adopts the session first: it
+becomes a task built from its Herdr pane, its git checkout and its Claude
+session id, logged as an adopt event, and the report lands as usual. moto made
+none of that session's surroundings, so close and snooze close only its tab,
+and remove its checkout only when it is a linked worktree that no other tab
+works in.
+
 moto list shows what happened in a held or snoozed task since its last
 report, because the driver sees none of it: the user's turns in the worker's
 pane, the user's new commits on its branch, and the last change to its PR.
@@ -110,6 +118,9 @@ BACKGROUND_WORK = re.compile(
     r"· (\d+ (?:shells?|monitors?|local agents?))(?= ·|$)", re.M
 )
 REPORT_KINDS = ("done", "question", "blocked", "wrap", "handback", "snooze")
+# Reports that make a session the user started, which no task owns, a task:
+# the user handing it to the driver to finish, park or carry on.
+ADOPT_KINDS = ("wrap", "snooze", "handback")
 # Reports that end the task's work, so it needs no watch once the driver saw them.
 FINISHED = ("done", "wrap")
 # Reports from the user ending the worker on purpose, so close needs no idle pane.
@@ -707,6 +718,147 @@ def cmd_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def git_checkout(cwd: str) -> tuple[str, str | None, str | None]:
+    """The repo a folder belongs to, the branch when the folder is in a linked
+    worktree, and the checked-out branch.
+
+    A main checkout gives no linked branch, nor does a detached worktree, so
+    close never removes either. A folder outside git is its own repo.
+    """
+    try:
+        top, common, git_dir = run(
+            ["git", "rev-parse", "--path-format=absolute", "--show-toplevel"]
+            + ["--git-common-dir", "--git-dir"],
+            cwd=cwd,
+        ).splitlines()
+    except (MotoError, ValueError, OSError):
+        return cwd, None, None
+    try:
+        current: str | None = run(
+            ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=cwd
+        ).strip()
+    except MotoError:
+        current = None
+    if Path(common) == Path(git_dir):
+        return top, None, current
+    return str(Path(common).parent), current, current
+
+
+def adopted_name(
+    tasks: dict[str, dict[str, Any]],
+    live: dict[str, dict[str, Any]],
+    sources: list[str | None],
+) -> str:
+    """A task name from the first of sources that gives one, unique in moto and Herdr.
+
+    A Jira key wins, as in abc-242 for ABC-242-retry-timeouts, the way the
+    driver names its workers. Otherwise the first three words, as in
+    widgets-api-notes.
+    """
+    base = ""
+    for source in sources:
+        if not source:
+            continue
+        if key := re.match(r"[A-Za-z]+-\d+", source):
+            base = key.group(0).lower()
+        else:
+            base = "-".join(re.findall(r"[a-z0-9]+", source.lower())[:3])
+        if base:
+            break
+    if not base[:1].isalpha():
+        base = f"session-{base}".rstrip("-")
+    base = base[:28]
+    taken = set(tasks) | {a.get("name") for a in live.values()}
+    name, suffix = base, 2
+    while name in taken:
+        name, suffix = f"{base}-{suffix}", suffix + 1
+    return name
+
+
+def adopt(tasks: dict[str, dict[str, Any]], pane_id: str | None) -> str | None:
+    """Make the Claude session in this pane a task, or None when it may not be one.
+
+    The user started it by hand, so moto takes what it finds: the pane, tab and
+    workspace from Herdr, the repo and branch from the checkout Claude runs in.
+    The driver's own pane stays untracked, like a pane outside Herdr or without
+    Claude; main refuses a fork before this runs. A session a task already
+    owns, resumed in a pane the SessionStart hook missed, moves its task here
+    rather than becoming a second one.
+    """
+    session = os.environ.get("CLAUDE_CODE_SESSION_ID")
+    if not pane_id or not session or forked():
+        return None
+    try:
+        live = live_agents()
+    except MotoError:
+        return None
+    agent = live.get(pane_id) or {}
+    # The pane's own cwd, where Claude started; foreground_cwd moves with programs.
+    cwd = agent.get("cwd") or os.getcwd()
+    if agent.get("agent") != "claude" or (
+        read_driver().get("pane_id") == pane_id or driver_cwd({"cwd": cwd})
+    ):
+        return None
+    for name, task in tasks.items():
+        if task.get("session") == session and not task.get("snoozed"):
+            attach(tasks, name, pane_id, live)
+            return name
+    repo, branch, current = git_checkout(cwd)
+    path = session_dir(cwd) / f"{session}.jsonl"
+    title = last_title(path) if path.is_file() else None
+    named = agent.get("name")
+    name = (
+        named
+        if named and named not in tasks
+        else adopted_name(
+            tasks,
+            live,
+            [
+                branch,
+                title,
+                agent.get("terminal_title_stripped"),
+                current,
+                Path(repo).name,
+            ],
+        )
+    )
+    # moto tell and the watch reach a worker by its Herdr name.
+    herdr("agent", "rename", pane_id, name)
+    now = time.time()
+    tasks[name] = {
+        "agent": name,
+        "repo": repo,
+        "branch": branch,
+        "pane_id": pane_id,
+        "workspace_id": agent["workspace_id"],
+        "tab_id": agent["tab_id"],
+        "cwd": cwd,
+        "title": title,
+        "started": now,
+        "told": now,
+        "report": None,
+        "pr": None,
+        # The report about to land is news; the pane's state so far is not.
+        "seen": {
+            "status": agent.get("agent_status"),
+            "seq": agent.get("state_change_seq"),
+        },
+        "session": session,
+        "adopted": True,
+    }
+    record(
+        "adopt",
+        name,
+        repo=repo,
+        branch=branch,
+        worktree=cwd if branch else None,
+        pane_id=pane_id,
+        session=session,
+        title=title,
+    )
+    return name
+
+
 def cmd_report(args: argparse.Namespace) -> int:
     pane_id = os.environ.get("HERDR_PANE_ID")
     text = " ".join(args.text).strip()
@@ -715,6 +867,12 @@ def cmd_report(args: argparse.Namespace) -> int:
             task = find_task(tasks, args.agent)
         else:
             task = next((t for t in tasks.values() if t["pane_id"] == pane_id), None)
+            if task is None and args.kind in ADOPT_KINDS:
+                if adopted := adopt(tasks, pane_id):
+                    task = tasks[adopted]
+                    print(f"moto now tracks this session as {adopted} for the driver.")
+                    if args.kind == "handback":
+                        print(REPORT_RULES)
             if task is None:
                 # Dropped tasks keep the brief that asks for reports.
                 print(UNTRACKED)
@@ -1095,11 +1253,64 @@ def still_working(
     return "; ".join(problems) or None
 
 
+def owns_worktree(task: dict[str, Any]) -> bool:
+    """Whether close and snooze may remove the task's checkout.
+
+    A spawned task with a branch made its own worktree. An adopted task ran
+    where the user put it, often a tab in a repo workspace that other sessions
+    share, so its checkout counts as its own only when it is a linked worktree
+    that no pane outside the task's tab works in. A snoozed adopted task
+    already settled this when it snoozed.
+    """
+    if not task.get("branch"):
+        return False
+    if not task.get("adopted"):
+        return True
+    if snooze := task.get("snoozed"):
+        return bool(snooze.get("worktree"))
+    try:
+        top = Path(
+            run(["git", "rev-parse", "--show-toplevel"], cwd=task["cwd"]).strip()
+        )
+    except (MotoError, OSError):
+        return True  # the worktree is gone; its branch is still checked for work
+    try:
+        panes = herdr("pane", "list")["panes"]
+    except MotoError:
+        return False  # without Herdr nobody can tell who else works there
+    for pane in panes:
+        if pane.get("tab_id") == task["tab_id"]:
+            continue
+        for key in ("cwd", "foreground_cwd"):
+            if (folder := pane.get(key)) and Path(folder).is_relative_to(top):
+                return False
+    return True
+
+
+def release_adopted(task: dict[str, Any], own: bool, force: bool) -> None:
+    """Close an adopted task's tab, and remove its worktree when it owns one.
+
+    Only the tab goes, never the workspace, because the user may run other
+    sessions as tabs beside it; Herdr closes a workspace with its last tab.
+    """
+    if not task.get("snoozed"):
+        try:
+            herdr("tab", "close", task["tab_id"])
+        except MotoError:
+            pass  # the tab is already gone
+    if own and os.path.isdir(task["cwd"]):
+        top = run(["git", "rev-parse", "--show-toplevel"], cwd=task["cwd"]).strip()
+        flags = ["--force"] if force else []
+        run(["git", "worktree", "remove", *flags, top], cwd=task["repo"], timeout=120)
+
+
 def cmd_close(args: argparse.Namespace) -> int:
     live = {} if args.force else live_agents()
     with tasks_for_update() as tasks:
         task = find_task(tasks, args.agent)
-        cwd, branch, repo = task["cwd"], task.get("branch"), task["repo"]
+        cwd, repo = task["cwd"], task["repo"]
+        # A checkout close may not remove keeps its branch too.
+        branch = task.get("branch") if owns_worktree(task) else None
         if not args.force and (
             # A snoozed task has no pane; Herdr may have reused its id.
             busy := still_working(
@@ -1119,7 +1330,9 @@ def cmd_close(args: argparse.Namespace) -> int:
                 raise MotoError(
                     f"{args.agent}: {problem}; pass --force to remove anyway"
                 )
-        if branch:
+        if task.get("adopted"):
+            release_adopted(task, bool(branch), args.force)
+        elif branch:
             workspace = checkout_workspace(cwd)
             force = ["--force"] if args.force else []
             if workspace:
@@ -1128,17 +1341,17 @@ def cmd_close(args: argparse.Namespace) -> int:
                 )
             elif exists:
                 run(["git", "worktree", "remove", *force, cwd], cwd=repo, timeout=120)
-            # Its commits are pushed or merged, so the local branch is a copy.
-            if not args.force:
-                try:
-                    run(["git", "branch", "-D", branch], cwd=repo)
-                except MotoError:
-                    pass
         else:
             try:
                 herdr("tab", "close", task["tab_id"])
             except MotoError:
                 pass  # the tab is already gone
+        # Its commits are pushed or merged, so the local branch is a copy.
+        if branch and not args.force:
+            try:
+                run(["git", "branch", "-D", branch], cwd=repo)
+            except MotoError:
+                pass
         record("close", args.agent, force=args.force, task=tasks.pop(args.agent))
     print(f"Closed {args.agent}")
     return 0
@@ -1359,24 +1572,30 @@ def cmd_snooze(args: argparse.Namespace) -> int:
         agent = live.get(task["pane_id"])
         if agent and agent.get("agent_status") == "working":
             raise MotoError(f"{args.agent} is mid-turn; snooze it once the turn ends")
-        cwd, repo, linked = task["cwd"], task["repo"], bool(task.get("branch"))
-        title = task_title(task, agent)
+        cwd, repo, linked = task["cwd"], task["repo"], owns_worktree(task)
         path = transcript(task, agent)
-        session = path.stem if path else find_session(cwd, title)
+        if path:
+            # A session the user started may have no name; its id is enough.
+            title = task.get("title") or (agent or {}).get("terminal_title_stripped")
+            session = path.stem
+        else:
+            title = task_title(task, agent)
+            session = find_session(cwd, title)
         if linked:
             branch = task["branch"]
-            if os.path.isdir(cwd):
-                if run(["git", "status", "--porcelain"], cwd=cwd).strip():
-                    raise MotoError(
-                        f"{args.agent}: the worktree has uncommitted changes"
-                    )
-                # Both keep the branch; wake checks it out again at the same path.
-                if workspace := checkout_workspace(cwd):
-                    herdr("worktree", "remove", "--workspace", workspace, timeout=120)
-                else:
-                    run(["git", "worktree", "remove", cwd], cwd=repo, timeout=120)
+            exists = os.path.isdir(cwd)
+            if exists and run(["git", "status", "--porcelain"], cwd=cwd).strip():
+                raise MotoError(f"{args.agent}: the worktree has uncommitted changes")
+            # All three keep the branch; wake checks it out again at the same path.
+            if task.get("adopted"):
+                release_adopted(task, True, False)
+            elif exists and (workspace := checkout_workspace(cwd)):
+                herdr("worktree", "remove", "--workspace", workspace, timeout=120)
+            elif exists:
+                run(["git", "worktree", "remove", cwd], cwd=repo, timeout=120)
         else:
-            # The main checkout stays as it is, on whatever branch it is on.
+            # The main checkout, or a worktree an adopted task shares, stays as
+            # it is, on whatever branch it is on.
             try:
                 branch = run(
                     ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=cwd
@@ -1417,7 +1636,9 @@ def cmd_wake(args: argparse.Namespace) -> int:
     # claude --resume finds a session only from the folder it ran in.
     if not (session_dir(cwd) / f"{session}.jsonl").is_file():
         raise MotoError(f"Session {session} is not in {session_dir(cwd)}")
-    command = ["spawn-session", "--json", "--repo", repo, "--name", task["agent"]]
+    # A checkout that stayed may be a worktree an adopted task shared, not the repo.
+    checkout = repo if linked else cwd
+    command = ["spawn-session", "--json", "--repo", checkout, "--name", task["agent"]]
     if linked:
         command += ["--worktree", snooze.get("branch") or task["branch"], "--path", cwd]
     elif not os.path.isdir(cwd):
