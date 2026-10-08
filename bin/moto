@@ -72,7 +72,9 @@ moto job loop is the scheduler, and its state is jobs.json beside tasks.json.
 
 A worker can start workers of its own, which the driver's watch skips. moto
 tell and wake from a worker's pane reach only the tasks it started, and tag the
-message with the worker's name instead of [driver].
+message with the worker's name instead of [driver]. A worker that hands work
+off instead runs moto spawn --to-driver: the task gets no parent, the driver
+watches it as its own, and requested_by records the worker that asked for it.
 
 fork-window starts a fork of a worker or the driver with MOTO_FORK set. A fork
 is neither: the hooks skip it, and every command that changes a task or speaks
@@ -148,13 +150,20 @@ answer, or with the work blocked, make your last action \
 `moto report done|question|blocked "<one line>"`. \
 Put the PR URL in a done line when there is one. The user merges every PR, so \
 stop once yours is ready."""
+SPAWN_RULES = """\
+To hand work off to a separate task, such as research that splits into \
+implementation tasks, start it with `moto spawn --to-driver`, so the driver \
+watches it. Start a helper you supervise yourself, such as a test worker, with \
+plain `moto spawn`."""
 BRIEF_FOOTER = f"""\
 A driver session started you and tracks this task for the user. {REPORT_RULES}
 
 Every message from the driver starts with {DRIVER_TAG}, as this one does. A \
 message without it is from the user, typing in this pane. Answer the user here, \
 and when the user and the driver disagree, follow the user. Still report to the \
-driver when the task finishes, gets stuck or needs a decision."""
+driver when the task finishes, gets stuck or needs a decision.
+
+{SPAWN_RULES}"""
 CHILD_FOOTER = f"""\
 Another worker, {{parent}}, started you and watches this task. A driver session \
 tracks {{parent}} for the user. {REPORT_RULES}
@@ -162,7 +171,9 @@ tracks {{parent}} for the user. {REPORT_RULES}
 Every message from {{parent}} starts with [{{parent}}], as this one does. A \
 message that starts with {DRIVER_TAG} is from the driver, and a message with \
 neither tag is from the user, typing in this pane. Answer the user here. When \
-they disagree, follow the user first, then the driver, then {{parent}}."""
+they disagree, follow the user first, then the driver, then {{parent}}.
+
+{SPAWN_RULES}"""
 
 
 UNTRACKED = (
@@ -382,6 +393,8 @@ def message_sender(
         hint = "To reach the driver, use moto report"
     if agent not in tasks:
         raise MotoError(f"No task named {agent}. {hint}")
+    if tasks[agent].get("requested_by") == sender:
+        hint = "The driver watches it, so use moto report to pass something on"
     if tasks[agent].get("parent") != sender:
         raise MotoError(
             f"{sender} can message only the tasks it started, and {agent} is not one"
@@ -551,7 +564,10 @@ EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 
 def start_worker(
-    spec: dict[str, Any], prompt: str, parent: str | None
+    spec: dict[str, Any],
+    prompt: str,
+    parent: str | None,
+    requested_by: str | None = None,
 ) -> dict[str, Any]:
     """Open a worker's pane on this prompt and record its task.
 
@@ -586,6 +602,8 @@ def start_worker(
             "pr": None,
             "seen": {"status": "working"},
         } | ({"parent": parent} if parent else {})
+        if requested_by:
+            tasks[info["agent"]]["requested_by"] = requested_by
         # Kept so wake resumes the session on the model it started with.
         for flag in MODEL_FLAGS:
             if value := spec.get(flag):
@@ -599,6 +617,7 @@ def start_worker(
             title=spec.get("title"),
             session=spec.get("resume"),
             parent=parent,
+            requested_by=requested_by,
             model=spec.get("model"),
             effort=spec.get("effort"),
         )
@@ -609,8 +628,11 @@ def cmd_spawn(args: argparse.Namespace) -> int:
     brief = sys.stdin.read().strip()
     if not brief:
         raise MotoError("Pass the task brief on stdin")
-    # A worker that starts its own worker watches it itself.
-    parent = caller(read_tasks())
+    # A worker that starts its own worker watches it itself, unless it hands the
+    # task to the driver, which then treats it as one it started.
+    worker = caller(read_tasks())
+    requested_by = worker if getattr(args, "to_driver", False) else None
+    parent = None if requested_by else worker
     footer = CHILD_FOOTER.format(parent=parent) if parent else BRIEF_FOOTER
     spec = {
         flag: getattr(args, flag, None)
@@ -625,7 +647,9 @@ def cmd_spawn(args: argparse.Namespace) -> int:
             *MODEL_FLAGS,
         )
     }
-    info = start_worker(spec, f"{tag(parent)} {brief}\n\n{footer}\n", parent)
+    info = start_worker(
+        spec, f"{tag(parent)} {brief}\n\n{footer}\n", parent, requested_by
+    )
     if getattr(args, "json", False):
         print(json.dumps(info))
         return 0
@@ -633,6 +657,11 @@ def cmd_spawn(args: argparse.Namespace) -> int:
     print(f"Started {info['agent']} on {where}")
     if parent:
         print(f"moto watch skips it, since {parent} started it; watch it yourself")
+    elif requested_by:
+        print(
+            f"The driver watches {info['agent']}, so you cannot moto tell it."
+            + " To pass anything on, moto report to the driver."
+        )
     return 0
 
 
@@ -692,6 +721,8 @@ def cmd_list(args: argparse.Namespace) -> int:
         held = " · held by the user" if row.get("held") else ""
         if parent := row.get("parent"):
             held += f" · started by {parent}"
+        elif requested_by := row.get("requested_by"):
+            held += f" · requested by {requested_by}"
         print(
             f"{row['name']} · {Path(row['repo']).name} · {branch} · {row['status']}{held}"
         )
@@ -2444,6 +2475,12 @@ def parser() -> argparse.ArgumentParser:
         metavar="PANE_ID",
         help="Adopt this pane instead of opening one, for a caller that built"
         + " the workspace itself, such as pr-review --worktree",
+    )
+    spawn.add_argument(
+        "--to-driver",
+        action="store_true",
+        help="From a worker: hand the task to the driver, which watches it and"
+        + " takes its reports, instead of supervising it yourself",
     )
     spawn.add_argument("--json", action="store_true", help="Print the new task as JSON")
     spawn.set_defaults(handler=cmd_spawn)

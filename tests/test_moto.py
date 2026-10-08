@@ -1412,6 +1412,51 @@ def test_task_a_worker_started_is_left_to_that_worker(moto: ModuleType):
     assert moto.check({"abc-2": tasks["abc-2"]}, {}, 0) == []
 
 
+def test_a_worker_hands_a_task_to_the_driver(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    details = {
+        "agent": "abc-2",
+        "repo": "/code/widgets",
+        "cwd": "/code/widgets",
+        "pane_id": "w2:p1",
+        "tab_id": "w2:t1",
+        "workspace_id": "w2",
+    }
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    args = argparse.Namespace(
+        repo="widgets",
+        worktree=None,
+        base=None,
+        name=None,
+        title="t",
+        resume=None,
+        to_driver=True,
+    )
+    with (
+        patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}),
+        patch("sys.stdin.read", return_value="Build it."),
+        patch.object(moto, "run", return_value=json.dumps(details)) as run,
+    ):
+        assert moto.cmd_spawn(args) == 0
+    brief = run.call_args.kwargs["stdin"]
+    assert brief.startswith("[driver] Build it.\n\nA driver session started you")
+    assert "The driver watches abc-2" in capsys.readouterr().out
+    tasks = moto.read_tasks()
+    assert "parent" not in tasks["abc-2"]
+    assert tasks["abc-2"]["requested_by"] == "abc-1"
+    assert not moto.unwatched(tasks["abc-2"])
+    spawned = [e for e in events(moto) if e["event"] == "spawn"]
+    assert spawned[-1]["requested_by"] == "abc-1"
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
+        with pytest.raises(moto.MotoError, match="use moto report"):
+            moto.message_sender(tasks, "abc-2", "hi")
+    with patch.object(moto, "live_agents", return_value={}):
+        assert moto.cmd_list(argparse.Namespace(json=False)) == 0
+    assert "· requested by abc-1" in capsys.readouterr().out
+
+
 def afk(moto: ModuleType, *words: str) -> None:
     assert moto.cmd_afk(argparse.Namespace(text=list(words))) == 0
 

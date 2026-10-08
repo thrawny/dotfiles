@@ -15,7 +15,7 @@ The user runs this in a moto worker's pane, or in a session they started by hand
 
    If that is empty, ask the user. Done when you have it in one line.
 
-2. **Stop what you started.** Your scope is what this session started: background shells, servers, Herdr tabs you opened for a stack, and workers you spawned with `moto spawn` (`moto list` shows them as "started by" you). Stop each one, and close spawned workers with `moto close <agent>`. Keep running only what the user asks to keep, and note why for each. Done when everything you stopped has exited and everything still running is on that keep list.
+2. **Stop what you started.** Your scope is what this session started: background shells, servers, Herdr tabs you opened for a stack, and workers you spawned with `moto spawn` (`moto list` shows them as "started by" you). Stop each one, and close spawned workers with `moto close <agent>`. Leave tasks you handed off with `moto spawn --to-driver` (shown as "requested by" you) running, since the driver watches and closes them. Keep running only what the user asks to keep, and note why for each. Done when everything you stopped has exited and everything still running is on that keep list.
 
 3. **Leave a clean tree.** `moto snooze` refuses a worktree with uncommitted changes, so check `git status`. For uncommitted changes, ask the user whether to commit them (and push, if they say so) or throw them away, and do what they choose. Discard work only on the user's explicit word. Done when `git status` shows a clean tree.
 
