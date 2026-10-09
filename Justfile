@@ -133,7 +133,7 @@ test-t3ctl:
     @just test-python tests/test_t3ctl.py
 
 # Run all tests
-test: test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills test-remote-mode
+test: test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-nvim-here test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills test-remote-mode
 
 # Session forking, exact session selection, and desktop routing
 test-fork-window:
@@ -172,6 +172,10 @@ test-project-picker:
 test-herdr-next-agent:
     bash -n bin/herdr-next-agent
     uv run --locked python -B -m pytest tests/test_herdr_next_agent.py
+
+# Finding the nearest Neovim and opening files in it, against headless Neovims
+test-nvim-here:
+    @just test-python tests/test_nvim_here.py
 
 # PR and Jira sidebar decoration, the command palette, and the private work config
 test-herdr-decorator:

@@ -1,0 +1,419 @@
+#!/usr/bin/env python3
+# vim: set filetype=python:
+"""Open a file in the Neovim nearest to the caller, for agents in a multiplexer.
+
+An agent runs in one terminal pane and the user keeps Neovim open in another.
+Every Neovim already listens on a socket in its run directory, and inherits the
+pane id its multiplexer gave it, so asking each socket for its pane is enough
+to find the one beside the agent. Nothing has to be configured in Neovim.
+
+The multiplexer only decides which Neovim counts as near and how to start one
+when there is none. Herdr is the only one so far; another fits by implementing
+the Multiplexer protocol and joining detect_multiplexer.
+"""
+
+from __future__ import annotations
+
+import argparse
+import getpass
+import json
+import os
+import re
+import shlex
+import subprocess
+import sys
+import time
+from collections.abc import Mapping, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Protocol, final
+
+# Long enough for a Neovim that is busy redrawing, short enough that one stuck
+# on a prompt does not hold the agent up.
+QUERY_TIMEOUT_SECONDS = 2
+OPEN_TIMEOUT_SECONDS = 5
+
+
+@dataclass(frozen=True)
+class Neovim:
+    socket: str
+    cwd: str
+    env: Mapping[str, str]
+
+
+@dataclass(frozen=True)
+class Target:
+    path: Path
+    line: int | None = None
+    col: int | None = None
+
+
+class Multiplexer(Protocol):
+    # Variables each Neovim reports from its own environment, which is where
+    # the multiplexer's pane id survives.
+    env_keys: tuple[str, ...]
+
+    def distance(self, nvim: Neovim) -> int | None:
+        """Rank a Neovim by how close it sits to the caller, None when too far."""
+        ...
+
+    def describe(self, nvim: Neovim) -> str: ...
+
+    def focus(self, nvim: Neovim) -> None: ...
+
+    def spawn(self, command: Sequence[str], cwd: Path, focus: bool) -> str:
+        """Start a command in a new pane beside the caller and name that pane."""
+        ...
+
+
+@final
+class Herdr:
+    env_keys: tuple[str, ...] = ("HERDR_PANE_ID",)
+
+    def __init__(self, env: Mapping[str, str]) -> None:
+        self.bin = env.get("HERDR_BIN_PATH") or "herdr"
+        self.pane_id = env["HERDR_PANE_ID"]
+        panes = self._call("pane", "list")["result"]["panes"]
+        self.panes: dict[str, dict[str, Any]] = {
+            pane["pane_id"]: pane for pane in panes
+        }
+        # Read the caller's place from the live list rather than its own
+        # environment, which goes stale when the pane moves to another tab.
+        me = self.panes.get(self.pane_id, {})
+        self.tab_id = me.get("tab_id") or env.get("HERDR_TAB_ID")
+        self.workspace_id = me.get("workspace_id") or env.get("HERDR_WORKSPACE_ID")
+
+    def _call(self, *args: str) -> dict[str, Any]:
+        result = subprocess.run(
+            [self.bin, *args],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise SystemExit(
+                f"nvim-here: herdr {' '.join(args)} failed: {result.stderr.strip()}"
+            )
+        return json.loads(result.stdout or "{}")
+
+    def _pane(self, nvim: Neovim) -> dict[str, Any] | None:
+        return self.panes.get(nvim.env.get("HERDR_PANE_ID", ""))
+
+    def distance(self, nvim: Neovim) -> int | None:
+        pane = self._pane(nvim)
+        if pane is None:
+            return None
+        if pane["tab_id"] == self.tab_id:
+            return 0
+        if pane["workspace_id"] == self.workspace_id:
+            return 1
+        return None
+
+    def describe(self, nvim: Neovim) -> str:
+        pane = self._pane(nvim)
+        if pane is None:
+            return nvim.socket
+        where = "same tab" if pane["tab_id"] == self.tab_id else "same workspace"
+        return f"pane {pane['pane_id']} ({where})"
+
+    def focus(self, nvim: Neovim) -> None:
+        pane = self._pane(nvim)
+        if pane is None:
+            return
+        # Herdr leaves the attached client where it was unless the jump is
+        # spelled out from the outside in, as in herdr-next-agent.
+        self._call("workspace", "focus", pane["workspace_id"])
+        self._call("tab", "focus", pane["tab_id"])
+
+    def spawn(self, command: Sequence[str], cwd: Path, focus: bool) -> str:
+        split = self._call(
+            "pane",
+            "split",
+            self.pane_id,
+            "--direction",
+            "right",
+            "--cwd",
+            str(cwd),
+            "--focus" if focus else "--no-focus",
+        )
+        pane_id = split["result"]["pane"]["pane_id"]
+        # A fresh shell drops input that arrives before its prompt, the same
+        # grace pr-review gives it.
+        time.sleep(0.3)
+        self._call("pane", "run", pane_id, shlex.join(command))
+        return f"new pane {pane_id}"
+
+
+def detect_multiplexer(env: Mapping[str, str]) -> Multiplexer | None:
+    if env.get("HERDR_PANE_ID"):
+        return Herdr(env)
+    return None
+
+
+def socket_paths(env: Mapping[str, str]) -> list[str]:
+    """Every default Neovim server socket for this user, live or stale."""
+    # Neovim puts its default socket in $XDG_RUNTIME_DIR when that is set, as on
+    # Linux, and otherwise in a random directory under $TMPDIR/nvim.$USER.
+    patterns: list[tuple[Path, str]] = []
+    if runtime := env.get("XDG_RUNTIME_DIR"):
+        patterns.append((Path(runtime), "nvim.*.0"))
+    user = env.get("USER") or getpass.getuser()
+    tmp = Path(env.get("TMPDIR") or "/tmp")
+    patterns.append((tmp / f"nvim.{user}", "*/nvim.*.0"))
+    found = {
+        str(path)
+        for root, glob in patterns
+        if root.is_dir()
+        for path in root.glob(glob)
+    }
+    return sorted(found)
+
+
+def remote_expr(socket: str, expr: str, timeout: float) -> str | None:
+    try:
+        result = subprocess.run(
+            [
+                "nvim",
+                "--clean",
+                "--headless",
+                "--server",
+                socket,
+                "--remote-expr",
+                expr,
+            ],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=timeout,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    if result.returncode != 0:
+        return None
+    return result.stdout.rstrip("\n")
+
+
+def vim_string(text: str) -> str:
+    """Quote text as a Vimscript literal string, which has no escapes but ''."""
+    return "'" + text.replace("'", "''") + "'"
+
+
+def lua_call(chunk: str, payload: object) -> str:
+    # The payload travels as JSON inside a literal string, so paths need no
+    # escaping beyond the doubled quote.
+    return f"luaeval({vim_string(chunk)}, {vim_string(json.dumps(payload))})"
+
+
+INFO_LUA = """
+(function(raw)
+  local keys = vim.json.decode(raw)
+  local env = {}
+  for _, key in ipairs(keys) do
+    env[key] = vim.env[key]
+  end
+  return vim.json.encode({ cwd = vim.fn.getcwd(), env = env })
+end)(_A)
+"""
+
+
+def query(socket: str, env_keys: Sequence[str]) -> Neovim | None:
+    out = remote_expr(socket, lua_call(INFO_LUA, list(env_keys)), QUERY_TIMEOUT_SECONDS)
+    if not out:
+        return None
+    try:
+        info: dict[str, Any] = json.loads(out)
+    except json.JSONDecodeError:
+        return None
+    # vim.json encodes an empty table as an array.
+    raw_env = info.get("env")
+    env: dict[str, str] = raw_env if isinstance(raw_env, dict) else {}
+    return Neovim(socket=socket, cwd=info.get("cwd") or "", env=env)
+
+
+def discover(sockets: Sequence[str], env_keys: Sequence[str]) -> list[Neovim]:
+    if not sockets:
+        return []
+    with ThreadPoolExecutor(max_workers=min(16, len(sockets))) as pool:
+        found = pool.map(query, sockets, [env_keys] * len(sockets))
+        return [nvim for nvim in found if nvim is not None]
+
+
+def nearest(nvims: Sequence[Neovim], mux: Multiplexer, target: Path) -> Neovim | None:
+    ranked: list[tuple[int, int, int, Neovim]] = []
+    for index, nvim in enumerate(nvims):
+        distance = mux.distance(nvim)
+        if distance is None:
+            continue
+        # Between equally near ones, prefer a Neovim already rooted in the
+        # file's project.
+        outside = 0 if nvim.cwd and target.is_relative_to(nvim.cwd) else 1
+        ranked.append((distance, outside, index, nvim))
+    return min(ranked, key=lambda entry: entry[:3])[3] if ranked else None
+
+
+# Open in the current tab unless it holds a codediff review, whose windows
+# belong to the diff. Reuse a window that already shows the file, then the
+# current window, then any ordinary one, before falling back to a new tab.
+OPEN_LUA = """
+(function(raw)
+  local a = vim.json.decode(raw)
+  local api = vim.api
+  local function ordinary(win)
+    if api.nvim_win_get_config(win).relative ~= "" then
+      return false
+    end
+    local buf = api.nvim_win_get_buf(win)
+    return vim.bo[buf].buftype == "" or vim.bo[buf].filetype == "snacks_dashboard"
+  end
+  local function in_review(tab)
+    local ok, lifecycle = pcall(require, "codediff.ui.lifecycle")
+    return ok and lifecycle.get_session(tab) ~= nil
+  end
+  local ok, err = pcall(function()
+    local tab = api.nvim_get_current_tabpage()
+    local win
+    if not in_review(tab) then
+      for _, w in ipairs(api.nvim_tabpage_list_wins(tab)) do
+        if api.nvim_buf_get_name(api.nvim_win_get_buf(w)) == a.path then
+          win = w
+          break
+        end
+      end
+      if not win and ordinary(api.nvim_get_current_win()) then
+        win = api.nvim_get_current_win()
+      end
+      if not win then
+        for _, w in ipairs(api.nvim_tabpage_list_wins(tab)) do
+          if ordinary(w) then
+            win = w
+            break
+          end
+        end
+      end
+    end
+    if win then
+      api.nvim_set_current_win(win)
+      vim.cmd.edit(vim.fn.fnameescape(a.path))
+    else
+      vim.cmd.tabedit(vim.fn.fnameescape(a.path))
+    end
+    if a.line then
+      local line = math.min(a.line, api.nvim_buf_line_count(0))
+      api.nvim_win_set_cursor(0, { line, math.max((a.col or 1) - 1, 0) })
+      vim.cmd("normal! zz")
+    end
+  end)
+  return ok and "ok" or tostring(err)
+end)(_A)
+"""
+
+
+def open_in(nvim: Neovim, target: Target) -> None:
+    # Leave out what is unset: JSON null decodes to vim.NIL, which Lua treats as true.
+    payload = {"path": str(target.path), "line": target.line, "col": target.col}
+    payload = {key: value for key, value in payload.items() if value is not None}
+    out = remote_expr(nvim.socket, lua_call(OPEN_LUA, payload), OPEN_TIMEOUT_SECONDS)
+    if out is None:
+        raise SystemExit(
+            f"nvim-here: Neovim at {nvim.socket} did not answer; it may be waiting on a prompt"
+        )
+    if out != "ok":
+        raise SystemExit(f"nvim-here: Neovim could not open {target.path}: {out}")
+
+
+def nvim_command(target: Target) -> list[str]:
+    command = ["nvim"]
+    if target.line:
+        command.append(f"+call cursor({target.line}, {target.col or 1})")
+    return [*command, "--", str(target.path)]
+
+
+LOCATION = re.compile(r"^(?P<path>.+?):(?P<line>\d+)(?::(?P<col>\d+))?$")
+
+
+def parse_target(spec: str, line: int | None, cwd: Path) -> Target:
+    """Read FILE, FILE:LINE or FILE:LINE:COL, preferring a file that exists as written."""
+    path, col = spec, None
+    if not (cwd / spec).exists() and (match := LOCATION.match(spec)):
+        path = match["path"]
+        line = line or int(match["line"])
+        col = int(match["col"]) if match["col"] else None
+    resolved = (cwd / path).resolve()
+    if not resolved.is_file():
+        raise SystemExit(f"nvim-here: no such file: {path}")
+    return Target(path=resolved, line=line, col=col)
+
+
+def location(target: Target) -> str:
+    return f"{target.path}:{target.line}" if target.line else str(target.path)
+
+
+def cmd_open(args: argparse.Namespace, env: Mapping[str, str]) -> int:
+    cwd = Path.cwd()
+    target = parse_target(args.file, args.line, cwd)
+
+    # An agent running inside a Neovim terminal already has its Neovim.
+    if own := env.get("NVIM"):
+        open_in(Neovim(socket=own, cwd="", env={}), target)
+        print(f"opened {location(target)} in the parent Neovim")
+        return 0
+
+    mux = detect_multiplexer(env)
+    if mux is None:
+        raise SystemExit("nvim-here: run inside Herdr or a Neovim terminal")
+
+    nvim = nearest(discover(socket_paths(env), mux.env_keys), mux, target.path)
+    if nvim is None:
+        if args.no_spawn:
+            raise SystemExit("nvim-here: no Neovim in this tab or workspace")
+        where = mux.spawn(nvim_command(target), cwd, args.focus)
+        print(f"opened {location(target)} in Neovim in {where}")
+        return 0
+
+    open_in(nvim, target)
+    if args.focus:
+        mux.focus(nvim)
+    print(f"opened {location(target)} in Neovim in {mux.describe(nvim)}")
+    return 0
+
+
+def parse_args(argv: Sequence[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="nvim-here",
+        description="Drive the Neovim nearest to this terminal pane.",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+    open_parser = sub.add_parser(
+        "open",
+        help="open a file, optionally at a line",
+        description=(
+            "Open a file in the nearest Neovim: one in the same tab, then the same "
+            "workspace. With none, start one in a new pane beside this one."
+        ),
+    )
+    open_parser.add_argument("file", help="FILE, FILE:LINE or FILE:LINE:COL")
+    open_parser.add_argument("-l", "--line", type=int, help="line to jump to")
+    open_parser.add_argument(
+        "--focus",
+        action="store_true",
+        help="switch to the Neovim's tab, which is otherwise left in the background",
+    )
+    open_parser.add_argument(
+        "--no-spawn",
+        action="store_true",
+        help="fail instead of starting a Neovim when none is near",
+    )
+    open_parser.set_defaults(func=cmd_open)
+    return parser.parse_args(argv)
+
+
+def main(argv: Sequence[str]) -> int:
+    args = parse_args(argv)
+    return args.func(args, os.environ)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
