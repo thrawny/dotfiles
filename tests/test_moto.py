@@ -181,15 +181,66 @@ def test_closed_mark_clears_when_the_pane_comes_back(moto: ModuleType):
     assert moto.check(tasks, {}, 2 * grace + 2) == ["abc-1: pane closed"]
 
 
-def test_closed_pane_is_left_to_the_worker_that_started_it_and_to_a_snooze(
-    moto: ModuleType,
-):
-    tasks = {
-        "abc-1": task(parent="abc-9"),
-        "abc-2": task(pane_id="w2:p1", snoozed=SNOOZE),
-    }
+def test_closed_pane_of_a_snooze_is_not_news(moto: ModuleType):
+    tasks = {"abc-2": task(pane_id="w2:p1", snoozed=SNOOZE)}
     moto.check(tasks, {}, 0)
     assert moto.check(tasks, {}, moto.PANE_GONE_GRACE) == []
+
+
+def test_closed_pane_of_a_child_task_is_news_once(moto: ModuleType):
+    tasks = {"abc-1": task(parent="abc-9")}
+    grace = moto.PANE_GONE_GRACE
+    assert moto.check(tasks, {}, 100) == []
+    closed = ["abc-1 (child of abc-9): pane closed"]
+    assert moto.check(tasks, {}, 100 + grace) == closed
+    assert moto.check(tasks, {}, 200 + grace) == []
+
+
+@pytest.mark.parametrize("kind", ["wrap", "snooze", "handback"])
+def test_child_wrap_snooze_and_handback_reach_the_driver_once(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str], kind: str
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1")
+    args = argparse.Namespace(kind=kind, text=["All", "set"], agent=None)
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}):
+        assert moto.cmd_report(args) == 0
+    out = capsys.readouterr().out
+    assert f"Reported {kind} to the driver" in out
+    assert "not watching" not in out
+    tasks = moto.read_tasks()
+    now = moto.time.time()
+    news = [f"abc-2 {kind} (child of abc-1): All set"]
+    assert moto.check(tasks, live("working", 2, "w2:p1"), now) == news
+    assert moto.check(tasks, live("done", 3, "w2:p1"), now) == []
+
+
+@pytest.mark.parametrize("kind", ["done", "question", "blocked"])
+def test_child_done_question_and_blocked_stay_with_the_parent(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str], kind: str
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1")
+    args = argparse.Namespace(kind=kind, text=["x"], agent=None)
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}):
+        assert moto.cmd_report(args) == 0
+    assert "the driver is not watching you" in capsys.readouterr().out
+    tasks = moto.read_tasks()
+    now = moto.time.time()
+    assert moto.check(tasks, live("done", 2, "w2:p1"), now) == []
+    assert moto.check(tasks, live("blocked", 3, "w2:p1"), now) == []
+
+
+def test_held_child_handing_back_reaches_the_driver(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1", held=True)
+    args = argparse.Namespace(kind="handback", text=["Over", "to", "you"], agent=None)
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}):
+        assert moto.cmd_report(args) == 0
+    tasks = moto.read_tasks()
+    assert moto.check(tasks, live("done", 2, "w2:p1"), moto.time.time()) == [
+        "abc-2 handback (child of abc-1): Over to you"
+    ]
 
 
 def test_unknown_state_is_skipped(moto: ModuleType):
@@ -1995,12 +2046,24 @@ def test_clearing_a_question_keeps_where_the_driver_is(moto: ModuleType):
     assert moto.read_driver() == {"pane_id": "w9:p1", "session": "abc"}
 
 
-def test_watch_skips_snoozed_tasks_and_those_a_worker_started(moto: ModuleType):
+def test_watch_skips_snoozed_tasks(moto: ModuleType):
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(parent="abc-9")
         tasks["abc-2"] = task(pane_id="w1:p2", snoozed=SNOOZE)
     with patch.object(moto, "live_agents", side_effect=AssertionError("no poll")):
         assert moto.watch() == {"watching": 0, "lines": [], "notes": None}
+
+
+def test_watch_checks_a_child_task_without_counting_it(moto: ModuleType):
+    report = {"kind": "wrap", "text": "merged", "at": 1.0}
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(parent="abc-9", report=report)
+    with patch.object(moto, "live_agents", return_value=live("done", 2)):
+        assert moto.watch() == {
+            "watching": 0,
+            "lines": ["abc-1 wrap (child of abc-9): merged"],
+            "notes": None,
+        }
+        assert moto.watch()["lines"] == []
 
 
 def test_watch_checks_a_held_task_s_pane_without_counting_it(moto: ModuleType):

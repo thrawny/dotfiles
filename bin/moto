@@ -70,11 +70,13 @@ a cheap check, and whether the result wakes the driver or starts a worker.
 Without a brief, the job follows the .md file of the same name beside it.
 moto job loop is the scheduler, and its state is jobs.json beside tasks.json.
 
-A worker can start workers of its own, which the driver's watch skips. moto
-tell and wake from a worker's pane reach only the tasks it started, and tag the
-message with the worker's name instead of [driver]. A worker that hands work
-off instead runs moto spawn --to-driver: the task gets no parent, the driver
-watches it as its own, and requested_by records the worker that asked for it.
+A worker can start workers of its own, which the driver's watch leaves to it,
+apart from what the user does in one: a wrap, snooze or handback, or closing its
+pane, which reach the driver as for any task. moto tell and wake from a
+worker's pane reach only the tasks it started, and tag the message with the
+worker's name instead of [driver]. A worker that hands work off instead runs
+moto spawn --to-driver: the task gets no parent, the driver watches it as its
+own, and requested_by records the worker that asked for it.
 
 fork-window starts a fork of a worker or the driver with MOTO_FORK set. A fork
 is neither: the hooks skip it, and every command that changes a task or speaks
@@ -931,7 +933,9 @@ def cmd_report(args: argparse.Namespace) -> int:
             record("pr", task["agent"], pr=task["pr"])
         held = bool(task.get("held"))
         parent = task.get("parent")
-    if parent:
+    if parent and args.kind in ADOPT_KINDS:
+        print(f"Reported {args.kind} to the driver, and {parent} can read it here.")
+    elif parent:
         print(
             f"Recorded. {parent} started you, not the driver, so the driver is not"
             + f" watching you. Answer here in your pane, where {parent} reads it."
@@ -1004,6 +1008,8 @@ def check(
     that ended while nothing was watching. A done worker that someone looked at
     turns idle, and that is not news. turn_end decides which turn ends are news.
     A held task is news only when its pane closes; pane_closed decides when.
+    A task another worker started is news only when its pane closes and when the
+    user ends or hands it back; the rest goes to that worker.
     """
     lines: list[str] = []
     for name, task in sorted(tasks.items()):
@@ -1017,6 +1023,10 @@ def check(
             continue
         if closed := pane_closed(name, task, status == "gone", now):
             lines.append(closed)
+        if parent := task.get("parent"):
+            if not task.get("held") and (line := child_report(name, task, parent)):
+                lines.append(line)
+            continue
         if unwatched(task):
             continue
         report: dict[str, Any] | None = task.get("report")
@@ -1055,6 +1065,23 @@ def check(
     return lines
 
 
+def child_report(name: str, task: dict[str, Any], parent: str) -> str | None:
+    """The line for a child task's new wrap, snooze or handback, once, or None.
+
+    The user runs those in the child's pane, so they are the driver's news.
+    The child's other reports are for its parent, so they pass unseen.
+    """
+    seen = task["seen"]
+    report: dict[str, Any] | None = task.get("report")
+    if report is None or report["at"] == seen.get("report_at"):
+        return None
+    seen["report_at"] = report["at"]
+    if report["kind"] not in ADOPT_KINDS:
+        return None
+    line = f"{name} {report['kind']} (child of {parent}): {report['text']}"
+    return line + " (pane closed)" if task.get("closed_at") else line
+
+
 def pane_closed(name: str, task: dict[str, Any], gone: bool, now: float) -> str | None:
     """The line for a pane the user closed, once, or None.
 
@@ -1072,6 +1099,8 @@ def pane_closed(name: str, task: dict[str, Any], gone: bool, now: float) -> str 
         return None
     task["closed_at"] = since
     record("pane_closed", name, pane_id=task["pane_id"], at=since)
+    if parent := task.get("parent"):
+        return f"{name} (child of {parent}): pane closed"
     return f"{name}: pane closed"
 
 
@@ -1175,13 +1204,15 @@ def background_work(pane_id: str) -> str | None:
 
 def unwatched(task: dict[str, Any]) -> bool:
     """A held task is the user's, a snoozed one has no pane, and a worker that
-    started another one watches it, so moto watch skips all three."""
+    started another one watches it, so moto watch skips all three, apart from
+    what pane_watched and child_report cover."""
     return bool(task.get("held") or task.get("snoozed") or task.get("parent"))
 
 
 def pane_watched(task: dict[str, Any]) -> bool:
-    """Whether moto watch looks for a closed pane, which it does for held tasks too."""
-    return not (task.get("snoozed") or task.get("parent"))
+    """Whether moto watch looks for a closed pane, which it does for held tasks
+    and those another worker started too."""
+    return not task.get("snoozed")
 
 
 def watch() -> dict[str, Any]:
