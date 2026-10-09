@@ -485,9 +485,11 @@ open_worktree() {
 
 # Start the review agent through moto when moto is installed, so the session is
 # a task the driver can see, report to and clean up. Without moto, or when the
-# spawn fails, the pane still gets a plain Claude: a review the driver cannot
-# track beats no review. Only --review sends the brief; a review the user opens
-# starts idle and waits for them to type.
+# spawn fails before Claude starts, the pane still gets a plain Claude: a review
+# the driver cannot track beats no review. A spawn that fails after Claude
+# started leaves it alone, since typing `claude` would land in its input box.
+# Only --review sends the brief; a review the user opens starts idle and waits
+# for them to type.
 start_review_agent() {
   local pane=$1 number=$2 repo=$3 branch=$4 title word='[a-z0-9][a-z0-9-]*'
   if ((!brief)); then
@@ -520,6 +522,10 @@ the PR.
 Report done once the review is written, then wait for the user in this pane.
 BRIEF
   then
+    return 0
+  fi
+  if [[ -n $("$herdr_bin" pane get "$pane" | jq -r '.result.pane.agent // empty') ]]; then
+    report "moto could not take this review; its session is in pane $pane but untracked"
     return 0
   fi
   report 'moto could not take this review, so it runs as an untracked session'

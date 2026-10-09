@@ -28,6 +28,11 @@ SESSION_ID_PATTERN = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 # An alias such as sonnet, or a full name such as claude-opus-5-5[1m].
 MODEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\[\]-]*")
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
+# The bracketed-paste end marker, and how often to resend it with an Enter.
+PASTE_END = "\x1b[201~"
+SUBMIT_TRIES = 3
+# A horizontal rule around Claude's input box; the top one may carry a title.
+RULE = re.compile(r"─{10,}.*─")
 
 
 class SpawnError(Exception):
@@ -228,6 +233,87 @@ def start_agent(
     herdr("agent", "wait", name, "--until", "idle", "--timeout", "60000", timeout=90)
 
 
+def prompt_box(screen: str) -> str | None:
+    """The text in Claude's input box, or None when the screen shows no box.
+
+    The box is the last stretch of screen between two horizontal rules; the top
+    rule may carry the session name.
+    """
+    lines = screen.splitlines()
+    rules = [i for i, line in enumerate(lines) if RULE.fullmatch(line.strip())]
+    if len(rules) < 2:
+        return None
+    body = "\n".join(line.strip() for line in lines[rules[-2] + 1 : rules[-1]])
+    return body.strip().removeprefix("❯").strip()
+
+
+def submit_brief(name: str, pane: str, brief: str) -> None:
+    """Paste the brief and press Enter, closing a paste Claude left open.
+
+    On a busy machine Claude can read a long paste in pieces, show the first
+    piece as [Pasted text #1], and lose the marker that ends the paste. It then
+    takes every Enter as a newline inside the paste, so Herdr's Enter never
+    submits and the prompt stalls. Sending the end marker again closes the
+    paste, and the next Enter submits the whole brief. With no paste open, the
+    marker changes nothing.
+
+    Claude can also stall so that it swallows Enter instead. Nothing found so
+    far frees that one, so it ends in an error that says the brief is unsent.
+    """
+    try:
+        herdr(
+            "agent",
+            "prompt",
+            name,
+            brief,
+            "--wait",
+            "--until",
+            "working",
+            "--timeout",
+            "30000",
+            timeout=60,
+        )
+        return
+    except SpawnError as error:
+        if "agent_prompt_stalled" not in str(error):
+            raise
+    for _ in range(SUBMIT_TRIES):
+        box = prompt_box(herdr_text("pane", "read", pane, "--source", "visible"))
+        if box is None:
+            raise SpawnError(
+                f"Agent {name} stalled with no input box on screen; it may show a dialog"
+            )
+        if not box:
+            raise SpawnError(
+                f"Agent {name} is idle with an empty input box; the brief never arrived"
+            )
+        herdr_text("pane", "send-text", pane, PASTE_END)
+        # Sent together, a busy Claude can read both in one piece; the manual fix waited.
+        time.sleep(0.5)
+        herdr_text("pane", "send-keys", pane, "enter")
+        try:
+            herdr(
+                "agent",
+                "wait",
+                name,
+                "--until",
+                "working",
+                "--until",
+                "blocked",
+                "--timeout",
+                "5000",
+                timeout=30,
+            )
+            return
+        except SpawnError as error:
+            if '"timeout"' not in str(error):
+                raise
+    raise SpawnError(
+        f"The brief sits unsent in agent {name}'s input box after {SUBMIT_TRIES} more"
+        + " Enter presses; send or clear it by hand"
+    )
+
+
 def agent_name(requested: str | None, fallback: str) -> str:
     if requested:
         if not NAME_PATTERN.fullmatch(requested):
@@ -359,18 +445,7 @@ def main() -> int:
         try:
             start_agent(name, args.kind, pane["pane_id"], agent_args)
             if brief:
-                herdr(
-                    "agent",
-                    "prompt",
-                    name,
-                    brief,
-                    "--wait",
-                    "--until",
-                    "working",
-                    "--timeout",
-                    "30000",
-                    timeout=60,
-                )
+                submit_brief(name, pane["pane_id"], brief)
         except (SpawnError, subprocess.TimeoutExpired) as error:
             raise SpawnError(
                 f"Launch in {location} was not confirmed; inspect it before retrying: {error}"

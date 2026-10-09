@@ -136,3 +136,76 @@ def test_new_worktree_goes_to_the_path_asked_for(spawn: ModuleType, tmp_path: Pa
         spawn.worktree_pane(tmp_path, "ABC-1-fix", "origin/main", str(tmp_path / "wt"))
     create = fake.call_args_list[1].args
     assert create[create.index("--path") + 1] == str(tmp_path / "wt")
+
+
+STALLED = '{"error":{"code":"agent_prompt_stalled","message":"no working state"}}'
+TIMEOUT = '{"error":{"code":"timeout","message":"timed out waiting for agent status"}}'
+RULE = "─" * 40
+
+
+def screen(box: str) -> str:
+    return f"⏺ earlier output\n{RULE} review ─\n❯ {box}\n{RULE}\n  Opus │ main\n"
+
+
+def test_prompt_box_reads_the_text_between_the_last_rules(spawn: ModuleType):
+    stuck = screen("[Pasted text #1 +20 lines]last line of the brief\n  claude")
+    assert (
+        spawn.prompt_box(stuck)
+        == "[Pasted text #1 +20 lines]last line of the brief\nclaude"
+    )
+    assert spawn.prompt_box(screen("")) == ""
+    assert spawn.prompt_box("Do you trust this folder?\n") is None
+
+
+def fake_herdr(spawn: ModuleType, waits: list[str | None], box: str):
+    """Fakes for herdr and herdr_text: the prompt stalls, then each wait gives the next outcome."""
+    sent: list[tuple[str, ...]] = []
+
+    def herdr(*args: str, **_: object) -> dict[str, object]:
+        if args[:2] == ("agent", "prompt"):
+            raise spawn.SpawnError(STALLED)
+        outcome = waits.pop(0)
+        if outcome:
+            raise spawn.SpawnError(outcome)
+        return {}
+
+    def herdr_text(*args: str, **_: object) -> str:
+        if args[:2] == ("pane", "read"):
+            return screen(box)
+        sent.append(args[1:])
+        return ""
+
+    return (
+        patch.object(spawn, "herdr", side_effect=herdr),
+        patch.object(spawn, "herdr_text", side_effect=herdr_text),
+        sent,
+    )
+
+
+def test_stalled_brief_is_submitted_by_closing_the_paste(spawn: ModuleType):
+    fake, fake_text, sent = fake_herdr(
+        spawn, [TIMEOUT, None], "[Pasted text #1 +20 lines]"
+    )
+    with fake, fake_text:
+        spawn.submit_brief("abc-1", "w1:p1", "the brief")
+    end_and_enter = [
+        ("send-text", "w1:p1", "\x1b[201~"),
+        ("send-keys", "w1:p1", "enter"),
+    ]
+    assert sent == end_and_enter * 2
+
+
+def test_stalled_brief_gives_up_and_says_where_it_is(spawn: ModuleType):
+    fake, fake_text, sent = fake_herdr(
+        spawn, [TIMEOUT] * 3, "[Pasted text #1 +20 lines]"
+    )
+    with fake, fake_text, pytest.raises(spawn.SpawnError, match="sits unsent"):
+        spawn.submit_brief("abc-1", "w1:p1", "the brief")
+    assert len(sent) == 2 * spawn.SUBMIT_TRIES
+
+
+def test_stalled_prompt_with_an_empty_box_presses_nothing(spawn: ModuleType):
+    fake, fake_text, sent = fake_herdr(spawn, [], "")
+    with fake, fake_text, pytest.raises(spawn.SpawnError, match="empty input box"):
+        spawn.submit_brief("abc-1", "w1:p1", "the brief")
+    assert sent == []
