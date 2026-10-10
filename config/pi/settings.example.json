@@ -30,7 +30,7 @@
   ],
   "packages": [
     "npm:pi-subdir-context",
-    "npm:@diegopetrucci/pi-openai-fast",
+    "npm:@diegopetrucci/pi-fast",
     "npm:@narumitw/pi-codex-compact",
     "git:github.com/thrawny/pi-codex-web-run",
     "git:github.com/thrawny/pi-diff",
