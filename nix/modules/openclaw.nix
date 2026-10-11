@@ -60,6 +60,21 @@ let
       # subscription transport rather than letting unknown IDs select API keys.
       api = "openai-chatgpt-responses";
       baseUrl = "https://chatgpt.com/backend-api/codex";
+      # The pinned OpenClaw catalog predates Sol 6.1. Keep it selectable until
+      # upstream discovery includes it, using the same subscription runtime.
+      models = [
+        {
+          id = "gpt-6.1-sol";
+          name = "GPT-6.1 Sol";
+          reasoning = true;
+          input = [
+            "text"
+            "image"
+          ];
+          contextWindow = 1050000;
+          maxTokens = 128000;
+        }
+      ];
     };
     tools = {
       profile = "full";
@@ -77,7 +92,7 @@ let
       ownership = "explicit";
       defaults = {
         model = {
-          primary = "openai/gpt-6-sol";
+          primary = "openai/gpt-6.1-sol";
           fallbacks = [ ];
         };
         inherit workspace;
@@ -90,6 +105,7 @@ let
         };
         systemAgent.agentId = "main";
         modelPolicy.allow = [
+          "openai/gpt-6.1-sol"
           "openai/gpt-6-sol"
           "openai/gpt-6-luna"
         ];

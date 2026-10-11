@@ -30,7 +30,7 @@ blocks its undocked-lid safety timer from suspending the system. Turning the mod
 off restores that timer's normal behavior; it does not immediately force sleep.
 
 For M1 closed-lid behavior, AC idle-sleep defaults, and FileVault limitations,
-see [Mac remote access](mac-remote-access.md). In particular, `remote-mode off`
+see the fleet guide at `fleet/references/mac-remote-access.md` in the [private skills checkout](private-agent-skills.md). In particular, `remote-mode off`
 does not undo the Mac's separately configured AC idle-sleep policy.
 
 ## Linux installation and diagnosis

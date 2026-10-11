@@ -443,6 +443,10 @@ update: full-update
 lock input:
     nix flake update "{{ input }}"
 
+# Refresh all package pins without activating or committing them
+lock-all:
+    nix flake update
+
 # Clean up old generations (keeps last 6) and optimize store
 clean:
     #!/usr/bin/env bash

@@ -36,6 +36,10 @@ model names can precede OpenClaw's static routing table; a healthy OAuth status
 does not prove a model turn works. Test through the scheduler after changing
 model routing.
 
+Sol 6.1 was verified with Codex 0.159.2. Codex 0.157.1 rejects that model with
+the same ChatGPT account, so keep the runtime update with the default change.
+The pinned OpenClaw catalog also needs the explicit Sol 6.1 model entry in Nix.
+
 ## Configuration and state
 
 - The service reads `OPENCLAW_CONFIG_PATH` directly from the Nix store.
@@ -47,7 +51,7 @@ model routing.
   disables channels when credentials are missing.
 - Use normal bundled plugin discovery, with an allowlist for Codex, OpenAI,
   Discord and Telegram. Do not add source-tree plugin paths or runtime installs.
-- Chat defaults are Sol 6 with low reasoning. Recurring heartbeat and autonomous
+- Chat defaults are Sol 6.1 with low reasoning. Recurring heartbeat and autonomous
   skill reviews are disabled. Memory dreaming uses Luna 6; its model override is
   restricted to that model.
 - Operator cron jobs live in the runtime SQLite store, not the Nix config. Use

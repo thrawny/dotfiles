@@ -2,7 +2,7 @@
 
 For an Apple Silicon Mac. Install Nix, add this Mac to the repo if needed, then run the first Home Manager switch. After that, use `just switch`.
 
-For the existing `thrawnym1` target, use the [nix-darwin and remote access guide](mac-remote-access.md) instead. That target integrates Home Manager into nix-darwin and needs an administrator password for system switches.
+For the existing `thrawnym1` target, use the fleet guide at `fleet/references/mac-remote-access.md` in the [private skills checkout](private-agent-skills.md) instead. That target integrates Home Manager into nix-darwin and needs an administrator password for system switches.
 
 ## Interactive setup
 

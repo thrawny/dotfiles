@@ -437,11 +437,12 @@ lib.mkMerge [
             .models.providers.openai.agentRuntime.id == "codex" and
             .models.providers.openai.api == "openai-chatgpt-responses" and
             .models.providers.openai.baseUrl == "https://chatgpt.com/backend-api/codex" and
-            .agents.defaults.model.primary == "openai/gpt-6-sol" and
+            .models.providers.openai.models[0].id == "gpt-6.1-sol" and
+            .agents.defaults.model.primary == "openai/gpt-6.1-sol" and
             .agents.defaults.model.fallbacks == [] and
             .agents.defaults.thinkingDefault == "low" and
             .agents.defaults.heartbeat.every == "0m" and
-            .agents.defaults.modelPolicy.allow == ["openai/gpt-6-sol", "openai/gpt-6-luna"] and
+            .agents.defaults.modelPolicy.allow == ["openai/gpt-6.1-sol", "openai/gpt-6-sol", "openai/gpt-6-luna"] and
             .plugins.entries["memory-core"].config.dreaming.model == "openai/gpt-6-luna" and
             .plugins.entries["memory-core"].subagent.allowedModels == ["openai/gpt-6-luna"] and
             .skills.workshop.autonomous.mode == "off" and
@@ -571,7 +572,7 @@ lib.mkMerge [
 
         model = {
           provider = "openai-codex";
-          default = "gpt-6-sol";
+          default = "gpt-6.1-sol";
         };
 
         agent.reasoning_effort = "low";

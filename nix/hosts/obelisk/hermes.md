@@ -6,6 +6,8 @@ Sign in as `admin`. The generated password is stored on Obelisk at
 `/srv/agents/hermes/home/.hermes/dashboard-password`, readable only by root.
 The bootstrap preserves existing credentials across deployments.
 
+Chat defaults to `gpt-6.1-sol` through the `openai-codex` provider with low reasoning.
+
 ## Checks
 
 Run from the repository root:

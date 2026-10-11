@@ -25,7 +25,7 @@ skills/   # Local agent skills linked into Claude, Pi, and Codex
 
 Setting up a fresh Mac? Run `bin/bootstrap-mac` from the checkout for an interactive walkthrough, including adding a missing target. See the [new Mac bootstrap guide](docs/new-mac.md) for the initial clone and manual steps.
 
-For this M1 Air's nix-darwin migration, Tailscale SSH, and closed-lid use, follow [Mac remote access](docs/mac-remote-access.md).
+For this M1 Air's nix-darwin migration, Tailscale SSH, and closed-lid use, follow the fleet guide at `fleet/references/mac-remote-access.md` in the [private skills checkout](docs/private-agent-skills.md).
 
 On the desktop, Z13, and M1, `remote-mode on` keeps the machine awake for remote access across logouts and reboots. Use `remote-mode off` to restore normal sleep behavior, or `remote-mode status` to check it. See [remote mode](docs/remote-mode.md) for laptop precautions.
 

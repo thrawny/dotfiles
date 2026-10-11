@@ -21,6 +21,10 @@ let
   repos = "${home}/repos";
   port = 3773;
   defaultCodexModel = "gpt-6-astra";
+  customCodexModels = [
+    defaultCodexModel
+    "gpt-6.1-sol"
+  ];
   forgejoHost = "forgejo.${config.dotfiles.tailnetDomain}";
   forgejoUrl = "https://${forgejoHost}";
   forgejoUser = "thrawny";
@@ -78,7 +82,7 @@ let
     homePath = codexHome;
     shadowHomePath = "";
     launchArgs = "";
-    customModels = [ defaultCodexModel ];
+    customModels = customCodexModels;
   };
   claudeProviderSettings = {
     enabled = true;
@@ -317,7 +321,7 @@ let
             homePath: $codex_home,
             shadowHomePath: "",
             launchArgs: "",
-            customModels: ["${defaultCodexModel}"]
+            customModels: ${builtins.toJSON customCodexModels}
           }
           | .providers.claudeAgent = {
             enabled: true,
