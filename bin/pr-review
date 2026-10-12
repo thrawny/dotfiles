@@ -65,8 +65,9 @@ in the work config) and open it in codediff, in that repo's Herdr workspace.
   -j, --jira      Open the Jira ticket for REPO NUMBER instead of reviewing
   -w, --worktree  Check the PR branch out in a Herdr worktree, with Claude Code
                   and Neovim side by side, instead of reviewing
-      --review    With --worktree, have Claude write the PR explainer and the
-                  tono findings at once, as a moto task the driver tracks.
+      --review    With --worktree, have Claude explain and review the PR at
+                  once, as a moto task the driver tracks. The brief comes from
+                  briefs/pr-review.md in MOTO_HOME when that file exists.
                   Without it Claude starts idle, as plain `claude`
       --no-focus  Open the review in the background, leaving focus where it
                   is, for a caller such as a scheduled job
@@ -483,6 +484,35 @@ open_worktree() {
     --label "$repo#$number" "$focus")" "$number" "$repo" "$branch"
 }
 
+# The brief for a --review agent. Work-specific review steps, such as which
+# review skill to run and how it marks its PR comments, live in MOTO_HOME's
+# briefs/pr-review.md, with {org}, {repo} and {number} filled in. Without that
+# file the agent gets a generic brief.
+review_brief() {
+  local number=$1 repo=$2 file text
+  file="${MOTO_HOME:-$HOME/code/moto}/briefs/pr-review.md"
+  if [[ -f $file ]]; then
+    text=$(<"$file")
+    text=${text//'{org}'/"$org"}
+    text=${text//'{repo}'/"$repo"}
+    printf '%s\n' "${text//'{number}'/"$number"}"
+    return 0
+  fi
+  cat <<BRIEF
+Review pull request $org/$repo#$number. Its branch is checked out in this
+worktree, and Neovim is open on the diff in the pane beside you.
+
+First explain in the pane what the PR does, plainly, for someone new to the
+codebase. Then review it with your code-review skill and summarise the
+findings, most severe first, one or two lines each with file:line.
+
+Post nothing to GitHub: the user reads this here and decides what to say on
+the PR.
+
+Report done once the review is written, then wait for the user in this pane.
+BRIEF
+}
+
 # Start the review agent through moto when moto is installed, so the session is
 # a task the driver can see, report to and clean up. Without moto, or when the
 # spawn fails before Claude starts, the pane still gets a plain Claude: a review
@@ -503,36 +533,9 @@ start_review_agent() {
   title="review $repo $number"
   # moto titles are one to three lowercase words; an odd repo name falls back.
   [[ $title =~ ^$word\ $word\ $word$ ]] || title="pr review $number"
-  if moto spawn --json --repo "$repo" --worktree "$branch" --pane "$pane" \
-    --title "$title" >/dev/null <<BRIEF
-Review pull request $org/$repo#$number. Its branch is checked out in this
-worktree, and Neovim is open on the diff in the pane beside you.
-
-Write both parts below in the pane, in this order:
-
-1. What the PR does: a plain explainer of the change, its purpose and how it
-   works, for someone new to the codebase. Use the \`unslop\` skill and keep it
-   simple.
-2. Findings. First look for a tono review already on the PR. tono posts PR
-   comments whose first line is a marker such as
-   \`<!-- tono:review n=2 sha=d58e5c8 -->\`, or \`tono:comments-check\` and
-   \`tono:docs-check\`. The sha is the commit it reviewed, and
-   \`verdict=lgtm\` means it found nothing. List the comments with
-   \`gh api --paginate repos/$org/$repo/issues/$number/comments\`.
-   - If there is one, use the newest of each kind and mention older ones.
-     Summarise its findings, most severe first, one or two lines each with
-     file:line, and say which look addressed. Then list the commits since
-     its sha (\`git log --oneline <sha>..HEAD\`), say in a line what they
-     change, and say whether a fresh tono pass is worth it. Ask the user
-     before running one.
-   - If there is none, run the \`tono\` skill on the PR, then summarise what
-     it found, most severe first, one or two lines each with file:line.
-
-Post nothing to GitHub: the user reads this here and decides what to say on
-the PR.
-
-Report done once the review is written, then wait for the user in this pane.
-BRIEF
+  if review_brief "$number" "$repo" |
+    moto spawn --json --repo "$repo" --worktree "$branch" --pane "$pane" \
+      --title "$title" >/dev/null
   then
     return 0
   fi
