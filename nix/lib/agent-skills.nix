@@ -96,7 +96,7 @@ let
       mattpocock-skills + "/skills/engineering/improve-codebase-architecture";
     unslop = {
       source = cursor-plugins + "/pstack/skills/unslop";
-      # Upstream disables automatic invocation despite declaring this skill must always apply.
+      # Upstream disables automatic invocation; global instructions rely on the model invoking it.
       patches = [ ../patches/skills/unslop-enable-model-invocation.patch ];
     };
     wayfinder.source = mattpocock-skills + "/skills/engineering/wayfinder";
