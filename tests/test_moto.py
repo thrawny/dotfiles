@@ -1626,7 +1626,7 @@ def skill(folder: Path, name: str) -> Path:
     return folder / name
 
 
-def test_link_prefers_the_epidemic_skill_and_leaves_other_links_alone(
+def test_link_prefers_the_work_skill_and_leaves_other_links_alone(
     moto: ModuleType, tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ):
     core, home, claude = tmp_path / "core", tmp_path / "moto", tmp_path / "claude"
@@ -1635,7 +1635,7 @@ def test_link_prefers_the_epidemic_skill_and_leaves_other_links_alone(
     setattr(moto, "CLAUDE_HOME", claude)
     skill(core, "moto-wrap")
     skill(core, "moto-brief")
-    epidemic = skill(home / "skills", "moto-brief")
+    work = skill(home / "skills", "moto-brief")
     skill(core, "not-moto")
     links = claude / "skills"
     links.mkdir(parents=True)
@@ -1645,16 +1645,16 @@ def test_link_prefers_the_epidemic_skill_and_leaves_other_links_alone(
     assert moto.cmd_link(argparse.Namespace()) == 0
     out = capsys.readouterr().out
     assert (links / "moto-wrap").readlink() == (core / "moto-wrap").resolve()
-    assert (links / "moto-brief").readlink() == epidemic.resolve()
+    assert (links / "moto-brief").readlink() == work.resolve()
     assert "Removed moto-gone" in out
     assert not (links / "moto-gone").is_symlink()
     assert (links / "moto-store").is_symlink() and (links / "moto-mine").is_symlink()
     assert not (links / "not-moto").exists()
     assert moto.cmd_link(argparse.Namespace()) == 0
     assert capsys.readouterr().out == "All 2 moto skills were already linked.\n"
-    # The Epidemic copy goes, so the generic one takes its place.
-    (epidemic / "SKILL.md").unlink()
-    epidemic.rmdir()
+    # The work copy goes, so the generic one takes its place.
+    (work / "SKILL.md").unlink()
+    work.rmdir()
     assert moto.cmd_link(argparse.Namespace()) == 0
     assert (links / "moto-brief").readlink() == (core / "moto-brief").resolve()
 
