@@ -513,8 +513,20 @@ Write both parts below in the pane, in this order:
 1. What the PR does: a plain explainer of the change, its purpose and how it
    works, for someone new to the codebase. Use the \`unslop\` skill and keep it
    simple.
-2. Findings: run the \`tono\` skill on the PR, then summarise what it found,
-   most severe first, one or two lines each with file:line.
+2. Findings. First look for a tono review already on the PR. tono posts PR
+   comments whose first line is a marker such as
+   \`<!-- tono:review n=2 sha=d58e5c8 -->\`, or \`tono:comments-check\` and
+   \`tono:docs-check\`. The sha is the commit it reviewed, and
+   \`verdict=lgtm\` means it found nothing. List the comments with
+   \`gh api --paginate repos/$org/$repo/issues/$number/comments\`.
+   - If there is one, use the newest of each kind and mention older ones.
+     Summarise its findings, most severe first, one or two lines each with
+     file:line, and say which look addressed. Then list the commits since
+     its sha (\`git log --oneline <sha>..HEAD\`), say in a line what they
+     change, and say whether a fresh tono pass is worth it. Ask the user
+     before running one.
+   - If there is none, run the \`tono\` skill on the PR, then summarise what
+     it found, most severe first, one or two lines each with file:line.
 
 Post nothing to GitHub: the user reads this here and decides what to say on
 the PR.
