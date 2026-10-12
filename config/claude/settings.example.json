@@ -66,6 +66,15 @@
             "command": "if [ -n \"${HERDR_PANE_ID:-}\" ]; then moto attach --hook; fi"
           }
         ]
+      },
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "if [ -n \"${MOTO_ROLE:-}\" ]; then moto role --hook; fi"
+          }
+        ]
       }
     ],
     "SessionEnd": [

@@ -80,6 +80,14 @@ own, and requested_by records the worker that asked for it.
 fork-window starts a fork of a worker or the driver with MOTO_FORK set. A fork
 is neither: the hooks skip it, and every command that changes a task or speaks
 for the driver refuses to run in it.
+
+A session that works inside MOTO_HOME takes a role, because MOTO_HOME's
+CLAUDE.md cannot tell the driver from a worker there. A role is a Markdown file
+in MOTO_HOME/roles. moto spawn --role starts a worker in MOTO_HOME, or a folder
+in it, with MOTO_ROLE set in its tab, and the task keeps the role through snooze
+and wake. moto focus starts the driver with MOTO_ROLE=driver. Claude's
+SessionStart hook runs moto role --hook, which hands the session its role file
+as context on every start, resume, clear and compact.
 """
 
 from __future__ import annotations
@@ -182,7 +190,10 @@ UNTRACKED = (
     + "Tell the user directly."
 )
 # What a fork may run: commands that only read, and hooks that skip forks.
-FORK_SAFE = ("list", "log", "focus", "pin", "link")
+FORK_SAFE = ("list", "log", "focus", "pin", "link", "role")
+ROLE_NAME = re.compile(r"[a-z][a-z0-9_-]{0,31}")
+# The role moto focus starts the driver in; spawn refuses it to workers.
+DRIVER_ROLE = "driver"
 
 
 # Scheduled jobs. The gate's exit codes are shepherd's, deliberately: a broken
@@ -577,9 +588,20 @@ def start_worker(
     differently from the driver.
     """
     command = ["spawn-session", "--json", "--repo", str(spec["repo"])]
-    for flag in ("worktree", "base", "name", "title", "resume", "pane", *MODEL_FLAGS):
+    for flag in (
+        "cwd",
+        "worktree",
+        "base",
+        "name",
+        "title",
+        "resume",
+        "pane",
+        *MODEL_FLAGS,
+    ):
         if value := spec.get(flag):
             command += [f"--{flag}", str(value)]
+    if role := spec.get("role"):
+        command += ["--env", f"MOTO_ROLE={role}"]
     # Worktree creation, agent startup and the first prompt each wait on Herdr.
     output = run(command, timeout=600, stdin=prompt)
     try:
@@ -605,6 +627,8 @@ def start_worker(
         } | ({"parent": parent} if parent else {})
         if requested_by:
             tasks[info["agent"]]["requested_by"] = requested_by
+        if role:
+            tasks[info["agent"]]["role"] = role
         # Kept so wake resumes the session on the model it started with.
         for flag in MODEL_FLAGS:
             if value := spec.get(flag):
@@ -621,6 +645,7 @@ def start_worker(
             requested_by=requested_by,
             model=spec.get("model"),
             effort=spec.get("effort"),
+            role=role,
         )
     return info
 
@@ -648,6 +673,22 @@ def cmd_spawn(args: argparse.Namespace) -> int:
             *MODEL_FLAGS,
         )
     }
+    if role := getattr(args, "role", None):
+        if role == DRIVER_ROLE:
+            raise MotoError("The driver role is the driver's; moto focus starts it")
+        if spec["worktree"] or spec["pane"]:
+            raise MotoError(
+                "--role sessions work in MOTO_HOME's own folder, so they take no"
+                + " --worktree or --pane"
+            )
+        role_file(role)
+        spec |= {
+            "repo": MOTO_HOME.resolve(),
+            "cwd": role_folder(spec["repo"]),
+            "role": role,
+        }
+    elif not spec["repo"]:
+        raise MotoError("Pass --repo, or --role for a session in MOTO_HOME")
     info = start_worker(
         spec, f"{tag(parent)} {brief}\n\n{footer}\n", parent, requested_by
     )
@@ -720,6 +761,8 @@ def cmd_list(args: argparse.Namespace) -> int:
             continue
         branch = row.get("branch") or "main checkout"
         held = " · held by the user" if row.get("held") else ""
+        if role := row.get("role"):
+            held = f" · role {role}{held}"
         if parent := row.get("parent"):
             held += f" · started by {parent}"
         elif requested_by := row.get("requested_by"):
@@ -740,7 +783,8 @@ def cmd_list(args: argparse.Namespace) -> int:
         snooze = row["snoozed"]
         branch = snooze.get("branch") or row.get("branch") or "main checkout"
         ago = age(now - snooze["at"])
-        print(f"{row['name']} · {Path(row['repo']).name} · {branch} · {ago}")
+        role = f" · role {row['role']}" if row.get("role") else ""
+        print(f"{row['name']} · {Path(row['repo']).name} · {branch} · {ago}{role}")
         print(f"  {snooze.get('reason') or 'no reason recorded'}")
         if row["pr"]:
             print(f"  PR: {row['pr']}")
@@ -828,7 +872,7 @@ def adopt(tasks: dict[str, dict[str, Any]], pane_id: str | None) -> str | None:
     # The pane's own cwd, where Claude started; foreground_cwd moves with programs.
     cwd = agent.get("cwd") or os.getcwd()
     if agent.get("agent") != "claude" or (
-        read_driver().get("pane_id") == pane_id or driver_cwd({"cwd": cwd})
+        read_driver().get("pane_id") == pane_id or driver_session(cwd)
     ):
         return None
     for name, task in tasks.items():
@@ -1535,9 +1579,9 @@ def attach_hook(payload: dict[str, Any]) -> None:
         return
     tasks = read_tasks()
     owner = pane_owner(tasks, pane_id)
-    if not owner and driver_cwd(payload):
-        # A pane no task owns, running in MOTO_HOME, is the driver. A scheduled
-        # job needs this to know where to send what it finds.
+    if not owner and driver_session(payload.get("cwd")):
+        # A pane no task owns that driver_session accepts is the driver. A
+        # scheduled job needs this to know where to send what it finds.
         write_driver(pane_id=pane_id, session=session)
     if owner:
         if tasks[owner].get("session") != session:
@@ -1697,9 +1741,14 @@ def cmd_wake(args: argparse.Namespace) -> int:
     # claude --resume finds a session only from the folder it ran in.
     if not (session_dir(cwd) / f"{session}.jsonl").is_file():
         raise MotoError(f"Session {session} is not in {session_dir(cwd)}")
-    # A checkout that stayed may be a worktree an adopted task shared, not the repo.
-    checkout = repo if linked else cwd
+    role = task.get("role")
+    # A checkout that stayed may be a worktree an adopted task shared, not the
+    # repo. A role's folder is in MOTO_HOME, which spawn-session takes as is.
+    checkout = repo if linked or role else cwd
     command = ["spawn-session", "--json", "--repo", checkout, "--name", task["agent"]]
+    if role:
+        role_file(role)
+        command += ["--cwd", cwd, "--env", f"MOTO_ROLE={role}"]
     if linked:
         command += ["--worktree", snooze.get("branch") or task["branch"], "--path", cwd]
     elif not os.path.isdir(cwd):
@@ -1905,9 +1954,10 @@ def cmd_focus(_: argparse.Namespace) -> int:
     if workspace is None:
         if not home.is_dir():
             raise MotoError(f"moto home not found: {home}")
-        pane = herdr("workspace", "create", "--cwd", str(home), "--label", "moto")[
-            "root_pane"
-        ]
+        env = driver_env()
+        pane = herdr(
+            "workspace", "create", "--cwd", str(home), "--label", "moto", *env
+        )["root_pane"]
         workspace = pane["workspace_id"]
         try:
             herdr(
@@ -1932,10 +1982,103 @@ def cmd_focus(_: argparse.Namespace) -> int:
         for a in herdr("agent", "list")["agents"]
         if a.get("workspace_id") == workspace
     ]
+    # Workers with a role may share the driver's workspace, so it comes first.
+    pane_id = read_driver().get("pane_id")
+    agents.sort(key=lambda a: (a["pane_id"] != pane_id, a.get("name") != "driver"))
     if agents:
         # Focusing the agent alone leaves the client on its current tab.
         herdr("tab", "focus", agents[0]["tab_id"])
         herdr("agent", "focus", agents[0]["pane_id"])
+    return 0
+
+
+def driver_env() -> list[str]:
+    """The Herdr arguments that start the driver in its role.
+
+    Until MOTO_HOME has a roles folder, the driver runs on MOTO_HOME's
+    CLAUDE.md, and focus says so on each start. Once it has one, a missing
+    driver role is a mistake, and focus refuses rather than start a driver
+    without instructions.
+    """
+    path = roles_dir() / f"{DRIVER_ROLE}.md"
+    if path.is_file():
+        return ["--env", f"MOTO_ROLE={DRIVER_ROLE}"]
+    if roles_dir().is_dir():
+        raise MotoError(f"role file missing: {path}, so the driver has no role")
+    notice = f"moto: no {path}, so the driver starts without a role"
+    print(notice, file=sys.stderr)
+    with suppress(MotoError, OSError, subprocess.TimeoutExpired):
+        herdr("notification", "show", notice, "--sound", "none")
+    return []
+
+
+def roles_dir() -> Path:
+    return MOTO_HOME / "roles"
+
+
+def role_file(role: str) -> Path:
+    """The role's file, refusing a role that has none."""
+    if not ROLE_NAME.fullmatch(role):
+        raise MotoError(f"Role names match {ROLE_NAME.pattern}: {role}")
+    path = roles_dir() / f"{role}.md"
+    if not path.is_file():
+        raise MotoError(f"No role {role}: {path} does not exist")
+    return path
+
+
+def role_folder(repo: str | None) -> Path:
+    """Where a session with a role works: MOTO_HOME, or a folder in it.
+
+    A relative --repo names a folder under MOTO_HOME, not a repo under ~/code.
+    """
+    home = MOTO_HOME.resolve()
+    folder = (home / Path(repo).expanduser()).resolve() if repo else home
+    if not folder.is_dir() or not folder.is_relative_to(home):
+        raise MotoError(f"--role sessions work in a folder of {home}, not {folder}")
+    return folder
+
+
+def role_context(role: str) -> str:
+    """What the SessionStart hook hands a session with this role.
+
+    A role that cannot load says so loudly, so the session never carries on
+    as if it had instructions it lacks.
+    """
+    alarm = "; you have no role. Tell the user before anything else."
+    if not ROLE_NAME.fullmatch(role):
+        return f"MOTO ROLE ERROR: MOTO_ROLE={role!r} is not a role name{alarm}"
+    path = roles_dir() / f"{role}.md"
+    try:
+        text = path.read_text()
+    except OSError as error:
+        problem = "missing" if isinstance(error, FileNotFoundError) else "unreadable"
+        return f"MOTO ROLE ERROR: role file {problem}: {path}{alarm}"
+    return f"Your moto role is {role}. Its instructions, from {path}:\n\n{text}"
+
+
+def cmd_role(args: argparse.Namespace) -> int:
+    """Claude's SessionStart hook with --hook; otherwise, name this session's role."""
+    role = os.environ.get("MOTO_ROLE")
+    if not args.hook:
+        if role:
+            print(f"{role}: {roles_dir() / f'{role}.md'}")
+        else:
+            print("No role: MOTO_ROLE is unset")
+        return 0
+    # A fork carries its parent's role in the conversation it copied.
+    if not role or forked():
+        return 0
+    context = role_context(role)
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "SessionStart",
+                    "additionalContext": context,
+                }
+            }
+        )
+    )
     return 0
 
 
@@ -2229,10 +2372,16 @@ def write_driver(**fields: Any) -> None:
     driver_path().write_text(json.dumps(read_driver() | fields) + "\n")
 
 
-def driver_cwd(payload: dict[str, Any]) -> bool:
-    """Whether a Claude session started in the driver's own checkout."""
+def driver_session(cwd: Any) -> bool:
+    """Whether this Claude session is the driver.
+
+    A session with a role is the driver only in the driver role. One without
+    a role is the driver when it started in MOTO_HOME itself.
+    """
+    if role := os.environ.get("MOTO_ROLE"):
+        return role == DRIVER_ROLE
     try:
-        return Path(str(payload.get("cwd") or "")).resolve() == MOTO_HOME.resolve()
+        return Path(str(cwd or "")).resolve() == MOTO_HOME.resolve()
     except OSError:
         return False
 
@@ -2481,7 +2630,16 @@ def parser() -> argparse.ArgumentParser:
     commands = root.add_subparsers(dest="command", required=True)
 
     spawn = commands.add_parser("spawn", help="Start a worker; brief on stdin")
-    spawn.add_argument("--repo", required=True, help="Repo name under ~/code or a path")
+    spawn.add_argument(
+        "--repo",
+        help="Repo name under ~/code or a path; with --role, a folder of MOTO_HOME"
+        + " (default: MOTO_HOME itself)",
+    )
+    spawn.add_argument(
+        "--role",
+        help="For a session that works inside MOTO_HOME: start it with MOTO_ROLE"
+        + " set, so it loads MOTO_HOME/roles/ROLE.md; no --worktree or --pane",
+    )
     spawn.add_argument("--worktree", metavar="BRANCH", help="Work in a linked worktree")
     spawn.add_argument("--base", help="Base ref for a new worktree")
     spawn.add_argument("--name", help="Herdr agent name")
@@ -2630,6 +2788,15 @@ def parser() -> argparse.ArgumentParser:
     log_action.add_argument("text", nargs="+")
     log_action.add_argument("--agent", help="The task it concerns; default: driver")
     log_action.set_defaults(handler=cmd_log_action)
+
+    role = commands.add_parser("role", help="Name this session's moto role")
+    role.add_argument(
+        "--hook",
+        action="store_true",
+        help="Claude's SessionStart hook: hand the session its role file as"
+        + " context; silent without MOTO_ROLE",
+    )
+    role.set_defaults(handler=cmd_role)
 
     focus = commands.add_parser("focus", help="Jump to the driver session")
     focus.set_defaults(handler=cmd_focus)

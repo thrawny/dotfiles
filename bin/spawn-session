@@ -4,6 +4,8 @@
 The brief is read from stdin. The session opens in the repo's Herdr workspace,
 or in a linked worktree workspace with --worktree, and starts on the brief
 right away. A resumed session may take no brief and wait for the user instead.
+With --cwd the tab opens in a folder of the repo, which then need not be a git
+checkout. --env sets variables in the new tab, which the agent inherits.
 """
 
 import argparse
@@ -24,6 +26,7 @@ NAME_PATTERN = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 # One to three lowercase words; a ticket key such as ABC-123 keeps its case.
 TITLE_WORD = r"(?:[A-Z][A-Z0-9]*-[0-9]+|[a-z0-9][a-z0-9-]*)"
 TITLE_PATTERN = re.compile(rf"{TITLE_WORD}(?: {TITLE_WORD}){{0,2}}")
+ENV_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=.*", re.S)
 SESSION_ID_PATTERN = re.compile(r"[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}")
 # An alias such as sonnet, or a full name such as claude-opus-5-5[1m].
 MODEL_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9._\[\]-]*")
@@ -65,7 +68,8 @@ def herdr(*args: str, timeout: int = 30) -> dict[str, Any]:
         raise SpawnError(f"herdr {args[0]} {args[1]} returned no result") from error
 
 
-def resolve_repo(repo: str | None) -> Path:
+def repo_folder(repo: str | None) -> Path:
+    """The folder --repo names, git checkout or not."""
     if repo is None:
         start = Path.cwd()
     elif "/" in repo or repo.startswith("~"):
@@ -74,6 +78,11 @@ def resolve_repo(repo: str | None) -> Path:
         start = CODE_DIR / repo
     if not start.is_dir():
         raise SpawnError(f"Repository not found: {start}")
+    return start
+
+
+def resolve_repo(repo: str | None) -> Path:
+    start = repo_folder(repo)
     try:
         root = run(["git", "rev-parse", "--show-toplevel"], cwd=start).strip()
     except SpawnError as error:
@@ -140,24 +149,54 @@ def existing_pane(pane_id: str) -> dict[str, Any]:
     return {key: pane[key] for key in ("pane_id", "tab_id", "workspace_id", "cwd")}
 
 
-def open_tab(workspace: str, cwd: Path) -> dict[str, Any]:
+def env_args(pairs: list[str] | None) -> list[str]:
+    """The Herdr arguments that set each KEY=VALUE in a new tab."""
+    args: list[str] = []
+    for pair in pairs or []:
+        if not ENV_PATTERN.fullmatch(pair):
+            raise SpawnError(f"Not a KEY=VALUE pair: {pair}")
+        args += ["--env", pair]
+    return args
+
+
+def open_tab(workspace: str, cwd: Path, env: list[str] | None = None) -> dict[str, Any]:
     return herdr(
-        "tab", "create", "--workspace", workspace, "--cwd", str(cwd), "--no-focus"
+        "tab",
+        "create",
+        "--workspace",
+        workspace,
+        "--cwd",
+        str(cwd),
+        *(env or []),
+        "--no-focus",
     )["root_pane"]
 
 
-def repo_pane(repo: Path) -> dict[str, Any]:
-    """A new tab in the repo's main-checkout workspace, creating the workspace if needed."""
+def repo_pane(
+    repo: Path, cwd: Path | None = None, env: list[str] | None = None
+) -> dict[str, Any]:
+    """A new tab in the repo's main-checkout workspace, creating the workspace if needed.
+
+    The tab opens at cwd, a folder in the repo, or at the repo itself.
+    """
+    cwd = cwd or repo
     caller = os.environ.get("HERDR_WORKSPACE_ID")
     if caller and Path.cwd().resolve().is_relative_to(repo):
-        return open_tab(caller, repo)
+        return open_tab(caller, cwd, env)
     for workspace in herdr("workspace", "list")["workspaces"]:
         worktree: dict[str, Any] = workspace.get("worktree") or {}
         checkout: str | None = worktree.get("checkout_path")
         if checkout and Path(checkout).resolve() == repo:
-            return open_tab(workspace["workspace_id"], repo)
+            return open_tab(workspace["workspace_id"], cwd, env)
     return herdr(
-        "workspace", "create", "--cwd", str(repo), "--label", repo.name, "--no-focus"
+        "workspace",
+        "create",
+        "--cwd",
+        str(cwd),
+        "--label",
+        repo.name,
+        *(env or []),
+        "--no-focus",
     )["root_pane"]
 
 
@@ -391,6 +430,19 @@ def main() -> int:
         "--path", help="Folder for a new worktree; default: where Herdr puts it"
     )
     parser.add_argument(
+        "--cwd",
+        metavar="FOLDER",
+        help="Open the tab in this folder of --repo, which then need not be a git"
+        + " checkout; not with --worktree or --pane",
+    )
+    parser.add_argument(
+        "--env",
+        action="append",
+        metavar="KEY=VALUE",
+        help="Set a variable in the new tab, which the agent inherits; repeatable;"
+        + " not with --worktree or --pane, whose panes Herdr gives no environment",
+    )
+    parser.add_argument(
         "--pane",
         metavar="PANE_ID",
         help="Start in this existing pane instead of opening one;"
@@ -433,13 +485,26 @@ def main() -> int:
             + title_args(args.title, args.kind)
             + model_args(args.model, args.effort, args.kind)
         )
-        repo = resolve_repo(args.repo)
+        env = env_args(args.env)
+        if (env or args.cwd) and (args.worktree or args.pane):
+            flag = "--env" if env else "--cwd"
+            raise SpawnError(
+                f"{flag} opens a new tab, so it takes no --worktree or --pane"
+            )
+        if args.cwd:
+            repo = repo_folder(args.repo).resolve()
+            cwd = Path(args.cwd).expanduser().resolve()
+            if not cwd.is_dir() or not cwd.is_relative_to(repo):
+                raise SpawnError(f"Not a folder in {repo}: {cwd}")
+        else:
+            repo = resolve_repo(args.repo)
+            cwd = repo
         if args.pane:
             pane = existing_pane(args.pane)
         elif args.worktree:
             pane = worktree_pane(repo, args.worktree, args.base, args.path)
         else:
-            pane = repo_pane(repo)
+            pane = repo_pane(repo, cwd, env)
         name = agent_name(args.name, args.worktree or repo.name)
         location = f"{pane['workspace_id']} tab {pane['tab_id']} at {pane['cwd']}"
         try:

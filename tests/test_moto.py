@@ -2096,3 +2096,264 @@ def test_watch_hands_a_job_note_over_once(moto: ModuleType, jobs_home: Path):
     notes = moto.watch()["notes"]
     assert notes.startswith(moto.JOB_TAG) and "widgets#7" in notes
     assert moto.watch()["notes"] is None
+
+
+@pytest.fixture
+def moto_home(moto: ModuleType, tmp_path: Path) -> Path:
+    home = tmp_path / "moto"
+    (home / "roles").mkdir(parents=True)
+    (home / "roles/reviewer.md").write_text("Review what the driver hands you.\n")
+    (home / "notes").mkdir()
+    setattr(moto, "MOTO_HOME", home)
+    return home.resolve()
+
+
+def role_spawn(**fields: Any) -> argparse.Namespace:
+    return argparse.Namespace(
+        **{"repo": None, "worktree": None, "pane": None, "title": "notes review"}
+        | fields
+    )
+
+
+def test_spawn_with_a_role_starts_in_moto_home_and_wake_keeps_the_role(
+    moto: ModuleType,
+    moto_home: Path,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+):
+    monkeypatch.setattr(moto, "CLAUDE_HOME", tmp_path / "claude")
+    cwd = str(moto_home / "notes")
+    details = {
+        "agent": "notes",
+        "repo": str(moto_home),
+        "cwd": cwd,
+        "pane_id": "w1:p2",
+        "tab_id": "w1:t2",
+        "workspace_id": "w1",
+    }
+    with (
+        patch("sys.stdin.read", return_value="Review the notes."),
+        patch.object(moto, "run", return_value=json.dumps(details)) as run,
+    ):
+        assert moto.cmd_spawn(role_spawn(role="reviewer", repo="notes")) == 0
+    assert run.call_args.args[0] == [
+        "spawn-session",
+        "--json",
+        "--repo",
+        str(moto_home),
+        "--cwd",
+        cwd,
+        "--title",
+        "notes review",
+        "--env",
+        "MOTO_ROLE=reviewer",
+    ]
+    assert moto.read_tasks()["notes"]["role"] == "reviewer"
+    assert moto.read_events()[-1]["role"] == "reviewer"
+    with patch.object(moto, "live_agents", return_value=live("idle", 1, "w1:p2")):
+        assert moto.cmd_list(argparse.Namespace(json=False)) == 0
+    assert (
+        "notes · moto · main checkout · idle · role reviewer" in capsys.readouterr().out
+    )
+
+    session_file(moto.session_dir(cwd), "s1", "notes review", mtime=100)
+    with moto.tasks_for_update() as tasks:
+        tasks["notes"]["snoozed"] = {**SNOOZE, "cwd": cwd, "worktree": False}
+    with (
+        patch.object(moto, "run", return_value=json.dumps(details)) as run,
+        patch.object(moto, "live_agents", return_value=live("working", 3, "w1:p2")),
+    ):
+        assert moto.cmd_wake(argparse.Namespace(agent="notes", text=[])) == 0
+    command = run.call_args.args[0]
+    assert command[2:4] == ["--repo", str(moto_home)]
+    assert command[command.index("--cwd") + 1] == cwd
+    assert command[command.index("--env") + 1] == "MOTO_ROLE=reviewer"
+    assert moto.read_tasks()["notes"]["role"] == "reviewer"
+
+
+def test_spawn_with_a_role_defaults_to_moto_home_and_runs_on_resume(
+    moto: ModuleType, moto_home: Path
+):
+    details = {
+        "agent": "moto",
+        "repo": str(moto_home),
+        "cwd": str(moto_home),
+        "pane_id": "w1:p2",
+        "tab_id": "w1:t2",
+        "workspace_id": "w1",
+    }
+    session = "0b6f5a52-5b0e-4a8e-9a43-2a1b7c4f9e10"
+    with (
+        patch("sys.stdin.read", return_value="Carry on."),
+        patch.object(moto, "run", return_value=json.dumps(details)) as run,
+    ):
+        assert moto.cmd_spawn(role_spawn(role="reviewer", resume=session)) == 0
+    command = run.call_args.args[0]
+    assert command[command.index("--cwd") + 1] == str(moto_home)
+    assert command[command.index("--resume") + 1] == session
+    assert command[-2:] == ["--env", "MOTO_ROLE=reviewer"]
+
+
+@pytest.mark.parametrize(
+    ("fields", "error"),
+    [
+        ({"role": "planner"}, "No role planner"),
+        ({"role": "../reviewer"}, "Role names match"),
+        ({"role": "driver"}, "moto focus starts it"),
+        ({"role": "reviewer", "worktree": "ABC-1-fix"}, "no --worktree or --pane"),
+        ({"role": "reviewer", "pane": "w1:p9"}, "no --worktree or --pane"),
+        ({"role": "reviewer", "repo": "/tmp"}, "work in a folder of"),
+        ({"role": "reviewer", "repo": "missing"}, "work in a folder of"),
+        ({}, "Pass --repo, or --role"),
+    ],
+)
+@pytest.mark.usefixtures("moto_home")
+def test_spawn_refuses_a_role_it_cannot_load_or_place(
+    moto: ModuleType,
+    fields: dict[str, Any],
+    error: str,
+):
+    with (
+        patch("sys.stdin.read", return_value="Review the notes."),
+        patch.object(moto, "run", side_effect=AssertionError("no spawn")),
+        pytest.raises(moto.MotoError, match=error),
+    ):
+        moto.cmd_spawn(role_spawn(**fields))
+    assert moto.read_tasks() == {}
+
+
+@pytest.mark.usefixtures("moto_home")
+def test_role_hook_hands_the_session_its_role_file(
+    moto: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+):
+    with patch.dict("os.environ", {"MOTO_ROLE": "reviewer"}):
+        assert moto_main(moto, "role", "--hook") == 0
+    output = json.loads(capsys.readouterr().out)["hookSpecificOutput"]
+    assert output["hookEventName"] == "SessionStart"
+    assert output["additionalContext"].startswith("Your moto role is reviewer.")
+    assert output["additionalContext"].endswith("Review what the driver hands you.\n")
+
+
+@pytest.mark.parametrize(
+    ("role", "error"),
+    [
+        ("planner", "role file missing: {home}/roles/planner.md; you have no role"),
+        ("../reviewer", "is not a role name; you have no role"),
+    ],
+)
+@pytest.mark.usefixtures("moto_home")
+def test_role_hook_says_loudly_when_the_role_cannot_load(
+    moto: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+    role: str,
+    error: str,
+):
+    with patch.dict("os.environ", {"MOTO_ROLE": role}):
+        assert moto_main(moto, "role", "--hook") == 0
+    output = json.loads(capsys.readouterr().out)["hookSpecificOutput"]
+    context = output["additionalContext"]
+    assert context.startswith("MOTO ROLE ERROR:")
+    assert error.format(home=moto.MOTO_HOME) in context
+
+
+@pytest.mark.usefixtures("moto_home")
+def test_role_hook_is_silent_without_a_role_and_in_a_fork(
+    moto: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+):
+    assert moto_main(moto, "role", "--hook") == 0
+    with patch.dict("os.environ", {"MOTO_ROLE": "reviewer", "MOTO_FORK": "1"}):
+        assert moto_main(moto, "role", "--hook") == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_session_start_hook_takes_only_the_driver_role_for_the_driver(
+    moto: ModuleType, moto_home: Path
+):
+    stdin = json.dumps({"session_id": "s1", "source": "startup", "cwd": str(moto_home)})
+
+    def hook(env: dict[str, str]) -> None:
+        with (
+            patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p2"} | env),
+            patch("sys.stdin.read", return_value=stdin),
+        ):
+            moto.cmd_attach(argparse.Namespace(agent=None, pane=None, hook=True))
+
+    # A worker with a role starts in MOTO_HOME before spawn records its task.
+    hook({"MOTO_ROLE": "reviewer"})
+    assert moto.read_driver() == {}
+    hook({"MOTO_ROLE": "driver"})
+    assert moto.read_driver() == {"pane_id": "w1:p2", "session": "s1"}
+    moto.driver_path().unlink()
+    hook({})  # no role: the driver is whatever starts in MOTO_HOME, as before
+    assert moto.read_driver() == {"pane_id": "w1:p2", "session": "s1"}
+
+
+def focus(moto: ModuleType) -> list[tuple[str, ...]]:
+    """Run moto focus with no driver open, returning the Herdr calls it made."""
+    calls: list[tuple[str, ...]] = []
+    replies: dict[str, dict[str, Any]] = {
+        "workspace list": {"workspaces": []},
+        "pane list": {"panes": []},
+        "workspace create": {"root_pane": {"pane_id": "w9:p1", "workspace_id": "w9"}},
+        "agent list": {
+            "agents": [
+                claude_in("w9:p2", name="notes"),
+                claude_in("w9:p1", name="driver"),
+            ]
+        },
+    }
+
+    def herdr(*args: str, **_: Any) -> dict[str, Any]:
+        calls.append(args)
+        return replies.get(" ".join(args[:2]), {})
+
+    with (
+        patch.object(moto, "herdr", side_effect=herdr),
+        patch.object(moto, "herdr_request"),
+    ):
+        moto_main(moto, "focus")
+    return calls
+
+
+def test_focus_starts_the_driver_in_its_role(moto: ModuleType, moto_home: Path):
+    (moto_home / "roles/driver.md").write_text("Drive.\n")
+    calls = focus(moto)
+    assert calls[2] == (
+        "workspace",
+        "create",
+        "--cwd",
+        str(moto_home),
+        "--label",
+        "moto",
+        "--env",
+        "MOTO_ROLE=driver",
+    )
+    assert calls[3][:3] == ("agent", "start", "driver")
+    # The driver, not a worker with a role that shares its workspace.
+    assert calls[-1] == ("agent", "focus", "w9:p1")
+
+
+def test_focus_starts_the_driver_without_a_role_until_moto_home_has_roles(
+    moto: ModuleType, moto_home: Path, capsys: pytest.CaptureFixture[str]
+):
+    for role in (moto_home / "roles").iterdir():
+        role.unlink()
+    (moto_home / "roles").rmdir()
+    calls = focus(moto)
+    create = next(c for c in calls if c[:2] == ("workspace", "create"))
+    assert "--env" not in create
+    assert any(c[:2] == ("agent", "start") for c in calls)
+    assert "driver starts without a role" in capsys.readouterr().err
+
+
+@pytest.mark.usefixtures("moto_home")
+def test_focus_refuses_a_roles_folder_without_the_driver_role(
+    moto: ModuleType,
+    capsys: pytest.CaptureFixture[str],
+):
+    calls = focus(moto)
+    assert not any(c[:2] == ("workspace", "create") for c in calls)
+    assert "role file missing" in capsys.readouterr().err

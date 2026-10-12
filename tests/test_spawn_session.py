@@ -209,3 +209,67 @@ def test_stalled_prompt_with_an_empty_box_presses_nothing(spawn: ModuleType):
     with fake, fake_text, pytest.raises(spawn.SpawnError, match="empty input box"):
         spawn.submit_brief("abc-1", "w1:p1", "the brief")
     assert sent == []
+
+
+def test_cwd_and_env_open_a_tab_in_a_folder_of_the_repo(
+    spawn: ModuleType, tmp_path: Path
+):
+    folder = tmp_path / "notes"
+    folder.mkdir()
+    env = spawn.env_args(["MOTO_ROLE=reviewer"])
+
+    def herdr(*args: str, **_: object) -> dict[str, object]:
+        if args[:2] == ("workspace", "list"):
+            return {"workspaces": []}
+        return {"root_pane": {}}
+
+    with patch.object(spawn, "herdr", side_effect=herdr) as fake:
+        spawn.repo_pane(tmp_path, folder, env)
+    # Not a git checkout, so no Herdr workspace knows it, and a new one opens.
+    create = fake.call_args_list[-1].args
+    assert create[:3] == ("workspace", "create", "--cwd")
+    assert create[3] == str(folder)
+    assert create[create.index("--env") + 1] == "MOTO_ROLE=reviewer"
+
+
+def test_env_must_be_key_value_pairs(spawn: ModuleType):
+    assert spawn.env_args(None) == []
+    with pytest.raises(spawn.SpawnError, match="Not a KEY=VALUE pair"):
+        spawn.env_args(["MOTO_ROLE"])
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        ["--env", "MOTO_ROLE=reviewer", "--worktree", "ABC-1-fix"],
+        ["--cwd", ".", "--pane", "w1:p1"],
+    ],
+)
+def test_cwd_and_env_refuse_a_worktree_or_an_existing_pane(
+    spawn: ModuleType, flags: list[str], capsys: pytest.CaptureFixture[str]
+):
+    with (
+        patch.dict("os.environ", {"HERDR_ENV": "1"}),
+        patch("sys.argv", ["spawn-session", *flags]),
+        patch("sys.stdin.read", return_value="Brief."),
+        patch.object(spawn, "herdr", side_effect=AssertionError("no Herdr")),
+    ):
+        assert spawn.main() == 1
+    assert (
+        "opens a new tab, so it takes no --worktree or --pane"
+        in capsys.readouterr().err
+    )
+
+
+def test_cwd_must_be_inside_the_repo(spawn: ModuleType, tmp_path: Path):
+    (tmp_path / "repo").mkdir()
+    with (
+        patch.dict("os.environ", {"HERDR_ENV": "1"}),
+        patch(
+            "sys.argv",
+            ["spawn-session", "--repo", str(tmp_path / "repo"), "--cwd", str(tmp_path)],
+        ),
+        patch("sys.stdin.read", return_value="Brief."),
+        patch.object(spawn, "herdr", side_effect=AssertionError("no Herdr")),
+    ):
+        assert spawn.main() == 1
