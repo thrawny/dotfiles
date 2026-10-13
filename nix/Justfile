@@ -98,6 +98,10 @@ deploy target:
 
     exit 1
 
+# Build the Mac's configured T3 Code package without activating Home Manager.
+build-t3code-mac:
+    nix build --no-link --print-out-paths .#homeConfigurations.thrawnym1.config.dotfiles.t3code.package
+
 # Refresh just the shared direnv asset without restarting active T3 Code sessions.
 sync-t3code-direnv target="obelisk":
     #!/usr/bin/env bash

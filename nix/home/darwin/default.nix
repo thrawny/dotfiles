@@ -12,6 +12,7 @@
     ./ghostty.nix
     ./aerospace.nix
     ./setup.nix
+    ./t3code.nix
   ];
 
   # Determinate owns the Nix installation, daemon, and configuration on macOS.
