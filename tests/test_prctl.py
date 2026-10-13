@@ -59,7 +59,9 @@ if args[:2] == ["pr", "view"]:
     checks = [] if no_checks else [{
         "name": "test",
         "status": "IN_PROGRESS" if checks_pending else "COMPLETED",
-        "conclusion": "" if checks_pending else "FAILURE",
+        "conclusion": "" if checks_pending else os.environ.get(
+            "FAKE_CHECK_CONCLUSION", "FAILURE"
+        ),
         "detailsUrl": "https://github.com/acme/widgets/actions/runs/123/job/456",
         "workflowName": "CI",
     }]
@@ -607,7 +609,7 @@ def test_watch_wakes_when_the_pr_merges(tmp_path: Path) -> None:
     assert "woke reason=merged" in result.stdout
 
 
-def test_watch_wakes_when_checks_settle_with_a_new_failure(tmp_path: Path) -> None:
+def test_watch_wakes_when_a_check_newly_fails(tmp_path: Path) -> None:
     pr_harness = PrHarness(tmp_path)
     env = watch_env(pr_harness, FAKE_CHECKS_PENDING_INITIAL="1")
     result = watch(pr_harness, env)
@@ -615,6 +617,16 @@ def test_watch_wakes_when_checks_settle_with_a_new_failure(tmp_path: Path) -> No
     assert "woke reason=checks" in result.stdout
     assert "checks_pending=0 checks_failed=1" in result.stdout
     assert "failed (new): test" in result.stdout
+
+
+def test_watch_keeps_waiting_when_checks_go_green(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(
+        pr_harness, FAKE_CHECKS_PENDING_INITIAL="1", FAKE_CHECK_CONCLUSION="SUCCESS"
+    )
+    result = watch(pr_harness, env, "--timeout", "2")
+    assert result.returncode == 1
+    assert "woke" not in result.stdout
 
 
 def test_watch_ignores_a_failure_that_was_already_there(tmp_path: Path) -> None:

@@ -1450,7 +1450,6 @@ def command_watch(args: argparse.Namespace) -> int:
         }
     head = initial.head_sha
     failed = {check.name for check in initial.checks_failed}
-    pending_seen = bool(initial.checks_pending)
     started = time.monotonic()
     deadline = started + args.timeout
     progress = WaitProgress()
@@ -1491,15 +1490,14 @@ def command_watch(args: argparse.Namespace) -> int:
                 fresh = visible(fresh)
             now_failed = {check.name for check in current.checks_failed}
             new_failures = now_failed - failed
-            pending_seen = pending_seen or bool(current.checks_pending)
-            checks_settled = pending_seen and not current.checks_pending
 
             reasons: list[str] = []
             if "state" in events and current.state != "OPEN":
                 reasons.append(current.state.lower())
             if "commit" in events and current.head_sha != head:
                 reasons.append("commit")
-            if "checks" in events and (new_failures or checks_settled):
+            # Checks going green is not news; the watcher waits on people.
+            if "checks" in events and new_failures:
                 reasons.append("checks")
             if fresh:
                 reasons.append("activity")
@@ -1616,7 +1614,7 @@ def build_parser() -> argparse.ArgumentParser:
         default=frozenset(WATCH_EVENTS),
         help=(
             "comma-separated events that wake the watcher: commit (new head),"
-            " checks (CI settles or a check newly fails), state (merged or"
+            " checks (a check newly fails), state (merged or"
             " closed), activity (a new review or comment); default: all"
         ),
     )
