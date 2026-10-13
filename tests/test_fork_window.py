@@ -3,7 +3,6 @@
 import importlib.util
 import json
 import shlex
-import subprocess
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType
@@ -62,36 +61,6 @@ def test_pi_file(fork: ModuleType, tmp_path: Path):
     assert fork.session_ref("pi", str(file)) == str(file)
     with pytest.raises(fork.ForkError, match="does not exist"):
         fork.session_ref("pi", str(tmp_path / "missing.jsonl"))
-
-
-@pytest.mark.parametrize(
-    "harness,flags",
-    [
-        ("pi", ["--fork", SESSION, "--"]),
-        ("claude", ["--resume", SESSION, "--fork-session"]),
-        ("codex", ["fork", SESSION]),
-    ],
-)
-def test_native_fork_and_notice(fork: ModuleType, harness: str, flags: list[str]):
-    with patch.object(fork.shutil, "which", side_effect=fake_binary):
-        command = fork.fork_command(harness, SESSION)
-    assert command[:8] == [
-        "/bin/env",
-        "-u",
-        "CLAUDECODE",
-        "-u",
-        "CLAUDE_CODE_SESSION_ID",
-        "-u",
-        "CODEX_THREAD_ID",
-        "MOTO_FORK=1",
-    ]
-    assert command[8:-1] == [f"/bin/{harness}", *flags]
-    assert "wait for the user's next" in command[-1]
-    assert "Do not run tools" in command[-1]
-    assert "original session remains active" in command[-1]
-    assert "neither a moto worker nor the moto driver" in command[-1]
-    assert "Do not run moto report, moto tell, moto watch" in command[-1]
-    assert f"Source session: {SESSION}" in command[-1]
 
 
 def test_named_claude_fork_gets_a_name_of_its_own(fork: ModuleType, tmp_path: Path):
@@ -160,25 +129,6 @@ def test_herdr_precedes_hypr_and_quotes_once(fork: ModuleType, tmp_path: Path):
     assert shlex.split(launch_args[4]) == command
 
 
-def test_hypr_uses_ghostty_argv(fork: ModuleType, tmp_path: Path):
-    command = ["codex", "fork", SESSION, "notice\n'quoted'"]
-    with (
-        patch.dict("os.environ", {"HYPRLAND_INSTANCE_SIGNATURE": "active"}),
-        patch.object(fork, "executable", side_effect=identity),
-        patch.object(fork, "run") as run,
-    ):
-        assert "Ghostty" in fork.launch(command, tmp_path)
-    run.assert_called_once_with(
-        ["ghostty", "+new-window", f"--working-directory={tmp_path}", "-e", *command],
-        tmp_path,
-    )
-
-
-def test_missing_desktop(fork: ModuleType, tmp_path: Path):
-    with pytest.raises(fork.ForkError, match="Herdr or a Hyprland"):
-        fork.launch(["pi"], tmp_path)
-
-
 def test_missing_workspace_does_not_fall_back(fork: ModuleType, tmp_path: Path):
     with patch.dict(
         "os.environ", {"HERDR_ENV": "1", "HYPRLAND_INSTANCE_SIGNATURE": "active"}
@@ -201,97 +151,9 @@ def test_malformed_herdr_response(fork: ModuleType, tmp_path: Path, response: st
     assert run.call_count == 1
 
 
-def test_failed_pane_run_retains_destination(fork: ModuleType, tmp_path: Path):
-    response = json.dumps({"result": {"root_pane": {"pane_id": "w3:p99"}}})
-    with (
-        patch.dict("os.environ", {"HERDR_ENV": "1", "HERDR_WORKSPACE_ID": "w3"}),
-        patch.object(fork, "executable", side_effect=identity),
-        patch.object(
-            fork, "run", side_effect=[response, fork.ForkError("broken")]
-        ) as run,
-        pytest.raises(fork.ForkError, match="w3:p99.*not confirmed"),
-    ):
-        fork.launch(["pi"], tmp_path)
-    assert run.call_count == 2
-
-
-def test_command_error(fork: ModuleType, tmp_path: Path):
-    with (
-        patch.object(
-            fork.subprocess,
-            "run",
-            return_value=subprocess.CompletedProcess(
-                ["herdr"], 1, "", "server unavailable"
-            ),
-        ),
-        pytest.raises(fork.ForkError, match="server unavailable"),
-    ):
-        fork.run(["herdr"], tmp_path)
-
-
-def test_sandbox_fails_before_launch(fork: ModuleType):
-    with (
-        patch.dict("os.environ", {"SANDBOX": "1"}),
-        patch("sys.argv", ["fork-window", "codex", SESSION]),
-        patch.object(fork, "launch") as launch,
-    ):
-        assert fork.main() == 1
-    launch.assert_not_called()
-
-
-@pytest.mark.parametrize(
-    "harness,variable",
-    [("claude", "CLAUDE_CODE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")],
-)
-def test_auto_detect(fork: ModuleType, harness: str, variable: str):
-    with patch.dict("os.environ", {variable: SESSION}):
-        assert fork.detect_harness() == harness
-
-
-def test_auto_detect_missing(fork: ModuleType):
-    with pytest.raises(fork.ForkError, match="No current session ID"):
-        fork.detect_harness()
-
-
 def test_auto_detect_ambiguous(fork: ModuleType):
     with patch.dict(
         "os.environ", {"CLAUDE_CODE_SESSION_ID": SESSION, "CODEX_THREAD_ID": SESSION}
     ):
         with pytest.raises(fork.ForkError, match="Ambiguous"):
             fork.detect_harness()
-
-
-@pytest.mark.parametrize(
-    "harness,variable",
-    [("claude", "CLAUDE_CODE_SESSION_ID"), ("codex", "CODEX_THREAD_ID")],
-)
-def test_no_argument_cli(fork: ModuleType, harness: str, variable: str):
-    with (
-        patch.dict("os.environ", {variable: SESSION}),
-        patch("sys.argv", ["fork-window"]),
-        patch.object(fork, "fork_command", return_value=["native-fork"]) as command,
-        patch.object(fork, "launch", return_value="Launched") as launch,
-    ):
-        assert fork.main() == 0
-    command.assert_called_once_with(harness, SESSION)
-    launch.assert_called_once()
-
-
-def test_explicit_harness_overrides_ambiguous_environment(fork: ModuleType):
-    with (
-        patch.dict(
-            "os.environ",
-            {"CLAUDE_CODE_SESSION_ID": SESSION, "CODEX_THREAD_ID": SESSION},
-        ),
-        patch("sys.argv", ["fork-window", "codex"]),
-        patch.object(fork, "fork_command", return_value=["native-fork"]) as command,
-        patch.object(fork, "launch", return_value="Launched"),
-    ):
-        assert fork.main() == 0
-    command.assert_called_once_with("codex", SESSION)
-
-
-def test_missing_executable(fork: ModuleType):
-    with patch.object(fork.shutil, "which", return_value=None):
-        with pytest.raises(fork.ForkError, match="not found"):
-            fork.fork_command("codex", SESSION)

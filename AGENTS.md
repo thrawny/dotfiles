@@ -10,6 +10,29 @@ Cross-platform dotfiles managed with Nix Home Manager (`nix/`). See `nix/AGENTS.
 - Before changing keyboard bindings, modifier remaps, or terminal key passthrough, read [keyboard rules](docs/keyboard-rules.md).
 - This repo is public. Employer values (GitHub org and team, Jira site, internal repo names) live in the private `~/.config/work/config.toml`, read with `bin/work-config`. Code, tests, comments and commit messages use placeholders such as `acme/widgets` and `ABC-123`.
 
+## Tests
+
+Every test is code someone has to keep working, so a change ships without new tests by default. Check it by running it: the command itself, a reload, or a smoke test in the real app.
+
+Add a test only when Jonas asks for one, or when all three hold:
+
+1. The code is logic that can be wrong while still running cleanly: parsing, a state machine, ranking or ordering, or a check that runs before deleting or overwriting something.
+2. A break would go unnoticed until it did damage. A keybinding, a launch or a config value breaks visibly on next use, so it gets no test.
+3. The test can call that logic directly, or drive real local tools such as git in a temp directory, headless Neovim or offscreen Qt.
+
+A bug fix earns a test only when the bug passes the same three conditions.
+
+How to write one:
+
+- Add it to the component's existing suite. Start a new test file only when the component has no suite.
+- Search the suite first and extend an existing test when one already covers the behaviour.
+- Assert outcomes: a return value, a file written, the state left behind. Message wording, glyphs, sizes, call order, mock arguments and config values stay unasserted.
+- Keep fakes to a few lines at the edge. When a test would need a fake that answers like an external tool, such as a fake `gh` that mimics GitHub's API, move the logic into a function that takes plain data and test that, or write no test.
+- Keep it deterministic, with no network and no real sleeps.
+- Run the suite, then name each added test in your final message with the condition it meets.
+
+When a change breaks an existing test, update it if it meets these rules and delete it if it doesn't.
+
 ## Source → target
 
 Two symlink styles, and the difference matters:

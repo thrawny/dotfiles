@@ -31,7 +31,3 @@ test('focus targets the ID, not its position, using Lua IPC', () => {
     assert.equal(model.focusRequest(5), 'hl.dsp.focus({workspace = "5"})');
     assert.throws(() => model.focusRequest('5"}); os.exit()'));
 });
-
-test('empty workspace model is valid', () => {
-    assert.equal(model.ordered([]).length, 0);
-});

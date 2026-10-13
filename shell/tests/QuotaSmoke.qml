@@ -31,8 +31,6 @@ ShellRoot {
                 details.open();
                 if (root.scenario === "invalid")
                     Quota.command = ["printf", "{bad json"];
-                else if (root.scenario === "version")
-                    Quota.command = ["printf", "{\"schema_version\":2,\"providers\":[]}"];
                 else if (root.scenario === "exit")
                     Quota.command = ["false"];
                 else

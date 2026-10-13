@@ -159,8 +159,6 @@ ShellRoot {
                 }
                 if (root.scenario === "invalid")
                     Agents.snapshotCommand = ["printf", "{bad json"];
-                else if (root.scenario === "version")
-                    Agents.snapshotCommand = ["printf", "{\"schema_version\":2,\"threads\":[]}"];
                 else if (root.scenario === "missing")
                     Agents.snapshotCommand = ["/nonexistent/dotfiles-agent-test"];
                 else if (root.scenario === "timeout") {

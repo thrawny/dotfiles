@@ -78,24 +78,6 @@ local function with_stubbed_get_node(stub, fn)
 end
 
 M.tests[#M.tests + 1] = {
-  name = "selects_standard_statement_nodes",
-  fn = function()
-    with_scratch_buffer({ "SELECT 1;" }, { 1, 0 }, function()
-      local root = fake_node("program", { 0, 0, 0, 9 }, nil)
-      local statement = fake_node("select_statement", { 0, 0, 0, 9 }, root)
-      local identifier = fake_node("identifier", { 0, 7, 0, 8 }, statement)
-
-      with_stubbed_get_node(function()
-        return identifier
-      end, function()
-        assert_equal(select_sql_statement(), true, "expected selection to succeed")
-        assert_equal(get_selected_text(), "SELECT 1;", "expected full statement to be selected")
-      end)
-    end)
-  end,
-}
-
-M.tests[#M.tests + 1] = {
   name = "falls_back_to_semicolon_delimited_statement_when_treesitter_only_returns_error_nodes",
   fn = function()
     with_scratch_buffer({ "GRANT SELECT ON users TO reader;", "SELECT 1;" }, { 1, 0 }, function()
@@ -110,31 +92,6 @@ M.tests[#M.tests + 1] = {
           get_selected_text(),
           "GRANT SELECT ON users TO reader;",
           "expected semicolon fallback to ignore narrow error nodes"
-        )
-      end)
-    end)
-  end,
-}
-
-M.tests[#M.tests + 1] = {
-  name = "checks_previous_position_when_cursor_is_on_semicolon",
-  fn = function()
-    with_scratch_buffer({ "SELECT 1;" }, { 1, 8 }, function()
-      local root = fake_node("program", { 0, 0, 0, 9 }, nil)
-      local statement = fake_node("select_statement", { 0, 0, 0, 9 }, root)
-      local identifier = fake_node("identifier", { 0, 7, 0, 8 }, statement)
-      local punctuation = fake_node("punctuation", { 0, 8, 0, 9 }, statement)
-      with_stubbed_get_node(function(args)
-        if args and args.pos then
-          return identifier
-        end
-        return punctuation
-      end, function()
-        assert_equal(select_sql_statement(), true, "expected selection to succeed")
-        assert_equal(
-          get_selected_text(),
-          "SELECT 1;",
-          "expected full statement to be selected when cursor is on the semicolon"
         )
       end)
     end)

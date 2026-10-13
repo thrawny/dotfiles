@@ -29,7 +29,7 @@ function readGcContext(cwd: string): GcContext {
 	};
 }
 
-export function buildGcPrompt(args: string, context: GcContext): string {
+function buildGcPrompt(args: string, context: GcContext): string {
 	const userInstruction = args.trim()
 		? `User commit instruction: ${args}\n\n`
 		: "";

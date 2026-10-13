@@ -5,12 +5,16 @@ import json
 import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+pytestmark = pytest.mark.skipif(
+    sys.platform == "darwin", reason="Linux display recovery needs flock"
+)
 type RunRecovery = Callable[..., tuple[subprocess.CompletedProcess[str], list[str]]]
 
 
@@ -172,12 +176,6 @@ def test_unplug_during_cycle_does_not_fall_back_to_all_outputs(recovery: RunReco
     assert calls == [dpms("off", "DP-1"), "sleep"]
 
 
-def test_missing_panel_shortcut_does_nothing(recovery: RunRecovery):
-    result, calls = recovery(script="hypr-panel-recover")
-    assert result.returncode == 0, result.stderr
-    assert calls == []
-
-
 def test_disabled_output_stays_disabled(recovery: RunRecovery):
     result, calls = recovery(monitors=[{"name": "DP-1", "disabled": True}])
     assert result.returncode == 0, result.stderr
@@ -201,11 +199,3 @@ def test_overlapping_recovery_is_skipped(recovery: RunRecovery):
     result, calls = recovery(locked=True)
     assert result.returncode == 0, result.stderr
     assert calls == []
-
-
-def test_niri_wake_unchanged(recovery: RunRecovery):
-    result, calls = recovery(
-        "--after-sleep", HYPRLAND_INSTANCE_SIGNATURE="", NIRI_SOCKET="test"
-    )
-    assert result.returncode == 0, result.stderr
-    assert calls == ["niri msg action power-on-monitors"]

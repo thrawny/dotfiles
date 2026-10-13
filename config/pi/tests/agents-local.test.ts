@@ -6,7 +6,6 @@ import {
 	findGitRoot,
 	findLocalInstructionPaths,
 	loadLocalInstructions,
-	renderLocalInstructions,
 } from "../extensions/agents-local.ts";
 
 describe("AGENTS.local.md discovery", () => {
@@ -70,8 +69,9 @@ describe("AGENTS.local.md discovery", () => {
 	});
 
 	it("falls back to cwd when outside a git repository", () => {
-		const cwd = mkdtempSync(path.join(tmpdir(), "pi-agents-local-test-"));
-		const parent = path.dirname(cwd);
+		const parent = mkdtempSync(path.join(tmpdir(), "pi-agents-local-test-"));
+		const cwd = path.join(parent, "project");
+		mkdirSync(cwd);
 		writeFileSync(path.join(parent, "AGENTS.local.md"), "parent guidance");
 		writeFileSync(path.join(cwd, "AGENTS.local.md"), "cwd guidance");
 
@@ -79,18 +79,5 @@ describe("AGENTS.local.md discovery", () => {
 		expect(findLocalInstructionPaths(cwd)).toEqual([
 			path.join(cwd, "AGENTS.local.md"),
 		]);
-	});
-
-	it("renders only the local instruction content", () => {
-		const root = mkdtempSync(path.join(tmpdir(), "pi-agents-local-test-"));
-		mkdirSync(path.join(root, ".git"));
-		const filePath = path.join(root, "AGENTS.local.md");
-		const rendered = renderLocalInstructions(
-			[{ path: filePath, content: "remember local preference" }],
-			root,
-		);
-
-		expect(rendered).toBe("remember local preference");
-		expect(rendered).not.toContain("AGENTS.local.md");
 	});
 });

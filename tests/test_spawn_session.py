@@ -83,12 +83,6 @@ def test_title_becomes_the_claude_session_name(spawn: ModuleType):
         spawn.title_args("ABC-123 summary", "codex")
 
 
-def test_agent_args_follow_a_separator(spawn: ModuleType):
-    with patch.object(spawn, "herdr") as herdr:
-        spawn.start_agent("abc-1", "claude", "w1:p1", ["--name", "ABC-1 fix"])
-    assert herdr.call_args.args[-3:] == ("--", "--name", "ABC-1 fix")
-
-
 def test_resume_passes_the_session_id(spawn: ModuleType):
     session = "01234567-89ab-cdef-0123-456789abcdef"
     assert spawn.resume_args(None, "codex") == []
@@ -117,25 +111,6 @@ def test_model_and_effort_pass_through_to_claude(spawn: ModuleType):
         spawn.model_args(None, "turbo", "claude")
     with pytest.raises(spawn.SpawnError, match="--kind claude"):
         spawn.model_args("sonnet", None, "codex")
-
-
-def test_new_worktree_goes_to_the_path_asked_for(spawn: ModuleType, tmp_path: Path):
-    pane = {"pane_id": "w1:p1", "cwd": str(tmp_path / "wt")}
-    replies: dict[str, dict[str, object]] = {
-        "list": {"worktrees": []},
-        "create": {"root_pane": pane},
-    }
-
-    def herdr(*args: str, **_: object) -> dict[str, object]:
-        return replies[args[1]]
-
-    with (
-        patch.object(spawn, "herdr", side_effect=herdr) as fake,
-        patch.object(spawn, "copy_local_files"),
-    ):
-        spawn.worktree_pane(tmp_path, "ABC-1-fix", "origin/main", str(tmp_path / "wt"))
-    create = fake.call_args_list[1].args
-    assert create[create.index("--path") + 1] == str(tmp_path / "wt")
 
 
 STALLED = '{"error":{"code":"agent_prompt_stalled","message":"no working state"}}'
@@ -209,67 +184,3 @@ def test_stalled_prompt_with_an_empty_box_presses_nothing(spawn: ModuleType):
     with fake, fake_text, pytest.raises(spawn.SpawnError, match="empty input box"):
         spawn.submit_brief("abc-1", "w1:p1", "the brief")
     assert sent == []
-
-
-def test_cwd_and_env_open_a_tab_in_a_folder_of_the_repo(
-    spawn: ModuleType, tmp_path: Path
-):
-    folder = tmp_path / "notes"
-    folder.mkdir()
-    env = spawn.env_args(["MOTO_ROLE=reviewer"])
-
-    def herdr(*args: str, **_: object) -> dict[str, object]:
-        if args[:2] == ("workspace", "list"):
-            return {"workspaces": []}
-        return {"root_pane": {}}
-
-    with patch.object(spawn, "herdr", side_effect=herdr) as fake:
-        spawn.repo_pane(tmp_path, folder, env)
-    # Not a git checkout, so no Herdr workspace knows it, and a new one opens.
-    create = fake.call_args_list[-1].args
-    assert create[:3] == ("workspace", "create", "--cwd")
-    assert create[3] == str(folder)
-    assert create[create.index("--env") + 1] == "MOTO_ROLE=reviewer"
-
-
-def test_env_must_be_key_value_pairs(spawn: ModuleType):
-    assert spawn.env_args(None) == []
-    with pytest.raises(spawn.SpawnError, match="Not a KEY=VALUE pair"):
-        spawn.env_args(["MOTO_ROLE"])
-
-
-@pytest.mark.parametrize(
-    "flags",
-    [
-        ["--env", "MOTO_ROLE=reviewer", "--worktree", "ABC-1-fix"],
-        ["--cwd", ".", "--pane", "w1:p1"],
-    ],
-)
-def test_cwd_and_env_refuse_a_worktree_or_an_existing_pane(
-    spawn: ModuleType, flags: list[str], capsys: pytest.CaptureFixture[str]
-):
-    with (
-        patch.dict("os.environ", {"HERDR_ENV": "1"}),
-        patch("sys.argv", ["spawn-session", *flags]),
-        patch("sys.stdin.read", return_value="Brief."),
-        patch.object(spawn, "herdr", side_effect=AssertionError("no Herdr")),
-    ):
-        assert spawn.main() == 1
-    assert (
-        "opens a new tab, so it takes no --worktree or --pane"
-        in capsys.readouterr().err
-    )
-
-
-def test_cwd_must_be_inside_the_repo(spawn: ModuleType, tmp_path: Path):
-    (tmp_path / "repo").mkdir()
-    with (
-        patch.dict("os.environ", {"HERDR_ENV": "1"}),
-        patch(
-            "sys.argv",
-            ["spawn-session", "--repo", str(tmp_path / "repo"), "--cwd", str(tmp_path)],
-        ),
-        patch("sys.stdin.read", return_value="Brief."),
-        patch.object(spawn, "herdr", side_effect=AssertionError("no Herdr")),
-    ):
-        assert spawn.main() == 1

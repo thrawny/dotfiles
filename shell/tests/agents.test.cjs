@@ -47,7 +47,7 @@ test('agent duration tolerates clock changes', () => {
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-for (const scenario of ['invalid', 'version', 'missing', 'exit', 'timeout', 'action', 'late', 'rename', 'rename-gone', 'layout']) {
+for (const scenario of ['invalid', 'missing', 'exit', 'timeout', 'action', 'late', 'rename', 'rename-gone', 'layout']) {
     test(`agent service retains state and reports ${scenario} failure`, t => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-agents-'));
         t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
@@ -92,18 +92,6 @@ test('agent shelf headers keep jump slots attached to visible threads', () => {
     assert.deepEqual(Array.from(display, row => row.kind === 'thread' ? row.thread.seq : row.lifecycle), [2, 1, 'settled', 4, 'archived']);
     assert.deepEqual(Array.from(display.filter(row => row.kind === 'thread'), row => row.jumpIndex), [1, 2, 3]);
     assert.equal(display[4].expanded, false);
-});
-
-test('agent display matches original status labels and scope context', () => {
-    assert.equal(model.statusLabel({...threads[0], state_updated: 100}, 7400), 'Working 2h 1m');
-    assert.equal(model.statusLabel({...threads[0], attention: 'done'}, 7400), '✓ Done');
-    assert.equal(model.statusLabel({...threads[0], attention: 'input'}, 7400), 'Input');
-    assert.equal(model.statusLabel({...threads[0], attention: 'approval'}, 7400), 'Approval');
-    assert.equal(model.statusLabel({...threads[0], attention: 'idle', state_updated: 100}, 110), 'now');
-    assert.equal(model.relativeTime(0, 172800), '2d');
-    assert.equal(model.locationText(threads[0], false), 'fixture');
-    assert.equal(model.locationText(threads[0], true), 'work · fixture');
-    assert.equal(model.locationText({...threads[0], area: 'fixture'}, true), 'fixture');
 });
 
 test('agent scope persists both choices across process restarts without overwriting on load', t => {

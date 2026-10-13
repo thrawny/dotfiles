@@ -63,24 +63,6 @@ def test_links_put_the_focused_pane_first_and_skip_closed_panes(
     assert entries[2].target == "https://jira.example.com/browse/ABC-1"
 
 
-def test_actions_leave_out_the_palette_itself(palette: ModuleType) -> None:
-    actions = [
-        {
-            "plugin_id": "thrawny.palette",
-            "action_id": "open",
-            "title": "Command palette",
-        },
-        {"plugin_id": "x.picker", "action_id": "open", "title": "Pick a project"},
-    ]
-    [entry] = palette.action_entries(actions)
-    assert (entry.tag, entry.label, entry.kind, entry.target) == (
-        "cmd",
-        "Pick a project",
-        "action",
-        "x.picker open",
-    )
-
-
 @pytest.mark.parametrize("strip_ansi", [False, True])
 def test_pick_reads_the_hidden_fields_of_the_chosen_row(
     palette: ModuleType, strip_ansi: bool
@@ -93,42 +75,3 @@ def test_pick_reads_the_hidden_fields_of_the_chosen_row(
     done = subprocess.CompletedProcess(["fzf"], 0, stdout=line + "\n")
     with patch.object(palette.subprocess, "run", return_value=done):
         assert palette.pick(entries) == entries[1]
-
-
-def test_pick_returns_none_when_fzf_is_cancelled(palette: ModuleType) -> None:
-    done = subprocess.CompletedProcess(["fzf"], 130, stdout="")
-    with patch.object(palette.subprocess, "run", return_value=done):
-        assert palette.pick([]) is None
-
-
-def test_invoke_closes_the_popup_before_running_the_action(
-    palette: ModuleType,
-) -> None:
-    calls: list[str] = []
-
-    def close_popup() -> None:
-        calls.append("close")
-
-    def herdr_json(*_args: str) -> dict[str, Any]:
-        calls.append("invoke")
-        return {"result": {}}
-
-    with (
-        patch.object(palette, "close_popup", side_effect=close_popup),
-        patch.object(palette, "herdr_json", side_effect=herdr_json),
-        patch.object(palette, "notify") as notify,
-    ):
-        assert palette.invoke("x.picker", "open") == 0
-    assert calls == ["close", "invoke"]
-    notify.assert_not_called()
-
-
-def test_invoke_reports_errors(palette: ModuleType) -> None:
-    missing = {"error": {"code": "plugin_not_found", "message": "plugin not found"}}
-    with (
-        patch.object(palette, "close_popup"),
-        patch.object(palette, "herdr_json", return_value=missing),
-        patch.object(palette, "notify") as notify,
-    ):
-        assert palette.invoke("x.picker", "open") == 1
-    notify.assert_called_once()

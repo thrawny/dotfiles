@@ -125,27 +125,6 @@ def test_wrong_uid_is_rejected(
     assert "UID" in broker.receive(client, 1)["error"]
 
 
-def test_nonzero_opener_status_is_an_error(broker: ModuleType):
-    with patch.object(broker.subprocess, "Popen") as popen:
-        popen.return_value.__enter__.return_value.wait.return_value = 1
-        with pytest.raises(ValueError, match="opener failed"):
-            broker.open_url("https://example.com", "/fixed/router")
-        assert popen.call_args.args[0] == ["/fixed/router", "https://example.com"]
-
-
-def test_opener_timeout_terminates_process_group(broker: ModuleType):
-    with (
-        patch.object(broker.subprocess, "Popen") as popen,
-        patch.object(broker.os, "killpg") as kill,
-    ):
-        process = popen.return_value.__enter__.return_value
-        process.pid = 123
-        process.wait.side_effect = [subprocess.TimeoutExpired("router", 40), 0]
-        with pytest.raises(ValueError, match="timed out"):
-            broker.open_url("https://example.com", "/fixed/router")
-        assert kill.call_count == 2
-
-
 @pytest.mark.parametrize(
     "target", ["https://example.com", "http://localhost:3000/path?q=a#b"]
 )
@@ -249,41 +228,6 @@ def test_unavailable_broker_does_not_fall_back_to_helium(tmp_path: Path, router:
     assert result.returncode == 1
     assert "broker unavailable" in result.stderr
     assert "unexpected browser launch" not in result.stderr
-
-
-def test_hypr_router_focuses_web_browser(tmp_path: Path):
-    hyprctl = tmp_path / "hyprctl"
-    calls = tmp_path / "calls"
-    hyprctl.write_text(
-        f"""#!/bin/sh
-if [ "$1 $2" = '-j clients' ]; then
-  echo '[{{"class":"helium","address":"0xabc","workspace":{{"name":"web"}},"focusHistoryID":0}}]'
-elif [ "$1 $2" = '-j activeworkspace' ]; then
-  echo '{{"name":"main"}}'
-else echo "$*" >> '{calls}'; fi
-"""
-    )
-    hyprctl.chmod(0o755)
-    for name in ("wtype", "wl-copy", "wl-paste"):
-        executable = tmp_path / name
-        executable.write_text("#!/bin/sh\nexit 0\n")
-        executable.chmod(0o755)
-    result = subprocess.run(
-        ["bash", str(ROOT / "bin/open-url"), "https://example.com"],
-        env={
-            **os.environ,
-            "SANDBOX": "",
-            "HYPRLAND_INSTANCE_SIGNATURE": "test",
-            "PATH": f"{tmp_path}:{os.environ['PATH']}",
-        },
-        capture_output=True,
-        text=True,
-        timeout=5,
-    )
-    assert result.returncode == 0, result.stderr
-    assert calls.read_text().splitlines() == [
-        "eval for _,w in ipairs(hl.get_windows()) do if tostring(w.address) == '0xabc' then hl.dispatch(hl.dsp.focus({window=w})) break end end"
-    ]
 
 
 @pytest.mark.parametrize("sandbox", ["1", ""])

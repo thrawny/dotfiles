@@ -2,7 +2,6 @@
 
 import base64
 import json
-import shutil
 import socket
 import subprocess
 import sys
@@ -15,10 +14,6 @@ from unittest.mock import patch
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-PI_CLIPBOARD = (
-    ROOT
-    / "config/pi/node_modules/@earendil-works/pi-coding-agent/dist/utils/clipboard-image.js"
-)
 LINUX = pytest.mark.skipif(sys.platform != "linux", reason="Linux clipboard reader")
 PNG = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aO1sAAAAASUVORK5CYII="
@@ -101,16 +96,6 @@ def test_types_hide_text_svg_and_arbitrary_metadata(
         assert broker.clipboard_types("/fixed/wl-paste") == expected
 
 
-def test_read_is_explicitly_typed_and_binary(broker: ModuleType):
-    with patch.object(broker, "clipboard_output", return_value=PNG) as capture:
-        assert broker.clipboard_image("/fixed/wl-paste", "image/png") == PNG
-        capture.assert_called_once_with(
-            "/fixed/wl-paste",
-            ["--type", "image/png", "--no-newline"],
-            broker.MAX_IMAGE_BYTES,
-        )
-
-
 @pytest.mark.parametrize(
     "mime",
     [
@@ -128,12 +113,6 @@ def test_unsafe_mimes_never_invoke_host_reader(broker: ModuleType, mime: object)
         with pytest.raises(ValueError):
             broker.clipboard_image("/fixed/wl-paste", mime)
         capture.assert_not_called()
-
-
-def test_empty_images_are_errors(broker: ModuleType):
-    with patch.object(broker, "clipboard_output", return_value=b""):
-        with pytest.raises(ValueError, match="empty"):
-            broker.clipboard_image("/fixed/wl-paste", "image/png")
 
 
 @pytest.mark.parametrize(
@@ -256,33 +235,6 @@ def test_pi_and_claude_read_flags_round_trip_binary(
         "image/png",
         "--no-newline",
     ]
-
-
-@pytest.mark.skipif(
-    not shutil.which("node") or not PI_CLIPBOARD.is_file(),
-    reason="Pi dependencies unavailable",
-)
-def test_pi_image_reader_uses_the_shim(clipboard: ClipboardFixture):
-    result = subprocess.run(
-        [
-            "node",
-            "--input-type=module",
-            "-e",
-            """
-            const { readClipboardImage } = await import(process.env.PI_TEST_CLIPBOARD);
-            const image = await readClipboardImage();
-            if (!image || image.mimeType !== 'image/png') process.exit(1);
-            process.stdout.write(Buffer.from(image.bytes));
-        """,
-        ],
-        env={**clipboard.environment, "PI_TEST_CLIPBOARD": PI_CLIPBOARD.as_uri()},
-        capture_output=True,
-        timeout=10,
-    )
-    assert result.returncode == 0, result.stderr
-    assert result.stdout == PNG
-    calls = [json.loads(line) for line in clipboard.log.read_text().splitlines()]
-    assert calls == [["--list-types"], ["--type", "image/png", "--no-newline"]]
 
 
 @pytest.mark.parametrize(

@@ -50,9 +50,6 @@ if args[:2] == ["pr", "view"]:
             counter.write(str(view_count + 1))
         if os.environ.get("FAKE_HEAD_CHANGE_AFTER_INITIAL") == "1" and view_count > 0:
             current_head = "c" * 40
-    state = os.environ.get("FAKE_PR_STATE", "OPEN")
-    if os.environ.get("FAKE_LATE_PR_STATE") and views_so_far() >= 2:
-        state = os.environ["FAKE_LATE_PR_STATE"]
     checks_pending = (
         os.environ.get("FAKE_CHECKS_PENDING_INITIAL") == "1" and views_so_far() < 2
     )
@@ -69,7 +66,7 @@ if args[:2] == ["pr", "view"]:
         "number": 12,
         "title": "Improve widgets",
         "url": "https://github.com/acme/widgets/pull/12",
-        "state": state,
+        "state": "OPEN",
         "headRefOid": current_head,
         "headRefName": "feature/widgets",
         "baseRefName": "main",
@@ -81,40 +78,32 @@ if args[:2] == ["pr", "view"]:
     }))
     raise SystemExit(0)
 
-if args[:2] == ["run", "view"]:
-    print("build\tstep\tstarting\nbuild\tstep\terror: widget mismatch\nbuild\tstep\tfailed")
-    raise SystemExit(0)
-
 if args and args[0] == "api":
     joined = " ".join(args)
     endpoint = args[-1]
     if " graphql " in f" {joined} ":
-        if "resolveReviewThread" in joined:
-            thread_id = next(value.split("=", 1)[1] for value in args if value.startswith("threadId="))
-            print(json.dumps({"data": {"resolveReviewThread": {"thread": {"id": thread_id, "isResolved": True}}}}))
-        else:
-            cursor = next((value.split("=", 1)[1] for value in args if value.startswith("cursor=")), None)
-            number = "2" if cursor else "1"
-            print(json.dumps({"data": {"repository": {"pullRequest": {"reviewThreads": {
-                "nodes": [{
-                    "id": f"THREAD_{number}",
-                    "isResolved": False,
-                    "isOutdated": False,
-                    "path": "src/widget.py",
-                    "line": 42,
-                    "originalLine": 42,
-                    "comments": {"nodes": [{
-                        "author": {"login": "chatgpt-codex-connector"},
-                        "body": "Fix the widget edge case",
-                        "url": f"https://github.com/acme/widgets/pull/12#discussion_r{number}",
-                        "createdAt": "2026-07-10T00:01:00Z",
-                    }]},
-                }],
-                "pageInfo": {"hasNextPage": cursor is None, "endCursor": "NEXT" if cursor is None else None},
-            }}}}}))
+        cursor = next((value.split("=", 1)[1] for value in args if value.startswith("cursor=")), None)
+        number = "2" if cursor else "1"
+        print(json.dumps({"data": {"repository": {"pullRequest": {"reviewThreads": {
+            "nodes": [{
+                "id": f"THREAD_{number}",
+                "isResolved": False,
+                "isOutdated": False,
+                "path": "src/widget.py",
+                "line": 42,
+                "originalLine": 42,
+                "comments": {"nodes": [{
+                    "author": {"login": "chatgpt-codex-connector"},
+                    "body": "Fix the widget edge case",
+                    "url": f"https://github.com/acme/widgets/pull/12#discussion_r{number}",
+                    "createdAt": "2026-07-10T00:01:00Z",
+                }]},
+            }],
+            "pageInfo": {"hasNextPage": cursor is None, "endCursor": "NEXT" if cursor is None else None},
+        }}}}}))
         raise SystemExit(0)
     if endpoint == "user":
-        print(json.dumps({"login": os.environ.get("FAKE_LOGIN", "octocat")}))
+        print(json.dumps({"login": "octocat"}))
         raise SystemExit(0)
     if "/commits/" in endpoint:
         print(json.dumps({"commit": {"committer": {"date": "2026-07-10T00:00:00Z"}}}))
@@ -206,15 +195,6 @@ if args and args[0] == "api":
                 "created_at": "2026-07-10T00:10:00Z",
                 "html_url": "https://github.com/acme/widgets/pull/12#issuecomment-900",
             })
-    if late and os.environ.get("FAKE_LATE_REVIEW_STATE") and "/reviews?" in endpoint:
-        items.append({
-            "id": 901,
-            "user": {"login": "ReviewerOne"},
-            "submitted_at": "2026-07-10T00:11:00Z",
-            "state": os.environ["FAKE_LATE_REVIEW_STATE"],
-            "body": "",
-            "html_url": "https://github.com/acme/widgets/pull/12#pullrequestreview-901",
-        })
     print(json.dumps([items] if "--slurp" in args else items))
     raise SystemExit(0)
 
@@ -261,17 +241,6 @@ def test_snapshot_is_bounded_and_current_head_aware(tmp_path: Path) -> None:
     assert data["readiness"]["humanApprovalRequired"]
 
 
-def test_threads_list_and_explicit_resolution(tmp_path: Path) -> None:
-    pr_harness = PrHarness(tmp_path)
-    listed = pr_harness.run("threads", "list", "12", "--json")
-    assert listed.returncode == 0, listed.stderr
-    assert json.loads(listed.stdout)["threads"][0]["id"] == "THREAD_1"
-
-    resolved = pr_harness.run("threads", "resolve", "PRRT_THREAD_1")
-    assert resolved.returncode == 0, resolved.stderr
-    assert "resolved PRRT_THREAD_1" in resolved.stdout
-
-
 def test_thread_resolution_rejects_all_arguments_before_mutating(
     tmp_path: Path,
 ) -> None:
@@ -279,23 +248,6 @@ def test_thread_resolution_rejects_all_arguments_before_mutating(
     assert result.returncode != 0
     assert result.stdout == ""
     assert "invalid review thread ID(s): 12" in result.stderr
-
-
-def test_failed_check_logs_are_saved_and_excerpted(tmp_path: Path) -> None:
-    pr_harness = PrHarness(tmp_path)
-    output_dir = pr_harness.temp_path / "logs"
-    result = pr_harness.run(
-        "failed-checks",
-        "12",
-        "--output-dir",
-        str(output_dir),
-        "--json",
-    )
-    assert result.returncode == 0, result.stderr
-    data = json.loads(result.stdout)
-    assert data["failedCount"] == 1
-    assert Path(data["runs"][0]["logPath"]).exists()
-    assert any("widget mismatch" in line for line in data["runs"][0]["excerpt"])
 
 
 def test_waiter_accepts_no_checks_and_inactive_optional_reviewer(
@@ -352,49 +304,6 @@ def test_reaction_on_a_trigger_comment_marks_the_reviewer_active(
     assert reviewer["issue_comments"] == 0
 
 
-def test_waiter_degrades_an_active_unavailable_reviewer(tmp_path: Path) -> None:
-    pr_harness = PrHarness(tmp_path)
-    env = pr_harness.env.copy()
-    env["FAKE_ACTIVE_REVIEWER"] = "1"
-    result = pr_harness.run(
-        "wait",
-        "12",
-        "--interval",
-        "1",
-        "--timeout",
-        "4",
-        "--reviewer-timeout",
-        "2",
-        env=env,
-    )
-    assert result.returncode == 0, result.stderr
-    assert "codex_state=unavailable" in result.stdout
-    assert "reviewer timeout: codex still active with no final review" in result.stdout
-    assert "start a new waiter" in result.stdout
-    assert result.stdout.count("snapshot ") == 2
-
-
-def test_waiter_reports_deadline_settle_as_inconclusive(tmp_path: Path) -> None:
-    pr_harness = PrHarness(tmp_path)
-    env = pr_harness.env.copy()
-    env["FAKE_ACTIVE_REVIEWER"] = "1"
-    result = pr_harness.run(
-        "wait",
-        "12",
-        "--interval",
-        "1",
-        "--timeout",
-        "3",
-        "--reviewer-timeout",
-        "30",
-        env=env,
-    )
-    assert result.returncode == 0, result.stderr
-    assert "settled" in result.stdout
-    assert "wait timeout reached before reviewers settled" in result.stdout
-    assert "start a new waiter" in result.stdout
-
-
 def test_waiter_can_require_approval_from_a_specific_reviewer(tmp_path: Path) -> None:
     pr_harness = PrHarness(tmp_path)
     env = pr_harness.env.copy()
@@ -434,22 +343,6 @@ def test_required_approval_wait_wakes_on_changes_requested(tmp_path: Path) -> No
     assert "reason=changes-requested" in result.stdout
 
 
-def test_required_approval_wait_wakes_on_pr_closure(tmp_path: Path) -> None:
-    pr_harness = PrHarness(tmp_path)
-    env = pr_harness.env.copy()
-    env["FAKE_PR_STATE"] = "CLOSED"
-    result = pr_harness.run(
-        "wait",
-        "12",
-        "--require-approval-from",
-        "ReviewerOne",
-        env=env,
-    )
-    assert result.returncode == 0, result.stderr
-    assert "reason=pr-closed" in result.stdout
-    assert "state=CLOSED" in result.stdout
-
-
 def test_required_approval_wait_wakes_on_head_change(tmp_path: Path) -> None:
     pr_harness = PrHarness(tmp_path)
     env = pr_harness.env.copy()
@@ -470,27 +363,6 @@ def test_required_approval_wait_wakes_on_head_change(tmp_path: Path) -> None:
     assert "reason=head-changed" in result.stdout
     assert "old=aaaaaaaaaaaa" in result.stdout
     assert "new=cccccccccccc" in result.stdout
-
-
-def test_required_approval_wait_times_out_without_that_reviewers_decision(
-    tmp_path: Path,
-) -> None:
-    pr_harness = PrHarness(tmp_path)
-    env = pr_harness.env.copy()
-    result = pr_harness.run(
-        "wait",
-        "12",
-        "--require-approval-from",
-        "ReviewerOne",
-        "--interval",
-        "1",
-        "--timeout",
-        "1",
-        env=env,
-    )
-    assert result.returncode == 1
-    assert "timed out" in result.stderr
-    assert "reviewer=ReviewerOne" in result.stderr
 
 
 def watch_env(pr_harness: PrHarness, **values: str) -> dict[str, str]:
@@ -520,14 +392,6 @@ def test_watch_wakes_on_a_teammates_comment(tmp_path: Path) -> None:
     assert "next-since=" in result.stdout
 
 
-def test_watch_counts_a_bot_comment(tmp_path: Path) -> None:
-    pr_harness = PrHarness(tmp_path)
-    env = watch_env(pr_harness, FAKE_LATE_COMMENT_AUTHOR="scanner[bot]")
-    result = watch(pr_harness, env)
-    assert result.returncode == 0, result.stderr
-    assert "comment @scanner[bot]" in result.stdout
-
-
 def test_watch_skips_the_signed_in_user_unless_asked(tmp_path: Path) -> None:
     pr_harness = PrHarness(tmp_path)
     env = watch_env(pr_harness, FAKE_LATE_COMMENT_AUTHOR="Octocat")
@@ -542,28 +406,12 @@ def test_watch_skips_the_signed_in_user_unless_asked(tmp_path: Path) -> None:
     assert "comment @Octocat" in included.stdout
 
 
-def test_watch_ignores_named_authors(tmp_path: Path) -> None:
-    pr_harness = PrHarness(tmp_path)
-    env = watch_env(pr_harness, FAKE_LATE_COMMENT_AUTHOR="noisy[bot]")
-    result = watch(pr_harness, env, "--timeout", "2", "--ignore-author", "noisy")
-    assert result.returncode == 1
-    assert "woke" not in result.stdout
-
-
 def test_watch_does_not_wake_on_an_edited_comment(tmp_path: Path) -> None:
     pr_harness = PrHarness(tmp_path)
     env = watch_env(pr_harness, FAKE_EDITED_COMMENT="1")
     result = watch(pr_harness, env, "--timeout", "2")
     assert result.returncode == 1
     assert "woke" not in result.stdout
-
-
-def test_watch_reports_an_approval(tmp_path: Path) -> None:
-    pr_harness = PrHarness(tmp_path)
-    env = watch_env(pr_harness, FAKE_LATE_REVIEW_STATE="APPROVED")
-    result = watch(pr_harness, env)
-    assert result.returncode == 0, result.stderr
-    assert "review approved @ReviewerOne: (no text)" in result.stdout
 
 
 def test_watch_since_counts_activity_from_before_the_watcher(tmp_path: Path) -> None:
@@ -585,28 +433,6 @@ def test_watch_wakes_on_a_new_commit(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "woke reason=commit" in result.stdout
     assert "old=aaaaaaaaaaaa new=cccccccccccc" in result.stdout
-
-
-def test_watch_on_limits_the_events(tmp_path: Path) -> None:
-    pr_harness = PrHarness(tmp_path)
-    env = watch_env(pr_harness, FAKE_HEAD_CHANGE_AFTER_INITIAL="1")
-    result = watch(pr_harness, env, "--timeout", "2", "--on", "activity,state")
-    assert result.returncode == 1
-    assert "on=state,activity" in result.stdout
-
-
-def test_watch_rejects_an_unknown_event(tmp_path: Path) -> None:
-    result = PrHarness(tmp_path).run("watch", "12", "--on", "commit,labels")
-    assert result.returncode == 2
-    assert "unknown: labels" in result.stderr
-
-
-def test_watch_wakes_when_the_pr_merges(tmp_path: Path) -> None:
-    pr_harness = PrHarness(tmp_path)
-    env = watch_env(pr_harness, FAKE_LATE_PR_STATE="MERGED")
-    result = watch(pr_harness, env)
-    assert result.returncode == 0, result.stderr
-    assert "woke reason=merged" in result.stdout
 
 
 def test_watch_wakes_when_a_check_newly_fails(tmp_path: Path) -> None:

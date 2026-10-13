@@ -45,10 +45,7 @@ function assistantResult(
 	return undefined;
 }
 
-export function buildHandoffRequest(
-	goal: string,
-	repositoryState: string,
-): string {
+function buildHandoffRequest(goal: string, repositoryState: string): string {
 	return `The user requested a handoff to a fresh session with this goal:
 
 ${goal}
@@ -83,7 +80,7 @@ function shellQuote(value: string): string {
 	return `'${value.replaceAll("'", `'"'"'`)}'`;
 }
 
-export function buildFreshSessionPrompt(
+function buildFreshSessionPrompt(
 	goal: string,
 	note: string,
 	parentSession: string,

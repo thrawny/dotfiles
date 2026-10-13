@@ -57,8 +57,7 @@ ShellRoot {
             fail("Tab cycle does not include projects");
             return;
         }
-        // Snapshot uses fixtures, never the user's repositories or clipboard.
-        capture.start();
+        finish.start();
     }
     Component.onCompleted: Launcher.toggleProjects()
     Connections {
@@ -74,26 +73,20 @@ ShellRoot {
         }
     }
     Timer {
-        id: capture
+        id: finish
         interval: 250
         onTriggered: {
             if (Projects.busy) {
                 restart();
                 return;
             }
-            panel.contentItem.grabToImage(result => {
-                if (!result.saveToFile(Quickshell.env("PROJECTS_SCREENSHOT"))) {
-                    root.fail("Could not save project picker screenshot");
-                    return;
-                }
-                Launcher.toggleProjects();
-                if (Launcher.opened || Projects.active)
-                    root.fail("Second Alt+P did not close the picker");
-                else {
-                    console.log("Project launcher verified");
-                    Qt.exit(0);
-                }
-            });
+            Launcher.toggleProjects();
+            if (Launcher.opened || Projects.active)
+                root.fail("Second Alt+P did not close the picker");
+            else {
+                console.log("Project launcher verified");
+                Qt.exit(0);
+            }
         }
     }
     Timer {

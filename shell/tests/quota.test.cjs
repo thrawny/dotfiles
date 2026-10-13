@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-for (const scenario of ['invalid', 'version', 'exit', 'missing']) {
+for (const scenario of ['invalid', 'exit', 'missing']) {
     test(`quota service retains last data on ${scenario} failure`, t => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-quota-'));
         t.after(() => fs.rmSync(dir, { recursive: true, force: true }));

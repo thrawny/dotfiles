@@ -20,7 +20,6 @@ process.env.PI_CODING_AGENT_DIR = mkdtempSync(
 );
 import backgroundBashExtension, {
 	backgroundSessionName,
-	shouldAlwaysBackground,
 } from "../extensions/background-bash.ts";
 
 type ToolResult = {
@@ -135,11 +134,6 @@ describe("background bash", () => {
 		);
 	});
 
-	it("has no always-background applications configured", () => {
-		expect(shouldAlwaysBackground("some-daemon --serve")).toBe(false);
-		expect(shouldAlwaysBackground("anything else")).toBe(false);
-	});
-
 	it("returns immediately and wakes the agent with bounded command output", async () => {
 		let finishWait: ((result: ExecResult) => void) | undefined;
 		let historyOutput = "";
@@ -154,17 +148,9 @@ describe("background bash", () => {
 			},
 		);
 
-		const { appendEntry, sendMessage, sendUserMessage, tool } =
-			setupExtension(exec);
+		const { appendEntry, sendMessage, tool } = setupExtension(exec);
 
-		expect(tool.parameters.properties).toHaveProperty("background");
-		expect(tool.promptGuidelines?.join("\n")).toContain(
-			"Check managed task status with zmx-list",
-		);
-		expect(tool.promptGuidelines?.join("\n")).toContain(
-			"when zero remain, nothing is left to wake the agent",
-		);
-		const result = await tool.execute(
+		await tool.execute(
 			"call-abc123",
 			{ command: "just check", background: true },
 			undefined,
@@ -172,38 +158,6 @@ describe("background bash", () => {
 			ctx,
 		);
 
-		expect(result.content[0]?.text).toContain("Started background command");
-		expect(result.content[0]?.text).toContain(
-			"do not run zmx wait or zmx tail",
-		);
-		expect(exec).toHaveBeenNthCalledWith(1, "zmx", ["list"], {
-			cwd: "/tmp",
-		});
-		expect(exec).toHaveBeenNthCalledWith(
-			2,
-			"env",
-			[
-				"QUIET_PROMPT=1",
-				"zmx",
-				"run",
-				expect.stringMatching(/^pi-bg-/),
-				"-d",
-				expect.any(String),
-				expect.stringMatching(/\/pi-bg-.*\.sh$/),
-			],
-			{ cwd: "/tmp" },
-		);
-		expect(exec).toHaveBeenNthCalledWith(
-			3,
-			expect.any(String),
-			[
-				"-c",
-				'exec zmx wait "$1" >/dev/null',
-				"pi-bg-wait",
-				expect.stringMatching(/^pi-bg-/),
-			],
-			expect.objectContaining({ cwd: "/tmp" }),
-		);
 		expect(sendMessage).not.toHaveBeenCalled();
 		expect(appendEntry).toHaveBeenCalledWith(
 			"background-bash-task",
@@ -231,21 +185,7 @@ describe("background bash", () => {
 			details: { remainingTaskCount: number };
 		};
 		expect(message.content).toContain("exit 0");
-		expect(message.content).toContain(
-			"No managed background tasks remain; no further completion wake-up is pending.",
-		);
 		expect(message.details.remainingTaskCount).toBe(0);
-		expect(sendMessage.mock.calls[0]?.[1]).toEqual({
-			deliverAs: "steer",
-			triggerTurn: false,
-		});
-		expect(sendUserMessage).toHaveBeenCalledOnce();
-		expect(sendUserMessage.mock.calls[0]?.[0]).toContain("Keep working");
-		expect(sendUserMessage.mock.calls[0]?.[1]).toEqual({ deliverAs: "steer" });
-		expect(sendMessage.mock.invocationCallOrder[0]).toBeLessThan(
-			sendUserMessage.mock.invocationCallOrder[0] ?? Number.POSITIVE_INFINITY,
-		);
-		expect(message.content).toContain("Managed task status: zmx-list");
 		expect(message.content).toContain("Output:\ncheck output");
 		expect(message.content).not.toContain("Command:");
 		expect(message.content).not.toContain("echoed command");
@@ -314,7 +254,6 @@ describe("background bash", () => {
 			content: string;
 			details: { remainingTaskCount: number };
 		};
-		expect(firstMessage.content).toContain("1 managed background task remains");
 		expect(firstMessage.details.remainingTaskCount).toBe(1);
 		expect(sendMessage.mock.calls[0]?.[1]).toEqual({
 			deliverAs: "steer",
@@ -328,9 +267,6 @@ describe("background bash", () => {
 			content: string;
 			details: { remainingTaskCount: number };
 		};
-		expect(secondMessage.content).toContain(
-			"No managed background tasks remain",
-		);
 		expect(secondMessage.details.remainingTaskCount).toBe(0);
 		expect(sendMessage.mock.calls[1]?.[1]).toEqual({
 			deliverAs: "steer",

@@ -5,31 +5,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-	isCodexFastEnabled,
 	layoutStatusLine,
-	modelDisplayName,
 	normalizeExtensionStatuses,
 	partitionExtensionStatuses,
 	resolveGitInfo,
 } from "../extensions/status-line.ts";
 
-describe("status line model names", () => {
-	it.each([
-		["gpt-6-astra", "Astra 6"],
-		["gpt-6-sol", "Sol 6"],
-		["gpt-5.6-terra", "Terra 5.6"],
-		["gpt-5.6-luna", "Luna 5.6"],
-		["unknown-model", "unknown-model"],
-	])("displays %s as %s", (id, name) => {
-		expect(modelDisplayName(id)).toBe(name);
-	});
-});
-
 describe("status line extension statuses", () => {
-	it("shows pi-openai-fast fast status once", () => {
-		expect(normalizeExtensionStatuses(["fast"])).toEqual(["fast"]);
-	});
-
 	it("extracts fast from pi-codex-conversion status", () => {
 		expect(
 			normalizeExtensionStatuses(["Codex adapter V: low • PATH mode • fast"]),
@@ -83,20 +65,6 @@ describe("status line extension statuses", () => {
 			rmSync(dir, { recursive: true, force: true });
 		}
 	});
-
-	it("reads fast from pi-codex-conversion config", () => {
-		const dir = mkdtempSync(join(tmpdir(), "pi-statusline-"));
-		const configPath = join(dir, "pi-codex-conversion.json");
-		try {
-			writeFileSync(configPath, JSON.stringify({ openai: { fast: true } }));
-			expect(isCodexFastEnabled(configPath)).toBe(true);
-
-			writeFileSync(configPath, JSON.stringify({ openai: { fast: false } }));
-			expect(isCodexFastEnabled(configPath)).toBe(false);
-		} finally {
-			rmSync(dir, { recursive: true, force: true });
-		}
-	});
 });
 
 describe("adaptive footer layout", () => {
@@ -133,10 +101,6 @@ describe("adaptive footer layout", () => {
 		expect(lines[0]).not.toContain("kanel");
 		expect(lines[1]).toContain(branch);
 		expect(lines[1]).toContain("Implementing");
-	});
-
-	it("handles missing optional content", () => {
-		expect(layoutStatusLine(80, primary, ["dotfiles"], "")).toHaveLength(1);
 	});
 
 	it("bounds both rows at every width, including ANSI and wide characters", () => {

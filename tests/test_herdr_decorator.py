@@ -63,24 +63,6 @@ def test_pr_state_reports_the_most_urgent_word(
     assert decorator.pr_state(pr(**fields)) == expected
 
 
-@pytest.mark.parametrize(
-    ("fields", "expected"),
-    [
-        ({"review": "REVIEW_REQUIRED"}, "\uf407 #412"),
-        ({"checks": "PENDING"}, "\uf407 #412 ◷"),
-        ({"checks": "FAILURE"}, "\uf407 #412 \uf467"),
-        ({"review": "CHANGES_REQUESTED"}, "\uf407 #412 ±"),
-        ({"draft": True}, "\uf4dd #412"),
-        ({"state": "MERGED"}, "\uf419 #412"),
-        ({"state": "CLOSED"}, "\uf4dc #412"),
-    ],
-)
-def test_pr_label_puts_state_in_the_icon_and_checks_in_the_mark(
-    decorator: ModuleType, fields: dict[str, Any], expected: str
-) -> None:
-    assert decorator.pr_label(pr(**fields)) == expected
-
-
 def test_query_groups_branches_by_repo_and_dedupes(decorator: ModuleType) -> None:
     a, b = ("acme", "widgets"), ("acme", "gadgets")
     query, aliases = decorator.build_query([(a, "x"), (b, "y"), (a, "x"), (a, 'q"z')])
@@ -148,11 +130,6 @@ def test_track_reports_a_title_with_a_new_jira_key(
     assert d.track({**info, "terminal_title_stripped": "widget docs"})[1] is False
     pane, changed = d.track({**info, "terminal_title_stripped": "ABC-12 widget docs"})
     assert changed and pane.title == "ABC-12 widget docs"
-
-
-def test_decorate_without_pr_or_key_is_empty(decorator: ModuleType) -> None:
-    pane = decorator.Pane("w1:p1", "/tmp", "claude", branch="tidy-readme")
-    assert decorator.decorate(pane, None) == ({}, {})
 
 
 def test_remote_parsing_handles_ssh_and_https(decorator: ModuleType) -> None:
@@ -323,13 +300,6 @@ def test_moto_reports_keep_only_what_waits_on_the_user(
         },
     )
     assert decorator.moto_reports() == {"w1:p1": question}
-
-
-def test_moto_reports_without_a_task_file_is_empty(
-    decorator: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setenv("XDG_STATE_HOME", str(tmp_path))
-    assert decorator.moto_reports() == {}
 
 
 def test_moto_note_shows_while_the_worker_waits(decorator: ModuleType) -> None:

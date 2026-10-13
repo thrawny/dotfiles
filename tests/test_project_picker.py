@@ -1,4 +1,4 @@
-"""Project picker dispatch and Herdr workspace reuse."""
+"""Project picker Herdr workspace reuse."""
 
 import json
 import os
@@ -34,8 +34,6 @@ def picker(tmp_path: Path) -> Picker:
 
     stub("zoxide", "exit 0\n")
     stub("fzf", 'printf "\\n%s\\n" "$PICK"\n')
-    for name in ("niri-project", "hyprland-project"):
-        stub(name, 'printf "%s\\n" "$0" "$@" > "$LOG"\n')
     stub(
         "herdr",
         'case "$1 $2" in\n'
@@ -67,17 +65,6 @@ def picker(tmp_path: Path) -> Picker:
     return run, env, log, repo, stub
 
 
-@pytest.mark.parametrize(
-    "flag,command", [("--niri", "niri-project"), ("--hypr", "hyprland-project")]
-)
-def test_desktop_dispatch(picker: Picker, flag: str, command: str):
-    run, _, log, repo, _ = picker
-    assert run(flag).returncode == 0
-    lines = log.read_text().splitlines()
-    assert lines[0].endswith(command)
-    assert lines[1:] == ["--terminals", "1", str(repo)]
-
-
 def test_herdr_create(picker: Picker):
     run, _, log, repo, _ = picker
     assert run("--herdr").returncode == 0
@@ -90,80 +77,6 @@ def test_herdr_create(picker: Picker):
         repo.name,
         "--focus",
     ]
-
-
-def test_herdr_worktree_from_remote_default(picker: Picker, tmp_path: Path):
-    run, env, log, repo, stub = picker
-    fetches = tmp_path / "fetches"
-    stub(
-        "git",
-        'case "$3 $4 $6" in\n'
-        + '"symbolic-ref --quiet "*) echo origin/trunk ;;\n'
-        + '"fetch --quiet trunk") printf "%s\\n" "$@" > "$FETCHES" ;;\n'
-        + "*) exit 1 ;;\n"
-        + "esac\n",
-    )
-    stub("fzf", 'printf "ctrl-g\\n%s\\n" "$PICK"\n')
-    env["FETCHES"] = str(fetches)
-    assert run("--herdr", stdin="feature\n").returncode == 0
-    assert log.read_text().splitlines() == [
-        "worktree",
-        "create",
-        "--cwd",
-        str(repo),
-        "--branch",
-        "feature",
-        "--base",
-        "origin/trunk",
-        "--focus",
-    ]
-    assert fetches.read_text().splitlines() == [
-        "-C",
-        str(repo),
-        "fetch",
-        "--quiet",
-        "origin",
-        "trunk",
-    ]
-
-
-def test_herdr_worktree_from_origin_branch(picker: Picker):
-    run, _, log, repo, stub = picker
-    stub(
-        "git",
-        'case "$3 $4 $6" in\n'
-        + '"fetch --quiet +refs/heads/pr-branch:refs/remotes/origin/pr-branch") ;;\n'
-        + "*) exit 1 ;;\n"
-        + "esac\n",
-    )
-    stub("fzf", 'printf "ctrl-g\\n%s\\n" "$PICK"\n')
-    assert run("--herdr", stdin="origin/pr-branch\n").returncode == 0
-    assert log.read_text().splitlines() == [
-        "worktree",
-        "create",
-        "--cwd",
-        str(repo),
-        "--branch",
-        "pr-branch",
-        "--base",
-        "origin/pr-branch",
-        "--focus",
-    ]
-
-
-def test_herdr_worktree_without_remote(picker: Picker):
-    run, _, log, _, stub = picker
-    stub("git", "exit 1\n")
-    stub("fzf", 'printf "ctrl-g\\n%s\\n" "$PICK"\n')
-    assert run("--herdr", stdin="feature\n").returncode == 0
-    assert log.read_text().splitlines()[-2:] == ["HEAD", "--focus"]
-
-
-def test_herdr_worktree_needs_a_branch(picker: Picker):
-    run, _, log, _, stub = picker
-    stub("fzf", 'printf "ctrl-g\\n%s\\n" "$PICK"\n')
-    assert run("--herdr", stdin="\n").returncode == 0
-    assert not log.exists()
 
 
 def test_herdr_reuse(picker: Picker):
@@ -190,33 +103,3 @@ def test_herdr_reuse_focus_only(picker: Picker):
     stub("fzf", 'printf "alt-enter\\n%s\\n" "$PICK"\n')
     assert run("--herdr").returncode == 0
     assert log.read_text().splitlines() == ["workspace", "focus", "w9"]
-
-
-@pytest.mark.parametrize("args", [[], ["--invalid"], ["--niri", "--herdr"]])
-def test_requires_one_backend(picker: Picker, args: list[str]):
-    run, _, log, _, _ = picker
-    assert run(*args).returncode == 2
-    assert not log.exists()
-
-
-def test_cancel(picker: Picker):
-    run, _, log, _, stub = picker
-    stub("fzf", "exit 130\n")
-    assert run("--herdr").returncode == 0
-    assert not log.exists()
-
-
-@pytest.mark.parametrize("backend", ["niri", "hypr"])
-def test_desktop_failure_notifies(picker: Picker, backend: str):
-    run, _, log, _, stub = picker
-    stub(
-        f"{backend}land-project" if backend == "hypr" else "niri-project",
-        'echo "compositor rejected request" >&2; exit 7\n',
-    )
-    stub("busctl", 'printf "%s\\n" "$@" > "$LOG"\n')
-    result = run(f"--{backend}")
-    assert result.returncode == 7
-    assert "compositor rejected request" in result.stderr
-    notification = log.read_text()
-    assert "Could not open project" in notification
-    assert "compositor rejected request" in notification

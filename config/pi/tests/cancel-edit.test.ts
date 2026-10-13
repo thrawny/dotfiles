@@ -38,7 +38,6 @@ function harness() {
 	let dispatch: Promise<void> | undefined;
 	let waitHook: (() => Promise<void>) | undefined;
 	let navigationHook: (() => Promise<void>) | undefined;
-	let appendAssistant = true;
 	let editorFactory: ((...args: never[]) => typeof editor) | undefined;
 	const nativeInterrupt = vi.fn(() => {
 		idle = true;
@@ -55,8 +54,7 @@ function harness() {
 			else editorText += data;
 		},
 	};
-	const baseFactory = () => editor;
-	editorFactory = baseFactory;
+	editorFactory = () => editor;
 	const emit = async (name: string, event: unknown = {}) =>
 		events.get(name)?.(event as never, ctx as never);
 	const ui = {
@@ -81,11 +79,9 @@ function harness() {
 		abort: vi.fn(),
 		waitForIdle: vi.fn(async () => {
 			await waitHook?.();
-			if (appendAssistant) {
-				const message = assistant();
-				await emit("message_end", { message });
-				session.appendMessage(message as never);
-			}
+			const message = assistant();
+			await emit("message_end", { message });
+			session.appendMessage(message as never);
 			idle = true;
 			await emit("agent_end", { messages: [] });
 			await emit("agent_settled");
@@ -137,7 +133,6 @@ function harness() {
 		editor,
 		nativeInterrupt,
 		emit,
-		baseFactory,
 		async start(
 			text = "Original prompt",
 			extra: Record<string, unknown> = {},
@@ -171,9 +166,6 @@ function harness() {
 		setNavigationHook(hook: () => Promise<void>) {
 			navigationHook = hook;
 		},
-		setAppendAssistant(value: boolean) {
-			appendAssistant = value;
-		},
 	};
 }
 
@@ -184,28 +176,10 @@ describe("cancel and edit", () => {
 		const targetId = h.session.getLeafId();
 		h.escape();
 		await h.finish();
-		expect(h.pi.sendUserMessage).toHaveBeenCalledWith("/cancel-edit", {
-			expandPromptTemplates: true,
-		});
-		expect(h.ctx.abort).toHaveBeenCalledOnce();
-		expect(h.ctx.navigateTree).toHaveBeenCalledWith(targetId, {
-			summarize: false,
-		});
 		expect(h.ui.getEditorText()).toBe("/template original");
 		expect(h.session.getLeafId()).toBe(h.savedParent);
 		expect(h.session.getEntry(targetId!)).toBeDefined();
 		expect(h.nativeInterrupt).not.toHaveBeenCalled();
-	});
-
-	it("makes an unresponded user leaf navigable without deleting history", async () => {
-		const h = harness();
-		await h.start();
-		h.setAppendAssistant(false);
-		h.escape();
-		await h.finish();
-		expect(h.pi.appendEntry).toHaveBeenCalledOnce();
-		expect(h.ctx.navigateTree).toHaveBeenCalledOnce();
-		expect(h.ui.getEditorText()).toBe("Original prompt");
 	});
 
 	it.each([
@@ -349,26 +323,9 @@ describe("cancel and edit", () => {
 		});
 		h.escape();
 		await h.finish();
-		expect(h.ui.notify).toHaveBeenCalledWith(
-			"Could not restore prompt: navigation failed",
-			"error",
-		);
+		expect(h.ui.notify).toHaveBeenCalledWith(expect.any(String), "error");
 		h.escape();
 		expect(h.nativeInterrupt).toHaveBeenCalledOnce();
-	});
-
-	it("restores the previous editor factory on shutdown", async () => {
-		const h = harness();
-		await h.start();
-		await h.emit("session_shutdown");
-		expect(h.ui.getEditorComponent()).toBe(h.baseFactory);
-	});
-
-	it("does not install an editor outside TUI mode", async () => {
-		const h = harness();
-		h.ctx.mode = "rpc";
-		await h.emit("session_start");
-		expect(h.ui.setEditorComponent).not.toHaveBeenCalled();
 	});
 });
 

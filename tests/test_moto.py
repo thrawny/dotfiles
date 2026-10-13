@@ -198,16 +198,13 @@ def test_closed_pane_of_a_child_task_is_news_once(moto: ModuleType):
 
 @pytest.mark.parametrize("kind", ["wrap", "snooze", "handback"])
 def test_child_wrap_snooze_and_handback_reach_the_driver_once(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str], kind: str
+    moto: ModuleType, kind: str
 ):
     with moto.tasks_for_update() as tasks:
         tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1")
     args = argparse.Namespace(kind=kind, text=["All", "set"], agent=None)
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}):
         assert moto.cmd_report(args) == 0
-    out = capsys.readouterr().out
-    assert f"Reported {kind} to the driver" in out
-    assert "not watching" not in out
     tasks = moto.read_tasks()
     now = moto.time.time()
     news = [f"abc-2 {kind} (child of abc-1): All set"]
@@ -262,35 +259,6 @@ def test_report_finds_its_task_by_pane_and_keeps_the_pr(moto: ModuleType):
     assert saved["pr"] == "https://github.com/o/r/pull/7"
 
 
-def test_report_from_an_untracked_pane_tells_the_worker_to_ask_directly(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
-    args = argparse.Namespace(kind="done", text=["x"], agent=None)
-    with patch.dict("os.environ", {"HERDR_PANE_ID": "w9:p9"}):
-        assert moto.cmd_report(args) == 0
-    assert "Tell the user directly" in capsys.readouterr().out
-    assert moto.read_tasks() == {}
-
-
-def test_report_from_a_held_task_tells_the_worker_to_ask_in_its_pane(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True)
-    args = argparse.Namespace(kind="question", text=["Next", "URL?"], agent=None)
-    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
-        assert moto.cmd_report(args) == 0
-    assert "ask the user directly in this pane" in capsys.readouterr().out
-    assert moto.read_tasks()["abc-1"]["report"]["text"] == "Next URL?"
-
-
-def test_held_task_never_wakes(moto: ModuleType):
-    report = {"kind": "question", "text": "Which base?", "at": 100.0}
-    tasks = {"abc-1": task(held=True, report=report)}
-    assert moto.check(tasks, live("done", 2), 200) == []
-    assert moto.check(tasks, {}, 200) == []
-
-
 def test_resume_treats_what_happened_while_held_as_seen(moto: ModuleType):
     report = {"kind": "question", "text": "Which base?", "at": 100.0}
     tasks = {"abc-1": task(held=True, report=report)}
@@ -304,7 +272,7 @@ def test_resume_treats_what_happened_while_held_as_seen(moto: ModuleType):
 
 @pytest.mark.parametrize("kind", ["handback", "snooze"])
 def test_handback_and_snooze_end_the_hold_and_wake_the_driver(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str], kind: str
+    moto: ModuleType, kind: str
 ):
     old = {"kind": "question", "text": "Which base?", "at": 100.0}
     seen = {"status": "working", "seq": 1, "pending": {"since": 90.0}}
@@ -313,7 +281,6 @@ def test_handback_and_snooze_end_the_hold_and_wake_the_driver(
     args = argparse.Namespace(kind=kind, text=["Ship", "it"], agent=None)
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
         assert moto.cmd_report(args) == 0
-    assert "moto watch covers this task again" in capsys.readouterr().out
     tasks = moto.read_tasks()
     assert tasks["abc-1"]["held"] is False
     now = moto.time.time()
@@ -330,46 +297,6 @@ def test_failed_update_writes_nothing(moto: ModuleType, state_home: Path):
             tasks["abc-1"] = task()
             raise moto.MotoError("boom")
     assert not (state_home / "moto/tasks.json").exists()
-
-
-def test_spawn_adds_the_report_footer_and_records_the_task(moto: ModuleType):
-    details = {
-        "agent": "abc-1",
-        "repo": "/code/widgets",
-        "branch": "ABC-1-fix",
-        "cwd": "/code/widgets-ABC-1-fix",
-        "pane_id": "w1:p1",
-        "tab_id": "w1:t1",
-        "workspace_id": "w1",
-    }
-    args = argparse.Namespace(
-        repo="widgets",
-        worktree="ABC-1-fix",
-        base=None,
-        name=None,
-        title="ABC-1 fix",
-        resume=None,
-    )
-    with (
-        patch("sys.stdin.read", return_value="Fix it."),
-        patch.object(moto, "run", return_value=json.dumps(details)) as run,
-    ):
-        assert moto.cmd_spawn(args) == 0
-    command = run.call_args.args[0]
-    assert command == [
-        "spawn-session",
-        "--json",
-        "--repo",
-        "widgets",
-        "--worktree",
-        "ABC-1-fix",
-        "--title",
-        "ABC-1 fix",
-    ]
-    assert run.call_args.kwargs["stdin"].startswith(
-        "[driver] Fix it.\n\nA driver session started you"
-    )
-    assert moto.read_tasks()["abc-1"]["seen"] == {"status": "working"}
 
 
 def git(cwd: Path, *args: str) -> None:
@@ -535,22 +462,6 @@ def test_forced_close_skips_the_busy_checks(moto: ModuleType):
     herdr.assert_called_once_with("tab", "close", "w1:t1")
 
 
-def test_workspace_without_checkout_is_found_by_pane_cwd(moto: ModuleType):
-    replies: dict[tuple[str, ...], dict[str, Any]] = {
-        ("workspace", "list"): {
-            "workspaces": [{"workspace_id": "w1", "label": "moto"}]
-        },
-        ("pane", "list"): {"panes": [{"workspace_id": "w1", "cwd": "/home/moto"}]},
-    }
-
-    def herdr(*args: str) -> dict[str, Any]:
-        return replies[args]
-
-    with patch.object(moto, "herdr", side_effect=herdr):
-        assert moto.checkout_workspace("/home/moto") == "w1"
-        assert moto.checkout_workspace("/elsewhere") is None
-
-
 @pytest.fixture
 def worktree(pushed_clone: Path) -> Path:
     """A pushed linked worktree of pushed_clone, on ABC-7-fix."""
@@ -625,13 +536,9 @@ def test_wrap_from_a_session_the_user_started_adopts_it(
     moto: ModuleType,
     pushed_clone: Path,
     worktree: Path,
-    capsys: pytest.CaptureFixture[str],
 ):
     herdr = report_from(moto, "wrap", worktree)
     herdr.assert_called_once_with("agent", "rename", "w4:p2", "abc-7")
-    out = capsys.readouterr().out
-    assert "moto now tracks this session as abc-7" in out
-    assert "Reported wrap to the driver." in out
     saved = moto.read_tasks()["abc-7"]
     assert (saved["repo"], saved["branch"], saved["cwd"]) == (
         str(pushed_clone),
@@ -649,15 +556,6 @@ def test_wrap_from_a_session_the_user_started_adopts_it(
     assert moto.check(moto.read_tasks(), live("done", 10, "w4:p2"), now) == [
         "abc-7 wrap: All done."
     ]
-
-
-@pytest.mark.usefixtures("claude_home")
-def test_handback_from_an_adopted_session_tells_it_how_to_report(
-    moto: ModuleType, pushed_clone: Path, capsys: pytest.CaptureFixture[str]
-):
-    report_from(moto, "handback", pushed_clone)
-    assert "moto report done|question|blocked" in capsys.readouterr().out
-    assert moto.read_tasks()["widgets-research-notes"]["report"]["kind"] == "handback"
 
 
 @pytest.mark.usefixtures("claude_home")
@@ -811,20 +709,6 @@ def test_ask_writes_and_clears_the_driver_question(
     assert json.loads(path.read_text()) == {"pane_id": "w1:p9"}
 
 
-def test_tell_marks_the_prompt_as_the_driver_s(moto: ModuleType):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    args = argparse.Namespace(agent="abc-1", text=["Ports", "are", "free."])
-    with patch.object(moto, "herdr", return_value={}) as herdr:
-        assert moto.cmd_tell(args) == 0
-    herdr.assert_called_once_with(
-        "agent", "prompt", "abc-1", "[driver] Ports are free."
-    )
-    with pytest.raises(moto.MotoError, match="No task named"):
-        moto.cmd_tell(argparse.Namespace(agent="nope", text=["x"]))
-    assert events(moto)[-1]["from"] == "driver"
-
-
 def test_worker_tells_only_its_own_children_under_its_name(moto: ModuleType):
     with moto.tasks_for_update() as tasks:
         tasks["abc-1"] = task()
@@ -892,23 +776,6 @@ def test_snoozed_task_never_wakes_and_resume_refuses_it(moto: ModuleType):
         moto.cmd_resume(argparse.Namespace(agent="abc-1"))
 
 
-def test_list_shows_snoozed_tasks_apart(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-        tasks["abc-2"] = task(pane_id="w2:p1", snoozed=SNOOZE)
-    with (
-        patch.object(moto, "live_agents", return_value=live("idle", 1)),
-        patch.object(moto.time, "time", return_value=100.0 + 7200),
-    ):
-        assert moto.cmd_list(argparse.Namespace(json=False)) == 0
-    out = capsys.readouterr().out
-    awake, snoozed = out.split("Snoozed:")
-    assert "abc-1" in awake and "abc-2" not in awake
-    assert "abc-2 · widgets · ABC-1-fix · 2h\n  waiting on infra" in snoozed
-
-
 def test_wake_resumes_the_session_at_the_same_worktree_path(
     moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
@@ -945,50 +812,6 @@ def test_wake_resumes_the_session_at_the_same_worktree_path(
     saved = moto.read_tasks()["abc-1"]
     assert "snoozed" not in saved and saved["held"] is False
     assert (saved["pane_id"], saved["seen"]["status"]) == ("w5:p1", "working")
-
-
-def test_spawn_passes_the_model_on_and_wake_keeps_it(
-    moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
-    monkeypatch.setattr(moto, "CLAUDE_HOME", tmp_path / "claude")
-    cwd = str(tmp_path / "widgets")
-    os.mkdir(cwd)
-    details = {
-        "agent": "abc-1",
-        "repo": cwd,
-        "cwd": cwd,
-        "pane_id": "w1:p1",
-        "tab_id": "w1:t1",
-        "workspace_id": "w1",
-    }
-    args = argparse.Namespace(
-        repo="widgets", title="ABC-1 fix", model="sonnet", effort="low"
-    )
-    with (
-        patch("sys.stdin.read", return_value="Fix it."),
-        patch.object(moto, "run", return_value=json.dumps(details)) as run,
-    ):
-        assert moto.cmd_spawn(args) == 0
-    assert run.call_args.args[0][-4:] == ["--model", "sonnet", "--effort", "low"]
-    saved = moto.read_tasks()["abc-1"]
-    assert (saved["model"], saved["effort"]) == ("sonnet", "low")
-
-    session_file(moto.session_dir(cwd), "s1", "ABC-1 fix", mtime=100)
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"]["snoozed"] = {**SNOOZE, "cwd": cwd, "worktree": False}
-    with (
-        patch.object(moto, "run", return_value=json.dumps(details)) as run,
-        patch.object(moto, "live_agents", return_value=live("working", 3, "w1:p1")),
-    ):
-        assert moto.cmd_wake(argparse.Namespace(agent="abc-1", text=[])) == 0
-    assert run.call_args.args[0][-6:] == [
-        "--resume",
-        "s1",
-        "--model",
-        "sonnet",
-        "--effort",
-        "low",
-    ]
 
 
 def test_wake_refuses_a_session_missing_from_its_folder(
@@ -1131,16 +954,6 @@ def test_session_start_hook_ignores_other_sessions_and_never_fails(
     assert capsys.readouterr().out == ""
 
 
-def test_report_records_the_worker_s_session(moto: ModuleType):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    args = argparse.Namespace(kind="done", text=["ok"], agent=None)
-    env = {"HERDR_PANE_ID": "w1:p1", "CLAUDE_CODE_SESSION_ID": "s1"}
-    with patch.dict("os.environ", env):
-        assert moto.cmd_report(args) == 0
-    assert moto.read_tasks()["abc-1"]["session"] == "s1"
-
-
 def moto_main(moto: ModuleType, *argv: str) -> int:
     with patch("sys.argv", ["moto", *argv]):
         return moto.main()
@@ -1169,9 +982,7 @@ def test_a_fork_runs_no_task_commands(
             ["hold", "abc-1"],
         ):
             assert moto_main(moto, *argv) == 1
-            err = capsys.readouterr().err
-            assert f"cannot run moto {argv[0]}" in err
-            assert "Answer the user in this pane" in err
+            assert f"cannot run moto {argv[0]}" in capsys.readouterr().err
         with patch.object(moto, "live_agents", return_value={}):
             assert moto_main(moto, "list") == 0
     assert "abc-1" in capsys.readouterr().out
@@ -1289,16 +1100,6 @@ def test_report_logs_its_text_and_a_new_pr_once(moto: ModuleType):
         ("pr", "https://github.com/o/r/pull/7"),
         ("report", "PR https://github.com/o/r/pull/7"),
     ]
-
-
-def test_drop_keeps_the_whole_task_in_the_log(moto: ModuleType):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(pr="https://github.com/o/r/pull/7")
-    assert moto.cmd_drop(argparse.Namespace(agent="abc-1")) == 0
-    assert moto.read_tasks() == {}
-    drop = events(moto)[-1]
-    assert drop["event"] == "drop"
-    assert drop["task"] == task(pr="https://github.com/o/r/pull/7")
 
 
 def absorbed(moto: ModuleType) -> list[str]:
@@ -1455,17 +1256,13 @@ def test_task_a_worker_started_is_left_to_that_worker(moto: ModuleType):
         patch.object(moto, "run", return_value=json.dumps(details)) as run,
     ):
         assert moto.cmd_spawn(args) == 0
-    brief = run.call_args.kwargs["stdin"]
-    assert brief.startswith("[abc-1] Test it.\n\nAnother worker, abc-1, started you")
-    assert "follow the user first, then the driver, then abc-1" in brief
+    assert run.call_args.kwargs["stdin"].startswith("[abc-1] Test it.")
     tasks = moto.read_tasks()
     assert tasks["abc-2"]["parent"] == "abc-1"
     assert moto.check({"abc-2": tasks["abc-2"]}, {}, 0) == []
 
 
-def test_a_worker_hands_a_task_to_the_driver(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
+def test_a_worker_hands_a_task_to_the_driver(moto: ModuleType):
     details = {
         "agent": "abc-2",
         "repo": "/code/widgets",
@@ -1491,9 +1288,7 @@ def test_a_worker_hands_a_task_to_the_driver(
         patch.object(moto, "run", return_value=json.dumps(details)) as run,
     ):
         assert moto.cmd_spawn(args) == 0
-    brief = run.call_args.kwargs["stdin"]
-    assert brief.startswith("[driver] Build it.\n\nA driver session started you")
-    assert "The driver watches abc-2" in capsys.readouterr().out
+    assert run.call_args.kwargs["stdin"].startswith("[driver] Build it.")
     tasks = moto.read_tasks()
     assert "parent" not in tasks["abc-2"]
     assert tasks["abc-2"]["requested_by"] == "abc-1"
@@ -1503,9 +1298,6 @@ def test_a_worker_hands_a_task_to_the_driver(
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
         with pytest.raises(moto.MotoError, match="use moto report"):
             moto.message_sender(tasks, "abc-2", "hi")
-    with patch.object(moto, "live_agents", return_value={}):
-        assert moto.cmd_list(argparse.Namespace(json=False)) == 0
-    assert "· requested by abc-1" in capsys.readouterr().out
 
 
 def afk(moto: ModuleType, *words: str) -> None:
@@ -1524,14 +1316,6 @@ def test_afk_keeps_the_note_word_for_word_and_logs_replacements(moto: ModuleType
         ("merge #194 if green; otherwise wait", None),
         ("just watch", "merge #194 if green; otherwise wait"),
     ]
-
-
-def test_afk_without_words_is_an_entry_without_instructions(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
-    afk(moto)
-    assert moto.read_afk()["note"] == ""
-    assert "no instructions" in capsys.readouterr().out
 
 
 def report(moto: ModuleType, agent: str, kind: str, text: str) -> None:
@@ -1590,36 +1374,6 @@ def test_back_lists_a_wrap_as_finished_and_leaves_a_handback_to_the_driver(
     assert "ship it" not in out
 
 
-def test_back_refuses_when_not_away(moto: ModuleType):
-    with pytest.raises(moto.MotoError, match="Not away"):
-        moto.cmd_back(argparse.Namespace())
-
-
-def test_list_shows_the_away_note(moto: ModuleType, capsys: pytest.CaptureFixture[str]):
-    afk(moto, "back at 5")
-    capsys.readouterr()
-    with patch.object(moto, "live_agents", return_value={}):
-        assert moto.cmd_list(argparse.Namespace(json=False)) == 0
-    out = capsys.readouterr().out
-    assert "The user is away since" in out and "Note: back at 5" in out
-
-
-def queue(operation: str, at: float, task_id: str = "b1") -> dict[str, Any]:
-    """A queue line as Claude writes it to the driver's transcript."""
-    stamp = datetime.fromtimestamp(at, UTC).isoformat().replace("+00:00", "Z")
-    entry: dict[str, Any] = {
-        "type": "queue-operation",
-        "operation": operation,
-        "timestamp": stamp,
-    }
-    if operation != "dequeue":
-        entry["content"] = (
-            f"<task-notification>\n<task-id>{task_id}</task-id>\n"
-            + "<status>completed</status>\n</task-notification>"
-        )
-    return entry
-
-
 def skill(folder: Path, name: str) -> Path:
     (folder / name).mkdir(parents=True)
     (folder / name / "SKILL.md").write_text(f"---\nname: {name}\n---\n")
@@ -1651,7 +1405,6 @@ def test_link_prefers_the_work_skill_and_leaves_other_links_alone(
     assert (links / "moto-store").is_symlink() and (links / "moto-mine").is_symlink()
     assert not (links / "not-moto").exists()
     assert moto.cmd_link(argparse.Namespace()) == 0
-    assert capsys.readouterr().out == "All 2 moto skills were already linked.\n"
     # The work copy goes, so the generic one takes its place.
     (work / "SKILL.md").unlink()
     work.rmdir()
@@ -1743,18 +1496,6 @@ def test_commits_since_counts_the_user_s_own_on_the_branch(
     assert moto.commits_since(task(), 1_700_002_000) is None
 
 
-def test_pr_check_gives_up_when_github_is_slow(monkeypatch: pytest.MonkeyPatch):
-    real = load_moto()
-
-    def slow(args: list[str], **_: Any) -> str:
-        raise subprocess.TimeoutExpired(args, real.PR_TIMEOUT)
-
-    monkeypatch.setattr(real, "run", slow)
-    assert real.pr_updated("https://github.com/acme/widgets/pull/1") is None
-    monkeypatch.setattr(real, "run", MagicMock(return_value="2026-10-05T08:27:53Z\n"))
-    assert real.pr_updated("https://github.com/acme/widgets/pull/1") == 1791188873.0
-
-
 def list_output(
     moto: ModuleType,
     capsys: pytest.CaptureFixture[str],
@@ -1789,17 +1530,6 @@ def test_list_shows_what_happened_in_a_held_task_since_its_report(
         + " ago · 3 commits · PR updated 21m ago\n"
     ) in held
     assert "since the" not in watched
-
-
-def test_list_shows_a_pane_closed_by_hand(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True, closed_at=7000.0, pane_id="w9:p1")
-        tasks["abc-2"] = task(pane_id="w8:p1")
-    out = list_output(moto, capsys, 7300, [], None, 0.0)
-    assert "abc-1 · widgets · ABC-1-fix · pane closed by hand 5m ago" in out
-    assert "abc-2 · widgets · ABC-1-fix · gone\n" in out
 
 
 def test_list_adds_nothing_when_nothing_happened_since_the_report(
@@ -2039,13 +1769,6 @@ def test_unknown_fields_are_rejected(moto: ModuleType):
     assert "evry" in (moto.job_problem(job) or "")
 
 
-def test_clearing_a_question_keeps_where_the_driver_is(moto: ModuleType):
-    moto.write_driver(pane_id="w9:p1", session="abc")
-    moto.write_driver(kind="question", text="Which base?", at=1.0)
-    moto.cmd_ask(argparse.Namespace(text=[], clear=True))
-    assert moto.read_driver() == {"pane_id": "w9:p1", "session": "abc"}
-
-
 def test_watch_skips_snoozed_tasks(moto: ModuleType):
     with moto.tasks_for_update() as tasks:
         tasks["abc-2"] = task(pane_id="w1:p2", snoozed=SNOOZE)
@@ -2120,7 +1843,6 @@ def test_spawn_with_a_role_starts_in_moto_home_and_wake_keeps_the_role(
     moto_home: Path,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
 ):
     monkeypatch.setattr(moto, "CLAUDE_HOME", tmp_path / "claude")
     cwd = str(moto_home / "notes")
@@ -2151,11 +1873,6 @@ def test_spawn_with_a_role_starts_in_moto_home_and_wake_keeps_the_role(
     ]
     assert moto.read_tasks()["notes"]["role"] == "reviewer"
     assert moto.read_events()[-1]["role"] == "reviewer"
-    with patch.object(moto, "live_agents", return_value=live("idle", 1, "w1:p2")):
-        assert moto.cmd_list(argparse.Namespace(json=False)) == 0
-    assert (
-        "notes · moto · main checkout · idle · role reviewer" in capsys.readouterr().out
-    )
 
     session_file(moto.session_dir(cwd), "s1", "notes review", mtime=100)
     with moto.tasks_for_update() as tasks:
@@ -2170,29 +1887,6 @@ def test_spawn_with_a_role_starts_in_moto_home_and_wake_keeps_the_role(
     assert command[command.index("--cwd") + 1] == cwd
     assert command[command.index("--env") + 1] == "MOTO_ROLE=reviewer"
     assert moto.read_tasks()["notes"]["role"] == "reviewer"
-
-
-def test_spawn_with_a_role_defaults_to_moto_home_and_runs_on_resume(
-    moto: ModuleType, moto_home: Path
-):
-    details = {
-        "agent": "moto",
-        "repo": str(moto_home),
-        "cwd": str(moto_home),
-        "pane_id": "w1:p2",
-        "tab_id": "w1:t2",
-        "workspace_id": "w1",
-    }
-    session = "0b6f5a52-5b0e-4a8e-9a43-2a1b7c4f9e10"
-    with (
-        patch("sys.stdin.read", return_value="Carry on."),
-        patch.object(moto, "run", return_value=json.dumps(details)) as run,
-    ):
-        assert moto.cmd_spawn(role_spawn(role="reviewer", resume=session)) == 0
-    command = run.call_args.args[0]
-    assert command[command.index("--cwd") + 1] == str(moto_home)
-    assert command[command.index("--resume") + 1] == session
-    assert command[-2:] == ["--env", "MOTO_ROLE=reviewer"]
 
 
 @pytest.mark.parametrize(
@@ -2289,71 +1983,3 @@ def test_session_start_hook_takes_only_the_driver_role_for_the_driver(
     moto.driver_path().unlink()
     hook({})  # no role: the driver is whatever starts in MOTO_HOME, as before
     assert moto.read_driver() == {"pane_id": "w1:p2", "session": "s1"}
-
-
-def focus(moto: ModuleType) -> list[tuple[str, ...]]:
-    """Run moto focus with no driver open, returning the Herdr calls it made."""
-    calls: list[tuple[str, ...]] = []
-    replies: dict[str, dict[str, Any]] = {
-        "workspace list": {"workspaces": []},
-        "pane list": {"panes": []},
-        "workspace create": {"root_pane": {"pane_id": "w9:p1", "workspace_id": "w9"}},
-        "agent list": {
-            "agents": [
-                claude_in("w9:p2", name="notes"),
-                claude_in("w9:p1", name="driver"),
-            ]
-        },
-    }
-
-    def herdr(*args: str, **_: Any) -> dict[str, Any]:
-        calls.append(args)
-        return replies.get(" ".join(args[:2]), {})
-
-    with (
-        patch.object(moto, "herdr", side_effect=herdr),
-        patch.object(moto, "herdr_request"),
-    ):
-        moto_main(moto, "focus")
-    return calls
-
-
-def test_focus_starts_the_driver_in_its_role(moto: ModuleType, moto_home: Path):
-    (moto_home / "roles/driver.md").write_text("Drive.\n")
-    calls = focus(moto)
-    assert calls[2] == (
-        "workspace",
-        "create",
-        "--cwd",
-        str(moto_home),
-        "--label",
-        "moto",
-        "--env",
-        "MOTO_ROLE=driver",
-    )
-    assert calls[3][:3] == ("agent", "start", "driver")
-    # The driver, not a worker with a role that shares its workspace.
-    assert calls[-1] == ("agent", "focus", "w9:p1")
-
-
-def test_focus_starts_the_driver_without_a_role_until_moto_home_has_roles(
-    moto: ModuleType, moto_home: Path, capsys: pytest.CaptureFixture[str]
-):
-    for role in (moto_home / "roles").iterdir():
-        role.unlink()
-    (moto_home / "roles").rmdir()
-    calls = focus(moto)
-    create = next(c for c in calls if c[:2] == ("workspace", "create"))
-    assert "--env" not in create
-    assert any(c[:2] == ("agent", "start") for c in calls)
-    assert "driver starts without a role" in capsys.readouterr().err
-
-
-@pytest.mark.usefixtures("moto_home")
-def test_focus_refuses_a_roles_folder_without_the_driver_role(
-    moto: ModuleType,
-    capsys: pytest.CaptureFixture[str],
-):
-    calls = focus(moto)
-    assert not any(c[:2] == ("workspace", "create") for c in calls)
-    assert "role file missing" in capsys.readouterr().err

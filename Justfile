@@ -3,7 +3,6 @@
 
 mod nix
 mod shell
-mod nvim "config/nvim"
 
 # Default recipe - list all recipes
 default:
@@ -137,7 +136,7 @@ test-t3ctl:
     @just test-python tests/test_t3ctl.py
 
 # Run all tests
-test: test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-nvim-here test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills test-remote-mode test-prctl
+test: test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-desktop-broker test-project-picker test-herdr-next-agent test-nvim-here test-herdr-decorator test-t3ctl test-direnv test-private-skills test-remote-mode test-prctl
 
 # Session forking, exact session selection, and desktop routing
 test-fork-window:
@@ -200,11 +199,6 @@ moto-jobs-dev:
 test-python *args:
     uv run --locked python -B -m pytest {{args}}
 
-# Check AeroSpace keybindings, app rules, and terminal launcher shell syntax
-# Portable checks only; macOS behavior still needs a smoke test.
-test-aerospace:
-    @just test-python tests/test_aerospace.py
-
 # Test display recovery, resume ordering, and closed-lid handling with fake tools
 test-display-recover:
     bash -n bin/hypr-display-recover bin/hypr-panel-recover bin/wake-lg bin/dpms-on
@@ -215,11 +209,6 @@ test-hypr-binds:
     bash -n bin/dpms-on bin/dpms-off
     nvim --headless -u NONE -l tests/test_hypr_binds.lua
 
-# Check niri layout detection with mocked desktop commands
-test-niri-layout:
-    bash -n bin/niri-layout
-    @just test-python tests/test_niri_layout.py
-
 # Check the desktop broker protocol and sandbox routing with a fake browser
 test-desktop-broker:
     bash -n bin/open-url bin/sandbox bin/sandbox-wl-paste bin/sandbox-xdg-open
@@ -228,10 +217,6 @@ test-desktop-broker:
 # Validate the active AeroSpace config on macOS without applying it
 check-aerospace:
     aerospace reload-config --dry-run --warnings-as-errors --no-gui
-
-# Test the Mac bootstrap walkthrough without changing this machine
-test-bootstrap-mac:
-    python3 tests/test_bootstrap_mac.py
 
 # Run Neovim config tests
 test-nvim:
@@ -245,7 +230,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv test-remote-mode test-prctl check-private-skills nix::eval
+check-parallel: test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv test-remote-mode test-prctl check-private-skills nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

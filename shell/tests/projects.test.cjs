@@ -61,10 +61,3 @@ for (const scenario of ['open', 'worktree', 'missing-directory', 'launch-failure
             assert.equal(fs.existsSync(log), false);
     });
 }
-
-test('Alt+P replaces the terminal picker binding and exposes launcher IPC', () => {
-    const binds = fs.readFileSync(path.join(__dirname, '../../config/hypr/lua/binds.lua'), 'utf8');
-    assert.ok(binds.includes('bind("ALT + P", dsp.exec_cmd("quickshell ipc -c dotfiles call launcher projects"))'));
-    assert.ok(!binds.includes('ghostty --title=project-picker'));
-    assert.ok(fs.readFileSync(path.join(__dirname, '../shell.qml'), 'utf8').includes('Launcher.toggleProjects()'));
-});
