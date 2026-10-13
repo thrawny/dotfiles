@@ -79,6 +79,14 @@ prctl wait 1010 --require-approval-from octocat --timeout 20m
 
 This mode waits for that reviewer's latest approval or changes request instead of settling on machine and optional-AI signals. It also wakes on PR closure or head change; unlike the default waiter, a head change is terminal rather than resetting observations. Timeout exits nonzero. It only observes review state and never merges. Run `snapshot` again after any wake-up to inspect the resulting PR state.
 
+When the loop has nothing left to do but wait on people, such as a review from whoever on the team picks it up, use `watch` instead. It exits on the first change: a new head, checks settling or newly failing, the PR merging or closing, or a new review or comment from anyone but the signed-in user, bots included:
+
+```bash
+prctl watch [<pr>] --timeout 1h
+```
+
+Each `woke reason=` line names one change, with the new comments' authors, excerpts and links. Pass its `next-since=` value to the next watcher's `--since` so activity that lands between the two still counts. `--on` narrows the events and `--ignore-author` mutes a noisy account. Timeout exits nonzero.
+
 Do not manually post `@codex review` after every push when the repository automatically reviews pushes. Trigger it only when repository behavior requires manual activation or Codex stayed inactive beyond the grace period and a new review is actually needed. After triggering a reviewer, launch `prctl wait` directly; do not separately poll reactions. Avoid duplicate review requests.
 
 ## 4. Fix and close the loop

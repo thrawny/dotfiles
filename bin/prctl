@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
@@ -1304,6 +1304,260 @@ def command_wait(args: argparse.Namespace) -> int:
             time.sleep(min(args.interval, remaining))
 
 
+WATCH_EVENTS = ("commit", "checks", "state", "activity")
+
+
+@dataclass(frozen=True)
+class Activity:
+    key: str
+    kind: str
+    author: str
+    created_at: datetime
+    state: str
+    body: str
+    url: str
+    location: str
+
+
+def watch_events(value: str) -> frozenset[str]:
+    events = frozenset(part.strip() for part in value.split(",") if part.strip())
+    unknown = sorted(events - set(WATCH_EVENTS))
+    if not events or unknown:
+        raise argparse.ArgumentTypeError(
+            f"choose from {','.join(WATCH_EVENTS)}"
+            + (f"; unknown: {','.join(unknown)}" if unknown else "")
+        )
+    return events
+
+
+def since_time(value: str) -> datetime:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "must be an ISO 8601 time such as 2026-01-31T09:00:00Z"
+        ) from error
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+
+
+def iso_utc(value: datetime) -> str:
+    return value.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def viewer_login(host: str) -> str:
+    data = api_json(host, "user")
+    login = data.get("login") if isinstance(data, dict) else None
+    if not isinstance(login, str) or not login:
+        raise GhError("gh did not return the signed-in user's login")
+    return login
+
+
+def pr_activity(host: str, repo: str, pr_number: int) -> list[Activity]:
+    """Every comment, review and inline comment on the PR, newest last."""
+
+    def author(item: dict[str, Any]) -> str:
+        user = item.get("user") or {}
+        login = user.get("login") if isinstance(user, dict) else None
+        return str(login or "unknown")
+
+    activity: list[Activity] = []
+    for item in paginated_items(host, f"repos/{repo}/issues/{pr_number}/comments"):
+        if not isinstance(item.get("created_at"), str):
+            continue
+        activity.append(
+            Activity(
+                key=f"comment:{item.get('id')}",
+                kind="comment",
+                author=author(item),
+                created_at=timestamp(item["created_at"]),
+                state="",
+                body=str(item.get("body") or ""),
+                url=str(item.get("html_url") or ""),
+                location="",
+            )
+        )
+    for item in paginated_items(host, f"repos/{repo}/pulls/{pr_number}/reviews"):
+        state = str(item.get("state") or "").upper()
+        # A pending review is an unsent draft that only its author can see.
+        if state == "PENDING" or not isinstance(item.get("submitted_at"), str):
+            continue
+        activity.append(
+            Activity(
+                key=f"review:{item.get('id')}",
+                kind="review",
+                author=author(item),
+                created_at=timestamp(item["submitted_at"]),
+                state=state.lower().replace("_", "-"),
+                body=str(item.get("body") or ""),
+                url=str(item.get("html_url") or ""),
+                location="",
+            )
+        )
+    for item in paginated_items(host, f"repos/{repo}/pulls/{pr_number}/comments"):
+        if not isinstance(item.get("created_at"), str):
+            continue
+        line = item.get("line") or item.get("original_line")
+        path = str(item.get("path") or "")
+        activity.append(
+            Activity(
+                key=f"inline:{item.get('id')}",
+                kind="inline",
+                author=author(item),
+                created_at=timestamp(item["created_at"]),
+                state="",
+                body=str(item.get("body") or ""),
+                url=str(item.get("html_url") or ""),
+                location=f"{path}:{line}" if line is not None else path,
+            )
+        )
+    activity.sort(key=lambda item: item.created_at)
+    return activity
+
+
+def print_activity(items: list[Activity], limit: int = 10) -> None:
+    for item in items[:limit]:
+        label = item.kind + (f" {item.state}" if item.state else "")
+        location = f" {item.location}" if item.location else ""
+        body = excerpt(item.body, 200) if item.body.strip() else "(no text)"
+        print(f"  {label} @{item.author}{location}: {body}")
+        if item.url:
+            print(f"    {item.url}")
+    if len(items) > limit:
+        print(f"  … {len(items) - limit} more")
+
+
+def command_watch(args: argparse.Namespace) -> int:
+    initial = get_pr(args.pr, args.repo)
+    host, repo = repo_from_url(initial.url)
+    full_repo = repo_spec(host, repo)
+    events: frozenset[str] = args.on
+    ignored = {normalize_login(login) for login in args.ignore_author}
+    if "activity" in events and not args.include_self:
+        ignored.add(normalize_login(viewer_login(host)))
+
+    def visible(items: list[Activity]) -> list[Activity]:
+        return [item for item in items if normalize_login(item.author) not in ignored]
+
+    # Activity is matched by ID, so an edited comment is not news. --since
+    # leaves items created at or after it out of the baseline, which lets a
+    # follow-up watcher catch what landed between two watchers.
+    seen: set[str] = set()
+    if "activity" in events:
+        seen = {
+            item.key
+            for item in pr_activity(host, repo, initial.number)
+            if args.since is None or item.created_at < args.since
+        }
+    head = initial.head_sha
+    failed = {check.name for check in initial.checks_failed}
+    pending_seen = bool(initial.checks_pending)
+    started = time.monotonic()
+    deadline = started + args.timeout
+    progress = WaitProgress()
+
+    print(
+        f"watching pr=#{initial.number} repo={repo} head={short_sha(head)}"
+        f" on={','.join(event for event in WATCH_EVENTS if event in events)}"
+        f" interval={args.interval}s timeout={args.timeout}s"
+        + (f" since={iso_utc(args.since)}" if args.since else "")
+        + (f" ignore={','.join(sorted(ignored))}" if ignored else ""),
+        flush=True,
+    )
+
+    while True:
+        now = time.monotonic()
+        elapsed = int(now - started)
+        if now >= deadline:
+            progress.finish_line()
+            print(
+                f"timed out pr=#{initial.number} head={short_sha(head)}"
+                f" elapsed={elapsed}s; nothing changed",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
+
+        try:
+            polled_at = datetime.now(UTC)
+            current = get_pr(str(initial.number), full_repo)
+            fresh: list[Activity] = []
+            if "activity" in events:
+                fresh = [
+                    item
+                    for item in pr_activity(host, repo, current.number)
+                    if item.key not in seen
+                ]
+                seen.update(item.key for item in fresh)
+                fresh = visible(fresh)
+            now_failed = {check.name for check in current.checks_failed}
+            new_failures = now_failed - failed
+            pending_seen = pending_seen or bool(current.checks_pending)
+            checks_settled = pending_seen and not current.checks_pending
+
+            reasons: list[str] = []
+            if "state" in events and current.state != "OPEN":
+                reasons.append(current.state.lower())
+            if "commit" in events and current.head_sha != head:
+                reasons.append("commit")
+            if "checks" in events and (new_failures or checks_settled):
+                reasons.append("checks")
+            if fresh:
+                reasons.append("activity")
+
+            progress.update(
+                f"snapshot elapsed={elapsed}s state={current.state}"
+                f" head={short_sha(current.head_sha)}"
+                f" checks_pending={len(current.checks_pending)}"
+                f" checks_failed={len(current.checks_failed)}",
+                (
+                    current.state,
+                    current.head_sha,
+                    len(current.checks_pending),
+                    len(current.checks_failed),
+                ),
+                now,
+            )
+            if reasons:
+                progress.finish_line()
+                for reason in reasons:
+                    print(
+                        f"woke reason={reason} pr=#{current.number}"
+                        f" head={short_sha(current.head_sha)}",
+                        flush=True,
+                    )
+                    if reason == "commit":
+                        print(
+                            f"  old={short_sha(head)} new={short_sha(current.head_sha)}"
+                        )
+                    elif reason == "checks":
+                        print(
+                            f"  checks_total={len(current.checks)}"
+                            f" checks_pending={len(current.checks_pending)}"
+                            f" checks_failed={len(current.checks_failed)}"
+                        )
+                        for check in current.checks_failed:
+                            new = " (new)" if check.name in new_failures else ""
+                            link = f" — {check.link}" if check.link else ""
+                            print(f"  failed{new}: {check.name}{link}")
+                    elif reason == "activity":
+                        print_activity(fresh)
+                print(f"next-since={iso_utc(polled_at)}", flush=True)
+                return 0
+
+            head = current.head_sha
+            failed = now_failed
+        except GhError as error:
+            progress.finish_line()
+            print(
+                f"warning: {error}; retrying in {args.interval}s",
+                file=sys.stderr,
+                flush=True,
+            )
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(args.interval, remaining))
+
+
 def add_pr_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "pr",
@@ -1351,6 +1605,44 @@ def build_parser() -> argparse.ArgumentParser:
         help="give up on an active reviewer after this long (default: --timeout)",
     )
 
+    watch_parser = commands.add_parser(
+        "watch",
+        help="wait until anything on the PR changes, and report what changed",
+    )
+    add_pr_arguments(watch_parser)
+    watch_parser.add_argument(
+        "--on",
+        type=watch_events,
+        default=frozenset(WATCH_EVENTS),
+        help=(
+            "comma-separated events that wake the watcher: commit (new head),"
+            " checks (CI settles or a check newly fails), state (merged or"
+            " closed), activity (a new review or comment); default: all"
+        ),
+    )
+    watch_parser.add_argument(
+        "--ignore-author",
+        action="append",
+        default=[],
+        metavar="LOGIN",
+        help="leave this author's reviews and comments out; repeatable",
+    )
+    watch_parser.add_argument(
+        "--include-self",
+        action="store_true",
+        help="count the signed-in gh user's own reviews and comments",
+    )
+    watch_parser.add_argument(
+        "--since",
+        type=since_time,
+        help=(
+            "count activity created at or after this ISO 8601 time as new;"
+            " pass the previous watcher's next-since"
+        ),
+    )
+    watch_parser.add_argument("-i", "--interval", type=duration, default=30)
+    watch_parser.add_argument("-t", "--timeout", type=duration, default=3600)
+
     thread_parser = commands.add_parser("threads", help="manage review threads")
     thread_commands = thread_parser.add_subparsers(dest="thread_command", required=True)
     list_parser = thread_commands.add_parser("list", help="list review threads")
@@ -1384,6 +1676,8 @@ def main() -> int:
             return command_snapshot(args)
         if args.command == "wait":
             return command_wait(args)
+        if args.command == "watch":
+            return command_watch(args)
         if args.command == "failed-checks":
             return command_failed_checks(args)
         if args.thread_command == "list":

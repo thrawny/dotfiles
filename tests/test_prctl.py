@@ -1,4 +1,4 @@
-"""Integration tests for the PR skill's GitHub helper scripts."""
+"""Integration tests for prctl against a fake gh."""
 
 # pyright: basic
 
@@ -9,7 +9,7 @@ import os
 import subprocess
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[3]
+REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = REPO_ROOT / "bin" / "prctl"
 
 FAKE_GH = r"""#!/usr/bin/env python3
@@ -25,6 +25,19 @@ active_reviewer = os.environ.get("FAKE_ACTIVE_REVIEWER") == "1"
 comment_reaction = os.environ.get("FAKE_COMMENT_REACTION") == "1"
 human_review_state = os.environ.get("FAKE_HUMAN_REVIEW_STATE")
 
+
+def views_so_far():
+    counter_path = os.environ.get("FAKE_PR_VIEW_COUNTER")
+    try:
+        return int(open(counter_path).read()) if counter_path else 0
+    except (FileNotFoundError, ValueError):
+        return 0
+
+
+# The first pr view is the initial read; anything "late" shows up from the
+# second view on, which is the watcher's first poll.
+late = views_so_far() >= 2
+
 if args[:2] == ["pr", "view"]:
     current_head = head
     counter_path = os.environ.get("FAKE_PR_VIEW_COUNTER")
@@ -37,10 +50,16 @@ if args[:2] == ["pr", "view"]:
             counter.write(str(view_count + 1))
         if os.environ.get("FAKE_HEAD_CHANGE_AFTER_INITIAL") == "1" and view_count > 0:
             current_head = "c" * 40
+    state = os.environ.get("FAKE_PR_STATE", "OPEN")
+    if os.environ.get("FAKE_LATE_PR_STATE") and views_so_far() >= 2:
+        state = os.environ["FAKE_LATE_PR_STATE"]
+    checks_pending = (
+        os.environ.get("FAKE_CHECKS_PENDING_INITIAL") == "1" and views_so_far() < 2
+    )
     checks = [] if no_checks else [{
         "name": "test",
-        "status": "COMPLETED",
-        "conclusion": "FAILURE",
+        "status": "IN_PROGRESS" if checks_pending else "COMPLETED",
+        "conclusion": "" if checks_pending else "FAILURE",
         "detailsUrl": "https://github.com/acme/widgets/actions/runs/123/job/456",
         "workflowName": "CI",
     }]
@@ -48,7 +67,7 @@ if args[:2] == ["pr", "view"]:
         "number": 12,
         "title": "Improve widgets",
         "url": "https://github.com/acme/widgets/pull/12",
-        "state": os.environ.get("FAKE_PR_STATE", "OPEN"),
+        "state": state,
         "headRefOid": current_head,
         "headRefName": "feature/widgets",
         "baseRefName": "main",
@@ -91,6 +110,9 @@ if args and args[0] == "api":
                 }],
                 "pageInfo": {"hasNextPage": cursor is None, "endCursor": "NEXT" if cursor is None else None},
             }}}}}))
+        raise SystemExit(0)
+    if endpoint == "user":
+        print(json.dumps({"login": os.environ.get("FAKE_LOGIN", "octocat")}))
         raise SystemExit(0)
     if "/commits/" in endpoint:
         print(json.dumps({"commit": {"committer": {"date": "2026-07-10T00:00:00Z"}}}))
@@ -156,6 +178,40 @@ if args and args[0] == "api":
             "commit_id": head,
             "submitted_at": "2026-07-10T00:04:00Z",
             "state": human_review_state,
+        })
+    if endpoint.startswith("repos/acme/widgets/issues/12/comments?"):
+        if os.environ.get("FAKE_EARLY_COMMENT_AT"):
+            items.append({
+                "id": 800,
+                "user": {"login": "ReviewerTwo"},
+                "body": "Looked at it before the watcher started",
+                "created_at": os.environ["FAKE_EARLY_COMMENT_AT"],
+                "html_url": "https://github.com/acme/widgets/pull/12#issuecomment-800",
+            })
+        if os.environ.get("FAKE_EDITED_COMMENT") == "1":
+            items.append({
+                "id": 801,
+                "user": {"login": "ci-helper[bot]"},
+                "body": "Sticky status, edited on every poll",
+                "created_at": "2026-07-10T00:00:30Z",
+                "updated_at": f"2026-07-10T00:0{min(views_so_far(), 9)}:00Z",
+            })
+        if late and os.environ.get("FAKE_LATE_COMMENT_AUTHOR"):
+            items.append({
+                "id": 900,
+                "user": {"login": os.environ["FAKE_LATE_COMMENT_AUTHOR"]},
+                "body": "Could this handle the empty widget?",
+                "created_at": "2026-07-10T00:10:00Z",
+                "html_url": "https://github.com/acme/widgets/pull/12#issuecomment-900",
+            })
+    if late and os.environ.get("FAKE_LATE_REVIEW_STATE") and "/reviews?" in endpoint:
+        items.append({
+            "id": 901,
+            "user": {"login": "ReviewerOne"},
+            "submitted_at": "2026-07-10T00:11:00Z",
+            "state": os.environ["FAKE_LATE_REVIEW_STATE"],
+            "body": "",
+            "html_url": "https://github.com/acme/widgets/pull/12#pullrequestreview-901",
         })
     print(json.dumps([items] if "--slurp" in args else items))
     raise SystemExit(0)
@@ -433,3 +489,136 @@ def test_required_approval_wait_times_out_without_that_reviewers_decision(
     assert result.returncode == 1
     assert "timed out" in result.stderr
     assert "reviewer=ReviewerOne" in result.stderr
+
+
+def watch_env(pr_harness: PrHarness, **values: str) -> dict[str, str]:
+    env = pr_harness.env.copy()
+    env["FAKE_NO_SIGNALS"] = "1"
+    env["FAKE_PR_VIEW_COUNTER"] = str(pr_harness.temp_path / "pr-view-count")
+    env.update(values)
+    return env
+
+
+def watch(
+    pr_harness: PrHarness, env: dict[str, str], *args: str
+) -> subprocess.CompletedProcess[str]:
+    return pr_harness.run(
+        "watch", "12", "--interval", "1", "--timeout", "3", *args, env=env
+    )
+
+
+def test_watch_wakes_on_a_teammates_comment(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_LATE_COMMENT_AUTHOR="ReviewerOne")
+    result = watch(pr_harness, env)
+    assert result.returncode == 0, result.stderr
+    assert "woke reason=activity pr=#12" in result.stdout
+    assert "comment @ReviewerOne: Could this handle the empty widget?" in result.stdout
+    assert "#issuecomment-900" in result.stdout
+    assert "next-since=" in result.stdout
+
+
+def test_watch_counts_a_bot_comment(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_LATE_COMMENT_AUTHOR="scanner[bot]")
+    result = watch(pr_harness, env)
+    assert result.returncode == 0, result.stderr
+    assert "comment @scanner[bot]" in result.stdout
+
+
+def test_watch_skips_the_signed_in_user_unless_asked(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_LATE_COMMENT_AUTHOR="Octocat")
+    skipped = watch(pr_harness, env, "--timeout", "2")
+    assert skipped.returncode == 1
+    assert "ignore=octocat" in skipped.stdout
+    assert "timed out" in skipped.stderr
+
+    (tmp_path / "pr-view-count").unlink()
+    included = watch(pr_harness, env, "--include-self")
+    assert included.returncode == 0, included.stderr
+    assert "comment @Octocat" in included.stdout
+
+
+def test_watch_ignores_named_authors(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_LATE_COMMENT_AUTHOR="noisy[bot]")
+    result = watch(pr_harness, env, "--timeout", "2", "--ignore-author", "noisy")
+    assert result.returncode == 1
+    assert "woke" not in result.stdout
+
+
+def test_watch_does_not_wake_on_an_edited_comment(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_EDITED_COMMENT="1")
+    result = watch(pr_harness, env, "--timeout", "2")
+    assert result.returncode == 1
+    assert "woke" not in result.stdout
+
+
+def test_watch_reports_an_approval(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_LATE_REVIEW_STATE="APPROVED")
+    result = watch(pr_harness, env)
+    assert result.returncode == 0, result.stderr
+    assert "review approved @ReviewerOne: (no text)" in result.stdout
+
+
+def test_watch_since_counts_activity_from_before_the_watcher(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_EARLY_COMMENT_AT="2026-07-10T00:05:00Z")
+    quiet = watch(pr_harness, env, "--timeout", "2")
+    assert quiet.returncode == 1
+
+    (tmp_path / "pr-view-count").unlink()
+    caught = watch(pr_harness, env, "--since", "2026-07-10T00:04:00Z")
+    assert caught.returncode == 0, caught.stderr
+    assert "comment @ReviewerTwo" in caught.stdout
+
+
+def test_watch_wakes_on_a_new_commit(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_HEAD_CHANGE_AFTER_INITIAL="1")
+    result = watch(pr_harness, env)
+    assert result.returncode == 0, result.stderr
+    assert "woke reason=commit" in result.stdout
+    assert "old=aaaaaaaaaaaa new=cccccccccccc" in result.stdout
+
+
+def test_watch_on_limits_the_events(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_HEAD_CHANGE_AFTER_INITIAL="1")
+    result = watch(pr_harness, env, "--timeout", "2", "--on", "activity,state")
+    assert result.returncode == 1
+    assert "on=state,activity" in result.stdout
+
+
+def test_watch_rejects_an_unknown_event(tmp_path: Path) -> None:
+    result = PrHarness(tmp_path).run("watch", "12", "--on", "commit,labels")
+    assert result.returncode == 2
+    assert "unknown: labels" in result.stderr
+
+
+def test_watch_wakes_when_the_pr_merges(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_LATE_PR_STATE="MERGED")
+    result = watch(pr_harness, env)
+    assert result.returncode == 0, result.stderr
+    assert "woke reason=merged" in result.stdout
+
+
+def test_watch_wakes_when_checks_settle_with_a_new_failure(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_CHECKS_PENDING_INITIAL="1")
+    result = watch(pr_harness, env)
+    assert result.returncode == 0, result.stderr
+    assert "woke reason=checks" in result.stdout
+    assert "checks_pending=0 checks_failed=1" in result.stdout
+    assert "failed (new): test" in result.stdout
+
+
+def test_watch_ignores_a_failure_that_was_already_there(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    result = watch(pr_harness, watch_env(pr_harness), "--timeout", "2")
+    assert result.returncode == 1
+    assert "woke" not in result.stdout

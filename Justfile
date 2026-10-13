@@ -128,12 +128,16 @@ check-t3ctl:
     @just typecheck-python bin/t3ctl tests/test_t3ctl.py
     @just test-t3ctl
 
+# PR snapshot, wait, watch and thread commands against a fake gh
+test-prctl:
+    @just test-python tests/test_prctl.py
+
 # Test T3 Code API commands and credential cleanup without a live server
 test-t3ctl:
     @just test-python tests/test_t3ctl.py
 
 # Run all tests
-test: test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-nvim-here test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills test-remote-mode
+test: test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-nvim-here test-herdr-decorator test-bootstrap-mac test-t3ctl test-direnv test-private-skills test-remote-mode test-prctl
 
 # Session forking, exact session selection, and desktop routing
 test-fork-window:
@@ -241,7 +245,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv test-remote-mode check-private-skills nix::eval
+check-parallel: test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-aerospace test-niri-layout test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv test-remote-mode test-prctl check-private-skills nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all
