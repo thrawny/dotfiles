@@ -9,7 +9,7 @@ const model = vm.createContext({});
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../services/ProjectWorktree.js'), 'utf8'), model);
 
 function fixture(t, remote = true) {
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-worktree-'));
+    const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'shell-worktree-')));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     const repo = path.join(dir, 'project with spaces');
     const env = { ...process.env, HOME: dir, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null', GIT_TERMINAL_PROMPT: '0' };
