@@ -1424,12 +1424,13 @@ def test_link_prefers_the_work_skill_and_leaves_other_links_alone(
     skill(core, "moto-wrap")
     skill(core, "moto-brief")
     work = skill(home / "skills", "moto-brief")
-    skill(core, "not-moto")
+    skill(home / "skills", "babysit")
     links = claude / "skills"
     links.mkdir(parents=True)
     (links / "moto-gone").symlink_to(core / "moto-gone")
     (links / "moto-store").symlink_to("/nix/store/abc-home-manager-files/moto-store")
     (links / "moto-mine").symlink_to(tmp_path)
+    (links / "other-gone").symlink_to(tmp_path / "other-gone")
     assert moto.cmd_link(argparse.Namespace()) == 0
     out = capsys.readouterr().out
     assert (links / "moto-wrap").readlink() == (core / "moto-wrap").resolve()
@@ -1437,7 +1438,8 @@ def test_link_prefers_the_work_skill_and_leaves_other_links_alone(
     assert "Removed moto-gone" in out
     assert not (links / "moto-gone").is_symlink()
     assert (links / "moto-store").is_symlink() and (links / "moto-mine").is_symlink()
-    assert not (links / "not-moto").exists()
+    assert (links / "babysit").readlink() == (home / "skills/babysit").resolve()
+    assert (links / "other-gone").is_symlink()
     assert moto.cmd_link(argparse.Namespace()) == 0
     # The work copy goes, so the generic one takes its place.
     (work / "SKILL.md").unlink()

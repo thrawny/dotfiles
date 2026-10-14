@@ -60,7 +60,7 @@ close refuses a worker that is mid-turn, or that the user typed to since its
 last report, because a done report can be stale by then.
 moto log prints those lines.
 
-moto link puts the moto-* skills in ~/.claude/skills as symlinks, outside Home
+moto link puts every moto skill in ~/.claude/skills as symlinks, outside Home
 Manager: the generic ones from moto/skills in dotfiles, and the work ones from
 skills/ in MOTO_HOME. A work skill replaces a generic one of the same name.
 
@@ -2181,30 +2181,28 @@ def skill_folders() -> list[Path]:
 
 
 def cmd_link(_: argparse.Namespace) -> int:
-    """Symlink every moto-* skill into Claude's skills folder.
+    """Symlink every skill in the skill folders into Claude's skills folder.
 
     A link is moto's when it points into a skill folder. moto replaces or
-    removes only its own links and links whose target is gone, so Home
-    Manager's links and anything else stay as they are.
+    removes only its own links, so Home Manager's links and anything else
+    stay as they are.
     """
     folders = [folder.resolve() for folder in skill_folders()]
     wanted: dict[str, Path] = {}
     for folder in folders:
-        for skill in sorted(folder.glob("moto-*/SKILL.md")):
+        for skill in sorted(folder.glob("*/SKILL.md")):
             wanted[skill.parent.name] = skill.parent
     target = CLAUDE_HOME / "skills"
     target.mkdir(parents=True, exist_ok=True)
     changes: list[str] = []
     refused: list[str] = []
-    for entry in sorted(target.glob("moto-*")):
+    for entry in sorted(target.iterdir()):
         if not entry.is_symlink():
             if entry.name in wanted:
                 refused.append(f"{entry} is not a symlink")
             continue
         points_to = entry.readlink()
-        mine = points_to.parent in folders
-        home_manager = points_to.is_relative_to("/nix/store")
-        if not mine and (entry.exists() or home_manager):
+        if points_to.parent not in folders:
             if entry.name in wanted:
                 refused.append(f"{entry} points to {points_to}, not a moto skill")
             continue
@@ -3257,7 +3255,7 @@ def parser() -> argparse.ArgumentParser:
     pin.set_defaults(handler=cmd_pin)
 
     link = commands.add_parser(
-        "link", help="Symlink the moto-* skills into ~/.claude/skills"
+        "link", help="Symlink the moto skills into ~/.claude/skills"
     )
     link.set_defaults(handler=cmd_link)
 
