@@ -1,4 +1,5 @@
 const { test } = require('node:test');
+const linuxOnly = require('./linux-only.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -6,7 +7,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 for (const scenario of ['invalid', 'exit', 'missing']) {
-    test(`quota service retains last data on ${scenario} failure`, t => {
+    test(`quota service retains last data on ${scenario} failure`, { skip: linuxOnly }, t => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-quota-'));
         t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
         fs.cpSync(path.resolve(__dirname, '../assets'), path.join(dir, 'assets'), { recursive: true });

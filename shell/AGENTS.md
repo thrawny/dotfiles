@@ -28,7 +28,9 @@ just shell::check
 ```
 
 The check runs model tests, offscreen QML/cliphist integration tests, and strict
-QML linting. For Nix wiring changes, also follow [the Nix guide](../nix/AGENTS.md).
+QML linting. Off Linux it runs only the model tests, because Quickshell, cliphist
+and sway build only for Linux; tests that need them pass `{ skip: linuxOnly }`.
+For Nix wiring changes, also follow [the Nix guide](../nix/AGENTS.md).
 For theme changes, use the root guide's theme check.
 
 For image adapter or packaging changes, also run `just shell::check-image-package`.

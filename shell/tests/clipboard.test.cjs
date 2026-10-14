@@ -1,4 +1,5 @@
 const { test } = require('node:test');
+const linuxOnly = require('./linux-only.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -7,7 +8,7 @@ const { spawnSync } = require('node:child_process');
 const smoke = path.resolve(__dirname, 'ClipboardSmoke.qml');
 
 for (const scenario of ['roundtrip', 'cancel', 'empty', 'broken-db']) {
-    test(`direct QML/cliphist integration: ${scenario}`, t => {
+    test(`direct QML/cliphist integration: ${scenario}`, { skip: linuxOnly }, t => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-clipboard-qml-'));
         t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
         const db = path.join(dir, 'db');

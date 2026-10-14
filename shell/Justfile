@@ -39,6 +39,12 @@ waybar:
 fmt:
     nix shell --inputs-from ./nix nixpkgs#qt6.qtdeclarative -c bash -c 'fd -e qml -0 . shell | xargs -0 qmlformat -i'
 
-# Check shell model tests and QML syntax/types
+# Check shell model tests and QML syntax/types; off Linux, only the model tests
 check:
-    nix shell --inputs-from ./nix nixpkgs#quickshell nixpkgs#qt6.qtdeclarative nixpkgs#cliphist nixpkgs#python3 nixpkgs#sway nixpkgs#wl-clipboard nixpkgs#git nixpkgs#fd nixpkgs#coreutils -c bash shell/scripts/check
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tools=(nixpkgs#git nixpkgs#coreutils)
+    if [[ $(uname -s) == Linux ]]; then
+        tools+=(nixpkgs#quickshell nixpkgs#qt6.qtdeclarative nixpkgs#cliphist nixpkgs#python3 nixpkgs#sway nixpkgs#wl-clipboard nixpkgs#fd)
+    fi
+    nix shell --inputs-from ./nix "${tools[@]}" -c bash shell/scripts/check

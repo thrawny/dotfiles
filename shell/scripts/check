@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 node --test shell/tests/*.test.cjs
+if [[ $(uname -s) != Linux ]]; then
+    echo "Skipping QML lint: Quickshell is Linux-only"
+    exit 0
+fi
 qs_root=$(dirname "$(dirname "$(readlink -f "$(command -v quickshell)")")")
 mapfile -t qml_files < <(fd --extension qml . shell)
 qt_root=$(dirname "$(dirname "$(readlink -f "$(command -v qmllint)")")")

@@ -1,11 +1,12 @@
 const { test } = require('node:test');
+const linuxOnly = require('./linux-only.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
-test('project launcher modes, branch/path entry and toggle', t => {
+test('project launcher modes, branch/path entry and toggle', { skip: linuxOnly }, t => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-launcher-projects-'));
     t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
     for (const component of ['services', 'components', 'modules/launcher'])

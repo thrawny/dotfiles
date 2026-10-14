@@ -1,4 +1,5 @@
 const { test } = require('node:test');
+const linuxOnly = require('./linux-only.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -6,7 +7,7 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 for (const scenario of ['open', 'worktree', 'missing-directory', 'launch-failure', 'missing-launcher', 'timeout', 'cancel', 'cancel-action', 'reopen']) {
-    test(`QML project picker: ${scenario}`, t => {
+    test(`QML project picker: ${scenario}`, { skip: linuxOnly }, t => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-projects-'));
         t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
         const tools = path.join(dir, 'tools');

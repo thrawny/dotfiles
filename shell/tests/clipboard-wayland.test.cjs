@@ -1,4 +1,5 @@
 const { test } = require('node:test');
+const linuxOnly = require('./linux-only.cjs');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -11,7 +12,7 @@ const pause = milliseconds => new Promise(resolve => setTimeout(resolve, millise
 
 // All Wayland clients in this test receive the socket of our private headless
 // compositor. Never fall back to a desktop display, even when startup fails.
-test('image adapter preserves PNG and animated GIF bytes after cache cleanup on isolated Wayland', { timeout: 30000 }, async t => {
+test('image adapter preserves PNG and animated GIF bytes after cache cleanup on isolated Wayland', { timeout: 30000, skip: linuxOnly }, async t => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-image-wayland-'));
     fs.chmodSync(dir, 0o700);
     const runtime = path.join(dir, 'runtime');

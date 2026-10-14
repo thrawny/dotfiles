@@ -1,4 +1,5 @@
 const { test } = require('node:test');
+const linuxOnly = require('./linux-only.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -58,7 +59,7 @@ function request(env, data) {
 }
 
 for (const scenario of ['preview', 'copy', 'cancel', 'replace']) {
-    test(`image QML integration: ${scenario}`, t => {
+    test(`image QML integration: ${scenario}`, { skip: linuxOnly }, t => {
         const { dir, env } = fixture(t);
         env.CLIPBOARD_TEST_CASE = scenario;
         if (['cancel', 'replace'].includes(scenario)) env.IMAGE_DECODE_DELAY = '0.45';
@@ -80,7 +81,7 @@ for (const scenario of ['preview', 'copy', 'cancel', 'replace']) {
     });
 }
 
-test('image adapter validates stdin IDs and removes abandoned private sessions', t => {
+test('image adapter validates stdin IDs and removes abandoned private sessions', { skip: linuxOnly }, t => {
     const { dir, env } = fixture(t);
     const invalid = request(env, { operation: 'prepare', session: 'safe', id: '../1' });
     assert.notEqual(invalid.status, 0);
@@ -98,7 +99,7 @@ test('image adapter validates stdin IDs and removes abandoned private sessions',
     assert.deepEqual(fs.readdirSync(path.join(dir, 'dotfiles-clipboard')), []);
 });
 
-test('image adapter bounds temporary output and reports failed copies without exposing data', t => {
+test('image adapter bounds temporary output and reports failed copies without exposing data', { skip: linuxOnly }, t => {
     const { dir, env } = fixture(t);
     const oversized = request({ ...env, IMAGE_OVERSIZE: '1' }, { operation: 'prepare', session: 'bounded', id: '1' });
     assert.notEqual(oversized.status, 0);
@@ -112,7 +113,7 @@ test('image adapter bounds temporary output and reports failed copies without ex
     assert.equal(fs.existsSync(env.IMAGE_CAPTURE_FILE), false);
 });
 
-test('image adapter evicts older originals when the session reaches its image limit', t => {
+test('image adapter evicts older originals when the session reaches its image limit', { skip: linuxOnly }, t => {
     const { env } = fixture(t);
     const prepared = request(env, { operation: 'prepare', session: 'bounded', id: '1' });
     assert.equal(prepared.status, 0, prepared.stderr);

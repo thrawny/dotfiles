@@ -1,4 +1,5 @@
 const { test } = require('node:test');
+const linuxOnly = require('./linux-only.cjs');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
@@ -48,7 +49,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 for (const scenario of ['invalid', 'missing', 'exit', 'timeout', 'action', 'late', 'rename', 'rename-gone', 'layout']) {
-    test(`agent service retains state and reports ${scenario} failure`, t => {
+    test(`agent service retains state and reports ${scenario} failure`, { skip: linuxOnly }, t => {
         const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-agents-'));
         t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
         fs.cpSync(path.resolve(__dirname, '../services'), path.join(dir, 'services'), {recursive: true});
@@ -94,7 +95,7 @@ test('agent shelf headers keep jump slots attached to visible threads', () => {
     assert.equal(display[4].expanded, false);
 });
 
-test('agent scope persists both choices across process restarts without overwriting on load', t => {
+test('agent scope persists both choices across process restarts without overwriting on load', { skip: linuxOnly }, t => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'shell-agent-scope-'));
     t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
     fs.cpSync(path.resolve(__dirname, '../services'), path.join(dir, 'services'), {recursive: true});
