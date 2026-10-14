@@ -496,7 +496,7 @@ def user_turns(
     try:
         if snooze:
             cwd = snooze.get("cwd") or task["cwd"]
-            path: Path | None = session_dir(cwd) / f"{snooze['session']}.jsonl"
+            path = session_path(cwd, snooze["session"])
         else:
             path = transcript(task, agent)
         lines = path.read_text(errors="replace").splitlines() if path else []
@@ -1615,6 +1615,38 @@ def session_dir(cwd: str) -> Path:
     return CLAUDE_HOME / "projects" / re.sub(r"[^A-Za-z0-9]", "-", cwd)
 
 
+def session_path(cwd: str, session: str) -> Path | None:
+    """The session's transcript, in cwd's folder or any other.
+
+    Claude files a session under the folder it started in, which can be
+    another checkout than the task's, such as a worktree the worker opened.
+    """
+    path = session_dir(cwd) / f"{session}.jsonl"
+    if path.is_file():
+        return path
+    found = sorted((CLAUDE_HOME / "projects").glob(f"*/{session}.jsonl"))
+    return found[0] if found else None
+
+
+def session_cwd(path: Path) -> str | None:
+    """The folder the session ran in, from which claude --resume must start.
+
+    Each entry records the shell's folder, which a cd moves, so the one that
+    maps to the transcript's own folder is where Claude started.
+    """
+    with path.open(errors="replace") as lines:
+        for line in lines:
+            if '"cwd"' not in line:
+                continue
+            try:
+                cwd = json.loads(line).get("cwd")
+            except ValueError:
+                continue
+            if isinstance(cwd, str) and session_dir(cwd) == path.parent:
+                return cwd
+    return None
+
+
 def last_title(session: Path) -> str | None:
     title = None
     with session.open(errors="replace") as lines:
@@ -1640,8 +1672,7 @@ def transcript(task: dict[str, Any], agent: dict[str, Any] | None) -> Path | Non
     """The worker's transcript: its recorded session's, else the newest one named
     after it. A fork of the worker copies the name, so the session id comes first."""
     session = task.get("session")
-    path = session_dir(task["cwd"]) / f"{session}.jsonl"
-    if session and path.is_file():
+    if session and (path := session_path(task["cwd"], session)):
         return path
     return newest_session(task["cwd"], task_title(task, agent))
 
@@ -1738,9 +1769,16 @@ def cmd_wake(args: argparse.Namespace) -> int:
     repo = snooze.get("repo") or task["repo"]
     cwd = snooze.get("cwd") or task["cwd"]
     linked = snooze.get("worktree", bool(task.get("branch")))
-    # claude --resume finds a session only from the folder it ran in.
-    if not (session_dir(cwd) / f"{session}.jsonl").is_file():
-        raise MotoError(f"Session {session} is not in {session_dir(cwd)}")
+    path = session_path(cwd, session)
+    if not path:
+        raise MotoError(f"Session {session} is not in {CLAUDE_HOME / 'projects'}")
+    # claude --resume finds a session only from the folder it ran in, which
+    # can be another checkout than the task's.
+    if path.parent != session_dir(cwd):
+        folder = session_cwd(path)
+        if not folder or not os.path.isdir(folder):
+            raise MotoError(f"Session {session} ran in a folder that is gone: {path}")
+        cwd, linked = folder, False
     role = task.get("role")
     # A checkout that stayed may be a worktree an adopted task shared, not the
     # repo. A role's folder is in MOTO_HOME, which spawn-session takes as is.

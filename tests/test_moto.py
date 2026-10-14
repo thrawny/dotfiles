@@ -736,10 +736,12 @@ def test_worker_tells_only_its_own_children_under_its_name(moto: ModuleType):
     assert (tell["event"], tell["agent"], tell["from"]) == ("tell", "abc-2", "abc-1")
 
 
-def session_file(directory: Path, session: str, *titles: str, mtime: float) -> None:
+def session_file(
+    directory: Path, session: str, *titles: str, mtime: float, cwd: str | None = None
+) -> None:
     directory.mkdir(parents=True, exist_ok=True)
     path = directory / f"{session}.jsonl"
-    lines = [json.dumps({"type": "user", "message": "hi"})]
+    lines = [json.dumps({"type": "user", "message": "hi", "cwd": cwd})]
     lines += [json.dumps({"type": "custom-title", "customTitle": t}) for t in titles]
     path.write_text("\n".join(lines) + "\n")
     os.utime(path, (mtime, mtime))
@@ -812,6 +814,38 @@ def test_wake_resumes_the_session_at_the_same_worktree_path(
     saved = moto.read_tasks()["abc-1"]
     assert "snoozed" not in saved and saved["held"] is False
     assert (saved["pane_id"], saved["seen"]["status"]) == ("w5:p1", "working")
+
+
+def test_wake_resumes_a_session_filed_under_another_checkout(
+    moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setattr(moto, "CLAUDE_HOME", tmp_path / "claude")
+    # The worker opened a worktree and its session ran there, not in the task's cwd.
+    worktree = tmp_path / "widgets-sketch"
+    (worktree / "docs").mkdir(parents=True)
+    directory = moto.session_dir(str(worktree))
+    session_file(directory, "s1", mtime=100, cwd=str(worktree / "docs"))
+    with (directory / "s1.jsonl").open("a") as transcript:
+        transcript.write(json.dumps({"type": "user", "cwd": str(worktree)}) + "\n")
+    worker = task(branch=None, cwd="/code/widgets", session="s1")
+    assert moto.transcript(worker, None) == directory / "s1.jsonl"
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = worker | {"snoozed": {**SNOOZE, "cwd": "/code/widgets"}}
+    details = {
+        "cwd": str(worktree),
+        "pane_id": "w5:p1",
+        "tab_id": "w5:t1",
+        "workspace_id": "w5",
+    }
+    with (
+        patch.object(moto, "run", return_value=json.dumps(details)) as run,
+        patch.object(moto, "live_agents", return_value=live("idle", 3, "w5:p1")),
+    ):
+        assert moto.cmd_wake(argparse.Namespace(agent="abc-1", text=[])) == 0
+    command = run.call_args.args[0]
+    assert command[2:4] == ["--repo", str(worktree)]
+    assert command[-2:] == ["--resume", "s1"]
+    assert moto.read_tasks()["abc-1"]["cwd"] == str(worktree)
 
 
 def test_wake_refuses_a_session_missing_from_its_folder(
