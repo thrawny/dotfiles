@@ -34,12 +34,14 @@ in
       PartOf = [ "graphical-session.target" ];
       Wants = [
         "dotfiles-agent-switch.service"
+        "dotfiles-keepawake.service"
         "shell-clipboard-text.service"
         "shell-clipboard-image.service"
       ];
       After = [
         "graphical-session.target"
         "dotfiles-agent-switch.service"
+        "dotfiles-keepawake.service"
       ];
     };
     Service = {
@@ -96,19 +98,6 @@ in
       Restart = "on-failure";
       RestartSec = 2;
       UMask = "0077";
-    };
-  };
-
-  # Keep caffeine independent of QML hot reloads, but release it at logout.
-  systemd.user.services.dotfiles-caffeine = {
-    Unit = {
-      Description = "Keep the desktop awake while caffeine is enabled";
-      PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
-    };
-    Service = {
-      Type = "exec";
-      ExecStart = "${pkgs.systemd}/bin/systemd-inhibit --what=idle --mode=block --who=dotfiles-caffeine --why=Caffeine ${pkgs.coreutils}/bin/sleep infinity";
     };
   };
 

@@ -22,6 +22,7 @@
 
     # Desktop modules
     ./hypridle.nix
+    ./keepawake.nix
     ./hyprlock.nix
     ./btop.nix
     ./mako.nix

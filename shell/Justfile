@@ -12,6 +12,19 @@ tools:
 build-backend package:
     nix build './nix#{{package}}' --no-link --print-out-paths
 
+# Exercise the Nix-built keep-awake CLI without a desktop or real power changes
+check-keepawake-package:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    package=$(nix build ./nix#keepawake --no-link --print-out-paths)
+    temporary=$(mktemp -d)
+    trap 'rm -rf "$temporary"' EXIT
+    "$package/bin/keepawake" --config "$temporary/config.toml" init
+    "$package/bin/keepawake" --config "$temporary/config.toml" check-config
+    XDG_RUNTIME_DIR="$temporary" "$package/bin/keepawake" can-suspend
+    XDG_RUNTIME_DIR="$temporary" "$package/bin/keepawake" can-screen-sleep
+    XDG_RUNTIME_DIR="$temporary" "$package/bin/keepawake" can-lid-suspend
+
 # Verify the installed image adapter against a private Wayland compositor
 check-image-package:
     #!/usr/bin/env bash
@@ -38,6 +51,16 @@ waybar:
 # Format the editable QML components
 fmt:
     nix shell --inputs-from ./nix nixpkgs#qt6.qtdeclarative -c bash -c 'fd -e qml -0 . shell | xargs -0 qmlformat -i'
+
+# Lint QML syntax and types independently of the integration tests
+lint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ $(uname -s) != Linux ]]; then
+        echo "Skipping QML lint: Quickshell is Linux-only"
+        exit 0
+    fi
+    nix shell --inputs-from ./nix nixpkgs#quickshell nixpkgs#qt6.qtdeclarative nixpkgs#fd -c bash shell/scripts/lint
 
 # Check shell model tests and QML syntax/types; off Linux, only the model tests
 check:

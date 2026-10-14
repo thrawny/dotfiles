@@ -14,7 +14,7 @@ its existing Waybar configuration. The appearance follows the current shell.
 | Clock date/time and alternate weekday | Click changes display; right-click locks |
 | Tray icons, tooltips, application/menu/secondary actions, scroll | Native SystemTray and DBus menus |
 | Compact tray expansion and passive filtering | Click the ellipsis on compact screens; external screens show all icons |
-| Caffeine indication and toggle | Separate systemd inhibitor survives UI reloads; existing active state preserved |
+| Caffeine indication and toggle | Separate keep-awake daemon survives UI reloads; session menu, right-click manual toggle, rules and battery limit |
 | Claude/Codex quota indicators and details | Rust snapshot and QML quota popup, including stale/error state, pace, cost and credits |
 | Agent attention indicator and sidebar | Rust daemon state/actions and QML sidebar; focus, new, settle, archive, read, rename, reorder, scopes and shelves |
 
