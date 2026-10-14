@@ -415,17 +415,6 @@ def model_args(model: str | None, effort: str | None, kind: str) -> list[str]:
     return args
 
 
-def settings_args(settings: str | None, kind: str) -> list[str]:
-    """The agent arguments that layer a settings file or JSON string over Claude's."""
-    if settings is None:
-        return []
-    if kind != "claude":
-        raise SpawnError(f"--settings only works with --kind claude, not {kind}")
-    if settings.startswith("-"):
-        raise SpawnError(f"Not a settings file or JSON string: {settings}")
-    return ["--settings", settings]
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -475,11 +464,6 @@ def main() -> int:
     )
     parser.add_argument("--effort", choices=EFFORTS, help="Claude effort level")
     parser.add_argument(
-        "--settings",
-        metavar="FILE_OR_JSON",
-        help="Claude settings that win over ~/.claude/settings.json, such as an env block",
-    )
-    parser.add_argument(
         "--focus", action="store_true", help="Switch to the new session"
     )
     parser.add_argument(
@@ -500,7 +484,6 @@ def main() -> int:
             resume_args(args.resume, args.kind)
             + title_args(args.title, args.kind)
             + model_args(args.model, args.effort, args.kind)
-            + settings_args(args.settings, args.kind)
         )
         env = env_args(args.env)
         if (env or args.cwd) and (args.worktree or args.pane):

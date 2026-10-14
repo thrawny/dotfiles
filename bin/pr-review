@@ -29,8 +29,8 @@ repos_ttl_minutes=1440
 # popup. Stale by a few minutes is fine for a review queue.
 cache_ttl_minutes=5
 herdr_bin="${HERDR_BIN_PATH:-herdr}"
-# Review sessions get the 1M auto-compact window of the cb alias, from the same file.
-claude_settings="$HOME/.claude/settings-1m.json"
+# Review sessions get the 1M auto-compact window of the cb alias.
+compact_window=1000000
 jira_base=$("$work_config" jira.browse_url || true)
 # Adding this label is what the team uses to say a PR is open for review, so an
 # unlabelled PR is still being worked on and does not belong in the queue. The
@@ -515,10 +515,6 @@ Report done once the review is written, then wait for the user in this pane.
 BRIEF
 }
 
-start_plain_claude() {
-  "$herdr_bin" pane run "$1" "claude --settings $(printf %q "$claude_settings")" >/dev/null
-}
-
 # Start the review agent through moto when moto is installed, so the session is
 # a task the driver can see, report to and clean up. Without moto, or when the
 # spawn fails before Claude starts, the pane still gets a plain Claude: a review
@@ -528,12 +524,14 @@ start_plain_claude() {
 # for them to type.
 start_review_agent() {
   local pane=$1 number=$2 repo=$3 branch=$4 title word='[a-z0-9][a-z0-9-]*'
+  # The pane's shell passes it on to whichever Claude starts in it.
+  "$herdr_bin" pane run "$pane" "export CLAUDE_CODE_AUTO_COMPACT_WINDOW=$compact_window" >/dev/null
   if ((!brief)); then
-    start_plain_claude "$pane"
+    "$herdr_bin" pane run "$pane" claude >/dev/null
     return 0
   fi
   if ! command -v moto >/dev/null 2>&1; then
-    start_plain_claude "$pane"
+    "$herdr_bin" pane run "$pane" claude >/dev/null
     return 0
   fi
   title="review $repo $number"
@@ -541,7 +539,7 @@ start_review_agent() {
   [[ $title =~ ^$word\ $word\ $word$ ]] || title="pr review $number"
   if review_brief "$number" "$repo" |
     moto spawn --json --repo "$repo" --worktree "$branch" --pane "$pane" \
-      --title "$title" --settings "$claude_settings" >/dev/null
+      --title "$title" >/dev/null
   then
     return 0
   fi
@@ -550,7 +548,7 @@ start_review_agent() {
     return 0
   fi
   report 'moto could not take this review, so it runs as an untracked session'
-  start_plain_claude "$pane"
+  "$herdr_bin" pane run "$pane" claude >/dev/null
 }
 
 # Takes the JSON Herdr prints for a new worktree workspace, and the PR number
