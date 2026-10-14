@@ -125,7 +125,8 @@ in
         # Session with a 1M auto-compact window instead of the 300k default.
         # The env block in ~/.claude/settings.json overrides both a shell
         # export and --autocompact; only --settings on the command line wins.
-        cb = "claude --settings '{\"env\":{\"CLAUDE_CODE_AUTO_COMPACT_WINDOW\":\"1000000\"}}'";
+        # pr-review starts its sessions with the same file.
+        cb = "claude --settings ~/.claude/settings-1m.json";
         gp = "git push --force-with-lease --force-if-includes";
         gw = "git worktree";
         tp = "terraform plan";

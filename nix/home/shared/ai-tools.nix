@@ -164,6 +164,7 @@ in
       ".claude/mods".source = configSource "claude/mods";
       ".claude/agents".source = configSource "claude/agents";
       ".claude/keybindings.json".source = configSource "claude/keybindings.json";
+      ".claude/settings-1m.json".source = configSource "claude/settings-1m.json";
       ".claude/CLAUDE.md".text =
         agentInstructions.claudeGlobal
         + lib.optionalString repoBacked ''

@@ -580,8 +580,9 @@ def activity_line(info: dict[str, Any] | None, now: float) -> str | None:
     return f"since the {info['since']}: " + " · ".join(parts) if parts else None
 
 
-# The worker's Claude model and effort, which spawn-session passes to claude.
-MODEL_FLAGS = ("model", "effort")
+# The worker's Claude model, effort and extra settings, which spawn-session
+# passes to claude.
+CLAUDE_FLAGS = ("model", "effort", "settings")
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
 
 
@@ -606,7 +607,7 @@ def start_worker(
         "title",
         "resume",
         "pane",
-        *MODEL_FLAGS,
+        *CLAUDE_FLAGS,
     ):
         if value := spec.get(flag):
             command += [f"--{flag}", str(value)]
@@ -639,8 +640,8 @@ def start_worker(
             tasks[info["agent"]]["requested_by"] = requested_by
         if role:
             tasks[info["agent"]]["role"] = role
-        # Kept so wake resumes the session on the model it started with.
-        for flag in MODEL_FLAGS:
+        # Kept so wake resumes the session on the model and settings it began with.
+        for flag in CLAUDE_FLAGS:
             if value := spec.get(flag):
                 tasks[info["agent"]][flag] = value
         record(
@@ -655,6 +656,7 @@ def start_worker(
             requested_by=requested_by,
             model=spec.get("model"),
             effort=spec.get("effort"),
+            settings=spec.get("settings"),
             role=role,
         )
     return info
@@ -680,7 +682,7 @@ def cmd_spawn(args: argparse.Namespace) -> int:
             "title",
             "resume",
             "pane",
-            *MODEL_FLAGS,
+            *CLAUDE_FLAGS,
         )
     }
     if role := getattr(args, "role", None):
@@ -1850,8 +1852,9 @@ def wake_task(name: str, text: str, sender: str | None) -> str:
     if title := snooze.get("title") or task.get("title"):
         command += ["--title", title]
     command += ["--resume", session]
-    # claude --resume starts on the default model, not the one the session used.
-    for flag in MODEL_FLAGS:
+    # claude --resume starts on the default model and settings, not the ones the
+    # session used.
+    for flag in CLAUDE_FLAGS:
         if value := task.get(flag):
             command += [f"--{flag}", value]
     stdin = f"{tag(sender)} {text}\n" if text else ""
@@ -3074,6 +3077,12 @@ def parser() -> argparse.ArgumentParser:
         help="Claude model for the worker: an alias such as sonnet, or a full name",
     )
     spawn.add_argument("--effort", choices=EFFORTS, help="Claude effort level")
+    spawn.add_argument(
+        "--settings",
+        metavar="FILE_OR_JSON",
+        help="Claude settings that win over ~/.claude/settings.json, such as"
+        + " ~/.claude/settings-1m.json for a 1M auto-compact window",
+    )
     spawn.add_argument(
         "--pane",
         metavar="PANE_ID",

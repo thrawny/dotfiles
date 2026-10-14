@@ -113,6 +113,18 @@ def test_model_and_effort_pass_through_to_claude(spawn: ModuleType):
         spawn.model_args("sonnet", None, "codex")
 
 
+def test_settings_pass_through_to_claude(spawn: ModuleType):
+    assert spawn.settings_args(None, "codex") == []
+    assert spawn.settings_args("/x/settings.json", "claude") == [
+        "--settings",
+        "/x/settings.json",
+    ]
+    with pytest.raises(spawn.SpawnError, match="Not a settings file"):
+        spawn.settings_args("--dangerously-skip-permissions", "claude")
+    with pytest.raises(spawn.SpawnError, match="--kind claude"):
+        spawn.settings_args("/x/settings.json", "codex")
+
+
 STALLED = '{"error":{"code":"agent_prompt_stalled","message":"no working state"}}'
 TIMEOUT = '{"error":{"code":"timeout","message":"timed out waiting for agent status"}}'
 RULE = "─" * 40
