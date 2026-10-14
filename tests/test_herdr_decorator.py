@@ -122,7 +122,10 @@ def test_titles_only_count_uppercase_keys(decorator: ModuleType) -> None:
 def test_track_reports_a_title_with_a_new_jira_key(
     decorator: ModuleType, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(decorator, "locate", lambda pane: None)
+    def no_location(_pane: object) -> None:
+        return None
+
+    monkeypatch.setattr(decorator, "locate", no_location)
     monkeypatch.setattr(decorator, "jira_browse_url", lambda: None)
     d = decorator.Decorator()
     info = {"pane_id": "w1:p1", "cwd": "/tmp", "agent": "claude"}

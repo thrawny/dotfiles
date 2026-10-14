@@ -27,7 +27,7 @@ from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, final
+from typing import Any, Protocol, cast, final
 
 # Long enough for a Neovim that is busy redrawing, short enough that one stuck
 # on a prompt does not hold the agent up.
@@ -229,7 +229,7 @@ def query(socket: str, env_keys: Sequence[str]) -> Neovim | None:
         return None
     # vim.json encodes an empty table as an array.
     raw_env = info.get("env")
-    env: dict[str, str] = raw_env if isinstance(raw_env, dict) else {}
+    env = cast("dict[str, str]", raw_env) if isinstance(raw_env, dict) else {}
     return Neovim(socket=socket, cwd=info.get("cwd") or "", env=env)
 
 
