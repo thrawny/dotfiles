@@ -9,7 +9,11 @@
 #
 # Checkouts with no remote are left out of the list: there is nothing to
 # fast-forward them from, and gita skips them in `gita freeze` anyway. So are
-# linked worktrees: their main checkout updates the branches they share.
+# linked worktrees: their main checkout updates the branches they share. So is
+# every checkout named in the ignore file, ~/.config/code-sync/ignore: one
+# directory name per line, # starts a comment. That is for a repo whose local
+# default branch is meant to stay where it is, such as a prototype with commits
+# that will never reach origin.
 #
 # Only the default branch is ever updated, and only by fast-forward. A repo
 # sitting on a feature branch keeps that branch checked out and its worktree
@@ -30,6 +34,7 @@ set -euo pipefail
 code_dir=${CODE_DIR:-"$HOME/code"}
 # Same precedence gita uses (gita/common.py).
 repos_csv=${GITA_PROJECT_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}}/gita/repos.csv
+ignore_file=${XDG_CONFIG_HOME:-$HOME/.config}/code-sync/ignore
 
 usage() {
   cat <<'EOF'
@@ -38,6 +43,10 @@ Usage: code-sync [-n] [-s]
 Sync gita's repo list with the git checkouts under $CODE_DIR (default ~/code),
 then fast-forward each one's default branch. Checkouts with no remote are left
 out, and so are linked worktrees and repos outside $CODE_DIR.
+
+To leave a checkout alone entirely, put its directory name on a line of its
+own in ~/.config/code-sync/ignore ($XDG_CONFIG_HOME is honoured). Lines
+starting with # are comments. Ignored checkouts drop out of gita's list too.
 
 A repo on some other branch stays on it: only its local default branch moves.
 If that branch's PR has merged, the repo switches to the default branch and
@@ -435,16 +444,36 @@ if [[ ! -d $code_dir ]]; then
   exit 1
 fi
 
+# Directory names from the ignore file, one per line, comments and blank lines
+# dropped.
+ignore_names=''
+if [[ -f $ignore_file ]]; then
+  while IFS= read -r line || [[ -n $line ]]; do
+    line=${line%%#*}
+    line=${line#"${line%%[![:space:]]*}"}
+    line=${line%"${line##*[![:space:]]}"}
+    if [[ -n $line ]]; then
+      ignore_names+=$line$'\n'
+    fi
+  done <"$ignore_file"
+fi
+
 # Enumerate the checkouts explicitly rather than using `gita add -r`, which
 # recurses without limit and would pick up every nested .git it finds (test
 # fixtures, vendored deps, worktrees). `gita add -a` is worse: it also builds a
 # group per directory level, which a flat ~/code does not want.
 names=()
 paths=()
+ignored=()
 remoteless=()
 linked=()
 for candidate in "$code_dir"/*/; do
   repo=${candidate%/}
+  [[ -e ${repo}/.git ]] || continue
+  if printf '%s' "$ignore_names" | grep -Fxq -- "${repo##*/}"; then
+    ignored+=("${repo##*/}")
+    continue
+  fi
   # Only main checkouts, where .git is a directory. A linked worktree has a
   # .git file instead, and its main checkout already updates it.
   if [[ -f ${repo}/.git ]]; then
@@ -465,6 +494,11 @@ if ((${#names[@]} == 0)); then
   exit 1
 fi
 
+if ((${#ignored[@]} > 0)); then
+  printf 'code-sync: ignoring %d checkout(s) listed in %s: %s\n' \
+    "${#ignored[@]}" "$ignore_file" "${ignored[*]}"
+fi
+
 if ((${#remoteless[@]} > 0)); then
   printf 'code-sync: ignoring %d checkout(s) with no remote: %s\n' \
     "${#remoteless[@]}" "${remoteless[*]}"
@@ -481,7 +515,7 @@ wanted=$(printf '%s\n' "${names[@]}")
 # Rows pointing outside $code_dir belong to something else and are skipped:
 # this command promises to touch only what lives under it.
 tracked=()
-drop_live=() # still a checkout, but unwanted now (lost its remote, or a linked worktree)
+drop_live=() # still a checkout, but unwanted now (ignored, lost its remote, or a linked worktree)
 drop_dead=() # path is gone
 if [[ -f $repos_csv ]]; then
   while IFS=, read -r row_path row_name _; do
