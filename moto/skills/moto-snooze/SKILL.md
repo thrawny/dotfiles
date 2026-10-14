@@ -19,4 +19,4 @@ The user runs this in a moto worker's pane, or in a session they started by hand
 
 3. **Leave a clean tree.** `moto snooze` refuses a worktree with uncommitted changes, so check `git status`. For uncommitted changes, ask the user whether to commit them (and push, if they say so) or throw them away, and do what they choose. Discard work only on the user's explicit word. Done when `git status` shows a clean tree.
 
-4. **Report.** End with `moto report snooze "<what it waits on>"`. Add the PR URL if there is one, and anything you left running and why.
+4. **Report.** End with `moto report snooze "<what it waits on>"`. Add the PR URL if there is one, and anything you left running and why. If one shell command can tell when the wait is over, such as a `gh` call that exits 0 once the PR has a review and non-zero without output until then, add it too. The driver can then snooze with `--until-check`, which wakes this session when the command passes.

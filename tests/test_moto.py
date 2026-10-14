@@ -1855,6 +1855,106 @@ def test_watch_hands_a_job_note_over_once(moto: ModuleType, jobs_home: Path):
     assert moto.watch()["notes"] is None
 
 
+def add_check(moto: ModuleType, check: str, **fields: Any) -> str:
+    args = {"brief": "Look.", "target": None, "name": None}
+    args |= {"every": "10m", "expires": "7d"} | fields
+    name, _ = moto.add_when(check=check, now=MONDAY_NOON, **args)
+    assert name
+    return name
+
+
+def test_durations_are_rejected_not_guessed(moto: ModuleType):
+    assert moto.parse_duration("10m") == 600
+    assert moto.parse_duration("7d") == 7 * 86400
+    for bad in ("10", "1h30m", "0m", "soon"):
+        with pytest.raises(moto.MotoError):
+            moto.parse_duration(bad)
+
+
+@pytest.mark.usefixtures("jobs_home")
+def test_a_check_that_errors_or_already_passes_is_not_kept(moto: ModuleType):
+    with pytest.raises(moto.MotoError):
+        add_check(moto, "no-such-command-anywhere")
+    name, output = moto.add_when("echo done", "Look.", None, None, "10m", "7d", 0.0)
+    assert name is None and output == "done"
+    assert moto.read_whens() == {}
+
+
+@pytest.mark.usefixtures("jobs_home")
+def test_a_check_waits_then_fires_once_and_is_gone(moto: ModuleType, tmp_path: Path):
+    flag = tmp_path / "merged"
+    name = add_check(moto, f"cat {flag} 2>/dev/null", brief="Close the task.")
+    # Not due yet, then due but still waiting.
+    assert moto.tick(MONDAY_NOON + 60) == []
+    assert moto.tick(MONDAY_NOON + 600) == [f"{name}: not yet"]
+    assert moto.read_whens()[name]["next"] == MONDAY_NOON + 1200
+    flag.write_text("widgets#7 merged\n")
+    assert moto.tick(MONDAY_NOON + 1200) == [f"{name}: left a note for the driver"]
+    assert moto.read_whens() == {}
+    ((_, note),) = moto.pending_notes()
+    assert "Close the task." in note["text"] and "widgets#7 merged" in note["text"]
+    assert moto.tick(MONDAY_NOON + 1800) == []
+
+
+@pytest.mark.usefixtures("jobs_home")
+def test_a_failing_check_tells_the_driver_once_per_streak(
+    moto: ModuleType, tmp_path: Path
+):
+    broken = tmp_path / "broken"
+    name = add_check(moto, f"test -e {broken} && echo boom >&2; exit 1")
+    broken.touch()
+    for run in range(1, moto.WHEN_ERROR_LIMIT + 2):
+        moto.tick(MONDAY_NOON + 600 * run)
+        if run == moto.WHEN_ERROR_LIMIT:
+            assert "boom" in moto.take_notes()
+    assert moto.take_notes() is None
+    # It keeps trying, so a fixed check can still pass.
+    assert name in moto.read_whens()
+
+
+@pytest.mark.usefixtures("jobs_home")
+def test_an_expired_check_tells_the_driver_and_is_gone(moto: ModuleType):
+    name = add_check(moto, "exit 1", brief="Nudge the reviewer.", expires="1d")
+    assert moto.tick(MONDAY_NOON + 86400) == [f"{name}: expired; told the driver"]
+    assert moto.read_whens() == {}
+    notes = moto.take_notes()
+    assert "gave up" in notes and "Nudge the reviewer." in notes
+
+
+@pytest.mark.usefixtures("jobs_home")
+def test_a_check_wakes_its_snoozed_task_with_the_brief(
+    moto: ModuleType, tmp_path: Path
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(snoozed=SNOOZE)
+    flag = tmp_path / "reviewed"
+    name = add_check(
+        moto, f"cat {flag} 2>/dev/null", brief="Address the review.", target="abc-1"
+    )
+    assert name == "abc-1"
+    woken: list[tuple[str, str]] = []
+
+    def wake_task(agent: str, text: str, _sender: str | None) -> None:
+        woken.append((agent, text))
+
+    setattr(moto, "wake_task", wake_task)
+    flag.write_text("approved\n")
+    assert moto.tick(MONDAY_NOON + 600) == ["abc-1: woke abc-1"]
+    ((agent, text),) = woken
+    assert agent == "abc-1" and "Address the review." in text and "approved" in text
+    assert "woke abc-1" in moto.take_notes()
+
+
+@pytest.mark.usefixtures("jobs_home")
+def test_closing_a_task_cancels_the_checks_that_would_wake_it(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(snoozed=SNOOZE)
+    add_check(moto, "exit 1", target="abc-1")
+    other = add_check(moto, "exit 1")
+    moto.cmd_drop(argparse.Namespace(agent="abc-1"))
+    assert list(moto.read_whens()) == [other]
+
+
 @pytest.fixture
 def moto_home(moto: ModuleType, tmp_path: Path) -> Path:
     home = tmp_path / "moto"

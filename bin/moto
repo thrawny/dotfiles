@@ -69,6 +69,15 @@ a cheap check, and whether the result wakes the driver or starts a worker.
 Without a brief, the job follows the .md file of the same name beside it.
 moto job loop is the scheduler, and its state is jobs.json beside tasks.json.
 
+moto when waits once on a condition: a shell command the job loop runs every
+so often, which fires when it exits 0. Its brief then goes to the driver, or
+prompts the task --wake names, waking it first if it is snoozed, and the check
+is gone. A check that errors several runs in a row tells the driver, and one
+that has not passed by its expiry, a week by default, tells the driver it gave
+up. Checks live in when.json beside jobs.json, never in MOTO_HOME. moto job
+list shows them, moto job rm cancels one, and moto snooze --until-check parks
+a task with the check that wakes it.
+
 A worker can start workers of its own, which the driver's watch leaves to it,
 apart from what the user does in one: a wrap, snooze or handback, or closing its
 pane, which reach the driver as for any task. moto tell and wake from a
@@ -93,6 +102,7 @@ as context on every start, resume, clear and compact.
 from __future__ import annotations
 
 import argparse
+import contextlib
 import fcntl
 import json
 import os
@@ -831,6 +841,12 @@ def adopted_name(
     driver names its workers. Otherwise the first three words, as in
     widgets-api-notes.
     """
+    taken = set(tasks) | {a.get("name") for a in live.values()}
+    return name_from(sources, taken)
+
+
+def name_from(sources: list[str | None], taken: set[str | None]) -> str:
+    """A name from the first of sources that gives one, not in taken."""
     base = ""
     for source in sources:
         if not source:
@@ -844,7 +860,6 @@ def adopted_name(
     if not base[:1].isalpha():
         base = f"session-{base}".rstrip("-")
     base = base[:28]
-    taken = set(tasks) | {a.get("name") for a in live.values()}
     name, suffix = base, 2
     while name in taken:
         name, suffix = f"{base}-{suffix}", suffix + 1
@@ -1000,19 +1015,23 @@ def cmd_tell(args: argparse.Namespace) -> int:
     text = " ".join(args.text).strip() or sys.stdin.read().strip()
     if not text:
         raise MotoError("Pass the message as arguments or on stdin")
-    tasks = read_tasks()
-    sender = message_sender(tasks, args.agent, text)
-    task = find_task(tasks, args.agent)
+    sender = message_sender(read_tasks(), args.agent, text)
+    print(f"Sent to {tell_task(args.agent, text, sender)}.")
+    return 0
+
+
+def tell_task(name: str, text: str, sender: str | None) -> str:
+    """Prompt a live task, tagged with its sender, and return its agent name."""
+    task = find_task(read_tasks(), name)
     if task.get("snoozed"):
-        raise MotoError(f"{args.agent} is snoozed; pass the message to moto wake")
+        raise MotoError(f"{name} is snoozed; pass the message to moto wake")
     agent = task["agent"]
     herdr("agent", "prompt", agent, f"{tag(sender)} {text}")
     with tasks_for_update() as tasks:
         if agent in tasks:
             tasks[agent]["told"] = time.time()
         record("tell", agent, text=text, **{"from": sender or "driver"})
-    print(f"Sent to {agent}.")
-    return 0
+    return agent
 
 
 def cmd_ask(args: argparse.Namespace) -> int:
@@ -1459,6 +1478,7 @@ def cmd_close(args: argparse.Namespace) -> int:
                 pass
         record("close", args.agent, force=args.force, task=tasks.pop(args.agent))
     print(f"Closed {args.agent}")
+    print_cancelled(args.agent)
     return 0
 
 
@@ -1467,7 +1487,13 @@ def cmd_drop(args: argparse.Namespace) -> int:
         find_task(tasks, args.agent)
         record("drop", args.agent, task=tasks.pop(args.agent))
     print(f"Dropped {args.agent}; its tab and worktree are untouched")
+    print_cancelled(args.agent)
     return 0
+
+
+def print_cancelled(agent: str) -> None:
+    for name in cancel_whens(agent):
+        print(f"Cancelled check {name}, which would have woken {agent}")
 
 
 def cmd_hold(args: argparse.Namespace) -> int:
@@ -1700,6 +1726,18 @@ def task_title(task: dict[str, Any], agent: dict[str, Any] | None) -> str:
 
 def cmd_snooze(args: argparse.Namespace) -> int:
     reason = " ".join(args.reason).strip()
+    check = getattr(args, "until_check", None)
+    if check:
+        # Run before anything closes, so a check that errors or already
+        # passes leaves the task as it was.
+        verdict, output = check_verdict(check, os.getcwd())
+        if verdict == "error":
+            raise MotoError(f"{output}; {args.agent} was not snoozed")
+        if verdict == "pass":
+            printed = f" It printed:\n{tail(output)}" if output else ""
+            raise MotoError(
+                f"The check passes already, so {args.agent} was not snoozed.{printed}"
+            )
     live = live_agents()
     with tasks_for_update() as tasks:
         task = find_task(tasks, args.agent)
@@ -1754,17 +1792,35 @@ def cmd_snooze(args: argparse.Namespace) -> int:
         }
         record("snooze", args.agent, **task["snoozed"])
     print(f"Snoozed {args.agent} (session {session}); bring it back with moto wake")
+    if check:
+        brief = f"You were snoozed waiting on: {reason}. That wait looks over."
+        name, _ = add_when(
+            check, brief, args.agent, None, args.every, args.expires, time.time()
+        )
+        if name is None:
+            print("The check passed while it snoozed; wake it with moto wake.")
+        else:
+            print(
+                f"Check {name} wakes it once `{check}` passes, every {args.every},"
+                + f" giving up in {args.expires}."
+            )
     return 0
 
 
 def cmd_wake(args: argparse.Namespace) -> int:
     text = " ".join(args.text).strip()
-    tasks = read_tasks()
-    sender = message_sender(tasks, args.agent, text)
-    task = find_task(tasks, args.agent)
+    sender = message_sender(read_tasks(), args.agent, text)
+    session = wake_task(args.agent, text, sender)
+    print(f"Woke {args.agent} on session {session}: moto watch covers it again")
+    return 0
+
+
+def wake_task(name: str, text: str, sender: str | None) -> str:
+    """Bring a snoozed task back with text as its prompt, and return its session."""
+    task = find_task(read_tasks(), name)
     snooze: dict[str, Any] | None = task.get("snoozed")
     if not snooze:
-        raise MotoError(f"{args.agent} is not snoozed")
+        raise MotoError(f"{name} is not snoozed")
     session = snooze["session"]
     repo = snooze.get("repo") or task["repo"]
     cwd = snooze.get("cwd") or task["cwd"]
@@ -1810,7 +1866,7 @@ def cmd_wake(args: argparse.Namespace) -> int:
         )
     live = live_agents()
     with tasks_for_update() as tasks:
-        task = find_task(tasks, args.agent)
+        task = find_task(tasks, name)
         for key in ("pane_id", "workspace_id", "tab_id", "cwd"):
             task[key] = info[key]
         task["title"] = title or task.get("title")
@@ -1822,15 +1878,14 @@ def cmd_wake(args: argparse.Namespace) -> int:
             task["told"] = time.time()
         record(
             "wake",
-            args.agent,
+            name,
             session=session,
             message=text or None,
             cwd=info["cwd"],
             **{"from": sender or "driver"},
             pane_id=info["pane_id"],
         )
-    print(f"Woke {args.agent} on session {session}: moto watch covers it again")
-    return 0
+    return session
 
 
 def afk_path() -> Path:
@@ -2175,36 +2230,44 @@ def jobs_dir() -> Path:
     return MOTO_HOME / "jobs"
 
 
-def read_jobs() -> dict[str, dict[str, Any]]:
-    """Each job's scheduling state: last run, last outcome and pending note."""
+def read_state(kind: str) -> dict[str, dict[str, Any]]:
+    """The entries in kind.json in the state folder, under the key kind."""
+    path = state_dir() / f"{kind}.json"
     try:
-        data = json.loads((state_dir() / "jobs.json").read_text())
+        data = json.loads(path.read_text())
     except FileNotFoundError:
         return {}
     except ValueError as error:
-        raise MotoError(f"{state_dir() / 'jobs.json'} is not valid JSON") from error
-    return data.get("jobs", {})
+        raise MotoError(f"{path} is not valid JSON") from error
+    return data.get(kind, {})
 
 
 @contextmanager
-def jobs_for_update() -> Generator[dict[str, dict[str, Any]]]:
-    """Job state under its own lock, written back on exit if it changed.
-
-    Its own lock, not the task lock, because a job's state changes while it
-    spawns a worker, and spawning takes the task lock itself.
-    """
+def state_for_update(kind: str) -> Generator[dict[str, dict[str, Any]]]:
+    """kind.json under its own lock, written back on exit if it changed."""
     directory = state_dir()
     directory.mkdir(parents=True, exist_ok=True)
-    with open(directory / "jobs.lock", "w") as lock:
+    with open(directory / f"{kind}.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        jobs = read_jobs()
-        before = json.dumps(jobs, sort_keys=True)
-        yield jobs
-        if json.dumps(jobs, sort_keys=True) != before:
-            path = directory / "jobs.json"
+        entries = read_state(kind)
+        before = json.dumps(entries, sort_keys=True)
+        yield entries
+        if json.dumps(entries, sort_keys=True) != before:
+            path = directory / f"{kind}.json"
             tmp = path.with_suffix(".tmp")
-            tmp.write_text(json.dumps({"jobs": jobs}, indent=2) + "\n")
+            tmp.write_text(json.dumps({kind: entries}, indent=2) + "\n")
             tmp.replace(path)
+
+
+def read_jobs() -> dict[str, dict[str, Any]]:
+    """Each job's scheduling state: last run, last outcome and pending note."""
+    return read_state("jobs")
+
+
+def jobs_for_update() -> contextlib.AbstractContextManager[dict[str, dict[str, Any]]]:
+    """Job state under its own lock, not the task lock, because a job's state
+    changes while it spawns a worker, and spawning takes the task lock itself."""
+    return state_for_update("jobs")
 
 
 def job_event(event: str, name: str, **fields: Any) -> None:
@@ -2360,32 +2423,43 @@ def run_gate(job: dict[str, Any]) -> tuple[str, str]:
     gate = str(job.get("gate") or "").strip()
     if not gate:
         return "run", ""
-    cwd = MOTO_HOME if MOTO_HOME.is_dir() else None
+    code, out, err = run_check(gate, MOTO_HOME)
+    if code is None:
+        return "broken", f"the gate {err}"
+    if code == 0:
+        return "run", out
+    if code == GATE_SKIP:
+        return "skip", out
+    return "broken", f"the gate exited {code}: {err or out or 'no output'}"
+
+
+def run_check(command: str, cwd: Path | str) -> tuple[int | None, str, str]:
+    """Run a gate or a check: its exit code, stdout and stderr, stripped.
+
+    The code is None when it could not start or ran past GATE_TIMEOUT, and
+    stderr then says which. A cwd that is gone runs it from moto's own folder.
+    """
+    folder = cwd if os.path.isdir(cwd) else None
     try:
-        # Its own process group, so a timeout kills what the gate started too.
+        # Its own process group, so a timeout kills what the command started too.
         process = subprocess.Popen(
-            ["sh", "-c", gate],
-            cwd=cwd,
+            ["sh", "-c", command],
+            cwd=folder,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             start_new_session=True,
         )
     except OSError as error:
-        return "broken", f"the gate could not start: {error}"
+        return None, "", f"could not start: {error}"
     try:
         out, err = process.communicate(timeout=GATE_TIMEOUT)
     except subprocess.TimeoutExpired:
         with suppress(OSError, ProcessLookupError):
             os.killpg(os.getpgid(process.pid), signal.SIGKILL)
         process.communicate()
-        return "broken", f"the gate still ran after {GATE_TIMEOUT}s, so it was killed"
-    if process.returncode == 0:
-        return "run", out.strip()
-    if process.returncode == GATE_SKIP:
-        return "skip", out.strip()
-    detail = (err or out).strip() or "no output"
-    return "broken", f"the gate exited {process.returncode}: {detail}"
+        return None, "", f"still ran after {GATE_TIMEOUT}s, so it was killed"
+    return process.returncode, out.strip(), err.strip()
 
 
 def driver_path() -> Path:
@@ -2460,6 +2534,9 @@ def take_notes() -> str | None:
     with jobs_for_update() as jobs:
         for name, _ in notes:
             jobs.get(name, {}).pop("note", None)
+            # A moto when check keeps no state here beyond its notes.
+            if name in jobs and not jobs[name]:
+                del jobs[name]
     for name, _ in notes:
         job_event("note-read", name)
     return "\n\n".join(note["text"] for _, note in notes)
@@ -2499,12 +2576,8 @@ def run_job(name: str, job: dict[str, Any], when: float, trigger: str) -> str:
     The stamp and the lock come before the gate, never after, so a loop killed
     between the check and the spawn cannot fire the same occurrence twice.
     """
-    directory = state_dir()
-    directory.mkdir(parents=True, exist_ok=True)
-    with open(directory / f"job-{name}.lock", "w") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
+    with running(name) as free:
+        if not free:
             return "still running, so this occurrence is skipped"
         with jobs_for_update() as jobs:
             jobs.setdefault(name, {})["ran_at"] = when
@@ -2524,8 +2597,24 @@ def run_job(name: str, job: dict[str, Any], when: float, trigger: str) -> str:
         return outcome
 
 
+@contextmanager
+def running(name: str) -> Generator[bool]:
+    """Whether this process got the lock that lets one run of a job or check
+    at a time, held until the block ends."""
+    directory = state_dir()
+    directory.mkdir(parents=True, exist_ok=True)
+    with open(directory / f"job-{name}.lock", "w") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            yield False
+            return
+        yield True
+
+
 def tick(now: float) -> list[str]:
-    """One pass over the job files: everything due, run. One line per thing done."""
+    """One pass over the job files and the checks: everything due, run. One line
+    per thing done."""
     jobs, problems = load_jobs()
     lines = [f"job file {problem}" for problem in problems]
     state = read_jobs()
@@ -2543,7 +2632,7 @@ def tick(now: float) -> list[str]:
             lines.append(f"{name}: {missed}")
             continue
         lines.append(f"{name}: {run_job(name, job, when, 'schedule')}")
-    return lines
+    return lines + when_tick(now)
 
 
 def job_beat_path() -> Path:
@@ -2591,7 +2680,8 @@ def job_rows(now: float) -> list[dict[str, Any]]:
 
 def print_jobs(now: float) -> None:
     rows = job_rows(now)
-    if not rows:
+    checks = when_rows()
+    if not rows and not checks:
         return
     print("\nJobs:")
     if problem := job_loop_problem():
@@ -2609,22 +2699,40 @@ def print_jobs(now: float) -> None:
             print(f"  last ({age(now - outcome['at'])} ago): {outcome['text']}")
         if row["note"]:
             print("  a note is waiting for the driver")
+    for row in checks:
+        to = f"wakes {row['target']}" if row["target"] else "driver"
+        print(
+            f"{row['name']} · check · {to} · every {age(row['every'])}"
+            + f" · next in {age(row['next'] - now)}"
+            + f" · expires in {age(row['expires'] - now)}"
+        )
+        print(f"  check: {row['check']}")
+        if last := row["last"]:
+            ago = age(now - last["at"])
+            if last["verdict"] == "error":
+                text = f"error, {row['errors']} in a row: {last['text']}"
+            else:
+                text = "not yet"
+            print(f"  last ({ago} ago): {text}")
 
 
 def cmd_job_list(args: argparse.Namespace) -> int:
     now = time.time()
     if args.json:
-        print(json.dumps(job_rows(now), indent=2))
+        rows = [{"kind": "job"} | row for row in job_rows(now)]
+        print(json.dumps(rows + when_rows(), indent=2))
         return 0
-    rows = job_rows(now)
-    if not rows:
-        print(f"No job files in {jobs_dir()}.")
+    if not job_rows(now) and not when_rows():
+        print(f"No job files in {jobs_dir()}, and no checks.")
         return 0
     print_jobs(now)
     return 0
 
 
 def cmd_job_run(args: argparse.Namespace) -> int:
+    if args.name in read_whens():
+        print(f"{args.name}: {run_when(args.name, time.time(), 'manual')}")
+        return 0
     jobs, problems = load_jobs()
     if args.name not in jobs:
         hint = f" ({'; '.join(problems)})" if problems else ""
@@ -2659,6 +2767,278 @@ def cmd_job_loop(args: argparse.Namespace) -> int:
                 time.sleep(args.every)
         finally:
             job_beat_path().unlink(missing_ok=True)
+
+
+# One-off checks, which moto when adds and the job loop runs.
+WHEN_EVERY = "10m"
+WHEN_EXPIRES = "7d"
+# Errors in a row before the driver hears that a check is broken, not waiting.
+WHEN_ERROR_LIMIT = 3
+# How many lines of a passing check's stdout go out with its brief.
+WHEN_TAIL_LINES = 20
+DURATION = re.compile(r"(\d+)([smhd])")
+DURATION_UNITS = {"s": 1, "m": 60, "h": 3600, "d": 86400}
+
+
+def parse_duration(text: str) -> int:
+    """The seconds in a duration such as 90s, 30m, 1h or 7d."""
+    match = DURATION.fullmatch(text.strip())
+    if not match or not int(match.group(1)):
+        raise MotoError(f"{text!r} is not a duration such as 30m, 1h or 7d")
+    return int(match.group(1)) * DURATION_UNITS[match.group(2)]
+
+
+def read_whens() -> dict[str, dict[str, Any]]:
+    return read_state("when")
+
+
+def check_verdict(command: str, cwd: str) -> tuple[str, str]:
+    """A check's verdict, pass, wait or error, and the text that goes with it.
+
+    Exit 0 passes and any other exit waits, quietly: a non-zero exit that
+    writes to stderr is an error, as is 126 or 127, the shell finding no such
+    command, or a check that could not start or timed out. Otherwise a broken
+    check would look like a condition that never comes, until it expires.
+    """
+    code, out, err = run_check(command, cwd)
+    if code == 0:
+        return "pass", out
+    if code is None:
+        return "error", f"the check {err}"
+    if err or code in (126, 127) or code < 0:
+        return "error", f"the check exited {code}: {err or out or 'no output'}"
+    return "wait", out
+
+
+def tail(text: str) -> str:
+    return "\n".join(text.splitlines()[-WHEN_TAIL_LINES:])
+
+
+def add_when(
+    check: str,
+    brief: str,
+    target: str | None,
+    name: str | None,
+    every: str,
+    expires: str,
+    now: float,
+) -> tuple[str | None, str]:
+    """Run a new check once, and keep it unless that run settles it.
+
+    Returns the check's name, or None when it already passes, with what that
+    run printed. An error refuses the check, so a typo never waits a week.
+    """
+    seconds, lasts = parse_duration(every), parse_duration(expires)
+    if seconds < JOB_TICK_SECONDS:
+        raise MotoError(f"--every is at least {JOB_TICK_SECONDS}s, the loop's tick")
+    cwd = os.getcwd()
+    verdict, text = check_verdict(check, cwd)
+    if verdict == "error":
+        raise MotoError(f"{text}; fix it, or make it exit non-zero quietly")
+    if verdict == "pass":
+        return None, text
+    whens = read_whens()
+    jobs, _ = load_jobs()
+    taken: set[str | None] = {
+        *whens,
+        *jobs,
+        *(p.stem for p in jobs_dir().glob("*.toml")),
+    }
+    if name and name in taken:
+        raise MotoError(f"A job or check named {name} exists already")
+    name = name or name_from([target, brief], taken)
+    entry = {
+        "check": check,
+        "brief": brief,
+        "target": target,
+        "cwd": cwd,
+        "every": seconds,
+        "created": now,
+        "expires": now + lasts,
+        "next": now + seconds,
+        "errors": 0,
+        "last": {"verdict": verdict, "text": tail(text), "at": now},
+    }
+    with state_for_update("when") as stored:
+        stored[name] = entry
+    job_event("when-add", name, check=check, brief=brief, target=target)
+    return name, text
+
+
+def when_tick(now: float) -> list[str]:
+    """Every check that is due, run, and every one past its expiry, given up."""
+    lines: list[str] = []
+    for name, entry in sorted(read_whens().items()):
+        if now >= entry["expires"]:
+            lines.append(f"{name}: {expire_when(name)}")
+        elif now >= entry["next"]:
+            lines.append(f"{name}: {run_when(name, now, 'schedule')}")
+    return lines
+
+
+def run_when(name: str, now: float, trigger: str) -> str:
+    """Run one check, and fire it or note how it went.
+
+    The next run is stamped before the check, as run_job stamps a job, and
+    the check is removed before it fires, so it fires once.
+    """
+    with running(name) as free:
+        if not free:
+            return "still running, so this run is skipped"
+        with state_for_update("when") as whens:
+            if name not in whens:
+                return "cancelled"
+            entry = whens[name]
+            entry["next"] = now + entry["every"]
+        verdict, text = check_verdict(entry["check"], entry["cwd"])
+        warn = False
+        with state_for_update("when") as whens:
+            if name not in whens:
+                return "cancelled while it ran"
+            if verdict == "pass":
+                del whens[name]
+            else:
+                errors = whens[name]["errors"] + 1 if verdict == "error" else 0
+                whens[name]["errors"] = errors
+                whens[name]["last"] = {
+                    "verdict": verdict,
+                    "text": tail(text),
+                    "at": time.time(),
+                }
+                # Once per streak, so a check that keeps failing says so once.
+                warn = errors == WHEN_ERROR_LIMIT
+        if verdict == "pass":
+            outcome = fire_when(name, entry, text)
+        elif warn:
+            wake_driver(
+                name,
+                f"The check {name} failed {WHEN_ERROR_LIMIT} runs in a row:"
+                + f" {text}\n\nIt keeps trying until it expires in"
+                + f" {age(entry['expires'] - now)}; moto job rm {name} cancels it."
+                + f" Its check: `{entry['check']}`. Its brief:\n\n{entry['brief']}",
+            )
+            outcome = f"{text}; told the driver"
+        else:
+            outcome = text if verdict == "error" else "not yet"
+        job_event("when", name, outcome=outcome, verdict=verdict, trigger=trigger)
+        return outcome
+
+
+def fire_when(name: str, entry: dict[str, Any], output: str) -> str:
+    """Deliver a check that passed: to the driver, or to the task it wakes.
+
+    The task gets the brief as the driver's own message, since the driver
+    wrote it, and the driver hears what happened either way.
+    """
+    printed = f"\n\nWhat it printed:\n\n{tail(output)}" if output else ""
+    check, brief, target = entry["check"], entry["brief"], entry.get("target")
+    if not target:
+        lead = f"The check {name} passed: `{check}`."
+        return wake_driver(name, f"{lead}\n\n{brief}{printed}")
+    text = f"{brief}\n\nThe check `{check}` passed.{printed}"
+    try:
+        task = read_tasks().get(target)
+        if task is None:
+            raise MotoError(f"{target} is no longer a task")
+        if task.get("snoozed"):
+            wake_task(target, text, None)
+            done = f"woke {target}"
+        else:
+            tell_task(target, text, None)
+            done = f"told {target}"
+    except (MotoError, OSError, subprocess.TimeoutExpired) as error:
+        wake_driver(
+            name,
+            f"The check {name} passed, but could not reach {target}: {error}"
+            + f"\n\nWhat it would have told {target}:\n\n{text}",
+        )
+        return f"failed: {error}; told the driver"
+    wake_driver(name, f"The check {name} passed and {done} with its brief.")
+    return done
+
+
+def expire_when(name: str) -> str:
+    """Remove a check that never passed, and tell the driver it gave up."""
+    with state_for_update("when") as whens:
+        entry = whens.pop(name, None)
+    if entry is None:
+        return "cancelled"
+    target = f" for {entry['target']}" if entry.get("target") else ""
+    last: dict[str, Any] = entry.get("last") or {}
+    found = (
+        f"\n\nIts last run ({last['verdict']}): {last['text']}"
+        if last.get("text")
+        else ""
+    )
+    wake_driver(
+        name,
+        f"The check {name}{target} gave up: `{entry['check']}` did not pass in"
+        + f" {age(entry['expires'] - entry['created'])}. Its brief:"
+        + f"\n\n{entry['brief']}{found}",
+    )
+    job_event("when", name, outcome="expired", verdict="expired", trigger="schedule")
+    return "expired; told the driver"
+
+
+def cancel_whens(target: str) -> list[str]:
+    """Remove the checks that would wake target, which is going away."""
+    with state_for_update("when") as whens:
+        names = [n for n, e in whens.items() if e.get("target") == target]
+        for name in names:
+            del whens[name]
+    for name in names:
+        job_event("when-cancel", name, target=target)
+    return names
+
+
+def when_rows() -> list[dict[str, Any]]:
+    return [
+        {"name": name, "kind": "when"}
+        | {k: entry.get(k) for k in ("check", "target", "every", "next", "expires")}
+        | {"last": entry.get("last"), "errors": entry.get("errors", 0)}
+        for name, entry in sorted(read_whens().items())
+    ]
+
+
+def cmd_when(args: argparse.Namespace) -> int:
+    brief = " ".join(args.text).strip() or sys.stdin.read().strip()
+    if not brief:
+        raise MotoError("Pass the brief as arguments or on stdin")
+    tasks = read_tasks()
+    if worker := caller(tasks):
+        raise MotoError(
+            f"{worker} is a worker, and only the driver adds checks;"
+            + " moto report what you wait on instead"
+        )
+    if args.wake:
+        find_task(tasks, args.wake)
+    name, output = add_when(
+        args.check, brief, args.wake, args.name, args.every, args.expires, time.time()
+    )
+    if name is None:
+        print("The check passes already, so nothing was scheduled.")
+        if output:
+            print(f"It printed:\n{tail(output)}")
+        return 0
+    to = f"wakes {args.wake}" if args.wake else "tells the driver"
+    print(
+        f"Added check {name}: every {args.every}, it {to} once the check passes,"
+        + f" and gives up in {args.expires}. moto job rm {name} cancels it."
+    )
+    return 0
+
+
+def cmd_job_rm(args: argparse.Namespace) -> int:
+    with state_for_update("when") as whens:
+        entry = whens.pop(args.name, None)
+    if entry is None:
+        path = jobs_dir() / f"{args.name}.toml"
+        if path.exists():
+            raise MotoError(f"{args.name} is a job file; delete {path} to remove it")
+        raise MotoError(f"No check named {args.name}")
+    job_event("when-cancel", args.name, target=entry.get("target"))
+    print(f"Cancelled {args.name}")
+    return 0
 
 
 def parser() -> argparse.ArgumentParser:
@@ -2787,7 +3167,41 @@ def parser() -> argparse.ArgumentParser:
     )
     snooze.add_argument("agent")
     snooze.add_argument("reason", nargs="+", help="Why it waits, shown in moto list")
+    snooze.add_argument(
+        "--until-check",
+        metavar="COMMAND",
+        help="Also add a moto when check that wakes the task once COMMAND exits 0",
+    )
+    add_when_timing(snooze)
     snooze.set_defaults(handler=cmd_snooze)
+
+    when = commands.add_parser(
+        "when",
+        help="Tell the driver, or wake a task, once a shell command exits 0;"
+        + " kept in moto's state folder, not MOTO_HOME",
+        description="Run COMMAND every so often from the job loop. Exit 0 passes:"
+        + " the brief and the tail of COMMAND's stdout go to the driver, or to the"
+        + " --wake task, and the check is gone. Any other exit means not yet, and"
+        + " should be quiet: a non-zero exit with stderr, 126, 127 or a timeout is"
+        + f" an error, and {WHEN_ERROR_LIMIT} errors in a row tell the driver."
+        + " moto when runs COMMAND once first, from the current folder, and later"
+        + " runs use that folder too.",
+    )
+    when.add_argument(
+        "--check", required=True, metavar="COMMAND", help="Shell command to run"
+    )
+    when.add_argument(
+        "--wake",
+        metavar="TASK",
+        help="Prompt this task with the brief, waking it first if it is snoozed;"
+        + " default: the driver",
+    )
+    when.add_argument(
+        "--name", help="Name in moto job list; default: from --wake or the brief"
+    )
+    add_when_timing(when)
+    when.add_argument("text", nargs="*", help="The brief; default: stdin")
+    when.set_defaults(handler=cmd_when)
 
     wake = commands.add_parser(
         "wake",
@@ -2863,16 +3277,34 @@ def parser() -> argparse.ArgumentParser:
     job_tick = job_commands.add_parser("tick", help="One pass: run everything due")
     job_tick.set_defaults(handler=cmd_job_tick)
     job_run = job_commands.add_parser(
-        "run", help="Run a job now, whatever its schedule says"
+        "run", help="Run a job or check now, whatever its schedule says"
     )
     job_run.add_argument("name")
     job_run.set_defaults(handler=cmd_job_run)
     job_list = job_commands.add_parser(
-        "list", help="Jobs with next run and last outcome"
+        "list", help="Jobs and checks with next run and last outcome"
     )
     job_list.add_argument("--json", action="store_true")
     job_list.set_defaults(handler=cmd_job_list)
+    job_rm = job_commands.add_parser("rm", help="Cancel a moto when check")
+    job_rm.add_argument("name")
+    job_rm.set_defaults(handler=cmd_job_rm)
     return root
+
+
+def add_when_timing(command: argparse.ArgumentParser) -> None:
+    command.add_argument(
+        "--every",
+        default=WHEN_EVERY,
+        metavar="DURATION",
+        help="How often the check runs, as in 10m or 1h (default: %(default)s)",
+    )
+    command.add_argument(
+        "--expires",
+        default=WHEN_EXPIRES,
+        metavar="DURATION",
+        help="When the check gives up and tells the driver (default: %(default)s)",
+    )
 
 
 def main() -> int:
