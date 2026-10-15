@@ -5,13 +5,16 @@ The brief is read from stdin. The session opens in the repo's Herdr workspace,
 or in a linked worktree workspace with --worktree, and starts on the brief
 right away. A resumed session may take no brief and wait for the user instead.
 With --cwd the tab opens in a folder of the repo, which then need not be a git
-checkout. --env sets variables in the new tab, which the agent inherits.
+checkout. --env sets variables the agent inherits: in the new tab, or, for a
+--worktree or --pane pane, which Herdr gives no environment, as exports in the
+pane's shell before the agent starts.
 """
 
 import argparse
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -439,8 +442,7 @@ def main() -> int:
         "--env",
         action="append",
         metavar="KEY=VALUE",
-        help="Set a variable in the new tab, which the agent inherits; repeatable;"
-        + " not with --worktree or --pane, whose panes Herdr gives no environment",
+        help="Set a variable the agent inherits; repeatable",
     )
     parser.add_argument(
         "--pane",
@@ -486,10 +488,9 @@ def main() -> int:
             + model_args(args.model, args.effort, args.kind)
         )
         env = env_args(args.env)
-        if (env or args.cwd) and (args.worktree or args.pane):
-            flag = "--env" if env else "--cwd"
+        if args.cwd and (args.worktree or args.pane):
             raise SpawnError(
-                f"{flag} opens a new tab, so it takes no --worktree or --pane"
+                "--cwd opens a new tab, so it takes no --worktree or --pane"
             )
         if args.cwd:
             repo = repo_folder(args.repo).resolve()
@@ -505,6 +506,10 @@ def main() -> int:
             pane = worktree_pane(repo, args.worktree, args.base, args.path)
         else:
             pane = repo_pane(repo, cwd, env)
+        if env and (args.pane or args.worktree):
+            # Herdr starts the agent from the pane's shell, which passes these on.
+            exports = " ".join(shlex.quote(pair) for pair in args.env)
+            herdr_text("pane", "run", pane["pane_id"], f"export {exports}")
         name = agent_name(args.name, args.worktree or repo.name)
         location = f"{pane['workspace_id']} tab {pane['tab_id']} at {pane['cwd']}"
         try:

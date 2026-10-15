@@ -786,7 +786,7 @@ def test_wake_resumes_the_session_at_the_same_worktree_path(
     session_file(moto.session_dir(cwd), "s1", "ABC-1 fix", mtime=100)
     snooze = {**SNOOZE, "title": "ABC-1 fix", "cwd": cwd, "worktree": True}
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(snoozed=snooze, held=True)
+        tasks["abc-1"] = task(snoozed=snooze, held=True, compact_window="1000000")
     details = {"cwd": cwd, "pane_id": "w5:p1", "tab_id": "w5:t1", "workspace_id": "w5"}
     args = argparse.Namespace(agent="abc-1", text=["Infra", "is", "done."])
     with (
@@ -809,6 +809,9 @@ def test_wake_resumes_the_session_at_the_same_worktree_path(
         "ABC-1 fix",
         "--resume",
         "s1",
+        # claude --resume would otherwise start on the default window.
+        "--env",
+        "CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000",
     ]
     assert run.call_args.kwargs["stdin"] == "[driver] Infra is done.\n"
     saved = moto.read_tasks()["abc-1"]

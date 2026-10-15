@@ -583,6 +583,16 @@ def activity_line(info: dict[str, Any] | None, now: float) -> str | None:
 # The worker's Claude model and effort, which spawn-session passes to claude.
 MODEL_FLAGS = ("model", "effort")
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
+# claude --resume reads the auto-compact window from the environment of the new
+# pane, so a session started with a larger one would come back on the default.
+COMPACT_WINDOW = "CLAUDE_CODE_AUTO_COMPACT_WINDOW"
+
+
+def note_window(task: dict[str, Any]) -> None:
+    """Keep the auto-compact window of the session this process runs in, for
+    wake to start it again with. Only the session itself sees its environment."""
+    if window := os.environ.get(COMPACT_WINDOW):
+        task["compact_window"] = window
 
 
 def start_worker(
@@ -937,6 +947,7 @@ def adopt(tasks: dict[str, dict[str, Any]], pane_id: str | None) -> str | None:
         "session": session,
         "adopted": True,
     }
+    note_window(tasks[name])
     record(
         "adopt",
         name,
@@ -972,6 +983,7 @@ def cmd_report(args: argparse.Namespace) -> int:
             # new worker's session id arrives with its first report.
             if session := os.environ.get("CLAUDE_CODE_SESSION_ID"):
                 task["session"] = session
+                note_window(task)
         handed_back = args.kind in ("wrap", "handback", "snooze") and bool(
             task.get("held")
         )
@@ -1610,10 +1622,13 @@ def attach_hook(payload: dict[str, Any]) -> None:
         # scheduled job needs this to know where to send what it finds.
         write_driver(pane_id=pane_id, session=session)
     if owner:
-        if tasks[owner].get("session") != session:
+        window = os.environ.get(COMPACT_WINDOW)
+        known = tasks[owner].get("compact_window")
+        if tasks[owner].get("session") != session or (window and window != known):
             with tasks_for_update() as tasks:
                 if owner in tasks and tasks[owner]["pane_id"] == pane_id:
                     tasks[owner]["session"] = session
+                    note_window(tasks[owner])
         return
     if not any(
         t.get("session") == session and not t.get("snoozed") for t in tasks.values()
@@ -1634,6 +1649,7 @@ def attach_hook(payload: dict[str, Any]) -> None:
         )
         if name and not pane_owner(tasks, pane_id):
             attach(tasks, name, pane_id, live)
+            note_window(tasks[name])
 
 
 def session_dir(cwd: str) -> Path:
@@ -1854,6 +1870,8 @@ def wake_task(name: str, text: str, sender: str | None) -> str:
     for flag in MODEL_FLAGS:
         if value := task.get(flag):
             command += [f"--{flag}", value]
+    if window := task.get("compact_window"):
+        command += ["--env", f"{COMPACT_WINDOW}={window}"]
     stdin = f"{tag(sender)} {text}\n" if text else ""
     output = run(command, timeout=600, stdin=stdin)
     try:

@@ -103,6 +103,10 @@ def fork_command(harness: str, ref: str) -> list[str]:
         args = [agent, "fork", ref, notice]
     else:
         args = [agent, "--fork", ref, "--", notice]
+    # The new terminal starts from Herdr's or the desktop's environment, so the
+    # fork keeps the session's auto-compact window only when it is passed on.
+    window = os.environ.get("CLAUDE_CODE_AUTO_COMPACT_WINDOW")
+    keep = [f"CLAUDE_CODE_AUTO_COMPACT_WINDOW={window}"] if window else []
     # A child terminal must not retain the parent's nested-agent/session markers.
     # MOTO_FORK makes moto's hooks skip the fork and its task commands refuse it.
     return [
@@ -114,6 +118,7 @@ def fork_command(harness: str, ref: str) -> list[str]:
         "-u",
         "CODEX_THREAD_ID",
         "MOTO_FORK=1",
+        *keep,
         *args,
     ]
 

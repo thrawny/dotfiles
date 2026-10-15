@@ -78,7 +78,7 @@ def test_named_claude_fork_gets_a_name_of_its_own(fork: ModuleType, tmp_path: Pa
         patch.object(fork.shutil, "which", side_effect=fake_binary),
     ):
         named = fork.fork_command("claude", SESSION)
-        assert named[8:-1] == [
+        assert named[named.index("/bin/claude") : -1] == [
             "/bin/claude",
             "--resume",
             SESSION,
