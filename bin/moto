@@ -2745,11 +2745,35 @@ def cmd_job_tick(_: argparse.Namespace) -> int:
     return 0
 
 
+def source_mtime(source: Path) -> float | None:
+    try:
+        return source.stat().st_mtime
+    except OSError:
+        return None
+
+
+def compiles(source: Path) -> bool:
+    try:
+        compile(source.read_bytes(), str(source), "exec")
+    except (OSError, SyntaxError, ValueError):
+        return False
+    return True
+
+
 def cmd_job_loop(args: argparse.Namespace) -> int:
-    """The long-lived scheduler, which watchexec restarts on every edit."""
+    """The long-lived scheduler.
+
+    Python reads this file once, so a loop that runs for days would keep the
+    code it started with and never learn of a feature added since. Once this
+    file changes and still compiles, the loop replaces itself with the new
+    code, keeping its pid, pane and arguments. A file that does not compile
+    leaves it on the old code until the next edit.
+    """
     signal.signal(signal.SIGTERM, exit_on_signal)
     directory = state_dir()
     directory.mkdir(parents=True, exist_ok=True)
+    source = Path(__file__).resolve()
+    loaded = source_mtime(source)
     with open(directory / "job-loop.lock", "w") as lock:
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -2763,6 +2787,20 @@ def cmd_job_loop(args: argparse.Namespace) -> int:
                 for line in tick(time.time()):
                     print(f"{clock(time.time())} {line}", flush=True)
                 time.sleep(args.every)
+                mtime = source_mtime(source)
+                if mtime == loaded:
+                    continue
+                loaded = mtime
+                if not compiles(source):
+                    print(f"{source} changed but does not compile", flush=True)
+                    continue
+                print(f"{source} changed, so the loop restarts on it", flush=True)
+                # The lock file is not inheritable, so exec releases the lock
+                # for the new code to take.
+                try:
+                    os.execv(source, [str(source), *sys.argv[1:]])
+                except OSError as error:
+                    print(f"could not restart on {source}: {error}", flush=True)
         finally:
             job_beat_path().unlink(missing_ok=True)
 
