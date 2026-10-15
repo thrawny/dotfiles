@@ -26,6 +26,13 @@
 # dirty tree. A branch moto has snoozed always stays, merged or not: its task
 # comes back on it.
 #
+# With --park, a main checkout left idle on some other branch switches back to
+# the freshly updated default branch. The branch stays as it is, unpushed
+# commits included: parking is a plain `git switch` and nothing more. A checkout
+# stays where it is when its tree is dirty, when an agent in Herdr has its cwd
+# there, when a moto task uses it, or when its HEAD moved in the last day. A
+# plain shell pane sitting in a checkout does not count as work on it.
+#
 # The updates are plain git rather than `gita pull`, because gita pull only
 # knows how to pull the checked-out branch. `gita` is still what holds the repo
 # list and prints the status table.
@@ -38,7 +45,7 @@ ignore_file=${XDG_CONFIG_HOME:-$HOME/.config}/code-sync/ignore
 
 usage() {
   cat <<'EOF'
-Usage: code-sync [-n] [-s]
+Usage: code-sync [-n] [-s] [-p]
 
 Sync gita's repo list with the git checkouts under $CODE_DIR (default ~/code),
 then fast-forward each one's default branch. Checkouts with no remote are left
@@ -55,7 +62,15 @@ PR did not. Linked worktrees on a merged PR's branch are removed, with the
 same conditions, unless Herdr has them open or they live under $CODE_DIR.
 Branches of tasks snoozed with `moto snooze` are always kept.
 
+With -p, a checkout that is idle on some other branch switches to its default
+branch, keeping the branch and its commits. It stays put when the tree has
+changes or untracked files, an agent pane in Herdr is in it, a moto task uses
+it, or its HEAD moved in the last 24 hours.
+
   -n  Print what would change and what would be updated, change nothing.
+      With -p, also print which checkouts would be parked and which stay.
+  -p, --park
+      Switch idle checkouts on other branches to their default branch.
   -s  Print the status table (gita ll) when finished.
   -h  This message.
 EOF
@@ -83,6 +98,9 @@ default_branch() {
   done
   return 1
 }
+
+# How long a checkout's HEAD has to sit still before --park may move it.
+park_idle_seconds=$((24 * 60 * 60))
 
 # The branches of snoozed moto tasks, one "repo<TAB>branch" line each. moto wake
 # checks such a branch out again, so it must outlive even a merged PR.
@@ -305,6 +323,80 @@ retire_worktrees() {
   done
 }
 
+# Whether any of the newline-separated paths is this directory or lies inside it.
+within() {
+  local dir=$1 paths=$2 p
+  while IFS= read -r p; do
+    if [[ -n $p && ($p == "$dir" || $p == "$dir"/*) ]]; then
+      return 0
+    fi
+  done <<<"$paths"
+  return 1
+}
+
+# When this checkout last saw work, in epoch seconds: the newer of HEAD's last
+# reflog entry (a commit, checkout, rebase or reset here) and the commit date of
+# HEAD, for a repo that keeps no reflog.
+last_activity() {
+  local repo=$1 reflog_time commit_time
+  commit_time=$(git -C "$repo" log -1 --format=%ct HEAD 2>/dev/null) || commit_time=0
+  reflog_time=$(git -C "$repo" log -g -1 --date=unix --format=%gd HEAD 2>/dev/null) ||
+    reflog_time=''
+  reflog_time=${reflog_time#*@\{}
+  reflog_time=${reflog_time%\}}
+  if [[ $reflog_time =~ ^[0-9]+$ ]] && ((reflog_time > commit_time)); then
+    printf '%s\n' "$reflog_time"
+  else
+    printf '%s\n' "${commit_time:-0}"
+  fi
+}
+
+# Why a main checkout on another branch has to stay there, or nothing when
+# --park may switch it to the default branch.
+park_reason() {
+  local repo=$1 default=$2 branch=$3 default_checkout
+  if [[ -n $(git -C "$repo" status --porcelain --untracked-files=normal) ]]; then
+    printf 'the tree has uncommitted changes or untracked files\n'
+  elif within "$repo" "$agent_cwds"; then
+    printf 'an agent in Herdr is working in it\n'
+  elif within "$repo" "$moto_cwds" || snoozed "$repo" "$branch"; then
+    printf 'a moto task uses it\n'
+  elif (($(date +%s) - $(last_activity "$repo") < park_idle_seconds)); then
+    printf 'it was used in the last 24 hours\n'
+  else
+    default_checkout=$(checkout_of "$repo" "$default")
+    if [[ -n $default_checkout && $default_checkout != "$repo" ]]; then
+      printf '%s is checked out in %s\n' "$default" "$default_checkout"
+    fi
+  fi
+}
+
+# The report line for a parked checkout, which keeps the branch name so the
+# branch can be found again.
+park_line() {
+  local repo=$1 default=$2 branch=$3 ahead
+  ahead=$(git -C "$repo" rev-list --count "refs/remotes/origin/$default..refs/heads/$branch" \
+    2>/dev/null) || ahead='?'
+  printf 'on %s (%s ahead) -> %s\n' "$branch" "$ahead" "$default"
+}
+
+# Move an idle checkout off its branch onto the default branch, which the fetch
+# has just brought up to date. Prints the report line and returns 0 when it did,
+# prints why not and returns 1 when the checkout stays.
+park_branch() {
+  local repo=$1 default=$2 branch=$3 reason log
+  reason=$(park_reason "$repo" "$default" "$branch")
+  if [[ -n $reason ]]; then
+    printf 'not parked: %s\n' "$reason"
+    return 1
+  fi
+  if ! log=$(git -C "$repo" switch --quiet "$default" 2>&1); then
+    printf 'not parked: switching to %s failed: %s\n' "$default" "$(error_line "$log")"
+    return 1
+  fi
+  printf 'parked: %s\n' "$(park_line "$repo" "$default" "$branch")"
+}
+
 # Where a repo is sitting, for the report. A detached HEAD has no branch name
 # to print, so its note already says everything.
 where_clause() {
@@ -334,14 +426,14 @@ checkout_of() {
 
 # Fast-forward one repo's default branch, then write a single tab-separated
 # line: result, default branch, checked-out branch, commits gained, whether a
-# merged branch was retired (yes or -), and a note (the branch report, or the
+# merged branch was retired or the checkout parked (yes, parked or -), and a note (the branch report, or the
 # git error for a failure). The retired field is never empty, because read
 # collapses consecutive tabs and would shift the note into it. The worktree lines
 # from retire_worktrees follow it. Runs in a background subshell, so these lines
 # are how it reports rather than globals or an exit code.
 update_repo() {
   local repo=$1 default head_branch before after log exit_code=0 gained note result
-  local retired=- retire_status default_checkout
+  local retired=- retire_status park_status park_note default_checkout
   if ! default=$(default_branch "$repo"); then
     printf 'failed\t-\t-\t0\t-\torigin/HEAD is unset and there is no origin/main or origin/master\n'
     return
@@ -407,18 +499,42 @@ update_repo() {
   if [[ $head_branch != "$default" && -z $note ]]; then
     note=$(branch_report "$repo" "$default" "$head_branch")
   fi
+  if [[ $park == true && $head_branch != "$default" && $head_branch != '-' ]]; then
+    park_status=0
+    park_note=$(park_branch "$repo" "$default" "$head_branch") || park_status=$?
+    if ((park_status == 0)); then
+      retired=parked
+      head_branch=$default
+      note=$park_note
+    else
+      note="$note, $park_note"
+    fi
+  fi
 
   printf '%s\t%s\t%s\t%s\t%s\t%s\n' \
     "$result" "$default" "$head_branch" "$gained" "$retired" "$note"
   retire_worktrees "$repo"
 }
 
+# getopts knows no long options, so spell them as their short ones first.
+short_args=()
+for arg in "$@"; do
+  case $arg in
+    --park) short_args+=(-p) ;;
+    --help) short_args+=(-h) ;;
+    *) short_args+=("$arg") ;;
+  esac
+done
+set -- ${short_args[@]+"${short_args[@]}"}
+
 dry_run=false
 show_status=false
-while getopts ':nsh' opt; do
+park=false
+while getopts ':nsph' opt; do
   case $opt in
     n) dry_run=true ;;
     s) show_status=true ;;
+    p) park=true ;;
     h)
       usage
       exit 0
@@ -442,6 +558,29 @@ fi
 if [[ ! -d $code_dir ]]; then
   printf 'code-sync: %s does not exist\n' "$code_dir" >&2
   exit 1
+fi
+
+# What --park needs to tell an idle checkout from one in use: the cwds of agent
+# panes in Herdr, and the directories moto tasks work in. A task with no cwd
+# works in its repo. Without Herdr on PATH nothing can be open in it, but when
+# Herdr is there and cannot answer, there is no telling, so nothing is parked.
+agent_cwds=''
+moto_cwds=''
+if [[ $park == true ]]; then
+  if command -v herdr >/dev/null 2>&1; then
+    if ! agent_cwds=$(herdr pane list 2>/dev/null | jq -r '.result.panes[]
+        | select((.agent // "") != "") | .cwd, .foreground_cwd | values'); then
+      printf 'code-sync: cannot list the panes in Herdr, so nothing will be parked\n' >&2
+      park=false
+    fi
+  fi
+  if [[ -f $moto_tasks ]]; then
+    if ! moto_cwds=$(jq -r '.tasks[]? | (.cwd // .repo), .snoozed.cwd? | values' \
+      "$moto_tasks"); then
+      printf 'code-sync: cannot read the task directories in %s\n' "$moto_tasks" >&2
+      exit 1
+    fi
+  fi
 fi
 
 # Directory names from the ignore file, one per line, comments and blank lines
@@ -555,6 +694,22 @@ if [[ $dry_run == true ]]; then
   fi
   printf 'code-sync: would fast-forward the default branch of %d repo(s) under %s and clean up merged branches and worktrees\n' \
     "${#names[@]}" "$code_dir"
+  if [[ $park == true ]]; then
+    # Nothing is fetched here, so the counts are against the last fetch. A
+    # branch whose PR merged shows as parked, where the real run deletes it.
+    for i in "${!names[@]}"; do
+      default=$(default_branch "${paths[i]}") || continue
+      head_branch=$(git -C "${paths[i]}" symbolic-ref --quiet --short HEAD) || continue
+      [[ $head_branch != "$default" ]] || continue
+      reason=$(park_reason "${paths[i]}" "$default" "$head_branch")
+      if [[ -n $reason ]]; then
+        printf '  %-30s on %s, not parked: %s\n' "${names[i]}" "$head_branch" "$reason"
+      else
+        printf '  %-30s would park: %s\n' "${names[i]}" \
+          "$(park_line "${paths[i]}" "$default" "$head_branch")"
+      fi
+    done
+  fi
   exit 0
 fi
 
@@ -618,6 +773,7 @@ current=0
 failed=0
 off_default=0
 retired_count=0
+parked_count=0
 worktrees_removed=0
 for i in "${!names[@]}"; do
   result=''
@@ -638,7 +794,10 @@ for i in "${!names[@]}"; do
       ;;
     updated)
       updated=$((updated + 1))
-      if [[ $retired == yes ]]; then
+      if [[ $retired == parked ]]; then
+        parked_count=$((parked_count + 1))
+        printf '  %-30s %s +%s, %s\n' "${names[i]}" "$default" "$gained" "$note"
+      elif [[ $retired == yes ]]; then
         retired_count=$((retired_count + 1))
         printf '  %-30s %s +%s, %s\n' "${names[i]}" "$default" "$gained" "$note"
       elif [[ -n $note ]]; then
@@ -652,8 +811,11 @@ for i in "${!names[@]}"; do
     current)
       current=$((current + 1))
       # A repo on its default branch with nothing to pull says nothing worth a
-      # line. One parked on another branch does.
-      if [[ $retired == yes ]]; then
+      # line. One left on another branch does.
+      if [[ $retired == parked ]]; then
+        parked_count=$((parked_count + 1))
+        printf '  %-30s %s\n' "${names[i]}" "$note"
+      elif [[ $retired == yes ]]; then
         retired_count=$((retired_count + 1))
         printf '  %-30s %s\n' "${names[i]}" "$note"
       elif [[ -n $note ]]; then
@@ -672,8 +834,12 @@ for i in "${!names[@]}"; do
   done < <(tail -n +2 "$scratch/$i.out")
 done
 
-printf 'code-sync: %d updated, %d already current, %d failed, %d not on the default branch, %d merged branch(es) cleaned up, %d worktree(s) removed\n' \
+printf 'code-sync: %d updated, %d already current, %d failed, %d not on the default branch, %d merged branch(es) cleaned up, %d worktree(s) removed' \
   "$updated" "$current" "$failed" "$off_default" "$retired_count" "$worktrees_removed"
+if [[ $park == true ]]; then
+  printf ', %d parked' "$parked_count"
+fi
+printf '\n'
 
 if [[ $show_status == true ]]; then
   printf '\n'
