@@ -65,6 +65,8 @@ in
         # super+shift+p opens Herdr's command palette plugin instead of
         # Ghostty's own.
         "super+shift+p=unbind"
+        # The config is Nix-generated, so open_config only opens a read-only file.
+        "super+,=unbind"
         "super+a=select_all"
         "super+c=copy_to_clipboard"
         "super+v=paste_from_clipboard"
