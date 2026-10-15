@@ -2399,9 +2399,12 @@ def due(
 
     A job whose time passed while the laptop slept runs on the next tick, since
     the occurrence is read off the wall clock. stale_after opts out of that.
+    A job owes nothing from before the loop first saw it, so a new job waits
+    for its next slot.
     """
     when = occurrence(job, now, ahead=False)
-    if when is None or float(state.get("ran_at") or 0) >= when:
+    last = max(float(state.get("ran_at") or 0), float(state.get("added") or 0))
+    if when is None or last >= when:
         return None, None
     stale = job.get("stale_after")
     if stale and now - when > float(stale) * 60:
@@ -2618,6 +2621,10 @@ def tick(now: float) -> list[str]:
     state = read_jobs()
     for name, job in sorted(jobs.items()):
         if job.get("enabled") is False:
+            continue
+        if name not in state:
+            with jobs_for_update() as live:
+                live.setdefault(name, {}).setdefault("added", now)
             continue
         when, missed = due(job, state.get(name, {}), now)
         if when is None:

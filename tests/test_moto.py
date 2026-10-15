@@ -1613,6 +1613,8 @@ def write_job(jobs_home: Path, name: str, body: str) -> None:
 
 
 MONDAY_NOON = datetime(2026, 10, 5, 12, 0).timestamp()
+# Before the 09:00 slot most jobs here use; a job's first tick only notes it.
+MONDAY_MORNING = datetime(2026, 10, 5, 8, 0).timestamp()
 
 
 def test_weekday_ranges_wrap(moto: ModuleType):
@@ -1661,6 +1663,19 @@ def test_a_job_runs_once_per_occurrence(moto: ModuleType):
     assert moto.due(job, {"ran_at": nine}, MONDAY_NOON) == (None, None)
 
 
+def test_a_new_job_waits_for_its_next_slot(moto: ModuleType, jobs_home: Path):
+    write_job(
+        jobs_home,
+        "queue",
+        'at = ["09:00", "14:00"]\ngate = "echo now"\ndeliver = "driver"\nbrief = "Look."\n',
+    )
+    # Added after 09:00, it skips that slot rather than firing at once.
+    assert moto.tick(MONDAY_NOON) == []
+    assert moto.tick(MONDAY_NOON + 60) == []
+    two = datetime(2026, 10, 5, 14, 0).timestamp()
+    assert moto.tick(two) == ["queue: left a note for the driver"]
+
+
 def test_stale_after_records_a_missed_run_instead(moto: ModuleType):
     job = {"at": ["09:00"], "days": ["mon-fri"], "stale_after": 60}
     when, missed = moto.due(job, {}, MONDAY_NOON)
@@ -1689,6 +1704,7 @@ def test_a_quiet_gate_spends_nothing(moto: ModuleType, jobs_home: Path):
         "quiet",
         'at = ["09:00"]\ngate = "exit 75"\ndeliver = "driver"\nbrief = "Look."\n',
     )
+    moto.tick(MONDAY_MORNING)
     assert moto.tick(MONDAY_NOON) == ["quiet: nothing to do"]
     assert not moto.pending_notes()
 
@@ -1699,6 +1715,7 @@ def test_a_busy_gate_leaves_the_driver_a_note(moto: ModuleType, jobs_home: Path)
         "queue",
         'at = ["09:00"]\ngate = "echo widgets#7"\ndeliver = "driver"\nbrief = "Look."\n',
     )
+    moto.tick(MONDAY_MORNING)
     assert moto.tick(MONDAY_NOON) == ["queue: left a note for the driver"]
     ((name, note),) = moto.pending_notes()
     assert name == "queue"
@@ -1712,6 +1729,7 @@ def test_a_newer_run_replaces_an_unread_note(moto: ModuleType, jobs_home: Path):
         "queue",
         'at = ["09:00", "14:00"]\ngate = "echo now"\ndeliver = "driver"\nbrief = "Look."\n',
     )
+    moto.tick(MONDAY_MORNING)
     moto.tick(MONDAY_NOON)
     moto.tick(datetime(2026, 10, 5, 14, 30).timestamp())
     assert len(moto.pending_notes()) == 1
@@ -1737,6 +1755,7 @@ brief = "Hunt."
         return {}
 
     setattr(moto, "start_worker", never)
+    moto.tick(MONDAY_MORNING)
     assert moto.tick(MONDAY_NOON) == ["hunt: broken gate, left a note for the driver"]
     assert not spawned
     ((_, note),) = moto.pending_notes()
@@ -1752,6 +1771,7 @@ def test_a_broken_job_file_does_not_silence_the_others(
         "good",
         'at = ["09:00"]\ngate = "exit 75"\ndeliver = "driver"\nbrief = "Look."\n',
     )
+    moto.tick(MONDAY_MORNING)
     lines = moto.tick(MONDAY_NOON)
     assert any("bad.toml" in line for line in lines)
     assert "good: nothing to do" in lines
@@ -1770,6 +1790,7 @@ def test_a_job_without_a_brief_follows_its_markdown_file(
     assert not problems
     assert jobs["queue"]["brief"] == "Follow jobs/queue.md."
     assert moto.job_rows(MONDAY_NOON)[0]["brief"] == "queue.md"
+    moto.tick(MONDAY_MORNING)
     moto.tick(MONDAY_NOON)
     ((_, note),) = moto.pending_notes()
     # The gate output still follows the brief.
@@ -1851,6 +1872,7 @@ def test_watch_hands_a_job_note_over_once(moto: ModuleType, jobs_home: Path):
         "queue",
         'at = ["09:00"]\ngate = "echo widgets#7"\ndeliver = "driver"\nbrief = "Look."\n',
     )
+    moto.tick(MONDAY_MORNING)
     assert moto.tick(MONDAY_NOON) == ["queue: left a note for the driver"]
     notes = moto.watch()["notes"]
     assert notes.startswith(moto.JOB_TAG) and "widgets#7" in notes
