@@ -840,6 +840,12 @@ def git_checkout(cwd: str) -> tuple[str, str | None, str | None]:
     return str(Path(common).parent), current, current
 
 
+def name_claude_pane(pane_id: str) -> None:
+    """Label the pane claude, so the tab tells it from Neovim or a server
+    beside it. The agent name, not the label, carries the task."""
+    herdr("pane", "rename", pane_id, "claude")
+
+
 def adopted_name(
     tasks: dict[str, dict[str, Any]],
     live: dict[str, dict[str, Any]],
@@ -925,6 +931,7 @@ def adopt(tasks: dict[str, dict[str, Any]], pane_id: str | None) -> str | None:
     )
     # moto tell and the watch reach a worker by its Herdr name.
     herdr("agent", "rename", pane_id, name)
+    name_claude_pane(pane_id)
     now = time.time()
     tasks[name] = {
         "agent": name,
@@ -1559,6 +1566,7 @@ def attach(
         if other.get("name") == name and other["pane_id"] != pane_id:
             herdr("agent", "rename", other["pane_id"], "--clear")
     herdr("agent", "rename", pane_id, name)
+    name_claude_pane(pane_id)
     old = task["pane_id"]
     task["pane_id"] = pane_id
     task["workspace_id"] = agent["workspace_id"]
@@ -2086,6 +2094,7 @@ def cmd_focus(_: argparse.Namespace) -> int:
             )
         except MotoError:
             pass  # a first start stops at Claude's trust prompt, which is now in view
+        name_claude_pane(pane["pane_id"])
     put_first(workspace)
     herdr("workspace", "focus", workspace)
     agents = [

@@ -538,7 +538,7 @@ def test_wrap_from_a_session_the_user_started_adopts_it(
     worktree: Path,
 ):
     herdr = report_from(moto, "wrap", worktree)
-    herdr.assert_called_once_with("agent", "rename", "w4:p2", "abc-7")
+    herdr.assert_any_call("agent", "rename", "w4:p2", "abc-7")
     saved = moto.read_tasks()["abc-7"]
     assert (saved["repo"], saved["branch"], saved["cwd"]) == (
         str(pushed_clone),
@@ -897,6 +897,7 @@ def test_attach_moves_a_task_to_its_resumed_pane(moto: ModuleType):
     assert [c.args for c in herdr.call_args_list] == [
         ("agent", "rename", "w1:p1", "--clear"),
         ("agent", "rename", "w1:p7", "abc-1"),
+        ("pane", "rename", "w1:p7", "claude"),
     ]
     saved = moto.read_tasks()["abc-1"]
     assert (saved["pane_id"], saved["tab_id"], saved["held"]) == (
@@ -969,7 +970,7 @@ def test_session_start_hook_records_the_session_and_follows_it_to_a_new_pane(
         patch.object(moto, "herdr") as herdr,
     ):
         assert attach_hook(moto, "w1:p7", "s1") == 0
-    herdr.assert_called_once_with("agent", "rename", "w1:p7", "abc-1")
+    herdr.assert_any_call("agent", "rename", "w1:p7", "abc-1")
     assert moto.read_tasks()["abc-1"]["pane_id"] == "w1:p7"
     assert capsys.readouterr().out == ""
 
