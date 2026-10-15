@@ -1304,7 +1304,20 @@ def command_wait(args: argparse.Namespace) -> int:
             time.sleep(min(args.interval, remaining))
 
 
-WATCH_EVENTS = ("commit", "checks", "state", "activity")
+WATCH_EVENTS = ("commit", "checks", "merge", "state", "activity")
+
+
+@dataclass(frozen=True)
+class Since:
+    """Where a follow-up watcher picks up: a time, and whether the PR conflicted."""
+
+    at: datetime
+    conflicting: bool | None = None
+
+    def __str__(self) -> str:
+        if self.conflicting is None:
+            return iso_utc(self.at)
+        return f"{iso_utc(self.at)},merge={'conflicting' if self.conflicting else 'mergeable'}"
 
 
 @dataclass(frozen=True)
@@ -1330,14 +1343,33 @@ def watch_events(value: str) -> frozenset[str]:
     return events
 
 
-def since_time(value: str) -> datetime:
+def since_value(value: str) -> Since:
+    time_part, _, merge_part = value.partition(",")
+    merge_states = {"merge=conflicting": True, "merge=mergeable": False}
+    if merge_part and merge_part not in merge_states:
+        raise argparse.ArgumentTypeError(
+            "the part after the time must be merge=conflicting or merge=mergeable"
+        )
     try:
-        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(time_part.replace("Z", "+00:00"))
     except ValueError as error:
         raise argparse.ArgumentTypeError(
-            "must be an ISO 8601 time such as 2026-01-31T09:00:00Z"
+            "must be an ISO 8601 time such as 2026-01-31T09:00:00Z,"
+            " optionally followed by ,merge=conflicting"
         ) from error
-    return parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC)
+    return Since(
+        at=parsed if parsed.tzinfo else parsed.replace(tzinfo=UTC),
+        conflicting=merge_states.get(merge_part),
+    )
+
+
+def merge_conflicting(mergeable: str, merge_state: str) -> bool | None:
+    """Whether the PR conflicts with its base, or None while GitHub computes it."""
+    if mergeable == "CONFLICTING" or merge_state == "DIRTY":
+        return True
+    if mergeable == "MERGEABLE":
+        return False
+    return None
 
 
 def iso_utc(value: datetime) -> str:
@@ -1446,10 +1478,13 @@ def command_watch(args: argparse.Namespace) -> int:
         seen = {
             item.key
             for item in pr_activity(host, repo, initial.number)
-            if args.since is None or item.created_at < args.since
+            if args.since is None or item.created_at < args.since.at
         }
     head = initial.head_sha
     failed = {check.name for check in initial.checks_failed}
+    # The baseline starts out mergeable, so a PR that already conflicts wakes
+    # the first poll. An unknown poll leaves the baseline as it was.
+    conflicting = bool(args.since and args.since.conflicting)
     started = time.monotonic()
     deadline = started + args.timeout
     progress = WaitProgress()
@@ -1458,7 +1493,7 @@ def command_watch(args: argparse.Namespace) -> int:
         f"watching pr=#{initial.number} repo={repo} head={short_sha(head)}"
         f" on={','.join(event for event in WATCH_EVENTS if event in events)}"
         f" interval={args.interval}s timeout={args.timeout}s"
-        + (f" since={iso_utc(args.since)}" if args.since else "")
+        + (f" since={args.since}" if args.since else "")
         + (f" ignore={','.join(sorted(ignored))}" if ignored else ""),
         flush=True,
     )
@@ -1490,6 +1525,7 @@ def command_watch(args: argparse.Namespace) -> int:
                 fresh = visible(fresh)
             now_failed = {check.name for check in current.checks_failed}
             new_failures = now_failed - failed
+            now_conflicting = merge_conflicting(current.mergeable, current.merge_state)
 
             reasons: list[str] = []
             if "state" in events and current.state != "OPEN":
@@ -1499,6 +1535,10 @@ def command_watch(args: argparse.Namespace) -> int:
             # Checks going green is not news; the watcher waits on people.
             if "checks" in events and new_failures:
                 reasons.append("checks")
+            if "merge" in events and now_conflicting and not conflicting:
+                reasons.append("conflict")
+            if now_conflicting is not None:
+                conflicting = now_conflicting
             if fresh:
                 reasons.append("activity")
 
@@ -1506,12 +1546,14 @@ def command_watch(args: argparse.Namespace) -> int:
                 f"snapshot elapsed={elapsed}s state={current.state}"
                 f" head={short_sha(current.head_sha)}"
                 f" checks_pending={len(current.checks_pending)}"
-                f" checks_failed={len(current.checks_failed)}",
+                f" checks_failed={len(current.checks_failed)}"
+                f" mergeable={current.mergeable.lower()}",
                 (
                     current.state,
                     current.head_sha,
                     len(current.checks_pending),
                     len(current.checks_failed),
+                    current.mergeable,
                 ),
                 now,
             )
@@ -1537,9 +1579,15 @@ def command_watch(args: argparse.Namespace) -> int:
                             new = " (new)" if check.name in new_failures else ""
                             link = f" — {check.link}" if check.link else ""
                             print(f"  failed{new}: {check.name}{link}")
+                    elif reason == "conflict":
+                        print(
+                            f"  base={current.base_branch}"
+                            f" mergeable={current.mergeable.lower()}"
+                            f" state={current.merge_state.lower()}"
+                        )
                     elif reason == "activity":
                         print_activity(fresh)
-                print(f"next-since={iso_utc(polled_at)}", flush=True)
+                print(f"next-since={Since(polled_at, conflicting)}", flush=True)
                 return 0
 
             head = current.head_sha
@@ -1614,8 +1662,9 @@ def build_parser() -> argparse.ArgumentParser:
         default=frozenset(WATCH_EVENTS),
         help=(
             "comma-separated events that wake the watcher: commit (new head),"
-            " checks (a check newly fails), state (merged or"
-            " closed), activity (a new review or comment); default: all"
+            " checks (a check newly fails), merge (the PR starts conflicting"
+            " with its base), state (merged or closed), activity (a new review"
+            " or comment); default: all"
         ),
     )
     watch_parser.add_argument(
@@ -1632,10 +1681,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     watch_parser.add_argument(
         "--since",
-        type=since_time,
+        type=since_value,
         help=(
-            "count activity created at or after this ISO 8601 time as new;"
-            " pass the previous watcher's next-since"
+            "count activity created at or after this ISO 8601 time as new, and"
+            " with ,merge=conflicting stay quiet about a conflict already"
+            " reported; pass the previous watcher's next-since"
         ),
     )
     watch_parser.add_argument("-i", "--interval", type=duration, default=30)

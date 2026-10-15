@@ -53,6 +53,9 @@ if args[:2] == ["pr", "view"]:
     checks_pending = (
         os.environ.get("FAKE_CHECKS_PENDING_INITIAL") == "1" and views_so_far() < 2
     )
+    # One mergeable value per view, the initial read first; the last one sticks.
+    mergeable_by_view = os.environ.get("FAKE_MERGEABLE", "MERGEABLE").split(",")
+    mergeable = mergeable_by_view[min(views_so_far() - 1, len(mergeable_by_view) - 1)]
     checks = [] if no_checks else [{
         "name": "test",
         "status": "IN_PROGRESS" if checks_pending else "COMPLETED",
@@ -71,8 +74,8 @@ if args[:2] == ["pr", "view"]:
         "headRefName": "feature/widgets",
         "baseRefName": "main",
         "isDraft": False,
-        "mergeable": "MERGEABLE",
-        "mergeStateStatus": "BLOCKED",
+        "mergeable": mergeable,
+        "mergeStateStatus": "DIRTY" if mergeable == "CONFLICTING" else "BLOCKED",
         "reviewDecision": "REVIEW_REQUIRED",
         "statusCheckRollup": checks,
     }))
@@ -460,3 +463,33 @@ def test_watch_ignores_a_failure_that_was_already_there(tmp_path: Path) -> None:
     result = watch(pr_harness, watch_env(pr_harness), "--timeout", "2")
     assert result.returncode == 1
     assert "woke" not in result.stdout
+
+
+def test_watch_wakes_once_on_a_pr_that_already_conflicts(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_MERGEABLE="CONFLICTING")
+    woke = watch(pr_harness, env)
+    assert woke.returncode == 0, woke.stderr
+    assert "woke reason=conflict pr=#12" in woke.stdout
+    next_since = woke.stdout.split("next-since=", 1)[1].split()[0]
+
+    (tmp_path / "pr-view-count").unlink()
+    quiet = watch(pr_harness, env, "--since", next_since, "--timeout", "2")
+    assert quiet.returncode == 1
+    assert "woke" not in quiet.stdout
+
+
+def test_watch_conflict_survives_an_unknown_poll(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = watch_env(pr_harness, FAKE_MERGEABLE="MERGEABLE,UNKNOWN,CONFLICTING")
+    woke = watch(pr_harness, env)
+    assert woke.returncode == 0, woke.stderr
+    assert "woke reason=conflict" in woke.stdout
+
+    # Unknown between two conflicting polls is the same conflict, not a new one.
+    (tmp_path / "pr-view-count").unlink()
+    env["FAKE_MERGEABLE"] = "MERGEABLE,CONFLICTING,UNKNOWN,CONFLICTING"
+    since = "2026-07-10T00:00:00Z,merge=conflicting"
+    quiet = watch(pr_harness, env, "--since", since)
+    assert quiet.returncode == 1
+    assert "woke" not in quiet.stdout
