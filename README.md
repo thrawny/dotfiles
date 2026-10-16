@@ -29,8 +29,6 @@ For this M1 Air's nix-darwin migration, Tailscale SSH, and closed-lid use, follo
 
 On the desktop, Z13, and M1, `remote-mode on` keeps the machine awake for remote access across logouts and reboots. Use `remote-mode off` to restore normal sleep behavior, or `remote-mode status` to check it. See [remote mode](docs/remote-mode.md) for laptop precautions.
 
-Use [`t3ctl`](docs/t3ctl.md) to control T3 Code on obelisk from agents or scripts.
-
 [Private agent skills](docs/private-agent-skills.md) sync from Forgejo on opted-in personal hosts, outside this public checkout and the Nix store.
 
 Use `!fork-window` in Claude or Codex, or `/fork-window` in Pi, to fork the current conversation into a Herdr tab or a new Ghostty window on Hyprland without a model turn in the original session. The fork shares the checkout, acknowledges a fork notice, and waits for instructions. From a terminal, use `fork-window pi /path/to/session.jsonl`, `fork-window claude <session-uuid>`, or `fork-window codex <session-uuid>`. Container sandboxes are not supported.
