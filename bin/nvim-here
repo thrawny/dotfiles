@@ -8,7 +8,8 @@ pane id its multiplexer gave it, so asking each socket for its pane is enough
 to find the one beside the agent. Nothing has to be configured in Neovim.
 
 The multiplexer only decides which Neovim counts as near and how to start one
-when there is none. Herdr is the only one so far; another fits by implementing
+when there is none. Near means the caller's own tab, because a file opened in
+another tab is out of sight. Herdr is the only one so far; another fits by implementing
 the Multiplexer protocol and joining detect_multiplexer.
 """
 
@@ -54,8 +55,8 @@ class Multiplexer(Protocol):
     # the multiplexer's pane id survives.
     env_keys: tuple[str, ...]
 
-    def distance(self, nvim: Neovim) -> int | None:
-        """Rank a Neovim by how close it sits to the caller, None when too far."""
+    def near(self, nvim: Neovim) -> bool:
+        """Whether a Neovim sits where the caller can see it."""
         ...
 
     def describe(self, nvim: Neovim) -> str: ...
@@ -78,11 +79,10 @@ class Herdr:
         self.panes: dict[str, dict[str, Any]] = {
             pane["pane_id"]: pane for pane in panes
         }
-        # Read the caller's place from the live list rather than its own
+        # Read the caller's tab from the live list rather than its own
         # environment, which goes stale when the pane moves to another tab.
         me = self.panes.get(self.pane_id, {})
         self.tab_id = me.get("tab_id") or env.get("HERDR_TAB_ID")
-        self.workspace_id = me.get("workspace_id") or env.get("HERDR_WORKSPACE_ID")
 
     def _call(self, *args: str) -> dict[str, Any]:
         result = subprocess.run(
@@ -101,22 +101,15 @@ class Herdr:
     def _pane(self, nvim: Neovim) -> dict[str, Any] | None:
         return self.panes.get(nvim.env.get("HERDR_PANE_ID", ""))
 
-    def distance(self, nvim: Neovim) -> int | None:
+    def near(self, nvim: Neovim) -> bool:
         pane = self._pane(nvim)
-        if pane is None:
-            return None
-        if pane["tab_id"] == self.tab_id:
-            return 0
-        if pane["workspace_id"] == self.workspace_id:
-            return 1
-        return None
+        return pane is not None and pane["tab_id"] == self.tab_id
 
     def describe(self, nvim: Neovim) -> str:
         pane = self._pane(nvim)
         if pane is None:
             return nvim.socket
-        where = "same tab" if pane["tab_id"] == self.tab_id else "same workspace"
-        return f"pane {pane['pane_id']} ({where})"
+        return f"pane {pane['pane_id']} (same tab)"
 
     def focus(self, nvim: Neovim) -> None:
         pane = self._pane(nvim)
@@ -242,16 +235,14 @@ def discover(sockets: Sequence[str], env_keys: Sequence[str]) -> list[Neovim]:
 
 
 def nearest(nvims: Sequence[Neovim], mux: Multiplexer, target: Path) -> Neovim | None:
-    ranked: list[tuple[int, int, int, Neovim]] = []
+    ranked: list[tuple[int, int, Neovim]] = []
     for index, nvim in enumerate(nvims):
-        distance = mux.distance(nvim)
-        if distance is None:
+        if not mux.near(nvim):
             continue
-        # Between equally near ones, prefer a Neovim already rooted in the
-        # file's project.
+        # Between near ones, prefer a Neovim already rooted in the file's project.
         outside = 0 if nvim.cwd and target.is_relative_to(nvim.cwd) else 1
-        ranked.append((distance, outside, index, nvim))
-    return min(ranked, key=lambda entry: entry[:3])[3] if ranked else None
+        ranked.append((outside, index, nvim))
+    return min(ranked, key=lambda entry: entry[:2])[2] if ranked else None
 
 
 # Open in the current tab unless it holds a codediff review, whose windows
@@ -368,7 +359,7 @@ def cmd_open(args: argparse.Namespace, env: Mapping[str, str]) -> int:
     nvim = nearest(discover(socket_paths(env), mux.env_keys), mux, target.path)
     if nvim is None:
         if args.no_spawn:
-            raise SystemExit("nvim-here: no Neovim in this tab or workspace")
+            raise SystemExit("nvim-here: no Neovim in this tab")
         where = mux.spawn(nvim_command(target), cwd, args.focus)
         print(f"opened {location(target)} in Neovim in {where}")
         return 0
@@ -390,8 +381,8 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
         "open",
         help="open a file, optionally at a line",
         description=(
-            "Open a file in the nearest Neovim: one in the same tab, then the same "
-            "workspace. With none, start one in a new pane beside this one."
+            "Open a file in a Neovim in this tab. With none, start one in a new "
+            "pane beside this one. A Neovim in another tab is never used."
         ),
     )
     open_parser.add_argument("file", help="FILE, FILE:LINE or FILE:LINE:COL")
@@ -399,7 +390,7 @@ def parse_args(argv: Sequence[str]) -> argparse.Namespace:
     open_parser.add_argument(
         "--focus",
         action="store_true",
-        help="switch to the Neovim's tab, which is otherwise left in the background",
+        help="switch Herdr to this tab, which is otherwise left in the background",
     )
     open_parser.add_argument(
         "--no-spawn",

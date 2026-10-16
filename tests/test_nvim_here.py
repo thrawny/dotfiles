@@ -151,22 +151,9 @@ def test_opens_at_line_in_the_neovim_in_the_same_tab(world: World):
     assert world.where(elsewhere)[0] == ""
 
 
-def test_falls_back_to_a_neovim_in_the_same_workspace(world: World):
+def test_starts_a_neovim_beside_the_caller_when_none_is_in_its_tab(world: World):
     world.panes(pane("w1:p1", "w1:t1"), pane("w1:p2", "w1:t2"), pane("w2:p1", "w2:t1"))
-    other_workspace = world.start_nvim("w2:p1")
-    same_workspace = world.start_nvim("w1:p2")
-    file = world.file("main.go")
-
-    result = world.run("open", "main.go:3:4", "--focus")
-
-    assert result.returncode == 0, result.stderr
-    assert world.where(same_workspace) == (resolved(file), 3, 4)
-    assert world.where(other_workspace)[0] == ""
-    assert world.calls()[-2:] == ["workspace focus w1", "tab focus w1:t2"]
-
-
-def test_starts_a_neovim_beside_the_caller_when_none_is_near(world: World):
-    world.panes(pane("w1:p1", "w1:t1"), pane("w2:p1", "w2:t1"))
+    other_tab = world.start_nvim("w1:p2")
     world.start_nvim("w2:p1")
     file = world.file("main.go")
 
@@ -180,6 +167,7 @@ def test_starts_a_neovim_beside_the_caller_when_none_is_near(world: World):
         == f"pane split w1:p1 --direction right --cwd {world.project.resolve()} --no-focus"
     )
     assert run == f"pane run w1:p9 nvim '+call cursor(7, 1)' -- {resolved(file)}"
+    assert world.where(other_tab)[0] == ""
 
 
 def test_no_spawn_fails_instead_of_starting_a_neovim(world: World):
@@ -189,7 +177,7 @@ def test_no_spawn_fails_instead_of_starting_a_neovim(world: World):
     result = world.run("open", "main.go", "--no-spawn")
 
     assert result.returncode == 1
-    assert "no Neovim in this tab or workspace" in result.stderr
+    assert "no Neovim in this tab" in result.stderr
     assert not any(call.startswith("pane split") for call in world.calls())
 
 
