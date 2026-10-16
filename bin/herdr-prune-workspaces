@@ -5,6 +5,10 @@ A workspace is empty when every pane is an idle shell: no agent, and the shell
 itself is the only foreground process, so no editor, server or watcher. The
 focused workspace and the one labelled background always stay.
 
+A repo workspace with linked worktree workspaces is a group, and Herdr closes
+it only together with them. A group closes only when every member is empty;
+otherwise all of it stays.
+
 Without --apply it prints what it would close and closes nothing.
 """
 
@@ -77,6 +81,46 @@ def empty_workspaces(
     return found
 
 
+def closures(
+    workspaces: list[dict[str, Any]], found: list[tuple[dict[str, Any], str]]
+) -> list[tuple[dict[str, Any], str, list[dict[str, Any]] | None]]:
+    """The closes to make: each workspace, its cwd, and its other group members.
+
+    The members are None for a workspace closed on its own. A group closes
+    through its first repo workspace, so a group without one closes member by
+    member.
+    """
+    cwd_of = {w["workspace_id"]: cwd for w, cwd in found}
+    members: dict[str, list[dict[str, Any]]] = {}
+    for workspace in workspaces:
+        worktree = workspace.get("worktree") or {}
+        if worktree.get("repo_key"):
+            members.setdefault(worktree["repo_key"], []).append(workspace)
+    group_of = {}
+    for group in members.values():
+        if any(w["worktree"].get("is_linked_worktree") for w in group):
+            for workspace in group:
+                group_of[workspace["workspace_id"]] = group
+
+    planned = []
+    for workspace in workspaces:
+        workspace_id = workspace["workspace_id"]
+        group = group_of.get(workspace_id)
+        if group is None:
+            if workspace_id in cwd_of:
+                planned.append((workspace, cwd_of[workspace_id], None))
+            continue
+        if not all(w["workspace_id"] in cwd_of for w in group):
+            continue
+        primaries = [w for w in group if not w["worktree"].get("is_linked_worktree")]
+        if primaries and workspace is primaries[0]:
+            linked = [w for w in group if w not in primaries]
+            planned.append((workspace, cwd_of[workspace_id], linked))
+        elif workspace in primaries or not primaries:
+            planned.append((workspace, cwd_of[workspace_id], None))
+    return planned
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
@@ -93,17 +137,29 @@ def main() -> int:
                 "process_info"
             ],
         )
-        for workspace, cwd in found:
-            name = workspace.get("label") or workspace["workspace_id"]
-            if args.apply:
-                herdr("workspace", "close", workspace["workspace_id"])
-                print(f"closed {name} {cwd}")
-            else:
-                print(f"would close {name} {cwd}")
     except HerdrError as error:
         print(f"herdr-prune-workspaces: {error}", file=sys.stderr)
         return 1
-    return 0
+
+    failed = False
+    for workspace, cwd, linked in closures(workspaces, found):
+        name = workspace.get("label") or workspace["workspace_id"]
+        if linked:
+            name += " with " + ", ".join(w.get("label") or w["workspace_id"] for w in linked)
+        if not args.apply:
+            print(f"would close {name} {cwd}")
+            continue
+        command = ["workspace", "close", workspace["workspace_id"]]
+        if linked is not None:
+            command.append("--group")
+        try:
+            herdr(*command)
+        except HerdrError as error:
+            print(f"herdr-prune-workspaces: {name}: {error}", file=sys.stderr)
+            failed = True
+            continue
+        print(f"closed {name} {cwd}")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

@@ -74,3 +74,28 @@ def test_only_unfocused_workspaces_of_idle_shells_close(prune: ModuleType):
 
 def test_a_pane_with_unknown_processes_is_not_idle(prune: ModuleType):
     assert not prune.idle_shell({}, {"shell_pid": 10})
+
+
+def worktree(repo: str, linked: bool) -> dict[str, Any]:
+    return {"repo_key": f"/{repo}/.git", "is_linked_worktree": linked}
+
+
+def test_a_group_closes_whole_only_when_every_member_is_empty(prune: ModuleType):
+    workspaces = [
+        {"workspace_id": "a", "worktree": worktree("a", False)},
+        {"workspace_id": "a1", "worktree": worktree("a", True)},
+        {"workspace_id": "b", "worktree": worktree("b", False)},
+        {"workspace_id": "b1", "worktree": worktree("b", True)},
+        {"workspace_id": "c1", "worktree": worktree("c", True)},
+        {"workspace_id": "d", "worktree": worktree("d", False)},
+    ]
+    # b1 is busy, so neither b nor b1 closes.
+    found = [(w, "/") for w in workspaces if w["workspace_id"] != "b1"]
+    planned = prune.closures(workspaces, found)
+    assert [
+        (
+            w["workspace_id"],
+            None if linked is None else [m["workspace_id"] for m in linked],
+        )
+        for w, _, linked in planned
+    ] == [("a", ["a1"]), ("c1", None), ("d", None)]
