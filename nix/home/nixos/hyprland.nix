@@ -43,7 +43,13 @@ in
       ];
     };
     Service = {
+      # Quickshell selects its network backend once. During a switch it can
+      # otherwise start before NetworkManager returns and stay offline forever.
+      # Wait for daemon startup, not connectivity, so offline sessions still work.
+      ExecStartPre = "${pkgs.networkmanager}/bin/nm-online --quiet --wait-for-startup --timeout=30";
       ExecStart = "${pkgs.quickshell}/bin/quickshell -c dotfiles";
+      # Apps launched with execDetached must survive shell restarts.
+      KillMode = "process";
       # Systemd does not inherit home.sessionPath. The project picker calls
       # hyprland-project from the mutable checkout, not the package profile.
       Environment = "PATH=${
