@@ -8,10 +8,17 @@
 Usage:
     blueprint-html lab/foo.blueprint.md                   # -> lab/foo.html
     blueprint-html foo.blueprint.md -o out.html
+    blueprint-html explainer.md -o explainer.html \\
+        --link-base https://github.com/acme/widgets/blob/<sha>/
 
 Source format: markdown with YAML-ish frontmatter (title, tier, description)
 and typed fences — callstack, filetree, contract, signatures, mockup, d2.
 See the blueprint skill's ARTIFACT-FORMAT.md for the grammar.
+
+With --link-base, `file:line` and `file:start-end` anchors become links to
+<link-base><file>#L<start>-L<end>, GitHub's line-anchor form. Anchors are
+linked in diff-fence comments and in inline code that is exactly an anchor,
+so write them as paths from the repository root.
 
 Lenient by design: unknown fence types, missing metadata, and a missing or
 failing d2 binary produce stderr warnings, never errors.
@@ -46,6 +53,9 @@ DIFF_FENCES = {"callstack", "filetree", "contract", "signatures"}
 MARKER_CLASS = {"+": "add", "-": "del", "~": "mod"}
 COMMENT_RE = re.compile(r"(\s#\s?.*)$")
 ANCHOR_RE = re.compile(r"([\w./-]+\.\w+:\d+)")
+LINK_ANCHOR_RE = re.compile(r"([\w./-]+\.\w+):(\d+)(?:-(\d+))?")
+# GitHub renders markdown at a blob URL, and the rendered view has no line anchors.
+PLAIN_SUFFIXES = (".md", ".mdx", ".markdown")
 
 # d2 renders at build time and the SVG is inlined, so the page needs no network
 # and no diagram runtime. Light theme only: the page's dark toggle is manual and
@@ -117,16 +127,31 @@ def parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
     return meta, text[end + 4 :]
 
 
-def render_diff_line(line: str, lexer=None) -> str:
+def anchor_link(m: re.Match[str], link_base: str, inner: str) -> str:
+    path, start, end = m.groups()
+    path = path.removeprefix("./")
+    query = "?plain=1" if path.endswith(PLAIN_SUFFIXES) else ""
+    lines = f"L{start}-L{end}" if end else f"L{start}"
+    href = html.escape(f"{link_base}{path}{query}#{lines}", quote=True)
+    return f'<a class="anchor" href="{href}" target="_blank" rel="noopener">{inner}</a>'
+
+
+def render_diff_line(line: str, lexer=None, link_base: str | None = None) -> str:
     marker = line[:1]
     cls = MARKER_CLASS.get(marker, "ctx")
     body, comment = line, ""
     m = COMMENT_RE.search(line)
     if m:
         body = line[: m.start()]
-        comment = ANCHOR_RE.sub(
-            r'<span class="anchor">\1</span>', html.escape(m.group(1))
-        )
+        if link_base:
+            comment = LINK_ANCHOR_RE.sub(
+                lambda a: anchor_link(a, link_base, a.group(0)),
+                html.escape(m.group(1)),
+            )
+        else:
+            comment = ANCHOR_RE.sub(
+                r'<span class="anchor">\1</span>', html.escape(m.group(1))
+            )
         comment = f'<span class="comment">{comment}</span>'
     if lexer is not None and body.strip():
         prefix, code = (marker, body[1:]) if cls != "ctx" else ("", body)
@@ -138,10 +163,11 @@ def render_diff_line(line: str, lexer=None) -> str:
     return f'<span class="ln {cls}">{body_html}{comment}\n</span>'
 
 
-def render_diff_block(kind: str, content: str) -> str:
+def render_diff_block(kind: str, content: str, link_base: str | None = None) -> str:
     lexer = SIG_LEXER if kind == "signatures" else None
     lines = "".join(
-        render_diff_line(ln, lexer) for ln in content.rstrip("\n").split("\n")
+        render_diff_line(ln, lexer, link_base)
+        for ln in content.rstrip("\n").split("\n")
     )
     return (
         f'<div class="block"><span class="badge">{kind}</span>'
@@ -205,7 +231,7 @@ def render_d2(content: str, salt: str) -> str:
     return f'<div class="figure d2-figure">{proc.stdout}</div>\n'
 
 
-def make_fence_renderer(default_fence):
+def make_fence_renderer(default_fence, link_base: str | None = None):
     diagrams = 0
 
     def fence(self, tokens, idx, options, env):
@@ -213,7 +239,7 @@ def make_fence_renderer(default_fence):
         token = tokens[idx]
         kind = token.info.strip().split(" ")[0] if token.info else ""
         if kind in DIFF_FENCES:
-            return render_diff_block(kind, token.content)
+            return render_diff_block(kind, token.content, link_base)
         if kind == "mockup":
             return render_mockup(token.content)
         if kind == "d2":
@@ -237,9 +263,25 @@ def slugify(text: str) -> str:
     return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
 
 
-def build_markdown() -> MarkdownIt:
+def make_code_inline_renderer(default_code_inline, link_base: str):
+    def code_inline(self, tokens, idx, options, env):
+        rendered = default_code_inline(tokens, idx, options, env)
+        m = LINK_ANCHOR_RE.fullmatch(tokens[idx].content)
+        return anchor_link(m, link_base, rendered) if m else rendered
+
+    return code_inline
+
+
+def build_markdown(link_base: str | None = None) -> MarkdownIt:
     md = MarkdownIt("commonmark").enable("table").enable("strikethrough")
-    md.add_render_rule("fence", make_fence_renderer(md.renderer.rules.get("fence")))
+    md.add_render_rule(
+        "fence", make_fence_renderer(md.renderer.rules.get("fence"), link_base)
+    )
+    if link_base:
+        md.add_render_rule(
+            "code_inline",
+            make_code_inline_renderer(md.renderer.rules.get("code_inline"), link_base),
+        )
     return md
 
 
@@ -428,7 +470,7 @@ def render_page(meta: dict[str, str], body_html: str, toc, src: Path) -> str:
 </header>
 {toc_html}
 {body_html}
-<footer>Blueprint rendered from <code>{html.escape(str(src))}</code>
+<footer>Rendered from <code>{html.escape(str(src))}</code>
 on {date.today().isoformat()} — source file is the single source of truth.</footer>
 </main>
 {zoom_js}
@@ -438,16 +480,22 @@ on {date.today().isoformat()} — source file is the single source of truth.</fo
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("src", type=Path, help="blueprint source markdown file")
+    parser.add_argument("src", type=Path, help="source markdown file")
     parser.add_argument("-o", "--out", type=Path, help="output HTML path")
+    parser.add_argument(
+        "--link-base",
+        metavar="URL",
+        help="link file:line anchors to URL + path, e.g. a GitHub blob URL at a commit",
+    )
     args = parser.parse_args()
+    link_base = args.link_base.rstrip("/") + "/" if args.link_base else None
 
     text = args.src.read_text()
     meta, body = parse_frontmatter(text)
     if "title" not in meta:
         warn(f"no title in frontmatter, using '{args.src.stem}'")
 
-    body_html, toc = render_body(build_markdown(), body)
+    body_html, toc = render_body(build_markdown(link_base), body)
     page = render_page(meta, body_html, toc, args.src)
 
     out = args.out or Path("lab") / f"{args.src.stem.removesuffix('.blueprint')}.html"
