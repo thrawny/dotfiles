@@ -38,6 +38,17 @@ clamshell-on:
 clamshell-off:
     remote-mode off
 
+# Test keep-awake rules and sessions with fake hardware
+test-keepawake:
+    @just test-python tests/test_keepawake.py
+
+# Format, typecheck, and exercise keep-awake rules with fake hardware
+check-keepawake:
+    ruff check --fix bin/keepawake tests/test_keepawake.py
+    ruff format bin/keepawake tests/test_keepawake.py
+    @just typecheck-python bin/keepawake tests/test_keepawake.py
+    @just test-keepawake
+
 # Test remote mode without changing the host's power settings
 test-remote-mode:
     bash -n bin/remote-mode
@@ -136,7 +147,7 @@ test-t3ctl:
     @just test-python tests/test_t3ctl.py
 
 # Run all tests
-test: test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-prune-workspaces test-nvim-here test-herdr-decorator test-t3ctl test-direnv test-private-skills test-remote-mode test-prctl
+test: test-keepawake test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-prune-workspaces test-nvim-here test-herdr-decorator test-t3ctl test-direnv test-private-skills test-remote-mode test-prctl
 
 # Session forking, exact session selection, and desktop routing
 test-fork-window:
@@ -233,7 +244,7 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv test-remote-mode test-prctl check-private-skills nix::eval
+check-parallel: test-keepawake test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-t3ctl test-direnv test-remote-mode test-prctl check-private-skills nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

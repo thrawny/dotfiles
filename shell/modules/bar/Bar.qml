@@ -115,14 +115,7 @@ PanelWindow {
             onSecondaryClicked: Audio.toggleMute()
             onScrolled: delta => Audio.adjust(delta * 0.05)
         }
-        BarButton {
-            text: Caffeine.active ? "󰅶" : "󰛊"
-            selected: Caffeine.active
-            attention: Caffeine.error !== ""
-            enabled: Caffeine.available && !Caffeine.busy
-            hint: Caffeine.error || (!Caffeine.available ? "Caffeine service unavailable" : Caffeine.active ? "Caffeine ON · Click to allow idle locking and sleep" : "Caffeine OFF · Click to keep the desktop awake")
-            onClicked: Caffeine.toggle()
-        }
+        CaffeineButton {}
         BarButton {
             readonly property var battery: UPower.displayDevice
             visible: battery.isPresent

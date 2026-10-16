@@ -1,0 +1,35 @@
+# Copied to ~/.config/keepawake/config.toml on first start. Edits reload automatically.
+version = 1
+battery_floor = 20
+poll_seconds = 5
+notifications = true
+keep_display_awake = false
+allow_lid_closed = false
+
+[[rules]]
+name = "Home Wi-Fi"
+# Set your SSID and enable this rule. No Wi-Fi name is stored in the repository.
+enabled = false
+match = "all"
+[rules.when]
+wifi_ssid = "YOUR_WIFI_SSID"
+
+# Additional examples. Enable only the rules you want.
+[[rules]]
+name = "Recording"
+enabled = false
+[rules.when]
+process = "obs"
+
+[[rules]]
+name = "Docked on AC"
+enabled = false
+[rules.when]
+external_display = true
+ac_power = true
+
+[[rules]]
+name = "Work hours"
+enabled = false
+[rules.when]
+schedule = { days = ["Mon", "Tue", "Wed", "Thu", "Fri"], start = "09:00", end = "17:00" }

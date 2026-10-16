@@ -1,4 +1,7 @@
-{ dotfiles, ... }:
+{ dotfiles, pkgs, ... }:
+let
+  keepawake = pkgs.callPackage ../../packages/keepawake.nix { };
+in
 {
   services.hypridle = {
     enable = true;
@@ -17,10 +20,14 @@
           timeout = 330;
           on-timeout = "${dotfiles}/bin/dpms-off";
           on-resume = "${dotfiles}/bin/dpms-on";
+          condition_cmd = "${keepawake}/bin/keepawake can-screen-sleep";
+          condition_retry = 10;
         }
         {
           timeout = 1800;
           on-timeout = "systemctl suspend";
+          condition_cmd = "${keepawake}/bin/keepawake can-suspend";
+          condition_retry = 10;
         }
       ];
     };
@@ -32,6 +39,8 @@
     Unit.Description = "Suspend a closed, undocked laptop";
     Service = {
       Type = "oneshot";
+      # Closed-lid sessions obey the battery floor; other sessions preserve this safety net.
+      ExecCondition = "${keepawake}/bin/keepawake can-lid-suspend";
       ExecStart = "${dotfiles}/bin/suspend-if-lid-closed-on-battery";
     };
   };

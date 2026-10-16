@@ -423,6 +423,9 @@
                 voxtype.packages.${system}.osd-native
               ];
             }
+            // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+              keepawake = pkgs.callPackage ./packages/keepawake.nix { };
+            }
             // lib.optionalAttrs (system == "aarch64-darwin") {
               inherit (nix-darwin.packages.${system}) darwin-rebuild;
             }
