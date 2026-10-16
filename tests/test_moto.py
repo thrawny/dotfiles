@@ -215,19 +215,47 @@ def test_child_wrap_snooze_and_handback_reach_the_driver_once(
 
 
 @pytest.mark.parametrize("kind", ["done", "question", "blocked"])
-def test_child_done_question_and_blocked_stay_with_the_parent(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str], kind: str
+def test_child_done_question_and_blocked_reach_the_parent_once_its_turn_ends(
+    moto: ModuleType, kind: str
 ):
     with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
         tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1")
     args = argparse.Namespace(kind=kind, text=["x"], agent=None, to_driver=False)
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}):
         assert moto.cmd_report(args) == 0
-    assert "the driver is not watching you" in capsys.readouterr().out
     tasks = moto.read_tasks()
     now = moto.time.time()
-    assert moto.check(tasks, live("done", 2, "w2:p1"), now) == []
-    assert moto.check(tasks, live("blocked", 3, "w2:p1"), now) == []
+    outbox: list[Any] = []
+    panes = live("working", 2) | live("done", 2, "w2:p1")
+    assert moto.check(tasks, panes, now, outbox) == []
+    assert outbox == []
+    panes = live("idle", 3) | live("done", 2, "w2:p1")
+    assert moto.check(tasks, panes, now, outbox) == []
+    assert outbox == [("abc-2", "abc-1", f"[abc-2 {kind}] x")]
+    assert moto.check(tasks, panes, now, outbox) == []
+    assert len(outbox) == 1
+
+
+@pytest.mark.parametrize("why", ["gone", "snoozed"])
+def test_child_report_goes_to_the_driver_when_the_parent_cannot_take_it(
+    moto: ModuleType, why: str
+):
+    tasks = {
+        "abc-2": task(
+            pane_id="w2:p1",
+            agent="abc-2",
+            parent="abc-1",
+            report={"kind": "done", "text": "PR ready", "at": 1.0},
+        )
+    }
+    if why == "snoozed":
+        tasks["abc-1"] = task(snoozed=SNOOZE)
+    outbox: list[Any] = []
+    news = [f"abc-2 done (child of abc-1, which is {why}): PR ready"]
+    assert moto.check(tasks, live("done", 2, "w2:p1"), 0, outbox) == news
+    assert moto.check(tasks, live("done", 2, "w2:p1"), 0, outbox) == []
+    assert outbox == []
 
 
 def test_held_child_handing_back_reaches_the_driver(moto: ModuleType):
@@ -762,7 +790,7 @@ def test_worker_tells_only_its_own_children_under_its_name(moto: ModuleType):
             moto.cmd_tell(argparse.Namespace(agent="abc-2", text=["[driver]", "x"]))
     with (
         patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}),
-        pytest.raises(moto.MotoError, match="abc-1 started you and reads your pane"),
+        pytest.raises(moto.MotoError, match="moto report reaches it"),
     ):
         moto.cmd_tell(argparse.Namespace(agent="abc-1", text=["x"]))
     herdr.assert_called_once_with("agent", "prompt", "abc-2", "[abc-1] Retry.")

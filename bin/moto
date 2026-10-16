@@ -85,7 +85,11 @@ a task with the check that wakes it.
 
 A worker can start workers of its own, which the driver's watch leaves to it,
 apart from what the user does in one: a wrap, snooze or handback, or closing its
-pane, which reach the driver as for any task. moto tell and wake from a
+pane, which reach the driver as for any task. The watch carries a child's done,
+question and blocked reports to its parent instead: it prompts the parent's
+pane with each one, tagged as in [child done], once the parent is not mid-turn,
+held or not. A parent that is gone, snoozed or closed cannot take them, so the
+driver gets them. moto tell and wake from a
 worker's pane reach only the tasks it started, and tag the message with the
 worker's name instead of [driver]. A worker that hands work off instead runs
 moto spawn --to-driver: the task gets no parent, the driver watches it as its
@@ -125,7 +129,7 @@ from contextlib import contextmanager, suppress
 from datetime import datetime, timedelta
 from datetime import time as dt_time
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, NamedTuple, cast
 
 MOTO_HOME = Path(os.environ.get("MOTO_HOME") or Path.home() / "code/moto")
 # Claude Code stops a background command at its Bash timeout, 30 minutes by
@@ -168,6 +172,12 @@ WATCH_MOD = Path(__file__).resolve().parents[1] / "moto/claude/mods/moto-watch"
 # Marks every prompt the driver sends, so a worker can tell it from the user's own typing.
 # A worker's prompts to the workers it started carry its own name instead.
 DRIVER_TAG = "[driver]"
+# Reports the watch carries from a child to its parent, and the tag each starts
+# with there, as in "[abc-2 done] PR ready".
+CHILD_KINDS = ("done", "question", "blocked")
+CHILD_REPORT = re.compile(rf"\[\S+ (?:{'|'.join(CHILD_KINDS)})\] ")
+# Herdr states of a parent that can take a child's report: its turn has ended.
+TURN_OVER = ("idle", "done")
 REPORT_RULES = """\
 When a turn ends with the task finished, with a question only the user can \
 answer, or with the work blocked, make your last action \
@@ -178,7 +188,9 @@ SPAWN_RULES = """\
 To hand work off to a separate task, such as research that splits into \
 implementation tasks, start it with `moto spawn --to-driver`, so the driver \
 watches it. Start a helper you supervise yourself, such as a test worker, with \
-plain `moto spawn`."""
+plain `moto spawn`. Its done, question and blocked reports arrive in your \
+pane once your turn ends, tagged with its name and the kind, as in \
+`[helper done]`; answer a question with `moto tell`."""
 # Taught wherever a worker learns the driver is not watching it.
 PASS_ON_RULE = """\
 When the user asks you to pass something to the driver, run \
@@ -194,8 +206,9 @@ driver when the task finishes, gets stuck or needs a decision. {PASS_ON_RULE}
 
 {SPAWN_RULES}"""
 CHILD_FOOTER = f"""\
-Another worker, {{parent}}, started you and watches this task. A driver session \
-tracks {{parent}} for the user. {REPORT_RULES}
+Another worker, {{parent}}, started you and takes your reports, which moto \
+delivers to its pane. A driver session tracks {{parent}} for the user. \
+{REPORT_RULES}
 
 Every message from {{parent}} starts with [{{parent}}], as this one does. A \
 message that starts with {DRIVER_TAG} is from the driver, and a message with \
@@ -258,6 +271,14 @@ EVENTS_VERSION = 1
 
 class MotoError(Exception):
     pass
+
+
+class Delivery(NamedTuple):
+    """A child's reports on their way into its parent's pane."""
+
+    child: str
+    parent: str
+    text: str
 
 
 # Events recorded during the current tasks_for_update, appended when it commits.
@@ -421,7 +442,7 @@ def message_sender(
     if sender is None:
         return None
     if parent := tasks[sender].get("parent"):
-        hint = f"{parent} started you and reads your pane, so answer there"
+        hint = f"{parent} started you, so moto report reaches it"
     else:
         hint = "To reach the driver, use moto report"
     if agent not in tasks:
@@ -510,8 +531,9 @@ def user_turns(
 ) -> list[float]:
     """When the user typed each prompt into the worker's pane after since.
 
-    Prompts from the driver, or from the worker that started this one, carry
-    their sender's tag and do not count.
+    Prompts from the driver, from the worker that started this one, and the
+    reports of the workers this one started carry their sender's tag and do
+    not count.
     """
     snooze = task.get("snoozed")
     try:
@@ -535,7 +557,13 @@ def user_turns(
         if entry.get("promptSource") != "typed" or entry.get("isSidechain"):
             continue
         at = timestamp(entry.get("timestamp"))
-        if at is not None and at > since and not typed_text(entry).startswith(tags):
+        text = typed_text(entry)
+        if (
+            at is not None
+            and at > since
+            and not text.startswith(tags)
+            and not CHILD_REPORT.match(text)
+        ):
             times.append(at)
     return times
 
@@ -729,7 +757,11 @@ def cmd_spawn(args: argparse.Namespace) -> int:
     where = f"{Path(info['repo']).name} {info.get('branch') or '(main checkout)'}"
     print(f"Started {info['agent']} on {where}")
     if parent:
-        print(f"moto watch skips it, since {parent} started it; watch it yourself")
+        print(
+            f"{info['agent']}'s done, question and blocked reports arrive in this"
+            + f" pane once your turn ends, tagged as in [{info['agent']} done]."
+            + " Answer it with moto tell."
+        )
     elif requested_by:
         print(
             f"The driver watches {info['agent']}, so you cannot moto tell it."
@@ -1033,9 +1065,8 @@ def cmd_report(args: argparse.Namespace) -> int:
         print(f"Reported {args.kind} to the driver, and {parent} can read it here.")
     elif parent:
         print(
-            f"Recorded. {parent} started you, not the driver, so the driver is not"
-            + f" watching you. Answer here in your pane, where {parent} reads it."
-            + f" {PASS_ON_RULE}"
+            f"Recorded. {parent} started you, not the driver, so moto delivers it to"
+            + f" {parent}'s pane once its turn ends. {PASS_ON_RULE}"
         )
     elif held and args.to_driver:
         print(
@@ -1106,7 +1137,10 @@ def cmd_ask(args: argparse.Namespace) -> int:
 
 
 def check(
-    tasks: dict[str, dict[str, Any]], live: dict[str, dict[str, Any]], now: float
+    tasks: dict[str, dict[str, Any]],
+    live: dict[str, dict[str, Any]],
+    now: float,
+    outbox: list[Delivery] | None = None,
 ) -> list[str]:
     """One line per task that needs the driver, updating each task's seen marker.
 
@@ -1117,7 +1151,9 @@ def check(
     A held task is news only when its pane closes and when it passes a report on
     with --to-driver; pane_closed and passed_on decide when. A task another
     worker started is news only when its pane closes, when the user ends or
-    hands it back, and when it passes a report on; the rest goes to that worker.
+    hands it back, and when it passes a report on. Its done, question and
+    blocked reports go to that worker through outbox, which the caller sends
+    after the update; to_parent decides when. Without an outbox they wait.
     """
     lines: list[str] = []
     for name, task in sorted(tasks.items()):
@@ -1134,6 +1170,7 @@ def check(
         if parent := task.get("parent"):
             if line := child_report(name, task, parent):
                 lines.append(line)
+            lines += to_parent(name, task, parent, tasks, live, now, outbox)
             continue
         if task.get("held"):
             if line := passed_on(name, task):
@@ -1190,14 +1227,66 @@ def child_report(name: str, task: dict[str, Any], parent: str) -> str | None:
     report, once, or None.
 
     The user runs or asks for those in the child's pane, so they are the
-    driver's news. The child's other reports are for its parent, so they pass
-    unseen, held or not.
+    driver's news. The child's done, question and blocked reports are for its
+    parent, held or not, so they queue in seen.for_parent for to_parent.
     """
     report = new_report(task)
-    if report is None or not (report["kind"] in ADOPT_KINDS or report.get("to_driver")):
+    if report is None:
+        return None
+    if not (report["kind"] in ADOPT_KINDS or report.get("to_driver")):
+        if report["kind"] in CHILD_KINDS:
+            task["seen"].setdefault("for_parent", []).append(report)
         return None
     line = f"{name} {report['kind']} (child of {parent}): {report['text']}"
     return line + " (pane closed)" if task.get("closed_at") else line
+
+
+def to_parent(
+    name: str,
+    task: dict[str, Any],
+    parent: str,
+    tasks: dict[str, dict[str, Any]],
+    live: dict[str, dict[str, Any]],
+    now: float,
+    outbox: list[Delivery] | None,
+) -> list[str]:
+    """Hand a child's queued reports to its parent once, returning driver lines.
+
+    The parent takes them once its turn ends, held or not, since the child is
+    its own work; mid-turn, at a prompt or between panes, they wait. A parent
+    that is gone, snoozed or closed would never take them, so the driver gets
+    them instead. Delivering counts as writing to the parent, like moto tell.
+    """
+    queued: list[dict[str, Any]] = task["seen"].get("for_parent") or []
+    if not queued:
+        return []
+    host = tasks.get(parent) or {}
+    if not host:
+        why = "gone"
+    elif host.get("snoozed"):
+        why = "snoozed"
+    elif host.get("closed_at"):
+        why = "closed"
+    else:
+        why = None
+    if why:
+        del task["seen"]["for_parent"]
+        for report in queued:
+            record("deliver", name, to="driver", kind=report["kind"], at=report["at"])
+        return [
+            f"{name} {r['kind']} (child of {parent}, which is {why}): {r['text']}"
+            for r in queued
+        ]
+    agent = live.get(host["pane_id"])
+    if outbox is None or not agent or agent.get("agent_status") not in TURN_OVER:
+        return []
+    del task["seen"]["for_parent"]
+    text = "\n".join(f"[{name} {r['kind']}] {r['text']}" for r in queued)
+    outbox.append(Delivery(name, host["agent"], text))
+    host["told"] = now
+    for report in queued:
+        record("deliver", name, to=parent, kind=report["kind"], at=report["at"])
+    return []
 
 
 def passed_on(name: str, task: dict[str, Any]) -> str | None:
@@ -1255,7 +1344,11 @@ def turn_end(
         if now - pending["since"] < TURN_SETTLE_SECONDS:
             return None  # the transcript may not hold the new turn yet
         reason = "Herdr announced a turn the watch already handled"
-    elif prompt is not None and not prompt.startswith(DRIVER_TAG):
+    elif (
+        prompt is not None
+        and not prompt.startswith(DRIVER_TAG)
+        and not CHILD_REPORT.match(prompt)
+    ):
         reason = "the user is talking to the worker"
     elif report and told is not None and report["at"] >= told:
         reason = "it reported since the driver last wrote to it"
@@ -1334,8 +1427,9 @@ def background_work(pane_id: str) -> str | None:
 
 def unwatched(task: dict[str, Any]) -> bool:
     """A held task is the user's, a snoozed one has no pane, and a worker that
-    started another one watches it, so moto watch skips all three, apart from
-    what pane_watched, child_report and passed_on cover."""
+    started another one takes its reports, so moto watch counts none of the
+    three, apart from what pane_watched, child_report, to_parent and passed_on
+    cover."""
     return bool(task.get("held") or task.get("snoozed") or task.get("parent"))
 
 
@@ -1352,10 +1446,20 @@ def watch() -> dict[str, Any]:
     needs the driver, and notes holds what scheduled jobs left, removed as the
     pass hands them over, or None.
     """
+    outbox: list[Delivery] = []
     with tasks_for_update() as tasks:
         watching = sum(1 for t in tasks.values() if not unwatched(t))
         panes = any(pane_watched(t) for t in tasks.values())
-        lines = check(tasks, live_agents(), time.time()) if panes else []
+        lines = check(tasks, live_agents(), time.time(), outbox) if panes else []
+    # Sent after the update, so a slow Herdr never holds the task lock.
+    for delivery in outbox:
+        try:
+            herdr("agent", "prompt", delivery.parent, delivery.text)
+        except (MotoError, subprocess.TimeoutExpired) as error:
+            lines.append(
+                f"{delivery.child} could not reach {delivery.parent} ({error}):"
+                + f" {delivery.text}"
+            )
     return {"watching": watching, "lines": lines, "notes": take_notes()}
 
 
