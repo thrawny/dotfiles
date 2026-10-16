@@ -37,10 +37,11 @@ bind(
 		end
 	)
 )
+-- A tray-only 1Password process still needs its command to reopen the window.
 bind(
 	"ALT + O",
-	scratchpad("1password", "pgrep -x 1password || 1password", function(window)
-		return window.class == "1password"
+	scratchpad("1password", "1password", function(window)
+		return window.class == "1password" or window.class == "com.onepassword.OnePassword"
 	end)
 )
 

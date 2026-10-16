@@ -52,7 +52,7 @@ hl.window_rule({
 })
 hl.window_rule({
 	name = "scratchpad-1password",
-	match = { class = "^1password$" },
+	match = { class = "^(1password|com\\.onepassword\\.OnePassword)$" },
 	workspace = "special:1password",
 	float = true,
 })
