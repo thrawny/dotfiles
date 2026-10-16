@@ -356,10 +356,10 @@ def submit_brief(name: str, pane: str, brief: str) -> None:
     )
 
 
-def name_claude_pane(pane_id: str) -> None:
-    """Label the pane claude, so the tab tells it from Neovim or a server
-    beside it. The agent name, not the label, carries the task."""
-    herdr("pane", "rename", pane_id, "claude")
+def name_claude_tab(tab_id: str) -> None:
+    """Label the tab claude, so it tells a Claude session from a tab of
+    servers. The agent name, not the label, carries the task."""
+    herdr("tab", "rename", tab_id, "claude")
 
 
 def agent_name(requested: str | None, fallback: str) -> str:
@@ -521,7 +521,7 @@ def main() -> int:
         try:
             start_agent(name, args.kind, pane["pane_id"], agent_args)
             if args.kind == "claude":
-                name_claude_pane(pane["pane_id"])
+                name_claude_tab(pane["tab_id"])
             if brief:
                 submit_brief(name, pane["pane_id"], brief)
         except (SpawnError, subprocess.TimeoutExpired) as error:

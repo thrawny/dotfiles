@@ -959,7 +959,7 @@ def test_attach_moves_a_task_to_its_resumed_pane(moto: ModuleType):
     assert [c.args for c in herdr.call_args_list] == [
         ("agent", "rename", "w1:p1", "--clear"),
         ("agent", "rename", "w1:p7", "abc-1"),
-        ("pane", "rename", "w1:p7", "claude"),
+        ("tab", "rename", "w1:t1", "claude"),
     ]
     saved = moto.read_tasks()["abc-1"]
     assert (saved["pane_id"], saved["tab_id"], saved["held"]) == (
