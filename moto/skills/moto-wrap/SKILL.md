@@ -1,12 +1,13 @@
 ---
 name: moto-wrap
-description: End a session's work, stop what it started, and report wrap to the driver. For a moto worker or a session the user started by hand.
-disable-model-invocation: true
+description: End a session's work, stop what it started, and report wrap to the driver. For a moto worker or a session the user started by hand. Use when the user says to wrap, also as the last step of an instruction such as "fix the test, and wrap if CI is green".
 ---
 
 # Wrap
 
-The user runs this in a session whose work is over: a moto worker, or a session they started by hand, which `moto report` makes a task so the driver can clean up after it. Close out the work in order, then report `wrap` to the driver. Leave the task's tickets as they are: the driver updates them.
+The user runs this, or asks for it in words, in a session whose work is over: a moto worker, or a session they started by hand, which `moto report` makes a task so the driver can clean up after it. Close out the work in order, then report `wrap` to the driver.
+
+When the user makes the wrap depend on something, as in "push it, and wrap if CI is green", do the work first and check the condition. Wrap only if it holds. If it doesn't, don't wrap: say what failed and wait for the user, and report `question` with it if moto tracks this session. Leave the task's tickets as they are: the driver updates them.
 
 1. **Check the agreed work is finished.** Compare what you did against your brief, if the driver gave you one, and against everything you agreed with the user. If any of it is unfinished, stop and ask the user how to proceed, then start again from this step. Done when every agreed item is finished or the user has said what to do with it.
 
