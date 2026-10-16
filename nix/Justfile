@@ -102,6 +102,14 @@ deploy target:
 build-t3code-mac:
     nix build --no-link --print-out-paths .#homeConfigurations.thrawnym1.config.dotfiles.t3code.package
 
+# Build/copy a remote configuration and show activation's planned service changes
+plan-deploy target:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    system_path="$(nix build --no-link --print-out-paths '.#nixosConfigurations.{{ target }}.config.system.build.toplevel')"
+    nix copy --no-check-sigs --to 'ssh-ng://root@{{ target }}' "$system_path"
+    ssh 'root@{{ target }}' "$system_path/bin/switch-to-configuration dry-activate"
+
 # Refresh just the shared direnv asset without restarting active T3 Code sessions.
 sync-t3code-direnv target="obelisk":
     #!/usr/bin/env bash
@@ -186,6 +194,10 @@ eval-darwin:
 # Build on Apple Silicon without activating
 build-darwin:
     nix build .#darwinConfigurations.thrawnym1.system --no-link
+
+# Update selected flake inputs without activating a host
+lock-input +inputs:
+    nix flake update {{inputs}}
 
 # Lock only the nix-darwin input
 lock-darwin:
