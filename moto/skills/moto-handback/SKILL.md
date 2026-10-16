@@ -8,6 +8,8 @@ disable-model-invocation: true
 
 The user runs this to give a session to the driver: a held moto worker they took over (a grill, say), or a session they started by hand. The driver never saw your conversation with the user, so your summary is all it knows of it.
 
+To send the driver something while the user keeps the session, run `moto report --to-driver` instead. The driver gets it, and the hold stays in place.
+
 1. **Write the summary.** Draw it from the conversation since the user took over, in a few sentences:
    - the decision you and the user reached;
    - what you do next;

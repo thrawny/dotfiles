@@ -33,6 +33,11 @@ worker that waits on something: it reports snooze with what the task waits on,
 and the driver runs moto snooze, since a worker that snoozes itself closes its
 own pane mid-turn. All three end a hold, so the driver hears of them.
 
+moto watch skips a held worker's ordinary reports. When the user asks a held
+worker to pass something on, the worker runs moto report --to-driver, which the
+watch delivers without ending the hold. A worker that another worker started
+uses the same flag to reach the driver instead of its parent.
+
 The user also runs those skills in Claude sessions they started by hand, which
 no task owns. A wrap, snooze or handback from one adopts the session first: it
 becomes a task built from its Herdr pane, its git checkout and its Claude
@@ -174,13 +179,18 @@ To hand work off to a separate task, such as research that splits into \
 implementation tasks, start it with `moto spawn --to-driver`, so the driver \
 watches it. Start a helper you supervise yourself, such as a test worker, with \
 plain `moto spawn`."""
+# Taught wherever a worker learns the driver is not watching it.
+PASS_ON_RULE = """\
+When the user asks you to pass something to the driver, run \
+`moto report --to-driver done|question|blocked "<one line>"`. The driver gets \
+it even while it does not watch you, and a hold stays in place."""
 BRIEF_FOOTER = f"""\
 A driver session started you and tracks this task for the user. {REPORT_RULES}
 
 Every message from the driver starts with {DRIVER_TAG}, as this one does. A \
 message without it is from the user, typing in this pane. Answer the user here, \
 and when the user and the driver disagree, follow the user. Still report to the \
-driver when the task finishes, gets stuck or needs a decision.
+driver when the task finishes, gets stuck or needs a decision. {PASS_ON_RULE}
 
 {SPAWN_RULES}"""
 CHILD_FOOTER = f"""\
@@ -190,7 +200,8 @@ tracks {{parent}} for the user. {REPORT_RULES}
 Every message from {{parent}} starts with [{{parent}}], as this one does. A \
 message that starts with {DRIVER_TAG} is from the driver, and a message with \
 neither tag is from the user, typing in this pane. Answer the user here. When \
-they disagree, follow the user first, then the driver, then {{parent}}.
+they disagree, follow the user first, then the driver, then {{parent}}. \
+{PASS_ON_RULE}
 
 {SPAWN_RULES}"""
 
@@ -1004,24 +1015,39 @@ def cmd_report(args: argparse.Namespace) -> int:
             } | {"report_at": previous.get("at")}
             record("resume", task["agent"], by=args.kind)
         task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
-        record("report", task["agent"], kind=args.kind, text=text)
+        if args.to_driver:
+            task["report"]["to_driver"] = True
+        record(
+            "report",
+            task["agent"],
+            kind=args.kind,
+            text=text,
+            **({"to_driver": True} if args.to_driver else {}),
+        )
         if (match := PR_URL.search(text)) and match.group(0) != task.get("pr"):
             task["pr"] = match.group(0)
             record("pr", task["agent"], pr=task["pr"])
         held = bool(task.get("held"))
         parent = task.get("parent")
-    if parent and args.kind in ADOPT_KINDS:
+    if parent and (args.kind in ADOPT_KINDS or args.to_driver):
         print(f"Reported {args.kind} to the driver, and {parent} can read it here.")
     elif parent:
         print(
             f"Recorded. {parent} started you, not the driver, so the driver is not"
             + f" watching you. Answer here in your pane, where {parent} reads it."
+            + f" {PASS_ON_RULE}"
+        )
+    elif held and args.to_driver:
+        print(
+            f"Passed {args.kind} on to the driver. The hold stays, so carry on with"
+            + " the user in this pane."
         )
     elif held:
-        # The driver's watch skips a held task, so nobody answers there.
+        # The driver's watch skips a held task's ordinary reports.
         print(
             "Recorded. The user is driving this session and the driver is not"
             + " watching it, so ask the user directly in this pane."
+            + f" {PASS_ON_RULE}"
         )
     else:
         again = "; moto watch covers this task again" if handed_back else ""
@@ -1088,9 +1114,10 @@ def check(
     prompt, and when its pane closes. Herdr's state_change_seq catches a turn
     that ended while nothing was watching. A done worker that someone looked at
     turns idle, and that is not news. turn_end decides which turn ends are news.
-    A held task is news only when its pane closes; pane_closed decides when.
-    A task another worker started is news only when its pane closes and when the
-    user ends or hands it back; the rest goes to that worker.
+    A held task is news only when its pane closes and when it passes a report on
+    with --to-driver; pane_closed and passed_on decide when. A task another
+    worker started is news only when its pane closes, when the user ends or
+    hands it back, and when it passes a report on; the rest goes to that worker.
     """
     lines: list[str] = []
     for name, task in sorted(tasks.items()):
@@ -1105,10 +1132,12 @@ def check(
         if closed := pane_closed(name, task, status == "gone", now):
             lines.append(closed)
         if parent := task.get("parent"):
-            if not task.get("held") and (line := child_report(name, task, parent)):
+            if line := child_report(name, task, parent):
                 lines.append(line)
             continue
-        if unwatched(task):
+        if task.get("held"):
+            if line := passed_on(name, task):
+                lines.append(line)
             continue
         report: dict[str, Any] | None = task.get("report")
         fresh = report is not None and report["at"] != seen.get("report_at")
@@ -1146,21 +1175,41 @@ def check(
     return lines
 
 
-def child_report(name: str, task: dict[str, Any], parent: str) -> str | None:
-    """The line for a child task's new wrap, snooze or handback, once, or None.
-
-    The user runs those in the child's pane, so they are the driver's news.
-    The child's other reports are for its parent, so they pass unseen.
-    """
+def new_report(task: dict[str, Any]) -> dict[str, Any] | None:
+    """The task's report if the watch has not seen it, marking it seen."""
     seen = task["seen"]
     report: dict[str, Any] | None = task.get("report")
     if report is None or report["at"] == seen.get("report_at"):
         return None
     seen["report_at"] = report["at"]
-    if report["kind"] not in ADOPT_KINDS:
+    return report
+
+
+def child_report(name: str, task: dict[str, Any], parent: str) -> str | None:
+    """The line for a child task's new wrap, snooze, handback or passed-on
+    report, once, or None.
+
+    The user runs or asks for those in the child's pane, so they are the
+    driver's news. The child's other reports are for its parent, so they pass
+    unseen, held or not.
+    """
+    report = new_report(task)
+    if report is None or not (report["kind"] in ADOPT_KINDS or report.get("to_driver")):
         return None
     line = f"{name} {report['kind']} (child of {parent}): {report['text']}"
     return line + " (pane closed)" if task.get("closed_at") else line
+
+
+def passed_on(name: str, task: dict[str, Any]) -> str | None:
+    """The line for a held task's new --to-driver report, once, or None.
+
+    The user asked the worker to send it, so it is the driver's news. The held
+    task's other reports are the user's, so they pass unseen.
+    """
+    report = new_report(task)
+    if report is None or not report.get("to_driver"):
+        return None
+    return f"{name} {report['kind']} (held, passed on): {report['text']}"
 
 
 def pane_closed(name: str, task: dict[str, Any], gone: bool, now: float) -> str | None:
@@ -1286,7 +1335,7 @@ def background_work(pane_id: str) -> str | None:
 def unwatched(task: dict[str, Any]) -> bool:
     """A held task is the user's, a snoozed one has no pane, and a worker that
     started another one watches it, so moto watch skips all three, apart from
-    what pane_watched and child_report cover."""
+    what pane_watched, child_report and passed_on cover."""
     return bool(task.get("held") or task.get("snoozed") or task.get("parent"))
 
 
@@ -3190,6 +3239,12 @@ def parser() -> argparse.ArgumentParser:
     report.add_argument("kind", choices=REPORT_KINDS)
     report.add_argument("text", nargs="+")
     report.add_argument("--agent", help="Task name; default: the task in this pane")
+    report.add_argument(
+        "--to-driver",
+        action="store_true",
+        help="Reach the driver even from a held task or one another worker"
+        + " started, without ending a hold; for when the user asks",
+    )
     report.set_defaults(handler=cmd_report)
 
     watch = commands.add_parser(

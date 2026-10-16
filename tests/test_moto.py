@@ -202,7 +202,9 @@ def test_child_wrap_snooze_and_handback_reach_the_driver_once(
 ):
     with moto.tasks_for_update() as tasks:
         tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1")
-    args = argparse.Namespace(kind=kind, text=["All", "set"], agent=None)
+    args = argparse.Namespace(
+        kind=kind, text=["All", "set"], agent=None, to_driver=False
+    )
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}):
         assert moto.cmd_report(args) == 0
     tasks = moto.read_tasks()
@@ -218,7 +220,7 @@ def test_child_done_question_and_blocked_stay_with_the_parent(
 ):
     with moto.tasks_for_update() as tasks:
         tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1")
-    args = argparse.Namespace(kind=kind, text=["x"], agent=None)
+    args = argparse.Namespace(kind=kind, text=["x"], agent=None, to_driver=False)
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}):
         assert moto.cmd_report(args) == 0
     assert "the driver is not watching you" in capsys.readouterr().out
@@ -231,7 +233,9 @@ def test_child_done_question_and_blocked_stay_with_the_parent(
 def test_held_child_handing_back_reaches_the_driver(moto: ModuleType):
     with moto.tasks_for_update() as tasks:
         tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1", held=True)
-    args = argparse.Namespace(kind="handback", text=["Over", "to", "you"], agent=None)
+    args = argparse.Namespace(
+        kind="handback", text=["Over", "to", "you"], agent=None, to_driver=False
+    )
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}):
         assert moto.cmd_report(args) == 0
     tasks = moto.read_tasks()
@@ -250,7 +254,10 @@ def test_report_finds_its_task_by_pane_and_keeps_the_pr(moto: ModuleType):
     with moto.tasks_for_update() as tasks:
         tasks["abc-1"] = task()
     args = argparse.Namespace(
-        kind="done", text=["PR", "https://github.com/o/r/pull/7", "ready"], agent=None
+        kind="done",
+        text=["PR", "https://github.com/o/r/pull/7", "ready"],
+        agent=None,
+        to_driver=False,
     )
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
         assert moto.cmd_report(args) == 0
@@ -278,7 +285,9 @@ def test_handback_and_snooze_end_the_hold_and_wake_the_driver(
     seen = {"status": "working", "seq": 1, "pending": {"since": 90.0}}
     with moto.tasks_for_update() as tasks:
         tasks["abc-1"] = task(held=True, report=old, seen=seen)
-    args = argparse.Namespace(kind=kind, text=["Ship", "it"], agent=None)
+    args = argparse.Namespace(
+        kind=kind, text=["Ship", "it"], agent=None, to_driver=False
+    )
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
         assert moto.cmd_report(args) == 0
     tasks = moto.read_tasks()
@@ -289,6 +298,29 @@ def test_handback_and_snooze_end_the_hold_and_wake_the_driver(
         ("resume", kind),
         ("report", None),
     ]
+
+
+def test_held_task_passes_on_only_what_the_user_asks_and_stays_held(
+    moto: ModuleType,
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
+        for text, to_driver in (("Mine", False), ("Yours", True)):
+            args = argparse.Namespace(
+                kind="question", text=[text], agent=None, to_driver=to_driver
+            )
+            assert moto.cmd_report(args) == 0
+            tasks = moto.read_tasks()
+            now = moto.time.time()
+            news = moto.check(tasks, live("done", 2), now)
+            assert news == (
+                ["abc-1 question (held, passed on): Yours"] if to_driver else []
+            )
+            assert moto.check(tasks, live("done", 3), now) == []
+            with moto.tasks_for_update() as saved:
+                saved.update(tasks)
+    assert moto.read_tasks()["abc-1"]["held"] is True
 
 
 def test_failed_update_writes_nothing(moto: ModuleType, state_home: Path):
@@ -495,7 +527,9 @@ def report_from(
     env = {"HERDR_PANE_ID": pane_id} | (
         {"CLAUDE_CODE_SESSION_ID": session} if session else {}
     )
-    args = argparse.Namespace(kind=kind, text=["All", "done."], agent=None)
+    args = argparse.Namespace(
+        kind=kind, text=["All", "done."], agent=None, to_driver=False
+    )
     with (
         patch.dict("os.environ", env),
         patch.object(moto, "live_agents", return_value={pane_id: agent}),
@@ -1128,7 +1162,10 @@ def test_report_logs_its_text_and_a_new_pr_once(moto: ModuleType):
     with moto.tasks_for_update() as tasks:
         tasks["abc-1"] = task()
     args = argparse.Namespace(
-        kind="done", text=["PR", "https://github.com/o/r/pull/7"], agent="abc-1"
+        kind="done",
+        text=["PR", "https://github.com/o/r/pull/7"],
+        agent="abc-1",
+        to_driver=False,
     )
     assert moto.cmd_report(args) == 0
     assert moto.cmd_report(args) == 0
@@ -1357,7 +1394,9 @@ def test_afk_keeps_the_note_word_for_word_and_logs_replacements(moto: ModuleType
 
 
 def report(moto: ModuleType, agent: str, kind: str, text: str) -> None:
-    moto.cmd_report(argparse.Namespace(kind=kind, text=[text], agent=agent))
+    moto.cmd_report(
+        argparse.Namespace(kind=kind, text=[text], agent=agent, to_driver=False)
+    )
 
 
 def test_back_prints_what_happened_while_away(
