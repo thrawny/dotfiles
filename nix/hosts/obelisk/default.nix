@@ -21,6 +21,7 @@ in
   imports = [
     ../../modules/headless.nix
     ../../modules/tailscale-serve.nix
+    ../../modules/portless.nix
     ../../modules/forgejo.nix
     ../../modules/agents.nix
     ../../modules/t3code.nix
