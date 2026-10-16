@@ -67,20 +67,25 @@ def test_requested_agent_name_is_validated(spawn: ModuleType):
 
 
 def test_title_becomes_the_claude_session_name(spawn: ModuleType):
-    assert spawn.title_args(None, "codex") == []
-    assert spawn.title_args("ABC-123 summary", "claude") == [
+    assert spawn.title_args(None, "codex", False) == []
+    assert spawn.title_args("ABC-123 summary", "claude", False) == [
         "--name",
         "ABC-123 summary",
     ]
-    assert spawn.title_args("fix retry timeouts", "claude") == [
+    assert spawn.title_args("fix retry timeouts", "claude", False) == [
         "--name",
         "fix retry timeouts",
     ]
     for bad in ("Fix retry", "one two three four", "two  spaces", " lead", ""):
         with pytest.raises(spawn.SpawnError, match="one to three"):
-            spawn.title_args(bad, "claude")
+            spawn.title_args(bad, "claude", False)
     with pytest.raises(spawn.SpawnError, match="--kind claude"):
-        spawn.title_args("ABC-123 summary", "codex")
+        spawn.title_args("ABC-123 summary", "codex", False)
+    # A resumed session keeps a name the user gave it by hand.
+    assert spawn.title_args("Widgets-001 API rebuild", "claude", True) == [
+        "--name",
+        "Widgets-001 API rebuild",
+    ]
 
 
 def test_resume_passes_the_session_id(spawn: ModuleType):
