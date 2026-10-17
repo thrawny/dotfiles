@@ -4,16 +4,7 @@
   "defaultThinkingLevel": "high",
   "defaultTools": ["+codemode"],
   "subagents": {
-    "disableBuiltins": true,
-    "agentOverrides": {
-      "delegate": {
-        "disabled": false,
-        "tools": "inherit",
-        "inheritGlobalContext": true,
-        "inheritSkills": true,
-        "systemPrompt": "Execute the delegated task using the available tools. Follow inherited instructions and return concise results, validation, and any unresolved blockers."
-      }
-    }
+    "disableBuiltins": true
   },
   "theme": "monokai-pi",
   "tuiMode": "fullscreen",

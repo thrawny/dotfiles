@@ -12,7 +12,7 @@ Requires Pi 0.87.1 or newer. See [AGENTS.md](AGENTS.md) for development checks.
 
 ## Subagents
 
-Ask “delegate this task to a subagent.” `delegate` is the only enabled role: a generic agent using the selected model, normal tools and extensions, inherited instructions, and skills. There is no role-specific tool allowlist. `/subagents-fleet` inspects running work; `/subagents-doctor` checks the installation.
+Ask “delegate this task to a subagent.” [`general-purpose`](agents/general-purpose.md) is the only enabled role (the same name as Claude Code): a generic agent using the selected model, normal tools and extensions, inherited instructions, and skills. There is no role-specific tool allowlist. `/subagents-fleet` inspects running work; `/subagents-doctor` checks the installation.
 
 The pinned `pi-subagents` package loads only its extension, not bundled skills or prompts. [Its config](extensions/subagent/config.json) keeps runs small and disables scheduling, automatic missions, and workflow scripting.
 

@@ -150,6 +150,7 @@ in
 
       ".pi/agent/AGENTS.md".text = agentInstructions.piGlobal;
       ".pi/agent/prompts".source = configSource "pi/prompts";
+      ".pi/agent/agents".source = configSource "pi/agents";
       # Pi themes have no inheritance mechanism, so the complete document is
       # generated from the central theme (edit nix/themes/monokai.json).
       ".pi/agent/themes/monokai-pi.json".text = builtins.toJSON (themeLib.piTheme theme);
