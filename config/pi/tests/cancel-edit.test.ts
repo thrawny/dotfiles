@@ -140,7 +140,10 @@ function harness() {
 		) {
 			await emit("session_start");
 			await emit("input", { text, source: "interactive", ...extra });
-			await emit("before_agent_start", { prompt: expanded });
+			await emit("before_agent_start", {
+				messageType: "user",
+				prompt: expanded,
+			});
 			session.appendMessage({
 				role: "user",
 				content: expanded,

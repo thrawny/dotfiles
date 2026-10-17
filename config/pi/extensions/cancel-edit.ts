@@ -202,7 +202,9 @@ export default function cancelEditExtension(pi: ExtensionAPI) {
 		const text = draft;
 		invalidate();
 		attempt =
-			text !== undefined && !event.images?.length
+			text !== undefined &&
+			event.messageType === "user" &&
+			!event.images?.length
 				? {
 						text,
 						sessionId: ctx.sessionManager.getSessionId(),

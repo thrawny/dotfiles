@@ -70,8 +70,12 @@ full-update: nix::full-update
 pi-update-deps +packages:
     pnpm --dir config/pi update --ignore-scripts {{packages}}
 
+# Require installed Pi, declared SDK pins, and installed SDKs to match
+check-pi-version:
+    uv run --locked python -B scripts/check-pi-version.py
+
 # Check and typecheck Pi config/extensions
-pi:
+pi: check-pi-version
     pnpm --dir config/pi run lint
     pnpm --dir config/pi run format
     pnpm --dir config/pi run typecheck

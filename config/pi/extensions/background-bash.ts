@@ -11,7 +11,7 @@ import {
 	type ExtensionAPI,
 	type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { Type } from "@sinclair/typebox";
+import { Type } from "typebox";
 
 const COMPLETION_MESSAGE_TYPE = "background-bash-finished";
 const TIMEOUT_MESSAGE_TYPE = "background-bash-timeout";
