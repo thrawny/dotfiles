@@ -1,21 +1,5 @@
 {
   "nodes": {
-    "acpx-skills": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1792032379,
-        "narHash": "sha256-DawbsoZFeZZjz4xbpa0DNgXO/lEvX80WTrrcmrjHZMc=",
-        "owner": "openclaw",
-        "repo": "acpx",
-        "rev": "82315f03032cb37a485e4bad4c0019805087c1fe",
-        "type": "github"
-      },
-      "original": {
-        "owner": "openclaw",
-        "repo": "acpx",
-        "type": "github"
-      }
-    },
     "agent-browser": {
       "flake": false,
       "locked": {
@@ -1141,7 +1125,6 @@
     },
     "root": {
       "inputs": {
-        "acpx-skills": "acpx-skills",
         "agent-browser": "agent-browser",
         "agent-switch": "agent-switch",
         "anthropic-skills": "anthropic-skills",

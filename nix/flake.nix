@@ -67,10 +67,6 @@
       url = "github:thrawny/agent-switch";
       flake = false;
     };
-    acpx-skills = {
-      url = "github:openclaw/acpx";
-      flake = false;
-    };
     agent-browser = {
       url = "github:vercel-labs/agent-browser";
       flake = false;
@@ -123,7 +119,6 @@
       zmx,
       quotabar,
       agent-switch,
-      acpx-skills,
       agent-browser,
       voxtype,
       cursor-plugins,
@@ -149,7 +144,6 @@
       };
       agentAssets = import ./lib/agent-skills.nix {
         inherit
-          acpx-skills
           agent-browser
           anthropic-skills
           cursor-plugins
