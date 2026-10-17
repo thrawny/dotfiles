@@ -3,6 +3,10 @@
   ...
 }:
 {
+  # pnpm warns about unset variables in .npmrc; an empty token needs no auth.
+  # Preserve tokens already exported by the parent environment.
+  home.sessionVariables.NPM_TOKEN = "\${NPM_TOKEN-}";
+
   # Configure npm to use a writable directory for global packages
   home.file.".npmrc".text = ''
     prefix = ${config.home.homeDirectory}/.npm-global
