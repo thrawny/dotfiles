@@ -2,6 +2,7 @@
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6.1-sol",
   "defaultThinkingLevel": "high",
+  "defaultTools": ["+codemode"],
   "theme": "monokai-pi",
   "tuiMode": "fullscreen",
   "diffTheme": "subtle",
