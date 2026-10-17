@@ -76,10 +76,7 @@ export function loadLocalInstructions(cwd: string): LocalInstructionFile[] {
 	});
 }
 
-export function renderLocalInstructions(
-	files: LocalInstructionFile[],
-	_cwd: string,
-): string {
+export function renderLocalInstructions(files: LocalInstructionFile[]): string {
 	return files.map((file) => file.content).join("\n\n");
 }
 
@@ -97,15 +94,13 @@ export default function agentsLocalExtension(pi: ExtensionAPI) {
 		}
 	});
 
-	pi.on("before_agent_start", async (event, ctx) => {
-		if (localInstructions.length === 0) return;
-
-		return {
-			systemPrompt: `${event.systemPrompt}\n\n${renderLocalInstructions(
-				localInstructions,
-				ctx.cwd,
-			)}`,
-		};
+	pi.on("before_agent_start", (event) => {
+		const sections = event.systemPromptOptions.sections;
+		if (localInstructions.length > 0) {
+			sections.local_instructions = renderLocalInstructions(localInstructions);
+		} else {
+			delete sections.local_instructions;
+		}
 	});
 
 	pi.registerCommand("local-instructions", {

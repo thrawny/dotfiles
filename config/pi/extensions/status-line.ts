@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type {
@@ -182,24 +182,6 @@ function envFlagSet(name: string): boolean {
 	return normalized !== "0" && normalized !== "false";
 }
 
-export function isCodexFastEnabled(
-	configPath = join(homedir(), ".pi", "agent", "pi-codex-conversion.json"),
-): boolean {
-	try {
-		if (!existsSync(configPath)) return false;
-		const config = JSON.parse(readFileSync(configPath, "utf8")) as unknown;
-		if (!config || typeof config !== "object") return false;
-		const openai = (config as { openai?: unknown }).openai;
-		return Boolean(
-			openai &&
-			typeof openai === "object" &&
-			(openai as { fast?: unknown }).fast === true,
-		);
-	} catch {
-		return false;
-	}
-}
-
 function getRuntimeBadge(): string | null {
 	if (envFlagSet("SANDBOX")) {
 		return "🫧";
@@ -361,9 +343,6 @@ function install(
 					partitionExtensionStatuses(
 						footerData.getExtensionStatuses().values(),
 					);
-				if (isCodexFastEnabled() && !extensionStatuses.includes("fast")) {
-					extensionStatuses.unshift("fast");
-				}
 				const usage = activeCtx
 					? safe(() => activeCtx.getContextUsage(), undefined)
 					: undefined;

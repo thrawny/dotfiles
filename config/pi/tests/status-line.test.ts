@@ -12,19 +12,18 @@ import {
 } from "../extensions/status-line.ts";
 
 describe("status line extension statuses", () => {
-	it("extracts fast from pi-codex-conversion status", () => {
-		expect(
-			normalizeExtensionStatuses(["Codex adapter V: low • PATH mode • fast"]),
-		).toEqual(["fast", "Codex adapter V: low • PATH mode"]);
+	it("keeps the live fast status", () => {
+		expect(normalizeExtensionStatuses(["fast", "voice…"])).toEqual([
+			"fast",
+			"voice…",
+		]);
 	});
 
 	it("deduplicates fast across extensions", () => {
-		expect(
-			normalizeExtensionStatuses([
-				"fast",
-				"Codex adapter V: low • PATH mode • fast",
-			]),
-		).toEqual(["fast", "Codex adapter V: low • PATH mode"]);
+		expect(normalizeExtensionStatuses(["fast", "voice ready • fast"])).toEqual([
+			"fast",
+			"voice ready",
+		]);
 	});
 
 	it("promotes the background task count out of trailing statuses", () => {
