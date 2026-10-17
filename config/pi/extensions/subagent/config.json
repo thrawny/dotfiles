@@ -1,0 +1,15 @@
+{
+	"globalConcurrencyLimit": 4,
+	"maxSubagentSpawnsPerRun": 4,
+	"maxSubagentDepth": 1,
+	"defaultSubagentContext": "fresh",
+	"missions": { "enabled": false },
+	"scheduledRuns": { "enabled": false },
+	"asyncWidget": false,
+	"disabledFeatures": [
+		"workflow-scripts",
+		"missions",
+		"external-machines",
+		"panes"
+	]
+}
