@@ -153,10 +153,7 @@ in
       # Pi themes have no inheritance mechanism, so the complete document is
       # generated from the central theme (edit nix/themes/monokai.json).
       ".pi/agent/themes/monokai-pi.json".text = builtins.toJSON (themeLib.piTheme theme);
-      ".pi/agent/claude-bridge.json".source = configSource "pi/claude-bridge.json";
-      ".pi/agent/openai-server-compaction.json".source = configSource "pi/openai-server-compaction.json";
       ".pi/agent/pi-diff.json".source = configSource "pi/pi-diff.json";
-      ".pi/agent/pi-vcc-config.json".source = configSource "pi/pi-vcc-config.json";
       ".pi/agent/models.json".source = configSource "pi/models.json";
       ".pi/agent/keybindings.json".source = configSource "pi/keybindings.json";
       ".pi/agent/extensions".source = configSource "pi/extensions";

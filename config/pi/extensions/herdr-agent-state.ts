@@ -1,4 +1,4 @@
-// Vendored from Herdr's Pi integration v8, with rpiv questionnaire state support.
+// Vendored from Herdr's Pi integration v8.
 // Managed by dotfiles. `herdr integration install pi` overwrites these patches.
 // HERDR_INTEGRATION_ID=pi
 // HERDR_INTEGRATION_VERSION=8
@@ -189,7 +189,6 @@ export default function (pi) {
 	}
 
 	let agentActive = false;
-	let questionBlocked = false;
 	let blockedCount = 0;
 	let blockedMessage: string | undefined;
 	let lastState: AgentState | undefined;
@@ -197,9 +196,6 @@ export default function (pi) {
 	let rootSession = false;
 
 	function desiredState() {
-		if (questionBlocked) {
-			return { state: "blocked" as const, message: "Waiting for your answer" };
-		}
 		if (blockedCount > 0) {
 			return { state: "blocked" as const, message: blockedMessage };
 		}
@@ -218,14 +214,6 @@ export default function (pi) {
 		lastMessage = next.message;
 		queueState(next.state, next.message);
 	}
-
-	// rpiv clears this in finally, including cancellation and UI errors.
-	// Keep it separate from other blocking prompts so one cannot clear another.
-	pi.events.on("rpiv:ask-user:blocked", (data) => {
-		if (!rootSession || typeof data?.active !== "boolean") return;
-		questionBlocked = data.active;
-		publishState();
-	});
 
 	pi.events.on("herdr:blocked", (data) => {
 		if (!rootSession) {
