@@ -34,6 +34,10 @@ let
     cat ${lib.escapeShellArg (toString agentAssets.codexFiles.config)} > "$out"
     cat >> "$out" <<'EOF'
 
+    [mcp_servers.linear]
+    url = "https://mcp.linear.app/mcp"
+    bearer_token_env_var = "LINEAR_API_KEY"
+
     [projects."/srv/t3code/repos"]
     trust_level = "trusted"
     EOF
