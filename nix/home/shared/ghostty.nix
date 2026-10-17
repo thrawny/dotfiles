@@ -32,6 +32,8 @@ in
       cursor-style-blink = false;
       font-synthetic-style = false;
       minimum-contrast = 1.2;
+      # Double wheel scrolling without changing touchpad scrolling.
+      mouse-scroll-multiplier = "precision:1,discrete:6";
       selection-background = app.selectionBackground;
       selection-foreground = app.selectionForeground;
       palette = [
