@@ -12,8 +12,8 @@ Requires Pi 0.87.1 or newer. See [AGENTS.md](AGENTS.md) for development checks.
 
 ## Subagents
 
-Ask “use scout to investigate this” or “have reviewer check this diff.” `/subagents-fleet` inspects running work; `/subagents-doctor` checks the installation.
+Ask “delegate this task to a subagent.” `delegate` is the only enabled role: a generic agent using the selected model, normal tools and extensions, inherited instructions, and skills. There is no role-specific tool allowlist. `/subagents-fleet` inspects running work; `/subagents-doctor` checks the installation.
 
-The pinned `pi-subagents` package loads only its extension, not bundled skills or prompts. [Its config](extensions/subagent/config.json) keeps runs small and disables scheduling, automatic missions, and workflow scripting. Children inherit the selected model and load the local-instruction and Codex web-search extensions. Scout, worker, reviewer, oracle, and delegate can use `web_run` with an OpenAI Codex Responses model while retaining their existing tool restrictions. The two research roles requiring `pi-web-access` remain disabled.
+The pinned `pi-subagents` package loads only its extension, not bundled skills or prompts. [Its config](extensions/subagent/config.json) keeps runs small and disables scheduling, automatic missions, and workflow scripting.
 
 Restart Pi after installing or changing subagent configuration.

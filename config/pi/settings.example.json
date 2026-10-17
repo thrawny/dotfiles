@@ -4,28 +4,15 @@
   "defaultThinkingLevel": "high",
   "defaultTools": ["+codemode"],
   "subagents": {
-    "defaultExtensions": [
-      "~/.pi/agent/extensions/agents-local.ts",
-      "~/.pi/agent/git/github.com/thrawny/pi-codex-web-run/src/index.ts"
-    ],
+    "disableBuiltins": true,
     "agentOverrides": {
-      "scout": {
-        "tools": ["read", "grep", "find", "ls", "bash", "write", "contact_supervisor", "web_run"]
-      },
-      "worker": {
-        "tools": ["read", "grep", "find", "ls", "bash", "edit", "write", "contact_supervisor", "web_run"]
-      },
-      "reviewer": {
-        "tools": ["read", "grep", "find", "ls", "watchdog_diff", "contact_supervisor", "web_run"]
-      },
-      "oracle": {
-        "tools": ["read", "grep", "find", "ls", "bash", "web_run"]
-      },
       "delegate": {
-        "tools": ["read", "grep", "find", "ls", "bash", "edit", "write", "contact_supervisor", "web_run"]
-      },
-      "researcher": { "disabled": true },
-      "evidence-auditor": { "disabled": true }
+        "disabled": false,
+        "tools": "inherit",
+        "inheritGlobalContext": true,
+        "inheritSkills": true,
+        "systemPrompt": "Execute the delegated task using the available tools. Follow inherited instructions and return concise results, validation, and any unresolved blockers."
+      }
     }
   },
   "theme": "monokai-pi",
