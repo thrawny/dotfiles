@@ -85,6 +85,11 @@ local function sync_displays()
 	end
 end
 
+-- Install rules while the config is loading, before Hyprland reapplies monitor
+-- and persistent-workspace rules. Waiting for the timer briefly enables the
+-- panel and moves web off the AOC, leaving a new empty workspace behind.
+sync_displays()
+
 -- Coalesce dock enumeration and lid-sensor bounce. Reuse a parked repeat timer:
 -- Hyprland destroys oneshot timers after firing, so they cannot be re-enabled.
 local settle_timer
