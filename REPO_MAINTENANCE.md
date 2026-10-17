@@ -62,7 +62,7 @@ These are not backed by repositories under `~/code`, but recent use shows they a
 | Tool | Installation | Current use / ownership |
 |---|---|---|
 | `extract_otp_secrets` | Standalone binary in `~/.local/bin` | Used in late July. Its installation source is not recorded, so it is not currently reproducible. |
-| `impeccable` | npm-global `impeccable@2.1.8` | CLI used in July. This is separate from Pi's skill-based `/impeccable` integration. |
+| `impeccable` | npm-global `impeccable@2.1.8` | CLI used in July. This is separate from project-local Impeccable skills. |
 | `pyinfra` | uv tool, `pyinfra@3.8.0` | Used in August. |
 | `sonos` | `go install github.com/steipete/sonoscli/cmd/sonos@v0.3.4` | Used in August. |
 | `migrate` | `go install github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1` with PostgreSQL support | Used for database migration work. |
