@@ -116,6 +116,9 @@ in
         hb = "gh repo view --web";
         gcam = "git add -A && git commit -m";
       }
+      // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+        unlock-keyring = ''${pkgs.python3}/bin/python3 -c 'import getpass, subprocess; password = getpass.getpass("Keyring password: "); subprocess.run(["${pkgs.gnome-keyring}/bin/gnome-keyring-daemon", "--unlock"], input=password.encode(), check=True)' '';
+      }
       // lib.optionalAttrs pkgs.stdenv.hostPlatform.isDarwin {
         bu = "brew upgrade";
       }
