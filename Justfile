@@ -78,8 +78,12 @@ pi-update-deps +packages:
 check-pi-version:
     uv run --locked python -B scripts/check-pi-version.py
 
+# Install Pi extension dependencies when node_modules is stale against the lock file
+pi-install:
+    pnpm --dir config/pi install --frozen-lockfile
+
 # Check and typecheck Pi config/extensions
-pi: check-pi-version
+pi: pi-install check-pi-version
     pnpm --dir config/pi run lint
     pnpm --dir config/pi run format
     pnpm --dir config/pi run typecheck
