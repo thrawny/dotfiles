@@ -114,9 +114,7 @@ def load_stamp(path: Path) -> dict[str, Any] | None:
             return None
         key: Any = data.get("key")
         return {"key": key} if isinstance(key, str) else None
-    except FileNotFoundError:
-        return None
-    except Exception:
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return None
 
 
