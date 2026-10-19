@@ -15,7 +15,7 @@ else
     trap 'rm -rf "$registration_dir"' EXIT
     forgejo_pid=$(systemctl show forgejo.service -p MainPID --value)
     forgejo_bin=$(readlink "/proc/$forgejo_pid/exe")
-    openssl rand -hex 20 > "$registration_dir/secret"
+    head -c 20 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$registration_dir/secret"
     chmod 0750 "$registration_dir"
     chown root:forgejo "$registration_dir"
     chown forgejo:forgejo "$registration_dir/secret"
