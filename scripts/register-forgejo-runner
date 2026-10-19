@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Run as root on Obelisk after activating the runner module.
+set -euo pipefail
+runner_home=/var/lib/forgejo-runner
+runner_user=forgejo-runner
+runner_uid=$(id -u "$runner_user")
+runner_url=https://forgejo.tailf85bba.ts.net
+runner_name=obelisk-thechalkboard
+
+if [ -f "$runner_home/.runner" ]; then
+    echo "Runner identity already exists; leaving it unchanged."
+else
+    umask 077
+    registration_dir=$(mktemp -d /run/forgejo-runner-register.XXXXXXXX)
+    trap 'rm -rf "$registration_dir"' EXIT
+    forgejo_pid=$(systemctl show forgejo.service -p MainPID --value)
+    forgejo_bin=$(readlink "/proc/$forgejo_pid/exe")
+    openssl rand -hex 20 > "$registration_dir/secret"
+    chmod 0750 "$registration_dir"
+    chown root:forgejo "$registration_dir"
+    chown forgejo:forgejo "$registration_dir/secret"
+    runuser -u forgejo -- env FORGEJO_WORK_DIR=/var/lib/forgejo \
+        "$forgejo_bin" forgejo-cli actions register \
+        --secret-file "$registration_dir/secret" \
+        --scope thrawny/thechalkboard --name "$runner_name" \
+        --labels chalkboard > "$registration_dir/server.log" 2>&1
+    # This CLI writes the shared identity directly to .runner; never print it.
+    cd "$runner_home"
+    runuser -u "$runner_user" -- forgejo-runner create-runner-file \
+        --instance "$runner_url" --name "$runner_name" \
+        --secret "$(cat "$registration_dir/secret")" \
+        > "$registration_dir/runner.log" 2>&1
+    chmod 0600 "$runner_home/.runner"
+    echo "Registered repository-scoped runner."
+fi
+
+runuser -u "$runner_user" -- env XDG_RUNTIME_DIR="/run/user/$runner_uid" \
+    systemctl --user start forgejo-runner.service
+runuser -u "$runner_user" -- env XDG_RUNTIME_DIR="/run/user/$runner_uid" \
+    systemctl --user is-active forgejo-runner.service

@@ -1,5 +1,9 @@
 # Nix configuration task runner
 
+# Register the repository-scoped rootless runner after deploying its module
+register-forgejo-runner target="obelisk":
+    ssh "root@{{ target }}" bash -se < "$(git rev-parse --show-toplevel)/scripts/register-forgejo-runner"
+
 # Default recipe
 default:
     @just --list

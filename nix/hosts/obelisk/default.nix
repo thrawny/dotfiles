@@ -23,6 +23,7 @@ in
     ../../modules/tailscale-serve.nix
     ../../modules/portless.nix
     ../../modules/forgejo.nix
+    ../../modules/forgejo-runner.nix
     ../../modules/agents.nix
     ../../modules/t3code.nix
     ./backup.nix
