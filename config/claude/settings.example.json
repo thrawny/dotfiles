@@ -7,7 +7,9 @@
     "CLAUDE_CODE_PLUGIN_DIRS": "~/.claude/mods/handoff"
   },
   "permissions": {
-    "allow": [],
+    "allow": [
+      "EnterWorktree"
+    ],
     "additionalDirectories": [
       "~/code",
       "~/dotfiles"
