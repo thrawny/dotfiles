@@ -65,6 +65,13 @@ if args[:2] == ["pr", "view"]:
         "detailsUrl": "https://github.com/acme/widgets/actions/runs/123/job/456",
         "workflowName": "CI",
     }]
+    if os.environ.get("FAKE_SUPERSEDED_FAILURE") == "1":
+        # A re-run of the same check skipped what the first run failed.
+        checks = [
+            {**checks[0], "conclusion": "FAILURE", "startedAt": "2026-07-10T00:00:00Z"},
+            {**checks[0], "conclusion": "SKIPPED", "startedAt": "2026-07-10T00:05:00Z",
+             "detailsUrl": "https://github.com/acme/widgets/actions/runs/124/job/457"},
+        ]
     print(json.dumps({
         "number": 12,
         "title": "Improve widgets",
@@ -242,6 +249,17 @@ def test_snapshot_is_bounded_and_current_head_aware(tmp_path: Path) -> None:
         "unresolved-threads",
     ]
     assert data["readiness"]["humanApprovalRequired"]
+
+
+def test_snapshot_counts_only_the_latest_run_of_each_check(tmp_path: Path) -> None:
+    pr_harness = PrHarness(tmp_path)
+    env = pr_harness.env | {"FAKE_SUPERSEDED_FAILURE": "1"}
+    result = pr_harness.run("snapshot", "12", "--json", env=env)
+    assert result.returncode == 0, result.stderr
+    data = json.loads(result.stdout)
+    assert data["checks"]["total"] == 1
+    assert data["checks"]["failed"] == []
+    assert "failed-checks" not in data["readiness"]["machineBlockers"]
 
 
 def test_thread_resolution_rejects_all_arguments_before_mutating(

@@ -237,6 +237,32 @@ def check_bucket(check: dict[str, Any]) -> str:
     return "complete"
 
 
+def check_started_at(check: dict[str, Any]) -> str:
+    started = str(check.get("startedAt") or "")
+    # A queued run has no start time yet, so it is newer than any run that has one.
+    if not started or started.startswith("0001-"):
+        return "9999"
+    return started
+
+
+def latest_checks(checks: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Keep only the newest run of each check, as GitHub's checks view does.
+
+    A re-run leaves the old run in the rollup, so without this a superseded
+    failure keeps the PR blocked.
+    """
+    latest: dict[tuple[str, str], dict[str, Any]] = {}
+    for check in checks:
+        key = (
+            str(check.get("workflowName") or ""),
+            str(check.get("name") or check.get("context") or ""),
+        )
+        kept = latest.get(key)
+        if kept is None or check_started_at(check) >= check_started_at(kept):
+            latest[key] = check
+    return list(latest.values())
+
+
 def check_signal(check: dict[str, Any]) -> CheckSignal:
     return CheckSignal(
         name=str(check.get("name") or check.get("context") or "unnamed check"),
@@ -281,7 +307,10 @@ def get_pr(selector: str | None, repo: str | None) -> PullRequest:
             merge_state=str(data.get("mergeStateStatus") or "UNKNOWN"),
             review_decision=str(data.get("reviewDecision") or ""),
             checks=tuple(
-                check_signal(check) for check in checks if isinstance(check, dict)
+                check_signal(check)
+                for check in latest_checks(
+                    [check for check in checks if isinstance(check, dict)]
+                )
             ),
         )
     except (KeyError, TypeError, ValueError) as error:
