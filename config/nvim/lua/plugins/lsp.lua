@@ -91,6 +91,10 @@ return {
         -- Disable <leader>co (organize imports) in diffview buffers so it doesn't
         -- conflict with diffview's conflict_choose("ours") binding
         ["*"] = {
+          -- On quit, SIGTERM servers that ignore "shutdown" for a second.
+          -- Without it, gopls stuck in a staticcheck analysis outlives Neovim
+          -- as an orphan that pins a CPU core.
+          exit_timeout = 1000,
           keys = {
             { "<leader>cc", false, mode = { "n", "x" } },
             { "<leader>cC", false },
