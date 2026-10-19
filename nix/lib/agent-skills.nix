@@ -89,6 +89,7 @@ let
       pkgs: "${herdr.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/herdr --skill";
     retro.source = mattpocock-skills + "/skills/engineering/retro";
     writing-for-agents.source = mattpocock-skills + "/skills/productivity/writing-for-agents";
+    to-tickets.source = mattpocock-skills + "/skills/engineering/to-tickets";
     teach.source = mattpocock-skills + "/skills/productivity/teach";
     improve-codebase-architecture.source =
       mattpocock-skills + "/skills/engineering/improve-codebase-architecture";

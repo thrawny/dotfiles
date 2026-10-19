@@ -28,6 +28,7 @@ let
   instructionConfig = config.dotfiles.agentInstructions;
   agentInstructionLib = import ../../lib/agent-instructions.nix;
   agentInstructions = agentInstructionLib.mkInstructions {
+    enableIssueTracker = instructionConfig.issueTracker.enable;
     enableEphemeralTools = instructionConfig.ephemeralTools.enable;
     enableShellPortability = instructionConfig.shellPortability.enable;
     enableSandbox = instructionConfig.sandbox.enable && !pkgs.stdenv.hostPlatform.isDarwin;
@@ -89,6 +90,7 @@ in
     agentSwitch.enable = lib.mkEnableOption "agent-switch integrations for AI tools";
 
     agentInstructions = {
+      issueTracker.enable = instructionBlockOption "Include the personal Linear issue tracker default";
       ephemeralTools.enable = instructionBlockOption "Include ephemeral tool instructions";
       shellPortability.enable = instructionBlockOption "Include shell portability instructions";
       sandbox.enable = instructionBlockOption "Include sandbox-specific instructions";

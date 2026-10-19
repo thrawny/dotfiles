@@ -21,6 +21,12 @@ rec {
     `README.md` is for people: what the thing is and how to start, kept short. `AGENTS.md` is for agents: the checks to run, the conventions, and the gotchas the code does not show. A fact lives in one of them and the other links to it. A repo's own instructions override this split.
   '';
 
+  issueTracker = ''
+    ## Issue tracker
+
+    Default to my personal Linear workspace for issues and tickets, including `to-tickets`. Explicit user requests and repository instructions take precedence. Use the available Linear integration; ask if the target team or project is ambiguous. For agent-ready tickets, use the `ready-for-agent` label; if it is missing, ask which existing label to use.
+  '';
+
   ephemeralTools = ''
     ## Ephemeral tools
 
@@ -78,6 +84,7 @@ rec {
   mkInstructions =
     {
       enableUnslop ? true,
+      enableIssueTracker ? true,
       enableEphemeralTools ? true,
       enableShellPortability ? true,
       enableSandbox ? true,
@@ -88,6 +95,7 @@ rec {
       claudeGlobal = render "# Global Claude Code Instructions" (
         optionalBlock enableUnslop unslop
         ++ [ docs ]
+        ++ optionalBlock enableIssueTracker issueTracker
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
         ++ optionalBlock enableSandbox sandbox
@@ -99,6 +107,7 @@ rec {
           docs
           codexQuestions
         ]
+        ++ optionalBlock enableIssueTracker issueTracker
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
         ++ optionalBlock enableSandbox sandbox
@@ -107,6 +116,7 @@ rec {
       piGlobal = render "# Global Pi Instructions" (
         optionalBlock enablePiWorkflow piWorkflow
         ++ [ docs ]
+        ++ optionalBlock enableIssueTracker issueTracker
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
         ++ optionalBlock enableSandbox sandbox

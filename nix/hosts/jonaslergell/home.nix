@@ -13,7 +13,11 @@
 
   # Dev servers here run in Herdr tabs, not zmx. Pi keeps zmx-pi, its own
   # skill for background tasks.
-  dotfiles.agentSkills.disabled = [ "zmx" ];
+  dotfiles.agentSkills.disabled = [
+    "zmx"
+    "to-tickets"
+  ];
+  dotfiles.agentInstructions.issueTracker.enable = false;
 
   home.packages = with pkgs; [
     terraform
