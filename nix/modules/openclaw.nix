@@ -3,6 +3,7 @@
   config,
   lib,
   openclawPackage,
+  openclawPluginPackages,
   pkgs,
 }:
 let
@@ -16,6 +17,7 @@ let
   runtimePlugins = [
     "codex"
     "discord"
+    "memory-core"
     "openai"
     "telegram"
   ];
@@ -148,6 +150,7 @@ let
       }
     ];
     plugins = {
+      load.paths = map toString openclawPluginPackages;
       entries = {
         openai.enabled = true;
         codex = {
@@ -161,6 +164,7 @@ let
         telegram.enabled = true;
         canvas.enabled = false;
         memory-core = {
+          enabled = true;
           subagent = {
             allowModelOverride = true;
             allowedModels = [ "openai/gpt-6-luna" ];

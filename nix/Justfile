@@ -563,3 +563,7 @@ check: fmt lint eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint eval-all
+
+# Build tracked working files on Linux over SSH, including from macOS; no activation
+build-remote target attr="system.build.toplevel":
+    "$(git rev-parse --show-toplevel)/scripts/nix-build-remote" {{quote(target)}} {{quote(attr)}}

@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Copy tracked working files and build on the target, without activating.
+set -euo pipefail
+host=${1:?Usage: nix-build-remote HOST [BUILD_ATTRIBUTE]}
+attribute=${2:-system.build.toplevel}
+[[ "$host" =~ ^[a-zA-Z0-9_-]+$ ]] || exit 2
+[[ "$attribute" =~ ^[a-zA-Z0-9_.-]+$ ]] || exit 2
+root=$(git rev-parse --show-toplevel)
+remote_dir=$(ssh "root@$host" 'mktemp -d /var/tmp/dotfiles-build.XXXXXXXX')
+printf 'Remote source: %s\n' "$remote_dir"
+git -C "$root" ls-files -z | COPYFILE_DISABLE=1 tar --no-xattrs -C "$root" --null -T - -cf - | ssh "root@$host" "tar -xf - -C '$remote_dir'"
+ssh "root@$host" "git -C '$remote_dir' init -q && git -C '$remote_dir' add --force ."
+ssh "root@$host" "zmx run dotfiles-build -d bash -c 'cd $remote_dir && nix build ./nix#nixosConfigurations.$host.config.$attribute --max-jobs 1 --cores 2 --out-link $remote_dir/result -L'"
+printf 'Inspect: ssh root@%s "zmx history dotfiles-build | tail -n 60"\nResult: %s/result\n' "$host" "$remote_dir"

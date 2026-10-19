@@ -53,6 +53,7 @@
     srvos.url = "github:nix-community/srvos";
     srvos.inputs.nixpkgs.follows = "nixpkgs";
     llm-agents.url = "github:numtide/llm-agents.nix";
+    nix-openclaw.url = "github:openclaw/nix-openclaw";
     hermes-agent.url = "github:NousResearch/hermes-agent";
     thrawny-pkgs = {
       url = "github:thrawny/nix-pkgs";
@@ -114,6 +115,7 @@
       disko,
       srvos,
       llm-agents,
+      nix-openclaw,
       hermes-agent,
       thrawny-pkgs,
       zmx,
@@ -194,6 +196,7 @@
             inherit
               self
               llm-agents
+              nix-openclaw
               hermes-agent
               agentAssets
               direnvAssets
@@ -237,6 +240,7 @@
             inherit
               self
               llm-agents
+              nix-openclaw
               hermes-agent
               agentAssets
               direnvAssets

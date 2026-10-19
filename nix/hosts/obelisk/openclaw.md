@@ -1,6 +1,6 @@
 # OpenClaw on Obelisk
 
-OpenClaw uses Numtide's pinned package and a NixOS system service, running as
+OpenClaw uses the pinned first-party `openclaw/nix-openclaw` gateway package and a NixOS system service, running as
 `openclaw`, UID 3101. Settings live in `nix/modules/openclaw.nix`; service wiring
 and the administrative wrapper live in `nix/modules/agents.nix`.
 
@@ -14,6 +14,12 @@ just nix::build-host obelisk
 just nix::deploy obelisk
 just nix::openclaw-health
 ```
+
+From macOS, use `just nix::build-remote obelisk` to build on Linux over SSH.
+This copies tracked working files into an isolated temporary directory, limits
+build parallelism, and starts a persistent `dotfiles-build` zmx session. It does
+not activate. Inspect the system diff and take the stopped-service backup below
+before installing its `result` with NixOS activation on the server.
 
 Allow startup to finish before the health check. It prints configuration warnings
 and checks config validity, active plugin failures, channel operation and the local
@@ -49,8 +55,10 @@ The pinned OpenClaw catalog also needs the explicit Sol 6.1 model entry in Nix.
   uses the existing private JSON token file referenced by the Nix config.
 - Credentials are required for configured channels. Startup no longer silently
   disables channels when credentials are missing.
-- Use normal bundled plugin discovery, with an allowlist for Codex, OpenAI,
-  Discord and Telegram. Do not add source-tree plugin paths or runtime installs.
+- Bundle the separately packaged official Codex plugin into the gateway so its
+  reserved harness hooks share the gateway SDK and registry. Load Discord through
+  its Nix store path; OpenAI, Telegram and memory-core remain bundled. Update them together;
+  do not use runtime plugin installs.
 - Chat defaults are Sol 6.1 with low reasoning. Recurring heartbeat and autonomous
   skill reviews are disabled. Memory dreaming uses Luna 6; its model override is
   restricted to that model.
@@ -107,3 +115,11 @@ It contains `state/`, a verified copy of the complete agent tree, and
 `system-generation`. Stop OpenClaw before restoring. Restore the matching state
 and Nix generation together; rolling back only the executable does not undo
 SQLite migrations.
+
+The October 18, 2026 upgrade to the official 2026.10.4 package migrated both
+agent databases from schema v21 to v24. Its verified pre-upgrade state and system
+generation are retained at `/srv/backups/openclaw/official-nix-20261017T220143Z/`.
+Doctor's private configuration and log are archived there under `doctor-success/`;
+its temporary optional-plugin installs are archived under `doctor-installs/`.
+The Nix configuration remains authoritative. Doctor can install optional plugins
+while Nix mode is disabled, so reconcile those side effects after a migration.

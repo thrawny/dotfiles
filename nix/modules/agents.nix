@@ -3,17 +3,37 @@
   lib,
   pkgs,
   llm-agents,
+  nix-openclaw,
   zmx,
   ...
 }:
 let
   inherit (pkgs.stdenv.hostPlatform) system;
   llmPkgs = llm-agents.packages.${system};
+  openclawPkgs = nix-openclaw.packages.${system};
+  # Codex claims reserved harness/command hooks, which require bundled origin.
+  # Keep its SDK peer in this gateway so both use the same runtime registry.
+  openclawPackage = openclawPkgs.openclaw-gateway.overrideAttrs (old: {
+    installPhase =
+      old.installPhase
+      + "\n"
+      + ''
+        codex_root="$out/lib/openclaw/dist-runtime/extensions/codex"
+        mkdir -p "$codex_root"
+        cp -R ${openclawPkgs.openclaw-runtime-plugin-codex}/. "$codex_root/"
+        chmod -R u+w "$codex_root"
+        rm "$codex_root/node_modules/openclaw"
+        ln -s ../../../.. "$codex_root/node_modules/openclaw"
+      '';
+  });
+  openclawPluginPackages = map (id: openclawPkgs.${"openclaw-runtime-plugin-${id}"}) [
+    "discord"
+  ];
   zmxPkg = zmx.packages.${system}.zmx-main;
   openclaw = import ./openclaw.nix {
     inherit config lib pkgs;
     codexPackage = llmPkgs.codex;
-    openclawPackage = llmPkgs.openclaw;
+    inherit openclawPackage openclawPluginPackages;
   };
   # Run administrative commands as the service user with the same config,
   # credentials and tools. Never source the systemd EnvironmentFile as shell code.
@@ -39,7 +59,7 @@ let
           --property=WorkingDirectory=${lib.escapeShellArg openclaw.workspace} \
           --property=EnvironmentFile=/srv/agents/openclaw/env \
           ${lib.escapeShellArgs envArgs} \
-          ${lib.getExe llmPkgs.openclaw} "$@"
+          ${lib.getExe openclawPackage} "$@"
       '';
   };
   hermes = import ./hermes.nix { inherit lib pkgs; };
@@ -404,7 +424,7 @@ lib.mkMerge [
       pkgs.runCommand "openclaw-config-check"
         {
           nativeBuildInputs = [
-            llmPkgs.openclaw
+            openclawPackage
             pkgs.jq
           ];
         }
@@ -415,10 +435,12 @@ lib.mkMerge [
           export OPENCLAW_CONFIG_PATH=${openclaw.configFile}
           export OPENCLAW_STATE_DIR="$HOME/.openclaw"
           test -s ${openclaw.uiSource}/index.html
-          for plugin_id in $(jq -r '.plugins.allow[]' ${openclaw.configFile}); do
-            plugin_dir=${llmPkgs.openclaw}/lib/openclaw/dist-runtime/extensions/$plugin_id
+          for plugin_dir in $(jq -r '.plugins.load.paths[]' ${openclaw.configFile}); do
             test -s "$plugin_dir/openclaw.plugin.json"
-            test -s "$plugin_dir/index.js"
+            jq -e 'has("id")' "$plugin_dir/openclaw.plugin.json"
+          done
+          for plugin_id in codex memory-core openai telegram; do
+            test -s ${openclawPackage}/lib/openclaw/dist-runtime/extensions/$plugin_id/openclaw.plugin.json
           done
           openclaw config validate --json > "$out"
           # Discovery warnings can concern unused bundled plugins. Keep them
@@ -453,8 +475,8 @@ lib.mkMerge [
             .channels.telegram.groups["-5176945403"].requireMention == true and
             ([.bindings[] | select(.agentId == "seedbox")] | length) == 1 and
             ([.bindings[] | select(.agentId == "seedbox")][0].match.peer.id == "-5176945403") and
-            .plugins.allow == ["codex", "discord", "openai", "telegram"] and
-            (.plugins | has("load") | not)
+            .plugins.allow == ["codex", "discord", "memory-core", "openai", "telegram"] and
+            (.plugins.load.paths | length) == 1
           ' ${openclaw.configFile}
         '';
 
@@ -468,7 +490,7 @@ lib.mkMerge [
     };
 
     environment.systemPackages = [
-      llmPkgs.openclaw
+      openclawPackage
       openclawAdmin
       zmxPkg
       pkgs.podman-compose
@@ -524,8 +546,8 @@ lib.mkMerge [
   (mkAgentService {
     name = "openclaw";
     uid = 3101;
-    package = llmPkgs.openclaw;
-    command = "${llmPkgs.openclaw}/bin/openclaw gateway run";
+    package = openclawPackage;
+    command = "${openclawPackage}/bin/openclaw gateway run";
     extraEnvironment = openclaw.environment;
     extraServiceConfig = {
       UMask = "0077";
