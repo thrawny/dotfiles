@@ -66,6 +66,10 @@ ai: nix::ai
 # Update all flake inputs with AI tool version report and switch
 full-update: nix::full-update
 
+# Install the locked Pi extension dependencies without lifecycle scripts
+pi-install-deps:
+    pnpm --dir config/pi install --frozen-lockfile --ignore-scripts
+
 # Update selected Pi extension development dependencies without lifecycle scripts
 pi-update-deps +packages:
     pnpm --dir config/pi update --ignore-scripts {{packages}}
