@@ -12,7 +12,8 @@
     ],
     "additionalDirectories": [
       "~/code",
-      "~/dotfiles"
+      "~/dotfiles",
+      "~/.herdr/worktrees"
     ],
     "deny": [],
     "ask": [],
