@@ -20,11 +20,13 @@ gh pr diff <pr>
 git fetch origin <baseRefName> "pull/<number>/head"   # base and head commits, for reading files at either side
 ```
 
-Pick the tier from the size and say it:
+Size the PR by its hand-written lines, not the `additions` and `deletions` totals. Split the files into hand-written and generated first. A file is generated when its first lines say so (`Code generated ... DO NOT EDIT.`, `@generated`), when `.gitattributes` marks it `linguist-generated`, when its name or folder says so (`*_gen.go`, `*.pb.go`, `*.gen.ts`, a `gen/` or `generated/` folder), or when it is a lockfile. Count snapshots and vendored code as generated too. Where a file is unclear, read its head and decide.
+
+Pick the tier from the hand-written lines and say it:
 
 - **Trivial**: a one-line fix, a typo, a version bump. Explain it in two sentences in the terminal, tell the caller no page was written, and stop.
 - **Medium**: one area of the code. One part per view in the reading order.
-- **Large**: several areas. One part per theme, ordered by importance so the reader can stop early. Above about 2,000 changed lines, explain at theme level and say so. Leave lockfiles and generated code out of the reading order, and say you did.
+- **Large**: several areas. One part per theme, ordered by importance so the reader can stop early. Above about 2,000 hand-written changed lines, explain at theme level and say so. Leave lockfiles and generated code out of the reading order, and say you did.
 
 This step is complete when the tier is stated.
 
@@ -71,7 +73,7 @@ Prefer the diff markers (`+`, `-`, `~`) for a change to an existing shape. Show 
 ### Sections
 
 1. `## TL;DR`
-   - A link line: PR link, title, short head commit, base branch, `+N −M in K files`.
+   - A link line: PR link, title, short head commit, base branch, and the size as hand-written lines first, generated after: `+N −M hand-written in K files, plus +X −Y generated in J files`.
    - One bold sentence on whether production behaviour changes, with the evidence for it.
    - Why the change, in one sentence.
    - Special things to note: 1 to 3 bullets (migrations, compatibility, deliberate omissions, surprising decisions), or "None."
