@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+"""Move the Herdr agent in this pane one place up or down the sidebar list.
+
+Usage: herdr-agent-order up|down
+
+Each agent pane carries an $order token, and an Agent view sorts the list by
+it. A move numbers every agent in the order the sidebar shows, swaps this one
+with its neighbour and installs the view again, so the first move after a
+server restart brings the view back. Agents without a token, such as new ones,
+sort after the numbered ones. The order does not survive a server restart.
+"""
+
+from __future__ import annotations
+
+import fcntl
+import json
+import os
+import socket
+import sys
+from pathlib import Path
+from typing import Any
+
+PLUGIN_ID = os.environ.get("HERDR_PLUGIN_ID", "thrawny.agent-order")
+SOURCE = "agent-order"
+TOKEN = "order"
+
+
+def request(method: str, params: dict[str, Any]) -> dict[str, Any]:
+    with socket.socket(socket.AF_UNIX) as sock:
+        sock.settimeout(10)
+        sock.connect(
+            os.environ.get("HERDR_SOCKET_PATH")
+            or os.path.expanduser("~/.config/herdr/herdr.sock")
+        )
+        sock.sendall(
+            (
+                json.dumps({"id": method, "method": method, "params": params}) + "\n"
+            ).encode()
+        )
+        reply = json.loads(sock.makefile().readline())
+    if "error" in reply:
+        raise RuntimeError(f"{method}: {reply['error'].get('message')}")
+    return reply["result"]
+
+
+def main() -> int:
+    if len(sys.argv) != 2 or sys.argv[1] not in ("up", "down"):
+        print(__doc__, file=sys.stderr)
+        return 2
+    step = -1 if sys.argv[1] == "up" else 1
+
+    # Two quick presses run two processes. Without the lock, both read the
+    # same order and the second move undoes the first.
+    lock_dir = Path(os.environ.get("HERDR_PLUGIN_STATE_DIR") or "/tmp")
+    with open(lock_dir / "agent-order.lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+
+        agents: list[dict[str, Any]] = request("agent.list", {})["agents"]
+        pivot = os.environ.get("HERDR_PANE_ID") or next(
+            (a["pane_id"] for a in agents if a.get("focused")), None
+        )
+        current: dict[str, str | None] = {
+            str(a["pane_id"]): (a.get("tokens") or {}).get(TOKEN) for a in agents
+        }
+        # The view's own order: numbered agents first, the rest in the
+        # sidebar's workspace order, which agent.list already follows.
+        # sorted() is stable, so the rest keep that order.
+        ids = sorted(current, key=lambda p: (current[p] is None, current[p] or ""))
+        if pivot not in ids:
+            return 0
+        here = ids.index(pivot)
+        there = here + step
+        if 0 <= there < len(ids):
+            ids[here], ids[there] = ids[there], ids[here]
+
+        # Tokens sort as text, so the numbers are zero-padded.
+        for index, pane_id in enumerate(ids):
+            value = f"{index:04d}"
+            if current[pane_id] != value:
+                request(
+                    "pane.report_metadata",
+                    {"pane_id": pane_id, "source": SOURCE, "tokens": {TOKEN: value}},
+                )
+        request(
+            "agent.view.set",
+            {
+                "source": f"plugin:{PLUGIN_ID}",
+                "label": "manual order",
+                "sort": [{"field": {"token": TOKEN}, "order": "asc"}],
+            },
+        )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

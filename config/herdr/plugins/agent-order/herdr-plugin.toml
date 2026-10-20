@@ -1,0 +1,18 @@
+id = "thrawny.agent-order"
+name = "Agent order"
+version = "0.1.0"
+min_herdr_version = "0.9.3"
+platforms = ["linux", "macos"]
+description = "Move the agent in this pane up or down the sidebar list"
+
+[[actions]]
+id = "up"
+title = "Move this agent up"
+contexts = ["workspace", "pane"]
+command = ["herdr-agent-order", "up"]
+
+[[actions]]
+id = "down"
+title = "Move this agent down"
+contexts = ["workspace", "pane"]
+command = ["herdr-agent-order", "down"]

@@ -69,6 +69,19 @@ in
       description = "Jump to the driver session";
     }
     {
+      # Shift moves the agent itself, where super+j/k only move focus.
+      key = "super+shift+j";
+      type = "plugin_action";
+      command = "thrawny.agent-order.down";
+      description = "Move this agent down";
+    }
+    {
+      key = "super+shift+k";
+      type = "plugin_action";
+      command = "thrawny.agent-order.up";
+      description = "Move this agent up";
+    }
+    {
       key = "super+p";
       type = "plugin_action";
       command = "thrawny.project-picker.open";
