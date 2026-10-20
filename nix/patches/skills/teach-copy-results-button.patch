@@ -1,0 +1,11 @@
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -60,6 +60,8 @@
+ 
+ Each lesson should contain a reminder to ask followup questions to the agent. The agent is their teacher, and can assist with anything that's unclear.
+ 
++Each lesson should have a "Copy results" button, so the user can paste their results back to you. It copies a plain-text summary: the lesson name, then each question with the user's answer and whether it was right. Build the button as a component in `./assets/`.
++
+ ## Assets
+ 
+ Lessons are built from reusable **components**, stored in `./assets/`: stylesheets, quiz widgets, simulators, diagram helpers, and anything else a second lesson could reuse.

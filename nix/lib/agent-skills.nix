@@ -90,7 +90,11 @@ let
     retro.source = mattpocock-skills + "/skills/engineering/retro";
     writing-for-agents.source = mattpocock-skills + "/skills/productivity/writing-for-agents";
     to-tickets.source = mattpocock-skills + "/skills/engineering/to-tickets";
-    teach.source = mattpocock-skills + "/skills/productivity/teach";
+    teach = {
+      source = mattpocock-skills + "/skills/productivity/teach";
+      # Lets the learner paste quiz results back to the teacher agent.
+      patches = [ ../patches/skills/teach-copy-results-button.patch ];
+    };
     improve-codebase-architecture.source =
       mattpocock-skills + "/skills/engineering/improve-codebase-architecture";
     unslop = {
