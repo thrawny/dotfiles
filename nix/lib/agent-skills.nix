@@ -99,6 +99,7 @@ let
       # Lets the learner paste quiz results back to the teacher agent.
       patches = [ ../patches/skills/teach-copy-results-button.patch ];
     };
+    codebase-design.source = mattpocock-skills + "/skills/engineering/codebase-design";
     improve-codebase-architecture.source =
       mattpocock-skills + "/skills/engineering/improve-codebase-architecture";
     unslop = {
