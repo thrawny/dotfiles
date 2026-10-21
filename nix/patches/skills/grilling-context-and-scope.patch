@@ -20,7 +20,7 @@
  
  Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask the rest of the frontier now. The _decisions_ are the user's: put each to them and wait.
  
-+When a question turns on how existing code or a running system works today, explain that briefly in the question body, before the choices. The user should never have to ask how something works before they can answer.
++When a question turns on how existing code or a running system works today, and the user may not know that part well, explain it briefly in the question body, before the choices. Skip what the user already knows well, such as code they wrote or a part they have explained or decided on earlier in the session. The user should never have to ask how something works before they can answer, nor read again what they already know.
 +
 +Under each recommended answer, add one line naming what it rests on: the earlier answers or facts that would reopen it if they changed, as in `Rests on: one message per URL (Q2)`.
 +
