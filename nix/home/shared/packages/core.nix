@@ -4,6 +4,7 @@
     # Core
     jq
     yq-go
+    hl-log-viewer
     fzf
     ripgrep
     fd
