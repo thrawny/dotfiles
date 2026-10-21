@@ -18,7 +18,7 @@ Then extract the handoff from the current conversation and write it to the `Hand
 4. **Files**: Files to read, as absolute paths, with specific line ranges where useful
 5. **Skills**: Skills the next session should invoke, if any
 6. **Live state**: Anything intentionally left running and why — omit if none
-7. **Immediate action**: The first concrete step to take
+7. **Immediate action**: The first concrete step to take. The next session starts on it without asking. When the user said the next session should wait for them, or the step needs a decision of theirs first, add "Wait for the user before starting" here.
 
 Don't duplicate content captured in plans, commits, diffs, or issues; reference those artifacts instead. Keep it focused and under roughly 1000 tokens.
 
