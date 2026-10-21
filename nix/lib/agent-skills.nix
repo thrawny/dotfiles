@@ -82,7 +82,11 @@ let
     domain-modeling.source = mattpocock-skills + "/skills/engineering/domain-modeling";
     frontend-design.source = anthropic-skills + "/skills/frontend-design";
     grill-with-docs.source = mattpocock-skills + "/skills/engineering/grill-with-docs";
-    grilling.source = mattpocock-skills + "/skills/productivity/grilling";
+    grilling = {
+      source = mattpocock-skills + "/skills/productivity/grilling";
+      # Questions explain current behaviour, show what each recommendation rests on, and stay in ticket scope.
+      patches = [ ../patches/skills/grilling-context-and-scope.patch ];
+    };
     # The herdr binary prints its own skill, so generate it from the version we
     # install rather than vendoring a copy that would describe an older herdr.
     herdr.skillCommand =
