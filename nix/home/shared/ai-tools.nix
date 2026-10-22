@@ -31,6 +31,7 @@ let
     enableIssueTracker = instructionConfig.issueTracker.enable;
     enableEphemeralTools = instructionConfig.ephemeralTools.enable;
     enableShellPortability = instructionConfig.shellPortability.enable;
+    enableGnuTools = pkgs.stdenv.hostPlatform.isDarwin;
     enableSandbox = instructionConfig.sandbox.enable && !pkgs.stdenv.hostPlatform.isDarwin;
     enableBackgroundTasks = instructionConfig.backgroundTasks.enable;
     enablePiWorkflow = instructionConfig.piWorkflow.enable;

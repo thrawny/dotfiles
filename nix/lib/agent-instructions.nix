@@ -55,6 +55,12 @@ rec {
     Prefer descriptive names such as `exit_code`, `cmd_status`, `history_text`, or a command-specific name such as `review_status`.
   '';
 
+  gnuTools = ''
+    ## GNU tools on macOS
+
+    `sed` and coreutils on `PATH` are the GNU versions from Nix, not the BSD ones macOS ships. Write `sed -i 's/a/b/' file`, with no `'''` after `-i`.
+  '';
+
   sandbox = ''
     ## Sandbox
 
@@ -87,6 +93,7 @@ rec {
       enableIssueTracker ? true,
       enableEphemeralTools ? true,
       enableShellPortability ? true,
+      enableGnuTools ? false,
       enableSandbox ? true,
       enableBackgroundTasks ? true,
       enablePiWorkflow ? true,
@@ -98,6 +105,7 @@ rec {
         ++ optionalBlock enableIssueTracker issueTracker
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
+        ++ optionalBlock enableGnuTools gnuTools
         ++ optionalBlock enableSandbox sandbox
         ++ optionalBlock enableBackgroundTasks backgroundTasks
       );
@@ -110,6 +118,7 @@ rec {
         ++ optionalBlock enableIssueTracker issueTracker
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
+        ++ optionalBlock enableGnuTools gnuTools
         ++ optionalBlock enableSandbox sandbox
       );
 
@@ -119,6 +128,7 @@ rec {
         ++ optionalBlock enableIssueTracker issueTracker
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
+        ++ optionalBlock enableGnuTools gnuTools
         ++ optionalBlock enableSandbox sandbox
       );
     };
