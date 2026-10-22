@@ -182,8 +182,9 @@ REPORT_RULES = """\
 When a turn ends with the task finished, with a question only the user can \
 answer, or with the work blocked, make your last action \
 `moto report done|question|blocked "<one line>"`. \
-Put the PR URL in a done line when there is one. The user merges every PR, so \
-stop once yours is ready."""
+Put the PR URL in a done line when there is one. The user merges every PR. \
+After you open one, follow your instructions for what comes next, such as \
+watching the PR, but stop short of merging."""
 SPAWN_RULES = """\
 To hand work off to a separate task, such as research that splits into \
 implementation tasks, start it with `moto spawn --to-driver`, so the driver \
