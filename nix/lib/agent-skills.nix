@@ -84,7 +84,7 @@ let
     grill-with-docs.source = mattpocock-skills + "/skills/engineering/grill-with-docs";
     grilling = {
       source = mattpocock-skills + "/skills/productivity/grilling";
-      # Questions explain current behaviour, show what each recommendation rests on, and stay in ticket scope.
+      # Questions explain current behaviour, show what each recommendation rests on, stay in ticket scope, and take "tentative" answers.
       patches = [ ../patches/skills/grilling-context-and-scope.patch ];
     };
     # The herdr binary prints its own skill, so generate it from the version we

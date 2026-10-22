@@ -1,6 +1,6 @@
 --- a/SKILL.md
 +++ b/SKILL.md
-@@ -14,11 +14,15 @@
+@@ -14,17 +14,29 @@
  
  ➡️ <your recommended answer>
  
@@ -16,7 +16,10 @@
  ```
  
  Word each question so "yes" accepts your recommended answer.
-@@ -27,4 +31,10 @@
+ 
++"tentative" also accepts your recommended answer, but marks it as not truly settled: the user doesn't know enough, or doesn't have the information, to judge it now. Carry on as if it were settled, and mark it `(tentative)` wherever you list it, in recaps, the final summary and anything you write from the grill, so readers expect changes or pushback on it later. A later answer that rests on a tentative one says so in its `Rests on:` line.
++
+ Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
  
  Finding _facts_ is your job, never the user's. When a frontier question needs a fact from the environment (filesystem, tools, etc.), dispatch a sub-agent to find it; don't ask the user for anything you could look up yourself. Don't block on it: a running exploration is an unsettled prerequisite, so only the questions downstream of it wait for the sub-agent to report; ask the rest of the frontier now. The _decisions_ are the user's: put each to them and wait.
  
