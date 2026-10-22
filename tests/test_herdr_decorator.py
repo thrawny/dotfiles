@@ -350,3 +350,36 @@ def test_fetch_prs_gives_up_on_a_gh_reply_that_is_not_json(
 
     monkeypatch.setattr(decorator.subprocess, "run", fake_run)
     assert decorator.fetch_prs([(("acme", "widgets"), "feature")]) is None
+
+
+PS = """\
+  100     1 /usr/libexec/herdr
+  200   100 -zsh
+  210   200 claude -c
+  220   210 /bin/zsh -c source ~/.claude/shell-snapshots/s.sh && eval 'prctl watch 12'
+  230   220 /usr/bin/python3 /home/u/dotfiles/bin/prctl watch 12 --timeout 370m
+  300   100 -zsh
+  310   300 claude
+  320   310 grep prctl watch
+  400     1 /usr/bin/python3 /home/u/dotfiles/bin/prctl watch 7
+  500   100 -zsh
+  510   500 claude
+  520   510 /bin/zsh -c prctl watch 3
+  530   520 prctl watch 3
+"""
+
+
+def test_babysat_panes_climbs_from_a_watcher_to_its_pane_shell(
+    decorator: ModuleType,
+) -> None:
+    shells = {200: "w1:p1", 300: "w1:p2", 500: "w1:p3"}
+    # p2 only greps for a watcher, and pid 400 runs under no pane.
+    assert decorator.babysat_panes(PS, shells) == {"w1:p1", "w1:p3"}
+    assert decorator.babysat_panes(PS, {300: "w1:p2"}) == set()
+
+
+def test_decorate_shows_the_babysit_icon(decorator: ModuleType) -> None:
+    pane = decorator.Pane("w1:p1", None, "claude")
+    tokens, _ = decorator.decorate(pane, None, babysit=True)
+    assert tokens["babysit"] == decorator.BABYSIT_ICON
+    assert "babysit" not in decorator.decorate(pane, None)[0]

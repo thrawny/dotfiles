@@ -305,6 +305,13 @@ in
                     }
                   ];
                 }
+                # An eye while the agent babysits a PR with `prctl watch`. It
+                # goes when the watcher exits, at the decorator's next poll.
+                {
+                  token = "$babysit";
+                  fg = theme.syntax.type;
+                  dim = false;
+                }
                 {
                   token = "$jira";
                   fg = theme.semantic.accent;

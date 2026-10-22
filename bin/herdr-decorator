@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Decorate Herdr agent panes with sidebar tokens: PR state, Jira key, place,
-and a moto worker's open question.
+a moto worker's open question, and whether the agent babysits a PR.
 
 One long-lived process. It follows pane changes over Herdr's socket, polls
 GitHub on a timer, and reports values with pane.report_metadata so the agent
@@ -28,6 +28,10 @@ waits. It clears once the worker starts working again. The driver's own
 question, from `moto ask`, is in $XDG_STATE_HOME/moto/driver.json. It stays
 until the driver clears it, since the driver also works on turns that are
 not the user's answer.
+
+$babysit shows while a `prctl watch` process runs under the pane's shell, as
+the babysit skill starts it from a Claude background task. Herdr's snapshot has
+no shell pid, so each pane's comes from one pane.process_info call.
 """
 
 from __future__ import annotations
@@ -76,6 +80,7 @@ PR_MARKS = {
 # Only reports that wait on the user; a done report's PR already has a token.
 MOTO_MARKS = {"question": "?", "blocked": "!"}
 MOTO_NOTE_CHARS = 60
+BABYSIT_ICON = "\uf441"  # oct-eye
 
 
 def log(message: str) -> None:
@@ -133,6 +138,57 @@ def moto_note(pane: Pane, report: dict[str, Any] | None) -> str | None:
     if len(text) > MOTO_NOTE_CHARS:
         text = text[: MOTO_NOTE_CHARS - 1] + "…"
     return f"{MOTO_MARKS[report['kind']]} {text}"
+
+
+def babysat_panes(ps_output: str, shells: dict[int, str]) -> set[str]:
+    """Pane ids whose shell has a `prctl watch` process somewhere below it.
+
+    ps_output is `ps -ax -o pid=,ppid=,command=`; shells maps shell pid → pane id.
+    """
+    parents: dict[int, int] = {}
+    watchers: list[int] = []
+    for line in ps_output.splitlines():
+        fields = line.split(None, 2)
+        if len(fields) < 3 or not fields[0].isdigit() or not fields[1].isdigit():
+            continue
+        pid, ppid = int(fields[0]), int(fields[1])
+        parents[pid] = ppid
+        # Skip the interpreter, as in `python3 .../prctl watch 12`, but not
+        # another command, as in `grep prctl watch`.
+        argv = fields[2].split()
+        if argv and os.path.basename(argv[0]).startswith("python"):
+            argv = argv[1:]
+        if (
+            len(argv) > 1
+            and os.path.basename(argv[0]) == "prctl"
+            and argv[1] == "watch"
+        ):
+            watchers.append(pid)
+    found: set[str] = set()
+    for pid in watchers:
+        seen: set[int] = set()
+        while pid > 1 and pid not in seen:
+            if pid in shells:
+                found.add(shells[pid])
+                break
+            seen.add(pid)
+            pid = parents.get(pid, 0)
+    return found
+
+
+def process_table() -> str | None:
+    try:
+        out = subprocess.run(
+            ["ps", "-ax", "-o", "pid=,ppid=,command="],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        log(f"ps failed: {exc}")
+        return None
+    return out.stdout if out.returncode == 0 else None
 
 
 def reported_cwd(pane_id: str) -> str | None:
@@ -247,6 +303,8 @@ class Pane:
     moved: str | None = None
     # When the agent last started a turn, as seen by this process.
     working_since: float | None = None
+    # The pane's own shell; it lives as long as the pane, so it is asked once.
+    shell_pid: int | None = None
     tokens: dict[str, str] = field(default_factory=dict)
     links: dict[str, str] = field(default_factory=dict)
 
@@ -450,11 +508,14 @@ def decorate(
     jira_base: str | None = None,
     workspace: str | None = None,
     note: str | None = None,
+    babysit: bool = False,
 ) -> tuple[dict[str, str], dict[str, str]]:
     tokens: dict[str, str] = {}
     links: dict[str, str] = {}
     if note:
         tokens["moto"] = note
+    if babysit:
+        tokens["babysit"] = BABYSIT_ICON
     if pane.moved:
         tokens["where"] = f"→ {pane.moved}"
     elif pane.place:
@@ -625,13 +686,16 @@ class Decorator:
             return  # keep what is shown; the TTL clears it if GitHub stays down
         workspaces = workspace_labels()
         reports = moto_reports()
+        babysat = self.babysat(panes)
         changed = 0
         for pane in panes:
             target = (pane.repo, pane.branch) if pane.repo and pane.branch else None
             pr = prs.get(target) if target else None
             workspace = workspaces.get(pane.workspace_id or "")
             note = moto_note(pane, reports.get(pane.pane_id))
-            tokens, pane.links = decorate(pane, pr, self.jira_base, workspace, note)
+            tokens, pane.links = decorate(
+                pane, pr, self.jira_base, workspace, note, pane.pane_id in babysat
+            )
             if tokens != pane.tokens:
                 changed += 1
                 where = f"{pane.repo[1] if pane.repo else '?'}@{pane.branch or '?'}"
@@ -640,6 +704,21 @@ class Decorator:
             self.report(pane, tokens)
         log(f"{reason}: {len(panes)} panes, {len(targets)} branches, {changed} changed")
         self.write_state()
+
+    def babysat(self, panes: list[Pane]) -> set[str]:
+        """Pane ids with a PR watcher running, from one ps call."""
+        for pane in panes:
+            if pane.shell_pid is None:
+                try:
+                    info = request("pane.process_info", {"pane_id": pane.pane_id})
+                    pane.shell_pid = int(info["process_info"]["shell_pid"])
+                except (RuntimeError, KeyError, TypeError, ValueError) as exc:
+                    log(f"no shell pid for {pane.pane_id}: {exc}")
+        table = process_table()
+        if table is None:
+            return set()
+        shells = {p.shell_pid: p.pane_id for p in panes if p.shell_pid}
+        return babysat_panes(table, shells)
 
     def report(self, pane: Pane, tokens: dict[str, str]) -> None:
         stale = {name: None for name in pane.tokens if name not in tokens}
