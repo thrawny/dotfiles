@@ -21,9 +21,16 @@ in
     # cmd+ctrl+shift = 1441792. IDs 28/30 save to a file, 29/31 copy.
     # The trip through PlistBuddy is what keeps those numbers integers;
     # `defaults -dict-add` would store them as strings and macOS ignores those.
+    # ID 60 selects the previous input source: cmd+option+space = 1572864.
+    # That takes the combo from ID 65 (Finder search window), so 65 is disabled.
     hotkeys_plist=$(mktemp "''${TMPDIR:-/tmp}/symbolichotkeys.XXXXXX")
     /usr/bin/defaults export com.apple.symbolichotkeys "$hotkeys_plist"
-    for hotkey in 28:51:20:1441792 29:51:20:1179648 30:52:21:1441792 31:52:21:1179648; do
+    /usr/libexec/PlistBuddy "$hotkeys_plist" \
+      -c "Delete :AppleSymbolicHotKeys:65" >/dev/null 2>&1 || true
+    /usr/libexec/PlistBuddy "$hotkeys_plist" \
+      -c "Add :AppleSymbolicHotKeys:65 dict" \
+      -c "Add :AppleSymbolicHotKeys:65:enabled bool false" >/dev/null
+    for hotkey in 28:51:20:1441792 29:51:20:1179648 30:52:21:1441792 31:52:21:1179648 60:32:49:1572864; do
       IFS=: read -r id ascii keycode modifiers <<<"$hotkey"
       /usr/libexec/PlistBuddy "$hotkeys_plist" \
         -c "Delete :AppleSymbolicHotKeys:$id" >/dev/null 2>&1 || true
@@ -47,6 +54,8 @@ in
     $DRY_RUN_CMD /usr/bin/defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
     $DRY_RUN_CMD /usr/bin/defaults write NSGlobalDomain KeyRepeat -int 2
     $DRY_RUN_CMD /usr/bin/defaults write NSGlobalDomain InitialKeyRepeat -int 10
+    # Pressing fn (globe) does nothing, instead of changing the input source.
+    $DRY_RUN_CMD /usr/bin/defaults write com.apple.HIToolbox AppleFnUsageType -int 0
 
     # Finder behavior
     $DRY_RUN_CMD /usr/bin/defaults write com.apple.finder QuitMenuItem -bool true
