@@ -17,7 +17,7 @@
  
  Word each question so "yes" accepts your recommended answer.
  
-+"tentative" also accepts your recommended answer, but marks it as not truly settled: the user doesn't know enough, or doesn't have the information, to judge it now. Carry on as if it were settled, and mark it `(tentative)` wherever you list it, in recaps, the final summary and anything you write from the grill, so readers expect changes or pushback on it later. A later answer that rests on a tentative one says so in its `Rests on:` line.
++"tentative" (or "tnt") also accepts your recommended answer, but marks it as not truly settled: the user doesn't know enough, or doesn't have the information, to judge it now. Carry on as if it were settled, and mark it `(tentative)` wherever you list it, in recaps, the final summary and anything you write from the grill, so readers expect changes or pushback on it later. A later answer that rests on a tentative one says so in its `Rests on:` line.
 +
  Each round the user answers reshapes the tree: settled decisions push the frontier outward and unblock questions that depended on them. Recompute the frontier and ask the next round. A question whose answer depends on another question still open in this round belongs to a _later_ round, not this one.
  
