@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import subprocess
 import sys
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
@@ -335,3 +336,17 @@ def test_the_driver_question_stays_while_the_driver_works(
     assert report["sticky"] is True
     busy = decorator.Pane("w1:p9", None, "claude", status="working", working_since=20.0)
     assert decorator.moto_note(busy, report) == "? Merge #12?"
+
+
+def test_fetch_prs_gives_up_on_a_gh_reply_that_is_not_json(
+    decorator: ModuleType, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    reply = subprocess.CompletedProcess(
+        [], 0, stdout="<html>rate limited</html>", stderr=""
+    )
+
+    def fake_run(*_args: Any, **_kwargs: Any) -> subprocess.CompletedProcess[str]:
+        return reply
+
+    monkeypatch.setattr(decorator.subprocess, "run", fake_run)
+    assert decorator.fetch_prs([(("acme", "widgets"), "feature")]) is None

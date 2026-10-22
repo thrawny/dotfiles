@@ -388,7 +388,10 @@ def fetch_prs(
     except (OSError, subprocess.TimeoutExpired) as exc:
         log(f"gh failed: {exc}")
         return None
-    body = json.loads(out.stdout or "{}")
+    try:
+        body = json.loads(out.stdout or "{}")
+    except json.JSONDecodeError:
+        body = {}
     data = body.get("data")
     if data is None:
         log(f"gh failed: {(out.stderr or out.stdout).strip()[:300]}")
@@ -483,6 +486,9 @@ class Decorator:
                 self.session()
             except HerdrGone as exc:
                 log(f"herdr unavailable ({exc}); retrying")
+            except Exception as exc:
+                # One bad poll must not end the sidebar; watchexec only restarts on edits.
+                log(f"session crashed ({type(exc).__name__}: {exc}); retrying")
             finally:
                 for sub in (self.lifecycle, self.status):
                     if sub:
