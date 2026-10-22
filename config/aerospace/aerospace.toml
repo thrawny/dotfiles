@@ -168,3 +168,8 @@ run = 'layout floating'
 [[on-window-detected]]
 if = 'test %{app-bundle-id} = com.okta.mobile'
 run = 'layout floating'
+
+# Vowen's indicator window disappears if AeroSpace tiles it.
+[[on-window-detected]]
+if = 'test %{app-bundle-id} = com.vowen.app'
+run = 'layout floating'
