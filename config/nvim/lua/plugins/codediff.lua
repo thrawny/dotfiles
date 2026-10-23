@@ -55,7 +55,7 @@ return {
         {
           "<leader>rm",
           function()
-            require("codediff.review").open_merge_base("origin/main", "WORKING")
+            require("codediff.review").open_branch()
           end,
           desc = "Review branch changes",
         },
