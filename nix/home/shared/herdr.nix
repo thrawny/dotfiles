@@ -186,6 +186,11 @@ in
           focus_pane_down = "";
           focus_pane_up = "";
           focus_pane_right = "";
+          # Mirrors alt+f fullscreen in the window managers.
+          zoom = [
+            "prefix+z"
+            "super+f"
+          ];
           # Cycling stays within the tab; with two panes it acts as a toggle.
           cycle_pane_next = [
             "prefix+tab"

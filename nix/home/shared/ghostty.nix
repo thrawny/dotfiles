@@ -61,6 +61,8 @@ in
         "super+shift+enter=unbind"
         "super+shift+w=unbind"
         "super+w=unbind"
+        # Ghostty's own super+f (search) would otherwise swallow Herdr's zoom.
+        "super+f=unbind"
         # super+d (new_split) is freed for other apps; Herdr splits live on
         # super+enter and the prefix.
         "super+d=unbind"
