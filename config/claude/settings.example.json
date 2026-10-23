@@ -3,6 +3,7 @@
   "outputStyle": "Concise",
   "env": {
     "CLAUDE_CODE_TMPDIR": "/tmp/claude",
+    "NODE_EXTRA_CA_CERTS": "/nix/var/nix/profiles/default/etc/ssl/certs/ca-bundle.crt",
     "USE_BUILTIN_RIPGREP": "0",
     "CLAUDE_CODE_PLUGIN_DIRS": "~/.claude/mods/handoff"
   },
