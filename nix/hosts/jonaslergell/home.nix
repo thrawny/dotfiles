@@ -13,11 +13,15 @@
 
   # Dev servers here run in Herdr tabs, not zmx. Pi keeps zmx-pi, its own
   # skill for background tasks.
+  # A plugin loads its own language rules into every session here, and unslop
+  # contradicts them on brackets and colons.
   dotfiles.agentSkills.disabled = [
     "zmx"
     "to-tickets"
+    "unslop"
   ];
   dotfiles.agentInstructions.issueTracker.enable = false;
+  dotfiles.agentInstructions.unslop.enable = false;
 
   home.packages = with pkgs; [
     terraform

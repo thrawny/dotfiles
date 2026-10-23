@@ -28,6 +28,7 @@ let
   instructionConfig = config.dotfiles.agentInstructions;
   agentInstructionLib = import ../../lib/agent-instructions.nix;
   agentInstructions = agentInstructionLib.mkInstructions {
+    enableUnslop = instructionConfig.unslop.enable;
     enableIssueTracker = instructionConfig.issueTracker.enable;
     enableEphemeralTools = instructionConfig.ephemeralTools.enable;
     enableShellPortability = instructionConfig.shellPortability.enable;
@@ -91,6 +92,7 @@ in
     agentSwitch.enable = lib.mkEnableOption "agent-switch integrations for AI tools";
 
     agentInstructions = {
+      unslop.enable = instructionBlockOption "Include the rule to run unslop on prose for people";
       issueTracker.enable = instructionBlockOption "Include the personal Linear issue tracker default";
       ephemeralTools.enable = instructionBlockOption "Include ephemeral tool instructions";
       shellPortability.enable = instructionBlockOption "Include shell portability instructions";

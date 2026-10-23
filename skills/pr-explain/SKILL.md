@@ -53,7 +53,7 @@ The renderer links each anchor to the head commit, so a wrong line sends the rev
 
 ## 4. Write the explainer
 
-Run the `unslop` skill first, then write `explainer.md`. Define each term the first time it appears.
+Run the `unslop` skill first, or follow the language rules already in your context where unslop is not installed. Then write `explainer.md`. Define each term the first time it appears.
 
 Format: the frontmatter and typed fences of blueprint's [ARTIFACT-FORMAT.md](../blueprint/ARTIFACT-FORMAT.md). Its sections, vertical slices and "no open questions" rule belong to blueprints; this explainer uses the sections below. Frontmatter `title` is `<repo> #<number>: <short subject>`, `tier` is the tier from step 1, and `description` says in one sentence what the PR does and the short head commit it was explained at.
 
