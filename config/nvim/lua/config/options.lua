@@ -6,8 +6,8 @@
 vim.g.mapleader = ","
 vim.g.maplocalleader = ","
 
--- Use basedpyright as Python LSP
-vim.g.lazyvim_python_lsp = "basedpyright"
+-- Use the Nix-installed ty language server for Python
+vim.g.lazyvim_python_lsp = "ty"
 
 -- Disable AI completion integration; no AI plugins are configured.
 vim.g.ai_cmp = false
@@ -48,6 +48,16 @@ vim.filetype.add({
     [".secrets"] = "sh",
   },
   pattern = {
+    -- Extensionless PEP 723 scripts use uv rather than python in their shebang.
+    [".*/[^/]+"] = {
+      function(_, bufnr)
+        local first = vim.api.nvim_buf_get_lines(bufnr, 0, 1, false)[1] or ""
+        if first:match("^#!.*%f[%w]uv%s+run%s+%-%-script") then
+          return "python"
+        end
+      end,
+      { priority = 10 },
+    },
     ["%.env[%w_.-]*"] = "sh",
     ["%.secrets[%w_.-]*"] = "sh",
   },

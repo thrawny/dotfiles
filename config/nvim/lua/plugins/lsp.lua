@@ -116,7 +116,7 @@ return {
             cb(root or vim.fs.dirname(fname))
           end,
         },
-        basedpyright = {
+        ty = {
           mason = false,
         },
         ruff = {

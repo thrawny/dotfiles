@@ -4,8 +4,6 @@
     # LSPs
     rust-analyzer
     gopls
-    basedpyright
-    pyright
     lua-language-server
     vtsls
     typescript-language-server

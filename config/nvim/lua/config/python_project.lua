@@ -9,9 +9,16 @@ local function has_section(file, section)
   if not fd then
     return false
   end
-  local content = fd:read("*a")
+  local found = false
+  for line in fd:lines() do
+    local header = line:match("^%s*%[%[?%s*([%w_.]+)")
+    if header == section or (header and vim.startswith(header, section .. ".")) then
+      found = true
+      break
+    end
+  end
   fd:close()
-  return content:find("%[" .. vim.pesc(section) .. "%]") ~= nil
+  return found
 end
 
 local function always()
@@ -35,27 +42,31 @@ local checkers = {
     },
   },
   {
-    name = "basedpyright",
+    name = "ty",
     files = {
-      ["pyrightconfig.json"] = always,
+      ["ty.toml"] = always,
       ["pyproject.toml"] = function(file)
-        return has_section(file, "tool.basedpyright") or has_section(file, "tool.pyright")
+        return has_section(file, "tool.ty")
       end,
     },
   },
 }
 
-local function find_root(path, files)
-  local hits = vim.fs.find(vim.tbl_keys(files), {
-    path = path,
-    upward = true,
-    type = "file",
-    limit = math.huge,
-  })
-  for _, file in ipairs(hits) do
-    if files[vim.fs.basename(file)](file) then
-      return vim.fs.dirname(file)
+-- Resolve the nearest configured project before trying a parent project.
+local function find_checker(path)
+  local stat = vim.uv.fs_stat(path)
+  local root = stat and stat.type == "directory" and path or vim.fs.dirname(path)
+  while root do
+    for _, checker in ipairs(checkers) do
+      for filename, matches in pairs(checker.files) do
+        local file = root .. "/" .. filename
+        if vim.uv.fs_stat(file) and matches(file) then
+          return checker.name, root
+        end
+      end
     end
+    local parent = vim.fs.dirname(root)
+    root = parent ~= root and parent or nil
   end
 end
 
@@ -86,15 +97,9 @@ function M.type_checker(path)
   if path == "" then
     return nil
   end
-  for _, checker in ipairs(checkers) do
-    local root = find_root(path, checker.files)
-    if root then
-      local resolved = { name = checker.name, root = root }
-      if checker.name == "mypy" then
-        resolved.cmd = mypy_command(root)
-      end
-      return resolved
-    end
+  local name, root = find_checker(vim.fs.normalize(path))
+  if name then
+    return { name = name, root = root, cmd = name == "mypy" and mypy_command(root) or nil }
   end
 end
 

@@ -26,21 +26,21 @@ return {
     "neovim/nvim-lspconfig",
     opts = {
       servers = {
-        basedpyright = {
-          -- Pre-seeded so before_init can mutate it in place; the client copies
-          -- this table on creation, so reassigning config.settings there would
-          -- never reach the server.
-          settings = { basedpyright = { analysis = {} } },
-          -- Keep basedpyright for completion, hover and navigation everywhere,
-          -- but leave type diagnostics to whatever the project configures.
+        ty = {
+          mason = false,
+          cmd = { "ty", "server" },
+          root_markers = {
+            { "ty.toml", "pyproject.toml", "mypy.ini", ".mypy.ini", "setup.py", "setup.cfg", "requirements.txt" },
+            ".git",
+          },
+          init_options = { experimental = { useUv = "on" } },
+          -- Preserve project-selected diagnostics while using ty for language
+          -- services everywhere, including projects checked by mypy on save.
+          settings = { ty = { diagnosticMode = "off" } },
           before_init = function(_, config)
-            local checker = python_project.type_checker(config.root_dir or vim.uv.cwd())
-            if checker and checker.name == "basedpyright" then
-              return
-            end
-            local analysis = vim.tbl_get(config, "settings", "basedpyright", "analysis")
-            if analysis then
-              analysis.typeCheckingMode = "off"
+            local checker = python_project.type_checker(config.root_dir or vim.api.nvim_buf_get_name(0))
+            if checker and checker.name == "ty" then
+              config.settings.ty.diagnosticMode = "openFilesOnly"
             end
           end,
         },

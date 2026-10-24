@@ -44,8 +44,8 @@ test-keepawake:
 
 # Format, typecheck, and exercise keep-awake rules with fake hardware
 check-keepawake:
-    ruff check --fix bin/keepawake tests/test_keepawake.py
-    ruff format bin/keepawake tests/test_keepawake.py
+    uv run --locked ruff check --fix bin/keepawake tests/test_keepawake.py
+    uv run --locked ruff format bin/keepawake tests/test_keepawake.py
     @just typecheck-python bin/keepawake tests/test_keepawake.py
     @just test-keepawake
 
@@ -107,7 +107,7 @@ fmt-lua:
 
 # Format Python files
 fmt-python:
-    ruff check --fix && ruff format .
+    uv run --locked ruff check --fix && uv run --locked ruff format .
 
 # === Linters ===
 
@@ -120,16 +120,16 @@ lint-lua:
 
 # Lint Python files
 lint-python:
-    ruff check .
+    uv run --locked ruff check .
 
 # === Type checking ===
 
 # Typecheck all
 typecheck: typecheck-python
 
-# Typecheck Python code
+# Typecheck with the Nix-installed ty and uv-managed project/script environments
 typecheck-python *files:
-    uv run --locked basedpyright {{files}}
+    TY_UV=scripts uv run --locked ty check {{files}}
 
 # === Theme ===
 

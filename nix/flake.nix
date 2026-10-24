@@ -346,6 +346,10 @@
             pkgs.mkShell {
               packages = with pkgs; [
                 bashInteractive
+                just
+                uv
+                ruff
+                ty
                 pkg-config
                 nixd
                 nixfmt

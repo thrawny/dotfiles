@@ -39,3 +39,5 @@ Use `/spawn <task>` in Claude to start a new session in a Herdr tab that begins 
 just switch   # Apply config (NixOS, nix-darwin, or Home Manager)
 just check    # Format, lint, evaluate
 ```
+
+Python tooling (uv, Ruff, and ty) is supplied by Nix. Run `just lint-python`, `just typecheck-python`, and `just test-python`; `nix develop ./nix` supplies the same tools before Home Manager is activated. Python test dependencies stay in `uv.lock`.

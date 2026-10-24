@@ -7,7 +7,7 @@ requires-python = ">=3.13"
 testpaths = ["tests"]
 addopts = ["--import-mode=importlib"]
 
-[tool.basedpyright]
+[tool.ty.src]
 include = [
   ".",
   "bin/private-skills-sync",
@@ -29,6 +29,13 @@ include = [
   "bin/prctl",
   "bin/run-if-changed",
   "bin/nvim-here",
+  "bin/blueprint-html",
+  "bin/env",
+  "bin/herdr-prune-workspaces",
+  "bin/incus-pull-sessions",
+  "bin/niri-lid-output-sync",
+  "bin/telegram-notify",
+  "bin/zmx-list",
 ]
 exclude = [
   ".venv",
@@ -47,10 +54,6 @@ exclude = [
   ".claude/worktrees",
   ".delta",
 ]
-reportExplicitAny = false
-reportAny = false
-reportUnusedCallResult = false
-reportImplicitOverride = false
 
 [tool.ruff]
 extend-include = [

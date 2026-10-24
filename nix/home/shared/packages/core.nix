@@ -58,6 +58,7 @@
     ))
     uv
     ruff
+    ty
     go
     golangci-lint
     gotestsum
