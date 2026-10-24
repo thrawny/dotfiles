@@ -10,9 +10,12 @@ import "../../services/BatteryIcon.js" as BatteryIcon
 // Quickshell chooses the platform implementation at runtime.
 // qmllint disable uncreatable-type
 PanelWindow {
-    id: panel
+    id: barWindow
     required property var modelData
+    // Quickshell._Window exposes QuickshellScreenInfo as opaque in its qmltypes.
+    // qmllint disable missing-property
     readonly property bool compact: screen.name.startsWith("eDP") || width <= 1200
+    // qmllint enable missing-property
     property bool alternateClock: false
     screen: modelData
     anchors {
@@ -43,7 +46,7 @@ PanelWindow {
         opacity: 0.3
     }
     WorkspaceList {
-        screen: panel.screen
+        screen: barWindow.screen
         anchors {
             left: parent.left
             top: parent.top
@@ -56,10 +59,10 @@ PanelWindow {
         id: windowTitle
         anchors.centerIn: parent
         // Reserve equal space on both sides so the title stays screen-centered.
-        width: Math.max(0, Math.min(panel.width * 0.3, panel.width - 2 * (statusItems.width + 16)))
-        visible: !panel.compact && width >= 60
+        width: Math.max(0, Math.min(barWindow.width * 0.3, barWindow.width - 2 * (statusItems.width + 16)))
+        visible: !barWindow.compact && width >= 60
         horizontalAlignment: Text.AlignHCenter
-        text: Workspaces.titleFor(panel.screen)
+        text: Workspaces.titleFor(barWindow.screen)
         textFormat: Text.PlainText
         elide: Text.ElideRight
         color: Theme.muted
@@ -74,21 +77,21 @@ PanelWindow {
             bottom: parent.bottom
             rightMargin: 8
         }
-        spacing: panel.compact ? 0 : 6
+        spacing: barWindow.compact ? 0 : 6
         BarButton {
             text: Agents.indicator
             hint: Agents.tooltip
             selected: Agents.opened
             attention: Agents.stale || (Agents.counts.done ?? 0) > 0
-            onClicked: Agents.toggle(panel.screen)
+            onClicked: Agents.toggle(barWindow.screen)
         }
         QuotaButton {
             providerId: "claude"
-            compact: panel.compact
+            compact: barWindow.compact
         }
         QuotaButton {
             providerId: "codex"
-            compact: panel.compact
+            compact: barWindow.compact
         }
         BarButton {
             text: Keyboard.label
@@ -98,18 +101,18 @@ PanelWindow {
             onClicked: Keyboard.next()
         }
         Tray {
-            panel: panel
-            compact: panel.compact
+            panel: barWindow
+            compact: barWindow.compact
         }
         BarButton {
-            text: Network.icon + (!panel.compact ? " " + Network.name : "")
+            text: Network.icon + (!barWindow.compact ? " " + Network.name : "")
             hint: Network.details + "\nClick to open network settings"
             attention: !Network.connected
             maxTextWidth: 120
             onClicked: Quickshell.execDetached(["nm-connection-editor"])
         }
         BarButton {
-            text: !Audio.available ? "󰖁 ?" : Audio.muted ? "󰝟" : (Audio.percent < 34 ? "󰕿" : Audio.percent < 67 ? "󰖀" : "󰕾") + (panel.compact ? "" : " " + Audio.percent + "%")
+            text: !Audio.available ? "󰖁 ?" : Audio.muted ? "󰝟" : (Audio.percent < 34 ? "󰕿" : Audio.percent < 67 ? "󰖀" : "󰕾") + (barWindow.compact ? "" : " " + Audio.percent + "%")
             hint: Audio.description + " · " + Audio.percent + "%" + (Audio.muted ? " · Muted" : "") + "\nClick for audio settings, right-click to mute, scroll for volume"
             onClicked: Quickshell.execDetached(["pavucontrol"])
             onSecondaryClicked: Audio.toggleMute()
@@ -131,9 +134,9 @@ PanelWindow {
             onClicked: Quickshell.execDetached(["ghostty", "-e", "btop"])
         }
         BarButton {
-            text: Qt.formatDateTime(clock.date, panel.alternateClock ? "dddd" : panel.compact ? "MM-dd HH:mm" : "yyyy-MM-dd HH:mm")
+            text: Qt.formatDateTime(clock.date, barWindow.alternateClock ? "dddd" : barWindow.compact ? "MM-dd HH:mm" : "yyyy-MM-dd HH:mm")
             hint: Qt.formatDateTime(clock.date, "dddd, d MMMM yyyy") + "\nClick to change display, right-click to lock"
-            onClicked: panel.alternateClock = !panel.alternateClock
+            onClicked: barWindow.alternateClock = !barWindow.alternateClock
             onSecondaryClicked: Quickshell.execDetached(["hyprlock"])
         }
     }

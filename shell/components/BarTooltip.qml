@@ -20,13 +20,16 @@ Item {
     }
     PopupWindow {
         id: popup
+        // Quickshell._Window exposes PopupAnchor as opaque in its qmltypes;
+        // its item/rect/edges/gravity properties exist at runtime.
+        // qmllint disable missing-property unresolved-type unqualified
         anchor.item: root.targetItem
         anchor.rect.y: root.targetItem.height + 6
-        // Quickshell's qmltypes omit the Edges::Flags property type.
+        // Quickshell's qmltypes also omit the Edges::Flags property type.
         // qmllint disable missing-type
         anchor.edges: Edges.Bottom
         anchor.gravity: Edges.Bottom
-        // qmllint enable missing-type
+        // qmllint enable missing-type missing-property unresolved-type unqualified
         visible: root.hovered && root.armed && root.text !== "" && Theme.ready
         // Window sizes use whole pixels; never round below the text's width.
         implicitWidth: Math.min(Math.ceil(label.implicitWidth) + 24, 420)

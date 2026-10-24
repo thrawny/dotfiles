@@ -1,6 +1,7 @@
 """Repo lookup and agent naming without Herdr or model turns."""
 
 import importlib.util
+import os
 import subprocess
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
@@ -24,7 +25,7 @@ def spawn() -> ModuleType:
 
 @pytest.fixture(autouse=True)
 def clean_environment():
-    with patch.dict("os.environ", {}, clear=True):
+    with patch.dict("os.environ", {"PATH": os.environ["PATH"]}, clear=True):
         yield
 
 

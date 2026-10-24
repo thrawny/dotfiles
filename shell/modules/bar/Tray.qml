@@ -1,5 +1,6 @@
 pragma ComponentBehavior: Bound
 import QtQuick
+import Quickshell
 import "../../components"
 import Quickshell.Services.SystemTray
 import "../../services"
@@ -66,10 +67,7 @@ Row {
             }
             TrayMenu {
                 id: menu
-                // Quickshell does not export DBusMenuHandle in its qmltypes.
-                // qmllint disable unresolved-type
-                handle: entry.modelData.menu
-                // qmllint enable unresolved-type
+                handle: entry.modelData.menu as QsMenuHandle
                 y: entry.height + 6
             }
             BarTooltip {

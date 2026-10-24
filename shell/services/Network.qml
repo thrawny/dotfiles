@@ -7,7 +7,10 @@ import "NetworkStats.js" as Stats
 
 Singleton {
     id: root
+    // Quickshell.Networking exposes UntypedObjectModel as opaque in its qmltypes.
+    // qmllint disable missing-property
     readonly property var connectedDevices: Networking.devices.values.filter(device => device.connected)
+    // qmllint enable missing-property
     readonly property var connections: connectedDevices.reduce((all, device) => all.concat(device.networks.values.filter(network => network.connected)), [])
     readonly property bool connected: connectedDevices.length > 0
     readonly property string name: connections.length ? connections[0].name : connected ? connectedDevices[0].name : "Offline"

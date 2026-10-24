@@ -57,7 +57,9 @@ def turn_in(moto: ModuleType, turn: str | None, prompt: str | None) -> None:
 @pytest.fixture(autouse=True)
 def state_home(tmp_path: Path):
     with patch.dict(
-        "os.environ", {"XDG_STATE_HOME": str(tmp_path / "state")}, clear=True
+        "os.environ",
+        {"PATH": os.environ["PATH"], "XDG_STATE_HOME": str(tmp_path / "state")},
+        clear=True,
     ):
         yield tmp_path / "state"
 
