@@ -27,6 +27,12 @@ rec {
     Default to my personal Linear workspace for issues and tickets, including `to-tickets`. Explicit user requests and repository instructions take precedence. Use the available Linear integration; ask if the target team or project is ambiguous. For agent-ready tickets, use the `ready-for-agent` label; if it is missing, ask which existing label to use.
   '';
 
+  goModernize = ''
+    ## Go modernization
+
+    After creating or modifying Go files, run `golangci-lint run --no-config --enable-only=modernize --max-issues-per-linter=0 --max-same-issues=0 --uniq-by-line=false --fix <touched.go> ...` with golangci-lint v2.6.0 or newer. Pass only existing Go files you touched for the current task, grouped by package; keep fixes scoped to those files. Review the diff, then rerun without `--fix` and address remaining suggestions before finishing. If file-scoped analysis cannot type-check, report the blocker while preserving this scope.
+  '';
+
   ephemeralTools = ''
     ## Ephemeral tools
 
@@ -101,7 +107,10 @@ rec {
     {
       claudeGlobal = render "# Global Claude Code Instructions" (
         optionalBlock enableUnslop unslop
-        ++ [ docs ]
+        ++ [
+          docs
+          goModernize
+        ]
         ++ optionalBlock enableIssueTracker issueTracker
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
@@ -114,6 +123,7 @@ rec {
         [
           docs
           codexQuestions
+          goModernize
         ]
         ++ optionalBlock enableIssueTracker issueTracker
         ++ optionalBlock enableEphemeralTools ephemeralTools
@@ -124,7 +134,10 @@ rec {
 
       piGlobal = render "# Global Pi Instructions" (
         optionalBlock enablePiWorkflow piWorkflow
-        ++ [ docs ]
+        ++ [
+          docs
+          goModernize
+        ]
         ++ optionalBlock enableIssueTracker issueTracker
         ++ optionalBlock enableEphemeralTools ephemeralTools
         ++ optionalBlock enableShellPortability shellPortability
