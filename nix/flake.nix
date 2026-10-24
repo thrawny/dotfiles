@@ -72,10 +72,6 @@
       url = "github:vercel-labs/agent-browser";
       flake = false;
     };
-    voxtype = {
-      url = "github:peteonrails/voxtype";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
     cursor-plugins = {
       url = "github:cursor/plugins";
       flake = false;
@@ -122,7 +118,6 @@
       quotabar,
       agent-switch,
       agent-browser,
-      voxtype,
       cursor-plugins,
       mattpocock-skills,
       anthropic-skills,
@@ -174,7 +169,6 @@
           nvim-monokai-pro
           thrawny-pkgs
           zmx
-          voxtype
           ;
         containerAssets = storeHomeAssets;
       };
@@ -421,8 +415,6 @@
               # Expensive builds that `just cache` pushes to Cachix.
               cache-bundle = pkgs.linkFarmFromDrvs "cache-bundle" [
                 hunk.packages.${system}.default
-                voxtype.packages.${system}.default
-                voxtype.packages.${system}.osd-native
               ];
             }
             // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {

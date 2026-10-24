@@ -1,19 +1,12 @@
+{ pkgs, ... }:
 {
-  pkgs,
-  voxtype,
-  ...
-}:
-{
-  imports = [ voxtype.homeManagerModules.default ];
-
-  programs.voxtype = {
+  services.voxtype = {
     enable = true;
-    package = voxtype.packages.${pkgs.stdenv.hostPlatform.system}.default;
-    service.enable = true;
+    package = pkgs.voxtype;
     settings = {
       audio.device = "pipewire";
       hotkey.enabled = false;
-      osd.frontend = "native";
+      osd.enabled = false;
       output = {
         mode = "paste";
         paste_keys = "ctrl+shift+v";
@@ -67,6 +60,4 @@
       };
     };
   };
-
-  home.packages = [ voxtype.packages.${pkgs.stdenv.hostPlatform.system}.osd-native ];
 }
