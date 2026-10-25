@@ -265,3 +265,15 @@ check-all: fmt lint nix::eval-all
 
 # CI: lint, typecheck, format, and test
 ci: fmt lint typecheck check-theme check-blueprint test
+
+# Build the Rosetta Linux builder for Apple Silicon
+build-linux-builder:
+    nix build ./nix#linux-builder --no-link --print-out-paths
+
+# Force an x64 Linux derivation through the configured builder
+check-linux-builder:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    result=$(nix build --impure --expr 'let pkgs = (builtins.getFlake (toString ./nix)).inputs.nixpkgs.legacyPackages.x86_64-linux; in pkgs.runCommand "linux-builder-smoke" { nonce = builtins.currentTime; } "uname -m > $out"' --max-jobs 0 --no-link --print-out-paths)
+    cat "$result"
+    test "$(cat "$result")" = x86_64
