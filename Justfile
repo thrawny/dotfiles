@@ -124,6 +124,23 @@ lint-python:
 
 # === Type checking ===
 
+# Install Blueprint's pinned runtime and development dependencies
+blueprint-install:
+    bun install --cwd bin/blueprint --frozen-lockfile --ignore-scripts
+
+# Refresh Blueprint's lockfile after intentional dependency changes
+blueprint-update:
+    bun install --cwd bin/blueprint --ignore-scripts
+
+# Format and typecheck the Bun renderer and directory server
+check-blueprint: blueprint-install
+    biome check --write bin/blueprint
+    bun run bin/blueprint/node_modules/typescript/bin/tsc --project bin/blueprint/tsconfig.json
+
+# Run a Bun development/verification script from the repository root
+blueprint-run +args:
+    bun run {{args}}
+
 # Typecheck all
 typecheck: typecheck-python
 
@@ -241,10 +258,10 @@ test-nvim:
 check: fmt check-parallel
 
 [parallel]
-check-parallel: test-keepawake test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-direnv test-remote-mode test-prctl check-private-skills nix::eval
+check-parallel: check-blueprint test-keepawake test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-direnv test-remote-mode test-prctl check-private-skills nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all
 
 # CI: lint, typecheck, format, and test
-ci: fmt lint typecheck check-theme test
+ci: fmt lint typecheck check-theme check-blueprint test

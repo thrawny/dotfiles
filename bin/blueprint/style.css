@@ -1,0 +1,264 @@
+a {
+	color: var(--accent);
+}
+* {
+	box-sizing: border-box;
+}
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--fg);
+	font:
+		16px / 1.6 system-ui,
+		-apple-system,
+		sans-serif;
+}
+main {
+	display: grid;
+	padding: 1.5rem 0 4rem;
+	grid-template-columns:
+		[full-start] minmax(1.25rem, 1fr)
+		[wide-start] minmax(0, 4rem)
+		[content-start] minmax(0, 52rem) [content-end]
+		minmax(0, 4rem) [wide-end] minmax(1.25rem, 1fr) [full-end];
+}
+main > * {
+	grid-column: content;
+}
+.figure {
+	position: relative;
+	margin: 1.2rem 0;
+	padding: 0.6rem 0;
+	overflow-x: auto;
+	overscroll-behavior-x: contain;
+}
+.d2-figure > svg {
+	display: block;
+	margin-inline: auto;
+	max-width: 100%;
+	height: auto;
+}
+.figbtn {
+	position: absolute;
+	top: 0.2rem;
+	right: 0.2rem;
+	font: 0.7rem / 1 system-ui;
+	padding: 0.3rem 0.6rem;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: var(--code-bg);
+	color: var(--muted);
+	cursor: pointer;
+}
+dialog.zoom {
+	width: 96vw;
+	height: 92vh;
+	max-width: none;
+	max-height: none;
+	border: 0;
+	padding: 0;
+	overflow: auto;
+	background: var(--bg);
+}
+dialog.zoom svg {
+	width: auto;
+	max-width: none;
+}
+dialog.zoom::backdrop {
+	background: rgb(0 0 0 / 0.5);
+}
+header.meta {
+	border-bottom: 1px solid var(--line);
+	padding: 1.5rem 0 1rem;
+	margin-bottom: 1.5rem;
+}
+header.meta h1 {
+	margin: 0 0 0.35rem;
+	font-size: 1.6rem;
+	line-height: 1.25;
+}
+header.meta p {
+	margin: 0.25rem 0;
+	color: var(--muted);
+}
+.tier {
+	display: inline-block;
+	font-size: 0.72rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.06em;
+	color: var(--accent);
+	border: 1px solid var(--accent);
+	border-radius: 99px;
+	padding: 0.1rem 0.6rem;
+	margin-bottom: 0.5rem;
+}
+nav.toc {
+	font-size: 0.9rem;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	padding: 0.75rem 1rem;
+	margin-bottom: 1.5rem;
+}
+nav.toc a {
+	color: var(--accent);
+	text-decoration: none;
+	margin-right: 1rem;
+	display: inline-block;
+}
+h2 {
+	margin-top: 2.2rem;
+	padding-top: 0.6rem;
+	border-top: 1px solid var(--line);
+	font-size: 1.25rem;
+}
+h3 {
+	font-size: 1.05rem;
+}
+code {
+	background: var(--code-bg);
+	border-radius: 4px;
+	padding: 0.1em 0.35em;
+	font:
+		0.86em / 1.5 ui-monospace,
+		"CaskaydiaMono Nerd Font",
+		monospace;
+}
+pre {
+	background: var(--code-bg);
+	border-radius: 8px;
+	padding: 0.9rem 1rem;
+	overflow-x: auto;
+	font:
+		0.82rem / 1.55 ui-monospace,
+		"CaskaydiaMono Nerd Font",
+		monospace;
+}
+pre code {
+	background: none;
+	padding: 0;
+	font: inherit;
+}
+.block {
+	position: relative;
+	margin: 1rem 0;
+}
+.badge {
+	position: absolute;
+	top: 0.45rem;
+	right: 0.7rem;
+	font-size: 0.68rem;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.07em;
+	color: var(--muted);
+}
+pre.diffish {
+	padding-top: 1.5rem;
+}
+pre.diffish .ln {
+	display: block;
+	white-space: pre;
+	border-left: 3px solid transparent;
+	padding-left: 0.5rem;
+}
+.ln.add {
+	color: var(--add);
+	background: var(--add-bg);
+	border-left-color: var(--add);
+}
+.ln.del {
+	color: var(--del);
+	background: var(--del-bg);
+	border-left-color: var(--del);
+	border-left-style: double;
+}
+.ln.mod {
+	color: var(--mod);
+	background: var(--mod-bg);
+	border-left-color: var(--mod);
+	border-left-style: dashed;
+}
+.comment {
+	color: var(--muted);
+	font-style: italic;
+}
+.comment .anchor {
+	color: var(--muted);
+	font-style: normal;
+	font-weight: 600;
+	text-decoration: underline dotted;
+}
+iframe.mockup {
+	width: 100%;
+	min-height: 22rem;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--mockup-bg);
+	margin-top: 1.4rem;
+}
+table {
+	border-collapse: collapse;
+	width: 100%;
+	display: block;
+	overflow-x: auto;
+	font-size: 0.92rem;
+}
+th,
+td {
+	border: 1px solid var(--line);
+	padding: 0.45rem 0.7rem;
+	text-align: left;
+}
+th {
+	background: var(--code-bg);
+}
+blockquote {
+	margin: 1rem 0;
+	padding: 0.1rem 1rem;
+	border-left: 3px solid var(--line);
+	color: var(--muted);
+}
+footer {
+	margin-top: 3rem;
+	font-size: 0.8rem;
+	color: var(--muted);
+}
+.themebtn {
+	position: fixed;
+	top: 0.75rem;
+	right: 0.75rem;
+	z-index: 10;
+	font: 1rem / 1 system-ui;
+	padding: 0.35rem 0.55rem;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--code-bg);
+	color: var(--muted);
+	cursor: pointer;
+}
+
+.hljs-comment,
+.hljs-quote {
+	color: var(--muted);
+	font-style: italic;
+}
+.hljs-keyword,
+.hljs-type,
+.hljs-built_in {
+	color: var(--add);
+}
+.hljs-string,
+.hljs-number,
+.hljs-literal,
+.hljs-meta {
+	color: var(--del);
+}
+
+main > .figure {
+	grid-column: wide;
+}
+main > .d2-figure {
+	grid-column: full;
+	padding-inline: 1.25rem;
+}

@@ -188,6 +188,38 @@
       "warning": "#e6db74",
       "claudeIcon": "#d97757",
       "codexIcon": "#e8e6df"
+    },
+    "blueprint": {
+      "light": {
+        "bg": "#fdfdfc",
+        "fg": "#1c1c1a",
+        "muted": "#6f6e66",
+        "line": "#e4e2da",
+        "accent": "#3b5bdb",
+        "add": "#1c5cab",
+        "add-bg": "#dbe8fa",
+        "del": "#ad4600",
+        "del-bg": "#fbe4d5",
+        "mod": "#45443e",
+        "mod-bg": "#eae8e0",
+        "code-bg": "#f4f3ef",
+        "mockup-bg": "#ffffff"
+      },
+      "dark": {
+        "bg": "#14161a",
+        "fg": "#e6e4dd",
+        "muted": "#94927f",
+        "line": "#2b2e35",
+        "accent": "#7b9aff",
+        "add": "#7fb2f0",
+        "add-bg": "#122840",
+        "del": "#f0894a",
+        "del-bg": "#3a2410",
+        "mod": "#cfcdc2",
+        "mod-bg": "#282b32",
+        "code-bg": "#1d2026",
+        "mockup-bg": "#ffffff"
+      }
     }
   }
 }

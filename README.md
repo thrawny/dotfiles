@@ -35,6 +35,8 @@ Use `!fork-window` in Claude or Codex, or `/fork-window` in Pi, to fork the curr
 
 Use `/spawn <task>` in Claude to start a new session in a Herdr tab that begins work on a task from the current conversation. A fork of the conversation writes the task brief and picks the repo and worktree, then runs `spawn-session`, which opens the tab and starts the agent.
 
+Use `blueprint-serve ./lab` for a searchable Markdown/HTML library with live browser refresh, or `blueprint-html` to export a standalone page. See [Blueprint previews](docs/blueprint.md).
+
 ```bash
 just switch   # Apply config (NixOS, nix-darwin, or Home Manager)
 just check    # Format, lint, evaluate

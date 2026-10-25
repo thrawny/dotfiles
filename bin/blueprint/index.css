@@ -1,0 +1,86 @@
+.library header.meta {
+	padding-top: 2rem;
+}
+.library header.meta h1 {
+	font-size: clamp(2rem, 5vw, 3rem);
+	letter-spacing: -0.045em;
+	font-weight: 650;
+}
+.library .root {
+	overflow-wrap: anywhere;
+}
+.search {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	margin: 0.5rem 0 1.5rem;
+}
+.search input {
+	width: 100%;
+	padding: 0.7rem 0.9rem;
+	font: inherit;
+	color: var(--fg);
+	background: var(--code-bg);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+}
+.search output {
+	white-space: nowrap;
+	color: var(--muted);
+	font-size: 0.85rem;
+}
+.documents {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+.documents li {
+	border-top: 1px solid var(--line);
+}
+.documents a {
+	display: block;
+	padding: 1.1rem 0;
+	text-decoration: none;
+	color: var(--fg);
+}
+.doc-title {
+	font-size: 1.1rem;
+	font-weight: 600;
+}
+.doc-description {
+	margin: 0.25rem 0;
+	color: var(--muted);
+}
+.doc-meta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.4rem 1rem;
+	font-size: 0.8rem;
+	color: var(--muted);
+	margin-top: 0.25rem;
+}
+.doc-meta .doc-path {
+	flex: 1;
+	overflow-wrap: anywhere;
+}
+.empty {
+	color: var(--muted);
+	padding: 1.5rem 0;
+}
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 4px;
+}
+[hidden] {
+	display: none;
+}
+@media (max-width: 480px) {
+	.search {
+		align-items: stretch;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+}
+.documents a:hover .doc-title {
+	color: var(--accent);
+}

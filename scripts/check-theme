@@ -48,6 +48,9 @@ scoped_files=(
   config/nvim/lua/plugins/codediff.lua
   config/nvim/lua/config/theme.lua
   config/pi/extensions/status-line.ts
+  bin/blueprint/render.ts
+  bin/blueprint/style.css
+  bin/blueprint/index.css
 )
 
 while IFS= read -r shell_file; do
