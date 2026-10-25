@@ -3,6 +3,8 @@ let
   host = import ./default.nix;
 in
 {
+  imports = [ ./linux-builder.nix ];
+
   nixpkgs.hostPlatform = "aarch64-darwin";
   system.stateVersion = 6;
   system.primaryUser = host.username;

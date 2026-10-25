@@ -1,5 +1,8 @@
+{ pkgs, ... }:
 {
   imports = [ ../../home/darwin ];
+
+  home.packages = [ pkgs.nixos-rebuild ];
 
   dotfiles.privateAgentSkills.enable = true;
   dotfiles.t3code.enable = true;

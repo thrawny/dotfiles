@@ -422,6 +422,7 @@
             }
             // lib.optionalAttrs (system == "aarch64-darwin") {
               inherit (nix-darwin.packages.${system}) darwin-rebuild;
+              linux-builder = import ./packages/linux-builder.nix { inherit pkgs; };
             }
           );
 
