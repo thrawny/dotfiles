@@ -3,7 +3,7 @@
 Cross-platform dotfiles managed with Nix Home Manager (`nix/`). See `nix/AGENTS.md` for nix specifics.
 
 - Task runner is `just`, always from the repo root — if a command is missing, add a recipe rather than `cd`ing into subdirectories.
-- Commit and push every dotfiles change before reporting completion. Verify the working tree is clean and the branch is up to date with its upstream. If pushing is blocked, report the blocker.
+- Commit and push every dotfiles change directly to `main` by default. Use a pull request only when explicitly requested. Before reporting completion, verify the working tree is clean and the branch is up to date with its upstream. If pushing is blocked, report the blocker.
 - Outside the sandbox, run `just switch-hm` or `just switch` without asking permission. Prefer `just switch-hm` for Home Manager-only changes. When `SANDBOX=1`, ask Jonas to run local activation outside the sandbox; remote deployments are allowed.
 - `bin/` is for runtime commands needed on `PATH`. Development and validation helpers go in `scripts/` or the owning component's `scripts/` directory, invoked through `just`.
 - Scripts of 50+ lines live in standalone files; Nix exposes or configures them rather than containing the implementation.
