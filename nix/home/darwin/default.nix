@@ -1,5 +1,6 @@
 {
   config,
+  pkgs,
   username,
   ...
 }:
@@ -31,5 +32,6 @@
   home = {
     inherit username;
     homeDirectory = "/Users/${username}";
+    packages = [ pkgs.flock ];
   };
 }

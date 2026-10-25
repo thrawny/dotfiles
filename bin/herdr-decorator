@@ -222,7 +222,8 @@ def request(method: str, params: dict[str, Any]) -> dict[str, Any]:
                     + "\n"
                 ).encode()
             )
-            line = sock.makefile().readline()
+            with sock.makefile() as reader:
+                line = reader.readline()
     except OSError as exc:
         raise HerdrGone(str(exc)) from exc
     if not line:
