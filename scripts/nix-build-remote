@@ -10,5 +10,5 @@ remote_dir=$(ssh "root@$host" 'mktemp -d /var/tmp/dotfiles-build.XXXXXXXX')
 printf 'Remote source: %s\n' "$remote_dir"
 git -C "$root" ls-files -z | COPYFILE_DISABLE=1 tar --no-xattrs -C "$root" --null -T - -cf - | ssh "root@$host" "tar -xf - -C '$remote_dir'"
 ssh "root@$host" "git -C '$remote_dir' init -q && git -C '$remote_dir' add --force ."
-ssh "root@$host" "zmx run dotfiles-build -d bash -c 'cd $remote_dir && nix build ./nix#nixosConfigurations.$host.config.$attribute --max-jobs 1 --cores 2 --out-link $remote_dir/result -L'"
+ssh "root@$host" "zmx run dotfiles-build -d bash -c 'cd $remote_dir && drv=\$(nix eval --raw ./nix#nixosConfigurations.$host.config.$attribute.drvPath --no-write-lock-file) && nix build \"\$drv^*\" --max-jobs 1 --cores 2 --out-link $remote_dir/result -L'"
 printf 'Inspect: ssh root@%s "zmx history dotfiles-build | tail -n 60"\nResult: %s/result\n' "$host" "$remote_dir"

@@ -221,7 +221,11 @@ check-hermes-web target="obelisk":
 
 # Build a specific NixOS host without activating or deploying it
 build-host target:
-    nix build ".#nixosConfigurations.{{ target }}.config.system.build.toplevel" --no-link --no-write-lock-file
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Release evaluation memory before building on small hosts.
+    drv=$(nix eval --raw ".#nixosConfigurations.{{ target }}.config.system.build.toplevel.drvPath" --no-write-lock-file)
+    nix build "$drv^*" --no-link
 
 # Exercise generated Tailscale Serve commands against a concurrent fake daemon
 check-tailscale-serve target="obelisk":
