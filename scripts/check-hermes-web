@@ -27,6 +27,18 @@ def main() -> None:
             "HERMES_DASHBOARD_BASIC_AUTH_SECRET": secrets.token_urlsafe(32),
         }
         (home / "config.yaml").write_text("plugins:\n  enabled: [discord, telegram]\n")
+        # The dashboard reads the store initialized by the gateway; it no longer
+        # creates a database when serving an empty profile.
+        subprocess.run(
+            [
+                sys.argv[2],
+                "-c",
+                "from hermes_state import SessionDB; SessionDB().close()",
+            ],
+            cwd=directory,
+            env=env,
+            check=True,
+        )
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))
             port = listener.getsockname()[1]
@@ -94,7 +106,10 @@ def main() -> None:
                 response = requests.get(
                     f"{url}/api/sessions", headers={"Cookie": cookie}, timeout=10
                 )
-                assert response.status_code == 200, response.status_code
+                assert response.status_code == 200, (
+                    response.status_code,
+                    response.text,
+                )
                 print(
                     "Hermes dashboard starts; login required; valid login can read sessions"
                 )

@@ -417,7 +417,7 @@ lib.mkMerge [
       pkgs.runCommand "hermes-web-check"
         { nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.requests ])) ]; }
         ''
-          python3 ${../../scripts/check-hermes-web} ${hermesPackage}/bin/hermes
+          python3 ${../../scripts/check-hermes-web} ${hermesPackage}/bin/hermes ${hermesPackage.hermesVenv}/bin/python3
           touch "$out"
         '';
 
