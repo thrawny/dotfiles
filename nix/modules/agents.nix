@@ -4,6 +4,7 @@
   pkgs,
   llm-agents,
   nix-openclaw,
+  hermes-agent,
   zmx,
   ...
 }:
@@ -571,6 +572,14 @@ lib.mkMerge [
   {
     services.hermes-agent = {
       enable = true;
+      # The pm-pinned Node 26.12.1 miscomputes fractional arithmetic under
+      # macOS 15 Rosetta, breaking npm's cache sizing. Nixpkgs' Node 26 works
+      # for both the frontend builds and the shipped runtime.
+      package = hermes-agent.packages.${system}.default.override (prev: {
+        pmPackages = prev.pmPackages // {
+          node = hermes-agent.inputs.nixpkgs.legacyPackages.${system}.nodejs_26;
+        };
+      });
       createUser = false;
       user = "hermes";
       group = "hermes";
