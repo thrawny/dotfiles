@@ -37,7 +37,8 @@ def request(method: str, params: dict[str, Any]) -> dict[str, Any]:
                 json.dumps({"id": method, "method": method, "params": params}) + "\n"
             ).encode()
         )
-        reply = json.loads(sock.makefile().readline())
+        with sock.makefile() as reader:
+            reply = json.loads(reader.readline())
     if "error" in reply:
         raise RuntimeError(f"{method}: {reply['error'].get('message')}")
     return reply["result"]

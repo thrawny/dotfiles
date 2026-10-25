@@ -63,7 +63,8 @@ def close_popup() -> None:
             sock.settimeout(5)
             sock.connect(path)
             sock.sendall((json.dumps(request) + "\n").encode())
-            sock.makefile().readline()
+            with sock.makefile() as reader:
+                reader.readline()
     except OSError:
         pass
 
