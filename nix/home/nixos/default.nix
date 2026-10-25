@@ -28,6 +28,7 @@
     ./mako.nix
     ./desktop-broker.nix
     ./telegram.nix
+    ./t3code.nix
     ./walker.nix
     ./waybar.nix
     ./gtk.nix

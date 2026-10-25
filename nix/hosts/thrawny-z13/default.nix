@@ -151,7 +151,11 @@ in
     zerotierone.enable = false;
   };
 
-  users.users.${config.dotfiles.username}.extraGroups = [ "incus" ];
+  users.users.${config.dotfiles.username} = {
+    extraGroups = [ "incus" ];
+    # Keep T3 available after logout; suspend still pauses the laptop.
+    linger = true;
+  };
 
   virtualisation.incus = {
     enable = true;
@@ -223,9 +227,34 @@ in
     ];
   };
 
+  # Root owns Serve configuration; the T3 server uses the user's repositories
+  # and provider logins. Leave the existing HTTPS 443 Funnel mapping untouched.
+  systemd.services.t3code-tailscale-serve = {
+    description = "Expose T3 Code over Tailscale HTTPS";
+    wantedBy = [ "multi-user.target" ];
+    wants = [
+      "network-online.target"
+      "tailscaled.service"
+    ];
+    after = [
+      "network-online.target"
+      "tailscaled.service"
+    ];
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+      ExecStart = "${lib.getExe pkgs.tailscale} serve --bg --https=8445 http://127.0.0.1:${
+        toString config.home-manager.users.${config.dotfiles.username}.dotfiles.t3code.port
+      }";
+      Restart = "on-failure";
+      RestartSec = 10;
+    };
+  };
+
   # Host-specific home-manager overrides
   home-manager.users.${config.dotfiles.username} = {
     dotfiles.privateAgentSkills.enable = true;
+    dotfiles.t3code.enable = true;
     programs.ghostty.settings.font-size = 11;
 
     programs.niri.settings = lib.mkIf config.programs.niri.enable {
