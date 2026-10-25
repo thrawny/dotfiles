@@ -151,6 +151,9 @@ in
     };
   };
 
+  # Hyprlock handles fingerprints natively; PAM supplies password authentication.
+  security.pam.services.hyprlock.fprintAuth = false;
+
   hardware.uinput.enable = true;
   hardware.bluetooth.enable = true;
   networking.networkmanager.enable = true;
