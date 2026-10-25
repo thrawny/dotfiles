@@ -106,6 +106,10 @@ deploy target:
 build-t3code-mac:
     nix build --no-link --print-out-paths .#homeConfigurations.thrawnym1.config.dotfiles.t3code.package
 
+# Build the Mac's Home Manager configuration without activating it.
+build-home-mac:
+    nix build --no-link --print-out-paths .#homeConfigurations.thrawnym1.activationPackage
+
 # Build/copy a remote configuration and show activation's planned service changes
 plan-deploy target:
     #!/usr/bin/env bash
