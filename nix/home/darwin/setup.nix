@@ -57,6 +57,17 @@ in
     # Pressing fn (globe) does nothing, instead of changing the input source.
     $DRY_RUN_CMD /usr/bin/defaults write com.apple.HIToolbox AppleFnUsageType -int 0
 
+    # Trackpad: three fingers drag, so swipes between spaces and
+    # Mission Control move to four fingers. The built-in and Bluetooth
+    # trackpads read separate domains.
+    for trackpad_domain in com.apple.AppleMultitouchTrackpad com.apple.driver.AppleBluetoothMultitouch.trackpad; do
+      $DRY_RUN_CMD /usr/bin/defaults write "$trackpad_domain" TrackpadThreeFingerDrag -int 1
+      $DRY_RUN_CMD /usr/bin/defaults write "$trackpad_domain" TrackpadThreeFingerHorizSwipeGesture -int 0
+      $DRY_RUN_CMD /usr/bin/defaults write "$trackpad_domain" TrackpadThreeFingerVertSwipeGesture -int 0
+      $DRY_RUN_CMD /usr/bin/defaults write "$trackpad_domain" TrackpadFourFingerHorizSwipeGesture -int 2
+      $DRY_RUN_CMD /usr/bin/defaults write "$trackpad_domain" TrackpadFourFingerVertSwipeGesture -int 2
+    done
+
     # Finder behavior
     $DRY_RUN_CMD /usr/bin/defaults write com.apple.finder QuitMenuItem -bool true
     $DRY_RUN_CMD /usr/bin/defaults write com.apple.finder DisableAllAnimations -bool true
