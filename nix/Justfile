@@ -171,7 +171,7 @@ eval force="--force=false":
     host=$(hostname | sed 's/\.local$//')
     if [ -f /etc/NIXOS ]; then
         echo "Evaluating NixOS config for $host..."
-        run-if-changed --name "nix-eval-$host" "{{ force }}" \
+        ../bin/run-if-changed --name "nix-eval-$host" "{{ force }}" \
             --include 'flake.nix' \
             --include 'flake.lock' \
             --include '**/*.nix' \
@@ -187,7 +187,7 @@ eval force="--force=false":
         fi
     else
         echo "Evaluating Home Manager config for $host..."
-        run-if-changed --name "home-eval-$host" "{{ force }}" \
+        ../bin/run-if-changed --name "home-eval-$host" "{{ force }}" \
             --include 'flake.nix' \
             --include 'flake.lock' \
             --include '**/*.nix' \

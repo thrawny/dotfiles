@@ -340,6 +340,7 @@
             pkgs.mkShell {
               packages = with pkgs; [
                 bashInteractive
+                biome
                 just
                 uv
                 ruff

@@ -30,7 +30,7 @@ check-image-package:
     #!/usr/bin/env bash
     set -euo pipefail
     package=$(nix build ./nix#shell-clipboard-image --no-link --print-out-paths)
-    nix shell --inputs-from ./nix nixpkgs#sway nixpkgs#wl-clipboard nixpkgs#cliphist -c env SHELL_CLIPBOARD_IMAGE_ADAPTER="$package/bin/shell-clipboard-image" node --test shell/tests/clipboard-wayland.test.cjs
+    nix shell --inputs-from ./nix nixpkgs#sway-unwrapped nixpkgs#wl-clipboard nixpkgs#cliphist -c env SHELL_CLIPBOARD_IMAGE_ADAPTER="$package/bin/shell-clipboard-image" node --test shell/tests/clipboard-wayland.test.cjs
 
 # Run in the foreground unless this config is already running
 dev:
@@ -68,6 +68,6 @@ check:
     set -euo pipefail
     tools=(nixpkgs#git nixpkgs#coreutils)
     if [[ $(uname -s) == Linux ]]; then
-        tools+=(nixpkgs#quickshell nixpkgs#qt6.qtdeclarative nixpkgs#cliphist nixpkgs#python3 nixpkgs#sway nixpkgs#wl-clipboard nixpkgs#fd)
+        tools+=(nixpkgs#quickshell nixpkgs#qt6.qtdeclarative nixpkgs#cliphist nixpkgs#python3 nixpkgs#sway-unwrapped nixpkgs#wl-clipboard nixpkgs#fd)
     fi
     nix shell --inputs-from ./nix "${tools[@]}" -c bash shell/scripts/check
