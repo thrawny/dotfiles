@@ -5,6 +5,11 @@ let
     "codex"
     "pi"
   ];
+  # Callers without a host platform get Linux defaults. obelisk's T3 Code
+  # server is the one such caller: it uses codexGlobal.
+  linux = {
+    isDarwin = false;
+  };
 in
 rec {
   codexQuestions = ''
@@ -98,7 +103,8 @@ rec {
   '';
 
   # Each agent gets the blocks that list it, in this order. Every block is a
-  # `dotfiles.agentInstructions.<name>.enable` option, on unless `default = false`.
+  # `dotfiles.agentInstructions.<name>.enable` option. `default` is a bool or a
+  # function of the host platform, and is true when left out.
   blocks = [
     {
       name = "piWorkflow";
@@ -144,12 +150,13 @@ rec {
       name = "gnuTools";
       text = gnuTools;
       agents = allAgents;
-      default = false;
+      default = platform: platform.isDarwin;
     }
     {
       name = "sandbox";
       text = sandbox;
       agents = allAgents;
+      default = platform: !platform.isDarwin;
     }
     {
       name = "backgroundTasks";
@@ -158,11 +165,18 @@ rec {
     }
   ];
 
-  # enabled: block name -> bool. Blocks left out fall back to their default.
+  defaultFor =
+    platform: block:
+    let
+      value = block.default or true;
+    in
+    if builtins.isFunction value then value platform else value;
+
+  # enabled: block name -> bool. Blocks left out fall back to their Linux default.
   mkInstructions =
     enabled:
     let
-      isEnabled = block: enabled.${block.name} or (block.default or true);
+      isEnabled = block: enabled.${block.name} or (defaultFor linux block);
       textsFor =
         agent:
         map (block: block.text) (

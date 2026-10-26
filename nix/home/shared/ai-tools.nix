@@ -81,16 +81,11 @@ in
         inherit (block) name;
         value.enable = lib.mkOption {
           type = lib.types.bool;
-          default = block.default or true;
+          default = agentInstructionLib.defaultFor pkgs.stdenv.hostPlatform block;
           description = "Include the ${block.name} block in the global agent instructions";
         };
       }) agentInstructionLib.blocks
     );
-  };
-
-  config.dotfiles.agentInstructions = {
-    gnuTools.enable = lib.mkDefault pkgs.stdenv.hostPlatform.isDarwin;
-    sandbox.enable = lib.mkDefault (!pkgs.stdenv.hostPlatform.isDarwin);
   };
 
   config.home = {
