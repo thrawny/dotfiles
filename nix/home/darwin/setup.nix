@@ -1,20 +1,76 @@
-{ lib, ... }:
+{ config, lib, ... }:
 let
   hmLib = lib.hm;
+  home = config.home.homeDirectory;
 in
 {
-  # macOS system defaults and setup
-  home.activation.setMacOSDefaults = hmLib.dag.entryAfter [ "writeBoundary" ] ''
-    # Finder settings
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.finder AppleShowAllFiles -bool true
-    $DRY_RUN_CMD /usr/bin/defaults write NSGlobalDomain AppleShowAllExtensions -bool true
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.desktopservices DSDontWriteNetworkStores -bool true
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.desktopservices DSDontWriteUSBStores -bool true
+  # macOS system defaults. Home Manager writes each domain with
+  # `defaults import`, which keeps the keys not listed here.
+  targets.darwin.defaults = {
+    NSGlobalDomain = {
+      AppleShowAllExtensions = true;
+      ApplePressAndHoldEnabled = false;
+      KeyRepeat = 2;
+      InitialKeyRepeat = 10;
+    };
 
-    # Screenshot settings
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.screencapture type -string "png"
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.screencapture location ~/Screenshots
+    "com.apple.desktopservices" = {
+      DSDontWriteNetworkStores = true;
+      DSDontWriteUSBStores = true;
+    };
 
+    "com.apple.screencapture" = {
+      type = "png";
+      location = "${home}/Screenshots";
+    };
+
+    # Pressing fn (globe) does nothing, instead of changing the input source.
+    "com.apple.HIToolbox".AppleFnUsageType = 0;
+
+    "com.apple.finder" = {
+      AppleShowAllFiles = true;
+      QuitMenuItem = true;
+      DisableAllAnimations = true;
+      NewWindowTargetPath = "file://${home}/Downloads/";
+      ShowStatusBar = true;
+      ShowPathbar = true;
+      WarnOnEmptyTrash = false;
+    };
+
+    "com.apple.dock" = {
+      minimize-to-application = true;
+      mru-spaces = false;
+      autohide = true;
+      show-recents = false;
+    };
+
+    "com.apple.SoftwareUpdate" = {
+      AutomaticCheckEnabled = true;
+      ScheduleFrequency = 1;
+      AutomaticDownload = 1;
+      CriticalUpdateInstall = 1;
+    };
+    "com.apple.commerce".AutoUpdate = true;
+
+    "com.apple.menuextra.clock".DateFormat = "yyyy-MM-dd HH:mm";
+  }
+  # Trackpad: three fingers drag, so swipes between spaces and
+  # Mission Control move to four fingers. The built-in and Bluetooth
+  # trackpads read separate domains.
+  //
+    lib.genAttrs
+      [ "com.apple.AppleMultitouchTrackpad" "com.apple.driver.AppleBluetoothMultitouch.trackpad" ]
+      (_: {
+        TrackpadThreeFingerDrag = 1;
+        TrackpadThreeFingerHorizSwipeGesture = 0;
+        TrackpadThreeFingerVertSwipeGesture = 0;
+        TrackpadFourFingerHorizSwipeGesture = 2;
+        TrackpadFourFingerVertSwipeGesture = 2;
+      });
+
+  # Settings a defaults option cannot express. Runs after setDarwinDefaults
+  # so activateSettings also picks up the keyboard settings.
+  home.activation.setMacOSDefaults = hmLib.dag.entryAfter [ "writeBoundary" "setDarwinDefaults" ] ''
     # Swap the screenshot shortcuts so a bare cmd+shift+3/4 copies to the
     # clipboard and adding ctrl writes the file. Parameters are
     # (ascii, virtual key code, modifier mask): cmd+shift = 1179648,
@@ -50,50 +106,8 @@ in
     # Without this the shortcuts only change after a logout.
     $DRY_RUN_CMD /System/Library/PrivateFrameworks/SystemAdministration.framework/Resources/activateSettings -u
 
-    # Keyboard settings
-    $DRY_RUN_CMD /usr/bin/defaults write NSGlobalDomain ApplePressAndHoldEnabled -bool false
-    $DRY_RUN_CMD /usr/bin/defaults write NSGlobalDomain KeyRepeat -int 2
-    $DRY_RUN_CMD /usr/bin/defaults write NSGlobalDomain InitialKeyRepeat -int 10
-    # Pressing fn (globe) does nothing, instead of changing the input source.
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.HIToolbox AppleFnUsageType -int 0
-
-    # Trackpad: three fingers drag, so swipes between spaces and
-    # Mission Control move to four fingers. The built-in and Bluetooth
-    # trackpads read separate domains.
-    for trackpad_domain in com.apple.AppleMultitouchTrackpad com.apple.driver.AppleBluetoothMultitouch.trackpad; do
-      $DRY_RUN_CMD /usr/bin/defaults write "$trackpad_domain" TrackpadThreeFingerDrag -int 1
-      $DRY_RUN_CMD /usr/bin/defaults write "$trackpad_domain" TrackpadThreeFingerHorizSwipeGesture -int 0
-      $DRY_RUN_CMD /usr/bin/defaults write "$trackpad_domain" TrackpadThreeFingerVertSwipeGesture -int 0
-      $DRY_RUN_CMD /usr/bin/defaults write "$trackpad_domain" TrackpadFourFingerHorizSwipeGesture -int 2
-      $DRY_RUN_CMD /usr/bin/defaults write "$trackpad_domain" TrackpadFourFingerVertSwipeGesture -int 2
-    done
-
-    # Finder behavior
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.finder QuitMenuItem -bool true
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.finder DisableAllAnimations -bool true
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.finder NewWindowTargetPath -string "file://$HOME/Downloads/"
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.finder ShowStatusBar -bool true
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.finder ShowPathbar -bool true
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.finder WarnOnEmptyTrash -bool false
-
     # Show Library folder
     $DRY_RUN_CMD /usr/bin/chflags nohidden ~/Library 2>/dev/null || true
-
-    # Dock settings
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.dock minimize-to-application -bool true
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.dock mru-spaces -bool false
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.dock autohide -bool true
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.dock show-recents -bool false
-
-    # Software Update settings
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.SoftwareUpdate AutomaticCheckEnabled -bool true
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.SoftwareUpdate ScheduleFrequency -int 1
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.SoftwareUpdate AutomaticDownload -int 1
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.SoftwareUpdate CriticalUpdateInstall -int 1
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.commerce AutoUpdate -bool true
-
-    # Menu bar clock format
-    $DRY_RUN_CMD /usr/bin/defaults write com.apple.menuextra.clock DateFormat -string "yyyy-MM-dd HH:mm"
 
     echo "macOS defaults have been set. Restart Finder and Dock to see changes:"
     echo "  killall Finder Dock"
