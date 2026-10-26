@@ -75,6 +75,7 @@ in
   nixpkgs.hostPlatform = lib.mkDefault "x86_64-linux";
 
   environment.systemPackages = with pkgs; [
+    just
     btop
     ncurses
     nvim
