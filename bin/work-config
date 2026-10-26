@@ -42,9 +42,9 @@ def load() -> dict[str, Any]:
 def lookup(config: dict[str, Any], key: str) -> Any:
     value: Any = config
     for part in key.split("."):
-        if not isinstance(value, dict) or part not in value:
+        if not isinstance(value, dict):
             return None
-        value = value[part]  # pyright: ignore[reportUnknownVariableType]
+        value = value.get(part)
     return value  # pyright: ignore[reportUnknownVariableType]
 
 
