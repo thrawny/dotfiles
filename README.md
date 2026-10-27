@@ -2,6 +2,8 @@
 
 My dotfiles and system configuration, declaratively managed with Nix.
 
+Canonical repository: [thrawny/dotfiles on GitHub](https://github.com/thrawny/dotfiles). Use GitHub for fetches, pushes and pull requests.
+
 ## Stack
 
 | Layer    | Tool                      |

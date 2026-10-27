@@ -4,6 +4,10 @@
 
   home.packages = [ pkgs.nixos-rebuild ];
 
+  # Dotfiles provisioning uses HTTPS URLs; this host authenticates GitHub via SSH.
+  programs.git.settings."url \"git@github.com:thrawny/dotfiles.git\"".insteadOf =
+    "https://github.com/thrawny/dotfiles.git";
+
   dotfiles.privateAgentSkills.enable = true;
   dotfiles.t3code.enable = true;
   dotfiles.t3code.port = 4773;
