@@ -259,7 +259,8 @@ test-nvim:
 # === Combined workflows ===
 
 # Format, lint, typecheck, evaluate current host, and check Pi extensions
-check: fmt check-parallel
+check:
+    nix develop ./nix --command just fmt check-parallel
 
 [parallel]
 check-parallel: check-blueprint test-keepawake test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-direnv test-remote-mode test-prctl check-private-skills nix::eval
