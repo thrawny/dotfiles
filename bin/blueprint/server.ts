@@ -7,7 +7,7 @@ import {
 	safeFile,
 	urlPath,
 } from "./catalog.ts";
-import { escapeHTML, page, render } from "./render.ts";
+import { escapeHTML, icon, page, render } from "./render.ts";
 
 const liveScript = readFileSync(join(import.meta.dir, "live.js"), "utf8");
 const indexCSS = readFileSync(join(import.meta.dir, "index.css"), "utf8");
@@ -52,23 +52,32 @@ async function inject(
 	const script = `<script data-blueprint-revision="${revision}">${liveScript}</script>`;
 	let hasBase = false;
 	let hasHead = false;
+	let hasIcon = false;
 	// Base must precede stylesheets/scripts: adding it at the end of head is
 	// too late for the browser's resource requests. Inspect existing bases first.
-	if (base)
-		await new HTMLRewriter()
-			.on("base[href]", {
-				element() {
-					hasBase = true;
-				},
-			})
-			.transform(new Response(html))
-			.arrayBuffer();
+	await new HTMLRewriter()
+		.on("base[href]", {
+			element() {
+				hasBase = true;
+			},
+		})
+		.on('link[rel~="icon" i]', {
+			element() {
+				hasIcon = true;
+			},
+		})
+		.transform(new Response(html))
+		.arrayBuffer();
+	const iconLink = hasIcon
+		? ""
+		: `<link rel="icon" href="${escapeHTML(icon)}">`;
 	const response = await new HTMLRewriter()
 		.on("head", {
 			element(element) {
 				hasHead = true;
 				if (base && !hasBase)
 					element.prepend(`<base href="${escapeHTML(base)}">`, { html: true });
+				element.append(iconLink, { html: true });
 			},
 		})
 		.on('a[href^="#"]', {
@@ -84,9 +93,8 @@ async function inject(
 		})
 		.transform(new Response(html))
 		.text();
-	return base && !hasHead && !hasBase
-		? `<base href="${escapeHTML(base)}">${response}`
-		: response;
+	if (hasHead) return response;
+	return `${base && !hasBase ? `<base href="${escapeHTML(base)}">` : ""}${iconLink}${response}`;
 }
 
 export async function serve(root: string, port: number, linkBase?: string) {

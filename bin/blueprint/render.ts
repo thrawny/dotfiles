@@ -56,13 +56,14 @@ ${readFileSync(join(import.meta.dir, "style.css"), "utf8")}`;
 const themeScript = readFileSync(join(import.meta.dir, "theme.js"), "utf8");
 const zoomScript = readFileSync(join(import.meta.dir, "zoom.js"), "utf8");
 
+export const icon = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="${palette.light.add}"/><path d="M16 20h32M16 30h24M16 40h28M16 50h18" stroke="${palette.light.bg}" stroke-width="5" stroke-linecap="round"/></svg>`)}`;
+
 export function page(
 	title: string,
 	content: string,
 	extraCSS = "",
 	scripts = "",
 ) {
-	const icon = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="${palette.light.add}"/><path d="M16 20h32M16 30h24M16 40h28M16 50h18" stroke="${palette.light.bg}" stroke-width="5" stroke-linecap="round"/></svg>`)}`;
 	return `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHTML(title)}</title><link rel="icon" href="${escapeHTML(icon)}"><style>${css}${extraCSS}</style>
