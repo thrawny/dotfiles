@@ -1,5 +1,7 @@
 # Forgejo Actions runner
 
+For web UI connectivity, see [Forgejo access and troubleshooting](forgejo.md).
+
 The [runner module](../../modules/forgejo-runner.nix) runs Forgejo Runner as
 `forgejo-runner` (UID 3104), with its own rootless Podman socket and state in
 `/var/lib/forgejo-runner`. Only `thrawny/thechalkboard` can use its `chalkboard`
