@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# gauntlet-review — run Claude and Codex code reviews in parallel over the same
-# scope and print both raw findings in delimited sections.
+# gauntlet-review — run selected code reviewers over the same scope and print
+# their raw findings in delimited sections.
 #
 # Mechanical launcher only: the caller (the `gauntlet` skill) supplies the
 # context brief and does all the judgment — dedupe, verify, fix, summarize.
@@ -27,11 +27,11 @@
 # engine produced a result, non-zero only if both fail.
 #
 # Reviewer selection: --reviewers takes a comma list of claude/codex (default
-# both). A deselected engine is never launched — unlike quota degradation this
+# codex). A deselected engine is never launched — unlike quota degradation this
 # is deterministic, so a Codex-only loop stays Codex-only even after a Claude
 # quota reset mid-loop. GAUNTLET_REVIEWERS sets the default.
 #
-# Env overrides: GAUNTLET_REVIEWERS (default claude,codex),
+# Env overrides: GAUNTLET_REVIEWERS (default codex),
 # GAUNTLET_CODEX_EFFORT (default high), GAUNTLET_CODEX_MODEL,
 # GAUNTLET_PRIOR (ledger path), GAUNTLET_STATE_DIR (output root).
 #
@@ -44,11 +44,11 @@ Usage: gauntlet-review [--base <branch> | --uncommitted | --commit <sha>]
                        [--reviewers claude,codex] [--prior <file> | --no-prior]
                        [brief]
 
-Runs one Claude (/code-review) and one Codex (review) over the same scope in
-parallel, printing each review's raw findings in a delimited section. The
+Runs Codex (review) by default, or selected Claude (/code-review) and Codex
+reviewers in parallel, printing each review's raw findings in a delimited section. The
 caller supplies the brief and does the dedupe/verify/fix/summarize.
 --reviewers restricts which engines run (comma list of claude/codex; default
-both, or GAUNTLET_REVIEWERS).
+codex, or GAUNTLET_REVIEWERS). The CLI flag overrides the environment variable.
 
 Raw output and the reviewed SHA are saved under the branch's state dir (printed
 at exit). Findings already adjudicated on this branch are read from that dir's
@@ -62,7 +62,7 @@ scope_set=0
 prior_file=""
 prior_set=0
 no_prior=0
-reviewers="${GAUNTLET_REVIEWERS:-}"
+reviewers="${GAUNTLET_REVIEWERS:-codex}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base) scope="--base $2"; scope_set=1; shift 2 ;;
@@ -79,9 +79,9 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Resolve reviewer selection. Default is both engines; an explicit selection
+# Resolve reviewer selection. Default is Codex only; an explicit selection
 # fails loudly on a typo rather than silently running the wrong set.
-run_claude=1
+run_claude=0
 run_codex=1
 if [[ -n "$reviewers" ]]; then
   run_claude=0

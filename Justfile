@@ -164,8 +164,12 @@ check-theme:
 test-prctl:
     @just test-python tests/test_prctl.py
 
+# Gauntlet reviewer selection without model invocations
+test-gauntlet:
+    @just test-python tests/test_gauntlet.py
+
 # Run all tests
-test: test-keepawake test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-prune-workspaces test-nvim-here test-herdr-decorator test-direnv test-private-skills test-remote-mode test-prctl
+test: test-keepawake test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-prune-workspaces test-nvim-here test-herdr-decorator test-direnv test-private-skills test-remote-mode test-prctl test-gauntlet
 
 # Session forking, exact session selection, and desktop routing
 test-fork-window:

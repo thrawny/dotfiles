@@ -1,13 +1,13 @@
 ---
 name: gauntlet
-description: Run Claude and Codex code reviews in parallel over the current changes, dedupe the findings, then fix the major ones (verifying each first) and summarize. Use when the user wants a thorough, cross-checked review-and-fix from both engines rather than just one.
+description: Review current changes with configurable Codex and Claude reviewers, verify findings, fix major implementation bugs and summarize. Use for gauntlet review-and-fix requests or loops to convergence.
 ---
 
 # Gauntlet
 
-Run the current diff through two independent reviewers at once — one Claude `/code-review` and one Codex `review` — merge their findings, **fix the major issues by default**, and summarize. The engines mostly surface *different* findings — that disjoint union is the value of running two, and confidence comes from per-finding verification (§4), not from agreement.
+Run the current diff through the configured reviewers, **fix the major issues by default**, and summarize. Codex `review` runs by default. When Claude `/code-review` and Codex run together, merge their findings: the engines mostly surface *different* findings, so their union improves recall. Confidence comes from per-finding verification (§4), not from agreement.
 
-The parallel launch is handled by the bundled `scripts/gauntlet-review` launcher; this skill owns the judgment around it.
+Reviewer selection and launch are handled by the bundled `scripts/gauntlet-review` launcher; this skill owns the judgment around it.
 
 This skill is tuned for **recall at generation time and precision at judgment time**. The reviewers are deliberately asked to be exhaustive, so expect more raw findings than pass the bar — including some false positives. That is the intended shape: a finding you never generate cannot be caught in step 4, but a bad one can. Do not try to restore precision by softening the launcher's prompts; restore it by verifying and declining in step 4.
 
@@ -24,7 +24,7 @@ The brief is the local stand-in for a PR description — without it, reviewers f
 - **Deliberate choices** reviewers should NOT flag (intentional tradeoffs, accepted limitations).
 - **Out of scope** — areas not to comment on (pre-existing code, unrelated files).
 
-Derive it from the conversation, the task, commit messages, or the PR description. If the intent is genuinely unclear, ask the user one question rather than guessing — a wrong brief produces wrong findings. The script passes this brief verbatim to both reviewers, and adds the scope and self-verification instructions itself.
+Derive it from the conversation, the task, commit messages, or the PR description. If the intent is genuinely unclear, ask the user one question rather than guessing — a wrong brief produces wrong findings. The script passes this brief verbatim to the selected reviewers, and adds the scope and self-verification instructions itself.
 
 ## 2. Run the reviewers
 
@@ -35,12 +35,12 @@ bash <skill-dir>/scripts/gauntlet-review "<your context brief>"
 ```
 
 - Scope is auto-detected: the current branch's diff against origin's remote-tracking default branch (for example, `origin/main`), or uncommitted changes when already on the corresponding local branch. Override with `--base <branch>`, `--uncommitted`, or `--commit <sha>` (before the brief). For a long brief, pipe it on stdin with a trailing `-`.
-- Both engines run by default. Restrict with `--reviewers claude` or `--reviewers codex` (comma list; `GAUNTLET_REVIEWERS` sets the default) — for a single-engine loop the user asked for, or to stop spending one engine's quota. Unlike quota degradation this is deterministic: a deselected engine never runs, even if its quota comes back mid-loop. A single-reviewer run generates a smaller union of findings — expect lower recall, not lower precision; verification (step 4.1) is unchanged.
-- It runs both reviewers in parallel and prints two delimited blocks labeled with each reviewer's state — `===== CLAUDE REVIEW [ok] =====` and `===== CODEX REVIEW [ok] =====`. **Reviews take 5–20 minutes. If the harness offers managed background execution that notifies on completion, launch the command that way and continue other work until the notification arrives. Only without such a mechanism, run it in the foreground with the longest timeout available.**
+- Codex runs by default. Set `GAUNTLET_REVIEWERS=codex`, `claude`, or `claude,codex` to choose reviewers; an unset or empty variable uses Codex. `--reviewers <comma-list>` overrides the environment for one run. For example, `GAUNTLET_REVIEWERS=claude,codex bash <skill-dir>/scripts/gauntlet-review "<brief>"` runs both. Unlike quota degradation this is deterministic: a deselected engine never runs, even if its quota comes back mid-loop. A single-reviewer run generates a smaller union of findings — expect lower recall, not lower precision; verification (step 4.1) is unchanged.
+- It runs the selected reviewers (in parallel when both are selected) and prints two delimited blocks labeled with each reviewer's state — `===== CLAUDE REVIEW [ok] =====` and `===== CODEX REVIEW [ok] =====`. **Reviews take 5–20 minutes. If the harness offers managed background execution that notifies on completion, launch the command that way and continue other work until the notification arrives. Only without such a mechanism, run it in the foreground with the longest timeout available.**
 - Codex reasoning effort defaults to `high`; raise it for a single run with `GAUNTLET_CODEX_EFFORT` (for example `xhigh`) or change the model with `GAUNTLET_CODEX_MODEL`.
 - Every run saves each reviewer's raw output, the reviewed SHA, and the brief under a per-repo/per-branch state dir, and prints a `===== GAUNTLET STATE =====` footer with the round number, the output path, and the ledger path. **Note those paths** — the raw output is how you re-check a dedupe decision without paying for another 5–20 minute round.
 - If this branch already has a `ledger.md` (see §6), the launcher picks it up automatically and tells the reviewers not to repeat findings already adjudicated there. A `NOTE:` line always says which ledger was used. Suppress it with `--no-prior`, or point elsewhere with `--prior <file>`.
-- **Graceful degradation:** a reviewer that is unauthenticated or out of usage/quota gets an `[unavailable: …]` block, and the script prints a `NOTE:` line saying what dropped, succeeding on the reviewer that ran. Proceed with the available findings and tell the user what was skipped and why. With only one reviewer the union of findings is smaller — a recall loss verification can't recover, so note it in the summary. If neither ran the script prints `ERROR:` and exits non-zero — report that and stop.
+- **Graceful degradation:** a reviewer that is unauthenticated or out of usage/quota gets an `[unavailable: …]` block, and the script prints a `NOTE:` line saying what dropped, succeeding on the reviewer that ran. Proceed with the available findings and tell the user what was skipped and why. With only one reviewer the union of findings is smaller — a recall loss verification can't recover, so note it in the summary. If no selected reviewer ran the script prints `ERROR:` and exits non-zero — report that and stop.
 
 ## 3. Dedupe
 
@@ -85,7 +85,7 @@ Close with a one-line tally: total unique findings, how many both reviewers agre
 
 One gauntlet is one sample, and one sample does not exhaust a diff. Measured against the hosted Codex PR reviewer on real PRs: it re-reads the **full** diff every round rather than just the new commits, and roughly two-thirds of what its later rounds found sat in code an earlier round had already read and passed over. Extra rounds pay not because the reviewer gets smarter but because a diff is not exhausted in one pass.
 
-That only works with a memory. Without one, round 2 spends both reviews re-deriving round 1's findings and you dedupe the duplicates away — you paid for the round and got the remainder. The ledger is what turns the next round outward onto new ground, and it is the same mechanism the hosted reviewer uses.
+That only works with a memory. Without one, round 2 spends its reviews re-deriving round 1's findings and you dedupe the duplicates away — you paid for the round and got the remainder. The ledger is what turns the next round outward onto new ground, and it is the same mechanism the hosted reviewer uses.
 
 **The ledger** lives at the path the launcher prints (`<state-dir>/<repo>/<branch>/ledger.md`), outside the working tree so it never lands inside its own review. One line per finding, appended at the end of each round's step 4:
 
@@ -111,4 +111,4 @@ Record **declined findings too, with the reason.** They are the ones that come b
 
 Expect later rounds to flag the *fixes* from earlier rounds — that is a real and recurring category, not noise, and it is the reason to keep looping rather than stopping at the first quiet round. Converging locally before pushing is also what makes any finding a hosted reviewer reports afterwards genuinely informative: it is a miss, rather than a finding in fix code nothing had reviewed yet.
 
-Each round costs one Claude and one Codex review at 5–20 minutes, so say so before starting a long loop on a large diff. Two or three rounds is the useful range for most changes.
+Each round invokes the selected reviewers and takes roughly 5–20 minutes, so state the reviewer selection and expected cost before starting a long loop on a large diff. Two or three rounds is the useful range for most changes.

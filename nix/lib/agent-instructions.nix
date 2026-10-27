@@ -1,6 +1,15 @@
 let
-  optionalBlock = enabled: block: if enabled then [ block ] else [ ];
-  render = title: blocks: builtins.concatStringsSep "\n" ([ title ] ++ blocks) + "\n";
+  render = title: texts: builtins.concatStringsSep "\n" ([ title ] ++ texts) + "\n";
+  allAgents = [
+    "claude"
+    "codex"
+    "pi"
+  ];
+  # Callers without a host platform get Linux defaults. obelisk's T3 Code
+  # server is the one such caller: it uses codexGlobal.
+  linux = {
+    isDarwin = false;
+  };
 in
 rec {
   codexQuestions = ''
@@ -93,57 +102,91 @@ rec {
     Keep the main agent thread responsive: long waits belong in background execution, never in an open foreground tool call. The Bash tool's own guidelines govern when and how.
   '';
 
+  # Each agent gets the blocks that list it, in this order. Every block is a
+  # `dotfiles.agentInstructions.<name>.enable` option. `default` is a bool or a
+  # function of the host platform, and is true when left out.
+  blocks = [
+    {
+      name = "piWorkflow";
+      text = piWorkflow;
+      agents = [ "pi" ];
+    }
+    {
+      name = "unslop";
+      text = unslop;
+      agents = [ "claude" ];
+    }
+    {
+      name = "docs";
+      text = docs;
+      agents = allAgents;
+    }
+    {
+      name = "codexQuestions";
+      text = codexQuestions;
+      agents = [ "codex" ];
+    }
+    {
+      name = "goModernize";
+      text = goModernize;
+      agents = allAgents;
+    }
+    {
+      name = "issueTracker";
+      text = issueTracker;
+      agents = allAgents;
+    }
+    {
+      name = "ephemeralTools";
+      text = ephemeralTools;
+      agents = allAgents;
+    }
+    {
+      name = "shellPortability";
+      text = shellPortability;
+      agents = allAgents;
+    }
+    {
+      name = "gnuTools";
+      text = gnuTools;
+      agents = allAgents;
+      default = platform: platform.isDarwin;
+    }
+    {
+      name = "sandbox";
+      text = sandbox;
+      agents = allAgents;
+      default = platform: !platform.isDarwin;
+    }
+    {
+      name = "backgroundTasks";
+      text = backgroundTasks;
+      agents = [ "claude" ];
+    }
+  ];
+
+  defaultFor =
+    platform: block:
+    let
+      value = block.default or true;
+    in
+    if builtins.isFunction value then value platform else value;
+
+  # enabled: block name -> bool. Blocks left out fall back to their Linux default.
   mkInstructions =
+    enabled:
+    let
+      isEnabled = block: enabled.${block.name} or (defaultFor linux block);
+      textsFor =
+        agent:
+        map (block: block.text) (
+          builtins.filter (block: builtins.elem agent block.agents && isEnabled block) blocks
+        );
+    in
     {
-      enableUnslop ? true,
-      enableIssueTracker ? true,
-      enableEphemeralTools ? true,
-      enableShellPortability ? true,
-      enableGnuTools ? false,
-      enableSandbox ? true,
-      enableBackgroundTasks ? true,
-      enablePiWorkflow ? true,
-    }:
-    {
-      claudeGlobal = render "# Global Claude Code Instructions" (
-        optionalBlock enableUnslop unslop
-        ++ [
-          docs
-          goModernize
-        ]
-        ++ optionalBlock enableIssueTracker issueTracker
-        ++ optionalBlock enableEphemeralTools ephemeralTools
-        ++ optionalBlock enableShellPortability shellPortability
-        ++ optionalBlock enableGnuTools gnuTools
-        ++ optionalBlock enableSandbox sandbox
-        ++ optionalBlock enableBackgroundTasks backgroundTasks
-      );
-
-      codexGlobal = render "# Global Codex Instructions" (
-        [
-          docs
-          codexQuestions
-          goModernize
-        ]
-        ++ optionalBlock enableIssueTracker issueTracker
-        ++ optionalBlock enableEphemeralTools ephemeralTools
-        ++ optionalBlock enableShellPortability shellPortability
-        ++ optionalBlock enableGnuTools gnuTools
-        ++ optionalBlock enableSandbox sandbox
-      );
-
-      piGlobal = render "# Global Pi Instructions" (
-        optionalBlock enablePiWorkflow piWorkflow
-        ++ [
-          docs
-          goModernize
-        ]
-        ++ optionalBlock enableIssueTracker issueTracker
-        ++ optionalBlock enableEphemeralTools ephemeralTools
-        ++ optionalBlock enableShellPortability shellPortability
-        ++ optionalBlock enableGnuTools gnuTools
-        ++ optionalBlock enableSandbox sandbox
-      );
+      claudeGlobal = render "# Global Claude Code Instructions" (textsFor "claude");
+      codexGlobal = render "# Global Codex Instructions" (textsFor "codex");
+      piGlobal = render "# Global Pi Instructions" (textsFor "pi");
     };
 
   inherit (mkInstructions { }) claudeGlobal codexGlobal piGlobal;

@@ -18,25 +18,10 @@ let
     rel: if repoBacked then "${dotfiles}/config/${rel}" else containerAssets.config + "/${rel}";
   configSource =
     rel: if repoBacked then config.lib.file.mkOutOfStoreSymlink (configPath rel) else configPath rel;
-  instructionBlockOption =
-    description:
-    lib.mkOption {
-      type = lib.types.bool;
-      default = true;
-      inherit description;
-    };
-  instructionConfig = config.dotfiles.agentInstructions;
   agentInstructionLib = import ../../lib/agent-instructions.nix;
-  agentInstructions = agentInstructionLib.mkInstructions {
-    enableUnslop = instructionConfig.unslop.enable;
-    enableIssueTracker = instructionConfig.issueTracker.enable;
-    enableEphemeralTools = instructionConfig.ephemeralTools.enable;
-    enableShellPortability = instructionConfig.shellPortability.enable;
-    enableGnuTools = pkgs.stdenv.hostPlatform.isDarwin;
-    enableSandbox = instructionConfig.sandbox.enable && !pkgs.stdenv.hostPlatform.isDarwin;
-    enableBackgroundTasks = instructionConfig.backgroundTasks.enable;
-    enablePiWorkflow = instructionConfig.piWorkflow.enable;
-  };
+  agentInstructions = agentInstructionLib.mkInstructions (
+    lib.mapAttrs (_: block: block.enable) config.dotfiles.agentInstructions
+  );
   stripAgentSwitchHooks = ''
     if .hooks then
       .hooks |= with_entries(
@@ -91,15 +76,16 @@ in
   options.dotfiles = {
     agentSwitch.enable = lib.mkEnableOption "agent-switch integrations for AI tools";
 
-    agentInstructions = {
-      unslop.enable = instructionBlockOption "Include the rule to run unslop on prose for people";
-      issueTracker.enable = instructionBlockOption "Include the personal Linear issue tracker default";
-      ephemeralTools.enable = instructionBlockOption "Include ephemeral tool instructions";
-      shellPortability.enable = instructionBlockOption "Include shell portability instructions";
-      sandbox.enable = instructionBlockOption "Include sandbox-specific instructions";
-      backgroundTasks.enable = instructionBlockOption "Include background task instructions";
-      piWorkflow.enable = instructionBlockOption "Include Pi workflow instructions";
-    };
+    agentInstructions = lib.listToAttrs (
+      map (block: {
+        inherit (block) name;
+        value.enable = lib.mkOption {
+          type = lib.types.bool;
+          default = agentInstructionLib.defaultFor pkgs.stdenv.hostPlatform block;
+          description = "Include the ${block.name} block in the global agent instructions";
+        };
+      }) agentInstructionLib.blocks
+    );
   };
 
   config.home = {
