@@ -269,6 +269,8 @@ def handle(
 ) -> None:
     body = b""
     try:
+        if sys.platform != "linux":
+            raise ValueError("peer credential checks require Linux")
         credentials = connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
         _, uid, _ = struct.unpack("3i", credentials)
         if uid != os.getuid():
