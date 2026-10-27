@@ -98,6 +98,16 @@ let
 
   serverSettings = pkgs.writeText "t3code-settings.json" (
     builtins.toJSON {
+      storageCleanup = {
+        worktreeKeepWhen = "any-local-files";
+        worktreeAfterDays = 14;
+        worktreeSettledAfterDays = 7;
+        worktreeOnMerge = true;
+        worktreeOnDelete = true;
+        worktreeUnchanged = false;
+        browserArtifactsAfterDays = 7;
+        logsAfterDays = 14;
+      };
       providers = {
         codex = codexProviderSettings;
         claudeAgent = claudeProviderSettings;
@@ -315,11 +325,13 @@ let
       fi
       settings_tmp="$(mktemp)"
       jq \
+        --slurpfile managed ${serverSettings} \
         --arg claude_binary ${lib.escapeShellArg (lib.getExe claudeWithDirenv)} \
         --arg codex_binary ${lib.escapeShellArg (lib.getExe codexWithDirenv)} \
         --arg codex_home ${lib.escapeShellArg codexHome} \
         '
-          .providers.codex = {
+          .storageCleanup = $managed[0].storageCleanup
+          | .providers.codex = {
             enabled: true,
             binaryPath: $codex_binary,
             homePath: $codex_home,
@@ -435,6 +447,8 @@ let
   };
 in
 {
+  system.build.t3code-settings = serverSettings;
+
   users.groups.t3code = { };
   users.users.t3code = {
     inherit uid;

@@ -128,6 +128,29 @@ sync-t3code-direnv target="obelisk":
     nix copy --no-check-sigs --to "ssh-ng://root@$target" "$rc_file"
     ssh "root@$target" install -o t3code -g t3code -m 0644 "$rc_file" /srv/t3code/.config/direnv/direnvrc
 
+# Sync the managed storage policy without restarting active T3 sessions
+sync-t3code-storage target="obelisk":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    target={{quote(target)}}
+    policy="$(mktemp)"
+    trap 'rm -f "$policy"' EXIT
+    nix eval --raw ".#nixosConfigurations.$target.config.system.build.t3code-settings.text" | jq '.storageCleanup' > "$policy"
+    remote_script="$(cat <<'REMOTE'
+    set -eu
+    live=/srv/t3code/.t3code/userdata/settings.json
+    cp -a "$live" "$live.before-storage-cleanup-$(date +%Y%m%dT%H%M%S)"
+    temporary="$(mktemp "${live}.XXXXXX")"
+    trap 'rm -f "$temporary"' EXIT
+    jq --slurpfile policy /dev/stdin '.storageCleanup = $policy[0]' "$live" > "$temporary"
+    chown t3code:t3code "$temporary"
+    chmod 0600 "$temporary"
+    mv "$temporary" "$live"
+    jq '.storageCleanup' "$live"
+    REMOTE
+    )"
+    ssh "root@$target" "$remote_script" < "$policy"
+
 # Explicitly build on this machine and install a remote NixOS generation for next boot
 deploy-boot target:
     nixos-rebuild boot --flake ".#{{ target }}" --build-host "" --target-host "root@{{ target }}"
