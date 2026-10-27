@@ -27,6 +27,7 @@ in
     ../../modules/agents.nix
     ../../modules/t3code.nix
     ./backup.nix
+    ./storage.nix
     ./hardware-configuration.nix
     ./disko.nix
   ];

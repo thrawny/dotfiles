@@ -262,12 +262,16 @@ test-nvim:
 
 # === Combined workflows ===
 
+# Check the disk floor and incoming Nix closure accounting
+test-obelisk-storage:
+    @just test-python tests/test_obelisk_storage.py
+
 # Format, lint, typecheck, evaluate current host, and check Pi extensions
 check:
     nix develop ./nix --command just fmt check-parallel
 
 [parallel]
-check-parallel: check-blueprint test-keepawake test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-direnv test-remote-mode test-prctl check-private-skills nix::eval
+check-parallel: test-obelisk-storage check-blueprint test-keepawake test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-direnv test-remote-mode test-prctl check-private-skills nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

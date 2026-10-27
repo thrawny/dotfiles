@@ -75,6 +75,11 @@ deploy target:
     log="$(mktemp)"
     trap 'rm -f "$log"' EXIT
 
+    if [ {{quote(target)}} = obelisk ]; then
+        system_path=$(nix build --no-link --print-out-paths '.#nixosConfigurations.obelisk.config.system.build.toplevel')
+        python3 ../bin/obelisk-storage deploy-check root@obelisk "$system_path"
+    fi
+
     if nixos-rebuild switch --flake ".#{{ target }}" --build-host "" --target-host "root@{{ target }}" 2>&1 | tee "$log"; then
         exit 0
     fi
@@ -115,6 +120,9 @@ plan-deploy target:
     #!/usr/bin/env bash
     set -euo pipefail
     system_path="$(nix build --no-link --print-out-paths '.#nixosConfigurations.{{ target }}.config.system.build.toplevel')"
+    if [ {{quote(target)}} = obelisk ]; then
+        python3 ../bin/obelisk-storage deploy-check root@obelisk "$system_path"
+    fi
     nix copy --no-check-sigs --to 'ssh-ng://root@{{ target }}' "$system_path"
     ssh 'root@{{ target }}' "$system_path/bin/switch-to-configuration dry-activate"
 
@@ -153,6 +161,12 @@ sync-t3code-storage target="obelisk":
 
 # Explicitly build on this machine and install a remote NixOS generation for next boot
 deploy-boot target:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ {{quote(target)}} = obelisk ]; then
+        system_path=$(nix build --no-link --print-out-paths '.#nixosConfigurations.obelisk.config.system.build.toplevel')
+        python3 ../bin/obelisk-storage deploy-check root@obelisk "$system_path"
+    fi
     nixos-rebuild boot --flake ".#{{ target }}" --build-host "" --target-host "root@{{ target }}"
 
 # Dry-run NixOS rebuild (NixOS only)

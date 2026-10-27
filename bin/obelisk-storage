@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""Keep Obelisk's root filesystem above its storage floor."""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+GIB = 1024**3
+FLOOR = 15 * GIB
+TRIGGER = 20 * GIB
+TARGET = 25 * GIB
+
+
+def available() -> int:
+    fs = os.statvfs("/")
+    # Include ext4's root-only reserve: this is physical free space, not the
+    # smaller amount applications may allocate (df's Available column).
+    return fs.f_bfree * fs.f_frsize
+
+
+def fits(free: int, incoming: int) -> bool:
+    if free < 0 or incoming < 0:
+        raise ValueError("storage sizes must be nonnegative")
+    return free - incoming >= FLOOR
+
+
+def missing_size(closure: dict, missing: set[str]) -> int:
+    # Fail closed if the remote reports a path absent from our closure metadata.
+    return sum(closure[name]["narSize"] for name in missing)
+
+
+def check(free: int, incoming: int) -> int:
+    print(f"Free: {free / GIB:.2f} GiB; incoming budget: {incoming / GIB:.2f} GiB")
+    if not fits(free, incoming):
+        print("Refusing operation: it would cross the 15 GiB floor.", file=sys.stderr)
+        return 1
+    return 0
+
+
+def deploy_check(target: str, system: str) -> int:
+    raw = subprocess.check_output(
+        ["nix", "path-info", "--recursive", "--json", system], text=True
+    )
+    data = json.loads(raw)
+    closure = {item["path"]: item for item in data} if isinstance(data, list) else data
+    result = subprocess.run(
+        ["ssh", target, "xargs -r nix-store --check-validity --print-invalid"],
+        input="\n".join(closure) + "\n",
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    missing = set(result.stdout.splitlines())
+    incoming = missing_size(closure, missing)
+    # Allow for filesystem metadata and temporary import/activation files.
+    incoming += incoming // 10 + GIB
+    blocks, block_size = map(
+        int,
+        subprocess.check_output(
+            ["ssh", target, "stat -f -c '%f %S' /"], text=True
+        ).split(),
+    )
+    return check(blocks * block_size, incoming)
+
+
+def reserve() -> int:
+    if not fits(available(), GIB):
+        raise ValueError("need at least 16 GiB physically free before reserving 15 GiB")
+    filesystem = subprocess.check_output(
+        ["findmnt", "-n", "-o", "FSTYPE", "/"], text=True
+    ).strip()
+    if filesystem != "ext4":
+        raise ValueError("the root-only reserve requires ext4")
+    device = subprocess.check_output(
+        ["findmnt", "-n", "-o", "SOURCE", "/"], text=True
+    ).strip()
+    # Block-device logical sector size is not necessarily the filesystem block
+    # size. statvfs reports the latter without parsing localized tune2fs output.
+    block_size = os.statvfs("/").f_frsize
+    count = (FLOOR + block_size - 1) // block_size
+    subprocess.run(
+        ["tune2fs", "-r", str(count), "-u", "0", "-g", "0", device], check=True
+    )
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    sub = parser.add_subparsers(dest="mode", required=True)
+    gate = sub.add_parser("check")
+    gate.add_argument("--required-bytes", type=int, default=GIB)
+    gate.add_argument("--copy-path", action="append", default=[])
+    sub.add_parser("clean")
+    sub.add_parser("reserve")
+    deploy = sub.add_parser("deploy-check")
+    deploy.add_argument("target")
+    deploy.add_argument("system")
+    args = parser.parse_args()
+    if args.mode == "deploy-check":
+        return deploy_check(args.target, args.system)
+    if args.mode == "reserve":
+        return reserve()
+    if args.mode == "check":
+        incoming = args.required_bytes
+        for name in args.copy_path:
+            if Path(name).exists():
+                incoming += int(
+                    subprocess.check_output(["du", "-sb", name], text=True).split()[0]
+                )
+        return check(available(), incoming)
+    free = available()
+    if free < TRIGGER:
+        subprocess.run(
+            [
+                "nix-collect-garbage",
+                "--delete-older-than",
+                "1d",
+                "--max-freed",
+                str(TARGET - free),
+            ],
+            check=True,
+        )
+    free = available()
+    print(f"Available after cleanup: {free / GIB:.2f} GiB (target: 25 GiB)")
+    if free < TRIGGER:
+        print(
+            "Storage remains below 20 GiB; review retained data/capacity.",
+            file=sys.stderr,
+        )
+    return check(free, 0)
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (OSError, ValueError, KeyError, subprocess.SubprocessError) as error:
+        print(f"Storage check failed: {error}", file=sys.stderr)
+        sys.exit(1)
