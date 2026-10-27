@@ -17,7 +17,7 @@ for dir in "${dirs[@]}"; do
   if [[ -d "$dir" ]]; then
     rm -rf "$dir"
     echo "removed $dir"
-    ((removed++))
+    ((removed += 1))
   fi
 done
 
@@ -26,7 +26,7 @@ for f in ~/.cache/nvim/tree-sitter-*; do
   if [[ -e "$f" ]]; then
     rm -rf "$f"
     echo "removed $f"
-    ((removed++))
+    ((removed += 1))
   fi
 done
 

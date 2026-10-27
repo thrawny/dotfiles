@@ -10,6 +10,10 @@ default:
 
 # === Shortcuts ===
 
+# Remove cached Neovim parsers after an upgrade
+nuke-treesitter:
+    bash scripts/nuke-treesitter.sh
+
 # Interactive setup for a fresh Apple Silicon Mac
 bootstrap-mac:
     bin/bootstrap-mac
