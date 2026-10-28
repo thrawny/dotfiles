@@ -13,20 +13,22 @@ dirs=(
 )
 
 removed=0
+remove_item() {
+  rm -rf "$1"
+  echo "removed $1"
+  ((removed += 1))
+}
+
 for dir in "${dirs[@]}"; do
   if [[ -d "$dir" ]]; then
-    rm -rf "$dir"
-    echo "removed $dir"
-    ((removed += 1))
+    remove_item "$dir"
   fi
 done
 
 # Glob for tree-sitter cache files separately (may not exist)
 for f in ~/.cache/nvim/tree-sitter-*; do
   if [[ -e "$f" ]]; then
-    rm -rf "$f"
-    echo "removed $f"
-    ((removed += 1))
+    remove_item "$f"
   fi
 done
 
