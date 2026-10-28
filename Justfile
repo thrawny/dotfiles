@@ -268,6 +268,10 @@ test-obelisk-storage:
 
 # Format, lint, typecheck, evaluate current host, and check Pi extensions
 check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Check tools also need small local builds on hosts with max-jobs = 0.
+    export NIX_CONFIG="$(printf '%s\n' "${NIX_CONFIG:-}" 'max-jobs = 1' 'cores = 2')"
     nix develop ./nix --command just fmt check-parallel
 
 [parallel]
