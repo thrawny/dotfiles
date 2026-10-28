@@ -2,6 +2,7 @@
 
 import argparse
 import importlib.util
+import io
 import json
 import os
 import subprocess
@@ -2214,3 +2215,80 @@ def test_session_start_hook_takes_only_the_driver_role_for_the_driver(
     moto.driver_path().unlink()
     hook({})  # no role: the driver is whatever starts in MOTO_HOME, as before
     assert moto.read_driver() == {"pane_id": "w1:p2", "session": "s1"}
+
+
+def test_watch_absorbs_the_handoff_turn_and_takeoff_turn(moto: ModuleType):
+    tasks = {"abc-1": task(told=50.0, handoff={"at": 0.0, "old": "s1"})}
+    turn_in(moto, "t1", "/handoff ship it")
+    assert moto.check(tasks, live("done", 2), 10) == []
+    tasks["abc-1"]["handoff"]["new"] = "s2"
+    turn_in(moto, "t2", "/takeoff handoff.md")
+    assert moto.check(tasks, live("working", 3), 20) == []
+    assert moto.check(tasks, live("done", 4), 30) == []
+    assert absorbed(moto) == ["handoff turn", "takeoff turn of a handoff"]
+    # A marker that outlived its handoff stops hiding turn ends.
+    turn_in(moto, "t3", "[driver] go on")
+    assert moto.check(tasks, live("working", 5), 40 + moto.HANDOFF_MARKER_LIFE) == []
+    assert moto.check(tasks, live("done", 6), 50 + moto.HANDOFF_MARKER_LIFE) == [
+        "abc-1: turn ended without a report"
+    ]
+    assert "handoff" not in tasks["abc-1"]
+
+
+def handoff(moto: ModuleType, brief: str = "", goal: str = "ship it") -> int:
+    args = argparse.Namespace(agent="abc-1", goal=goal.split())
+    with patch("sys.stdin", io.StringIO(brief)):
+        return moto.cmd_handoff(args)
+
+
+def test_handoff_waits_for_the_new_session_and_takeoff_then_briefs_it(
+    moto: ModuleType,
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(session="s1")
+
+    def herdr(*args: str) -> dict[str, Any]:
+        if args[2:] == ("abc-1", "/handoff ship it"):
+            assert attach_hook(moto, "w1:p1", "s2") == 0  # the session after /clear
+        return {}
+
+    turn_in(moto, "t1", "/takeoff handoff.md")
+    with (
+        patch.object(moto, "live_agents", return_value=live("idle", 5)),
+        patch.object(moto, "herdr", side_effect=herdr) as run,
+        patch.object(moto.time, "sleep"),
+    ):
+        assert handoff(moto, "Mind the flaky test.\n") == 0
+    assert [c.args[2:] for c in run.call_args_list] == [
+        ("abc-1", "/handoff ship it"),
+        ("abc-1", "[driver] Mind the flaky test."),
+    ]
+    saved = moto.read_tasks()["abc-1"]
+    assert saved["session"] == "s2"
+    assert "handoff" not in saved
+    assert saved["seen"]["turn"] == "t1"
+    logged = next(e for e in events(moto) if e["event"] == "handoff")
+    assert (logged["old"], logged["new"], logged["goal"]) == ("s1", "s2", "ship it")
+
+
+def test_handoff_refuses_a_busy_worker_and_times_out_without_a_new_session(
+    moto: ModuleType,
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(session="s1")
+    with (
+        patch.object(moto, "live_agents", return_value=live("working", 1)),
+        patch.object(moto, "herdr") as run,
+        pytest.raises(moto.MotoError, match="^abc-1 is working"),
+    ):
+        handoff(moto)
+    run.assert_not_called()
+    with (
+        patch.object(moto, "live_agents", return_value=live("idle", 2)),
+        patch.object(moto, "herdr") as run,
+        patch.object(moto, "HANDOFF_SESSION_WAIT", 0),
+        pytest.raises(moto.MotoError, match="started no new session"),
+    ):
+        handoff(moto)
+    assert run.call_args.args[2:] == ("abc-1", "/handoff ship it")
+    assert "handoff" not in moto.read_tasks()["abc-1"]

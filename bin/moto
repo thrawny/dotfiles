@@ -9,8 +9,8 @@ up after a merge. A task blocked for a while can be snoozed: its worktree and
 workspace go away, and wake brings them back on the same Claude session.
 When the user resumes a worker's session in a new pane, moto attach moves the
 task to that pane, so moto stops calling it gone. Claude's SessionStart hook
-runs moto attach --hook, which records each worker's session id and does that
-move by itself.
+runs moto attach --hook, which records each worker's session id, including the
+new one after /clear, and does that move by itself.
 
 When the user closes a worker's pane by hand, the watch tells the driver once
 the pane has stayed gone for PANE_GONE_GRACE, held tasks included, and marks
@@ -64,6 +64,14 @@ close and drop copy the whole task into their line before deleting it.
 close refuses a worker that is mid-turn, or that the user typed to since its
 last report, because a done report can be stale by then.
 moto log prints those lines.
+
+moto handoff moves a worker to a fresh session in the same pane. It checks that
+the worker is idle, submits /handoff to its pane as typed, with no [driver] tag,
+so the handoff mod runs it, then waits for the session start hook to record the
+new session and for the takeoff turn to end. It logs a handoff event with both
+session ids and the goal, and then sends the brief from stdin, tagged as moto
+tell tags it. While a handoff runs, a marker on the task makes the watch absorb
+the handoff turn and the takeoff turn, since neither needs the driver.
 
 moto link puts every moto skill in ~/.claude/skills as symlinks, outside Home
 Manager: the generic ones from moto/skills in dotfiles, and the work ones from
@@ -123,7 +131,7 @@ import subprocess
 import sys
 import time
 import tomllib
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, suppress
 from datetime import datetime, timedelta
@@ -158,6 +166,14 @@ ENDED_BY_USER = ("wrap", "snooze")
 # A closed pane is news only once it has stayed gone this long, because the user
 # may be resuming its session in a new pane, which attach then moves the task to.
 PANE_GONE_GRACE = 2 * 60
+# How long moto handoff waits for the new session, then for takeoff's turn to end.
+HANDOFF_SESSION_WAIT = 5 * 60
+HANDOFF_TAKEOFF_WAIT = 15 * 60
+HANDOFF_POLL_SECONDS = 2
+# A handoff marker older than this is a crashed handoff, so the watch stops absorbing.
+HANDOFF_MARKER_LIFE = 30 * 60
+# The handoff mod's flag that keeps the session, which moto handoff cannot wait on.
+HANDOFF_STAY = "--stay"
 # Herdr states of an agent that is mid-turn or waiting at a prompt.
 BUSY = ("working", "blocked")
 # moto list asks GitHub when a held task's PR last changed, and gives up after this.
@@ -1111,6 +1127,98 @@ def tell_task(name: str, text: str, sender: str | None) -> str:
     return agent
 
 
+def cmd_handoff(args: argparse.Namespace) -> int:
+    """Hand a worker off to a fresh session in its pane, with an optional brief.
+
+    The worker's /handoff command writes the handoff file, then clears the
+    session and runs /takeoff on it. The brief on stdin goes to the new session
+    once takeoff's turn has ended.
+    """
+    goal = " ".join(args.goal).strip()
+    if HANDOFF_STAY in goal.split():
+        raise MotoError(f"{HANDOFF_STAY} keeps the session, so there is no handoff")
+    brief = "" if sys.stdin.isatty() else sys.stdin.read().strip()
+    name = args.agent
+    sender = message_sender(read_tasks(), name, brief)
+    live = live_agents()
+    with tasks_for_update() as tasks:
+        task = find_task(tasks, name)
+        if task.get("snoozed"):
+            raise MotoError(f"{name} is snoozed; wake it first")
+        agent = live.get(task["pane_id"])
+        status = agent.get("agent_status") if agent else "gone"
+        if status == "gone":
+            raise MotoError(f"{name}'s pane is gone")
+        if status in BUSY:
+            raise MotoError(f"{name} is {status}; wait for it to finish its turn")
+        old = task.get("session")
+        task["handoff"] = {"at": time.time(), "old": old}
+    try:
+        herdr("agent", "prompt", task["agent"], f"/handoff {goal}".strip())
+        new = wait_for(
+            lambda: (read_tasks().get(name, {}).get("handoff") or {}).get("new"),
+            HANDOFF_SESSION_WAIT,
+            f"{name} started no new session within {age(HANDOFF_SESSION_WAIT)}: the"
+            + " handoff may have failed, and the session may be unchanged",
+        )
+        with tasks_for_update():
+            record("handoff", name, old=old, new=new, goal=goal)
+        wait_for(
+            lambda: took_off(name),
+            HANDOFF_TAKEOFF_WAIT,
+            f"{name}'s takeoff turn did not end within {age(HANDOFF_TAKEOFF_WAIT)}",
+        )
+    except BaseException:
+        with tasks_for_update() as tasks:
+            if name in tasks:
+                tasks[name].pop("handoff", None)
+        raise
+    with tasks_for_update() as tasks:
+        if name in tasks:
+            settled(tasks[name], live_agents().get(task["pane_id"]))
+    print(f"Handed {name} off to session {new}.")
+    if brief:
+        print(f"Sent to {tell_task(name, brief, sender)}.")
+    return 0
+
+
+def wait_for(ready: Callable[[], Any], timeout: float, failure: str) -> Any:
+    """Poll until ready returns something truthy, which wait_for returns."""
+    deadline = time.time() + timeout
+    while not (found := ready()):
+        if time.time() >= deadline:
+            raise MotoError(failure)
+        time.sleep(HANDOFF_POLL_SECONDS)
+    return found
+
+
+def took_off(name: str) -> bool:
+    """Whether the worker's new session has answered and its turn has ended.
+
+    /clear leaves the pane idle before /takeoff starts, so an idle pane is not
+    enough: the new session's transcript must hold a reply too.
+    """
+    task = read_tasks().get(name)
+    if task is None:
+        raise MotoError(f"{name} was closed during the handoff")
+    agent = live_agents().get(task["pane_id"])
+    if not agent or agent.get("agent_status") not in TURN_OVER:
+        return False
+    turn, _ = last_turn(task, agent)
+    return turn is not None
+
+
+def settled(task: dict[str, Any], agent: dict[str, Any] | None) -> None:
+    """End the handoff marker, treating takeoff's turn as seen by the watch."""
+    seen = task.setdefault("seen", {})
+    seen.pop("pending", None)
+    seen["turn"], _ = last_turn(task, agent)
+    if agent:
+        seen["status"] = agent.get("agent_status")
+        seen["seq"] = agent.get("state_change_seq")
+    task.pop("handoff", None)
+
+
 def cmd_ask(args: argparse.Namespace) -> int:
     """Show the driver's question under its own sidebar row, or clear it.
 
@@ -1329,9 +1437,10 @@ def turn_end(
 ) -> str | None:
     """The line for a turn that ended without a report, or None to stay quiet.
 
-    Quiet, and logged as an absorb event, when the user is talking to the worker,
-    when the worker reported since the driver last wrote to it, or when Herdr
-    announces a turn the watch already handled. A turn end stays pending while
+    Quiet, and logged as an absorb event, when moto handoff is moving the worker
+    to a new session, when the user is talking to the worker, when the worker
+    reported since the driver last wrote to it, or when Herdr announces a turn
+    the watch already handled. A turn end stays pending while
     the worker's background work runs, up to BUSY_LIMIT, and is rechecked every
     poll. With no transcript to read, every turn end is news.
     """
@@ -1341,7 +1450,9 @@ def turn_end(
     reason = None
     report: dict[str, Any] | None = task.get("report")
     told = task.get("told")
-    if turn is not None and turn == seen.get("turn"):
+    if handoff := handoff_turn(task, now):
+        reason = handoff
+    elif turn is not None and turn == seen.get("turn"):
         if now - pending["since"] < TURN_SETTLE_SECONDS:
             return None  # the transcript may not hold the new turn yet
         reason = "Herdr announced a turn the watch already handled"
@@ -1374,6 +1485,21 @@ def turn_end(
             f"{name}: turn ended without a report; {work} still running after {running}"
         )
     return f"{name}: turn ended without a report"
+
+
+def handoff_turn(task: dict[str, Any], now: float) -> str | None:
+    """Why a turn end belongs to a running moto handoff, or None.
+
+    The turn before the new session is the /handoff turn, and the turn after it
+    is takeoff's. A marker that outlived HANDOFF_MARKER_LIFE is dropped.
+    """
+    marker = task.get("handoff")
+    if not marker:
+        return None
+    if now - marker["at"] > HANDOFF_MARKER_LIFE:
+        del task["handoff"]
+        return None
+    return "takeoff turn of a handoff" if marker.get("new") else "handoff turn"
 
 
 def last_turn(
@@ -1766,12 +1892,13 @@ def cmd_attach(args: argparse.Namespace) -> int:
 
 
 def attach_hook(payload: dict[str, Any]) -> None:
-    """Claude's SessionStart hook, for startup and resume.
+    """Claude's SessionStart hook, for startup, resume and clear.
 
     A task's own pane records its Claude session id. A session resumed in a
     pane no task owns moves the task with that session id to the pane. Reads
     tasks.json without the lock first, so the usual case costs no Herdr call.
-    A fork gets a session id of its own, and the hook skips it anyway.
+    A fork gets a session id of its own, and the hook skips it anyway. A clear
+    gives the task's own pane a new session, which moto handoff waits for.
     """
     pane_id = os.environ.get("HERDR_PANE_ID")
     session = payload.get("session_id")
@@ -1789,6 +1916,9 @@ def attach_hook(payload: dict[str, Any]) -> None:
         if tasks[owner].get("session") != session or (window and window != known):
             with tasks_for_update() as tasks:
                 if owner in tasks and tasks[owner]["pane_id"] == pane_id:
+                    marker = tasks[owner].get("handoff")
+                    if marker and marker.get("old") != session:
+                        marker.setdefault("new", session)
                     tasks[owner]["session"] = session
                     note_window(tasks[owner])
         return
@@ -3322,6 +3452,17 @@ def parser() -> argparse.ArgumentParser:
     tell.add_argument("agent")
     tell.add_argument("text", nargs="*", help="The message; default: stdin")
     tell.set_defaults(handler=cmd_tell)
+
+    handoff = commands.add_parser(
+        "handoff",
+        help="Hand an idle worker off to a fresh session in its pane;"
+        + " the brief for the new session is optional, on stdin",
+    )
+    handoff.add_argument("agent")
+    handoff.add_argument(
+        "goal", nargs="*", help="What the new session should do; default: none"
+    )
+    handoff.set_defaults(handler=cmd_handoff)
 
     ask = commands.add_parser(
         "ask", help="Show the driver's question to the user in the sidebar"

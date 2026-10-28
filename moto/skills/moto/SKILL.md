@@ -11,7 +11,7 @@ A driver session started you with `moto spawn`. moto tracks each worker as a tas
 
 Spawn when part of the task belongs in another session: work in another repo, or a long test run you want out of your own context.
 
-- **A helper you supervise**: plain `moto spawn`. Its `done`, `question` and `blocked` reports arrive in your pane after your turn ends, tagged as in `[widgets-fix done]`. Answer a question with `moto tell <agent> "<answer>"`. When it is done, close it with `moto close <agent>`.
+- **A helper you supervise**: plain `moto spawn`. Its `done`, `question` and `blocked` reports arrive in your pane after your turn ends, tagged as in `[widgets-fix done]`. Answer a question with `moto tell <agent> "<answer>"`. When it is done, close it with `moto close <agent>`. To move an idle helper to a fresh session in the same pane, run `moto handoff <agent> "<goal>"`, with a brief for the new session on stdin if it needs one.
 - **A separate task for the driver**: `moto spawn --to-driver`, for example research that splits into implementation tasks. The driver watches it and takes its reports. You cannot `moto tell` it. Pass anything on with `moto report`.
 
 ### The call
