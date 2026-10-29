@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import sys
+import runpy
 
 
 def build(directory, outcome=None):
@@ -21,6 +22,10 @@ def build(directory, outcome=None):
                               maxAttempts=3, retryable=False,
                               retryBudgetExhausted=last.get('exhausted', False),
                               resetAt=last.get('resetAt'), evidence=str(directory / f'{engine}.attempts.jsonl')))
+    current = runpy.run_path(str(Path(__file__).with_name('retry-review.py')))['fingerprint'](meta['scope'])
+    if any(json.loads((directory / f"{r['engine']}.attempts.jsonl").read_text().splitlines()[0])['fingerprint'] != current for r in reviewers):
+        for reviewer in reviewers:
+            reviewer['reasonClass'] = reviewer['reasonCode'] = 'scope-changed'
     complete = all(r['reasonClass'] == 'ok' for r in reviewers)
     exhausted = any(r['retryBudgetExhausted'] for r in reviewers)
     if outcome not in (None, 'converged', 'capped', 'escalated'):
@@ -40,6 +45,9 @@ def build(directory, outcome=None):
 
 def publish(directory, outcome=None):
     result = build(directory, outcome)
+    if not result['completedReviewRound']:
+        meta_file = Path(directory) / 'meta.txt'
+        meta_file.write_text(meta_file.read_text().replace('completed_review_round: yes', 'completed_review_round: no'))
     target = Path(directory) / 'result.json'
     temporary = target.with_suffix('.tmp')
     with temporary.open('w') as stream:
@@ -51,5 +59,18 @@ def publish(directory, outcome=None):
     return target
 
 
+def settled(directory, expected=None):
+    journals = list(Path(directory).glob('*.attempts.jsonl'))
+    terminal = {'ok', 'transient', 'auth', 'quota', 'human-stop', 'terminal', 'scope-changed', 'empty-result', 'output-error'}
+    try:
+        return bool(journals) and (expected is None or len(journals) == expected) and all(json.loads(p.read_text().splitlines()[-1])['state'] in terminal for p in journals)
+    except (OSError, ValueError, IndexError, KeyError):
+        return False
+
+
 if __name__ == '__main__':
-    print(publish(*sys.argv[1:]))
+    if sys.argv[1] == '--settled':
+        sys.exit(0 if settled(sys.argv[2], int(sys.argv[3])) else 1)
+    target = publish(*sys.argv[1:])
+    print(target)
+    sys.exit(0 if json.loads(target.read_text())['completedReviewRound'] else 1)

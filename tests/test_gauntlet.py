@@ -149,7 +149,7 @@ def test_structured_result_fails_closed(tmp_path, state, exhausted, outcome):
     import json
     result_module = runpy.run_path(str(LAUNCHER.with_name('review-result.py')))
     (tmp_path / 'meta.txt').write_text('reviewers: codex\nhead_sha: exact-head\nscope: --uncommitted\nround: 2\nprior_ledger: none\n')
-    events = [dict(state='running', fingerprint='exact-tree'), dict(state=state, exhausted=exhausted, resetAt=123)]
+    events = [dict(state='running', fingerprint=retry_review.fingerprint('--uncommitted')), dict(state=state, exhausted=exhausted, resetAt=123)]
     (tmp_path / 'codex.attempts.jsonl').write_text(''.join(json.dumps(e) + '\n' for e in events))
     result = result_module['build'](tmp_path)
     assert result['outcome'] == outcome
@@ -172,3 +172,77 @@ def test_structured_result_fails_closed(tmp_path, state, exhausted, outcome):
 ])
 def test_provider_reset_is_absolute(text, expected):
     assert retry_review.reset_at(text) == expected
+
+
+def test_successful_review_can_discuss_auth_and_quota():
+    assert retry_review.classify(0, '401 authentication quota billing') == 'ok'
+
+
+def test_retry_deadline_rechecked_after_sleep(tmp_path, monkeypatch):
+    monkeypatch.setattr(retry_review, 'fingerprint', lambda: 'scope')
+    now = [0]
+    launches = []
+    def invoke(command, stdout, stderr):
+        launches.append(now[0])
+        stdout.write(b'503 capacity')
+        return subprocess.CompletedProcess(command, 1)
+    def sleep(_):
+        now[0] = 400
+    assert retry_review.run(tmp_path, 'claude', str(tmp_path / 'out'), ['reviewer'],
+                            invoke=invoke, sleep=sleep, clock=lambda: now[0]) == 1
+    assert launches == [0]
+    import json
+    assert json.loads((tmp_path / 'claude.attempts.jsonl').read_text().splitlines()[-1])['exhausted']
+
+
+def test_untracked_fingerprint_has_file_boundaries(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(['git', 'init', '-q'], check=True)
+    (tmp_path / 'a').write_text('x')
+    (tmp_path / 'b').write_text('y')
+    before = retry_review.fingerprint('')
+    (tmp_path / 'a').write_text('xy')
+    (tmp_path / 'b').write_text('')
+    assert retry_review.fingerprint('') != before
+
+
+def test_base_ref_is_part_of_fingerprint(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    subprocess.run(['git', 'init', '-q'], check=True)
+    for index in range(2):
+        subprocess.run(['git', '-c', 'user.name=Test', '-c', 'user.email=test@example.com',
+                        'commit', '--allow-empty', '-qm', str(index)], check=True)
+    subprocess.run(['git', 'branch', 'review-base', 'HEAD~'], check=True)
+    before = retry_review.fingerprint('--base review-base')
+    subprocess.run(['git', 'branch', '-f', 'review-base', 'HEAD'], check=True)
+    assert retry_review.fingerprint('--base review-base') != before
+
+
+def test_unknown_attempt_keeps_lock_ownership(tmp_path):
+    module = runpy.run_path(str(LAUNCHER.with_name('review-result.py')))
+    journal = tmp_path / 'codex.attempts.jsonl'
+    journal.write_text('{"state":"running"}\n')
+    assert not module['settled'](tmp_path, 1)
+    journal.write_text('{"state":"ok"}\n')
+    assert module['settled'](tmp_path, 1)
+    assert not module['settled'](tmp_path, 2)
+
+
+def test_output_error_cannot_publish_success(tmp_path, monkeypatch):
+    monkeypatch.setattr(retry_review, 'fingerprint', lambda: 'scope')
+    def invoke(command, stdout, stderr):
+        stdout.write(b'No findings')
+        return subprocess.CompletedProcess(command, 0)
+    assert retry_review.run(tmp_path, 'claude', str(tmp_path), ['reviewer'], invoke=invoke) == 1
+    import json
+    assert json.loads((tmp_path / 'claude.attempts.jsonl').read_text().splitlines()[-1])['state'] == 'output-error'
+
+
+def test_result_rechecks_scope_at_handoff(tmp_path):
+    import json
+    module = runpy.run_path(str(LAUNCHER.with_name('review-result.py')))
+    (tmp_path / 'meta.txt').write_text('reviewers: codex\nhead_sha: old-head\nscope: --uncommitted\nround: 1\nprior_ledger: none\n')
+    (tmp_path / 'codex.attempts.jsonl').write_text(json.dumps(dict(state='ok', fingerprint='old-scope')) + '\n')
+    result = module['build'](tmp_path)
+    assert result['outcome'] == 'blocked'
+    assert result['reviewers'][0]['reasonClass'] == 'scope-changed'

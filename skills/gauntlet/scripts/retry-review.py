@@ -11,21 +11,34 @@ import sys
 import time
 
 
-def fingerprint():
+def fingerprint(scope=None):
+    scope = os.environ.get('GAUNTLET_REVIEW_SCOPE', '') if scope is None else scope
     digest = hashlib.sha256()
+    def contribute(value):
+        digest.update(len(value).to_bytes(8, 'big'))
+        digest.update(value)
+    contribute(scope.encode())
+    if scope.startswith(('--base ', '--commit ')):
+        ref = scope.split(' ', 1)[1]
+        resolved = subprocess.run(['git', 'rev-parse', '--verify', ref], capture_output=True, check=True)
+        contribute(resolved.stdout)
     for args in (["rev-parse", "HEAD"], ["diff", "HEAD", "--binary"],
                  ["ls-files", "--others", "--exclude-standard", "-z"]):
         result = subprocess.run(["git", *args], capture_output=True)
-        digest.update(result.stdout)
+        contribute(result.stdout)
         if args[0] == "ls-files":
             for name in result.stdout.split(b"\0"):
                 if name:
                     p = Path(os.fsdecode(name))
-                    digest.update(os.fsencode(os.readlink(p)) if p.is_symlink() else p.read_bytes())
+                    contribute(name)
+                    contribute(b'symlink' if p.is_symlink() else b'file')
+                    contribute(os.fsencode(os.readlink(p)) if p.is_symlink() else p.read_bytes())
     return digest.hexdigest()
 
 
 def classify(code, text):
+    if code == 0:
+        return "ok"
     text = text.lower()
     if code in (130, 143) or code < 0:
         return "human-stop"
@@ -33,8 +46,6 @@ def classify(code, text):
         return "auth"
     if re.search(r'quota|usage limit|out of credit|insufficient.credit|billing', text):
         return "quota"
-    if code == 0:
-        return "ok"
     if re.search(r'429|rate.?limit|too many requests|capacity|overloaded|temporar|503|502|504|connection reset|connection closed|connection refused|timed? out|timeout|transport error', text):
         return "transient"
     return "terminal"
@@ -80,6 +91,9 @@ def run(directory, engine, output, command, *, invoke=subprocess.run, sleep=time
                 stream.write(json.dumps(dict(schemaVersion=1, engine=engine, attempt=attempt, maxAttempts=3, fingerprint=original, head_sha=head, **data)) + '\n')
                 stream.flush()
                 os.fsync(stream.fileno())
+        if attempt > 1 and clock() - started > 300:
+            record(state='transient', retry_owner='gauntlet', retryable=True, exhausted=True)
+            return 1
         if fingerprint() != original:
             record(state='scope-changed', retry_owner='gauntlet')
             return 1
@@ -101,12 +115,16 @@ def run(directory, engine, output, command, *, invoke=subprocess.run, sleep=time
             kind = 'empty-result'
         wait = delay(attempt, text, clock()) if kind == 'transient' else 0
         retry = kind == 'transient' and attempt < 3 and clock() + wait - started <= 300
+        if kind == 'ok':
+            try:
+                Path(output).write_bytes(answer.read_bytes() if engine == 'codex' else raw.read_bytes())
+            except OSError:
+                kind = 'output-error'
         record(state='retry-wait' if retry else kind, retryable=kind == 'transient',
                retry_owner='gauntlet', exhausted=kind == 'transient' and not retry,
                next_attempt_at=clock() + wait if retry else None,
                resetAt=reset_at(text) if kind == 'transient' else None, raw=str(raw))
         if kind == 'ok':
-            Path(output).write_bytes(answer.read_bytes() if engine == 'codex' else raw.read_bytes())
             return 0
         if not retry:
             print(f'{engine}: blocked ({kind}); evidence: {events}', file=sys.stderr)

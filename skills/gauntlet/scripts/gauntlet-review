@@ -178,6 +178,7 @@ fi
 reviewers_settled=0
 trap 'if [[ "$reviewers_settled" -eq 1 ]]; then rmdir "$branch_dir/active.lock"; fi' EXIT
 retry_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/retry-review.py"
+export GAUNTLET_REVIEW_SCOPE="$scope"
 export GAUNTLET_SCOPE_FINGERPRINT="$(python3 -c 'import runpy,sys; print(runpy.run_path(sys.argv[1])["fingerprint"]())' "$retry_script")"
 round=1
 while [[ -e "$(printf '%s/round-%02d' "$branch_dir" "$round")" ]]; do round=$((round + 1)); done
@@ -295,7 +296,9 @@ if [[ -n "$codex_pid" ]]; then
   if wait "$codex_pid"; then codex_status=0; else codex_status=$?; fi
 fi
 
-reviewers_settled=1
+if python3 "$(dirname "$retry_script")/review-result.py" --settled "$round_dir" "$((run_claude + run_codex))"; then
+  reviewers_settled=1
+fi
 
 # Classify a non-zero engine result so we can degrade gracefully and say why.
 classify() {
