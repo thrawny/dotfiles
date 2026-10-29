@@ -384,6 +384,12 @@ else
   # On failure, show codex's answer file if it wrote anything, plus the log tail
   # (codex diagnostics usually land on stderr -> the log, but not always).
   if [[ -s "$codex_out" ]]; then cat "$codex_out"; fi
+  for partial in "$round_dir"/codex.attempt-*.out; do
+    if [[ -s "$partial" ]]; then
+      printf '\n----- partial findings (failed attempt): %s -----\n' "$partial"
+      cat "$partial"
+    fi
+  done
   printf '\n----- codex log tail -----\n'
   tail -40 "$codex_log"
 fi
@@ -394,8 +400,9 @@ printf 'output: %s\n' "$round_dir"
 printf 'ledger: %s%s\n' "$ledger_default" \
   "$([[ -s "$ledger_default" ]] && printf '' || printf '  (not yet written)')"
 
-result_file="$(python3 "$(dirname "$retry_script")/review-result.py" "$round_dir")"
+result_status=0
+result_file="$(python3 "$(dirname "$retry_script")/review-result.py" "$round_dir")" || result_status=$?
 printf 'result: %s\n' "$result_file"
 
 # A partial result never completes a round.
-[[ "$claude_status" -eq 0 && "$codex_status" -eq 0 ]]
+[[ "$claude_status" -eq 0 && "$codex_status" -eq 0 && "$result_status" -eq 0 ]]

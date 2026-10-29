@@ -63,12 +63,16 @@ def classify(code, text):
     if code in (130, 143) or code < 0:
         return "human-stop"
     if re.search(
-        r"401|403|unauthorized|authenticat|not logged in|invalid.api.key|no credentials",
+        r"401|unauthorized|authenticat|not logged in|invalid.api.key|no credentials",
         text,
     ):
         return "auth"
     if re.search(r"quota|usage limit|out of credit|insufficient.credit|billing", text):
         return "quota"
+    if re.search(r"429|rate.?limit|too many requests", text):
+        return "transient"
+    if re.search(r"403", text):
+        return "auth"
     if re.search(
         r"429|rate.?limit|too many requests|capacity|overloaded|temporar|503|502|504|connection reset|connection closed|connection refused|timed? out|timeout|transport error",
         text,

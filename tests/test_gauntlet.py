@@ -106,6 +106,8 @@ _spec.loader.exec_module(retry_review)
         ("401 temporarily unavailable", "auth"),
         ("quota exceeded 429", "quota"),
         ("invalid model", "terminal"),
+        ("HTTP 403 rate limit: Retry-After: 1", "transient"),
+        ("HTTP 403 Forbidden: invalid API key", "auth"),
     ],
 )
 def test_retry_classification(diagnostic, expected):
@@ -462,3 +464,40 @@ def test_capped_adjudication_preserves_completed_review_after_fixes(
         assert result["adjudicationFingerprint"] != scope
     with pytest.raises(ValueError):
         module["build"](directory, "converged")
+
+
+def test_blocked_launcher_exposes_partial_and_result(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    stub = tools / "codex"
+    stub.write_text(
+        '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do\n  if [ "$1" = "-o" ]; then shift; echo PARTIAL_FINDING > "$1"; fi\n  shift\ndone\necho "invalid model" >&2\nexit 1\n'
+    )
+    stub.chmod(0o755)
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("GAUNTLET_")
+    }
+    environment.update(
+        PATH=f"{tools}:{environment['PATH']}",
+        GAUNTLET_STATE_DIR=str(tmp_path / "state"),
+    )
+    result = subprocess.run(
+        ["bash", str(LAUNCHER), "--uncommitted", "Fixture"],
+        cwd=repo,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    import json
+
+    evidence = next((tmp_path / "state").glob("**/result.json"))
+    assert result.returncode != 0
+    assert "PARTIAL_FINDING" in result.stdout
+    assert str(evidence) in result.stdout
+    assert json.loads(evidence.read_text())["outcome"] == "blocked"
