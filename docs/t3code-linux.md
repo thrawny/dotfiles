@@ -27,6 +27,8 @@ The endpoint is `https://thrawny-z13.tailf85bba.ts.net:8445/`, forwarding to
 loopback port 4773. Port 8445 is tailnet-only; the existing port 443 Funnel
 mapping is unchanged. Remote project access requires pairing.
 
+For app credentials shared across worktrees, see [app credential setup](t3-app-secrets.md).
+
 ## Maintenance
 
 Update through dotfiles and `just switch` (or `just switch-hm` for package
