@@ -330,6 +330,7 @@ ok_count=0
   printf 'completed_review_round: %s\n' "$([[ "$claude_status" -eq 0 && "$codex_status" -eq 0 ]] && echo yes || echo no)"
   printf 'finished: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'scope: %s\n' "$scope"
+  printf 'repo_root: %s\n' "$repo_root"
   printf 'head_sha: %s\n' "$head_sha"
   printf 'worktree: %s\n' "$tree_state"
   [[ -n "$merge_base" ]] && printf 'merge_base: %s\n' "$merge_base"
