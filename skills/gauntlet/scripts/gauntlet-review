@@ -373,7 +373,15 @@ fi
 printf '===== CLAUDE REVIEW [%s] =====\n' "$claude_state"
 if [[ "$run_claude" -eq 0 ]]; then
   : # deselected — nothing ran, nothing to print
-elif [[ "$claude_status" -eq 0 ]]; then cat "$claude_out"; else tail -40 "$claude_out"; fi
+elif [[ "$claude_status" -eq 0 ]]; then cat "$claude_out"; else
+  tail -40 "$claude_out"
+  for partial in "$round_dir"/claude.attempt-*.log; do
+    if [[ -s "$partial" ]]; then
+      printf '\n----- partial findings (failed attempt): %s -----\n' "$partial"
+      cat "$partial"
+    fi
+  done
+fi
 
 printf '\n===== CODEX REVIEW [%s] =====\n' "$codex_state"
 if [[ "$run_codex" -eq 0 ]]; then
