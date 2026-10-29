@@ -206,6 +206,7 @@ def test_structured_result_fails_closed(tmp_path, state, exhausted, outcome):
     (tmp_path / "codex.attempts.jsonl").write_text(
         "".join(json.dumps(e) + "\n" for e in events)
     )
+    result_module["publish"](tmp_path)
     result = result_module["build"](tmp_path)
     assert result["outcome"] == outcome
     assert result["retryable"] is False
@@ -417,3 +418,34 @@ def test_partial_findings_do_not_override_transport_diagnostic(tmp_path, monkeyp
         )
         == 0
     )
+
+
+def test_capped_adjudication_preserves_completed_review_after_fixes(
+    tmp_path, monkeypatch
+):
+    import json
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    monkeypatch.chdir(repo)
+    scope = retry_review.fingerprint("--uncommitted")
+    directory = tmp_path / "round-01"
+    directory.mkdir()
+    (directory / "meta.txt").write_text(
+        f"reviewers: codex\nrepo_root: {repo}\nhead_sha: reviewed-head\nscope: --uncommitted\nround: 1\nprior_ledger: none\n"
+    )
+    (directory / "codex.attempts.jsonl").write_text(
+        json.dumps(dict(state="ok", fingerprint=scope)) + "\n"
+    )
+    module = runpy.run_path(str(LAUNCHER.with_name("review-result.py")))
+    module["publish"](directory)
+    (repo / "fix").write_text("post-review fix")
+    for outcome in ("capped", "escalated"):
+        result = module["build"](directory, outcome)
+        assert result["outcome"] == outcome
+        assert result["reviewedHead"] == "reviewed-head"
+        assert result["fingerprint"] == scope
+        assert result["adjudicationFingerprint"] != scope
+    with pytest.raises(ValueError):
+        module["build"](directory, "converged")

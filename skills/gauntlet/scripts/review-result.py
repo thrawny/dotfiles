@@ -43,6 +43,39 @@ def build(directory, outcome=None):
     current = runpy.run_path(str(Path(__file__).with_name("retry-review.py")))[
         "fingerprint"
     ](meta["scope"], meta.get("repo_root"))
+    if outcome is not None:
+        if outcome not in ("converged", "capped", "escalated"):
+            raise ValueError("unknown adjudicated outcome")
+        if not all(r["reasonClass"] == "ok" for r in reviewers):
+            raise ValueError("failed review cannot have an adjudicated outcome")
+        previous = json.loads((directory / "result.json").read_text())
+        if (
+            previous.get("schemaVersion") != 1
+            or previous.get("kind") != "gauntlet-review-result"
+            or not previous.get("completedReviewRound")
+            or previous.get("outcome")
+            not in ("review-complete", "converged", "capped", "escalated")
+            or previous.get("reviewedHead") != meta["head_sha"]
+            or previous.get("roundIdentity") != str(directory.resolve())
+            or any(
+                json.loads(
+                    (directory / f"{r['engine']}.attempts.jsonl")
+                    .read_text()
+                    .splitlines()[0]
+                )["fingerprint"]
+                != previous.get("fingerprint")
+                for r in reviewers
+            )
+        ):
+            raise ValueError("adjudication requires saved completed review evidence")
+        if outcome == "converged" and current != previous["fingerprint"]:
+            raise ValueError("convergence requires unchanged reviewed scope")
+        return previous | dict(
+            outcome=outcome,
+            reasonClass="adjudicated",
+            reasonCode=outcome,
+            adjudicationFingerprint=current,
+        )
     if any(
         json.loads(
             (directory / f"{r['engine']}.attempts.jsonl").read_text().splitlines()[0]
@@ -54,22 +87,16 @@ def build(directory, outcome=None):
             reviewer["reasonClass"] = reviewer["reasonCode"] = "scope-changed"
     complete = all(r["reasonClass"] == "ok" for r in reviewers)
     exhausted = any(r["retryBudgetExhausted"] for r in reviewers)
-    if outcome not in (None, "converged", "capped", "escalated"):
-        raise ValueError("unknown adjudicated outcome")
-    if outcome and not complete:
-        raise ValueError("failed review cannot have an adjudicated outcome")
     return dict(
         schemaVersion=1,
         kind="gauntlet-review-result",
-        outcome=outcome
-        or ("review-complete" if complete else "exhausted" if exhausted else "blocked"),
-        reasonClass="adjudicated"
-        if outcome
-        else "review-complete"
+        outcome="review-complete"
         if complete
-        else "reviewer-failure",
-        reasonCode=outcome
-        or (
+        else "exhausted"
+        if exhausted
+        else "blocked",
+        reasonClass="review-complete" if complete else "reviewer-failure",
+        reasonCode=(
             "all-selected-completed"
             if complete
             else "retry-budget-exhausted"
