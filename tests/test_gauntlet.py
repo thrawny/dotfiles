@@ -161,3 +161,14 @@ def test_structured_result_fails_closed(tmp_path, state, exhausted, outcome):
             result_module['build'](tmp_path, 'converged')
     else:
         assert result_module['build'](tmp_path, 'converged')['outcome'] == 'converged'
+
+
+@pytest.mark.parametrize('text, expected', [
+    ('resetAt: 2026-10-29T12:00:00+02:00', '2026-10-29T10:00:00Z'),
+    ('resetAt: 2026-10-29T12:00:00', None),
+    ('resetAt: invalid', None),
+    ('Retry-After: 60', None),
+    ('temporary capacity', None),
+])
+def test_provider_reset_is_absolute(text, expected):
+    assert retry_review.reset_at(text) == expected

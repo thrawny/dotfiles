@@ -40,20 +40,28 @@ def classify(code, text):
     return "terminal"
 
 
-def reset_at(text, now):
+def reset_at(text):
     match = re.search(r'"?resetAt"?\s*[:=]\s*"?([^"\s,}]+)', text)
     if match:
         try:
             value = match[1]
-            return float(value) if value.replace('.', '', 1).isdigit() else datetime.datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
-        except ValueError:
+            if value.replace('.', '', 1).isdigit():
+                parsed = datetime.datetime.fromtimestamp(float(value), datetime.timezone.utc)
+            else:
+                parsed = datetime.datetime.fromisoformat(value.replace('Z', '+00:00'))
+                if parsed.tzinfo is None:
+                    return None
+            return parsed.astimezone(datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
+        except (ValueError, OverflowError, OSError):
             pass
-    match = re.search(r'retry-after\s*[:=]\s*(\d+)', text, re.I)
-    return now + int(match[1]) if match else None
+    return None
 
 
 def delay(attempt, text, now):
-    return max(min(30 * 2 ** (attempt - 1), 120), (reset_at(text, now) or now) - now)
+    reset = reset_at(text)
+    earliest = datetime.datetime.fromisoformat(reset.replace('Z', '+00:00')).timestamp() if reset else now
+    match = re.search(r'retry-after\s*[:=]\s*(\d+)', text, re.I)
+    return max(min(30 * 2 ** (attempt - 1), 120), earliest - now, int(match[1]) if match else 0)
 
 
 def run(directory, engine, output, command, *, invoke=subprocess.run, sleep=time.sleep, clock=time.time):
@@ -96,7 +104,7 @@ def run(directory, engine, output, command, *, invoke=subprocess.run, sleep=time
         record(state='retry-wait' if retry else kind, retryable=kind == 'transient',
                retry_owner='gauntlet', exhausted=kind == 'transient' and not retry,
                next_attempt_at=clock() + wait if retry else None,
-               resetAt=reset_at(text, clock()) if kind == 'transient' else None, raw=str(raw))
+               resetAt=reset_at(text) if kind == 'transient' else None, raw=str(raw))
         if kind == 'ok':
             Path(output).write_bytes(answer.read_bytes() if engine == 'codex' else raw.read_bytes())
             return 0
