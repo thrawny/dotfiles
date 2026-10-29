@@ -169,6 +169,10 @@ fi
 
 # Round numbering makes the loop legible after the fact and keeps rounds ordered
 # lexically; the ledger is what carries meaning between them.
+retry_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/retry-review.py"
+export GAUNTLET_REVIEW_SCOPE="$scope"
+GAUNTLET_SCOPE_FINGERPRINT="$(python3 -c 'import runpy,sys; print(runpy.run_path(sys.argv[1])["fingerprint"]())' "$retry_script")"
+export GAUNTLET_SCOPE_FINGERPRINT
 mkdir -p "$branch_dir"
 # One owner per branch: an interrupted lock requires human inspection, not replay.
 if ! mkdir "$branch_dir/active.lock" 2>/dev/null; then
@@ -177,9 +181,6 @@ if ! mkdir "$branch_dir/active.lock" 2>/dev/null; then
 fi
 reviewers_settled=0
 trap 'if [[ "$reviewers_settled" -eq 1 ]]; then rmdir "$branch_dir/active.lock"; fi' EXIT
-retry_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/retry-review.py"
-export GAUNTLET_REVIEW_SCOPE="$scope"
-export GAUNTLET_SCOPE_FINGERPRINT="$(python3 -c 'import runpy,sys; print(runpy.run_path(sys.argv[1])["fingerprint"]())' "$retry_script")"
 round=1
 while [[ -e "$(printf '%s/round-%02d' "$branch_dir" "$round")" ]]; do round=$((round + 1)); done
 round_dir="$(printf '%s/round-%02d' "$branch_dir" "$round")"

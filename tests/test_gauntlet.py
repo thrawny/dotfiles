@@ -21,6 +21,7 @@ LAUNCHER = (
         ("codex", ["--reviewers", "claude"], {"claude"}),
         ("claude,codex", ["--reviewers", "codex"], {"codex"}),
         ("invalid", [], set()),
+        ("codex", ["--base", "missing-ref"], set()),
     ],
 )
 def test_reviewer_selection(
@@ -70,6 +71,18 @@ def test_reviewer_selection(
     )
     assert (result.returncode == 0) is bool(expected), result.stderr
     assert {entry.name for entry in calls.iterdir()} == expected
+    assert not list((tmp_path / "state").glob("**/active.lock"))
+    if arguments == ["--base", "missing-ref"]:
+        followup = subprocess.run(
+            ["bash", str(LAUNCHER), "--uncommitted", "Fixture review"],
+            cwd=repository,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert followup.returncode == 0, followup.stderr
+        assert {entry.name for entry in calls.iterdir()} == {"codex"}
 
 
 # Retry policy is plain-data logic; these tests use no provider calls or sleeps.
