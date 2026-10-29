@@ -111,7 +111,7 @@ main() {
   fi
 
   echo "Attempting to change default shell to zsh..."
-  if command -v sudo &>/dev/null && sudo chsh -s "$(which zsh)" "$USER" 2>/dev/null; then
+  if command -v sudo &>/dev/null && sudo chsh -s "$(command -v zsh)" "$USER" 2>/dev/null; then
     echo "Successfully changed default shell to zsh"
   else
     echo "Info: Could not change default shell to zsh (sudo access may not be available)"
