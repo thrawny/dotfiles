@@ -70,3 +70,74 @@ def test_reviewer_selection(
     )
     assert (result.returncode == 0) is bool(expected), result.stderr
     assert {entry.name for entry in calls.iterdir()} == expected
+
+# Retry policy is plain-data logic; these tests use no provider calls or sleeps.
+import importlib.util
+
+_spec = importlib.util.spec_from_file_location("retry_review", LAUNCHER.with_name("retry-review.py"))
+retry_review = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(retry_review)
+
+
+@pytest.mark.parametrize("diagnostic, expected", [
+    ("model capacity temporarily unavailable", "transient"),
+    ("429 rate limit", "transient"),
+    ("connection reset", "transient"),
+    ("401 temporarily unavailable", "auth"),
+    ("quota exceeded 429", "quota"),
+    ("invalid model", "terminal"),
+])
+def test_retry_classification(diagnostic, expected):
+    assert retry_review.classify(1, diagnostic) == expected
+
+
+@pytest.mark.parametrize("codes, diagnostic, expected, attempts", [
+    ([1, 0], "503 model capacity", 0, 2),
+    ([1, 1, 1], "429 rate limit", 1, 3),
+    ([1], "invalid API key", 1, 1),
+    ([130], "temporary transport error", 1, 1),
+    ([1], '429 resetAt: 9999999999', 1, 1),
+])
+def test_retry_outcomes(tmp_path, monkeypatch, codes, diagnostic, expected, attempts):
+    monkeypatch.setattr(retry_review, "fingerprint", lambda: "exact-scope")
+    remaining = iter(codes)
+    waits = []
+    def invoke(command, stdout, stderr):
+        code = next(remaining)
+        stdout.write((diagnostic if code else "No findings").encode())
+        return subprocess.CompletedProcess(command, code)
+    output = tmp_path / "result.out"
+    result = retry_review.run(tmp_path, "claude", str(output), ["reviewer"],
+                              invoke=invoke, sleep=waits.append, clock=lambda: 0)
+    import json
+    events = [json.loads(line) for line in (tmp_path / "claude.attempts.jsonl").read_text().splitlines()]
+    assert result == expected
+    assert sum(event["state"] == "running" for event in events) == attempts
+    assert output.exists() is (expected == 0)
+    assert len(waits) == attempts - 1
+
+
+def test_retry_scope_change_blocks(tmp_path, monkeypatch):
+    scopes = iter(["before", "before", "after"])
+    monkeypatch.setattr(retry_review, "fingerprint", lambda: next(scopes))
+    def invoke(command, stdout, stderr):
+        stdout.write(b"No findings")
+        return subprocess.CompletedProcess(command, 0)
+    output = tmp_path / "result"
+    assert retry_review.run(tmp_path, "claude", str(output), ["reviewer"], invoke=invoke) == 1
+    assert not output.exists()
+
+
+def test_codex_retry_publishes_only_success(tmp_path, monkeypatch):
+    monkeypatch.setattr(retry_review, "fingerprint", lambda: "same-head-and-tree")
+    answers = iter([(1, "503 capacity", "partial"), (0, "completed", "No findings")])
+    def invoke(command, stdout, stderr):
+        code, diagnostic, answer = next(answers)
+        stdout.write(diagnostic.encode())
+        Path(command[1]).write_text(answer)
+        return subprocess.CompletedProcess(command, code)
+    output = tmp_path / "codex.out"
+    assert retry_review.run(tmp_path, "codex", str(output), ["codex", str(output)],
+                            invoke=invoke, sleep=lambda _: None, clock=lambda: 0) == 0
+    assert output.read_text() == "No findings"
+    assert (tmp_path / "codex.attempt-1.out").read_text() == "partial"

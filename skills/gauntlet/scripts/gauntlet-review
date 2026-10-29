@@ -22,9 +22,8 @@
 # Codex PR reviewer, which re-reads the full diff every round with prior
 # findings suppressed. See SKILL.md for the ledger format and loop protocol.
 #
-# Graceful degradation: if one engine is unauthenticated or out of usage/quota,
-# the script continues with the other and labels why. Exits 0 if at least one
-# engine produced a result, non-zero only if both fail.
+# Selected reviewers retry transient failures independently. Any remaining
+# failure blocks round completion; partial findings remain available.
 #
 # Reviewer selection: --reviewers takes a comma list of claude/codex (default
 # codex). A deselected engine is never launched — unlike quota degradation this
@@ -171,6 +170,15 @@ fi
 # Round numbering makes the loop legible after the fact and keeps rounds ordered
 # lexically; the ledger is what carries meaning between them.
 mkdir -p "$branch_dir"
+# One owner per branch: an interrupted lock requires human inspection, not replay.
+if ! mkdir "$branch_dir/active.lock" 2>/dev/null; then
+  echo "gauntlet-review: blocked: active/unknown invocation at $branch_dir/active.lock" >&2
+  exit 1
+fi
+reviewers_settled=0
+trap 'if [[ "$reviewers_settled" -eq 1 ]]; then rmdir "$branch_dir/active.lock"; fi' EXIT
+retry_script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/retry-review.py"
+export GAUNTLET_SCOPE_FINGERPRINT="$(python3 -c 'import runpy,sys; print(runpy.run_path(sys.argv[1])["fingerprint"]())' "$retry_script")"
 round=1
 while [[ -e "$(printf '%s/round-%02d' "$branch_dir" "$round")" ]]; do round=$((round + 1)); done
 round_dir="$(printf '%s/round-%02d' "$branch_dir" "$round")"
@@ -246,6 +254,7 @@ ${prior_block}"
 # once means a bad dedupe forces a full re-run, and a loop that crosses a
 # context compaction loses the basis it is supposed to dedupe against.
 claude_out="$round_dir/claude.out"
+touch "$claude_out"
 
 # Claude reviewer — prints findings to stdout, then exits. Pin every model
 # selection surface to Opus 5: /code-review may spawn subagents or carry its
@@ -257,7 +266,7 @@ claude_pid=""
 if [[ "$run_claude" -eq 1 ]]; then
   CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
   ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
-    claude -p --model "$claude_review_model" --setting-sources "" \
+    python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --model "$claude_review_model" --setting-sources "" \
       --settings "$claude_review_settings" --no-session-persistence \
       --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
   claude_pid=$!
@@ -269,9 +278,10 @@ readonly codex_model="${GAUNTLET_CODEX_MODEL:-gpt-6-sol}"
 readonly codex_effort="${GAUNTLET_CODEX_EFFORT:-high}"
 codex_out="$round_dir/codex.out"
 codex_log="$round_dir/codex.log"
+touch "$codex_out"
 codex_pid=""
 if [[ "$run_codex" -eq 1 ]]; then
-  codex exec --ephemeral --color never --model "$codex_model" \
+  python3 "$retry_script" "$round_dir" codex "$codex_out" codex exec --ephemeral --color never --model "$codex_model" \
     -c model_reasoning_effort="$codex_effort" -o "$codex_out" review "$codex_prompt" >"$codex_log" 2>&1 &
   codex_pid=$!
 fi
@@ -284,6 +294,8 @@ fi
 if [[ -n "$codex_pid" ]]; then
   if wait "$codex_pid"; then codex_status=0; else codex_status=$?; fi
 fi
+
+reviewers_settled=1
 
 # Classify a non-zero engine result so we can degrade gracefully and say why.
 classify() {
@@ -312,6 +324,7 @@ ok_count=0
 # findings (a degraded round is otherwise indistinguishable from a dry one).
 {
   printf 'round: %d\n' "$round"
+  printf 'completed_review_round: %s\n' "$([[ "$claude_status" -eq 0 && "$codex_status" -eq 0 ]] && echo yes || echo no)"
   printf 'finished: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   printf 'scope: %s\n' "$scope"
   printf 'head_sha: %s\n' "$head_sha"
@@ -336,12 +349,12 @@ else
   if [[ "$run_claude" -eq 0 ]]; then
     printf 'NOTE: claude skipped by --reviewers.\n'
   elif [[ "$claude_status" -ne 0 ]]; then
-    printf 'NOTE: claude %s — proceeding with Codex only.\n' "$claude_state"
+    printf 'NOTE: claude %s — blocked; Codex findings remain available.\n' "$claude_state"
   fi
   if [[ "$run_codex" -eq 0 ]]; then
     printf 'NOTE: codex skipped by --reviewers.\n'
   elif [[ "$codex_status" -ne 0 ]]; then
-    printf 'NOTE: codex %s — proceeding with Claude only.\n' "$codex_state"
+    printf 'NOTE: codex %s — blocked; Claude findings remain available.\n' "$codex_state"
   fi
   if [[ -n "$prior_src" ]]; then
     printf 'NOTE: round %d — suppressing findings already adjudicated in %s\n' "$round" "$prior_src"
@@ -376,5 +389,5 @@ printf 'output: %s\n' "$round_dir"
 printf 'ledger: %s%s\n' "$ledger_default" \
   "$([[ -s "$ledger_default" ]] && printf '' || printf '  (not yet written)')"
 
-# Succeed if at least one reviewer produced a result; degrade gracefully otherwise.
-[[ "$ok_count" -ge 1 ]]
+# A partial result never completes a round.
+[[ "$claude_status" -eq 0 && "$codex_status" -eq 0 ]]
