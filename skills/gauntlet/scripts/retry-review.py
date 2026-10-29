@@ -40,20 +40,20 @@ def classify(code, text):
     return "terminal"
 
 
-def delay(attempt, text, now):
-    wait = min(30 * 2 ** (attempt - 1), 120)
+def reset_at(text, now):
     match = re.search(r'"?resetAt"?\s*[:=]\s*"?([^"\s,}]+)', text)
     if match:
         try:
             value = match[1]
-            reset = float(value) if value.replace('.', '', 1).isdigit() else datetime.datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
-            wait = max(wait, reset - now)
+            return float(value) if value.replace('.', '', 1).isdigit() else datetime.datetime.fromisoformat(value.replace('Z', '+00:00')).timestamp()
         except ValueError:
             pass
     match = re.search(r'retry-after\s*[:=]\s*(\d+)', text, re.I)
-    if match:
-        wait = max(wait, int(match[1]))
-    return wait
+    return now + int(match[1]) if match else None
+
+
+def delay(attempt, text, now):
+    return max(min(30 * 2 ** (attempt - 1), 120), (reset_at(text, now) or now) - now)
 
 
 def run(directory, engine, output, command, *, invoke=subprocess.run, sleep=time.sleep, clock=time.time):
@@ -69,7 +69,7 @@ def run(directory, engine, output, command, *, invoke=subprocess.run, sleep=time
         # Record launch intent durably. An interrupted/unknown attempt is never replayed.
         def record(**data):
             with events.open('a') as stream:
-                stream.write(json.dumps(dict(engine=engine, attempt=attempt, fingerprint=original, head_sha=head, **data)) + '\n')
+                stream.write(json.dumps(dict(schemaVersion=1, engine=engine, attempt=attempt, maxAttempts=3, fingerprint=original, head_sha=head, **data)) + '\n')
                 stream.flush()
                 os.fsync(stream.fileno())
         if fingerprint() != original:
@@ -95,7 +95,8 @@ def run(directory, engine, output, command, *, invoke=subprocess.run, sleep=time
         retry = kind == 'transient' and attempt < 3 and clock() + wait - started <= 300
         record(state='retry-wait' if retry else kind, retryable=kind == 'transient',
                retry_owner='gauntlet', exhausted=kind == 'transient' and not retry,
-               next_attempt_at=clock() + wait if retry else None, raw=str(raw))
+               next_attempt_at=clock() + wait if retry else None,
+               resetAt=reset_at(text, clock()) if kind == 'transient' else None, raw=str(raw))
         if kind == 'ok':
             Path(output).write_bytes(answer.read_bytes() if engine == 'codex' else raw.read_bytes())
             return 0

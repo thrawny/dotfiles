@@ -73,6 +73,7 @@ def test_reviewer_selection(
 
 # Retry policy is plain-data logic; these tests use no provider calls or sleeps.
 import importlib.util
+import runpy
 
 _spec = importlib.util.spec_from_file_location("retry_review", LAUNCHER.with_name("retry-review.py"))
 retry_review = importlib.util.module_from_spec(_spec)
@@ -141,3 +142,22 @@ def test_codex_retry_publishes_only_success(tmp_path, monkeypatch):
                             invoke=invoke, sleep=lambda _: None, clock=lambda: 0) == 0
     assert output.read_text() == "No findings"
     assert (tmp_path / "codex.attempt-1.out").read_text() == "partial"
+
+
+@pytest.mark.parametrize('state, exhausted, outcome', [('ok', False, 'review-complete'), ('auth', False, 'blocked'), ('transient', True, 'exhausted')])
+def test_structured_result_fails_closed(tmp_path, state, exhausted, outcome):
+    import json
+    result_module = runpy.run_path(str(LAUNCHER.with_name('review-result.py')))
+    (tmp_path / 'meta.txt').write_text('reviewers: codex\nhead_sha: exact-head\nscope: --uncommitted\nround: 2\nprior_ledger: none\n')
+    events = [dict(state='running', fingerprint='exact-tree'), dict(state=state, exhausted=exhausted, resetAt=123)]
+    (tmp_path / 'codex.attempts.jsonl').write_text(''.join(json.dumps(e) + '\n' for e in events))
+    result = result_module['build'](tmp_path)
+    assert result['outcome'] == outcome
+    assert result['retryable'] is False
+    assert result['retryBudgetExhausted'] is exhausted
+    assert result['reviewers'][0]['attempts'] == 1
+    if state != 'ok':
+        with pytest.raises(ValueError):
+            result_module['build'](tmp_path, 'converged')
+    else:
+        assert result_module['build'](tmp_path, 'converged')['outcome'] == 'converged'

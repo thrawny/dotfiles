@@ -389,5 +389,8 @@ printf 'output: %s\n' "$round_dir"
 printf 'ledger: %s%s\n' "$ledger_default" \
   "$([[ -s "$ledger_default" ]] && printf '' || printf '  (not yet written)')"
 
+result_file="$(python3 "$(dirname "$retry_script")/review-result.py" "$round_dir")"
+printf 'result: %s\n' "$result_file"
+
 # A partial result never completes a round.
 [[ "$claude_status" -eq 0 && "$codex_status" -eq 0 ]]
