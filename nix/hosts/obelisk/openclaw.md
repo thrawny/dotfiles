@@ -61,6 +61,16 @@ The private group requires a bot mention. Node pairing remains independent of
 chat routing; the agent still runs on the gateway with the M1 available as a
 command target. Do not copy OAuth credentials into the new agent's store.
 
+The initial shared-chat deployment retains the running Codex runtime instead of
+activating unrelated pending system updates. Its immutable config is derived
+from the generated Nix config with only that runtime path retained. The service
+env file pins `OPENCLAW_CONFIG_PATH` and `OPENCLAW_INCLUDE_ROOTS`; both the gateway
+and administrative wrapper read those overrides. Deployment provenance, the
+baseline config GC root and recovery state are retained privately on the host.
+When intentionally deploying a complete generation, reconcile those env overrides
+so they do not mask the new generation's config. Do not remove them before the
+generation includes the shared route and its private include.
+
 - The service reads `OPENCLAW_CONFIG_PATH` directly from the Nix store.
 - `/srv/agents/openclaw/home/.openclaw` contains mutable state and credentials.
 - `/srv/agents/openclaw/workspace` contains the existing agent workspace.
