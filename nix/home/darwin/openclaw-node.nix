@@ -17,9 +17,14 @@ in
       type = lib.types.str;
       description = "Existing gateway TLS hostname.";
     };
+    packages = lib.mkOption {
+      type = lib.types.listOf lib.types.package;
+      default = [ ];
+      description = "CLI packages installed for the user and placed first on the node PATH.";
+    };
   };
   config = lib.mkIf cfg.enable {
-    home.packages = [ package ];
+    home.packages = [ package ] ++ cfg.packages;
     home.activation.openclawNodeLogs = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       run mkdir -p ${lib.escapeShellArg logs}
     '';
@@ -43,7 +48,8 @@ in
         EnvironmentVariables = {
           HOME = config.home.homeDirectory;
           PATH = lib.concatStringsSep ":" (
-            [ "${config.home.profileDirectory}/bin" ]
+            (map (tool: "${lib.getBin tool}/bin") cfg.packages)
+            ++ [ "${config.home.profileDirectory}/bin" ]
             ++ map (lib.replaceStrings
               [ "$HOME" "\${HOME}" ]
               [ config.home.homeDirectory config.home.homeDirectory ]

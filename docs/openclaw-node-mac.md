@@ -36,6 +36,16 @@ it does not necessarily allow every operation of that CLI. Verify the complete
 request, operator decision and node result from Telegram before claiming that
 interaction works. Headless CLI agent probes cannot wait for human approval.
 
+Install node CLIs with `dotfiles.openclawNode.packages` in the M1 host's home
+configuration. These packages are also installed for the user, and their store
+directories come first on the node PATH. Sonos uses nixpkgs' `sonoscli`.
+The shared agent can resolve the current executable through the node's
+`system.which` command, then use that absolute store path for execution.
+Its local Sonos approval pattern is `/nix/store/*-sonoscli-*/bin/sonos`, without
+an argument restriction. This covers Sonos package updates without granting
+other CLIs. Keep the workspace instructions using discovery rather than a
+hardcoded store hash. Package installation does not itself grant execution.
+
 Inspect the service with:
 
 ```sh
