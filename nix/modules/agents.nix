@@ -433,7 +433,14 @@ lib.mkMerge [
           export HOME="$TMPDIR/home"
           mkdir -p "$HOME"
           export OPENCLAW_NIX_MODE=1
-          export OPENCLAW_CONFIG_PATH=${openclaw.configFile}
+          # Runtime group identifiers remain outside the public Nix store config.
+          export OPENCLAW_SHARED_GROUP_ID=-1000000000000
+          export OPENCLAW_INCLUDE_ROOTS="$TMPDIR"
+          printf '%s' '{}' > "$TMPDIR/shared-groups.json"
+          jq --arg include "$TMPDIR/shared-groups.json" \
+            '.channels.telegram.groups."$include" = $include' \
+            ${openclaw.configFile} > "$TMPDIR/openclaw.json"
+          export OPENCLAW_CONFIG_PATH="$TMPDIR/openclaw.json"
           export OPENCLAW_STATE_DIR="$HOME/.openclaw"
           test -s ${openclaw.uiSource}/index.html
           for plugin_dir in $(jq -r '.plugins.load.paths[]' ${openclaw.configFile}); do
@@ -511,6 +518,7 @@ lib.mkMerge [
       "d /srv/agents/openclaw/workspace 0750 openclaw openclaw -"
       "d /srv/agents/openclaw/workspaces 0750 openclaw openclaw -"
       "d ${openclaw.seedboxWorkspace} 0750 openclaw openclaw -"
+      "d ${openclaw.sharedWorkspace} 0750 openclaw openclaw -"
       "L+ ${openclaw.stateDir}/openclaw.json - - - - ${openclaw.configFile}"
       "d /var/lib/openclaw-ui 0755 root root -"
       "C ${openclaw.uiRoot} - root root - ${openclaw.uiSource}"

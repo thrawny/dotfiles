@@ -48,6 +48,19 @@ The pinned OpenClaw catalog also needs the explicit Sol 6.1 model entry in Nix.
 
 ## Configuration and state
 
+The `shared` agent has a separate workspace at
+`/srv/agents/openclaw/workspaces/shared` and its own default agent state directory.
+Its Telegram binding reads `OPENCLAW_SHARED_GROUP_ID` from the service env file.
+The group's sender allowlist lives in
+`/srv/agents/openclaw/home/.openclaw/secrets/shared-telegram-groups.json`, as a
+JSON object keyed by the exact group ID. Nix admits that directory through
+`OPENCLAW_INCLUDE_ROOTS`; the include must exist before activation. Keep it
+root-owned and readable by the `openclaw` group. This keeps personal chat and
+participant identifiers outside the public source and store-generated config.
+The private group requires a bot mention. Node pairing remains independent of
+chat routing; the agent still runs on the gateway with the M1 available as a
+command target. Do not copy OAuth credentials into the new agent's store.
+
 - The service reads `OPENCLAW_CONFIG_PATH` directly from the Nix store.
 - `/srv/agents/openclaw/home/.openclaw` contains mutable state and credentials.
 - `/srv/agents/openclaw/workspace` contains the existing agent workspace.

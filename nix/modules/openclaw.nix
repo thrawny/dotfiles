@@ -11,6 +11,8 @@ let
   home = "/srv/agents/openclaw/home";
   workspace = "/srv/agents/openclaw/workspace";
   seedboxWorkspace = "/srv/agents/openclaw/workspaces/seedbox";
+  sharedWorkspace = "/srv/agents/openclaw/workspaces/shared";
+  sharedTelegramGroups = "${stateDir}/secrets/shared-telegram-groups.json";
   stateDir = "${home}/.openclaw";
   uiSource = "${openclawPackage}/lib/openclaw/dist/control-ui";
   uiRoot = "/var/lib/openclaw-ui/${builtins.baseNameOf (toString openclawPackage)}";
@@ -120,9 +122,24 @@ let
           name = "Seedbox";
           workspace = seedboxWorkspace;
         };
+        shared = {
+          name = "Shared";
+          workspace = sharedWorkspace;
+        };
       };
     };
     bindings = [
+      {
+        agentId = "shared";
+        match = {
+          channel = "telegram";
+          accountId = "default";
+          peer = {
+            kind = "group";
+            id = "\${OPENCLAW_SHARED_GROUP_ID}";
+          };
+        };
+      }
       {
         agentId = "seedbox";
         match = {
@@ -182,6 +199,7 @@ let
       telegram = {
         enabled = true;
         groupPolicy = "allowlist";
+        groups."$include" = sharedTelegramGroups;
         groups."-5176945403" = {
           enabled = true;
           requireMention = true;
@@ -261,6 +279,8 @@ in
     workspace
     stateDir
     seedboxWorkspace
+    sharedWorkspace
+    sharedTelegramGroups
     uiSource
     uiRoot
     configFile
@@ -269,6 +289,7 @@ in
   environment = {
     OPENCLAW_NIX_MODE = "1";
     OPENCLAW_STATE_DIR = stateDir;
+    OPENCLAW_INCLUDE_ROOTS = "${stateDir}/secrets";
     # 2026.8.2's recovery path bypasses the Nix write guard and can replace a
     # symlink with stale config. Read the store path directly, accepting its
     # harmless warning when it tries to write a sibling .last-good file.
