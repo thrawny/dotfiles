@@ -3,6 +3,8 @@ export type Pass = {
   watching: number
   lines: string[]
   notes: string | null
+  // Every task moto tracks.
+  tasks: string[]
 }
 
 declare module 'claude-code' {

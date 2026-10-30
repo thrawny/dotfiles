@@ -52,9 +52,11 @@ async function poll($: EngineInterface) {
     }
     const pass = JSON.parse(stdout) as Pass
     $.ui.status(`watching ${pass.watching}`)
-    if (pass.lines.length > 0) {
-      await update($, lines, before => [...before, ...pass.lines])
-    }
+    // A line held for a task closed since is no longer news.
+    const tracked = new Set(pass.tasks)
+    await update($, lines, before =>
+      [...before, ...pass.lines].filter(line => tracked.has(line.split(/[\s:]/, 1)[0] ?? '')),
+    )
     const note = pass.notes
     if (note !== null) {
       await update($, notes, before => [...before, note])
@@ -90,6 +92,8 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const result = await next(e)
     turns.delete(e.turnId)
+    // A fresh pass first, so a task the turn closed drops its held lines.
+    await poll($)
     await deliver($)
     return result
   })

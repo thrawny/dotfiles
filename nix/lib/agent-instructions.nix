@@ -45,6 +45,7 @@ rec {
   ephemeralTools = ''
     ## Ephemeral tools
 
+    Before you reach for a one-off, check with `command -v <cmd>` that the tool is missing.
     If a needed tool/library is missing, prefer reproducible one-offs over ad hoc scripts or global installs.
 
     Prefer `, <cmd> ...` for one-off CLI tools by executable name.
@@ -68,6 +69,7 @@ rec {
 
     Zsh has special parameters with ordinary-looking names. In shell snippets that may run under zsh, never use `status` or `history` as variable names because they are read-only, or `path` because it is tied to `PATH`. Other collision-prone names include `argv`, `aliases`, `builtins`, `commands`, `functions`, `keymaps`, `modules`, `options`, `parameters`, `prompt`, `watch`, and `widgets`. When unsure, inspect `''${parameters[$name]}` and avoid types containing `special`.
     Prefer descriptive names such as `exit_code`, `cmd_status`, `history_text`, or a command-specific name such as `review_status`.
+    Quote globs in flags and paths, as in `grep -r --include='*.go'`: zsh fails a command whose glob matches no file.
   '';
 
   gnuTools = ''

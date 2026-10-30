@@ -1103,6 +1103,21 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_settle(args: argparse.Namespace) -> int:
+    """Replace a settled question with a done report the watch has already seen.
+
+    A plain `report --agent` from the driver comes back to it as worker news.
+    """
+    text = " ".join(args.text).strip()
+    with tasks_for_update() as tasks:
+        task = find_task(tasks, args.agent)
+        task["report"] = {"kind": "done", "text": text, "at": time.time()}
+        task.setdefault("seen", {})["report_at"] = task["report"]["at"]
+        record("settle", task["agent"], text=text)
+    print(f"Settled {task['agent']}; the watch skips it.")
+    return 0
+
+
 def cmd_tell(args: argparse.Namespace) -> int:
     """Send a worker a prompt tagged with its sender: the driver or its parent."""
     text = " ".join(args.text).strip() or sys.stdin.read().strip()
@@ -1571,10 +1586,12 @@ def watch() -> dict[str, Any]:
 
     watching counts the tasks the pass covers, lines has one line per worker that
     needs the driver, and notes holds what scheduled jobs left, removed as the
-    pass hands them over, or None.
+    pass hands them over, or None. tasks names every task moto tracks, so the mod
+    can drop held lines of a task closed since.
     """
     outbox: list[Delivery] = []
     with tasks_for_update() as tasks:
+        names = sorted(tasks)
         watching = sum(1 for t in tasks.values() if not unwatched(t))
         panes = any(pane_watched(t) for t in tasks.values())
         lines = check(tasks, live_agents(), time.time(), outbox) if panes else []
@@ -1587,7 +1604,12 @@ def watch() -> dict[str, Any]:
                 f"{delivery.child} could not reach {delivery.parent} ({error}):"
                 + f" {delivery.text}"
             )
-    return {"watching": watching, "lines": lines, "notes": take_notes()}
+    return {
+        "watching": watching,
+        "lines": lines,
+        "notes": take_notes(),
+        "tasks": names,
+    }
 
 
 def cmd_watch(_: argparse.Namespace) -> int:
@@ -3492,6 +3514,14 @@ def parser() -> argparse.ArgumentParser:
         + " started, without ending a hold; for when the user asks",
     )
     report.set_defaults(handler=cmd_report)
+
+    settle = commands.add_parser(
+        "settle",
+        help="Run by the driver to replace a task's settled question; not news",
+    )
+    settle.add_argument("agent")
+    settle.add_argument("text", nargs="+", help="What settled it")
+    settle.set_defaults(handler=cmd_settle)
 
     watch = commands.add_parser(
         "watch", help="One pass, as JSON, of what needs the driver"

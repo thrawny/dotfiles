@@ -1208,6 +1208,20 @@ def test_report_logs_its_text_and_a_new_pr_once(moto: ModuleType):
     ]
 
 
+def test_settle_replaces_a_question_without_news(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(
+            report={"kind": "question", "text": "which?", "at": 1},
+            seen={"status": "done", "seq": 1, "report_at": 1},
+        )
+    args = argparse.Namespace(agent="abc-1", text=["Jonas", "picked", "main"])
+    assert moto.cmd_settle(args) == 0
+    report = moto.read_tasks()["abc-1"]["report"]
+    assert (report["kind"], report["text"]) == ("done", "Jonas picked main")
+    with patch.object(moto, "live_agents", return_value=live("done", 1)):
+        assert moto.watch()["lines"] == []
+
+
 def absorbed(moto: ModuleType) -> list[str]:
     return [e["reason"] for e in moto.pending_events if e["event"] == "absorb"]
 
@@ -1904,7 +1918,12 @@ def test_watch_skips_snoozed_tasks(moto: ModuleType):
     with moto.tasks_for_update() as tasks:
         tasks["abc-2"] = task(pane_id="w1:p2", snoozed=SNOOZE)
     with patch.object(moto, "live_agents", side_effect=AssertionError("no poll")):
-        assert moto.watch() == {"watching": 0, "lines": [], "notes": None}
+        assert moto.watch() == {
+            "watching": 0,
+            "lines": [],
+            "notes": None,
+            "tasks": ["abc-2"],
+        }
 
 
 def test_watch_checks_a_child_task_without_counting_it(moto: ModuleType):
@@ -1916,6 +1935,7 @@ def test_watch_checks_a_child_task_without_counting_it(moto: ModuleType):
             "watching": 0,
             "lines": ["abc-1 wrap (child of abc-9): merged"],
             "notes": None,
+            "tasks": ["abc-1"],
         }
         assert moto.watch()["lines"] == []
 
@@ -1928,6 +1948,7 @@ def test_watch_checks_a_held_task_s_pane_without_counting_it(moto: ModuleType):
             "watching": 0,
             "lines": ["abc-1: pane closed"],
             "notes": None,
+            "tasks": ["abc-1"],
         }
     assert moto.read_tasks()["abc-1"]["closed_at"] == 0.0
 
@@ -1937,7 +1958,12 @@ def test_watch_reports_news_once(moto: ModuleType):
         tasks["abc-1"] = task(report={"kind": "question", "text": "which?", "at": 1})
     with patch.object(moto, "live_agents", return_value=live("done", 1)):
         assert moto.watch()["lines"] == ["abc-1 question: which?"]
-        assert moto.watch() == {"watching": 1, "lines": [], "notes": None}
+        assert moto.watch() == {
+            "watching": 1,
+            "lines": [],
+            "notes": None,
+            "tasks": ["abc-1"],
+        }
 
 
 def test_watch_hands_a_job_note_over_once(moto: ModuleType, jobs_home: Path):

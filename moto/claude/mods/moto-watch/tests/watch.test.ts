@@ -19,7 +19,7 @@ function world(on: On, passes: Pass[], env: Record<string, string> = {}): World 
   })
   on('process.run', () => {
     seen.runs += 1
-    const pass = passes.shift() ?? { watching: 1, lines: [], notes: null }
+    const pass = passes.shift() ?? { watching: 1, lines: [], notes: null, tasks: ['abc-1', 'abc-2'] }
     const stdout = JSON.stringify(pass)
     return {
       value: { exitCode: 0, stdout, stderr: '', isStdoutTruncated: false, isStderrTruncated: false },
@@ -32,8 +32,13 @@ function world(on: On, passes: Pass[], env: Record<string, string> = {}): World 
   return seen
 }
 
-const NEWS: Pass = { watching: 2, lines: ['abc-1 question: which?'], notes: null }
-const MORE: Pass = { watching: 2, lines: ['abc-2: pane closed'], notes: '[job] Review widgets#7.' }
+const NEWS: Pass = { watching: 2, lines: ['abc-1 question: which?'], notes: null, tasks: ['abc-1', 'abc-2'] }
+const MORE: Pass = {
+  watching: 2,
+  lines: ['abc-2: pane closed'],
+  notes: '[job] Review widgets#7.',
+  tasks: ['abc-1', 'abc-2'],
+}
 
 test('news reaches an idle driver as one tagged prompt', async ($, on) => {
   const clock = mock.clock(on)
@@ -72,4 +77,15 @@ test('a fork of the driver never polls', async ($, on) => {
   await $.session.start({ cwd: '/moto', surface: 'terminal', isInteractive: true })
   await clock.advance(9000)
   expect(seen.runs).toBe(0)
+})
+
+test('lines held for a task closed during the turn are dropped', async ($, on) => {
+  const clock = mock.clock(on)
+  const closed: Pass = { watching: 1, lines: [], notes: null, tasks: ['abc-2'] }
+  const seen = world(on, [NEWS, closed, closed])
+  await $.session.start({ cwd: '/moto', surface: 'terminal', isInteractive: true })
+  await $.turn.start({ text: 'hi', turnId: 't1' })
+  await clock.advance(3000)
+  await $.turn.complete({ answer: '', durationMs: 1, isAborted: false, turnId: 't1', reason: 'answer' })
+  expect(seen.prompts).toEqual([])
 })
