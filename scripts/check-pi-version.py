@@ -27,9 +27,10 @@ def main() -> int:
     declared = manifest.get("dependencies", {}) | manifest.get("devDependencies", {})
     errors: list[str] = []
     for package in PI_PACKAGES:
-        if declared.get(package) != runtime:
+        declared_version = declared.get(package)
+        if declared_version != runtime:
             errors.append(
-                f"{package}: declared {declared.get(package)!r}, runtime {runtime}"
+                f"{package}: declared {declared_version!r}, runtime {runtime}"
             )
         try:
             installed = json.loads(
