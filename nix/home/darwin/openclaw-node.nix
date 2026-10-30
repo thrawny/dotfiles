@@ -42,8 +42,18 @@ in
         ];
         EnvironmentVariables = {
           HOME = config.home.homeDirectory;
-          PATH = "${config.home.profileDirectory}/bin:/nix/var/nix/profiles/default/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+          PATH = lib.concatStringsSep ":" [
+            "${config.home.profileDirectory}/bin"
+            "/nix/var/nix/profiles/default/bin"
+            "/opt/homebrew/bin"
+            "/usr/local/bin"
+            "/usr/bin"
+            "/bin"
+            "/usr/sbin"
+            "/sbin"
+          ];
         };
+        WorkingDirectory = config.home.homeDirectory;
         RunAtLoad = true;
         KeepAlive = true;
         ThrottleInterval = 15;
