@@ -4,7 +4,6 @@
   pkgs,
   llm-agents,
   nix-openclaw,
-  hermes-agent,
   zmx,
   ...
 }:
@@ -62,11 +61,6 @@ let
           ${lib.escapeShellArgs envArgs} \
           ${lib.getExe openclawPackage} "$@"
       '';
-  };
-  hermes = import ./hermes.nix { inherit lib pkgs; };
-  # Match the gateway's effective package, including dependency groups and fixes.
-  hermesPackage = config.services.hermes-agent.package.override {
-    inherit (config.services.hermes-agent) extraPythonPackages extraDependencyGroups;
   };
   forgejoHost = "forgejo.${config.dotfiles.tailnetDomain}";
   forgejoUrl = "https://${forgejoHost}";
@@ -172,115 +166,6 @@ let
         // extraServiceConfig
         // lib.optionalAttrs (execStartPre != [ ]) { ExecStartPre = execStartPre; };
       };
-    };
-
-  mkHermesDashboardAuthBootstrap =
-    let
-      passwordHashScript = pkgs.writeText "hermes-dashboard-password-hash.py" ''
-        import base64
-        import hashlib
-        import secrets
-
-        password = secrets.token_urlsafe(24)
-        n = 2**14
-        r = 8
-        p = 1
-        salt = secrets.token_bytes(16)
-        digest = hashlib.scrypt(
-            password.encode("utf-8"),
-            salt=salt,
-            n=n,
-            r=r,
-            p=p,
-            dklen=32,
-            maxmem=0,
-        )
-        print(password)
-        print(
-            "scrypt$"
-            + str(n)
-            + "$"
-            + str(r)
-            + "$"
-            + str(p)
-            + "$"
-            + base64.b64encode(salt).decode()
-            + "$"
-            + base64.b64encode(digest).decode()
-        )
-      '';
-    in
-    pkgs.writeShellApplication {
-      name = "hermes-dashboard-auth-bootstrap";
-      runtimeInputs = [
-        pkgs.coreutils
-        pkgs.gnugrep
-        pkgs.python3
-      ];
-      text = ''
-        set -euo pipefail
-
-        hermes_dir=${lib.escapeShellArg "${hermes.home}/.hermes"}
-        env_path=${lib.escapeShellArg hermes.envFile}
-        password_path="$hermes_dir/dashboard-password"
-
-        install -d -m 0750 -o hermes -g hermes "$hermes_dir"
-        if [ ! -e "$env_path" ]; then
-          install -m 0600 -o hermes -g hermes /dev/null "$env_path"
-        fi
-
-        set_env_var() {
-          key="$1"
-          value="$2"
-          tmp="$(mktemp)"
-          grep -v "^$key=" "$env_path" > "$tmp" || true
-          printf '%s=%s\n' "$key" "$value" >> "$tmp"
-          install -m 0600 -o hermes -g hermes "$tmp" "$env_path"
-          rm -f "$tmp"
-        }
-
-        ensure_env_var() {
-          key="$1"
-          value="$2"
-          if ! grep -q "^$key=" "$env_path"; then
-            set_env_var "$key" "$value"
-          fi
-        }
-
-        ensure_env_var HERMES_DASHBOARD_BASIC_AUTH_USERNAME admin
-
-        needs_password=false
-        if ! grep -Eq '^(HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH|HERMES_DASHBOARD_BASIC_AUTH_PASSWORD)=' "$env_path"; then
-          needs_password=true
-        elif [ ! -f "$password_path" ] && ! grep -q '^HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=' "$env_path"; then
-          needs_password=true
-        fi
-
-        if [ "$needs_password" = true ]; then
-          mapfile -t generated < <(python3 ${passwordHashScript})
-          password="''${generated[0]}"
-          password_hash="''${generated[1]}"
-
-          set_env_var HERMES_DASHBOARD_BASIC_AUTH_PASSWORD_HASH "$password_hash"
-
-          password_tmp="$(mktemp)"
-          printf '%s\n' "$password" > "$password_tmp"
-          install -m 0600 -o root -g root "$password_tmp" "$password_path"
-          rm -f "$password_tmp"
-        fi
-
-        if ! grep -q '^HERMES_DASHBOARD_BASIC_AUTH_SECRET=' "$env_path"; then
-          secret="$(python3 - <<'PY'
-        import secrets
-        print(secrets.token_urlsafe(48))
-        PY
-        )"
-          set_env_var HERMES_DASHBOARD_BASIC_AUTH_SECRET "$secret"
-        fi
-
-        chown hermes:hermes "$env_path"
-        chmod 0600 "$env_path"
-      '';
     };
 
   mkForgejoBootstrap =
@@ -413,14 +298,6 @@ lib.mkMerge [
       ];
     };
 
-    system.build.hermes-web-check =
-      pkgs.runCommand "hermes-web-check"
-        { nativeBuildInputs = [ (pkgs.python3.withPackages (ps: [ ps.requests ])) ]; }
-        ''
-          python3 ${../../scripts/check-hermes-web} ${hermesPackage}/bin/hermes ${hermesPackage.hermesVenv}/bin/python3
-          touch "$out"
-        '';
-
     system.build.openclaw-check =
       pkgs.runCommand "openclaw-config-check"
         {
@@ -523,7 +400,6 @@ lib.mkMerge [
       "L+ ${openclaw.stateDir}/openclaw.json - - - - ${openclaw.configFile}"
       "d /var/lib/openclaw-ui 0755 root root -"
       "C ${openclaw.uiRoot} - root root - ${openclaw.uiSource}"
-      "d /srv/agents/hermes 0750 hermes hermes -"
     ];
 
     services.tailscaleServe.services = {
@@ -532,12 +408,6 @@ lib.mkMerge [
         wants = [ "openclaw.service" ];
         after = [ "openclaw.service" ];
       };
-      hermes-dashboard = {
-        serviceName = "svc:hermes";
-        target = "http://127.0.0.1:9119";
-        wants = [ "hermes-dashboard.service" ];
-        after = [ "hermes-dashboard.service" ];
-      };
     };
   }
 
@@ -545,12 +415,6 @@ lib.mkMerge [
     name = "openclaw";
     uid = 3101;
     description = "OpenClaw agent service";
-  })
-
-  (mkAgentUser {
-    name = "hermes";
-    uid = 3102;
-    description = "Hermes agent service";
   })
 
   (mkAgentService {
@@ -578,172 +442,4 @@ lib.mkMerge [
     ];
   })
 
-  {
-    services.hermes-agent = {
-      enable = true;
-      # The pm-pinned Node 26.12.1 miscomputes fractional arithmetic under
-      # macOS 15 Rosetta, breaking npm's cache sizing. Nixpkgs' Node 26 works
-      # for both the frontend builds and the shipped runtime.
-      package = hermes-agent.packages.${system}.default.override (prev: {
-        pmPackages = prev.pmPackages // {
-          node = hermes-agent.inputs.nixpkgs.legacyPackages.${system}.nodejs_26;
-        };
-      });
-      createUser = false;
-      user = "hermes";
-      group = "hermes";
-      stateDir = hermes.home;
-      workingDirectory = hermes.workspace;
-      addToSystemPackages = true;
-      extraArgs = [
-        "run"
-        "--replace"
-        "--accept-hooks"
-      ];
-      extraDependencyGroups = [ "messaging" ];
-      extraPackages = commonPath;
-      restartSec = 10;
-      settings = {
-        dashboard.public_url = "https://hermes.${config.dotfiles.tailnetDomain}";
-        plugins.enabled = [
-          "discord"
-          "telegram"
-        ];
-
-        model = {
-          provider = "openai-codex";
-          default = "gpt-6.1-sol";
-        };
-
-        agent.reasoning_effort = "low";
-
-        image_gen = {
-          provider = "openai-codex";
-          openai-codex.model = "gpt-image-2-medium";
-        };
-
-        compression = {
-          threshold = 0.85;
-          codex_gpt55_autoraise = false;
-        };
-
-        terminal = {
-          backend = "local";
-          working_dir = hermes.workspace;
-          cwd = hermes.workspace;
-        };
-
-        agent.restart_drain_timeout = 60;
-
-        discord = {
-          require_mention = true;
-          thread_require_mention = false;
-          auto_thread = true;
-          reactions = true;
-          allowed_channels = [
-            "777231848123924561"
-            "1510629338264113252"
-            "1512036755673448579"
-          ];
-          free_response_channels = [ "1512036755673448579" ];
-          history_backfill = true;
-          history_backfill_limit = 50;
-          allow_mentions = {
-            everyone = false;
-            roles = false;
-            users = true;
-            replied_user = true;
-          };
-        };
-
-        telegram = {
-          require_mention = true;
-          exclusive_bot_mentions = true;
-          group_allowed_chats = [ "-1003968451169" ];
-        };
-      };
-    };
-
-    systemd.services.hermes-dashboard = {
-      description = "Hermes Agent web dashboard";
-      wantedBy = [ "multi-user.target" ];
-      wants = [
-        "network-online.target"
-        "hermes-agent.service"
-      ];
-      after = [
-        "network-online.target"
-        "hermes-agent.service"
-      ];
-      path = [
-        hermesPackage
-        pkgs.bash
-        pkgs.coreutils
-      ]
-      ++ commonPath;
-      environment = {
-        HOME = hermes.home;
-        HERMES_HOME = "${hermes.home}/.hermes";
-        HERMES_MANAGED = "true";
-        USER = "hermes";
-        LOGNAME = "hermes";
-        XDG_RUNTIME_DIR = "/run/user/3102";
-      };
-      serviceConfig = {
-        User = "hermes";
-        Group = "hermes";
-        WorkingDirectory = hermes.workspace;
-        ExecStartPre = "+${mkHermesDashboardAuthBootstrap}/bin/hermes-dashboard-auth-bootstrap";
-        ExecStart = "${hermesPackage}/bin/hermes dashboard --no-open --host 127.0.0.1 --port 9119 --skip-build";
-        Restart = "always";
-        RestartSec = 10;
-        UMask = "0007";
-        NoNewPrivileges = true;
-        ProtectSystem = "strict";
-        ProtectHome = false;
-        ReadWritePaths = [
-          hermes.home
-          hermes.workspace
-          "/run/user/3102"
-        ];
-        PrivateTmp = true;
-        TasksMax = 1024;
-      };
-    };
-
-    systemd.services.hermes-agent = {
-      wants = [
-        "linger-users.service"
-        "user@3102.service"
-      ];
-      after = [
-        "linger-users.service"
-        "user@3102.service"
-      ];
-      environment = {
-        USER = "hermes";
-        LOGNAME = "hermes";
-        XDG_RUNTIME_DIR = "/run/user/3102";
-        DOCKER_HOST = "unix:///run/user/3102/podman/podman.sock";
-        FJ_FALLBACK_HOST = forgejoUrl;
-      };
-      serviceConfig = {
-        ExecStartPre = "+${
-          mkForgejoBootstrap {
-            agentName = "hermes";
-            botUser = "maelle-bot";
-            botDisplayName = "Maelle";
-            botEmail = "maelle-bot@obelisk.local";
-            uid = 3102;
-            extraExports.HERMES_HOME = "${hermes.home}/.hermes";
-            inherit (hermes) workspace;
-          }
-        }/bin/hermes-forgejo-bootstrap";
-        ReadWritePaths = lib.mkAfter [ "/run/user/3102" ];
-        UnsetEnvironment = [ "MESSAGING_CWD" ];
-        TasksMax = 4096;
-        TimeoutStopSec = 240;
-      };
-    };
-  }
 ]

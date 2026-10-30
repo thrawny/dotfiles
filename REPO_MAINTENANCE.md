@@ -36,7 +36,6 @@ These checkouts are intentionally retained for reading source and documentation.
 |---|---|---|
 | `acpx` | ACP CLI behavior, skills, and implementation reference | Fetch/pull only when investigating current behavior. |
 | `openclaw` | OpenClaw source and integration reference | Update on demand. |
-| `hermes-agent` | Hermes source and service integration reference | Update on demand. |
 | `pi` | Pi source and documentation reference | Update on demand; the active Pi binary and docs come from the Nix-installed version. |
 
 Behind counts on reference repositories are not maintenance debt.

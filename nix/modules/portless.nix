@@ -45,7 +45,7 @@ in
   };
   # Daemon-launched agents have explicit PATHs, not the login-shell system PATH.
   systemd.services =
-    lib.genAttrs [ "t3code" "openclaw" "hermes-agent" ] (_: {
+    lib.genAttrs [ "t3code" "openclaw" ] (_: {
       path = [ package ];
     })
     // {

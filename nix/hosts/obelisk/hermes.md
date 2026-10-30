@@ -1,34 +1,11 @@
-# Hermes on Obelisk
+# Hermes retirement on Obelisk
 
-Dashboard: https://hermes.tailf85bba.ts.net/
+Hermes is retired from the authoritative host configuration. Its agent,
+dashboard, Tailscale Serve route, service account and package input are removed.
+OpenClaw is managed separately; see [openclaw.md](openclaw.md).
 
-Sign in as `admin`. The generated password is stored on Obelisk at
-`/srv/agents/hermes/home/.hermes/dashboard-password`, readable only by root.
-The bootstrap preserves existing credentials across deployments.
-
-Chat defaults to `gpt-6.1-sol` through the `openai-codex` provider with low reasoning.
-
-## Checks
-
-Run from the repository root:
-
-```sh
-just nix::check-hermes-web
-just nix::tailscale-serve-health
-ssh root@obelisk 'systemctl show hermes-dashboard hermes-agent -p Id -p ActiveState -p SubState -p NRestarts'
-```
-
-`check-hermes-web` starts the actual packaged dashboard in an isolated temporary
-home without network access. It checks the login page, rejects anonymous API
-access and an incorrect password, then authenticates and reads sessions.
-
-## Packaging and proxy
-
-`nix/modules/agents.nix` gives the dashboard and gateway the same effective
-Hermes package, including messaging dependencies. Upstream's `setup.py` now
-includes all root Python modules in the wheel, including the state modules
-that previously needed a local workaround.
-
-The dashboard listens only on `127.0.0.1:9119`. Nix manages Tailscale Serve's
-`svc:hermes` HTTPS proxy. `dashboard.public_url` declares the browser-facing URL
-and keeps authentication required despite the loopback listener.
+Retirement must preserve private conversation history, credentials and workspace
+source in a root-only rollback archive. Account UID 3102 must not be reused while
+retained files still carry that ownership. Existing Nix generations can retain
+Hermes packages; removing configuration alone does not reclaim their closures.
+Do not prune unrelated generations or OpenClaw recovery snapshots.

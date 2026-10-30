@@ -1,7 +1,6 @@
 # Private web previews on Obelisk
 
-Portless is available to local users, including `thrawny`, `t3code`, `openclaw`
-and `hermes`. Tailscale sharing is on by default.
+Portless is available to local users, including `thrawny`, `t3code`, and `openclaw`. Tailscale sharing is on by default.
 
 Run from your project or worktree:
 
