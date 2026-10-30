@@ -27,6 +27,9 @@ It compares against the installed fleet, runs `just check`, and builds only app
 packages, with Linux builds originating on M1's Linux VM. Package publication may
 lag upstream releases: this job consumes the supported Nix package inputs and
 does not modify their upstream repositories or use app self-updaters.
+These inputs also contain packages used elsewhere in dotfiles. Their source pins
+advance together, but the nightly rollout applies only these app runtimes; other
+packages remain pending a separately authorized normal generation activation.
 
 Release-specific scoped rollout and supported migrations run through a separate
 noninteractive `codex exec` agent using the M1's existing Codex login/model
@@ -70,6 +73,8 @@ State and private logs live in `~/.local/state/nightly-app-update/` (0700):
   agent result/log, mutation intents/results, health and backup/restore evidence.
 - `paused`: prevents new maintenance; it does not interrupt work already running.
 - `lock`: an advisory lock held for the whole attempt; overlapping launches exit.
+- `gcroots/`: retains the installed scheduler and its runtime closure independently
+  of Home Manager generations; previous roots are preserved during replacement.
 
 Unchanged source clones and clones deferred before live maintenance are disposable;
 the runner deletes only those owned candidate directories. Evidence and backups

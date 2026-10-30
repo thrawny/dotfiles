@@ -102,6 +102,10 @@ def changed_versions(before, after):
     return changed
 
 
+def changed_apps(targets):
+    return {target.split("-", 1)[1] for target in targets}
+
+
 def validate_release(version, release, nightly):
     version_key(version)
     if release.get("tag_name") != f"v{version}" or release.get("draft") is not False:
@@ -579,7 +583,7 @@ def prepare(checkout, destination, build=True):
     releases = {
         app: official_release(app, after[f"m1-{app}"])
         for app in ("t3", "openclaw")
-        if f"m1-{app}" in changed
+        if app in changed_apps(changed)
     }
     result = {
         "outcome": "prepared",

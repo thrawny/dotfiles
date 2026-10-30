@@ -31,6 +31,14 @@ def test_version_updates_cover_both_hosts():
     ]
 
 
+def test_obelisk_only_drift_still_selects_official_release_check():
+    installed = fleet(openclaw="2026.10.8")
+    installed["obelisk-openclaw"] = "2026.10.7"
+    changed = updater.changed_versions(installed, fleet(openclaw="2026.10.8"))
+    assert changed == ["obelisk-openclaw"]
+    assert updater.changed_apps(changed) == {"openclaw"}
+
+
 @pytest.mark.parametrize("version", ["unknown", "2026.10.7-rc.1", "", "2026.9.9"])
 def test_unknown_versions_and_downgrades_hold(version):
     with pytest.raises(ValueError):
