@@ -38,7 +38,7 @@ in
           "--display-name"
           "M1"
           "--commands"
-          "system.run.prepare,system.run,system.which"
+          "system.run.prepare,system.run,system.which,system.execApprovals.get"
         ];
         EnvironmentVariables = {
           HOME = config.home.homeDirectory;

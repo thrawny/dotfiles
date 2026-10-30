@@ -4,7 +4,9 @@ The M1 runs a headless companion for the existing gateway. Home Manager owns
 `org.nix-community.home.openclaw-node`; activate changes with `just switch-hm`.
 The laptop must be awake and logged in. Telegram remains on the gateway.
 
-The service advertises `system.run.prepare`, `system.run` and `system.which`. Local execution approvals
+The service advertises `system.run.prepare`, `system.run`, `system.which` and
+`system.execApprovals.get`. The read-only policy query lets the gateway recognize
+local executable allowances; remote policy writes stay disabled. Local execution approvals
 are separate from gateway pairing and command approval. Preserve `~/.openclaw`
 when rebuilding: it holds the device identity and durable paired credential.
 Do not copy the gateway's provider credentials or administrator token to the Mac.
@@ -20,6 +22,19 @@ Before enrollment, configure local approvals through `openclaw approvals set`:
 use `security: "allowlist"`, `ask: "on-miss"`, `askFallback: "deny"` and
 `autoAllowSkills: false`. These are runtime permissions in SQLite, rather than
 the immutable Nix configuration. Review individual command grants as needed.
+
+For commands needing approval, the shared agent sends native approval requests
+to the configured operator's Telegram DM. The private service EnvironmentFile
+provides `OPENCLAW_TELEGRAM_EXEC_APPROVER`; group membership alone never grants
+approval rights. Native approval buttons use the existing Telegram DM capability.
+
+Invoke user-installed commands through the node's `PATH` (for example, `sonos`).
+This version accepts approval requests for that form, while it rejects an
+absolute writable executable path inside the node shell tool. A remembered
+approval can be limited to the command and arguments shown in the request;
+it does not necessarily allow every operation of that CLI. Verify the complete
+request, operator decision and node result from Telegram before claiming that
+interaction works. Headless CLI agent probes cannot wait for human approval.
 
 Inspect the service with:
 

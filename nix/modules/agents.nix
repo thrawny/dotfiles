@@ -435,6 +435,7 @@ lib.mkMerge [
           export OPENCLAW_NIX_MODE=1
           # Runtime group identifiers remain outside the public Nix store config.
           export OPENCLAW_SHARED_GROUP_ID=-1000000000000
+          export OPENCLAW_TELEGRAM_EXEC_APPROVER=1000000000
           export OPENCLAW_INCLUDE_ROOTS="$TMPDIR"
           printf '%s' '{}' > "$TMPDIR/shared-groups.json"
           jq --arg include "$TMPDIR/shared-groups.json" \

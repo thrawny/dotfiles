@@ -146,3 +146,10 @@ Doctor's private configuration and log are archived there under `doctor-success/
 its temporary optional-plugin installs are archived under `doctor-installs/`.
 The Nix configuration remains authoritative. Doctor can install optional plugins
 while Nix mode is disabled, so reconcile those side effects after a migration.
+
+Shared-agent node command approvals are sent to the operator's Telegram DM.
+Set `OPENCLAW_TELEGRAM_EXEC_APPROVER` in the private service EnvironmentFile to
+the verified numeric operator ID. The public config filters requests to agent
+`shared`; existing command ownership and other agents remain unchanged. A
+successful config/recipient check does not verify delivery or the operator's
+button click. Complete that check with a real Telegram-origin read-only command.

@@ -199,6 +199,12 @@ let
       telegram = {
         enabled = true;
         groupPolicy = "allowlist";
+        execApprovals = {
+          enabled = true;
+          approvers = [ "\${OPENCLAW_TELEGRAM_EXEC_APPROVER}" ];
+          target = "dm";
+          agentFilter = [ "shared" ];
+        };
         groups."$include" = sharedTelegramGroups;
         groups."-5176945403" = {
           enabled = true;
