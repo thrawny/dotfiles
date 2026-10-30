@@ -153,6 +153,7 @@
       direnvAssets = import ./lib/direnv-assets.nix;
       flakeArgs = {
         inherit
+          nix-openclaw
           quotabar
           agent-switch
           agentAssets

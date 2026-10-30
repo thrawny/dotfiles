@@ -12,4 +12,6 @@
   dotfiles.t3code.enable = true;
   dotfiles.t3code.port = 4773;
   dotfiles.t3code.httpsPort = 8445;
+  dotfiles.openclawNode.enable = true;
+  dotfiles.openclawNode.host = "openclaw.tailf85bba.ts.net";
 }
