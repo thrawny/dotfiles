@@ -7,12 +7,17 @@
 }:
 let
   cfg = config.dotfiles.openclawNode;
-  package = nix-openclaw.packages.${pkgs.stdenv.hostPlatform.system}.openclaw-gateway;
+  inherit (cfg) package;
   logs = "${config.home.homeDirectory}/Library/Logs/openclaw-node";
 in
 {
   options.dotfiles.openclawNode = {
     enable = lib.mkEnableOption "headless OpenClaw companion node";
+    package = lib.mkOption {
+      type = lib.types.package;
+      default = nix-openclaw.packages.${pkgs.stdenv.hostPlatform.system}.openclaw-gateway;
+      description = "Pinned OpenClaw node runtime.";
+    };
     host = lib.mkOption {
       type = lib.types.str;
       description = "Existing gateway TLS hostname.";

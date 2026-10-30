@@ -447,6 +447,7 @@ let
   };
 in
 {
+  system.build.t3code-runtime = package;
   system.build.t3code-settings = serverSettings;
 
   users.groups.t3code = { };

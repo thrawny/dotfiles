@@ -20,3 +20,5 @@ My personal configuration for Linux and macOS, managed with Nix flakes, Home Man
 - `scripts/` — development and validation helpers.
 - `skills/` — shared agent skills.
 - `docs/` — component documentation and reference guides.
+
+The M1's [nightly app maintenance](docs/nightly-app-updates.md) checks OpenClaw and T3 on both M1 and Obelisk.

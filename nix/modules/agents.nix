@@ -298,6 +298,7 @@ lib.mkMerge [
       ];
     };
 
+    system.build.openclaw-runtime = openclawPackage;
     system.build.openclaw-check =
       pkgs.runCommand "openclaw-config-check"
         {

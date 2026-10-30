@@ -96,6 +96,31 @@ pi: pi-install-deps check-pi-version
 # Update all flake inputs and switch
 update: nix::update
 
+# Prepare app-only fleet candidates without changing installed services or pins.
+prepare-nightly-app-update:
+    python3 scripts/nightly-app-update.py --prepare --state-dir "$HOME/.local/state/nightly-app-update"
+
+test-nightly-app-update:
+    @just test-python tests/test_nightly_app_update.py
+
+# Install only the updater schedule; leave active app services and HM untouched.
+install-nightly-app-update:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    updater_plist=$(nix build --no-link --print-out-paths ./nix#homeConfigurations.thrawnym1.config.dotfiles.nightlyAppUpdate.plist)
+    python3 scripts/install-nightly-app-update.py "$updater_plist"
+
+nightly-app-update-status:
+    python3 scripts/nightly-app-update.py --verify --state-dir "$HOME/.local/state/nightly-app-update"
+    launchctl print "gui/$(id -u)/org.nix-community.home.nightly-app-update"
+
+nightly-app-update-pause:
+    mkdir -p "$HOME/.local/state/nightly-app-update"
+    touch "$HOME/.local/state/nightly-app-update/paused"
+
+nightly-app-update-resume:
+    rm -f "$HOME/.local/state/nightly-app-update/paused"
+
 # Fetch private skills and refresh links on hosts that opt in through Home Manager
 private-skills-sync:
     private-skills-sync
@@ -279,7 +304,7 @@ check:
     nix develop ./nix --command just fmt check-parallel
 
 [parallel]
-check-parallel: test-obelisk-storage check-blueprint test-keepawake test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-direnv test-remote-mode test-prctl check-private-skills nix::eval
+check-parallel: test-nightly-app-update test-obelisk-storage check-blueprint test-keepawake test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-direnv test-remote-mode test-prctl check-private-skills nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

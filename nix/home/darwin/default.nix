@@ -15,6 +15,7 @@
     ./setup.nix
     ./t3code.nix
     ./openclaw-node.nix
+    ./nightly-app-update.nix
   ];
 
   # Determinate owns the Nix installation, daemon, and configuration on macOS.
