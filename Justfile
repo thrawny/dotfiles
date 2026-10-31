@@ -312,6 +312,10 @@ check-all: fmt lint nix::eval-all
 # CI: lint, typecheck, format, and test
 ci: fmt lint typecheck check-theme check-blueprint test
 
+# Apply the canonical Monokai palette to the native Herdr desktop app
+herdr-app-theme:
+    python3 scripts/herdr-app-theme.py
+
 # Build the Rosetta Linux builder for Apple Silicon
 build-linux-builder:
     nix build ./nix#linux-builder --no-link --print-out-paths
