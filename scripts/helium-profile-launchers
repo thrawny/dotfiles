@@ -55,11 +55,15 @@ restart_elephant() {
   fi
 }
 
+is_generated() {
+  grep -qxF "$marker" "$1"
+}
+
 remove_generated() {
   local file
   shopt -s nullglob
   for file in "$applications_dir"/helium-profile-*.desktop "$applications_dir"/helium.desktop; do
-    if [[ -f "$file" ]] && grep -qxF "$marker" "$file"; then
+    if [[ -f "$file" ]] && is_generated "$file"; then
       rm -f "$file"
     fi
   done
@@ -148,7 +152,7 @@ fi
 shopt -s nullglob
 for file in "$applications_dir"/helium-profile-*.desktop; do
   filename=${file##*/}
-  if [[ -z "${wanted[$filename]:-}" ]] && grep -qxF "$marker" "$file"; then
+  if [[ -z "${wanted[$filename]:-}" ]] && is_generated "$file"; then
     rm -f "$file"
   fi
 done
@@ -156,7 +160,7 @@ shopt -u nullglob
 
 generic_override="$applications_dir/helium.desktop"
 if [[ "$hide_generic" == true ]]; then
-  if [[ -e "$generic_override" ]] && ! grep -qxF "$marker" "$generic_override"; then
+  if [[ -e "$generic_override" ]] && ! is_generated "$generic_override"; then
     echo "helium-profile-launchers: not replacing unmanaged $generic_override" >&2
     echo "helium-profile-launchers: the generic Helium entry remains visible" >&2
   else
@@ -171,7 +175,7 @@ EOF
     chmod 600 "$temporary"
     mv -f "$temporary" "$generic_override"
   fi
-elif [[ -f "$generic_override" ]] && grep -qxF "$marker" "$generic_override"; then
+elif [[ -f "$generic_override" ]] && is_generated "$generic_override"; then
   rm -f "$generic_override"
 fi
 

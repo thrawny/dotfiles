@@ -14,6 +14,10 @@ default:
 nuke-treesitter:
     bash scripts/nuke-treesitter.sh
 
+# Check the Helium profile launcher script without changing desktop entries
+check-helium-profile-launchers:
+    bash -n scripts/helium-profile-launchers
+
 # Interactive setup for a fresh Apple Silicon Mac
 bootstrap-mac:
     bin/bootstrap-mac
