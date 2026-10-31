@@ -72,6 +72,9 @@ State and private logs live in `~/.local/state/nightly-app-update/` (0700):
 - `runs/<Stockholm-date>/`: exact candidate manifest, release evidence, source,
   agent result/log, mutation intents/results, health and backup/restore evidence.
 - `paused`: prevents new maintenance; it does not interrupt work already running.
+- `dispatch.json`: installation's next-night deadline, independent of older receipts.
+- `installing`: a failed/interrupted schedule replacement holds dispatch until a
+  successful explicit reinstall; it never starts maintenance to repair itself.
 - `lock`: an advisory lock held for the whole attempt; overlapping launches exit.
 - `gcroots/`: retains the installed scheduler and its runtime closure independently
   of Home Manager generations; previous roots are preserved during replacement.
@@ -95,6 +98,8 @@ pending push, verify the exact retained commit against origin; push that commit
 only if still a valid fast-forward, or reconcile source explicitly. Do not replay
 the live upgrade to retry a push. After reconciliation, archive the receipt and
 set `latest.json` to the verified terminal outcome with its original night.
+Pause and wait for an active attempt to finish before manually activating a whole
+Home Manager generation; the scoped installer refuses to interrupt a running job.
 
 Health includes exact live versions, HTTP/service readiness, config/plugin health,
 auth readiness, node pairing and Telegram connection status, without delivery.

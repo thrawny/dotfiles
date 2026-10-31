@@ -14,6 +14,13 @@ spec = importlib.util.spec_from_file_location(
 assert spec is not None and spec.loader is not None
 updater = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(updater)
+install_spec = importlib.util.spec_from_file_location(
+    "install_nightly_app_update",
+    Path(__file__).resolve().parents[1] / "scripts/install-nightly-app-update.py",
+)
+assert install_spec is not None and install_spec.loader is not None
+installer = importlib.util.module_from_spec(install_spec)
+install_spec.loader.exec_module(installer)
 
 
 def fleet(t3="0.1.3-nightly.20261025.3669", openclaw="2026.10.7"):
@@ -22,6 +29,44 @@ def fleet(t3="0.1.3-nightly.20261025.3669", openclaw="2026.10.7"):
 
 def test_no_change():
     assert updater.changed_versions(fleet(), fleet()) == []
+
+
+def test_installation_suppresses_due_old_receipt_until_next_night():
+    now = dt.datetime(2026, 10, 31, 15, tzinfo=dt.UTC)
+    old = {"outcome": "failed", "night": "2026-10-30"}
+    assert updater.attempt_reason(old, now) is None
+    deadline = installer.next_dispatch(now)
+    policy = {"not_before": deadline.isoformat()}
+    assert (
+        updater.installation_reason(now, policy, False)
+        == "schedule-installation-window"
+    )
+    assert updater.installation_reason(deadline, policy, False) is None
+    assert (
+        updater.installation_reason(deadline, policy, True)
+        == "schedule-installation-incomplete"
+    )
+
+
+def test_installation_before_two_waits_for_the_upcoming_night():
+    now = dt.datetime(2026, 10, 31, 0, 59, tzinfo=dt.UTC)
+    assert installer.next_dispatch(now) == dt.datetime(2026, 10, 31, 1, tzinfo=dt.UTC)
+
+
+def test_schedule_final_verification_failure_restores_prior_plist(tmp_path):
+    import plistlib
+
+    target = tmp_path / "schedule.plist"
+    prior = plistlib.dumps({"version": "old"})
+    target.write_bytes(prior)
+
+    def operate(action, file):
+        if action == "verify" and plistlib.loads(file.read_bytes())["version"] == "new":
+            raise RuntimeError("verification failed")
+
+    with pytest.raises(RuntimeError):
+        installer.replace_agent(target, {"version": "new"}, True, operate)
+    assert target.read_bytes() == prior
 
 
 def test_version_updates_cover_both_hosts():

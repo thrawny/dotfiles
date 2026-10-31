@@ -73,13 +73,13 @@ in
       enable = true;
       config = agentConfig;
     };
-    home.activation.nightlyAppUpdateState = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      run mkdir -p ${lib.escapeShellArg state}
-      run chmod 0700 ${lib.escapeShellArg state}
-      if [[ ! -e ${lib.escapeShellArg "${state}/latest.json"} ]]; then
-        run ${pkgs.python3}/bin/python3 ${../../../scripts/nightly-app-update.py} \
-          --initialize --state-dir ${lib.escapeShellArg state}
-      fi
-    '';
+    home.activation.nightlyAppUpdateState =
+      lib.hm.dag.entryBetween [ "setupLaunchAgents" ] [ "writeBoundary" ]
+        ''
+          run mkdir -p ${lib.escapeShellArg state}
+          run chmod 0700 ${lib.escapeShellArg state}
+          run ${pkgs.python3}/bin/python3 ${../../../scripts/nightly-app-update.py} \
+            --initialize --state-dir ${lib.escapeShellArg state}
+        '';
   };
 }

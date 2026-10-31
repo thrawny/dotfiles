@@ -79,6 +79,15 @@ def due_day(now, previous):
     return day.isoformat() if previous != day.isoformat() else None
 
 
+def installation_reason(now, policy, installing):
+    if installing:
+        return "schedule-installation-incomplete"
+    deadline = policy.get("not_before")
+    if deadline and now < dt.datetime.fromisoformat(deadline):
+        return "schedule-installation-window"
+    return None
+
+
 def version_key(value):
     match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:-nightly\.(\d{8})\.(\d+))?", value)
     if not match:
@@ -381,6 +390,10 @@ def scheduled(checkout, state_directory, task_file):
     state_file = state_directory / "latest.json"
     previous = json.loads(state_file.read_text()) if state_file.exists() else {}
     now = dt.datetime.now(dt.UTC)
+    policy_file = state_directory / "dispatch.json"
+    policy = json.loads(policy_file.read_text()) if policy_file.exists() else {}
+    if installation_reason(now, policy, (state_directory / "installing").exists()):
+        return
     if (state_directory / "paused").exists():
         return
     if previous.get("outcome") in {"maintaining", "uncertain", "pending-push"}:
@@ -657,6 +670,12 @@ def main():
                 {
                     "state": receipt,
                     "paused": (args.state_dir / "paused").exists(),
+                    "installation_incomplete": (args.state_dir / "installing").exists(),
+                    "not_before": json.loads(
+                        (args.state_dir / "dispatch.json").read_text()
+                    ).get("not_before")
+                    if (args.state_dir / "dispatch.json").exists()
+                    else None,
                     "timezone": "Europe/Stockholm",
                     "next_night": next_night.isoformat(),
                     "dispatch_resolution_seconds": 60,
@@ -671,6 +690,13 @@ def main():
         except BlockingIOError:
             return
         if args.initialize:
+            local = dt.datetime.now(ZONE)
+            deadline = dt.datetime.combine(local.date(), dt.time(2), ZONE)
+            if deadline <= local:
+                deadline += dt.timedelta(days=1)
+            write_json(
+                args.state_dir / "dispatch.json", {"not_before": deadline.isoformat()}
+            )
             if not (args.state_dir / "latest.json").exists():
                 persist(
                     args.state_dir,

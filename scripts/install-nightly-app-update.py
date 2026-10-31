@@ -12,6 +12,50 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 
+def next_dispatch(now):
+    local = now.astimezone(ZoneInfo("Europe/Stockholm"))
+    deadline = dt.datetime.combine(local.date(), dt.time(2), local.tzinfo)
+    if deadline <= local:
+        deadline += dt.timedelta(days=1)
+    return deadline
+
+
+def defer_dispatch(state, now):
+    temporary = state / "dispatch.new"
+    with temporary.open("w") as stream:
+        json.dump({"not_before": next_dispatch(now).isoformat()}, stream)
+        stream.flush()
+        os.fsync(stream.fileno())
+    temporary.replace(state / "dispatch.json")
+
+
+def replace_agent(target, config, loaded, operate):
+    previous = target.read_bytes() if target.exists() else None
+    if loaded and previous is None:
+        raise ValueError("Cannot retain the loaded scheduler's original plist")
+    temporary = target.with_suffix(".new")
+    try:
+        if loaded:
+            operate("bootout", target)
+        with temporary.open("wb") as stream:
+            plistlib.dump(config, stream)
+        temporary.replace(target)
+        operate("bootstrap", target)
+        operate("verify", target)
+    except Exception:
+        # The replacement may already be loaded when final verification fails.
+        operate("discard", target)
+        if previous is not None:
+            temporary.write_bytes(previous)
+            temporary.replace(target)
+            if loaded:
+                operate("bootstrap", target)
+                operate("verify", target)
+        else:
+            target.unlink(missing_ok=True)
+        raise
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("plist", type=Path)
@@ -71,29 +115,31 @@ def main():
         loaded = subprocess.run(
             ["/bin/launchctl", "print", f"{domain}/{label}"], capture_output=True
         )
-        previous = target.read_bytes() if target.exists() else None
-        if loaded.returncode == 0:
-            subprocess.run(
-                ["/bin/launchctl", "bootout", f"{domain}/{label}"], check=True
-            )
-        temporary = target.with_suffix(".new")
-        try:
-            with temporary.open("wb") as stream:
-                plistlib.dump(config, stream)
-            temporary.replace(target)
-            subprocess.run(
-                ["/bin/launchctl", "bootstrap", domain, str(target)], check=True
-            )
-        except Exception:
-            if previous is not None:
-                temporary.write_bytes(previous)
-                temporary.replace(target)
-                if loaded.returncode == 0:
-                    subprocess.run(
-                        ["/bin/launchctl", "bootstrap", domain, str(target)], check=True
-                    )
-            raise
-        subprocess.run(["/bin/launchctl", "print", f"{domain}/{label}"], check=True)
+
+        def operate(action, agent_file):
+            if action == "bootstrap":
+                subprocess.run(
+                    ["/bin/launchctl", "bootstrap", domain, str(agent_file)], check=True
+                )
+            elif action == "verify":
+                subprocess.run(
+                    ["/bin/launchctl", "print", f"{domain}/{label}"], check=True
+                )
+            else:
+                subprocess.run(
+                    ["/bin/launchctl", "bootout", f"{domain}/{label}"],
+                    check=action != "discard",
+                    capture_output=True,
+                )
+
+        marker = state / "installing"
+        marker.write_text(dt.datetime.now(dt.UTC).isoformat())
+        defer_dispatch(state, dt.datetime.now(dt.UTC))
+        # A failed/interrupted install keeps the marker: no maintenance may start
+        # until installation is explicitly completed and verified.
+        replace_agent(target, config, loaded.returncode == 0, operate)
+        defer_dispatch(state, dt.datetime.now(dt.UTC))
+        marker.unlink()
         print("Installed; initial run is suppressed until the next Stockholm night.")
 
 
