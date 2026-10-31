@@ -98,7 +98,7 @@ update: nix::update
 
 # Prepare app-only fleet candidates without changing installed services or pins.
 prepare-nightly-app-update:
-    python3 scripts/nightly-app-update.py --prepare --state-dir "$HOME/.local/state/nightly-app-update"
+    uv run --locked python scripts/nightly-app-update.py --prepare --state-dir "$HOME/.local/state/nightly-app-update"
 
 test-nightly-app-update:
     @just test-python tests/test_nightly_app_update.py
@@ -108,10 +108,10 @@ install-nightly-app-update:
     #!/usr/bin/env bash
     set -euo pipefail
     updater_plist=$(nix build --no-link --print-out-paths ./nix#homeConfigurations.thrawnym1.config.dotfiles.nightlyAppUpdate.plist)
-    python3 scripts/install-nightly-app-update.py "$updater_plist"
+    uv run --locked python scripts/install-nightly-app-update.py "$updater_plist"
 
 nightly-app-update-status:
-    python3 scripts/nightly-app-update.py --verify --state-dir "$HOME/.local/state/nightly-app-update"
+    uv run --locked python scripts/nightly-app-update.py --verify --state-dir "$HOME/.local/state/nightly-app-update"
     launchctl print "gui/$(id -u)/org.nix-community.home.nightly-app-update"
 
 nightly-app-update-pause:
