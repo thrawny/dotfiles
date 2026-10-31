@@ -149,13 +149,45 @@ def validate_input_scope(before, after):
     if old_inputs.keys() != new_inputs.keys():
         raise ValueError("Unexpected flake input additions or removals")
     for name in old_inputs.keys() - set(INPUTS):
-        old_node, new_node = old_inputs[name], new_inputs[name]
-        if not isinstance(old_node, str) or not isinstance(new_node, str):
-            raise ValueError("Unsupported root input reference")
-        if before["nodes"][old_node].get("locked") != after["nodes"][new_node].get(
-            "locked"
+        if locked_graph(before, old_inputs[name]) != locked_graph(
+            after, new_inputs[name]
         ):
             raise ValueError(f"Unrelated root input changed: {name}")
+
+
+def locked_graph(lock, reference):
+    """Compare semantic dependency graphs independent of lock node renaming."""
+    nodes = lock["nodes"]
+
+    def resolve(ref, follows=()):
+        if isinstance(ref, str):
+            if ref not in nodes:
+                raise ValueError("Unknown lock node")
+            return ref
+        if not isinstance(ref, list) or not all(isinstance(part, str) for part in ref):
+            raise ValueError("Unknown lock input reference")
+        marker = tuple(ref)
+        if marker in follows:
+            raise ValueError("Cyclic follows reference")
+        current = lock["root"]
+        for name in ref:
+            current = resolve(nodes[current]["inputs"][name], (*follows, marker))
+        return current
+
+    def visit(ref, ancestors=()):
+        key = resolve(ref)
+        if key in ancestors:
+            return {"cycle_depth": len(ancestors) - ancestors.index(key)}
+        node = nodes[key]
+        return {
+            "node": {name: value for name, value in node.items() if name != "inputs"},
+            "inputs": {
+                name: visit(child, (*ancestors, key))
+                for name, child in sorted(node.get("inputs", {}).items())
+            },
+        }
+
+    return visit(reference)
 
 
 def run(args, cwd, timeout=900):

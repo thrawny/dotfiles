@@ -183,6 +183,34 @@ def test_unrelated_input_pin_change_rejected():
         updater.validate_input_scope(baseline, candidate)
 
 
+def test_transitive_scope_handles_node_renames_and_follows():
+    import copy
+
+    baseline: dict[str, Any] = {
+        "root": "root",
+        "nodes": {
+            "root": {
+                "inputs": {"nix-openclaw": "app", "hunk": "hunk", "nixpkgs": "shared"}
+            },
+            "app": {"locked": {"rev": "old"}},
+            "hunk": {
+                "locked": {"rev": "same"},
+                "inputs": {"child": "child", "nixpkgs": ["nixpkgs"]},
+            },
+            "child": {"locked": {"rev": "retained"}},
+            "shared": {"locked": {"rev": "shared-pin"}},
+        },
+    }
+    candidate = copy.deepcopy(baseline)
+    candidate["nodes"]["child-renamed"] = candidate["nodes"].pop("child")
+    candidate["nodes"]["hunk"]["inputs"]["child"] = "child-renamed"
+    candidate["nodes"]["app"]["locked"]["rev"] = "new"
+    updater.validate_input_scope(baseline, candidate)
+    candidate["nodes"]["child-renamed"]["locked"]["rev"] = "unrelated"
+    with pytest.raises(ValueError):
+        updater.validate_input_scope(baseline, candidate)
+
+
 def test_failed_build_record_preserves_rollout_and_hides_tool_output(
     tmp_path, monkeypatch
 ):
