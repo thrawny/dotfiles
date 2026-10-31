@@ -296,3 +296,44 @@ def test_push_failure_retains_exact_commit_and_stops_replay(tmp_path):
         updater.attempt_reason(receipt, dt.datetime(2026, 11, 1, 10, tzinfo=dt.UTC))
         == "uncertain-mutation-requires-reconciliation"
     )
+
+
+def test_runtime_identity_rejects_candidate_config_argument():
+    package = "/nix/store/candidate-openclaw"
+    assert updater.runtime_matches(package + "/bin/openclaw node run", package)
+    assert updater.runtime_matches(
+        "/nix/store/node/bin/node " + package + "/lib/openclaw.mjs node run", package
+    )
+    assert not updater.runtime_matches(
+        "/nix/store/old/bin/openclaw --config " + package + "/config.json", package
+    )
+    assert not updater.runtime_matches(
+        "/nix/store/node/bin/node /nix/store/old/app.mjs --config "
+        + package
+        + "/config.json",
+        package,
+    )
+    assert not updater.runtime_matches(package + "-other/bin/openclaw", package)
+
+
+def test_failed_process_creation_is_retryable_without_live_mutation(
+    tmp_path, monkeypatch
+):
+    import json
+
+    task = tmp_path / "task.md"
+    task.write_text("No live operations in this test")
+    monkeypatch.setenv("PATH", "")
+    with pytest.raises(updater.MaintenanceNotStarted):
+        updater.launch_maintenance(tmp_path, tmp_path, task, {})
+    assert (tmp_path / "agent.log").read_text() == ""
+    monkeypatch.setattr(
+        updater, "prepare", lambda *_a, **_kw: {"outcome": "prepared", "changed": []}
+    )
+    monkeypatch.setattr(updater, "idle_reason", lambda: None)
+    monkeypatch.setattr(updater, "build_candidates", lambda *_a: {})
+    updater.scheduled(tmp_path, tmp_path, task)
+    receipt = json.loads((tmp_path / "latest.json").read_text())
+    assert receipt["outcome"] == "failed"
+    tomorrow = dt.datetime.now(dt.UTC) + dt.timedelta(days=1)
+    assert updater.attempt_reason(receipt, tomorrow) is None

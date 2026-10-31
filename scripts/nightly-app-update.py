@@ -7,6 +7,7 @@ import fcntl
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import sqlite3
@@ -270,6 +271,10 @@ def idle_reason():
     return reason or remote_activity()
 
 
+class MaintenanceNotStarted(RuntimeError):
+    """The OS rejected process creation; no maintenance code has run."""
+
+
 def launch_maintenance(candidate, directory, task_file, manifest):
     """A separate launchd-owned agent survives T3's scoped service restart."""
     result_file = directory / "agent-result.json"
@@ -294,26 +299,29 @@ def launch_maintenance(candidate, directory, task_file, manifest):
         )
     )
     with (directory / "agent.log").open("w") as log:
-        process = subprocess.Popen(
-            [
-                "codex",
-                "exec",
-                "--ephemeral",
-                "--dangerously-bypass-approvals-and-sandbox",
-                "--output-schema",
-                str(schema_file),
-                "--output-last-message",
-                str(result_file),
-                "--cd",
-                str(candidate),
-                "-",
-            ],
-            stdin=subprocess.PIPE,
-            stdout=log,
-            stderr=log,
-            text=True,
-            start_new_session=True,
-        )
+        try:
+            process = subprocess.Popen(
+                [
+                    "codex",
+                    "exec",
+                    "--ephemeral",
+                    "--dangerously-bypass-approvals-and-sandbox",
+                    "--output-schema",
+                    str(schema_file),
+                    "--output-last-message",
+                    str(result_file),
+                    "--cd",
+                    str(candidate),
+                    "-",
+                ],
+                stdin=subprocess.PIPE,
+                stdout=log,
+                stderr=log,
+                text=True,
+                start_new_session=True,
+            )
+        except OSError as error:
+            raise MaintenanceNotStarted() from error
         assert process.stdin is not None
         process.stdin.write(prompt)
         process.stdin.close()
@@ -336,6 +344,18 @@ def launch_maintenance(candidate, directory, task_file, manifest):
     if result["outcome"] not in {"updated", "deferred", "failed"}:
         raise ValueError("Unknown maintenance result")
     return result
+
+
+def runtime_matches(command_line, package):
+    arguments = shlex.split(command_line)
+    if not arguments:
+        return False
+    candidates = [arguments[0]]
+    # Interpreted entrypoints must immediately follow a recognized interpreter.
+    if Path(arguments[0]).name in {"node", "nodejs", "bash", "sh", "python3"}:
+        if len(arguments) > 1 and not arguments[1].startswith("-"):
+            candidates.append(arguments[1])
+    return any(value.startswith(package + "/") for value in candidates)
 
 
 def verify_commands(manifest):
@@ -365,7 +385,7 @@ def verify_commands(manifest):
             command_line = run(
                 ["/bin/ps", "-p", match[1], "-o", "command="], Path.home()
             )
-        if package not in command_line:
+        if not runtime_matches(command_line, package):
             raise ValueError(f"Running command does not match built {target} package")
 
 
@@ -499,7 +519,11 @@ def scheduled(checkout, state_directory, task_file):
         phase = current.get("outcome")
         if phase == "pending-push":
             return
-        outcome = "uncertain" if phase == "maintaining" else "failed"
+        outcome = (
+            "uncertain"
+            if phase == "maintaining" and not isinstance(error, MaintenanceNotStarted)
+            else "failed"
+        )
         persist(
             state_directory,
             {**receipt, "outcome": outcome, "error": type(error).__name__},
