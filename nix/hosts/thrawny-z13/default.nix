@@ -2,6 +2,7 @@
   lib,
   config,
   pkgs,
+  self,
   ...
 }:
 let
@@ -327,6 +328,8 @@ in
     };
 
     home.packages = [
+      self.packages.${pkgs.stdenv.hostPlatform.system}.herdr-app
+      self.packages.${pkgs.stdenv.hostPlatform.system}.herdr-core
       pkgs.google-chrome
       pkgs.slack
       pkgs.terraform

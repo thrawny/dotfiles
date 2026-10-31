@@ -417,6 +417,12 @@
             // lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
               keepawake = pkgs.callPackage ./packages/keepawake.nix { };
             }
+            // lib.optionalAttrs (system == "x86_64-linux") {
+              herdr-core = pkgs.callPackage ./packages/herdr-core.nix { };
+              herdr-app = pkgs.callPackage ./packages/herdr-app.nix {
+                inherit (self.packages.${system}) herdr-core;
+              };
+            }
             // lib.optionalAttrs (system == "aarch64-darwin") {
               inherit (nix-darwin.packages.${system}) darwin-rebuild;
               linux-builder = import ./packages/linux-builder.nix { inherit pkgs; };

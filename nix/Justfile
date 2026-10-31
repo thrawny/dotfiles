@@ -252,6 +252,10 @@ lock-darwin:
 eval-host target attr="system.build.toplevel.drvPath":
     nix eval --json ".#nixosConfigurations.{{ target }}.config.{{ attr }}" --no-write-lock-file
 
+# Build a flake package without activating a host
+build-package package:
+    nix build --no-link --print-out-paths ".#{{ package }}"
+
 # Build a specific NixOS host without activating or deploying it
 build-host target:
     #!/usr/bin/env bash
