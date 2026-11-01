@@ -235,6 +235,38 @@ def test_failed_build_record_preserves_rollout_and_hides_tool_output(
     )
 
 
+def test_command_failure_evidence_excludes_arguments_output_and_environment(tmp_path):
+    import json
+    import os
+    import subprocess
+    import sys
+
+    evidence = tmp_path / "steps.jsonl"
+    token = updater.STEP_LOG.set(evidence)
+    try:
+        with pytest.raises(subprocess.CalledProcessError) as caught:
+            updater.run(
+                [
+                    sys.executable,
+                    "-c",
+                    "import sys; print('private-output'); sys.exit(7)",
+                    "private-argument",
+                ],
+                tmp_path,
+            )
+        details = updater.failure_details(caught.value)
+    finally:
+        updater.STEP_LOG.reset(token)
+    assert details["exit_code"] == 7
+    assert json.loads(evidence.read_text().splitlines()[-1])["exit_code"] == 7
+    serialized = evidence.read_text() + json.dumps(details)
+    assert "private-output" not in serialized
+    assert "private-argument" not in serialized
+    assert str(tmp_path) not in serialized
+    assert sys.executable not in serialized
+    assert os.environ.get("PATH", "private-path") not in serialized
+
+
 def test_discard_candidate_cannot_delete_outside_its_owned_clone(tmp_path):
     owned = tmp_path / "runs/night/candidate"
     owned.mkdir(parents=True)

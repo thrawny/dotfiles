@@ -71,6 +71,11 @@ State and private logs live in `~/.local/state/nightly-app-update/` (0700):
 - `latest.json` and `events.jsonl`: durable phase/outcome and night.
 - `runs/<Stockholm-date>/`: exact candidate manifest, release evidence, source,
   agent result/log, mutation intents/results, health and backup/restore evidence.
+  `steps.jsonl` records static subprocess step labels, start/completion/failure,
+  exit codes or timeout/OS error numbers. Failure receipts also include the phase
+  and failing step when available. Commands, environment values and captured
+  stdout/stderr are excluded; an old receipt containing only an exception type
+  cannot establish which command failed.
 - `paused`: prevents new maintenance; it does not interrupt work already running.
 - `dispatch.json`: installation's next-night deadline, independent of older receipts.
 - `installing`: a failed/interrupted schedule replacement holds dispatch until a
@@ -82,6 +87,9 @@ State and private logs live in `~/.local/state/nightly-app-update/` (0700):
 Unchanged source clones and clones deferred before live maintenance are disposable;
 the runner deletes only those owned candidate directories. Evidence and backups
 remain. Temporary preparation records are separate from live rollout receipts.
+Their subprocess diagnostics live in `preparation-steps.jsonl`. Validation tools
+are declared in the Nix dev shell so `just check` also runs with launchd's minimal
+PATH, without an interactive login profile.
 
 After maintenance reports success, the runner independently checks that each
 changed service process command contains the exact built runtime store prefix.

@@ -336,6 +336,21 @@
             pkgs.mkShell {
               packages = with pkgs; [
                 bashInteractive
+                # `just check` must also work from launchd's minimal PATH.
+                bun
+                nodejs
+                pnpm
+                fd
+                jq
+                ripgrep
+                coreutils
+                findutils
+                gnugrep
+                gnused
+                git
+                openssh
+                llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.claude-code
+                llm-agents.packages.${pkgs.stdenv.hostPlatform.system}.pi
                 biome
                 just
                 uv

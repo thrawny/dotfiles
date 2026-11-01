@@ -103,6 +103,10 @@ prepare-nightly-app-update:
 test-nightly-app-update:
     @just test-python tests/test_nightly_app_update.py
 
+# Exercise validation with the system PATH launchd gives the updater.
+check-nightly-app-update-environment:
+    env PATH=/nix/var/nix/profiles/default/bin:/usr/bin:/bin:/usr/sbin:/sbin {{just_executable()}} check
+
 # Install only the updater schedule; leave active app services and HM untouched.
 install-nightly-app-update:
     #!/usr/bin/env bash

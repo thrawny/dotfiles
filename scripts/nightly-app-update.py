@@ -2,6 +2,7 @@
 """Gate nightly fleet app maintenance and prepare isolated Nix candidates."""
 
 import argparse
+import contextvars
 import datetime as dt
 import fcntl
 import json
@@ -27,6 +28,57 @@ ATTRS = {
     "obelisk-openclaw": "nixosConfigurations.obelisk.config.system.build.openclaw-runtime",
 }
 TERMINAL_RUN_STATES = {"completed", "failed", "cancelled", "interrupted", "rolled_back"}
+STEP_LOG: contextvars.ContextVar[Path | None] = contextvars.ContextVar(
+    "step_log", default=None
+)
+
+# Only these static labels can reach durable diagnostics. Never derive a label
+# from command arguments, output, exception messages, or environment values.
+COMMAND_STEPS = {
+    ("git", "remote"): "source-origin",
+    ("git", "clone"): "source-clone",
+    ("git", "rev-parse"): "source-revision",
+    ("git", "diff"): "source-diff",
+    ("git", "status"): "source-status",
+    ("git", "add"): "pins-stage",
+    ("git", "commit"): "pins-commit",
+    ("git", "push"): "pins-push",
+    ("nix", "eval"): "candidate-versions",
+    ("nix", "flake"): "candidate-input-update",
+    ("nix", "build"): "candidate-build",
+    ("just", "check"): "candidate-check",
+    ("ssh",): "remote-inspection",
+    ("/bin/launchctl",): "local-service-inspection",
+    ("/bin/ps",): "local-process-inspection",
+}
+
+
+def failure_details(error):
+    details: dict[str, object] = {"error": type(error).__name__}
+    label = getattr(error, "updater_step", None)
+    if label in {*COMMAND_STEPS.values(), "local-version", "subprocess"}:
+        details["step"] = label
+    if isinstance(error, subprocess.CalledProcessError):
+        details["exit_code"] = error.returncode
+    elif isinstance(error, subprocess.TimeoutExpired):
+        details["timed_out"] = True
+    elif isinstance(error, OSError):
+        details["errno"] = error.errno
+    return details
+
+
+def record_step(value):
+    destination = STEP_LOG.get()
+    if destination is not None:
+        with destination.open("a") as stream:
+            stream.write(
+                json.dumps(
+                    {"recorded_at": dt.datetime.now(dt.UTC).isoformat(), **value}
+                )
+                + "\n"
+            )
+            stream.flush()
+            os.fsync(stream.fileno())
 
 
 def activity_reason(runs, sessions):
@@ -192,9 +244,22 @@ def locked_graph(lock, reference):
 
 
 def run(args, cwd, timeout=900):
-    return subprocess.run(
-        args, cwd=cwd, check=True, text=True, capture_output=True, timeout=timeout
-    ).stdout.strip()
+    label = COMMAND_STEPS.get(
+        tuple(args[:2]), COMMAND_STEPS.get(tuple(args[:1]), "subprocess")
+    )
+    if len(args) == 2 and args[1] == "--version":
+        label = "local-version"
+    record_step({"step": label, "outcome": "started"})
+    try:
+        result = subprocess.run(
+            args, cwd=cwd, check=True, text=True, capture_output=True, timeout=timeout
+        )
+    except (subprocess.SubprocessError, OSError) as error:
+        error.__dict__["updater_step"] = label
+        record_step({"outcome": "failed", **failure_details(error)})
+        raise
+    record_step({"step": label, "outcome": "completed", "exit_code": 0})
+    return result.stdout.strip()
 
 
 def write_json(destination, value):
@@ -219,14 +284,17 @@ def record_preparation(directory, value):
 
 def prepare_recorded(checkout, destination, state_directory):
     record_preparation(state_directory, {"outcome": "preparing"})
+    token = STEP_LOG.set(state_directory / "preparation-steps.jsonl")
     try:
         result = prepare(checkout, destination)
     except Exception as error:
         # Never persist captured tool output: it can contain operational secrets.
         record_preparation(
-            state_directory, {"outcome": "failed", "error": type(error).__name__}
+            state_directory, {"outcome": "failed", **failure_details(error)}
         )
         return False
+    finally:
+        STEP_LOG.reset(token)
     record_preparation(state_directory, result)
     return True
 
@@ -457,8 +525,9 @@ def scheduled(checkout, state_directory, task_file):
     directory = state_directory / "runs" / night
     directory.mkdir(parents=True, exist_ok=False)
     candidate = directory / "candidate"
-    receipt = {"night": night, "run_directory": str(directory)}
+    receipt = {"night": night, "run_directory": str(directory), "phase": "prepare"}
     persist(state_directory, {**receipt, "outcome": "preparing"})
+    token = STEP_LOG.set(directory / "steps.jsonl")
     try:
         if tree_bytes(state_directory) > 32 * 1024**3:
             persist(
@@ -476,6 +545,7 @@ def scheduled(checkout, state_directory, task_file):
             persist(state_directory, {**receipt, "outcome": "no-change"})
             discard_candidate(candidate, state_directory)
             return
+        receipt["phase"] = "idle-before-build"
         reason = idle_reason()
         if reason or (state_directory / "paused").exists():
             persist(
@@ -488,8 +558,10 @@ def scheduled(checkout, state_directory, task_file):
             )
             discard_candidate(candidate, state_directory)
             return
+        receipt["phase"] = "check-and-build"
         manifest["builds"] = build_candidates(candidate, manifest["changed"])
         write_json(directory / "candidate.json", manifest)
+        receipt["phase"] = "idle-before-maintenance"
         reason = idle_reason()
         if reason or (state_directory / "paused").exists():
             persist(
@@ -502,6 +574,7 @@ def scheduled(checkout, state_directory, task_file):
             )
             discard_candidate(candidate, state_directory)
             return
+        receipt["phase"] = "maintenance"
         persist(state_directory, {**receipt, "outcome": "maintaining"})
         result = launch_maintenance(candidate, directory, task_file, manifest)
         write_json(directory / "maintenance.json", result)
@@ -512,7 +585,9 @@ def scheduled(checkout, state_directory, task_file):
                 {**receipt, "outcome": outcome, "reason": result["reason"]},
             )
             return
+        receipt["phase"] = "verify-runtimes"
         verify_commands(manifest)
+        receipt["phase"] = "push-pins"
         push_candidate(candidate, manifest, state_directory, night)
     except Exception as error:
         current = json.loads(state_file.read_text())
@@ -526,8 +601,10 @@ def scheduled(checkout, state_directory, task_file):
         )
         persist(
             state_directory,
-            {**receipt, "outcome": outcome, "error": type(error).__name__},
+            {**receipt, "outcome": outcome, **failure_details(error)},
         )
+    finally:
+        STEP_LOG.reset(token)
 
 
 def versions(checkout):
