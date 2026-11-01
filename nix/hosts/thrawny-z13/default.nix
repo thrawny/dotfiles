@@ -327,6 +327,8 @@ in
       };
     };
 
+    dotfiles.herdrApp.enable = true;
+
     home.packages = [
       self.packages.${pkgs.stdenv.hostPlatform.system}.herdr-app
       self.packages.${pkgs.stdenv.hostPlatform.system}.herdr-core

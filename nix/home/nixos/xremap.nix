@@ -58,12 +58,13 @@ let
       };
     }
     {
-      name = "macOS-style shortcuts (exclude Ghostty)";
+      name = "macOS-style shortcuts (exclude Ghostty and Herdr)";
       application = {
         not = [
           "com.mitchellh.ghostty"
           "com.thrawny.GhosttyScratchpad"
           "Ghostty"
+          "herdr-app"
         ];
       };
       remap = {

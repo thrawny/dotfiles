@@ -19,6 +19,7 @@
     ./git.nix
     ./ghostty.nix
     ./herdr.nix
+    ./herdr-app.nix
     ./hunk.nix
     ./k9s.nix
     ./lazygit.nix

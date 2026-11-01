@@ -41,21 +41,27 @@ run_desktop_backend() {
 }
 
 usage() {
-  echo 'Usage: project-picker --niri|--hypr|--herdr'
+  echo 'Usage: project-picker --niri|--hypr|--herdr|--list'
 }
 if [[ $# -ne 1 ]]; then
   usage >&2
   exit 2
 fi
 case "$1" in
-  --niri|--hypr|--herdr) backend="$1" ;;
+  --niri|--hypr|--herdr|--list) backend="$1" ;;
   --help|-h) usage; exit 0 ;;
   *) usage >&2; exit 2 ;;
 esac
 
 projects=$({
   while IFS= read -r candidate; do
-    git -C "$candidate" rev-parse --show-toplevel 2>/dev/null || true
+    if [[ "$backend" == --list ]]; then
+      # Desktop discovery must not stall on a sleeping mount or a macOS
+      # privacy-protected folder remembered by zoxide.
+      timeout --kill-after=0.2s 0.2s git -C "$candidate" rev-parse --show-toplevel 2>/dev/null || true
+    else
+      git -C "$candidate" rev-parse --show-toplevel 2>/dev/null || true
+    fi
   done < <(zoxide query -l 2>/dev/null || true)
   shopt -s nullglob
   for root in "$HOME/code" "$HOME"/work/*/code; do
@@ -66,6 +72,11 @@ projects=$({
     done < <(fd --hidden --no-ignore --max-depth 3 --glob .git "$root")
   done
 } | awk 'NF && !seen[$0]++')
+
+if [[ "$backend" == --list ]]; then
+  printf '%s\n' "$projects"
+  exit 0
+fi
 
 header='Ctrl-O to type a path'
 expect=ctrl-o
