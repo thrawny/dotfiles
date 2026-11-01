@@ -2,7 +2,16 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { spaces, panes, run, theme, home, openOverlay, window as win } from "herdr";
+import { spaces, panes, terminals, run, theme, home, openOverlay, window as win } from "herdr";
+
+function sessionName(terminal) {
+  // Pi reports its session name directly; other agents set the terminal title.
+  const report = terminal?.report;
+  if (report?.app === "pi" && report.msg?.trim()) return report.msg.trim();
+  const title = (terminal?.title ?? "").replace(/^[^\p{L}\p{N}]+/u, "").replace(/^π\s*-\s*/, "").trim();
+  return title && title !== terminal?.program?.name && title.toLowerCase() !== terminal?.program?.key
+    && !/^[~/]|^[A-Za-z]:\\/.test(title) ? title : "";
+}
 
 function folder(cwd) {
   if (!cwd) return "";
@@ -87,11 +96,13 @@ export default class TerminalsBar extends View {
     const space = spaces().find((p) => p.active);
     if (!space) return div();
     const all = panes();
+    const core = new Map(terminals().map(t => [t.address, t]));
     const w = win() ?? {};
 
     const tab = (c) => {
       const p = lead(all, c.id);
       const where = folder(p?.cwd);
+      const name = (c.named ? c.name : "") || sessionName(core.get(p?.terminal)) || c.name;
       return own(h_flex())
         .id(`tm-${c.id}`)
         .flex_shrink(1)
@@ -118,7 +129,7 @@ export default class TerminalsBar extends View {
             .min_w(0)
             .gap(6)
             .truncate()
-            .child(div().flex_none().text_color(c.active ? t.foreground : t.muted).child(c.name))
+            .child(div().min_w(0).truncate().tooltip(name).text_color(c.active ? t.foreground : t.muted).child(name))
             .when(Boolean(where), (el) => el.child(div().truncate().text_color(t.muted).child(where))),
         );
     };

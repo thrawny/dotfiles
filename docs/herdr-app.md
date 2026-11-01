@@ -47,6 +47,8 @@ to the window manager; terminal word-navigation keys remain available.
   Children stay nested under their parent, including after opening them in a
   normal tab. Clicking a child opens or focuses its tab; Cmd+J/K (and the prefix's
   J/K) visit children immediately after their parent, even when folded.
+  Sidebar rows and tabs use the agent's session name (Pi's reported name, or
+  Claude/other agents' terminal title), with explicit tab names taking precedence.
   Status indicators and pins remain.
 - **Project picker:** a native popup reuses `project-picker --list` for zoxide
   history and repositories under the existing code roots. It starts on the
