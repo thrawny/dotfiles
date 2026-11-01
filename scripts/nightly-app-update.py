@@ -56,7 +56,12 @@ COMMAND_STEPS = {
 def failure_details(error):
     details: dict[str, object] = {"error": type(error).__name__}
     label = getattr(error, "updater_step", None)
-    if label in {*COMMAND_STEPS.values(), "local-version", "subprocess"}:
+    if label in {
+        *COMMAND_STEPS.values(),
+        "local-version",
+        "subprocess",
+        "maintenance-agent",
+    }:
         details["step"] = label
     if isinstance(error, subprocess.CalledProcessError):
         details["exit_code"] = error.returncode
@@ -64,6 +69,8 @@ def failure_details(error):
         details["timed_out"] = True
     elif isinstance(error, OSError):
         details["errno"] = error.errno
+        if isinstance(getattr(error, "updater_exit_code", None), int):
+            details["exit_code"] = error.updater_exit_code
     elif isinstance(error, MaintenanceNotStarted):
         details["step"] = "maintenance-agent"
         if isinstance(error.__cause__, OSError):
@@ -266,7 +273,7 @@ def run(args, cwd, timeout=900):
         result = subprocess.run(
             args, cwd=cwd, check=True, text=True, capture_output=True, timeout=timeout
         )
-    except (subprocess.SubprocessError, OSError) as error:
+    except (subprocess.SubprocessError, OSError, UnicodeError) as error:
         error.__dict__["updater_step"] = label
         record_step({"outcome": "failed", **failure_details(error)})
         raise
@@ -364,6 +371,24 @@ class MaintenanceFailed(RuntimeError):
         self.limit = limit
 
 
+def stop_maintenance(process):
+    """Bound cleanup of our own process group; a started agent stays uncertain."""
+    if process.poll() is None:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        try:
+            process.wait(timeout=30)
+        except subprocess.TimeoutExpired:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            process.wait()
+    return process.returncode
+
+
 def launch_maintenance(candidate, directory, task_file, manifest):
     """A separate launchd-owned agent survives T3's scoped service restart."""
     result_file = directory / "agent-result.json"
@@ -421,18 +446,23 @@ def launch_maintenance(candidate, directory, task_file, manifest):
             )
             raise MaintenanceNotStarted() from error
         assert process.stdin is not None
-        process.stdin.write(prompt)
-        process.stdin.close()
+        try:
+            process.stdin.write(prompt)
+            process.stdin.close()
+        except OSError as error:
+            error.__dict__["updater_step"] = "maintenance-agent"
+            error.__dict__["updater_exit_code"] = stop_maintenance(process)
+            try:
+                process.stdin.close()
+            except OSError:
+                pass
+            record_step({"outcome": "failed", **failure_details(error)})
+            raise
         deadline = time.monotonic() + 5400
         while process.poll() is None:
             timed_out = time.monotonic() >= deadline
             if timed_out or log.tell() > 32 * 1024 * 1024:
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.wait(timeout=30)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait()
+                stop_maintenance(process)
                 error = MaintenanceFailed(
                     limit="deadline" if timed_out else "output-capacity"
                 )

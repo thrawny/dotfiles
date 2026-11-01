@@ -235,7 +235,10 @@ def test_failed_build_record_preserves_rollout_and_hides_tool_output(
     )
 
 
-def test_command_failure_evidence_excludes_arguments_output_and_environment(tmp_path):
+@pytest.mark.parametrize("invalid_utf8", [False, True])
+def test_command_failure_evidence_excludes_arguments_output_and_environment(
+    tmp_path, invalid_utf8
+):
     import json
     import os
     import subprocess
@@ -244,12 +247,16 @@ def test_command_failure_evidence_excludes_arguments_output_and_environment(tmp_
     evidence = tmp_path / "steps.jsonl"
     token = updater.STEP_LOG.set(evidence)
     try:
-        with pytest.raises(subprocess.CalledProcessError) as caught:
+        with pytest.raises(
+            (subprocess.CalledProcessError, UnicodeDecodeError)
+        ) as caught:
             updater.run(
                 [
                     sys.executable,
                     "-c",
-                    "import sys; print('private-output'); sys.exit(7)",
+                    "import sys; sys.stdout.buffer.write(b'\\xff')"
+                    if invalid_utf8
+                    else "import sys; print('private-output'); sys.exit(7)",
                     "private-argument",
                 ],
                 tmp_path,
@@ -257,8 +264,12 @@ def test_command_failure_evidence_excludes_arguments_output_and_environment(tmp_
         details = updater.failure_details(caught.value)
     finally:
         updater.STEP_LOG.reset(token)
-    assert details["exit_code"] == 7
-    assert json.loads(evidence.read_text().splitlines()[-1])["exit_code"] == 7
+    assert details["step"] == "subprocess"
+    if not invalid_utf8:
+        assert details["exit_code"] == 7
+        assert json.loads(evidence.read_text().splitlines()[-1])["exit_code"] == 7
+    else:
+        assert json.loads(evidence.read_text().splitlines()[-1])["outcome"] == "failed"
     serialized = evidence.read_text() + json.dumps(details)
     assert "private-output" not in serialized
     assert "private-argument" not in serialized
@@ -380,15 +391,16 @@ def test_failed_process_creation_is_retryable_without_live_mutation(
     assert updater.attempt_reason(receipt, tomorrow) is None
 
 
+@pytest.mark.parametrize("consume_prompt", [False, True])
 def test_started_maintenance_failure_holds_replay_and_records_status(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, consume_prompt
 ):
     import json
     import subprocess
     import sys
 
     task = tmp_path / "task.md"
-    task.write_text("No live operations")
+    task.write_text("No live operations\n" * 100000)
     popen = subprocess.Popen
 
     def failed_agent(_args, **kwargs):
@@ -396,7 +408,9 @@ def test_started_maintenance_failure_holds_replay_and_records_status(
             [
                 sys.executable,
                 "-c",
-                "import sys; sys.stdin.read(); print('private-output'); sys.exit(7)",
+                "import sys; "
+                + ("sys.stdin.read(); " if consume_prompt else "")
+                + "print('private-output'); sys.exit(7)",
             ],
             **kwargs,
         )
@@ -412,9 +426,11 @@ def test_started_maintenance_failure_holds_replay_and_records_status(
     receipt = json.loads((tmp_path / "latest.json").read_text())
     assert receipt["outcome"] == "uncertain"
     assert receipt["step"] == "maintenance-agent"
-    assert receipt["exit_code"] == 7
+    assert isinstance(receipt["exit_code"], int)
+    if consume_prompt:
+        assert receipt["exit_code"] == 7
     steps = next((tmp_path / "runs").glob("*/steps.jsonl")).read_text()
-    assert json.loads(steps.splitlines()[-1])["exit_code"] == 7
+    assert json.loads(steps.splitlines()[-1])["exit_code"] == receipt["exit_code"]
     assert "private-output" not in steps + json.dumps(receipt)
     assert (
         updater.attempt_reason(receipt, dt.datetime.now(dt.UTC) + dt.timedelta(days=1))
