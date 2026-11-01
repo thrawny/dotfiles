@@ -102,8 +102,13 @@
       "when": "terminalFocus"
     },
     {
+      "key": "mod+shift+n",
+      "command": "chat.newLocal",
+      "when": "!terminalFocus"
+    },
+    {
       "key": "meta+p",
-      "command": "chat.new"
+      "command": "chat.newLocal"
     },
     {
       "key": "meta+shift+p",
@@ -149,7 +154,7 @@
     },
     {
       "key": "meta+shift+enter",
-      "command": "chat.new",
+      "command": "chat.newLocal",
       "when": "!terminalFocus"
     },
     {

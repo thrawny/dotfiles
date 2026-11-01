@@ -47,7 +47,7 @@ Cmd means left Super on Linux and Command on macOS. Native Ctrl shortcuts remain
 
 | Shortcut | Action |
 | --- | --- |
-| Cmd+P | New thread |
+| Cmd+P | New thread in the current project |
 | Cmd+Shift+P | Command palette |
 | Cmd+J / Cmd+K | Next / previous thread |
 | Ctrl+Shift+H / Ctrl+Shift+L | Previous / next thread |
@@ -55,7 +55,7 @@ Cmd means left Super on Linux and Command on macOS. Native Ctrl shortcuts remain
 | Cmd+B | Toggle sidebar |
 | Cmd+M / Cmd+Shift+M | Next / previous workspace focus |
 | Cmd+Enter | Split the focused terminal right |
-| Cmd+Shift+Enter | Split the focused terminal down; otherwise new thread |
+| Cmd+Shift+Enter | Split the focused terminal down; otherwise new thread in the current project |
 
 See [keyboard rules](keyboard-rules.md) for modifier ownership and reserved keys.
 
