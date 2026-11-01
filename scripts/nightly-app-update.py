@@ -494,6 +494,7 @@ def push_candidate(candidate, manifest, directory, night):
     commit = run(["git", "rev-parse", "HEAD"], candidate)
     receipt = {
         "outcome": "pending-push",
+        "phase": "push-pins",
         "night": night,
         "candidate": str(candidate),
         "commit": commit,
@@ -501,7 +502,11 @@ def push_candidate(candidate, manifest, directory, night):
     }
     persist(directory, receipt)
     # A rejected push leaves this immutable candidate for a push-only reconciliation.
-    run(["git", "push", "origin", "HEAD:main"], candidate, timeout=120)
+    try:
+        run(["git", "push", "origin", "HEAD:main"], candidate, timeout=120)
+    except Exception as error:
+        persist(directory, {**receipt, **failure_details(error)})
+        raise
     receipt["outcome"] = "updated"
     persist(directory, receipt)
 

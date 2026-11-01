@@ -313,7 +313,7 @@ def test_push_failure_retains_exact_commit_and_stops_replay(tmp_path):
     git("remote", "add", "origin", str(origin))
     git("push", "origin", "HEAD:main")
     hook = origin / "hooks/pre-receive"
-    hook.write_text("#!/bin/sh\nexit 1\n")
+    hook.write_text("#!/bin/sh\necho private-push-output >&2\nexit 1\n")
     hook.chmod(0o700)
     lock.write_text('{"version":2}')
     with pytest.raises(subprocess.CalledProcessError):
@@ -322,6 +322,10 @@ def test_push_failure_retains_exact_commit_and_stops_replay(tmp_path):
         )
     receipt = json.loads((tmp_path / "latest.json").read_text())
     assert receipt["outcome"] == "pending-push"
+    assert receipt["phase"] == "push-pins"
+    assert receipt["step"] == "pins-push"
+    assert receipt["exit_code"] == 1
+    assert "private-push-output" not in (tmp_path / "latest.json").read_text()
     assert receipt["commit"] == git("rev-parse", "HEAD")
     assert git("--git-dir", str(origin), "rev-parse", "refs/heads/main") == base
     assert (
