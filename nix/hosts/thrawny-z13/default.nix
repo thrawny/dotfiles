@@ -3,6 +3,7 @@
   config,
   pkgs,
   self,
+  thrawny-pkgs,
   ...
 }:
 let
@@ -330,6 +331,7 @@ in
     dotfiles.herdrApp.enable = true;
 
     home.packages = [
+      thrawny-pkgs.packages.${pkgs.stdenv.hostPlatform.system}.t3code-desktop-nightly
       self.packages.${pkgs.stdenv.hostPlatform.system}.herdr-app
       self.packages.${pkgs.stdenv.hostPlatform.system}.herdr-core
       pkgs.google-chrome
