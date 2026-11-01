@@ -12,6 +12,7 @@ let
     "thrawny-agents"
     "thrawny-prefix"
     "thrawny-projects"
+    "thrawny-tabs"
   ];
 in
 {

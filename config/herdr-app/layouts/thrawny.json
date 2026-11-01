@@ -79,7 +79,7 @@
           "id": "tabs",
           "type": "block",
           "content": {
-            "mod": "terminals-bar"
+            "mod": "thrawny-tabs"
           },
           "size": {
             "px": 38
