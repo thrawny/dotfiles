@@ -83,6 +83,8 @@ export default class Projects extends View {
     const rows = this.rows();
     this.at = Math.min(this.at, Math.max(0, rows.length - 1));
     const start = Math.max(0, this.at - 5);
+    const visible = rows.slice(start, start + 10);
+    const rowHeight = 56;
     const choices = machines().filter(m => m.layout === "ready");
     return v_flex().id("projects").track_focus(this.handle).w_full().min_h(0).p(18).gap(10).bg(t.popover)
       .on_key_down((e, cx) => {
@@ -102,10 +104,11 @@ export default class Projects extends View {
         .child(Input.new(this.input).h_full().w_full().text_color(t.foreground).text_size(13)))
       .when(this.loading, el => el.child(div().text_color(t.muted).text_size(12).child("Finding projects…")))
       .when(Boolean(this.error), el => el.child(div().text_color(t.blocked).text_size(12).child(this.error)))
-      .child(v_flex().max_h(340).min_h(0).overflow_y_scrollbar().children(rows.slice(start, start + 10).map((folder, offset) => {
+      // Scrolling content does not supply an intrinsic height to this popup.
+      .child(v_flex().h(Math.min(340, visible.length * rowHeight)).min_h(0).overflow_y_scrollbar().children(visible.map((folder, offset) => {
         const i = start + offset;
         const open = spaces().some(s => s.machine === this.machine && s.folder === folder);
-        return h_flex().id(`project-${i}`).px(8).py(8).gap(12).rounded(5).cursor_pointer()
+        return h_flex().id(`project-${i}`).h(rowHeight).flex_none().px(8).py(8).gap(12).rounded(5).cursor_pointer()
           .bg(i === this.at ? t.selected : t.popover).hover(s => s.bg(t.hover))
           .on_click((_e, cx) => this.open(false, cx, folder))
           .child(v_flex().flex_1().min_w(0).gap(2)
