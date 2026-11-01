@@ -40,13 +40,14 @@ to the window manager; terminal word-navigation keys remain available.
 
 - **Next agent and agent order:** the personal `thrawny-agents` mod extends
   Herdr's 0.1.10 Agents mod. Numbers and ordering use parent rows; cycling
-  also visits their children.
+  also visits their children. The default order follows spaces and tabs, not
+  idle/working status; priority sorting is opt-in from the sort menu.
   Manual order persists in the mod's local storage; new agents follow ordered
   agents. Reset it with the prefix, or pin an agent to return to native sorting.
   Children stay nested under their parent, including after opening them in a
   normal tab. Clicking a child opens or focuses its tab; Cmd+J/K (and the prefix's
   J/K) visit children immediately after their parent, even when folded.
-  Status groups and pins remain.
+  Status indicators and pins remain.
 - **Project picker:** a native popup reuses `project-picker --list` for zoxide
   history and repositories under the existing code roots. It starts on the
   focused space's machine. Enter opens a new tab in an existing project space,
