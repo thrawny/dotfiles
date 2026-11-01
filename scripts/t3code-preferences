@@ -22,7 +22,7 @@ jq -en --slurpfile managed "$preferences" --slurpfile existing "$bindings_input"
   $managed[0].keybindings as $rules
   | ($existing[0] // [])
   | if type != "array" then error("keybindings must be an array") else . end
-  | map(select(. as $binding | $rules | all(.key != $binding.key or (.when // "") != ($binding.when // ""))))
+  | map(select(. as $binding | $rules | all(.key != $binding.key)))
   + $rules
 ' > "$bindings_tmp"
 mv "$settings_tmp" "$settings"

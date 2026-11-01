@@ -108,7 +108,8 @@
     },
     {
       "key": "meta+p",
-      "command": "chat.newLocal"
+      "command": "chat.new",
+      "when": "!terminalFocus"
     },
     {
       "key": "meta+shift+p",

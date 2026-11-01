@@ -47,7 +47,7 @@ Cmd means left Super on Linux and Command on macOS. Native Ctrl shortcuts remain
 
 | Shortcut | Action |
 | --- | --- |
-| Cmd+P | New thread in the current project |
+| Cmd+P | Same new-thread action as Ctrl+Shift+O |
 | Cmd+Shift+P | Command palette |
 | Cmd+J / Cmd+K | Next / previous thread |
 | Ctrl+Shift+H / Ctrl+Shift+L | Previous / next thread |
