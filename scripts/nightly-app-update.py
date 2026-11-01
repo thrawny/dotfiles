@@ -68,6 +68,14 @@ def failure_details(error):
         details["step"] = "maintenance-agent"
         if isinstance(error.__cause__, OSError):
             details["errno"] = error.__cause__.errno
+    elif isinstance(error, MaintenanceFailed):
+        details["step"] = "maintenance-agent"
+        if error.exit_code is not None:
+            details["exit_code"] = error.exit_code
+        if error.limit == "deadline":
+            details["timed_out"] = True
+        elif error.limit == "output-capacity":
+            details["limit"] = "output-capacity"
     return details
 
 
@@ -347,6 +355,15 @@ class MaintenanceNotStarted(RuntimeError):
     """The OS rejected process creation; no maintenance code has run."""
 
 
+class MaintenanceFailed(RuntimeError):
+    """A started agent failed; its live mutation outcome needs reconciliation."""
+
+    def __init__(self, *, exit_code=None, limit=None):
+        super().__init__("Maintenance agent failed; reconcile before replay")
+        self.exit_code = exit_code
+        self.limit = limit
+
+
 def launch_maintenance(candidate, directory, task_file, manifest):
     """A separate launchd-owned agent survives T3's scoped service restart."""
     result_file = directory / "agent-result.json"
@@ -370,6 +387,7 @@ def launch_maintenance(candidate, directory, task_file, manifest):
             {"candidate": manifest, "evidence_directory": str(directory)}, indent=2
         )
     )
+    record_step({"step": "maintenance-agent", "outcome": "started"})
     with (directory / "agent.log").open("w") as log:
         try:
             process = subprocess.Popen(
@@ -393,25 +411,39 @@ def launch_maintenance(candidate, directory, task_file, manifest):
                 start_new_session=True,
             )
         except OSError as error:
+            record_step(
+                {
+                    "step": "maintenance-agent",
+                    "outcome": "failed",
+                    "error": "MaintenanceNotStarted",
+                    "errno": error.errno,
+                }
+            )
             raise MaintenanceNotStarted() from error
         assert process.stdin is not None
         process.stdin.write(prompt)
         process.stdin.close()
         deadline = time.monotonic() + 5400
         while process.poll() is None:
-            if time.monotonic() >= deadline or log.tell() > 32 * 1024 * 1024:
+            timed_out = time.monotonic() >= deadline
+            if timed_out or log.tell() > 32 * 1024 * 1024:
                 os.killpg(process.pid, signal.SIGTERM)
                 try:
                     process.wait(timeout=30)
                 except subprocess.TimeoutExpired:
                     os.killpg(process.pid, signal.SIGKILL)
                     process.wait()
-                raise RuntimeError(
-                    "Maintenance deadline exceeded; reconcile before replay"
+                error = MaintenanceFailed(
+                    limit="deadline" if timed_out else "output-capacity"
                 )
+                record_step({"outcome": "failed", **failure_details(error)})
+                raise error
             time.sleep(2)
         if process.returncode != 0:
-            raise RuntimeError("Maintenance agent failed; reconcile before replay")
+            error = MaintenanceFailed(exit_code=process.returncode)
+            record_step({"outcome": "failed", **failure_details(error)})
+            raise error
+    record_step({"step": "maintenance-agent", "outcome": "completed", "exit_code": 0})
     result = json.loads(result_file.read_text())
     if result["outcome"] not in {"updated", "deferred", "failed"}:
         raise ValueError("Unknown maintenance result")

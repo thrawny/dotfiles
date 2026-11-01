@@ -378,3 +378,57 @@ def test_failed_process_creation_is_retryable_without_live_mutation(
     assert receipt["errno"] == 2
     tomorrow = dt.datetime.now(dt.UTC) + dt.timedelta(days=1)
     assert updater.attempt_reason(receipt, tomorrow) is None
+
+
+def test_started_maintenance_failure_holds_replay_and_records_status(
+    tmp_path, monkeypatch
+):
+    import json
+    import subprocess
+    import sys
+
+    task = tmp_path / "task.md"
+    task.write_text("No live operations")
+    popen = subprocess.Popen
+
+    def failed_agent(_args, **kwargs):
+        return popen(
+            [
+                sys.executable,
+                "-c",
+                "import sys; sys.stdin.read(); print('private-output'); sys.exit(7)",
+            ],
+            **kwargs,
+        )
+
+    monkeypatch.setattr(updater.subprocess, "Popen", failed_agent)
+    monkeypatch.setattr(updater.time, "sleep", lambda _seconds: None)
+    monkeypatch.setattr(
+        updater, "prepare", lambda *_a, **_kw: {"outcome": "prepared", "changed": []}
+    )
+    monkeypatch.setattr(updater, "idle_reason", lambda: None)
+    monkeypatch.setattr(updater, "build_candidates", lambda *_a: {})
+    updater.scheduled(tmp_path, tmp_path, task)
+    receipt = json.loads((tmp_path / "latest.json").read_text())
+    assert receipt["outcome"] == "uncertain"
+    assert receipt["step"] == "maintenance-agent"
+    assert receipt["exit_code"] == 7
+    steps = next((tmp_path / "runs").glob("*/steps.jsonl")).read_text()
+    assert json.loads(steps.splitlines()[-1])["exit_code"] == 7
+    assert "private-output" not in steps + json.dumps(receipt)
+    assert (
+        updater.attempt_reason(receipt, dt.datetime.now(dt.UTC) + dt.timedelta(days=1))
+        == "uncertain-mutation-requires-reconciliation"
+    )
+    assert (
+        updater.failure_details(updater.MaintenanceFailed(limit="deadline"))[
+            "timed_out"
+        ]
+        is True
+    )
+    assert (
+        updater.failure_details(updater.MaintenanceFailed(limit="output-capacity"))[
+            "limit"
+        ]
+        == "output-capacity"
+    )
