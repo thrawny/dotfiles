@@ -5,11 +5,11 @@
 }:
 stdenvNoCC.mkDerivation (finalAttrs: {
   pname = "herdr-core";
-  version = "0.1.15";
+  version = "0.1.16";
 
   src = fetchurl {
     url = "https://releases.herdr.dev/core/${finalAttrs.version}/herdr-core-linux-x86_64.tar.gz";
-    hash = "sha256-77sTgto9UFPLIMYMFmpi7DTnPYKZl3+x9avtKN3sjWY=";
+    hash = "sha256-WNaGEXbcb+kFtYiA1b/weplZvmE6mOXWa0WDsEts+kU=";
   };
 
   sourceRoot = ".";

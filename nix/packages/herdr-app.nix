@@ -15,11 +15,11 @@
 }:
 stdenv.mkDerivation (finalAttrs: {
   pname = "herdr-app";
-  version = "0.1.10";
+  version = "0.1.11";
 
   src = fetchurl {
     url = "https://releases.herdr.dev/app/${finalAttrs.version}/herdr-app-linux-x86_64.tar.gz";
-    hash = "sha256-re8P6rEpyE2N5NlReWKb8pfnaCLTDg1eacJirSMs4zo=";
+    hash = "sha256-Ro/zFqJvxMLGOPEMWNLeNTyCXKxNhG+iVMYSlBQXRKM=";
   };
 
   nativeBuildInputs = [
