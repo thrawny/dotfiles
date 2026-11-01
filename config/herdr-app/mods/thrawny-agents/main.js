@@ -94,7 +94,11 @@ export default class Agents extends View {
     const name = typeof command === "string" ? command : command.name;
     const f = focused();
     this.snapshot();
-    if (name.startsWith("agent-")) {
+    if (name === "next" || name === "prev") {
+      const i = this.navigation.indexOf(f?.shown ?? f?.terminal ?? f?.agent);
+      const n = this.navigation.length;
+      if (n) this.focus(this.navigation[i < 0 ? (name === "next" ? 0 : n - 1) : (i + (name === "next" ? 1 : -1) + n) % n]);
+    } else if (name.startsWith("agent-")) {
       const a = this.order[Number(name.slice(6)) - 1];
       if (a) run("agent.focus", { terminal: a.address });
     } else if (name === "urgent") {
@@ -216,8 +220,23 @@ export default class Agents extends View {
         .when(s.id === on, (el) => el.child(svg("mods/workspace-chrome/check.svg").size(14).flex_none().text_color(t.foreground)))));
   }
 
-  peek(addr) {
-    run("terminal.peek", { terminal: addr });
+  focus(addr) {
+    const existing = panes().find(p => p.terminal === addr);
+    if (existing) return run("pane.focus", { pane: existing.pane });
+
+    // Keep a child beside its parent, even when reached from another space.
+    const all = terminals();
+    let terminal = all.find(t => t.address === addr);
+    while (terminal?.parent) {
+      terminal = all.find(t => t.address === terminal.parent);
+      const parentPane = panes().find(p => p.terminal === terminal?.address);
+      const space = spaces().find(s => s.tabs.some(t => t.id === parentPane?.tab));
+      if (space) {
+        run("space.select", { id: space.id });
+        break;
+      }
+    }
+    run("terminal.keep", { terminal: addr, place: "tab" });
   }
 
   // Live sub-agents of `addr`, depth first, each with the tree lines in front of it.
@@ -249,7 +268,7 @@ export default class Agents extends View {
       .text_size(12.5)
       .when(on, (el) => el.bg(t.raised))
       .hover((s) => s.bg(t.hover))
-      .on_click(() => this.peek(k.address))
+      .on_click(() => this.focus(k.address))
       .children(s.lines.map(l => div().self_start().mt(-4).w(9).h(17).mr(4).flex_none()
         .when(Boolean(l), el => el.border_l(1.5).border_color(t.input))
         .when(l === "└" || l === "├", el => el.border_b(1.5).rounded_bl(6))))
@@ -275,10 +294,14 @@ export default class Agents extends View {
     let list = agents();
     this.listed = new Map(list.map((a) => [a.address, a.status]));
     const all = terminals();
-    const shown = focused()?.agent;
+    const f = focused();
+    const shown = f?.shown ?? f?.terminal ?? f?.agent;
     const now = Date.now();
     this.track(list, now);
     this.hold(list);
+    // Giving a child a pane adds it to agents(); keep it under its parent only.
+    const nested = new Set(list.flatMap(a => this.tree(all, a.address).map(s => s.t.address)));
+    list = list.filter(a => !nested.has(a.address));
     const byPriority = sort.id === "priority";
     const urgency = new Map(list.map((a) => [a.address, Math.max(this.rank(a), ...this.tree(all, a.address).map((s) => RANK[kidStatus(s.t, this.listed)] ?? 0))]));
     const rankOf = (a) => urgency.get(a.address);
@@ -292,12 +315,14 @@ export default class Agents extends View {
       list.sort((a, b) => (at.get(a.address) ?? Infinity) - (at.get(b.address) ?? Infinity));
     }
     this.order = list;
+    // Include children without panes; native agent navigation ignores those.
+    this.navigation = list.flatMap(a => [a.address, ...this.tree(all, a.address).map(s => s.t.address)]);
     const pane = focused()?.pane;
     if (pane && pane !== this.currentPane) {
       this.previousPane = this.currentPane;
       this.currentPane = pane;
     }
-    setAgentOrder(list.map((a) => a.address));
+    setAgentOrder(this.navigation);
 
     return { sort, list, all, shown, now, byPriority, pinned, rest, rankOf };
   }

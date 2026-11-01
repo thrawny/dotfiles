@@ -6,7 +6,7 @@ const ACTIONS = {
   c: ["tab.new", "New tab"],
   h: ["tab.prev", "Previous tab"], p: ["tab.prev", "Previous tab"],
   l: ["tab.next", "Next tab"], n: ["tab.next", "Next tab"],
-  j: ["agent.next", "Next agent"], k: ["agent.prev", "Previous agent"],
+  j: ["thrawny-agents.next", "Next agent"], k: ["thrawny-agents.prev", "Previous agent"],
   v: ["pane.split:right", "Split right"], "-": ["pane.split:down", "Split down"],
   x: ["pane.close", "Close pane"], "shift-x": ["tab.close", "Close tab"],
   z: ["pane.zoom", "Zoom pane"], tab: ["thrawny-agents.cycle-pane", "Next pane"],

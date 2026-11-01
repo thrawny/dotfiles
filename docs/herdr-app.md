@@ -19,7 +19,7 @@ conflicts are in [keyboard rules](keyboard-rules.md).
 | Cmd+F | Zoom pane |
 | Cmd+H/L, Ctrl+Shift+H/L | Previous / next tab |
 | Cmd+U/I | Previous / next space |
-| Cmd+J/K | Next / previous agent |
+| Cmd+J/K | Next / previous agent, including children |
 | Cmd+1–9 | Focus the numbered agent in the sidebar |
 | Cmd+O | Cycle blocked, done, working agents; oldest first in each tier |
 | Cmd+Shift+J/K | Move the focused agent down / up |
@@ -37,10 +37,14 @@ to the window manager; terminal word-navigation keys remain available.
 ## Plugins
 
 - **Next agent and agent order:** the personal `thrawny-agents` mod extends
-  Herdr's 0.1.10 Agents mod. Numbers, cycling and ordering use the same list.
+  Herdr's 0.1.10 Agents mod. Numbers and ordering use parent rows; cycling
+  also visits their children.
   Manual order persists in the mod's local storage; new agents follow ordered
   agents. Reset it with the prefix, or pin an agent to return to native sorting.
-  Herdr's native parent/sub-agent display, status groups and pins remain.
+  Children stay nested under their parent, including after opening them in a
+  normal tab. Clicking a child opens or focuses its tab; Cmd+J/K (and the prefix's
+  J/K) visit children immediately after their parent, even when folded.
+  Status groups and pins remain.
 - **Project picker:** a native popup reuses `project-picker --list` for zoxide
   history and repositories under the existing code roots. It starts on the
   focused space's machine. Enter opens a new tab in an existing project space,
