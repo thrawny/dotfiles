@@ -1,7 +1,9 @@
 # Herdr desktop
 
-The M1 and z13 use the `thrawny` layout, with tabs at the bottom and the
-Monokai theme. Home Manager installs the personal mods and reapplies
+The M1 and z13 use the `thrawny` layout: the custom sidebar beside a minimal
+terminal area with the built-in Terminals tab bar at the top, no bottom status
+bar, and pane controls on hover when split. The Monokai theme stays in place.
+Home Manager installs the personal mods and reapplies
 `config/herdr-app/keys.json` and `layouts/thrawny.json` on activation.
 Settings, sessions, machine connections and other app state remain app-owned.
 The TUI configuration still works independently.
