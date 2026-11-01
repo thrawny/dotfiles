@@ -7,6 +7,18 @@
   ...
 }:
 let
+  # The headless server owns ~/.t3. Keep the desktop profile separate and
+  # pair it with the server for the existing projects and threads.
+  t3codeDesktop =
+    thrawny-pkgs.packages.${pkgs.stdenv.hostPlatform.system}.t3code-desktop-nightly.overrideAttrs
+      (old: {
+        # Wrap in the same output so relaunches and URL handlers also use this profile.
+        buildCommand = old.buildCommand + ''
+          wrapProgram "$out/bin/t3code-desktop-nightly" \
+            --set T3CODE_HOME ${lib.escapeShellArg "${config.users.users.${config.dotfiles.username}.home}/.t3-desktop"} \
+            --set T3CODE_TELEMETRY_ENABLED false
+        '';
+      });
   dotfilesBin = "${config.users.users.${config.dotfiles.username}.home}/dotfiles/bin";
   niriLidOutputSync = [
     "${pkgs.python3}/bin/python3"
@@ -331,7 +343,7 @@ in
     dotfiles.herdrApp.enable = true;
 
     home.packages = [
-      thrawny-pkgs.packages.${pkgs.stdenv.hostPlatform.system}.t3code-desktop-nightly
+      t3codeDesktop
       self.packages.${pkgs.stdenv.hostPlatform.system}.herdr-app
       self.packages.${pkgs.stdenv.hostPlatform.system}.herdr-core
       pkgs.google-chrome
