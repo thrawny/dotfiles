@@ -360,8 +360,11 @@ def test_failed_process_creation_is_retryable_without_live_mutation(
     task = tmp_path / "task.md"
     task.write_text("No live operations in this test")
     monkeypatch.setenv("PATH", "")
-    with pytest.raises(updater.MaintenanceNotStarted):
+    with pytest.raises(updater.MaintenanceNotStarted) as caught:
         updater.launch_maintenance(tmp_path, tmp_path, task, {})
+    details = updater.failure_details(caught.value)
+    assert details["step"] == "maintenance-agent"
+    assert details["errno"] == 2
     assert (tmp_path / "agent.log").read_text() == ""
     monkeypatch.setattr(
         updater, "prepare", lambda *_a, **_kw: {"outcome": "prepared", "changed": []}
@@ -371,5 +374,7 @@ def test_failed_process_creation_is_retryable_without_live_mutation(
     updater.scheduled(tmp_path, tmp_path, task)
     receipt = json.loads((tmp_path / "latest.json").read_text())
     assert receipt["outcome"] == "failed"
+    assert receipt["step"] == "maintenance-agent"
+    assert receipt["errno"] == 2
     tomorrow = dt.datetime.now(dt.UTC) + dt.timedelta(days=1)
     assert updater.attempt_reason(receipt, tomorrow) is None

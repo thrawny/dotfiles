@@ -64,6 +64,10 @@ def failure_details(error):
         details["timed_out"] = True
     elif isinstance(error, OSError):
         details["errno"] = error.errno
+    elif isinstance(error, MaintenanceNotStarted):
+        details["step"] = "maintenance-agent"
+        if isinstance(error.__cause__, OSError):
+            details["errno"] = error.__cause__.errno
     return details
 
 
