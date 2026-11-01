@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+state=${1:?Usage: t3code-preferences STATE PREFERENCES_JSON}
+preferences=${2:?Usage: t3code-preferences STATE PREFERENCES_JSON}
+umask 077
+mkdir -p "$state/userdata"
+settings="$state/userdata/settings.json"
+bindings="$state/userdata/keybindings.json"
+settings_input="$settings"
+bindings_input="$bindings"
+[[ -f "$settings_input" ]] || settings_input=/dev/null
+[[ -f "$bindings_input" ]] || bindings_input=/dev/null
+settings_tmp=$(mktemp "$settings.XXXXXX")
+bindings_tmp=$(mktemp "$bindings.XXXXXX")
+trap 'rm -f "$settings_tmp" "$bindings_tmp"' EXIT
+
+jq -en --slurpfile managed "$preferences" --slurpfile existing "$settings_input" \
+  '($existing[0] // {}) | if type != "object" then error("settings must be an object") else . + $managed[0].settings end' \
+  /dev/null > "$settings_tmp"
+jq -en --slurpfile managed "$preferences" --slurpfile existing "$bindings_input" '
+  $managed[0].keybindings as $rules
+  | ($existing[0] // [])
+  | if type != "array" then error("keybindings must be an array") else . end
+  | map(select(. as $binding | $rules | all(.key != $binding.key or (.when // "") != ($binding.when // ""))))
+  + $rules
+' > "$bindings_tmp"
+mv "$settings_tmp" "$settings"
+mv "$bindings_tmp" "$bindings"

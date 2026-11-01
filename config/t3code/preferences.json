@@ -1,0 +1,201 @@
+{
+  "settings": {
+    "defaultModelSelection": {
+      "instanceId": "codex",
+      "model": "gpt-6.1-sol",
+      "options": [
+        {
+          "id": "reasoningEffort",
+          "value": "high"
+        }
+      ]
+    }
+  },
+  "keybindings": [
+    {
+      "key": "f6",
+      "command": "workspace.focusNext"
+    },
+    {
+      "key": "shift+f6",
+      "command": "workspace.focusPrevious"
+    },
+    {
+      "key": "mod+f6",
+      "command": "workspace.focusNext"
+    },
+    {
+      "key": "mod+shift+f6",
+      "command": "workspace.focusPrevious"
+    },
+    {
+      "key": "mod+d",
+      "command": "terminal.split",
+      "when": "terminalFocus"
+    },
+    {
+      "key": "mod+k",
+      "command": "commandPalette.toggle",
+      "when": "!terminalFocus"
+    },
+    {
+      "key": "mod+n",
+      "command": "chat.new",
+      "when": "!terminalFocus"
+    },
+    {
+      "key": "mod+shift+o",
+      "command": "chat.new",
+      "when": "!terminalFocus"
+    },
+    {
+      "key": "mod+shift+[",
+      "command": "thread.previous"
+    },
+    {
+      "key": "mod+shift+]",
+      "command": "thread.next"
+    },
+    {
+      "key": "mod+1",
+      "command": "thread.jump.1"
+    },
+    {
+      "key": "mod+2",
+      "command": "thread.jump.2"
+    },
+    {
+      "key": "mod+3",
+      "command": "thread.jump.3"
+    },
+    {
+      "key": "mod+4",
+      "command": "thread.jump.4"
+    },
+    {
+      "key": "mod+5",
+      "command": "thread.jump.5"
+    },
+    {
+      "key": "mod+6",
+      "command": "thread.jump.6"
+    },
+    {
+      "key": "mod+7",
+      "command": "thread.jump.7"
+    },
+    {
+      "key": "mod+8",
+      "command": "thread.jump.8"
+    },
+    {
+      "key": "mod+9",
+      "command": "thread.jump.9"
+    },
+    {
+      "key": "mod+b",
+      "command": "sidebar.toggle"
+    },
+    {
+      "key": "mod+shift+d",
+      "command": "terminal.splitVertical",
+      "when": "terminalFocus"
+    },
+    {
+      "key": "meta+p",
+      "command": "chat.new"
+    },
+    {
+      "key": "meta+shift+p",
+      "command": "commandPalette.toggle"
+    },
+    {
+      "key": "meta+b",
+      "command": "sidebar.toggle"
+    },
+    {
+      "key": "meta+j",
+      "command": "thread.next"
+    },
+    {
+      "key": "meta+k",
+      "command": "thread.previous"
+    },
+    {
+      "key": "ctrl+shift+h",
+      "command": "thread.previous"
+    },
+    {
+      "key": "ctrl+shift+l",
+      "command": "thread.next"
+    },
+    {
+      "key": "meta+m",
+      "command": "workspace.focusNext"
+    },
+    {
+      "key": "meta+shift+m",
+      "command": "workspace.focusPrevious"
+    },
+    {
+      "key": "meta+enter",
+      "command": "terminal.split",
+      "when": "terminalFocus"
+    },
+    {
+      "key": "meta+shift+enter",
+      "command": "terminal.splitVertical",
+      "when": "terminalFocus"
+    },
+    {
+      "key": "meta+shift+enter",
+      "command": "chat.new",
+      "when": "!terminalFocus"
+    },
+    {
+      "key": "meta+1",
+      "command": "thread.jump.1",
+      "when": "!modelPickerOpen && isDesktop"
+    },
+    {
+      "key": "meta+2",
+      "command": "thread.jump.2",
+      "when": "!modelPickerOpen && isDesktop"
+    },
+    {
+      "key": "meta+3",
+      "command": "thread.jump.3",
+      "when": "!modelPickerOpen && isDesktop"
+    },
+    {
+      "key": "meta+4",
+      "command": "thread.jump.4",
+      "when": "!modelPickerOpen && isDesktop"
+    },
+    {
+      "key": "meta+5",
+      "command": "thread.jump.5",
+      "when": "!modelPickerOpen && isDesktop"
+    },
+    {
+      "key": "meta+6",
+      "command": "thread.jump.6",
+      "when": "!modelPickerOpen && isDesktop"
+    },
+    {
+      "key": "meta+7",
+      "command": "thread.jump.7",
+      "when": "!modelPickerOpen && isDesktop"
+    },
+    {
+      "key": "meta+8",
+      "command": "thread.jump.8",
+      "when": "!modelPickerOpen && isDesktop"
+    },
+    {
+      "key": "meta+9",
+      "command": "thread.jump.9",
+      "when": "!modelPickerOpen && isDesktop"
+    }
+  ]
+}

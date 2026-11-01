@@ -12,6 +12,7 @@
 let
   inherit (pkgs.stdenv.hostPlatform) system;
   llmPkgs = llm-agents.packages.${system};
+  preferences = import ../lib/t3code-preferences.nix { inherit pkgs; };
   zmxPkg = zmx.packages.${system}.zmx-main;
 
   uid = 3103;
@@ -410,6 +411,7 @@ let
         "$settings_path" > "$settings_tmp"
       install -m 0600 "$settings_tmp" "$settings_path"
       rm -f "$settings_tmp"
+      ${lib.getExe preferences} ${lib.escapeShellArg state} ${../../config/t3code/preferences.json}
 
       install -m 0600 ${gitConfig} ${lib.escapeShellArg "${home}/.gitconfig"}
       install -m 0644 ${gitIgnore} ${lib.escapeShellArg "${home}/.config/git/ignore"}

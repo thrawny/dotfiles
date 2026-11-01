@@ -11,6 +11,7 @@ let
   home = config.home.homeDirectory;
   state = "${home}/.t3";
   llmPkgs = llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+  preferences = import ../../lib/t3code-preferences.nix { inherit pkgs; };
   providerWithDirenv =
     name: package:
     pkgs.writeShellApplication {
@@ -86,6 +87,12 @@ in
         mv "$settingsTmp" "$settings"
       fi
     '';
+
+    home.activation.t3codePreferences =
+      lib.hm.dag.entryBetween [ "reloadSystemd" ] [ "t3codeProviders" ]
+        ''
+          run ${lib.getExe preferences} ${lib.escapeShellArg state} ${../../../config/t3code/preferences.json}
+        '';
 
     systemd.user.services.t3code = {
       Unit.Description = "T3 Code headless server";

@@ -125,6 +125,10 @@ nightly-app-update-pause:
 nightly-app-update-resume:
     rm -f "$HOME/.local/state/nightly-app-update/paused"
 
+# Apply T3 model defaults and shortcuts live, without restarting its server
+sync-t3code-preferences target="thrawny-z13":
+    bash scripts/sync-t3code-preferences {{quote(target)}}
+
 # Fetch private skills and refresh links on hosts that opt in through Home Manager
 private-skills-sync:
     private-skills-sync

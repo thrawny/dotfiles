@@ -8,6 +8,7 @@
 }:
 let
   cfg = config.dotfiles.t3code;
+  preferences = import ../../lib/t3code-preferences.nix { inherit pkgs; };
   home = config.home.homeDirectory;
   state = "${home}/.t3";
   logs = "${state}/userdata/logs";
@@ -115,6 +116,12 @@ in
             chmod 600 "$settingsTmp"
             mv "$settingsTmp" "$settings"
           fi
+        '';
+
+    home.activation.t3codePreferences =
+      lib.hm.dag.entryBetween [ "setupLaunchAgents" ] [ "t3codeProviders" ]
+        ''
+          run ${lib.getExe preferences} ${lib.escapeShellArg state} ${../../../config/t3code/preferences.json}
         '';
 
     # Home Manager can exit after unloading an agent but before reinstalling it.

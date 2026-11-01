@@ -29,6 +29,36 @@ mapping is unchanged. Remote project access requires pairing.
 
 For app credentials shared across worktrees, see [app credential setup](t3-app-secrets.md).
 
+## Desktop client
+
+`t3code-desktop-nightly` uses `~/.t3-desktop` so it does not contend with the
+background server for `~/.t3`. Keep **Settings → Environments → Local environment**
+disabled and pair the desktop with the servers you want to use. Pairings stay in
+the app's encrypted connection catalog, not in this public repository.
+
+Model defaults and shortcuts live in
+[`config/t3code/preferences.json`](../config/t3code/preferences.json). New threads
+default to **Sol 6.1 / High** unless a project has its own override. Nix activation
+reapplies these preferences; apply them live without a server restart with
+`just sync-t3code-preferences` (Z13), `just sync-t3code-preferences thrawnym1`, or
+`just sync-t3code-preferences obelisk`.
+
+Cmd means left Super on Linux and Command on macOS. Native Ctrl shortcuts remain.
+
+| Shortcut | Action |
+| --- | --- |
+| Cmd+P | New thread |
+| Cmd+Shift+P | Command palette |
+| Cmd+J / Cmd+K | Next / previous thread |
+| Ctrl+Shift+H / Ctrl+Shift+L | Previous / next thread |
+| Cmd+1–9 | Jump to thread |
+| Cmd+B | Toggle sidebar |
+| Cmd+M / Cmd+Shift+M | Next / previous workspace focus |
+| Cmd+Enter | Split the focused terminal right |
+| Cmd+Shift+Enter | Split the focused terminal down; otherwise new thread |
+
+See [keyboard rules](keyboard-rules.md) for modifier ownership and reserved keys.
+
 ## Maintenance
 
 Update through dotfiles and `just switch` (or `just switch-hm` for package

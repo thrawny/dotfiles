@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+target=${1:-thrawny-z13}
+preferences=config/t3code/preferences.json
+run_as=()
+case "$target" in
+  thrawny-z13)
+    exec bash scripts/t3code-preferences "$HOME/.t3" "$preferences"
+    ;;
+  thrawnym1)
+    destination=thrawny@thrawnym1
+    state=/Users/thrawny/.t3
+    ;;
+  obelisk)
+    destination=root@obelisk
+    state=/srv/t3code/.t3code
+    run_as=(sudo -u t3code env HOME=/srv/t3code)
+    ;;
+  *)
+    echo 'Usage: just sync-t3code-preferences [thrawny-z13|thrawnym1|obelisk]' >&2
+    exit 2
+    ;;
+esac
+
+remote_file=$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$destination" mktemp /tmp/t3code-preferences.XXXXXX)
+trap 'ssh -o BatchMode=yes -o ConnectTimeout=10 "$destination" rm -f "$remote_file"' EXIT
+scp -q -o BatchMode=yes -o ConnectTimeout=10 "$preferences" "$destination:$remote_file"
+if [[ "$target" == obelisk ]]; then
+  ssh -o BatchMode=yes -o ConnectTimeout=10 "$destination" chown t3code:t3code "$remote_file"
+fi
+ssh -o BatchMode=yes -o ConnectTimeout=10 "$destination" "${run_as[@]}" bash -s -- "$state" "$remote_file" < scripts/t3code-preferences
