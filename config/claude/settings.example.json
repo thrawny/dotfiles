@@ -75,7 +75,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -n \"${MOTO_ROLE:-}\" ]; then moto role --hook; fi"
+            "command": "if [ -n \"${MOTO_ROLE:-}${HERDR_PANE_ID:-}\" ]; then moto role --hook; fi"
           }
         ]
       }

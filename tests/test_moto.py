@@ -2126,8 +2126,14 @@ def test_spawn_with_a_role_starts_in_moto_home_and_wake_keeps_the_role(
         cwd,
         "--title",
         "notes review",
+        "--model",
+        "opus",
+        "--effort",
+        "medium",
         "--env",
         "MOTO_ROLE=reviewer",
+        "--env",
+        "MOTO_WORKER=1",
     ]
     assert moto.read_tasks()["notes"]["role"] == "reviewer"
     assert moto.read_events()[-1]["role"] == "reviewer"
@@ -2175,17 +2181,38 @@ def test_spawn_refuses_a_role_it_cannot_load_or_place(
     assert moto.read_tasks() == {}
 
 
-@pytest.mark.usefixtures("moto_home")
-def test_role_hook_hands_the_session_its_role_file(
-    moto: ModuleType,
-    capsys: pytest.CaptureFixture[str],
-):
-    with patch.dict("os.environ", {"MOTO_ROLE": "reviewer"}):
+def role_hook(
+    moto: ModuleType, env: dict[str, str], cwd: Path | None = None
+) -> dict[str, Any] | None:
+    """Run moto role --hook as Claude would, and return its hook output."""
+    stdin = json.dumps({"source": "compact", "cwd": str(cwd or "/elsewhere")})
+    with (
+        patch.dict("os.environ", env),
+        patch("sys.stdin.read", return_value=stdin),
+        patch("sys.stdout", new_callable=io.StringIO) as out,
+    ):
         assert moto_main(moto, "role", "--hook") == 0
-    output = json.loads(capsys.readouterr().out)["hookSpecificOutput"]
-    assert output["hookEventName"] == "SessionStart"
+    text = out.getvalue()
+    return json.loads(text)["hookSpecificOutput"] if text else None
+
+
+@pytest.mark.usefixtures("moto_home")
+def test_role_hook_hands_the_session_its_role_file(moto: ModuleType):
+    output = role_hook(moto, {"MOTO_ROLE": "reviewer"})
+    assert output and output["hookEventName"] == "SessionStart"
     assert output["additionalContext"].startswith("Your moto role is reviewer.")
     assert output["additionalContext"].endswith("Review what the driver hands you.\n")
+
+
+def test_role_hook_orders_a_read_of_a_role_file_too_long_to_inline(
+    moto: ModuleType, moto_home: Path
+):
+    path = moto_home / "roles/reviewer.md"
+    path.write_text("x" * (moto.ROLE_INLINE_LIMIT + 1))
+    output = role_hook(moto, {"MOTO_ROLE": "reviewer"})
+    assert output
+    assert f"Read {path} in full" in output["additionalContext"]
+    assert "xxx" not in output["additionalContext"]
 
 
 @pytest.mark.parametrize(
@@ -2197,28 +2224,37 @@ def test_role_hook_hands_the_session_its_role_file(
 )
 @pytest.mark.usefixtures("moto_home")
 def test_role_hook_says_loudly_when_the_role_cannot_load(
-    moto: ModuleType,
-    capsys: pytest.CaptureFixture[str],
-    role: str,
-    error: str,
+    moto: ModuleType, role: str, error: str
 ):
-    with patch.dict("os.environ", {"MOTO_ROLE": role}):
-        assert moto_main(moto, "role", "--hook") == 0
-    output = json.loads(capsys.readouterr().out)["hookSpecificOutput"]
+    output = role_hook(moto, {"MOTO_ROLE": role})
+    assert output
     context = output["additionalContext"]
     assert context.startswith("MOTO ROLE ERROR:")
     assert error.format(home=moto.MOTO_HOME) in context
 
 
 @pytest.mark.usefixtures("moto_home")
-def test_role_hook_is_silent_without_a_role_and_in_a_fork(
-    moto: ModuleType,
-    capsys: pytest.CaptureFixture[str],
+def test_role_hook_is_silent_without_a_role_and_in_a_fork(moto: ModuleType):
+    assert role_hook(moto, {"HERDR_PANE_ID": "w1:p2"}) is None
+    assert role_hook(moto, {"MOTO_ROLE": "reviewer", "MOTO_FORK": "1"}) is None
+
+
+def test_role_hook_finds_the_driver_whose_shell_lacks_moto_role(
+    moto: ModuleType, moto_home: Path
 ):
-    assert moto_main(moto, "role", "--hook") == 0
-    with patch.dict("os.environ", {"MOTO_ROLE": "reviewer", "MOTO_FORK": "1"}):
-        assert moto_main(moto, "role", "--hook") == 0
-    assert capsys.readouterr().out == ""
+    (moto_home / "roles/driver.md").write_text("Drive.\n")
+    pane = {"HERDR_PANE_ID": "w1:p2"}
+    output = role_hook(moto, pane, cwd=moto_home)
+    assert output and output["additionalContext"].startswith("Your moto role is driver.")
+    # The recorded driver pane keeps the role after the session leaves MOTO_HOME.
+    assert role_hook(moto, pane) is None
+    moto.write_driver(pane_id="w1:p2", session="s1")
+    assert role_hook(moto, pane)
+    # A worker in MOTO_HOME is never the driver, before or after spawn records it.
+    assert role_hook(moto, pane | {"MOTO_WORKER": "1"}, cwd=moto_home) is None
+    with moto.tasks_for_update() as tasks:
+        tasks["notes"] = task(pane_id="w1:p2")
+    assert role_hook(moto, pane, cwd=moto_home) is None
 
 
 def test_session_start_hook_takes_only_the_driver_role_for_the_driver(

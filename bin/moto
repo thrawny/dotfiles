@@ -114,6 +114,14 @@ in it, with MOTO_ROLE set in its tab, and the task keeps the role through snooze
 and wake. moto focus starts the driver with MOTO_ROLE=driver. Claude's
 SessionStart hook runs moto role --hook, which hands the session its role file
 as context on every start, resume, clear and compact.
+
+MOTO_ROLE lives in the tab's shell, so a driver restarted from a shell older
+than its role has none. The hook then takes the driver role for a session in
+MOTO_HOME that no task owns, the rule that records the driver's pane. spawn
+and wake set MOTO_WORKER in a main-checkout tab, so a worker in MOTO_HOME
+never passes for the driver before its task names its pane. Claude Code saves
+hook context over 10,000 characters to a file and shows only a preview, so a
+longer role file comes as an order to Read it in full.
 """
 
 from __future__ import annotations
@@ -639,6 +647,10 @@ def activity_line(info: dict[str, Any] | None, now: float) -> str | None:
 # The worker's Claude model and effort, which spawn-session passes to claude.
 MODEL_FLAGS = ("model", "effort")
 EFFORTS = ("low", "medium", "high", "xhigh", "max")
+# What moto spawn starts a worker on when its flags leave one out.
+SPAWN_DEFAULTS = {"model": "opus", "effort": "medium"}
+# Set in a worker's tab, so a worker in MOTO_HOME never passes for the driver.
+WORKER_ENV = "MOTO_WORKER"
 # claude --resume reads the auto-compact window from the environment of the new
 # pane, so a session started with a larger one would come back on the default.
 COMPACT_WINDOW = "CLAUDE_CODE_AUTO_COMPACT_WINDOW"
@@ -678,6 +690,8 @@ def start_worker(
             command += [f"--{flag}", str(value)]
     if role := spec.get("role"):
         command += ["--env", f"MOTO_ROLE={role}"]
+    if not spec.get("worktree") and not spec.get("pane"):
+        command += ["--env", f"{WORKER_ENV}=1"]
     # Worktree creation, agent startup and the first prompt each wait on Herdr.
     output = run(command, timeout=600, stdin=prompt)
     try:
@@ -749,6 +763,8 @@ def cmd_spawn(args: argparse.Namespace) -> int:
             *MODEL_FLAGS,
         )
     }
+    for flag, default in SPAWN_DEFAULTS.items():
+        spec[flag] = spec[flag] or default
     if role := getattr(args, "role", None):
         if role == DRIVER_ROLE:
             raise MotoError("The driver role is the driver's; moto focus starts it")
@@ -2177,6 +2193,8 @@ def wake_task(name: str, text: str, sender: str | None) -> str:
         command += ["--worktree", snooze.get("branch") or task["branch"], "--path", cwd]
     elif not os.path.isdir(cwd):
         raise MotoError(f"The checkout {cwd} is gone")
+    else:
+        command += ["--env", f"{WORKER_ENV}=1"]
     if title := snooze.get("title") or task.get("title"):
         command += ["--title", title]
     command += ["--resume", session]
@@ -2464,6 +2482,30 @@ def role_folder(repo: str | None) -> Path:
     return folder
 
 
+# Claude Code caps hook context at 10,000 characters; past it, the session gets
+# a file path and a 2,000-character preview, and no prompt to read the rest.
+ROLE_INLINE_LIMIT = 9_000
+
+
+def session_role(cwd: Any) -> str | None:
+    """This session's role: MOTO_ROLE, else the driver's for the driver.
+
+    MOTO_ROLE is missing from a tab whose shell predates the role. So a pane no
+    task owns takes the driver role if it is in MOTO_HOME, the rule that
+    records the driver's pane, or is the recorded driver pane. That needs a
+    driver role file in MOTO_HOME.
+    """
+    if role := os.environ.get("MOTO_ROLE"):
+        return role
+    pane_id = os.environ.get("HERDR_PANE_ID")
+    if not pane_id or os.environ.get(WORKER_ENV) or pane_owner(read_tasks(), pane_id):
+        return None
+    # The session may have moved out of MOTO_HOME since the pane was recorded.
+    if not driver_session(cwd) and read_driver().get("pane_id") != pane_id:
+        return None
+    return DRIVER_ROLE if (roles_dir() / f"{DRIVER_ROLE}.md").is_file() else None
+
+
 def role_context(role: str) -> str:
     """What the SessionStart hook hands a session with this role.
 
@@ -2479,20 +2521,33 @@ def role_context(role: str) -> str:
     except OSError as error:
         problem = "missing" if isinstance(error, FileNotFoundError) else "unreadable"
         return f"MOTO ROLE ERROR: role file {problem}: {path}{alarm}"
-    return f"Your moto role is {role}. Its instructions, from {path}:\n\n{text}"
+    if len(text) <= ROLE_INLINE_LIMIT:
+        return f"Your moto role is {role}. Its instructions, from {path}:\n\n{text}"
+    return (
+        f"Your moto role is {role}. Its instructions are in {path}, which is"
+        + f" {len(text)} characters: too long for a hook to hand over whole."
+        + f" Before anything else, before you answer any message, Read {path}"
+        + " in full, every line, and follow it as your role. If one Read returns"
+        + " only part of the file, read on with offset until its last line."
+    )
 
 
 def cmd_role(args: argparse.Namespace) -> int:
     """Claude's SessionStart hook with --hook; otherwise, name this session's role."""
-    role = os.environ.get("MOTO_ROLE")
     if not args.hook:
-        if role:
+        if role := session_role(os.getcwd()):
             print(f"{role}: {roles_dir() / f'{role}.md'}")
         else:
-            print("No role: MOTO_ROLE is unset")
+            print("No role: MOTO_ROLE is unset, and this is not the driver")
         return 0
     # A fork carries its parent's role in the conversation it copied.
-    if not role or forked():
+    if forked():
+        return 0
+    try:
+        payload = json.loads(sys.stdin.read() or "{}")
+    except ValueError:
+        payload = {}
+    if not (role := session_role(payload.get("cwd") or os.getcwd())):
         return 0
     context = role_context(role)
     print(
@@ -2826,6 +2881,8 @@ def driver_session(cwd: Any) -> bool:
     """
     if role := os.environ.get("MOTO_ROLE"):
         return role == DRIVER_ROLE
+    if os.environ.get(WORKER_ENV):
+        return False
     try:
         return Path(str(cwd or "")).resolve() == MOTO_HOME.resolve()
     except OSError:
@@ -3449,9 +3506,14 @@ def parser() -> argparse.ArgumentParser:
     )
     spawn.add_argument(
         "--model",
-        help="Claude model for the worker: an alias such as sonnet, or a full name",
+        help="Claude model for the worker: an alias such as sonnet, or a full"
+        + f" name; default: {SPAWN_DEFAULTS['model']}",
     )
-    spawn.add_argument("--effort", choices=EFFORTS, help="Claude effort level")
+    spawn.add_argument(
+        "--effort",
+        choices=EFFORTS,
+        help=f"Claude effort level; default: {SPAWN_DEFAULTS['effort']}",
+    )
     spawn.add_argument(
         "--pane",
         metavar="PANE_ID",
@@ -3647,7 +3709,7 @@ def parser() -> argparse.ArgumentParser:
         "--hook",
         action="store_true",
         help="Claude's SessionStart hook: hand the session its role file as"
-        + " context; silent without MOTO_ROLE",
+        + " context; silent for a session without a role",
     )
     role.set_defaults(handler=cmd_role)
 

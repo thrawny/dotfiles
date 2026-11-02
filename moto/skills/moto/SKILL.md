@@ -28,7 +28,7 @@ EOF
 - The brief goes on stdin, and an empty brief fails. Write it for a session that knows nothing: the goal, where to look, what done means. moto adds the `[driver]` or `[<you>]` tag and the report rules, so leave those out.
 - `--worktree <branch>`: see below. `--base <ref>` picks the start of a new worktree's branch. It defaults to the remote's default branch, fetched, and is ignored when the branch's worktree already exists.
 - `--name <agent>`: the Herdr agent name, matching `[a-z][a-z0-9_-]{0,31}`. It defaults to the branch name, or the repo name without `--worktree`.
-- `--model <alias or full name>` and `--effort low|medium|high|xhigh|max`: set them only when the brief or the user asks.
+- `--model <alias or full name>` and `--effort low|medium|high|xhigh|max`: set them only when the brief or the user asks. A flag left out defaults to `opus` and `medium`.
 
 The call fails when stdin is empty, `--repo` or `--title` is missing or invalid, the repo is not found, or the session runs inside the sandbox (`SANDBOX=1`) or outside Herdr. Spawn waits for the worktree and the new session, so it can take a minute or more. If it ends with "Launch ... was not confirmed", run `moto list` before you retry, because the worker may already exist.
 
