@@ -69,11 +69,15 @@ def empty_workspaces(
     process_of is asked only about panes without an agent, in workspaces that
     may be closed, and stops at a workspace's first busy pane.
     """
+    panes_by_workspace: dict[str, list[dict[str, Any]]] = {}
+    for pane in panes:
+        panes_by_workspace.setdefault(pane["workspace_id"], []).append(pane)
+
     found = []
     for workspace in workspaces:
         if workspace.get("focused") or workspace.get("label") in KEEP:
             continue
-        own = [p for p in panes if p["workspace_id"] == workspace["workspace_id"]]
+        own = panes_by_workspace.get(workspace["workspace_id"], [])
         if own and all(
             not p.get("agent") and idle_shell(p, process_of(p["pane_id"])) for p in own
         ):
