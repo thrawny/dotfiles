@@ -11,6 +11,8 @@
   # re-import nixpkgs for this host; that is the price of the one package.
   nixpkgs.config.allowUnfree = true;
 
+  dotfiles.agentSkills.herdrTui = true;
+
   # Dev servers here run in Herdr tabs, not zmx. Pi keeps zmx-pi, its own
   # skill for background tasks.
   # A plugin loads its own language rules into every session here, and unslop

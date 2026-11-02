@@ -4,6 +4,7 @@
   containerAssets,
   cursor-plugins,
   herdr,
+  herdr-core-skills,
   lib,
   mattpocock-skills,
   ...
@@ -91,6 +92,7 @@ let
     # install rather than vendoring a copy that would describe an older herdr.
     herdr.skillCommand =
       pkgs: "${herdr.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/herdr --skill";
+    herdr-core.source = herdr-core-skills + "/skills/herdr-core";
     retro.source = mattpocock-skills + "/skills/engineering/retro";
     writing-for-agents.source = mattpocock-skills + "/skills/productivity/writing-for-agents";
     to-tickets.source = mattpocock-skills + "/skills/engineering/to-tickets";

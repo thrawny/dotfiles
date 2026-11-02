@@ -36,6 +36,10 @@
       url = "github:herdrdev/herdr-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    herdr-core-skills = {
+      url = "git+https://github.com/herdrdev/herdr-core?ref=master&shallow=1";
+      flake = false;
+    };
     nix-index-database.url = "github:Mic92/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
     nixos-hardware.url = "github:NixOS/nixos-hardware";
@@ -99,6 +103,7 @@
       nvim-monokai-pro,
       hunk,
       herdr,
+      herdr-core-skills,
       nix-index-database,
       nixos-hardware,
       nur,
@@ -143,6 +148,7 @@
           anthropic-skills
           cursor-plugins
           herdr
+          herdr-core-skills
           lib
           mattpocock-skills
           ;

@@ -373,6 +373,24 @@
         "type": "github"
       }
     },
+    "herdr-core-skills": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793572811,
+        "narHash": "sha256-KE5B9Csk+AmzO29IMg47snkW1wadlv/5gVVleWQS5hU=",
+        "ref": "master",
+        "rev": "5a9de29b2f9b6690388a1c297a7ca8d73df7d3e2",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/herdrdev/herdr-core"
+      },
+      "original": {
+        "ref": "master",
+        "shallow": true,
+        "type": "git",
+        "url": "https://github.com/herdrdev/herdr-core"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -1099,6 +1117,7 @@
         "elephant": "elephant",
         "helium-browser": "helium-browser",
         "herdr": "herdr",
+        "herdr-core-skills": "herdr-core-skills",
         "home-manager": "home-manager",
         "hunk": "hunk",
         "lazy-nvim-nix": "lazy-nvim-nix",
