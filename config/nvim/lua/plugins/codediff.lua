@@ -34,7 +34,7 @@ return {
     dependencies = {
       "MunifTanjim/nui.nvim",
     },
-    cmd = { "CodeDiff", "CodeReview", "Review" },
+    cmd = { "CodeDiff", "CodeReview", "Review", "Api" },
     config = function(_, opts)
       require("codediff").setup(opts)
       require("codediff.review").setup(review_opts)
@@ -58,6 +58,13 @@ return {
             require("codediff.review").open_branch()
           end,
           desc = "Review branch changes",
+        },
+        {
+          "<leader>uO",
+          function()
+            require("codediff.api").toggle()
+          end,
+          desc = "Toggle API browse mode",
         },
         { "<leader>rc", "<cmd>Review commits<cr>", desc = "Review commits" },
         { "<leader>rp", "<cmd>Review pr<cr>", desc = "Review GitHub PR" },
