@@ -2260,12 +2260,19 @@ def test_role_hook_finds_the_driver_whose_shell_lacks_moto_role(
 def test_session_start_hook_takes_only_the_driver_role_for_the_driver(
     moto: ModuleType, moto_home: Path
 ):
-    stdin = json.dumps({"session_id": "s1", "source": "startup", "cwd": str(moto_home)})
-
-    def hook(env: dict[str, str]) -> None:
+    def hook(
+        env: dict[str, str],
+        pane_id: str = "w1:p2",
+        session: str = "s1",
+        live: dict[str, dict[str, Any]] | None = None,
+    ) -> None:
+        stdin = json.dumps(
+            {"session_id": session, "source": "startup", "cwd": str(moto_home)}
+        )
         with (
-            patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p2"} | env),
+            patch.dict("os.environ", {"HERDR_PANE_ID": pane_id} | env),
             patch("sys.stdin.read", return_value=stdin),
+            patch.object(moto, "live_agents", return_value=live or {}),
         ):
             moto.cmd_attach(argparse.Namespace(agent=None, pane=None, hook=True))
 
@@ -2277,6 +2284,16 @@ def test_session_start_hook_takes_only_the_driver_role_for_the_driver(
     moto.driver_path().unlink()
     hook({})  # no role: the driver is whatever starts in MOTO_HOME, as before
     assert moto.read_driver() == {"pane_id": "w1:p2", "session": "s1"}
+    # A worker in MOTO_HOME whose tab lacks MOTO_WORKER, such as one spawned
+    # before moto set it, never takes the pane of a driver still running.
+    driver = {"w1:p2": {"pane_id": "w1:p2", "agent": "claude"}}
+    hook({}, pane_id="w1:p3", session="s2", live=driver)
+    assert moto.read_driver() == {"pane_id": "w1:p2", "session": "s1"}
+    # The driver resumed in its own pane, and a driver restarted elsewhere.
+    hook({}, session="s3", live=driver)
+    assert moto.read_driver() == {"pane_id": "w1:p2", "session": "s3"}
+    hook({}, pane_id="w1:p4", session="s4")
+    assert moto.read_driver() == {"pane_id": "w1:p4", "session": "s4"}
 
 
 def test_watch_absorbs_the_handoff_turn_and_takeoff_turn(moto: ModuleType):

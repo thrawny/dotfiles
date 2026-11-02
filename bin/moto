@@ -1929,6 +1929,23 @@ def cmd_attach(args: argparse.Namespace) -> int:
     return 0
 
 
+def driver_elsewhere(pane_id: str) -> bool:
+    """Whether the recorded driver pane is another pane, still running Claude.
+
+    A session in MOTO_HOME whose tab lacks MOTO_WORKER passes for the driver
+    until spawn records its task, so it must not take a live driver's pane. If
+    Herdr cannot answer, the new session takes the pane, as before.
+    """
+    recorded = read_driver().get("pane_id")
+    if not recorded or recorded == pane_id:
+        return False
+    try:
+        agent = live_agents().get(recorded)
+    except (MotoError, subprocess.TimeoutExpired):
+        return False
+    return bool(agent) and agent.get("agent") == "claude"
+
+
 def attach_hook(payload: dict[str, Any]) -> None:
     """Claude's SessionStart hook, for startup, resume and clear.
 
@@ -1944,7 +1961,11 @@ def attach_hook(payload: dict[str, Any]) -> None:
         return
     tasks = read_tasks()
     owner = pane_owner(tasks, pane_id)
-    if not owner and driver_session(payload.get("cwd")):
+    if (
+        not owner
+        and driver_session(payload.get("cwd"))
+        and not driver_elsewhere(pane_id)
+    ):
         # A pane no task owns that driver_session accepts is the driver. A
         # scheduled job needs this to know where to send what it finds.
         write_driver(pane_id=pane_id, session=session)
