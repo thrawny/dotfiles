@@ -5,7 +5,7 @@
     "CLAUDE_CODE_TMPDIR": "/tmp/claude",
     "CLAUDE_CODE_CERT_STORE": "bundled",
     "USE_BUILTIN_RIPGREP": "0",
-    "CLAUDE_CODE_PLUGIN_DIRS": "~/.claude/mods/handoff"
+    "CLAUDE_CODE_PLUGIN_DIRS": "~/.claude/mods/handoff:~/.claude/mods/shell-home"
   },
   "permissions": {
     "allow": [

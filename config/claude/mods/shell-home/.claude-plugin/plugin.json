@@ -1,0 +1,1 @@
+{ "name": "shell-home", "version": "0.1.0", "description": "Nudge the agent back when its shell leaves the session's folder, and return it after 5 idle minutes" }
