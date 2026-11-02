@@ -10,6 +10,8 @@ const { values, positionals } = parseArgs({
 		help: { type: "boolean", short: "h" },
 		out: { type: "string", short: "o" },
 		"link-base": { type: "string" },
+		jira: { type: "string" },
+		"jira-projects": { type: "string" },
 		name: { type: "string" },
 		port: { type: "string" },
 		tailscale: { type: "boolean" },
@@ -17,20 +19,37 @@ const { values, positionals } = parseArgs({
 	},
 });
 
+async function renderOptions() {
+	const { checkJiraURL, parseJiraProjects } = await import("./render.ts");
+	if (values["jira-projects"] && !values.jira)
+		throw new Error("--jira-projects needs --jira.");
+	return {
+		linkBase: values["link-base"],
+		jira: values.jira
+			? {
+					url: checkJiraURL(values.jira),
+					projects: parseJiraProjects(values["jira-projects"] || ""),
+				}
+			: undefined,
+	};
+}
+
 async function main() {
 	if (values.help) {
 		console.log(
 			mode === "render"
-				? `Usage: blueprint-html <source.md> [-o output.html] [--link-base URL]
+				? `Usage: blueprint-html <source.md> [-o output.html] [--link-base URL] [--jira URL [--jira-projects KEYS]]
 Render Markdown and Blueprint typed fences to standalone HTML.
 Default output: lab/<source-name>.html`
-				: `Usage: blueprint-serve [directory] [--name hostname] [--tailscale] [--link-base URL]
+				: `Usage: blueprint-serve [directory] [--name hostname] [--tailscale] [--link-base URL] [--jira URL [--jira-projects KEYS]]
        blueprint-serve [directory] --port 4321
 
 Serve Markdown and HTML with a searchable index, document links, and live refresh.
 Uses Portless by default, local-only. --tailscale opts into tailnet sharing.
 --port runs directly on loopback without Portless. Directory defaults to lab/.
-Hidden directories, dependencies, and symlinks are excluded from discovery.`,
+Hidden directories, dependencies, and symlinks are excluded from discovery.
+--jira links Jira keys such as ABC-123 in Markdown prose to URL/ABC-123.
+--jira-projects ABC,DEF limits the keys to those projects.`,
 		);
 		return;
 	}
@@ -56,7 +75,7 @@ Hidden directories, dependencies, and symlinks are excluded from discovery.`,
 		const result = await render(
 			await Bun.file(source).text(),
 			source,
-			values["link-base"],
+			await renderOptions(),
 		);
 		for (const warning of result.warnings)
 			console.error(`blueprint-html: warning: ${warning}`);
@@ -77,7 +96,7 @@ Hidden directories, dependencies, and symlinks are excluded from discovery.`,
 		if (!Number.isInteger(port) || port < 1 || port > 65535)
 			throw new Error("Expected a port between 1 and 65535.");
 		const { serve } = await import("./server.ts");
-		await serve(root, port, values["link-base"]);
+		await serve(root, port, await renderOptions());
 		return;
 	}
 	if (!Bun.which("portless"))
@@ -108,7 +127,11 @@ Hidden directories, dependencies, and symlinks are excluded from discovery.`,
 		root,
 		"--internal",
 	];
+	await renderOptions();
 	if (values["link-base"]) args.push("--link-base", values["link-base"]);
+	if (values.jira) args.push("--jira", values.jira);
+	if (values["jira-projects"])
+		args.push("--jira-projects", values["jira-projects"]);
 	const child = Bun.spawn(args, {
 		stdin: "inherit",
 		stdout: "inherit",

@@ -7,7 +7,13 @@ import {
 	safeFile,
 	urlPath,
 } from "./catalog.ts";
-import { escapeHTML, icon, page, render } from "./render.ts";
+import {
+	escapeHTML,
+	icon,
+	page,
+	type RenderOptions,
+	render,
+} from "./render.ts";
 
 const liveScript = readFileSync(join(import.meta.dir, "live.js"), "utf8");
 const indexCSS = readFileSync(join(import.meta.dir, "index.css"), "utf8");
@@ -97,7 +103,11 @@ async function inject(
 	return `${base && !hasBase ? `<base href="${escapeHTML(base)}">` : ""}${iconLink}${response}`;
 }
 
-export async function serve(root: string, port: number, linkBase?: string) {
+export async function serve(
+	root: string,
+	port: number,
+	options: RenderOptions = {},
+) {
 	let revision = crypto.randomUUID();
 	let catalog = await discover(root);
 	const cache = new Map<string, Promise<string>>();
@@ -216,7 +226,7 @@ export async function serve(root: string, port: number, linkBase?: string) {
 				const pending = (async () => {
 					const text = await Bun.file(actual).text();
 					if (doc.kind === "HTML") return text;
-					const result = await render(text, file, linkBase);
+					const result = await render(text, file, options);
 					for (const warning of result.warnings)
 						console.error(`blueprint-serve: ${file}: ${warning}`);
 					return result.html;

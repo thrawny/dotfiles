@@ -176,7 +176,102 @@ async function diagram(content: string, salt: string, warnings: string[]) {
 	}
 }
 
-export async function render(text: string, source: string, linkBase?: string) {
+export type RenderOptions = {
+	/** Repository blob URL that turns source citations into links. */
+	linkBase?: string;
+	/** Jira key linking, off when absent. */
+	jira?: JiraOptions;
+};
+
+export type JiraOptions = {
+	/** Browse URL that a key is appended to, such as https://example.atlassian.net/browse/. */
+	url: string;
+	/** Project keys to match, such as ["ABC"]. Empty matches any uppercase key. */
+	projects?: string[];
+};
+
+export function parseJiraProjects(value: string) {
+	const projects = value
+		.split(",")
+		.map((project) => project.trim())
+		.filter(Boolean);
+	for (const project of projects)
+		if (!/^[A-Z][A-Z0-9_]+$/.test(project))
+			throw new Error(
+				`Jira project key '${project}' must be uppercase letters, digits or underscores.`,
+			);
+	return projects;
+}
+
+export function checkJiraURL(value: string) {
+	if (!/^https?:\/\/[^/\s]+/.test(value))
+		throw new Error(`Jira URL '${value}' must start with http:// or https://.`);
+	return value;
+}
+
+// Adds links to Jira keys in text tokens only. Code spans, fences, raw HTML
+// blocks and image alt text never reach a text token, and the depth count
+// skips text that already sits inside a Markdown, autolink or inline <a> link.
+function linkJiraKeys(md: InstanceType<typeof MarkdownIt>, jira: JiraOptions) {
+	const prefix = jira.projects?.length
+		? `(?:${jira.projects.join("|")})`
+		: "[A-Z][A-Z0-9_]+";
+	const pattern = new RegExp(`(?<![\\w/-])${prefix}-\\d+(?![\\w])`, "g");
+	const base = jira.url.replace(/\/+$/, "");
+	md.core.ruler.push("jira_keys", (state) => {
+		for (const block of state.tokens) {
+			if (block.type !== "inline" || !block.children) continue;
+			const children: typeof block.children = [];
+			let depth = 0;
+			for (const token of block.children) {
+				if (token.type === "link_open") depth++;
+				else if (token.type === "link_close") depth--;
+				else if (token.type === "html_inline") {
+					if (/^<a[\s>]/i.test(token.content)) depth++;
+					else if (/^<\/a\s*>/i.test(token.content)) depth--;
+				}
+				if (token.type !== "text" || depth > 0) {
+					children.push(token);
+					continue;
+				}
+				let last = 0;
+				for (const match of token.content.matchAll(pattern)) {
+					const at = match.index;
+					if (at > last) {
+						const before = new state.Token("text", "", 0);
+						before.content = token.content.slice(last, at);
+						children.push(before);
+					}
+					const open = new state.Token("link_open", "a", 1);
+					open.attrs = [
+						["href", `${base}/${match[0]}`],
+						["class", "jira"],
+						["target", "_blank"],
+						["rel", "noopener"],
+					];
+					const label = new state.Token("text", "", 0);
+					label.content = match[0];
+					children.push(open, label, new state.Token("link_close", "a", -1));
+					last = at + match[0].length;
+				}
+				if (last === 0) {
+					children.push(token);
+				} else if (last < token.content.length) {
+					const after = new state.Token("text", "", 0);
+					after.content = token.content.slice(last);
+					children.push(after);
+				}
+			}
+			block.children = children;
+		}
+	});
+}
+
+export async function render(
+	text: string,
+	source: string,
+	{ linkBase, jira }: RenderOptions = {},
+) {
 	const { meta, body } = frontmatter(text);
 	const warnings: string[] = [];
 	const title =
@@ -185,6 +280,7 @@ export async function render(text: string, source: string, linkBase?: string) {
 	const md = new MarkdownIt("commonmark")
 		.enable("table")
 		.enable("strikethrough");
+	if (jira) linkJiraKeys(md, jira);
 	const diagrams: { placeholder: string; content: string }[] = [];
 	// A per-render token prevents document text from colliding with placeholders.
 	const nonce = crypto.randomUUID();
