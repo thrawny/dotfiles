@@ -24,6 +24,7 @@
   ];
   dotfiles.agentInstructions.issueTracker.enable = false;
   dotfiles.agentInstructions.unslop.enable = false;
+  dotfiles.agentInstructions.zmxRule.enable = false;
 
   home.packages = with pkgs; [
     terraform

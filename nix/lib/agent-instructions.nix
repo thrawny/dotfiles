@@ -86,14 +86,20 @@ rec {
     - Docker commands should use the sandbox-provided `DOCKER_HOST`; do not access `/var/run/docker.sock`.
   '';
 
-  backgroundTasks = ''
+  # on: block name -> bool, whether that block is enabled for this host.
+  backgroundTasks = on: ''
     ## Background tasks and long-running processes
 
     Run builds, tests, linters, and other gates in the foreground — their result decides your next step, so backgrounding them only adds latency and invites moving on without the verdict. Reserve background tasks for work that genuinely runs while you do something else: delegated agent turns (acpx/codex) and bounded readiness waits.
 
     Only background commands that provably exit. The completion notification only fires on process exit, so a never-terminating background command hangs silently forever.
 
-    - Never background a persistent service or a supervisor/restart loop. Dev stacks and servers run in zmx (`zmx run -d`), which survives the session and is visible to other sessions. Inspect via `zmx history`; on observed failure restart once, never via a loop.
+    - Never background a persistent service or a supervisor/restart loop.${
+      if on "zmxRule" then
+        " Dev stacks and servers run in zmx (`zmx run -d`), which survives the session and is visible to other sessions. Inspect via `zmx history`; on observed failure restart once, never via a loop."
+      else
+        ""
+    }
     - Readiness waits must be bounded and must match failure output as well as the ready banner: `timeout 300 bash -c 'until <ready-or-failed>; do sleep 2; done'`, or use the Monitor tool, which enforces a timeout.
     - Before ending a session or handing off, stop background tasks you started; anything deliberately left running must be named in the handoff.
   '';
@@ -106,7 +112,9 @@ rec {
 
   # Each agent gets the blocks that list it, in this order. Every block is a
   # `dotfiles.agentInstructions.<name>.enable` option. `default` is a bool or a
-  # function of the host platform, and is true when left out.
+  # function of the host platform, and is true when left out. `text` is a string,
+  # or a function of `on` (block name -> bool) when it changes with other blocks.
+  # A block with no agents only carries its option.
   blocks = [
     {
       name = "piWorkflow";
@@ -165,6 +173,12 @@ rec {
       text = backgroundTasks;
       agents = [ "claude" ];
     }
+    {
+      # Switch off on a host whose dev stacks run somewhere other than zmx.
+      name = "zmxRule";
+      text = "";
+      agents = [ ];
+    }
   ];
 
   defaultFor =
@@ -179,11 +193,11 @@ rec {
     enabled:
     let
       isEnabled = block: enabled.${block.name} or (defaultFor linux block);
+      on = name: isEnabled (builtins.head (builtins.filter (block: block.name == name) blocks));
+      textOf = block: if builtins.isFunction block.text then block.text on else block.text;
       textsFor =
         agent:
-        map (block: block.text) (
-          builtins.filter (block: builtins.elem agent block.agents && isEnabled block) blocks
-        );
+        map textOf (builtins.filter (block: builtins.elem agent block.agents && isEnabled block) blocks);
     in
     {
       claudeGlobal = render "# Global Claude Code Instructions" (textsFor "claude");
