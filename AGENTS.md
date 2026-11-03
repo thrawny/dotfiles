@@ -11,6 +11,12 @@ Cross-platform dotfiles managed with Nix Home Manager (`nix/`). See `nix/AGENTS.
 - Before changing keyboard bindings, modifier remaps, or terminal key passthrough, read [keyboard rules](docs/keyboard-rules.md).
 - This repo is public. Employer values (GitHub org and team, Jira site, internal repo names) live in the private `~/.config/work/config.toml`, read with `bin/work-config`. Code, tests, comments and commit messages use placeholders such as `acme/widgets` and `ABC-123`.
 
+## Task guidance
+
+Before reviewing changes or auditing code health, read
+[CODING_STANDARDS.md](CODING_STANDARDS.md) at the working revision. Include this
+requirement in review briefs.
+
 ## Tests
 
 Every test is code someone has to keep working, so a change ships without new tests by default. Check it by running it: the command itself, a reload, or a smoke test in the real app.
