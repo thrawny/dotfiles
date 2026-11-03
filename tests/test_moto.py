@@ -354,6 +354,27 @@ def test_held_task_passes_on_only_what_the_user_asks_and_stays_held(
     assert moto.read_tasks()["abc-1"]["held"] is True
 
 
+@pytest.mark.parametrize("held", [False, True])
+def test_reports_sent_between_two_watches_all_reach_the_driver_in_order(
+    moto: ModuleType, held: bool
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=held)
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
+        for text in ("one", "two", "three"):
+            args = argparse.Namespace(
+                kind="question", text=[text], agent=None, to_driver=held
+            )
+            assert moto.cmd_report(args) == 0
+    tasks = moto.read_tasks()
+    tag = " (held, passed on)" if held else ""
+    assert moto.check(tasks, live("done", 2), moto.time.time()) == [
+        f"abc-1 question{tag}: {text}" for text in ("one", "two", "three")
+    ]
+    assert moto.check(tasks, live("done", 2), moto.time.time()) == []
+    assert tasks["abc-1"]["report"]["text"] == "three"
+
+
 def test_failed_update_writes_nothing(moto: ModuleType, state_home: Path):
     with pytest.raises(moto.MotoError):
         with moto.tasks_for_update() as tasks:
@@ -2245,7 +2266,9 @@ def test_role_hook_finds_the_driver_whose_shell_lacks_moto_role(
     (moto_home / "roles/driver.md").write_text("Drive.\n")
     pane = {"HERDR_PANE_ID": "w1:p2"}
     output = role_hook(moto, pane, cwd=moto_home)
-    assert output and output["additionalContext"].startswith("Your moto role is driver.")
+    assert output and output["additionalContext"].startswith(
+        "Your moto role is driver."
+    )
     # The recorded driver pane keeps the role after the session leaves MOTO_HOME.
     assert role_hook(moto, pane) is None
     moto.write_driver(pane_id="w1:p2", session="s1")

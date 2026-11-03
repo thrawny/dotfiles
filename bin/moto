@@ -152,6 +152,8 @@ MOTO_HOME = Path(os.environ.get("MOTO_HOME") or Path.home() / "code/moto")
 # A report lands a moment before the worker's turn ends. Holding it back this
 # long lets the turn end first, so one wake covers both.
 REPORT_SETTLE_SECONDS = 20
+# Reports a task keeps for the watch, more than any worker sends between two.
+REPORTS_KEPT = 20
 # How long a turn end waits for the worker's transcript to catch up with Herdr,
 # and for the next turn to start once the worker's background work finishes.
 TURN_SETTLE_SECONDS = 10
@@ -1082,6 +1084,9 @@ def cmd_report(args: argparse.Namespace) -> int:
         task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
         if args.to_driver:
             task["report"]["to_driver"] = True
+        # report keeps the last one for moto list. The watch reads reports, so
+        # several reports between two watches all reach the driver.
+        task["reports"] = [*task.get("reports", []), task["report"]][-REPORTS_KEPT:]
         record(
             "report",
             task["agent"],
@@ -1308,24 +1313,18 @@ def check(
         if closed := pane_closed(name, task, status == "gone", now):
             lines.append(closed)
         if parent := task.get("parent"):
-            if line := child_report(name, task, parent):
-                lines.append(line)
+            lines += child_report(name, task, parent)
             lines += to_parent(name, task, parent, tasks, live, now, outbox)
             continue
         if task.get("held"):
-            if line := passed_on(name, task):
-                lines.append(line)
+            lines += passed_on(name, task)
             continue
-        report: dict[str, Any] | None = task.get("report")
-        fresh = report is not None and report["at"] != seen.get("report_at")
+        unseen = unseen_reports(task)
+        fresh = bool(unseen)
         if status == "working":
             changed = False
             seen.pop("pending", None)  # a new turn started
-            fresh = (
-                fresh
-                and report is not None
-                and now - report["at"] >= REPORT_SETTLE_SECONDS
-            )
+            fresh = fresh and now - unseen[-1]["at"] >= REPORT_SETTLE_SECONDS
         elif status == "gone":
             changed = False  # pane_closed reports it, once it has stayed gone
         elif status == "idle":
@@ -1334,11 +1333,12 @@ def check(
             changed = seq != seen.get("seq")
         seen["status"], seen["seq"] = status, seq
         line = None
-        if fresh and report is not None:
-            seen["report_at"] = report["at"]
-            line = f"{name} {report['kind']}: {report['text']}"
-            if task.get("closed_at"):
-                line += " (pane closed)"
+        if fresh:
+            seen["report_at"] = unseen[-1]["at"]
+            closed = " (pane closed)" if task.get("closed_at") else ""
+            *earlier, last = unseen
+            lines += [f"{name} {r['kind']}: {r['text']}{closed}" for r in earlier]
+            line = f"{name} {last['kind']}: {last['text']}{closed}"
         elif changed and status == "blocked":
             line = f"{name} blocked: waiting at an approval or question prompt"
         elif status in ("done", "idle") and (changed or "pending" in seen):
@@ -1352,33 +1352,47 @@ def check(
     return lines
 
 
-def new_report(task: dict[str, Any]) -> dict[str, Any] | None:
-    """The task's report if the watch has not seen it, marking it seen."""
-    seen = task["seen"]
-    report: dict[str, Any] | None = task.get("report")
-    if report is None or report["at"] == seen.get("report_at"):
-        return None
-    seen["report_at"] = report["at"]
-    return report
+def unseen_reports(task: dict[str, Any]) -> list[dict[str, Any]]:
+    """The task's reports the watch has not seen, oldest first.
+
+    A task saved before moto kept reports has only its last report.
+    """
+    reports: list[dict[str, Any]] = task.get("reports") or (
+        [task["report"]] if task.get("report") else []
+    )
+    seen_at = task.get("seen", {}).get("report_at")
+    if seen_at is None:
+        return reports
+    return [r for r in reports if r["at"] > seen_at]
 
 
-def child_report(name: str, task: dict[str, Any], parent: str) -> str | None:
-    """The line for a child task's new wrap, snooze, handback or passed-on
-    report, once, or None.
+def new_reports(task: dict[str, Any]) -> list[dict[str, Any]]:
+    """The task's reports the watch has not seen, oldest first, marking them seen."""
+    reports = unseen_reports(task)
+    if reports:
+        task["seen"]["report_at"] = reports[-1]["at"]
+    return reports
+
+
+def child_report(name: str, task: dict[str, Any], parent: str) -> list[str]:
+    """The lines for a child task's new wrap, snooze, handback and passed-on
+    reports, once each.
 
     The user runs or asks for those in the child's pane, so they are the
     driver's news. The child's done, question and blocked reports are for its
     parent, held or not, so they queue in seen.for_parent for to_parent.
     """
-    report = new_report(task)
-    if report is None:
-        return None
-    if not (report["kind"] in ADOPT_KINDS or report.get("to_driver")):
-        if report["kind"] in CHILD_KINDS:
-            task["seen"].setdefault("for_parent", []).append(report)
-        return None
-    line = f"{name} {report['kind']} (child of {parent}): {report['text']}"
-    return line + " (pane closed)" if task.get("closed_at") else line
+    lines: list[str] = []
+    closed = " (pane closed)" if task.get("closed_at") else ""
+    for report in new_reports(task):
+        if not (report["kind"] in ADOPT_KINDS or report.get("to_driver")):
+            if report["kind"] in CHILD_KINDS:
+                task["seen"].setdefault("for_parent", []).append(report)
+            continue
+        lines.append(
+            f"{name} {report['kind']} (child of {parent}): {report['text']}{closed}"
+        )
+    return lines
 
 
 def to_parent(
@@ -1429,16 +1443,17 @@ def to_parent(
     return []
 
 
-def passed_on(name: str, task: dict[str, Any]) -> str | None:
-    """The line for a held task's new --to-driver report, once, or None.
+def passed_on(name: str, task: dict[str, Any]) -> list[str]:
+    """The lines for a held task's new --to-driver reports, once each.
 
-    The user asked the worker to send it, so it is the driver's news. The held
-    task's other reports are the user's, so they pass unseen.
+    The user asked the worker to send them, so they are the driver's news. The
+    held task's other reports are the user's, so they pass unseen.
     """
-    report = new_report(task)
-    if report is None or not report.get("to_driver"):
-        return None
-    return f"{name} {report['kind']} (held, passed on): {report['text']}"
+    return [
+        f"{name} {r['kind']} (held, passed on): {r['text']}"
+        for r in new_reports(task)
+        if r.get("to_driver")
+    ]
 
 
 def pane_closed(name: str, task: dict[str, Any], gone: bool, now: float) -> str | None:
