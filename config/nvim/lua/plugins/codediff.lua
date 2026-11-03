@@ -20,6 +20,7 @@ local review_opts = {
   },
   codediff = {
     focus_modified_pane = false,
+    view = "api",
   },
   popup = {
     show_type_selector = false,
@@ -123,6 +124,9 @@ return {
       },
       explorer = {
         view_mode = "tree",
+      },
+      api = {
+        comments = false,
       },
       keymaps = {
         view = {
