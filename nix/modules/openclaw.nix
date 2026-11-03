@@ -194,6 +194,8 @@ let
       };
       allow = runtimePlugins;
     };
+    # Use the existing keyword index without an embeddings API credential.
+    memory.search.provider = "none";
     skills.workshop.autonomous.mode = "off";
     channels = {
       telegram = {
