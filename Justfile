@@ -14,10 +14,6 @@ default:
 nuke-treesitter:
     bash scripts/nuke-treesitter.sh
 
-# Check the Helium profile launcher script without changing desktop entries
-check-helium-profile-launchers:
-    bash -n scripts/helium-profile-launchers
-
 # Interactive setup for a fresh Apple Silicon Mac
 bootstrap-mac:
     bin/bootstrap-mac
@@ -38,29 +34,6 @@ build-darwin: nix::build-darwin
 # Sign this Mac into Tailscale and enable its SSH server
 tailscale-login:
     sudo /run/current-system/sw/bin/tailscale up --ssh
-
-# Compatibility aliases; remote-mode is also available directly on PATH
-clamshell-on:
-    remote-mode on
-
-clamshell-off:
-    remote-mode off
-
-# Test keep-awake rules and sessions with fake hardware
-test-keepawake:
-    @just test-python tests/test_keepawake.py
-
-# Format, typecheck, and exercise keep-awake rules with fake hardware
-check-keepawake:
-    uv run --locked ruff check --fix bin/keepawake tests/test_keepawake.py
-    uv run --locked ruff format bin/keepawake tests/test_keepawake.py
-    @just typecheck-python bin/keepawake tests/test_keepawake.py
-    @just test-keepawake
-
-# Test remote mode without changing the host's power settings
-test-remote-mode:
-    bash -n bin/remote-mode
-    @just test-python tests/test_remote_mode.py
 
 # Push the flake's cache-bundle (selected expensive builds) to Cachix
 cache dry_run="": (nix::cache dry_run)
@@ -99,9 +72,6 @@ update: nix::update
 # Prepare app-only fleet candidates without changing installed services or pins.
 prepare-nightly-app-update:
     uv run --locked python scripts/nightly-app-update.py --prepare --state-dir "$HOME/.local/state/nightly-app-update"
-
-test-nightly-app-update:
-    @just test-python tests/test_nightly_app_update.py
 
 # Exercise validation with the system PATH launchd gives the updater.
 check-nightly-app-update-environment:
@@ -153,11 +123,7 @@ fmt-python:
 # === Linters ===
 
 # Lint all
-lint: nix::lint lint-lua lint-python
-
-# Lint Lua files (TODO: fix selene config for neovim globals)
-lint-lua:
-    @true
+lint: nix::lint lint-python
 
 # Lint Python files
 lint-python:
@@ -178,19 +144,8 @@ check-blueprint: blueprint-install
     biome check --write bin/blueprint
     bun run bin/blueprint/node_modules/typescript/bin/tsc --project bin/blueprint/tsconfig.json
 
-# Blueprint's renderer tests
-test-blueprint: blueprint-install
-    bun test bin/blueprint
-
-# Run a Bun development/verification script from the repository root
-blueprint-run +args:
-    bun run {{args}}
-
-# Typecheck all
-typecheck: typecheck-python
-
-# Typecheck with the Nix-installed ty and uv-managed project/script environments
-typecheck-python *files:
+# Typecheck Python, optionally selecting files, with the locked environments
+typecheck *files:
     TY_UV=scripts uv run --locked ty check {{files}}
 
 # === Theme ===
@@ -201,66 +156,13 @@ check-theme:
 
 # === Tests ===
 
-# PR snapshot, wait, watch and thread commands against a fake gh
-test-prctl:
-    @just test-python tests/test_prctl.py
-
-# Gauntlet reviewer selection without model invocations
-test-gauntlet:
-    @just test-python tests/test_gauntlet.py
-
-# Run all tests
-test: test-keepawake test-display-recover test-fork-window test-spawn-session test-moto test-claude-mods test-nvim test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-prune-workspaces test-nvim-here test-herdr-decorator test-direnv test-private-skills test-remote-mode test-prctl test-gauntlet test-blueprint
-
-# Session forking, exact session selection, and desktop routing
-test-fork-window:
-    @just test-python tests/test_fork_window.py
-
-# Herdr session launcher repo lookup and agent naming
-test-spawn-session:
-    @just test-python tests/test_spawn_session.py
+# Run Python, Neovim, and Claude mod tests
+test: test-python test-nvim test-claude-mods
 
 # Claude Code mods' own tests
 test-claude-mods:
     @claude plugin test config/claude/mods/handoff
-
-test-moto:
-    @just test-python tests/test_moto.py
     @claude plugin test moto/claude/mods/moto-watch
-
-# Validate private-skill behavior and the host opt-in list
-check-private-skills: test-private-skills nix::check-private-skills
-
-# Private skill cloning, offline updates, collision handling, and link cleanup
-test-private-skills:
-    @just test-python tests/test_private_skills.py
-
-# Shared direnv helpers, independent of any Home Manager user.
-test-direnv:
-    bash -n nix/lib/direnv-stdlib.sh
-    @just test-python tests/test_direnv_stdlib.py
-
-# Project selection and backend dispatch
-test-project-picker:
-    bash -n bin/project-picker
-    uv run --locked python -B -m pytest tests/test_project_picker.py
-
-# Agent attention ranking and queue walking
-test-herdr-next-agent:
-    bash -n bin/herdr-next-agent
-    uv run --locked python -B -m pytest tests/test_herdr_next_agent.py
-
-# Finding the nearest Neovim and opening files in it, against headless Neovims
-test-nvim-here:
-    @just test-python tests/test_nvim_here.py
-
-# PR and Jira sidebar decoration, the command palette, and the private work config
-test-herdr-prune-workspaces:
-    uv run --locked python -B -m pytest tests/test_herdr_prune_workspaces.py
-
-test-herdr-decorator:
-    uv run --locked python -B -m pytest tests/test_herdr_decorator.py tests/test_work_config.py tests/test_herdr_palette.py
-    bash -n bin/pr-review bin/code-sync
 
 # Run the sidebar decorator in the foreground, restarting it on every edit
 herdr-decorator-dev:
@@ -276,21 +178,6 @@ moto-jobs-dev:
 test-python *args:
     uv run --locked python -B -m pytest {{args}}
 
-# Test display recovery, resume ordering, and closed-lid handling with fake tools
-test-display-recover:
-    bash -n bin/hypr-display-recover bin/hypr-panel-recover bin/wake-lg bin/dpms-on
-    @just test-python tests/test_display_recover.py
-
-# Check Hyprland scratchpad callbacks and terminal path quoting without a compositor
-test-hypr-binds:
-    bash -n bin/dpms-on bin/dpms-off
-    nvim --headless -u NONE -l tests/test_hypr_binds.lua
-
-# Check the desktop broker protocol and sandbox routing with a fake browser
-test-desktop-broker:
-    bash -n bin/open-url bin/sandbox bin/sandbox-wl-paste bin/sandbox-xdg-open
-    @just test-python tests/test_desktop_broker.py tests/test_desktop_broker_clipboard.py
-
 # Validate the active AeroSpace config on macOS without applying it
 check-aerospace:
     aerospace reload-config --dry-run --warnings-as-errors --no-gui
@@ -303,10 +190,6 @@ test-nvim:
 
 # === Combined workflows ===
 
-# Check the disk floor and incoming Nix closure accounting
-test-obelisk-storage:
-    @just test-python tests/test_obelisk_storage.py
-
 # Format, lint, typecheck, evaluate current host, and check Pi extensions
 check:
     #!/usr/bin/env bash
@@ -316,13 +199,10 @@ check:
     nix develop ./nix --command just fmt check-parallel
 
 [parallel]
-check-parallel: test-nightly-app-update test-obelisk-storage check-blueprint test-keepawake test-display-recover lint typecheck pi test-fork-window test-spawn-session test-moto check-theme shell::check test-desktop-broker test-project-picker test-herdr-next-agent test-herdr-decorator test-direnv test-remote-mode test-prctl check-private-skills nix::eval
+check-parallel: lint typecheck pi check-blueprint test check-theme shell::check nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all
-
-# CI: lint, typecheck, format, and test
-ci: fmt lint typecheck check-theme check-blueprint test
 
 # Build the Rosetta Linux builder for Apple Silicon
 build-linux-builder:

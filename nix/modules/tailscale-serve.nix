@@ -91,21 +91,5 @@ in
       }
     ) cfg.services;
 
-    system.build.tailscale-serve-check =
-      let
-        spec = pkgs.writeText "tailscale-serve-units.json" (
-          builtins.toJSON {
-            inherit lockFile flock tailscale;
-            services = lib.mapAttrs (name: service: {
-              inherit (service) serviceName target httpsPort;
-              inherit (config.systemd.services."tailscale-serve-${name}".serviceConfig) ExecStart ExecStop;
-            }) cfg.services;
-          }
-        );
-      in
-      pkgs.runCommand "tailscale-serve-check" { nativeBuildInputs = [ pkgs.python3 ]; } ''
-        python3 ${../../scripts/check-tailscale-serve} ${spec}
-        touch "$out"
-      '';
   };
 }

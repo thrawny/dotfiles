@@ -41,4 +41,4 @@ Private Git hosting does not keep skill contents out of model requests or agent 
 
 ## Checks
 
-Run `just test-private-skills` for local Git integration tests and `just check` for repository checks. Tests use temporary repositories and isolated Git configuration, without Forgejo credentials or network access.
+Run `just test-python tests/test_private_skills.py` for local Git integration tests and `just check` for repository checks. Tests use temporary repositories and isolated Git configuration, without Forgejo credentials or network access.

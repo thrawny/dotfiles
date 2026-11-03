@@ -57,7 +57,6 @@ endpoints changed outside Portless. Do not use `tailscale serve reset`.
 From the dotfiles repository root:
 
 ```sh
-just nix::check-tailscale-serve
 just nix::tailscale-serve-health
 ```
 

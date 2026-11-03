@@ -10,8 +10,7 @@ remote-mode off
 
 Turning the mode on or off requires sudo. It starts off on Linux and remembers
 your choice across logouts, reboots, and Nix switches. On macOS it reflects the
-existing `pmset` sleep-disable setting, including changes made by the old
-`just clamshell-on` command.
+existing `pmset` sleep-disable setting.
 
 Remote mode blocks system sleep, including manual suspend and hibernation.
 It leaves screen locking and monitor power-off alone. It does not stop shutdown

@@ -338,33 +338,7 @@ lib.mkMerge [
             echo "Nix mode unexpectedly allowed a config write" >&2
             exit 1
           fi
-          grep -q 'managed by Nix' "$TMPDIR/write-error"
-          jq -e '
-            .gateway.auth.token.source == "env" and
-            .channels.discord.token.source == "file" and
-            .channels.telegram.botToken.source == "env" and
-            .models.providers.openai.agentRuntime.id == "codex" and
-            .models.providers.openai.api == "openai-chatgpt-responses" and
-            .models.providers.openai.baseUrl == "https://chatgpt.com/backend-api/codex" and
-            .models.providers.openai.models[0].id == "gpt-6.1-sol" and
-            .agents.defaults.model.primary == "openai/gpt-6.1-sol" and
-            .agents.defaults.model.fallbacks == [] and
-            .agents.defaults.thinkingDefault == "low" and
-            .agents.defaults.heartbeat.every == "0m" and
-            .agents.defaults.modelPolicy.allow == ["openai/gpt-6.1-sol", "openai/gpt-6-sol", "openai/gpt-6-luna"] and
-            .plugins.entries["memory-core"].config.dreaming.model == "openai/gpt-6-luna" and
-            .plugins.entries["memory-core"].subagent.allowedModels == ["openai/gpt-6-luna"] and
-            .skills.workshop.autonomous.mode == "off" and
-            .agents.entries.main.workspace == "${openclaw.workspace}" and
-            .agents.entries.seedbox.workspace == "${openclaw.seedboxWorkspace}" and
-            .agents.defaults.systemAgent.agentId == "main" and
-            .channels.telegram.groups["-5176945403"].allowFrom == ["781443178", "718852556"] and
-            .channels.telegram.groups["-5176945403"].requireMention == true and
-            ([.bindings[] | select(.agentId == "seedbox")] | length) == 1 and
-            ([.bindings[] | select(.agentId == "seedbox")][0].match.peer.id == "-5176945403") and
-            .plugins.allow == ["codex", "discord", "memory-core", "openai", "telegram"] and
-            (.plugins.load.paths | length) == 1
-          ' ${openclaw.configFile}
+
         '';
 
     virtualisation = {

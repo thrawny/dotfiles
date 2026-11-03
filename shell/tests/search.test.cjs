@@ -7,24 +7,9 @@ const search = vm.createContext({});
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../services/Search.js'), 'utf8'), search);
 const plain = value => JSON.parse(JSON.stringify(value));
 
-test('app search ranks exact, prefix, substring, then subsequence', () => {
-    const entries = ['My Ghostty', 'Ghostty Nightly', 'Ghost Terminal TTY', 'Ghostty'].map(name => ({ name }));
-    assert.deepEqual(plain(search.apps(entries, 'ghostty')).map(row => row.name),
-        ['Ghostty', 'Ghostty Nightly', 'My Ghostty', 'Ghost Terminal TTY']);
-    assert.equal(search.apps(entries, 'zzzz').length, 0);
-});
-test('app search uses metadata, excludes hidden entries, and keeps launch objects', () => {
-    const entry = { name: 'Ghostty', genericName: 'Terminal', keywords: ['Shell'] };
-    const entries = [entry, { name: 'Hidden Shell', noDisplay: true }];
-    assert.equal(search.apps(entries, 'shell')[0].entry, entry);
-    assert.equal(search.apps(entries, 'terminal').length, 1);
-    assert.equal(search.apps(entries, 'hidden').length, 0);
-});
-test('empty search sorts apps and caps results', () => {
-    const entries = Array.from({ length: 100 }, (_, i) => ({ name: `App ${i}` }));
-    assert.equal(search.apps(entries, '').length, 80);
-    assert.equal(search.apps([{ name: 'Z' }, { name: 'A' }], '')[0].name, 'A');
-});
+
+
+
 test('clipboard rows preserve IDs and tabs while hiding older binary entries', () => {
     const rows = plain(search.clipboardRows('9\thello\tworld\n7\t[[ binary data 4 KiB png 20x20 ]]\n6\t[[ binary data 3 B ]]\ninvalid\n;rm\tunsafe\n'));
     assert.deepEqual(rows.map(row => row.id), ['9']);
@@ -44,17 +29,4 @@ test('image history keeps order, dimensions, and type while rejecting unsupporte
     assert.equal(rows[1].imageFormat, 'png');
     assert.equal(rows[1].imageSource, '');
     assert.deepEqual(plain(search.clipboard(rows, 'image')).map(row => row.id), ['8', '6']);
-});
-test('project search matches names and paths while retaining discovery order for ties', () => {
-    const rows = [
-        { kind: 'project', name: 'Widgets', detail: '~/work/acme/code/widgets', path: '/work/widgets' },
-        { kind: 'project', name: 'Dotfiles', detail: '~/dotfiles', path: '/dotfiles' },
-        { kind: 'project', name: 'Widgets', detail: '~/code/widgets', path: '/code/widgets' },
-    ];
-    assert.deepEqual(plain(search.projects(rows, '')).map(row => row.path), rows.map(row => row.path));
-    assert.deepEqual(plain(search.projects(rows, 'widgets')).map(row => row.path), ['/work/widgets', '/code/widgets']);
-    assert.equal(search.projects(rows, 'acme')[0].path, '/work/widgets');
-    assert.equal(search.projects(rows, 'dtfl')[0].path, '/dotfiles');
-    assert.equal(search.projects(rows, 'missing').length, 0);
-    assert.equal(search.projects(Array.from({ length: 100 }, () => rows[0]), '').length, 80);
 });

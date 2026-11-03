@@ -19,6 +19,10 @@ requirement in review briefs.
 
 ## Tests
 
+Run `just check` for the repository gate. `just test` runs the Python, Neovim and Claude mod
+suites; Pi and shell suites also run in `just check`.
+Use `just test-python [path or pytest arguments]` for focused Python runs.
+
 Every test is code someone has to keep working, so a change ships without new tests by default. Check it by running it: the command itself, a reload, or a smoke test in the real app.
 
 Add a test only when Jonas asks for one, or when all three hold:
