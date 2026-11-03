@@ -45,6 +45,14 @@ End a turn with `moto report done|question|blocked "<one line>"` when the task i
 
 Add `--to-driver` whenever the report asks the driver to act, such as creating a ticket or starting a worker, and whenever the user asks you to pass something on. Without it, a report from a session the user holds reaches only the sidebar, never the driver. With it, the report reaches the driver even if the user holds this session or another worker started you, and a hold stays in place.
 
+### Phase boundaries
+
+A phase boundary is where one kind of work ends and the next starts: grilling to implementation, implementation to shipping a PR, shipping to babysitting it. At a boundary, first write down what the next phase needs, such as the ticket or the PR description. Then run `moto report phase "<next phase>"` and end your turn.
+
+The watch then reads how much context your session holds. Over the limit, it hands you off to a fresh session in the same pane, with the next phase as its goal. Under it, a `[driver]` message tells you to carry on in this session. While the user holds your session, or after the user typed in your pane, moto never hands you off: carry on with the user.
+
+A helper's phase report reaches you as `[helper phase] <next phase>`. Answer with `moto handoff <helper> "<next phase>"` for a fresh session, or `moto tell <helper> "carry on"`.
+
 The report kinds `wrap`, `handback` and `snooze` belong to the moto-wrap, moto-handback and moto-snooze skills. Use those skills, not a bare report.
 
 ## See your workers

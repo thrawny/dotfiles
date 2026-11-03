@@ -33,6 +33,7 @@ def moto() -> ModuleType:
     # Unit tests never read a real pane or transcript.
     footer_says(module, None)
     turn_in(module, None, None)
+    context_holds(module, None)
     setattr(module, "pr_updated", no_pr_update)
     return module
 
@@ -2337,8 +2338,10 @@ def test_watch_absorbs_the_handoff_turn_and_takeoff_turn(moto: ModuleType):
     assert "handoff" not in tasks["abc-1"]
 
 
-def handoff(moto: ModuleType, brief: str = "", goal: str = "ship it") -> int:
-    args = argparse.Namespace(agent="abc-1", goal=goal.split())
+def handoff(
+    moto: ModuleType, brief: str = "", goal: str = "ship it", from_watch: bool = False
+) -> int:
+    args = argparse.Namespace(agent="abc-1", goal=goal.split(), from_watch=from_watch)
     with patch("sys.stdin", io.StringIO(brief)):
         return moto.cmd_handoff(args)
 
@@ -2394,3 +2397,191 @@ def test_handoff_refuses_a_busy_worker_and_times_out_without_a_new_session(
         handoff(moto)
     assert run.call_args.args[2:] == ("abc-1", "/handoff ship it")
     assert "handoff" not in moto.read_tasks()["abc-1"]
+    # A phase handoff the watch started tells the driver it failed, and ends
+    # the marker the watch set.
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"]["handoff"] = {"at": 0.0, "old": "s1"}
+    with (
+        patch.object(moto, "live_agents", return_value=live("working", 3)),
+        pytest.raises(moto.MotoError),
+    ):
+        handoff(moto, from_watch=True)
+    assert "handoff" not in moto.read_tasks()["abc-1"]
+    assert "abc-1's phase handoff failed" in (moto.take_notes() or "")
+
+
+# Phase handoffs: a worker's phase report, and /compact for a long phase.
+
+
+@pytest.fixture
+def phase_home(moto: ModuleType, tmp_path: Path) -> Path:
+    home = tmp_path / "phase-home"
+    home.mkdir()
+    setattr(moto, "MOTO_HOME", home)
+    return home
+
+
+def context_holds(moto: ModuleType, tokens: int | None) -> None:
+    def context_tokens(_task: Any, _agent: Any) -> int | None:
+        return tokens
+
+    setattr(moto, "context_tokens", context_tokens)
+
+
+def phase_task(**fields: Any) -> dict[str, Any]:
+    report = {"kind": "phase", "text": "implementation", "at": 100.0}
+    return task(session="s1", told=50.0, report=report, **fields)
+
+
+def test_phase_report_over_the_limit_hands_off_once_the_turn_ends(
+    moto: ModuleType, phase_home: Path
+):
+    tasks = {"abc-1": phase_task()}
+    turn_in(moto, "t1", "[driver] grill CON-1")
+    context_holds(moto, 150_000)
+    steps: list[Any] = []
+    settled = 100 + moto.REPORT_SETTLE_SECONDS
+    assert moto.check(tasks, live("working", 1), settled, [], steps) == []
+    assert steps == []
+    [line] = moto.check(tasks, live("idle", 2), settled + 1, [], steps)
+    assert line.startswith("abc-1 phase: implementation")
+    assert [(s.agent, s.action, s.text) for s in steps] == [
+        ("abc-1", "handoff", "implementation")
+    ]
+    # The /handoff turn that follows is the handoff's, not news.
+    assert "handoff" in tasks["abc-1"]
+    assert moto.check(tasks, live("idle", 2), settled + 2, [], steps) == []
+    assert len(steps) == 1
+
+
+def test_phase_report_under_the_limit_tells_the_worker_to_carry_on(
+    moto: ModuleType, phase_home: Path
+):
+    tasks = {"abc-1": phase_task()}
+    turn_in(moto, "t1", "[driver] grill CON-1")
+    context_holds(moto, 40_000)
+    steps: list[Any] = []
+    [line] = moto.check(tasks, live("done", 2), 101, [], steps)
+    assert line.startswith("abc-1 phase: implementation")
+    assert [(s.agent, s.action) for s in steps] == [("abc-1", "tell")]
+    assert tasks["abc-1"]["told"] == 101
+    assert "handoff" not in tasks["abc-1"]
+
+
+def test_handoff_limit_comes_from_the_settings(moto: ModuleType, phase_home: Path):
+    (phase_home / "settings.toml").write_text("handoff_tokens = 30000\n")
+    tasks = {"abc-1": phase_task()}
+    turn_in(moto, "t1", "[driver] grill CON-1")
+    context_holds(moto, 40_000)
+    steps: list[Any] = []
+    moto.check(tasks, live("done", 2), 101, [], steps)
+    assert [s.action for s in steps] == ["handoff"]
+    (phase_home / "settings.toml").write_text("handoff = 30000\n")
+    with pytest.raises(moto.MotoError, match="handoff"):
+        moto.settings()
+
+
+def test_phase_report_of_a_worker_the_user_talks_to_goes_to_the_driver(
+    moto: ModuleType, phase_home: Path
+):
+    tasks = {"abc-1": phase_task()}
+    turn_in(moto, "t1", "looks good, go ahead")
+    context_holds(moto, 150_000)
+    steps: list[Any] = []
+    [line] = moto.check(tasks, live("done", 2), 101, [], steps)
+    assert line.startswith("abc-1 phase: implementation")
+    assert steps == []
+    assert "handoff" not in tasks["abc-1"]
+
+
+def test_phase_report_of_a_held_worker_goes_to_the_driver(
+    moto: ModuleType, phase_home: Path
+):
+    tasks = {"abc-1": phase_task(held=True)}
+    turn_in(moto, "t1", "[driver] grill CON-1")
+    context_holds(moto, 150_000)
+    steps: list[Any] = []
+    [line] = moto.check(tasks, live("done", 2), 101, [], steps)
+    assert line.startswith("abc-1 phase")
+    assert steps == []
+    assert moto.check(tasks, live("done", 2), 102, [], steps) == []
+
+
+def test_long_phase_gets_compact_once_per_growth_step(
+    moto: ModuleType, phase_home: Path
+):
+    tasks = {"abc-1": task(told=0.0)}
+    steps: list[Any] = []
+
+    def turn_end(turn: str, seq: int, tokens: int) -> list[str]:
+        turn_in(moto, turn, "[driver] babysit the PR")
+        context_holds(moto, tokens)
+        moto.check(tasks, live("working", seq), seq, [], steps)
+        return moto.check(tasks, live("idle", seq + 1), seq + 1, [], steps)
+
+    assert len(turn_end("t1", 1, 450_000)) == 1  # under the limit
+    assert len(turn_end("t2", 3, 520_000)) == 2  # turn end and /compact
+    assert len(turn_end("t3", 5, 600_000)) == 1  # grew less than a step
+    assert len(turn_end("t4", 7, 730_000)) == 2
+    assert len(turn_end("t5", 9, 20_000)) == 1  # compacted
+    assert len(turn_end("t6", 11, 510_000)) == 2
+    assert [s.action for s in steps] == ["compact"] * 3
+    compacted = [e["tokens"] for e in moto.pending_events if e["event"] == "compact"]
+    assert compacted == [520_000, 730_000, 510_000]
+
+
+def test_held_worker_never_gets_compact(moto: ModuleType, phase_home: Path):
+    tasks = {"abc-1": task(held=True, told=0.0)}
+    turn_in(moto, "t1", "[driver] babysit the PR")
+    context_holds(moto, 900_000)
+    steps: list[Any] = []
+    moto.check(tasks, live("working", 1), 1, [], steps)
+    moto.check(tasks, live("idle", 2), 2, [], steps)
+    assert steps == []
+
+
+def test_context_size_is_the_last_reply_s_usage_and_zero_after_a_compact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    real = load_moto()
+    monkeypatch.setattr(real, "CLAUDE_HOME", tmp_path / "claude")
+    directory = real.session_dir("/code/widgets-ABC-1-fix")
+    directory.mkdir(parents=True)
+    usage = {
+        "input_tokens": 2,
+        "cache_creation_input_tokens": 1_000,
+        "cache_read_input_tokens": 120_000,
+        "output_tokens": 300,
+    }
+    entries = [
+        {"type": "assistant", "message": {"usage": usage | {"input_tokens": 9}}},
+        {"type": "assistant", "message": {"usage": usage}},
+        {"type": "assistant", "isSidechain": True, "message": {"usage": {}}},
+        {"type": "user", "message": {"content": "next"}},
+    ]
+    path = directory / "s1.jsonl"
+    path.write_text("".join(json.dumps(e) + "\n" for e in entries))
+    assert real.context_tokens(task(session="s1"), None) == 121_302
+    with path.open("a") as transcript:
+        transcript.write(json.dumps({"type": "system", "subtype": "compact_boundary"}))
+    assert real.context_tokens(task(session="s1"), None) == 0
+    assert real.context_tokens(task(session="none", title="x"), None) is None
+
+
+def test_watch_runs_the_phase_handoff_outside_the_lock(
+    moto: ModuleType, phase_home: Path
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = phase_task()
+    turn_in(moto, "t1", "[driver] grill CON-1")
+    context_holds(moto, 150_000)
+    with (
+        patch.object(moto, "live_agents", return_value=live("idle", 2)),
+        patch.object(moto, "herdr") as prompt,
+        patch.object(moto.subprocess, "Popen") as start,
+    ):
+        [line] = moto.watch()["lines"]
+    assert line.startswith("abc-1 phase: implementation")
+    prompt.assert_not_called()
+    command = start.call_args.args[0]
+    assert command[-4:] == ["handoff", "--from-watch", "abc-1", "implementation"]

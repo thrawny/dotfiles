@@ -73,6 +73,17 @@ session ids and the goal, and then sends the brief from stdin, tagged as moto
 tell tags it. While a handoff runs, a marker on the task makes the watch absorb
 the handoff turn and the takeoff turn, since neither needs the driver.
 
+A worker that reaches a phase boundary, such as from grilling to implementing,
+runs moto report phase with the next phase and ends its turn. The watch then
+reads the context size from the worker's transcript. Over handoff_tokens it
+starts moto handoff in the background, and under it tells the worker to carry
+on. The driver gets one line either way, and a handoff that fails leaves it a
+note. A held worker, or one the user is talking to, is never handed off: its
+phase report reaches the driver as a plain line. A worker that ends a turn
+without a report over compact_tokens gets /compact, at most once per
+COMPACT_GROWTH tokens of growth. Both limits live in MOTO_HOME/settings.toml.
+A phase report from a worker another worker started goes to that worker.
+
 moto link puts every moto skill in ~/.claude/skills as symlinks, outside Home
 Manager: the generic ones from moto/skills in dotfiles, and the work ones from
 skills/ in MOTO_HOME. A work skill replaces a generic one of the same name.
@@ -165,7 +176,7 @@ PASTED = re.compile(r"^\s*(<pasted_content[^>]*>\s*)?")
 BACKGROUND_WORK = re.compile(
     r"· (\d+ (?:shells?|monitors?|local agents?))(?= ·|$)", re.M
 )
-REPORT_KINDS = ("done", "question", "blocked", "wrap", "handback", "snooze")
+REPORT_KINDS = ("done", "question", "blocked", "wrap", "handback", "snooze", "phase")
 # Reports that make a session the user started, which no task owns, a task:
 # the user handing it to the driver to finish, park or carry on.
 ADOPT_KINDS = ("wrap", "snooze", "handback")
@@ -186,6 +197,23 @@ HANDOFF_MARKER_LIFE = 30 * 60
 HANDOFF_STAY = "--stay"
 # Herdr states of an agent that is mid-turn or waiting at a prompt.
 BUSY = ("working", "blocked")
+# The defaults for MOTO_HOME/settings.toml, in tokens of a worker's context.
+SETTINGS = {
+    # A phase report above this hands the worker off to a fresh session, and
+    # below it tells the worker to carry on.
+    "handoff_tokens": 100_000,
+    # A turn that ends above this, without a report, gets /compact.
+    "compact_tokens": 500_000,
+}
+# The context must grow this much after one /compact before the next.
+COMPACT_GROWTH = 200_000
+# The parts of a reply's usage that together are the context Claude sent.
+CONTEXT_USAGE = (
+    "input_tokens",
+    "cache_creation_input_tokens",
+    "cache_read_input_tokens",
+    "output_tokens",
+)
 # moto list asks GitHub when a held task's PR last changed, and gives up after this.
 PR_TIMEOUT = 3
 PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
@@ -200,7 +228,7 @@ WATCH_MOD = Path(__file__).resolve().parents[1] / "moto/claude/mods/moto-watch"
 DRIVER_TAG = "[driver]"
 # Reports the watch carries from a child to its parent, and the tag each starts
 # with there, as in "[abc-2 done] PR ready".
-CHILD_KINDS = ("done", "question", "blocked")
+CHILD_KINDS = ("done", "question", "blocked", "phase")
 CHILD_REPORT = re.compile(rf"\[\S+ (?:{'|'.join(CHILD_KINDS)})\] ")
 # Herdr states of a parent that can take a child's report: its turn has ended.
 TURN_OVER = ("idle", "done")
@@ -298,6 +326,15 @@ EVENTS_VERSION = 1
 
 class MotoError(Exception):
     pass
+
+
+class Step(NamedTuple):
+    """What the watch does to a worker after its update: tell it to carry on,
+    hand it off to a fresh session, or compact its context."""
+
+    agent: str
+    action: str
+    text: str
 
 
 class Delivery(NamedTuple):
@@ -1106,6 +1143,11 @@ def cmd_report(args: argparse.Namespace) -> int:
             f"Recorded. {parent} started you, not the driver, so moto delivers it to"
             + f" {parent}'s pane once its turn ends. {PASS_ON_RULE}"
         )
+    elif held and args.kind == "phase":
+        print(
+            "The user holds this session, so moto does not hand it off. The driver"
+            + " hears of the phase. Carry on with the user in this pane."
+        )
     elif held and args.to_driver:
         print(
             f"Passed {args.kind} on to the driver. The hold stays, so carry on with"
@@ -1117,6 +1159,11 @@ def cmd_report(args: argparse.Namespace) -> int:
             "Recorded. The user is driving this session and the driver is not"
             + " watching it, so ask the user directly in this pane."
             + f" {PASS_ON_RULE}"
+        )
+    elif args.kind == "phase":
+        print(
+            "Reported the phase. End your turn now. Once it ends, the watch hands"
+            + " you off to a fresh session or tells you to carry on."
         )
     else:
         again = "; moto watch covers this task again" if handed_back else ""
@@ -1164,6 +1211,29 @@ def tell_task(name: str, text: str, sender: str | None) -> str:
 
 
 def cmd_handoff(args: argparse.Namespace) -> int:
+    """Hand a worker off, and from the watch, tell the driver when that fails.
+
+    The watch starts a phase handoff in the background, so nobody else would
+    see its error. It also set the handoff marker, which a failure must end.
+    """
+    if not args.from_watch:
+        return hand_off(args)
+    try:
+        return hand_off(args)
+    except MotoError as error:
+        with tasks_for_update() as tasks:
+            if args.agent in tasks:
+                tasks[args.agent].pop("handoff", None)
+                record("handoff_failed", args.agent, error=str(error))
+        wake_driver(
+            f"phase-{args.agent}",
+            f"{args.agent}'s phase handoff failed: {error}",
+            label="[watch]",
+        )
+        raise
+
+
+def hand_off(args: argparse.Namespace) -> int:
     """Hand a worker off to a fresh session in its pane, with an optional brief.
 
     The worker's /handoff command writes the handoff file, then clears the
@@ -1286,6 +1356,7 @@ def check(
     live: dict[str, dict[str, Any]],
     now: float,
     outbox: list[Delivery] | None = None,
+    steps: list[Step] | None = None,
 ) -> list[str]:
     """One line per task that needs the driver, updating each task's seen marker.
 
@@ -1299,6 +1370,11 @@ def check(
     hands it back, and when it passes a report on. Its done, question and
     blocked reports go to that worker through outbox, which the caller sends
     after the update; to_parent decides when. Without an outbox they wait.
+
+    A phase report waits for the worker's turn to end, then phase_step decides
+    whether the worker hands off or carries on. A turn end without a report may
+    earn /compact, which compact_line decides. Both add to steps, which the
+    caller runs after the update. Without steps, phase reports wait.
     """
     lines: list[str] = []
     for name, task in sorted(tasks.items()):
@@ -1320,6 +1396,9 @@ def check(
             lines += passed_on(name, task)
             continue
         unseen = unseen_reports(task)
+        if unseen and unseen[-1]["kind"] == "phase":
+            if steps is None or status in BUSY:
+                unseen = unseen[:-1]  # the handoff needs the turn to end
         fresh = bool(unseen)
         if status == "working":
             changed = False
@@ -1338,13 +1417,19 @@ def check(
             closed = " (pane closed)" if task.get("closed_at") else ""
             *earlier, last = unseen
             lines += [f"{name} {r['kind']}: {r['text']}{closed}" for r in earlier]
-            line = f"{name} {last['kind']}: {last['text']}{closed}"
+            if last["kind"] == "phase" and steps is not None and status != "gone":
+                line = phase_step(name, task, agent, last, now, steps)
+            else:
+                line = f"{name} {last['kind']}: {last['text']}{closed}"
         elif changed and status == "blocked":
             line = f"{name} blocked: waiting at an approval or question prompt"
         elif status in ("done", "idle") and (changed or "pending" in seen):
             line = turn_end(name, task, agent, now)
             if line:
                 lines.append(line)
+            if steps is not None and "pending" not in seen:
+                if compact := compact_line(name, task, agent, steps):
+                    lines.append(compact)
             continue
         if line:
             seen.pop("pending", None)
@@ -1444,16 +1529,19 @@ def to_parent(
 
 
 def passed_on(name: str, task: dict[str, Any]) -> list[str]:
-    """The lines for a held task's new --to-driver reports, once each.
+    """The lines for a held task's new --to-driver and phase reports, once each.
 
-    The user asked the worker to send them, so they are the driver's news. The
-    held task's other reports are the user's, so they pass unseen.
+    The user asked the worker to send the first, so they are the driver's news.
+    A phase report is never handed off in a held task, but the driver hears
+    of it. The held task's other reports are the user's, so they pass unseen.
     """
-    return [
-        f"{name} {r['kind']} (held, passed on): {r['text']}"
-        for r in new_reports(task)
-        if r.get("to_driver")
-    ]
+    lines: list[str] = []
+    for report in new_reports(task):
+        if report.get("to_driver"):
+            lines.append(f"{name} {report['kind']} (held, passed on): {report['text']}")
+        elif report["kind"] == "phase":
+            lines.append(f"{name} phase (held, not handed off): {report['text']}")
+    return lines
 
 
 def pane_closed(name: str, task: dict[str, Any], gone: bool, now: float) -> str | None:
@@ -1502,11 +1590,7 @@ def turn_end(
         if now - pending["since"] < TURN_SETTLE_SECONDS:
             return None  # the transcript may not hold the new turn yet
         reason = "Herdr announced a turn the watch already handled"
-    elif (
-        prompt is not None
-        and not prompt.startswith(DRIVER_TAG)
-        and not CHILD_REPORT.match(prompt)
-    ):
+    elif from_user(prompt):
         reason = "the user is talking to the worker"
     elif report and told is not None and report["at"] >= told:
         reason = "it reported since the driver last wrote to it"
@@ -1531,6 +1615,140 @@ def turn_end(
             f"{name}: turn ended without a report; {work} still running after {running}"
         )
     return f"{name}: turn ended without a report"
+
+
+def from_user(prompt: str | None) -> bool:
+    """Whether the worker's last typed prompt is the user's, not the driver's
+    or a child's report."""
+    return (
+        prompt is not None
+        and not prompt.startswith(DRIVER_TAG)
+        and not CHILD_REPORT.match(prompt)
+    )
+
+
+def kilo(tokens: int) -> str:
+    return f"{round(tokens / 1000)}k"
+
+
+def phase_step(
+    name: str,
+    task: dict[str, Any],
+    agent: dict[str, Any] | None,
+    report: dict[str, Any],
+    now: float,
+    steps: list[Step],
+) -> str:
+    """Hand a worker whose turn ended on a phase report off, or tell it to carry on.
+
+    A worker over the handoff limit starts the next phase in a fresh session,
+    and one under it carries on. The driver gets the line either way. When the
+    user is talking to the worker, or the context size is unknown, the watch
+    does neither and the line leaves it to the driver.
+    """
+    phase = report["text"]
+    head = f"{name} phase: {phase}"
+    _, prompt = last_turn(task, agent)
+    tokens = None if from_user(prompt) else context_tokens(task, agent)
+    if tokens is None:
+        why = "the user is talking to it" if from_user(prompt) else "no transcript"
+        record("phase", name, phase=phase, action="driver", reason=why)
+        return f"{head} (not handed off: {why})"
+    limit = settings()["handoff_tokens"]
+    if tokens > limit:
+        record("phase", name, phase=phase, action="handoff", tokens=tokens)
+        # Absorbs the /handoff turn until moto handoff sets its own marker.
+        task["handoff"] = {"at": now, "old": task.get("session")}
+        steps.append(Step(name, "handoff", phase))
+        return f"{head}; handing it off to a fresh session at {kilo(tokens)} tokens"
+    text = (
+        f"Carry on with {phase} in this session. Its context holds"
+        + f" {kilo(tokens)} tokens, under the {kilo(limit)} that start a fresh one."
+    )
+    record("phase", name, phase=phase, action="carry on", tokens=tokens)
+    record("tell", name, text=text, **{"from": "watch"})
+    task["told"] = now
+    steps.append(Step(name, "tell", text))
+    return f"{head}; told it to carry on at {kilo(tokens)} tokens"
+
+
+def compact_line(
+    name: str, task: dict[str, Any], agent: dict[str, Any] | None, steps: list[Step]
+) -> str | None:
+    """Send /compact to a worker whose turn ended over the compact limit.
+
+    seen.compact_at holds the context size at the last /compact, or the size
+    since, if the context shrank. The worker gets /compact again only once its
+    context grew COMPACT_GROWTH past that. A worker the user is talking to, or
+    one a handoff is moving, is left alone.
+    """
+    _, prompt = last_turn(task, agent)
+    if task.get("handoff") or from_user(prompt):
+        return None
+    tokens = context_tokens(task, agent)
+    if tokens is None:
+        return None
+    seen = task["seen"]
+    last = seen.get("compact_at")
+    if last is not None and tokens < last:
+        seen["compact_at"] = last = tokens  # compacted since
+    if tokens <= settings()["compact_tokens"]:
+        return None
+    if last is not None and tokens - last < COMPACT_GROWTH:
+        return None
+    seen["compact_at"] = tokens
+    record("compact", name, tokens=tokens)
+    steps.append(Step(name, "compact", "/compact"))
+    return f"{name}: sent /compact at {kilo(tokens)} tokens"
+
+
+def context_tokens(task: dict[str, Any], agent: dict[str, Any] | None) -> int | None:
+    """How many tokens the worker's context holds, from its transcript.
+
+    Each reply records the context Claude sent for it. A compaction after the
+    last reply leaves little of it, so the size then counts as 0. None means no
+    transcript, or no reply in it yet.
+    """
+    try:
+        path = transcript(task, agent)
+        lines = path.read_text(errors="replace").splitlines() if path else []
+    except (MotoError, OSError):
+        return None
+    for line in reversed(lines):
+        if '"compact_boundary"' not in line and '"usage"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if entry.get("isSidechain"):
+            continue
+        if entry.get("subtype") == "compact_boundary":
+            return 0
+        message: dict[str, Any] = entry.get("message") or {}
+        if entry.get("type") == "assistant" and (usage := message.get("usage")):
+            return sum(int(usage.get(key) or 0) for key in CONTEXT_USAGE)
+    return None
+
+
+def settings() -> dict[str, int]:
+    """SETTINGS, with what MOTO_HOME/settings.toml sets in their place."""
+    path = MOTO_HOME / "settings.toml"
+    try:
+        found = tomllib.loads(path.read_text())
+    except FileNotFoundError:
+        return dict(SETTINGS)
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        raise MotoError(f"{path} cannot be read: {error}") from error
+    if unknown := sorted(set(found) - set(SETTINGS)):
+        raise MotoError(
+            f"{path} has unknown settings: {', '.join(unknown)}."
+            + f" Known: {', '.join(SETTINGS)}"
+        )
+    for key, value in found.items():
+        if type(value) is not int or value <= 0:
+            raise MotoError(f"{path}: {key} must be a positive number of tokens")
+    return SETTINGS | found
 
 
 def handoff_turn(task: dict[str, Any], now: float) -> str | None:
@@ -1621,11 +1839,13 @@ def watch() -> dict[str, Any]:
     can drop held lines of a task closed since.
     """
     outbox: list[Delivery] = []
+    steps: list[Step] = []
     with tasks_for_update() as tasks:
         names = sorted(tasks)
         watching = sum(1 for t in tasks.values() if not unwatched(t))
         panes = any(pane_watched(t) for t in tasks.values())
-        lines = check(tasks, live_agents(), time.time(), outbox) if panes else []
+        now = time.time()
+        lines = check(tasks, live_agents(), now, outbox, steps) if panes else []
     # Sent after the update, so a slow Herdr never holds the task lock.
     for delivery in outbox:
         try:
@@ -1635,12 +1855,49 @@ def watch() -> dict[str, Any]:
                 f"{delivery.child} could not reach {delivery.parent} ({error}):"
                 + f" {delivery.text}"
             )
+    for step in steps:
+        try:
+            run_step(step)
+        except (MotoError, OSError, subprocess.TimeoutExpired) as error:
+            lines.append(f"{step.agent}: could not {step.action} ({error})")
     return {
         "watching": watching,
         "lines": lines,
         "notes": take_notes(),
         "tasks": names,
     }
+
+
+def run_step(step: Step) -> None:
+    """Run what phase_step or compact_line decided for a worker.
+
+    A handoff waits minutes for the new session, longer than a watch pass may
+    take, so it runs as its own moto handoff in the background. That process
+    tells the driver if it fails.
+    """
+    if step.action == "tell":
+        herdr("agent", "prompt", step.agent, f"{DRIVER_TAG} {step.text}")
+    elif step.action == "compact":
+        herdr("agent", "prompt", step.agent, step.text)
+    elif step.action == "handoff":
+        state_dir().mkdir(parents=True, exist_ok=True)
+        brief = (
+            f"Start the next phase: {step.text}. The handoff above holds what it"
+            + f" needs.\n\n{BRIEF_FOOTER}"
+        )
+        command = [sys.executable, str(Path(__file__).resolve())]
+        with open(state_dir() / f"handoff-{step.agent}.log", "a") as log:
+            process = subprocess.Popen(
+                command + ["handoff", "--from-watch", step.agent, step.text],
+                stdin=subprocess.PIPE,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+                text=True,
+            )
+        if process.stdin:
+            process.stdin.write(brief)
+            process.stdin.close()
 
 
 def cmd_watch(_: argparse.Namespace) -> int:
@@ -2925,7 +3182,7 @@ def driver_session(cwd: Any) -> bool:
         return False
 
 
-def wake_driver(name: str, text: str) -> str:
+def wake_driver(name: str, text: str, label: str = JOB_TAG) -> str:
     """Leave the driver a note, which the moto-watch mod's next pass hands over.
 
     One note per job: a newer run replaces an unread one, because a review
@@ -2936,7 +3193,7 @@ def wake_driver(name: str, text: str) -> str:
     with jobs_for_update() as jobs:
         state = jobs.setdefault(name, {})
         replaced = bool(state.get("note"))
-        state["note"] = {"text": f"{JOB_TAG} {text}", "at": time.time()}
+        state["note"] = {"text": f"{label} {text}", "at": time.time()}
     if replaced:
         job_event("note-replaced", name)
     return "left a note for the driver"
@@ -3582,6 +3839,7 @@ def parser() -> argparse.ArgumentParser:
     handoff.add_argument(
         "goal", nargs="*", help="What the new session should do; default: none"
     )
+    handoff.add_argument("--from-watch", action="store_true", help=argparse.SUPPRESS)
     handoff.set_defaults(handler=cmd_handoff)
 
     ask = commands.add_parser(
@@ -3600,7 +3858,7 @@ def parser() -> argparse.ArgumentParser:
     report = commands.add_parser(
         "report",
         help="Run by a worker to report to the driver; wrap, handback and"
-        + " snooze also end a hold",
+        + " snooze also end a hold, and phase asks for a fresh session",
     )
     report.add_argument("kind", choices=REPORT_KINDS)
     report.add_argument("text", nargs="+")
