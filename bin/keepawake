@@ -120,7 +120,8 @@ def validate_schedule(value: Any) -> None:
 
 
 def load_config(filename: Path) -> dict[str, Any]:
-    data = tomllib.loads(filename.read_text())
+    with filename.open("rb") as stream:
+        data = tomllib.load(stream)
     allowed = {
         "version",
         "battery_floor",
