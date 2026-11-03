@@ -39,7 +39,7 @@ rec {
   goModernize = ''
     ## Go modernization
 
-    After creating or modifying Go files, run `golangci-lint run --no-config --enable-only=modernize --max-issues-per-linter=0 --max-same-issues=0 --uniq-by-line=false --fix <touched.go> ...` with golangci-lint v2.6.0 or newer. Pass only existing Go files you touched for the current task, grouped by package; keep fixes scoped to those files. Review the diff, then rerun without `--fix` and address remaining suggestions before finishing. If file-scoped analysis cannot type-check, report the blocker while preserving this scope.
+    After creating or modifying Go files, run `golangci-lint run --no-config --enable-only=modernize --max-issues-per-linter=0 --max-same-issues=0 --uniq-by-line=false --new-from-rev=<base> --fix ./...` from each touched module's root, with golangci-lint v2.6.0 or newer. `<base>` is the commit before the task's first change: `HEAD` while the work is uncommitted, or the branch's merge base once it is committed. The linter type-checks the whole module but reports and fixes only lines changed since `<base>`, untracked files included. Never pass file paths: a file alone fails type-checking. Review the diff, then rerun without `--fix` and address remaining suggestions before finishing.
   '';
 
   ephemeralTools = ''
