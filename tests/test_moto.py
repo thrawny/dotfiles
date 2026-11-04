@@ -2585,3 +2585,38 @@ def test_watch_runs_the_phase_handoff_outside_the_lock(
     prompt.assert_not_called()
     command = start.call_args.args[0]
     assert command[-4:] == ["handoff", "--from-watch", "abc-1", "implementation"]
+
+
+def test_checkout_workspace_skips_background_and_prefers_the_folder_name(
+    moto: ModuleType,
+):
+    checkout = "/home/u/dotfiles"
+    listing = {
+        "workspaces": [
+            # Herdr records the checkout on the background workspace too.
+            {
+                "workspace_id": "wB",
+                "label": "background",
+                "worktree": {"checkout_path": checkout},
+            },
+            {"workspace_id": "wX", "label": "other"},
+            {"workspace_id": "wD", "label": "dotfiles"},
+        ]
+    }
+    panes = {
+        "panes": [
+            {"workspace_id": "wB", "cwd": checkout},
+            {"workspace_id": "wX", "cwd": checkout},
+            {"workspace_id": "wD", "cwd": checkout},
+        ]
+    }
+
+    def herdr(*args: str, **_: Any) -> dict[str, Any]:
+        return listing if args == ("workspace", "list") else panes
+
+    with patch.object(moto, "herdr", side_effect=herdr):
+        assert moto.checkout_workspace(checkout) == "wD"
+        panes["panes"].pop()
+        assert moto.checkout_workspace(checkout) == "wX"
+        panes["panes"].pop()
+        assert moto.checkout_workspace(checkout) is None

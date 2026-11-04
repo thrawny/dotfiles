@@ -172,6 +172,8 @@ TURN_SETTLE_SECONDS = 10
 BUSY_LIMIT = 15 * 60
 # Claude wraps a pasted prompt, such as a long brief, in this tag.
 PASTED = re.compile(r"^\s*(<pasted_content[^>]*>\s*)?")
+# The Herdr workspace for dev servers, tunnels and other long-running tabs.
+BACKGROUND_WORKSPACE = "background"
 # Claude's footer counts background work Herdr does not, as in "· 1 shell ·".
 BACKGROUND_WORK = re.compile(
     r"· (\d+ (?:shells?|monitors?|local agents?))(?= ·|$)", re.M
@@ -1943,16 +1945,31 @@ def unsaved_work(cwd: str, branch: str | None = None) -> str | None:
 
 
 def checkout_workspace(path: str) -> str | None:
-    """The Herdr workspace opened on this checkout, if any."""
-    for workspace in herdr("workspace", "list")["workspaces"]:
+    """The Herdr workspace opened on this checkout, if any.
+
+    The background workspace never counts: its long-running tabs often sit in a
+    repo's main checkout, and Herdr may record that checkout as its own.
+    """
+    workspaces = [
+        w
+        for w in herdr("workspace", "list")["workspaces"]
+        if w.get("label") != BACKGROUND_WORKSPACE
+    ]
+    for workspace in workspaces:
         worktree: dict[str, Any] = workspace.get("worktree") or {}
         if worktree.get("checkout_path") == path:
             return workspace["workspace_id"]
-    # `workspace create --cwd` records no checkout, so fall back to a pane there.
-    for pane in herdr("pane", "list")["panes"]:
-        if pane.get("cwd") == path:
-            return pane["workspace_id"]
-    return None
+    # `workspace create --cwd` records no checkout, so fall back to a pane
+    # there, in the workspace named after the folder first.
+    folder = Path(path).name
+    labels = {w["workspace_id"]: w.get("label") for w in workspaces}
+    found = [
+        pane["workspace_id"]
+        for pane in herdr("pane", "list")["panes"]
+        if pane.get("cwd") == path and pane.get("workspace_id") in labels
+    ]
+    found.sort(key=lambda workspace_id: labels[workspace_id] != folder)
+    return found[0] if found else None
 
 
 def still_working(
