@@ -42,5 +42,5 @@ sudo nix run "$repo_root/nix#darwin-rebuild" -- \
 printf '\nNext steps:\n'
 printf '  Open a new terminal, then run: just tailscale-login\n'
 printf '  Check your tailnet SSH policy and test a remote login before closing the lid.\n'
-printf '  For closed-lid use on AC: remote-mode on\n'
+printf '  For closed-lid use on AC: configure Amphetamine triggers.\n'
 printf '  Setup and recovery: ~/code/private-agent-skills/fleet/references/mac-remote-access.md\n'

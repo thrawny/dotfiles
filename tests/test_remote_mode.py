@@ -9,7 +9,7 @@ from typing import final
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-# The Linux path needs flock and sysfs power supplies; the Mac path runs anywhere.
+# Linux remote mode needs flock and sysfs power supplies.
 LINUX = pytest.mark.skipif(sys.platform == "darwin", reason="Linux remote mode")
 
 
@@ -26,8 +26,6 @@ class RemoteMode:
         source = source.replace("/var/lib/remote-mode", str(tmp_path / "state"))
         source = source.replace("/run/lock/remote-mode.lock", str(tmp_path / "lock"))
         source = source.replace("/sys/class/power_supply", str(tmp_path / "supplies"))
-        source = source.replace("/usr/bin/pmset", str(tmp_path / "pmset"))
-        source = source.replace("/usr/bin/sudo", str(tmp_path / "sudo"))
         source = source.replace("(( EUID != 0 ))", "false")
         self.script.write_text(source)
         stub = tmp_path / "systemctl"
@@ -45,31 +43,12 @@ esac
 """
         )
         stub.chmod(0o755)
-        for name, body in {
-            "uname": 'echo "$PLATFORM"',
-            "sudo": 'exec "$@"',
-            "pmset": (
-                'echo "pmset $*" >> "$CALLS"\n'
-                'case "$*" in\n'
-                '  "-g batt") echo "$POWER_SOURCE" ;;\n'
-                '  "-g") echo "$PM_SETTINGS" ;;\n'
-                '  "-a disablesleep "*) [[ "$FAIL" != pmset ]] ;;\n'
-                "  *) exit 99 ;;\n"
-                "esac"
-            ),
-        }.items():
-            tool = tmp_path / name
-            tool.write_text(f"#!/usr/bin/env bash\nset -eu\n{body}\n")
-            tool.chmod(0o755)
         self.env = {
             **os.environ,
             "PATH": f"{tmp_path}{os.pathsep}{os.environ['PATH']}",
             "ACTIVE": str(self.active),
             "CALLS": str(self.calls),
             "FAIL": "",
-            "PLATFORM": "Linux",
-            "POWER_SOURCE": "Now drawing from 'AC Power'",
-            "PM_SETTINGS": "System-wide power settings:\n SleepDisabled 0\n",
         }
 
     def run(self, *args: str, fail: str = "") -> subprocess.CompletedProcess[str]:
@@ -163,12 +142,3 @@ def test_device_battery_does_not_make_desktop_a_laptop(
     (battery / "type").write_text("Battery\n")
     (battery / "scope").write_text("Device\n")
     assert mode.run("on").returncode == 0
-
-
-def test_mac_refuses_on_battery_but_allows_off(mode: RemoteMode):
-    mode.env.update(PLATFORM="Darwin", POWER_SOURCE="Now drawing from 'Battery Power'")
-    result = mode.run("on")
-    assert result.returncode == 1
-    assert "Connect AC power" in result.stderr
-    assert "disablesleep 1" not in mode.calls.read_text()
-    assert mode.run("off").returncode == 0

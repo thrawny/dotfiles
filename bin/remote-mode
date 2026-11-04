@@ -13,40 +13,8 @@ case "$1" in
 esac
 
 case "$(uname -s)" in
-    Darwin)
-        case "$1" in
-            on)
-                power_source=$(/usr/bin/pmset -g batt)
-                [[ "$power_source" == *"AC Power"* ]] || {
-                    echo 'Connect AC power before enabling remote mode.' >&2
-                    exit 1
-                }
-                /usr/bin/sudo /usr/bin/pmset -a disablesleep 1
-                echo 'Remote mode is on and will survive reboots, including with the lid closed.'
-                echo 'Unplugging does not turn it off. Run remote-mode off before using battery power or packing the laptop.'
-                ;;
-            off)
-                /usr/bin/sudo /usr/bin/pmset -a disablesleep 0
-                echo 'Remote mode is off. Normal lid and manual sleep behavior is restored; configured AC idle sleep settings are unchanged.'
-                ;;
-            status)
-                settings=$(/usr/bin/pmset -g)
-                if [[ "$settings" =~ SleepDisabled[[:space:]]+([01]) ]]; then
-                    if [[ "${BASH_REMATCH[1]}" == 1 ]]; then
-                        echo 'Remote mode is on, including after reboot and on battery. Run remote-mode off before packing the laptop.'
-                    else
-                        echo 'Remote mode is off. Configured AC idle sleep settings still apply.'
-                    fi
-                else
-                    echo 'Could not determine remote mode from pmset -g.' >&2
-                    exit 1
-                fi
-                ;;
-        esac
-        exit 0
-        ;;
     Linux) ;;
-    *) echo 'Remote mode supports Linux and macOS only.' >&2; exit 1 ;;
+    *) echo 'Remote mode supports Linux only. Use Amphetamine on macOS.' >&2; exit 1 ;;
 esac
 
 unit=remote-mode.service

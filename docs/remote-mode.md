@@ -1,6 +1,6 @@
 # Remote mode
 
-The same command works on `thrawny-desktop`, `thrawny-z13`, and `thrawnym1`, from any directory:
+The same command works on `thrawny-desktop` and `thrawny-z13`, from any directory:
 
 ```sh
 remote-mode on
@@ -9,8 +9,7 @@ remote-mode off
 ```
 
 Turning the mode on or off requires sudo. It starts off on Linux and remembers
-your choice across logouts, reboots, and Nix switches. On macOS it reflects the
-existing `pmset` sleep-disable setting.
+your choice across logouts, reboots, and Nix switches.
 
 Remote mode blocks system sleep, including manual suspend and hibernation.
 It leaves screen locking and monitor power-off alone. It does not stop shutdown
@@ -28,9 +27,9 @@ The Z13's existing lid handler still turns the internal panel off. Remote mode
 blocks its undocked-lid safety timer from suspending the system. Turning the mode
 off restores that timer's normal behavior; it does not immediately force sleep.
 
-For M1 closed-lid behavior, AC idle-sleep defaults, and FileVault limitations,
-see the fleet guide at `fleet/references/mac-remote-access.md` in the [private skills checkout](private-agent-skills.md). In particular, `remote-mode off`
-does not undo the Mac's separately configured AC idle-sleep policy.
+The M1 uses Amphetamine for automatic keep-awake and closed-lid sessions.
+For its setup and FileVault limitations, see the fleet guide at
+`fleet/references/mac-remote-access.md` in the [private skills checkout](private-agent-skills.md).
 
 ## Linux installation and diagnosis
 

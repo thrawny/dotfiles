@@ -28,10 +28,4 @@ in
       chmod 644 /etc/resolver/ts.net
     fi
   '';
-
-  # Keep remote access available on AC without changing battery sleep settings.
-  # Lid-close sleep is separate; see `remote-mode on` and the fleet skill's references/mac-remote-access.md.
-  system.activationScripts.power.text = lib.mkAfter ''
-    /usr/bin/pmset -c sleep 0
-  '';
 }
