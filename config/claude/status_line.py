@@ -241,6 +241,19 @@ def get_context_from_transcript(
     return None
 
 
+def get_compact_window() -> int | None:
+    """The autoCompactWindow from Claude's settings, if one is set."""
+    config_dir = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.expanduser("~/.claude")
+    try:
+        with open(os.path.join(config_dir, "settings.json")) as f:
+            window = json.load(f).get("autoCompactWindow")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if isinstance(window, int) and not isinstance(window, bool) and window > 0:
+        return window
+    return None
+
+
 def main() -> None:
     data = json.load(sys.stdin)
 
@@ -263,9 +276,9 @@ def main() -> None:
         tokens, percentage = context_info
         # Percentage is against the auto-compact window when one is configured,
         # not the model's full context window.
-        compact_window = os.getenv("CLAUDE_CODE_AUTO_COMPACT_WINDOW", "")
-        if compact_window.isdigit() and int(compact_window) > 0:
-            percentage = min(100, tokens / int(compact_window) * 100)
+        compact_window = get_compact_window()
+        if compact_window:
+            percentage = min(100, tokens / compact_window * 100)
         text = f"{format_tokens(tokens)} {percentage:.0f}%"
         if percentage >= 90:
             parts.append(f"{BOLD}{fg(RED)}{BOLT} {text}{RESET}")

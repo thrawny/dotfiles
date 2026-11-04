@@ -29,8 +29,6 @@ repos_ttl_minutes=1440
 # popup. Stale by a few minutes is fine for a review queue.
 cache_ttl_minutes=5
 herdr_bin="${HERDR_BIN_PATH:-herdr}"
-# Review sessions get the 1M auto-compact window of the cb alias.
-compact_window=1000000
 jira_base=$("$work_config" jira.browse_url || true)
 # Adding this label is what the team uses to say a PR is open for review, so an
 # unlabelled PR is still being worked on and does not belong in the queue. The
@@ -560,8 +558,6 @@ start_review_agent() {
   fi
   # Every path below ends in Claude, so the tab is labelled for it.
   "$herdr_bin" tab rename "$("$herdr_bin" pane get "$pane" | jq -r .result.pane.tab_id)" claude >/dev/null
-  # The pane's shell passes it on to whichever Claude starts in it.
-  "$herdr_bin" pane run "$pane" "export CLAUDE_CODE_AUTO_COMPACT_WINDOW=$compact_window" >/dev/null
   if ((!brief)); then
     "$herdr_bin" pane run "$pane" "$claude_cmd" >/dev/null
     return 0

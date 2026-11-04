@@ -97,6 +97,7 @@
     "padding": 0
   },
   "autoCompactEnabled": true,
+  "autoCompactWindow": 1000000,
   "plansDirectory": ".claude/plans",
   "tui": "fullscreen",
   "skipDangerousModePermissionPrompt": true,

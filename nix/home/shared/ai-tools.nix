@@ -91,7 +91,6 @@ in
   config.home = {
     sessionVariables = {
       CLAUDE_CONFIG_DIR = "${config.home.homeDirectory}/.claude";
-      CLAUDE_CODE_AUTO_COMPACT_WINDOW = "300000";
     };
 
     activation = {

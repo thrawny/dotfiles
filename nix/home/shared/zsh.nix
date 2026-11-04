@@ -122,9 +122,6 @@ in
       // {
         c = "claude";
         cy = "claude --dangerously-skip-permissions";
-        # Session with a 1M auto-compact window instead of the 300k default.
-        # The 300k default comes from sessionVariables in ai-tools.nix.
-        cb = "CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 claude";
         gp = "git push --force-with-lease --force-if-includes";
         gw = "git worktree";
         tp = "terraform plan";
