@@ -9,7 +9,7 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[1] / "bin/git-cleanup-repo"
 
 
-@pytest.mark.parametrize("local_change", [None, "tracked", "untracked"])
+@pytest.mark.parametrize("local_change", [None, "tracked", "untracked", "ignored"])
 def test_merged_worktree_removal_preserves_local_changes(
     tmp_path: Path, local_change: str | None
 ) -> None:
@@ -39,7 +39,8 @@ def test_merged_worktree_removal_preserves_local_changes(
     git("clone", "remote", "repo")
     repo = tmp_path / "repo"
     (repo / "tracked").write_text("Committed content\n")
-    git("-C", str(repo), "add", "tracked")
+    (repo / ".gitignore").write_text("ignored\n")
+    git("-C", str(repo), "add", "tracked", ".gitignore")
     git("-C", str(repo), "commit", "-m", "Initial commit")
     git("-C", str(repo), "push", "-u", "origin", "main")
     worktree = tmp_path / "merged worktree"

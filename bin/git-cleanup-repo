@@ -61,6 +61,17 @@ while IFS= read -r worktree_path; do
   fi
 
   if [[ "$should_remove" == "true" ]]; then
+    # Git's removal guard allows ignored files, which may still contain local work.
+    if ! ignored_files=$(git -C "$worktree_path" ls-files --others --ignored --exclude-standard --directory); then
+      echo "Could not inspect ignored files; keeping worktree: $worktree_path" >&2
+      cleanup_failed=true
+      continue
+    fi
+    if [[ -n "$ignored_files" ]]; then
+      echo "Keeping worktree with ignored files: $worktree_path" >&2
+      cleanup_failed=true
+      continue
+    fi
     echo "Removing worktree ($reason): $worktree_path ($branch)"
     # Let Git refuse dirty or locked worktrees; merged history does not make local files disposable.
     if ! git worktree remove "$worktree_path"; then
