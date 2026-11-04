@@ -19,6 +19,7 @@ in
   imports = [
     ../../modules/default.nix
     ./hardware-configuration.nix
+    ./t3code.nix
     ../../modules/remote-mode.nix
   ];
 
@@ -74,6 +75,8 @@ in
   };
 
   services = {
+    # Tailscale handles SSH authentication and only accepts tailnet traffic.
+    tailscale.extraSetFlags = [ "--ssh" ];
     xserver.videoDrivers = [ "nvidia" ]; # Load NVIDIA driver
     # Sunshine - game streaming server for Moonlight
     sunshine = {
