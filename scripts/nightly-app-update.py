@@ -5,6 +5,7 @@ import argparse
 import contextvars
 import datetime as dt
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -13,6 +14,7 @@ import shutil
 import signal
 import sqlite3
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.request
@@ -419,6 +421,10 @@ def launch_maintenance(candidate, directory, task_file, manifest):
                 [
                     "codex",
                     "exec",
+                    "--model",
+                    "gpt-6.1-sol",
+                    "-c",
+                    'model_reasoning_effort="high"',
                     "--ephemeral",
                     "--dangerously-bypass-approvals-and-sandbox",
                     "--output-schema",
@@ -678,6 +684,117 @@ def scheduled(checkout, state_directory, task_file):
         STEP_LOG.reset(token)
 
 
+def diagnostic_result(output, exit_code):
+    """Classify sanitized streamed results, preserving completed partial checks."""
+    lines = []
+    invalid = False
+    for line in output.splitlines():
+        try:
+            item = json.loads(line)
+            if not isinstance(item, dict):
+                raise ValueError("Unknown diagnostic record")
+            lines.append(item)
+        except ValueError:
+            invalid = True
+    receipt = {
+        "outcome": "failed",
+        "exit_code": exit_code,
+        "checks": {
+            item["check"]: item["result"]
+            for item in lines
+            if "check" in item and "result" in item
+        },
+    }
+    completed = next((item for item in lines if item.get("complete") is True), None)
+    if completed is None or exit_code != 0 or invalid:
+        return receipt
+    receipt.update(
+        {
+            key: completed[key]
+            for key in ("checks", "runtime", "config_path", "duration_seconds")
+        }
+    )
+    checks = receipt["checks"]
+    if any(item["outcome"] == "failed" for item in checks.values()):
+        return receipt
+    healthy = all(item["outcome"] == "passed" for item in checks.values())
+    healthy = healthy and checks["config"].get("valid") is True
+    healthy = healthy and checks["config"].get("warning_count") == 0
+    healthy = healthy and checks["doctor"].get("ok") is True
+    healthy = healthy and checks["doctor"].get("findings") == []
+    healthy = healthy and checks["doctor"].get("warnings") == []
+    healthy = healthy and checks["health"].get("ready") is True
+    healthy = healthy and checks["ui"].get("http_code") == 200
+    nodes = checks["nodes"].get("nodes", [])
+    healthy = (
+        healthy
+        and bool(nodes)
+        and all(node["paired"] is True and node["connected"] is True for node in nodes)
+    )
+    healthy = healthy and checks["memory"].get("ready") is True
+    agents = checks["agents"].get("agents", [])
+    healthy = (
+        healthy
+        and bool(agents)
+        and all(
+            checks.get("auth-" + agent, {}).get("selection_ready") is True
+            and checks.get("auth-" + agent, {}).get("runtime_ready") is True
+            for agent in agents
+        )
+    )
+    receipt["outcome"] = "healthy" if healthy else "findings"
+    return receipt
+
+
+def diagnose(state_directory, night=None):
+    """Run one bounded read-only pass without changing rollout/dispatch state."""
+    directory = state_directory / "diagnostics"
+    directory.mkdir(exist_ok=True)
+    name = night or "manual-" + dt.datetime.now(dt.UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    target = directory / f"{name}.json"
+    helper = Path(__file__).with_name("openclaw-diagnostics.py")
+    receipt = {
+        "night": night,
+        "started_at": dt.datetime.now(dt.UTC).isoformat(),
+        "outcome": "checking",
+        "read_only": True,
+        "executor_sha256": hashlib.sha256(helper.read_bytes()).hexdigest(),
+    }
+
+    def save():
+        write_json(target, receipt)
+        write_json(
+            directory / ("latest.json" if night else "manual-latest.json"), receipt
+        )
+
+    save()
+    try:
+        result = subprocess.run(
+            [sys.executable, str(helper), "--remote"],
+            capture_output=True,
+            text=True,
+            timeout=525,
+        )
+        receipt.update(diagnostic_result(result.stdout, result.returncode))
+    except subprocess.TimeoutExpired as error:
+        output = error.stdout or b""
+        if isinstance(output, bytes):
+            output = output.decode("utf-8", errors="replace")
+        receipt.update(diagnostic_result(output, None))
+        receipt.update({"error": "TimeoutExpired", "timed_out": True})
+    except (
+        OSError,
+        subprocess.SubprocessError,
+        ValueError,
+        KeyError,
+        TypeError,
+    ) as error:
+        receipt.update({"outcome": "failed", "error": type(error).__name__})
+    receipt["finished_at"] = dt.datetime.now(dt.UTC).isoformat()
+    save()
+    return receipt
+
+
 def versions(checkout):
     return {
         target: json.loads(
@@ -847,6 +964,7 @@ def main():
     mode.add_argument("--scheduled", action="store_true")
     mode.add_argument("--verify", action="store_true")
     mode.add_argument("--initialize", action="store_true")
+    mode.add_argument("--diagnose", action="store_true")
     parser.add_argument(
         "--repo", type=Path, default=Path(__file__).resolve().parents[1]
     )
@@ -892,6 +1010,8 @@ def main():
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
+            if args.diagnose:
+                raise SystemExit("Updater is running; diagnostic not started") from None
             return
         if args.initialize:
             local = dt.datetime.now(ZONE)
@@ -913,6 +1033,10 @@ def main():
         if args.scheduled:
             scheduled(args.repo, args.state_dir, args.task)
             return
+        if args.diagnose:
+            receipt = diagnose(args.state_dir)
+            print(json.dumps(receipt, indent=2))
+            raise SystemExit(0 if receipt["outcome"] == "healthy" else 1)
         with tempfile.TemporaryDirectory(prefix="nightly-app-update-") as directory:
             succeeded = prepare_recorded(
                 args.repo,

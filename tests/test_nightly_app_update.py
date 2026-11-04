@@ -21,6 +21,13 @@ install_spec = importlib.util.spec_from_file_location(
 assert install_spec is not None and install_spec.loader is not None
 installer = importlib.util.module_from_spec(install_spec)
 install_spec.loader.exec_module(installer)
+diagnostic_spec = importlib.util.spec_from_file_location(
+    "openclaw_diagnostics",
+    Path(__file__).resolve().parents[1] / "scripts/openclaw-diagnostics.py",
+)
+assert diagnostic_spec is not None and diagnostic_spec.loader is not None
+diagnostics = importlib.util.module_from_spec(diagnostic_spec)
+diagnostic_spec.loader.exec_module(diagnostics)
 
 
 def fleet(t3="0.1.3-nightly.20261025.3669", openclaw="2026.10.7"):
@@ -29,6 +36,145 @@ def fleet(t3="0.1.3-nightly.20261025.3669", openclaw="2026.10.7"):
 
 def test_no_change():
     assert updater.changed_versions(fleet(), fleet()) == []
+
+
+def test_auth_readiness_uses_effective_selection_and_hides_profile_identity():
+    data = {
+        "auth": {
+            "oauth": {
+                "providers": [
+                    {
+                        "provider": "openai",
+                        "status": "ok",
+                        "profiles": [
+                            {"profileId": "renewed-private-login", "status": "ok"}
+                        ],
+                        "effectiveProfiles": [
+                            {
+                                "profileId": "expired-private-login",
+                                "status": "expired",
+                                "remainingMs": -1,
+                                "expiresAt": 1,
+                            }
+                        ],
+                    }
+                ]
+            },
+            "runtimeAuthRoutes": [{"authStatus": "usable"}],
+            "missingProvidersInUse": [],
+            "modelRouteIssues": [],
+        }
+    }
+    result = diagnostics.auth_summary(data)
+    assert result["selection_ready"] is False
+    assert result["providers"][0]["effective"][0]["remaining_ms"] == -1
+    assert "private-login" not in str(result)
+    data["auth"]["oauth"]["providers"][0]["effectiveProfiles"] = [
+        {
+            "profileId": "renewed-private-login",
+            "status": "ok",
+            "remainingMs": 1000,
+        }
+    ]
+    assert diagnostics.auth_summary(data)["selection_ready"] is True
+    data["auth"]["runtimeAuthRoutes"][0].update(
+        {"status": "unavailable", "runtimeStatus": "unavailable"}
+    )
+    result = diagnostics.auth_summary(data)
+    assert result["selection_ready"] is True
+    assert result["runtime_ready"] is False
+
+
+@pytest.mark.parametrize(
+    "finding",
+    [
+        "config-warning",
+        "doctor-warning",
+        "doctor-separate-warning",
+        "failed-check",
+        "runtime-unavailable",
+    ],
+)
+def test_diagnostic_receipt_retains_warnings_and_failures(finding):
+    import json
+
+    checks = {
+        "config": {"outcome": "passed", "valid": True, "warning_count": 0},
+        "doctor": {"outcome": "passed", "ok": True, "findings": [], "warnings": []},
+        "health": {"outcome": "passed", "ready": True},
+        "ui": {"outcome": "passed", "http_code": 200},
+        "nodes": {"outcome": "passed", "nodes": [{"paired": True, "connected": True}]},
+        "memory": {"outcome": "passed", "ready": True},
+        "agents": {"outcome": "passed", "agents": ["main"]},
+        "auth-main": {
+            "outcome": "passed",
+            "selection_ready": True,
+            "runtime_ready": True,
+        },
+    }
+    record = {
+        "complete": True,
+        "checks": checks,
+        "runtime": "/nix/store/runtime",
+        "config_path": "/nix/store/config",
+        "duration_seconds": 1,
+    }
+    assert updater.diagnostic_result(json.dumps(record), 0)["outcome"] == "healthy"
+    if finding == "config-warning":
+        checks["config"]["warning_count"] = 1
+    elif finding == "doctor-warning":
+        checks["doctor"]["findings"] = [{"severity": "warning"}]
+    elif finding == "doctor-separate-warning":
+        checks["doctor"] = {
+            "outcome": "passed",
+            **diagnostics.doctor_summary(
+                {
+                    "schemaVersion": 1,
+                    "ok": True,
+                    "checksRun": 1,
+                    "checksSkipped": 0,
+                    "findings": [],
+                    "warnings": [
+                        {
+                            "checkId": "inspection-incomplete",
+                            "severity": "warning",
+                            "message": "private-output",
+                        }
+                    ],
+                }
+            ),
+        }
+    elif finding == "runtime-unavailable":
+        checks["auth-main"]["runtime_ready"] = False
+    else:
+        checks["ui"] = {"outcome": "failed", "error": "TimeoutExpired"}
+    result = updater.diagnostic_result(json.dumps(record), 0)
+    assert result["outcome"] == ("failed" if finding == "failed-check" else "findings")
+    assert result["checks"] == checks
+
+
+def test_diagnostic_timeout_keeps_completed_streamed_checks():
+    import json
+
+    check = {"outcome": "passed", "valid": True}
+    partial = json.dumps({"check": "config", "result": check}) + '\n{"check":'
+    result = updater.diagnostic_result(partial, None)
+    assert result["outcome"] == "failed"
+    assert result["checks"] == {"config": check}
+
+
+@pytest.mark.parametrize("schema", [None, 2, True, "1"])
+def test_doctor_summary_rejects_unknown_schemas(schema):
+    with pytest.raises(ValueError):
+        diagnostics.doctor_summary(
+            {
+                "schemaVersion": schema,
+                "ok": True,
+                "checksRun": 1,
+                "checksSkipped": 0,
+                "findings": [],
+            }
+        )
 
 
 def test_installation_suppresses_due_old_receipt_until_next_night():
@@ -381,6 +527,7 @@ def test_failed_process_creation_is_retryable_without_live_mutation(
         updater, "prepare", lambda *_a, **_kw: {"outcome": "prepared", "changed": []}
     )
     monkeypatch.setattr(updater, "idle_reason", lambda: None)
+    monkeypatch.setattr(updater, "diagnose", lambda *_args: None)
     monkeypatch.setattr(updater, "build_candidates", lambda *_a: {})
     updater.scheduled(tmp_path, tmp_path, task)
     receipt = json.loads((tmp_path / "latest.json").read_text())
@@ -421,6 +568,7 @@ def test_started_maintenance_failure_holds_replay_and_records_status(
         updater, "prepare", lambda *_a, **_kw: {"outcome": "prepared", "changed": []}
     )
     monkeypatch.setattr(updater, "idle_reason", lambda: None)
+    monkeypatch.setattr(updater, "diagnose", lambda *_args: None)
     monkeypatch.setattr(updater, "build_candidates", lambda *_a: {})
     updater.scheduled(tmp_path, tmp_path, task)
     receipt = json.loads((tmp_path / "latest.json").read_text())

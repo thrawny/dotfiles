@@ -88,6 +88,10 @@ nightly-app-update-status:
     uv run --locked python scripts/nightly-app-update.py --verify --state-dir "$HOME/.local/state/nightly-app-update"
     launchctl print "gui/$(id -u)/org.nix-community.home.nightly-app-update"
 
+# One bounded read-only pass; does not consume a night or attempt an upgrade.
+nightly-app-update-diagnose:
+    uv run --locked python scripts/nightly-app-update.py --diagnose --state-dir "$HOME/.local/state/nightly-app-update"
+
 nightly-app-update-pause:
     mkdir -p "$HOME/.local/state/nightly-app-update"
     touch "$HOME/.local/state/nightly-app-update/paused"

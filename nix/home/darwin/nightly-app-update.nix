@@ -8,6 +8,12 @@
 let
   cfg = config.dotfiles.nightlyAppUpdate;
   state = "${config.home.homeDirectory}/.local/state/nightly-app-update";
+  # Keep the diagnostic helper beside the runner in the immutable installation.
+  source = pkgs.runCommand "nightly-app-update-source" { } ''
+    mkdir -p "$out"
+    cp ${../../../scripts/nightly-app-update.py} "$out/nightly-app-update.py"
+    cp ${../../../scripts/openclaw-diagnostics.py} "$out/openclaw-diagnostics.py"
+  '';
   runner = pkgs.writeShellApplication {
     name = "nightly-app-update";
     runtimeInputs = [
@@ -25,7 +31,7 @@ let
       export PYTHONTZPATH=${pkgs.tzdata}/share/zoneinfo
       export GIT_TERMINAL_PROMPT=0
       export GIT_SSH_COMMAND='ssh -o BatchMode=yes -o ConnectTimeout=10'
-      exec python3 ${../../../scripts/nightly-app-update.py} --scheduled \
+      exec python3 ${source}/nightly-app-update.py --scheduled \
         --repo ${lib.escapeShellArg cfg.repository} \
         --task ${../../../scripts/nightly-app-update-task.md} \
         --state-dir ${lib.escapeShellArg state}
