@@ -10,7 +10,7 @@ To see the current defaults and action IDs, move the file aside, start OmniWM an
 
 Differences from AeroSpace:
 
-- The default layout is `dwindle`, the closest match to AeroSpace tiles. OmniWM's own default is `niri` (scrolling columns).
+- Every workspace uses the `niri` layout (scrolling columns), not AeroSpace tiles. `toggleSplit` is unbound: it is dwindle-only. Option+Minus/Equal change the column width and Option+Shift+Minus/Equal the window height, in 10 percent steps.
 - No chord opens a new Ghostty window: OmniWM 0.7.6 has no `openApp` action.
 - `Option+B` (web workspace) is unbound: an action takes one chord only.
 - Directional monitor focus, the service mode and the Vowen follow-workspace script have no equivalent.

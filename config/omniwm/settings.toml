@@ -160,20 +160,20 @@ hotkeys = [
     { binding = "Unassigned", id = "toggleContainerFullPrimarySpan" },
     { binding = "Unassigned", id = "expandContainerToAvailablePrimarySpan" },
     { binding = "Unassigned", id = "resetWindowSecondarySpan" },
-    { binding = "Unassigned", id = "setContainerPrimarySpan.decrease10Percent" },
-    { binding = "Unassigned", id = "setContainerPrimarySpan.increase10Percent" },
+    { binding = "Option+Minus", id = "setContainerPrimarySpan.decrease10Percent" },
+    { binding = "Option+Equal", id = "setContainerPrimarySpan.increase10Percent" },
     { binding = "Unassigned", id = "setWindowPrimarySpan.decrease10Percent" },
     { binding = "Unassigned", id = "setWindowPrimarySpan.increase10Percent" },
-    { binding = "Unassigned", id = "setWindowSecondarySpan.decrease10Percent" },
-    { binding = "Unassigned", id = "setWindowSecondarySpan.increase10Percent" },
+    { binding = "Option+Shift+Minus", id = "setWindowSecondarySpan.decrease10Percent" },
+    { binding = "Option+Shift+Equal", id = "setWindowSecondarySpan.increase10Percent" },
     { binding = "Unassigned", id = "balanceSizes" },
     { binding = "Unassigned", id = "moveToRoot" },
-    { binding = "Option+Slash", id = "toggleSplit" },
+    { binding = "Unassigned", id = "toggleSplit" },
     { binding = "Unassigned", id = "swapSplit" },
-    { binding = "Option+Equal", id = "resizeGrow.horizontal" },
-    { binding = "Option+Shift+Equal", id = "resizeGrow.vertical" },
-    { binding = "Option+Minus", id = "resizeShrink.horizontal" },
-    { binding = "Option+Shift+Minus", id = "resizeShrink.vertical" },
+    { binding = "Unassigned", id = "resizeGrow.horizontal" },
+    { binding = "Unassigned", id = "resizeGrow.vertical" },
+    { binding = "Unassigned", id = "resizeShrink.horizontal" },
+    { binding = "Unassigned", id = "resizeShrink.vertical" },
     { binding = "Unassigned", id = "resizeFocusedWindow.grow" },
     { binding = "Unassigned", id = "resizeFocusedWindow.shrink" },
     { binding = "Unassigned", id = "preselect.left" },
@@ -251,7 +251,7 @@ top = 0.0
 [general]
 animationSpeed = 1.0
 animationsEnabled = true
-defaultLayoutType = "dwindle"
+defaultLayoutType = "niri"
 hotkeysEnabled = true
 hyperKeyModifiers = "Control+Option+Shift+Command"
 ipcEnabled = true
@@ -521,7 +521,7 @@ layout = "float"
 id = "1F373A89-C2DA-5C1C-9CA3-220E88C8BBDB"
 name = "1"
 displayName = "main"
-layoutType = "dwindle"
+layoutType = "niri"
 
 [workspaces.monitorAssignment]
 type = "main"
@@ -530,7 +530,7 @@ type = "main"
 id = "956CAC1C-C907-5716-AB5F-59DDA3A064B8"
 name = "2"
 displayName = "web"
-layoutType = "dwindle"
+layoutType = "niri"
 
 [workspaces.monitorAssignment]
 type = "main"
@@ -539,7 +539,7 @@ type = "main"
 id = "250B2A84-7075-55C0-B6E5-BE58C30B8347"
 name = "3"
 displayName = "code"
-layoutType = "dwindle"
+layoutType = "niri"
 
 [workspaces.monitorAssignment]
 type = "secondary"
@@ -547,7 +547,7 @@ type = "secondary"
 [[workspaces]]
 id = "083B0E0D-CC0E-577E-AE9A-89F1920E6EB2"
 name = "4"
-layoutType = "dwindle"
+layoutType = "niri"
 
 [workspaces.monitorAssignment]
 type = "main"
@@ -555,7 +555,7 @@ type = "main"
 [[workspaces]]
 id = "E7244CA1-ADED-5F3B-BFB7-363175A70E19"
 name = "5"
-layoutType = "dwindle"
+layoutType = "niri"
 
 [workspaces.monitorAssignment]
 type = "main"
@@ -563,7 +563,7 @@ type = "main"
 [[workspaces]]
 id = "D57A0713-B475-51D4-A67D-78D0026A5C00"
 name = "6"
-layoutType = "dwindle"
+layoutType = "niri"
 
 [workspaces.monitorAssignment]
 type = "main"
@@ -571,7 +571,7 @@ type = "main"
 [[workspaces]]
 id = "E80CDA65-5472-52AF-990F-133AB14DB563"
 name = "7"
-layoutType = "dwindle"
+layoutType = "niri"
 
 [workspaces.monitorAssignment]
 type = "main"
@@ -579,7 +579,7 @@ type = "main"
 [[workspaces]]
 id = "679405FD-7650-5A08-8D0E-1C6DDF7D7786"
 name = "8"
-layoutType = "dwindle"
+layoutType = "niri"
 
 [workspaces.monitorAssignment]
 type = "main"
@@ -587,7 +587,7 @@ type = "main"
 [[workspaces]]
 id = "5D21B0CB-5F39-501F-B1EB-E87DB92A5167"
 name = "9"
-layoutType = "dwindle"
+layoutType = "niri"
 
 [workspaces.monitorAssignment]
 type = "main"
@@ -595,7 +595,7 @@ type = "main"
 [[workspaces]]
 id = "6C3E5748-CFD2-59CB-AE01-C21F278277AD"
 name = "10"
-layoutType = "dwindle"
+layoutType = "niri"
 
 [workspaces.monitorAssignment]
 type = "main"
