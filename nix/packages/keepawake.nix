@@ -3,6 +3,7 @@
   python3,
   systemd,
   libnotify,
+  defaultConfig ? ../../config/keepawake/config.example.toml,
 }:
 stdenvNoCC.mkDerivation {
   pname = "keepawake";
@@ -10,7 +11,7 @@ stdenvNoCC.mkDerivation {
   dontUnpack = true;
   installPhase = ''
     install -Dm755 ${../../bin/keepawake} $out/bin/keepawake
-    install -Dm644 ${../../config/keepawake/config.example.toml} $out/share/keepawake/config.example.toml
+    install -Dm644 ${defaultConfig} $out/share/keepawake/config.example.toml
     substituteInPlace $out/bin/keepawake \
       --replace-fail '#!/usr/bin/env python3' '#!${python3}/bin/python3' \
       --replace-fail '@busctl@' '${systemd}/bin/busctl' \

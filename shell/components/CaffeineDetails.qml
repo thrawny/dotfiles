@@ -61,6 +61,7 @@ Popup {
             }
             Text {
                 Layout.fillWidth: true
+                visible: !Caffeine.desktop
                 text: "Stops at " + (Caffeine.snapshot.battery_floor ?? 20) + "% on battery. AC has no battery limit."
                 color: Theme.muted
                 font: root.font
@@ -119,6 +120,7 @@ Popup {
             }
             CheckBox {
                 id: lidClosed
+                visible: !Caffeine.desktop
                 text: "Allow closed-lid operation"
             }
             Button {

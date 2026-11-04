@@ -75,7 +75,7 @@ AC power, external displays, and weekly schedules. The original app's
 reference; there is no published usage ranking for individual features.
 
 On first start, the service creates `~/.config/keepawake/config.toml` from the
-[example](../config/keepawake/config.example.toml). All example rules start
+[laptop example](../config/keepawake/config.example.toml). Its example rules start
 disabled. Click **Edit rules**, set the Wi-Fi SSID, and enable that rule:
 
 ```toml
@@ -95,9 +95,17 @@ release their holds at or below the battery floor when unplugged, and have no
 battery limit on AC. Manual sessions end at the floor; automatic rules can
 reactivate when their conditions and power requirements match again.
 
+The desktop selects the [desktop example](../config/keepawake/desktop.example.toml)
+instead. It uses `device_type = "desktop"`, skips power monitoring, hides battery
+and lid controls, and prevents suspend while connected to any Wi-Fi network.
+Screen locking and monitor sleep remain enabled. Laptop configurations default
+to `device_type = "laptop"` and retain battery protection. The Home Manager option
+`dotfiles.keepawake.deviceType` selects the first-start template; an existing
+`~/.config/keepawake/config.toml` stays editable and is never overwritten by activation.
+
 Each rule's `when` conditions use AND by default; `match = "any"` uses OR.
-Supported conditions are `wifi_ssid` and `process` strings, `ac_power` and
-`external_display` booleans, and a `schedule` with `days`, `start`, and `end`.
+Supported conditions are `wifi_ssid` and `process` strings, `wifi_connected`,
+`ac_power` and `external_display` booleans, and a `schedule` with `days`, `start`, and `end`.
 Process names match the current user's processes, even in the background.
 Schedules use local time, include their start and exclude their end. An overnight
 window belongs to its start day. Rules may override `keep_display_awake` or

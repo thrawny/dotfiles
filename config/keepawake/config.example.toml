@@ -1,5 +1,6 @@
 # Copied to ~/.config/keepawake/config.toml on first start. Edits reload automatically.
 version = 1
+device_type = "laptop"
 battery_floor = 20
 poll_seconds = 5
 notifications = true

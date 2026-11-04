@@ -32,7 +32,7 @@ class Facts:
         }
         self.errors: list[str] = []
 
-    def sample(self):
+    def sample(self, **_kwargs: Any):
         return self.data.copy(), self.errors.copy()
 
 
@@ -52,16 +52,29 @@ def engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     return daemon, facts, clock
 
 
-def test_wifi_power_transitions(engine: Any):
+@pytest.mark.parametrize("device_type", ["laptop", "desktop"])
+def test_wifi_power_transitions(engine: Any, device_type: str):
     daemon, facts, _ = engine
+    desktop = device_type == "desktop"
+    if desktop:
+        daemon.filename.write_text(
+            'device_type = "desktop"\n'
+            + daemon.filename.read_text().replace(
+                'wifi_ssid = "Test Wi-Fi"', "wifi_connected = true"
+            )
+        )
+        daemon.poll(facts)
     assert daemon.snapshot["active"]
     facts.data["battery_percent"] = 20
     daemon.poll(facts)
-    assert not daemon.snapshot["active"]
+    assert daemon.snapshot["active"] is desktop
     facts.data["on_ac"] = True
     daemon.poll(facts)
     assert daemon.snapshot["active"]
     facts.data["wifi_ssids"] = ["Other Wi-Fi"]
+    daemon.poll(facts)
+    assert daemon.snapshot["active"] is desktop
+    facts.data["wifi_ssids"] = []
     daemon.poll(facts)
     assert not daemon.snapshot["active"]
     facts.data["wifi_ssids"] = ["Test Wi-Fi"]
@@ -174,12 +187,17 @@ def test_pid_reuse_ends_the_original_session(
     assert not daemon.command({"action": "status"})["active"]
 
 
-def test_unknown_power_and_stale_facts_release_holds(engine: Any):
+@pytest.mark.parametrize("device_type", ["laptop", "desktop"])
+def test_unknown_power_and_stale_facts_release_holds(engine: Any, device_type: str):
     daemon, facts, clock = engine
+    if device_type == "desktop":
+        daemon.filename.write_text(
+            'device_type = "desktop"\n' + daemon.filename.read_text()
+        )
     facts.data["on_ac"] = None
     facts.errors = ["Power unavailable"]
     daemon.poll(facts)
-    assert not daemon.snapshot["active"]
+    assert daemon.snapshot["active"] is (device_type == "desktop")
     facts.data["on_ac"] = True
     daemon.poll(facts)
     clock[0] += keepawake.MAX_AGE + 1

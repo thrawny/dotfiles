@@ -1,0 +1,11 @@
+# Desktop defaults. No battery checks or lid rules.
+version = 1
+device_type = "desktop"
+poll_seconds = 5
+notifications = true
+keep_display_awake = false
+
+[[rules]]
+name = "Connected to Wi-Fi"
+[rules.when]
+wifi_connected = true

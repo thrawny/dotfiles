@@ -124,6 +124,7 @@ def load_config(filename: Path) -> dict[str, Any]:
         data = tomllib.load(stream)
     allowed = {
         "version",
+        "device_type",
         "battery_floor",
         "poll_seconds",
         "notifications",
@@ -133,6 +134,9 @@ def load_config(filename: Path) -> dict[str, Any]:
     }
     if set(data) - allowed or data.get("version", 1) != 1:
         raise KeepawakeError("Unknown configuration key or unsupported version.")
+    data.setdefault("device_type", "laptop")
+    if data["device_type"] not in ("laptop", "desktop"):
+        raise KeepawakeError("device_type must be laptop or desktop.")
     for key, default in (("battery_floor", 20), ("poll_seconds", 5)):
         data.setdefault(key, default)
         if type(data[key]) not in (int, float) or not math.isfinite(data[key]):
@@ -174,7 +178,14 @@ def load_config(filename: Path) -> dict[str, Any]:
             not isinstance(when, dict)
             or not when
             or set(cast(dict[str, Any], when))
-            - {"wifi_ssid", "process", "ac_power", "external_display", "schedule"}
+            - {
+                "wifi_ssid",
+                "wifi_connected",
+                "process",
+                "ac_power",
+                "external_display",
+                "schedule",
+            }
         ):
             raise KeepawakeError("Rules need supported conditions in when.")
         for key, value in cast(dict[str, Any], when).items():
@@ -182,7 +193,10 @@ def load_config(filename: Path) -> dict[str, Any]:
                 not isinstance(value, str) or not value
             ):
                 raise KeepawakeError(f"{key} must be a nonempty string.")
-            if key in ("ac_power", "external_display") and type(value) is not bool:
+            if (
+                key in ("wifi_connected", "ac_power", "external_display")
+                and type(value) is not bool
+            ):
                 raise KeepawakeError(f"{key} must be true or false.")
             if key == "schedule":
                 validate_schedule(value)
@@ -205,6 +219,8 @@ def rule_matches(rule: dict[str, Any], facts: dict[str, Any], now: dt.datetime) 
     for key, value in rule["when"].items():
         if key == "wifi_ssid":
             checks.append(value in facts["wifi_ssids"])
+        elif key == "wifi_connected":
+            checks.append(bool(facts["wifi_ssids"]) is value)
         elif key == "process":
             checks.append(value in facts["processes"])
         elif key == "ac_power":
@@ -302,7 +318,9 @@ class SystemFacts:
                 )
         return ssids
 
-    def sample(self) -> tuple[dict[str, Any], list[str]]:
+    def sample(
+        self, *, device_type: str = "laptop"
+    ) -> tuple[dict[str, Any], list[str]]:
         errors: list[str] = []
         facts: dict[str, Any] = {
             "on_ac": None,
@@ -311,16 +329,19 @@ class SystemFacts:
             "processes": set(),
             "external_displays": [],
         }
-        try:
-            facts["on_ac"], facts["battery_percent"] = self.power()
-        except (
-            OSError,
-            ValueError,
-            KeyError,
-            subprocess.SubprocessError,
-            KeepawakeError,
-        ):
-            errors.append("Power information unavailable; keep-awake holds released.")
+        if device_type != "desktop":
+            try:
+                facts["on_ac"], facts["battery_percent"] = self.power()
+            except (
+                OSError,
+                ValueError,
+                KeyError,
+                subprocess.SubprocessError,
+                KeepawakeError,
+            ):
+                errors.append(
+                    "Power information unavailable; keep-awake holds released."
+                )
         try:
             facts["wifi_ssids"] = self.wifi()
         except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
@@ -403,7 +424,7 @@ class Engine:
             config_error = ""
         except (OSError, ValueError, KeepawakeError) as error:
             config, config_error = {}, f"Configuration error: {error}"
-        facts, errors = source.sample()
+        facts, errors = source.sample(device_type=config.get("device_type", "laptop"))
         with self.lock:
             # BOOTTIME includes suspend; MONOTONIC does not. Clear manual
             # sessions after sleep without monitoring logind or blocking it.
@@ -420,7 +441,10 @@ class Engine:
         ended: list[str] = []
         allowed = (
             bool(self.config)
-            and power_allowed(self.facts, self.config["battery_floor"])
+            and (
+                self.config["device_type"] == "desktop"
+                or power_allowed(self.facts, self.config["battery_floor"])
+            )
             and now - self.sampled_at <= MAX_AGE
         )
         retained: list[dict[str, Any]] = []
@@ -501,6 +525,7 @@ class Engine:
             ),
             "paused": self.paused,
             "power_allowed": allowed,
+            "device_type": self.config.get("device_type", "laptop"),
             "battery_floor": self.config.get("battery_floor", 20),
             "on_ac": self.facts["on_ac"],
             "battery_percent": self.facts["battery_percent"],

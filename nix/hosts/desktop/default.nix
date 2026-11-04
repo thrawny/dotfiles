@@ -162,6 +162,7 @@ in
     }:
     {
       dotfiles.privateAgentSkills.enable = true;
+      dotfiles.keepawake.deviceType = "desktop";
       home.packages = [ pkgs.google-chrome ];
 
       programs.ghostty.settings.font-size = lib.mkForce 12;

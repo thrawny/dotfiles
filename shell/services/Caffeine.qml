@@ -8,6 +8,7 @@ Singleton {
     property var snapshot: ({})
     readonly property bool active: snapshot.active === true
     readonly property bool paused: snapshot.paused === true
+    readonly property bool desktop: snapshot.device_type === "desktop"
     readonly property var sessions: snapshot.sessions || []
     readonly property var rules: snapshot.rules || []
     property bool available: false
@@ -22,7 +23,7 @@ Singleton {
             return error || "Keep-awake service unavailable";
         const reasons = (snapshot.reasons || []).join(", ");
         const timers = sessions.filter(session => session.remaining_seconds !== null).map(session => session.name + ": " + Math.ceil(session.remaining_seconds / 60) + "m remaining");
-        return [error || actionError, paused ? "Keep awake paused" : active ? "Keep awake: " + reasons : "Normal sleep enabled", ...timers, "Screen sleep " + (snapshot.keep_display_awake ? "prevented" : "allowed") + " · Battery limit " + (snapshot.battery_floor ?? 20) + "%", "Click for sessions · Right-click to toggle manual session"].filter(Boolean).join("\n");
+        return [error || actionError, paused ? "Keep awake paused" : active ? "Keep awake: " + reasons : "Normal sleep enabled", ...timers, "Screen sleep " + (snapshot.keep_display_awake ? "prevented" : "allowed") + (desktop ? "" : " · Battery limit " + (snapshot.battery_floor ?? 20) + "%"), "Click for sessions · Right-click to toggle manual session"].filter(Boolean).join("\n");
     }
     function refresh(): void {
         if (!state.running && !action.running)
