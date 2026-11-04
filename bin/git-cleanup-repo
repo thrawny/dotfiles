@@ -31,6 +31,7 @@ git remote prune origin
 git worktree prune
 
 # Remove worktrees whose branches have been merged, squash-merged, or deleted on remote
+cleanup_failed=false
 while IFS= read -r worktree_path; do
   [[ -z "$worktree_path" ]] && continue
   [[ "$worktree_path" == "$main_worktree" ]] && continue
@@ -60,8 +61,34 @@ while IFS= read -r worktree_path; do
   fi
 
   if [[ "$should_remove" == "true" ]]; then
+    # Index flags can hide tracked edits from Git's removal guard.
+    if ! indexed_files=$(git -C "$worktree_path" ls-files -v); then
+      echo "Could not inspect index flags; keeping worktree: $worktree_path" >&2
+      cleanup_failed=true
+      continue
+    fi
+    if printf '%s\n' "$indexed_files" | grep -qE '^[a-zS] '; then
+      echo "Keeping worktree with assume-unchanged or skip-worktree files: $worktree_path" >&2
+      cleanup_failed=true
+      continue
+    fi
+    # Git's removal guard allows ignored files, which may still contain local work.
+    if ! ignored_files=$(git -C "$worktree_path" ls-files --others --ignored --exclude-standard --directory); then
+      echo "Could not inspect ignored files; keeping worktree: $worktree_path" >&2
+      cleanup_failed=true
+      continue
+    fi
+    if [[ -n "$ignored_files" ]]; then
+      echo "Keeping worktree with ignored files: $worktree_path" >&2
+      cleanup_failed=true
+      continue
+    fi
     echo "Removing worktree ($reason): $worktree_path ($branch)"
-    git worktree remove --force "$worktree_path" 2>/dev/null || git worktree remove "$worktree_path" 2>/dev/null
+    # Let Git refuse dirty or locked worktrees; merged history does not make local files disposable.
+    if ! git worktree remove "$worktree_path"; then
+      echo "Could not remove worktree; keeping it: $worktree_path" >&2
+      cleanup_failed=true
+    fi
   fi
 done < <(git worktree list --porcelain | grep "^worktree " | cut -d' ' -f2-)
 
@@ -82,4 +109,7 @@ done
 # https://github.com/not-an-aardvark/git-delete-squashed
 git for-each-ref refs/heads/ "--format=%(refname:short)" | grep -vE "$eternal_branches" | while read branch; do mergeBase=$(git merge-base $main $branch) && [[ $(git cherry $main $(git commit-tree $(git rev-parse $branch\^{tree}) -p $mergeBase -m _)) == "-"* ]] && git branch -D $branch; done
 
-git pull
+git pull || exit $?
+if [[ "$cleanup_failed" == true ]]; then
+  exit 1
+fi
