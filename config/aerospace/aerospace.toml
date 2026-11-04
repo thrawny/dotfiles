@@ -1,7 +1,7 @@
 # Requires AeroSpace 0.21.3+ for auto-reload and Wispr Flow popup fixes.
 # Keybindings follow niri where AeroSpace has a suitable equivalent.
 config-version = 2
-start-at-login = true
+start-at-login = false
 auto-reload-config = true
 
 # Only the named workspaces persist when empty. Workspaces 4..10 are on demand.
