@@ -9,7 +9,10 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[1] / "bin/git-cleanup-repo"
 
 
-@pytest.mark.parametrize("local_change", [None, "tracked", "untracked", "ignored"])
+@pytest.mark.parametrize(
+    "local_change",
+    [None, "tracked", "untracked", "ignored", "assume-unchanged", "skip-worktree"],
+)
 def test_merged_worktree_removal_preserves_local_changes(
     tmp_path: Path, local_change: str | None
 ) -> None:
@@ -45,8 +48,12 @@ def test_merged_worktree_removal_preserves_local_changes(
     git("-C", str(repo), "push", "-u", "origin", "main")
     worktree = tmp_path / "merged worktree"
     git("-C", str(repo), "worktree", "add", "-b", "topic", str(worktree))
+    local_file = worktree / (local_change or "tracked")
+    if local_change in ("assume-unchanged", "skip-worktree"):
+        git("-C", str(worktree), "update-index", f"--{local_change}", "tracked")
+        local_file = worktree / "tracked"
     if local_change:
-        (worktree / local_change).write_text("Local work\n")
+        local_file.write_text("Local work\n")
 
     result = subprocess.run(
         ["bash", str(SCRIPT)],
@@ -58,7 +65,7 @@ def test_merged_worktree_removal_preserves_local_changes(
     )
 
     if local_change:
-        assert (worktree / local_change).read_text() == "Local work\n"
+        assert local_file.read_text() == "Local work\n"
         assert git("-C", str(worktree), "branch", "--show-current") == "topic"
         assert result.returncode != 0
     else:
