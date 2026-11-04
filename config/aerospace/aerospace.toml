@@ -38,7 +38,15 @@ exec-on-workspace-change = ['/bin/bash', '-c', '''
 [workspace-to-monitor-force-assignment]
 main = ['Q27G2WG4', 'built-in']
 web = ['Q27G2WG4', 'built-in']
-code = ['U3219Q']   # TODO: add the home LG monitor name.
+code = ['U3219Q', '27GL850']
+# Workspaces 4..10 go to the AOC at home. At work it is absent, so they stay unpinned.
+'4' = ['Q27G2WG4']
+'5' = ['Q27G2WG4']
+'6' = ['Q27G2WG4']
+'7' = ['Q27G2WG4']
+'8' = ['Q27G2WG4']
+'9' = ['Q27G2WG4']
+'10' = ['Q27G2WG4']
 
 [key-mapping]
 preset = 'qwerty'
@@ -85,7 +93,7 @@ alt-shift-k = 'swap up'
 alt-shift-l = 'swap right'
 
 # Focus monitors, move a window and follow it, or move the entire workspace.
-# Pinned workspaces (see below) cannot move to another monitor; 4..10 can.
+# Pinned workspaces (see below) cannot move to another monitor.
 alt-n = 'focus-monitor --wrap-around prev'   # Matches niri/Hyprland: previous in order, not history.
 alt-ctrl-h = 'focus-monitor left'
 alt-ctrl-j = 'focus-monitor down'
