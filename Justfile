@@ -77,27 +77,29 @@ prepare-nightly-app-update:
 check-nightly-app-update-environment:
     env PATH=/nix/var/nix/profiles/default/bin:/usr/bin:/bin:/usr/sbin:/sbin {{just_executable()}} check
 
-# Install only the updater schedule; leave active app services and HM untouched.
+# Install on-demand helpers and retire only the old unattended updater job.
 install-nightly-app-update:
     #!/usr/bin/env bash
     set -euo pipefail
-    updater_plist=$(nix build --no-link --print-out-paths ./nix#homeConfigurations.thrawnym1.config.dotfiles.nightlyAppUpdate.plist)
-    uv run --locked python scripts/install-nightly-app-update.py "$updater_plist"
+    updater_package=$(nix build --no-link --print-out-paths ./nix#homeConfigurations.thrawnym1.config.dotfiles.nightlyAppUpdate.package)
+    uv run --locked python scripts/install-nightly-app-update.py "$updater_package"
 
+# Legacy rollout receipts are historical; the actual schedule lives in T3.
 nightly-app-update-status:
     uv run --locked python scripts/nightly-app-update.py --verify --state-dir "$HOME/.local/state/nightly-app-update"
-    launchctl print "gui/$(id -u)/org.nix-community.home.nightly-app-update"
+    @echo 'Legacy updates are retired by policy; verify actual launchctl installation. T3 owns the next run.'
 
 # One bounded read-only pass; does not consume a night or attempt an upgrade.
 nightly-app-update-diagnose:
-    uv run --locked python scripts/nightly-app-update.py --diagnose --state-dir "$HOME/.local/state/nightly-app-update"
+    "$HOME/.local/state/nightly-app-update/executor/bin/nightly-app-update" --diagnose
 
 nightly-app-update-pause:
     mkdir -p "$HOME/.local/state/nightly-app-update"
     touch "$HOME/.local/state/nightly-app-update/paused"
 
 nightly-app-update-resume:
-    rm -f "$HOME/.local/state/nightly-app-update/paused"
+    @echo 'The unattended updater is retired; enable the native task in T3 instead.'
+    @exit 1
 
 # Apply T3 model defaults and shortcuts live, without restarting its server
 sync-t3code-preferences target="thrawny-z13":

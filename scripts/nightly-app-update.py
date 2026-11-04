@@ -984,9 +984,6 @@ def main():
             if state.exists()
             else {"outcome": "not-initialized"}
         )
-        now = dt.datetime.now(ZONE)
-        night = dt.date.fromisoformat(receipt.get("night", due_day(now, None)))
-        next_night = dt.datetime.combine(night + dt.timedelta(days=1), dt.time(2), ZONE)
         print(
             json.dumps(
                 {
@@ -998,9 +995,8 @@ def main():
                     ).get("not_before")
                     if (args.state_dir / "dispatch.json").exists()
                     else None,
-                    "timezone": "Europe/Stockholm",
-                    "next_night": next_night.isoformat(),
-                    "dispatch_resolution_seconds": 60,
+                    "legacy_runner_policy": "retired; verify actual launchctl installation separately",
+                    "schedule_owner": "native T3 task; inspect its actual next-run binding",
                 },
                 indent=2,
             )

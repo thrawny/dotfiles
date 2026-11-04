@@ -1,65 +1,20 @@
 #!/usr/bin/env python3
-"""Install only the updater's repo-native launch agent, without activating apps."""
+"""Install on-demand helpers and retire only the legacy unattended updater."""
 
 import argparse
-import datetime as dt
 import fcntl
-import json
+import hashlib
 import os
-import plistlib
 import subprocess
 from pathlib import Path
-from zoneinfo import ZoneInfo
-
-
-def next_dispatch(now):
-    local = now.astimezone(ZoneInfo("Europe/Stockholm"))
-    deadline = dt.datetime.combine(local.date(), dt.time(2), local.tzinfo)
-    if deadline <= local:
-        deadline += dt.timedelta(days=1)
-    return deadline
-
-
-def defer_dispatch(state, now):
-    temporary = state / "dispatch.new"
-    with temporary.open("w") as stream:
-        json.dump({"not_before": next_dispatch(now).isoformat()}, stream)
-        stream.flush()
-        os.fsync(stream.fileno())
-    temporary.replace(state / "dispatch.json")
-
-
-def replace_agent(target, config, loaded, operate):
-    previous = target.read_bytes() if target.exists() else None
-    if loaded and previous is None:
-        raise ValueError("Cannot retain the loaded scheduler's original plist")
-    temporary = target.with_suffix(".new")
-    try:
-        if loaded:
-            operate("bootout", target)
-        with temporary.open("wb") as stream:
-            plistlib.dump(config, stream)
-        temporary.replace(target)
-        operate("bootstrap", target)
-        operate("verify", target)
-    except Exception:
-        # The replacement may already be loaded when final verification fails.
-        operate("discard", target)
-        if previous is not None:
-            temporary.write_bytes(previous)
-            temporary.replace(target)
-            if loaded:
-                operate("bootstrap", target)
-                operate("verify", target)
-        else:
-            target.unlink(missing_ok=True)
-        raise
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("plist", type=Path)
+    parser.add_argument("package", type=Path)
     args = parser.parse_args()
+    if not (args.package / "bin/nightly-app-update").is_file():
+        raise SystemExit("Missing on-demand maintenance command")
     os.umask(0o077)
     state = Path.home() / ".local/state/nightly-app-update"
     state.mkdir(parents=True, exist_ok=True)
@@ -68,79 +23,45 @@ def main():
         try:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
-            raise SystemExit(
-                "Updater is running; installation deferred without interruption"
-            ) from None
-        latest = state / "latest.json"
-        if latest.exists():
-            receipt = json.loads(latest.read_text())
-            if receipt.get("outcome") in {"maintaining", "uncertain", "pending-push"}:
-                raise SystemExit(
-                    "Reconcile the retained maintenance receipt before replacing the schedule"
-                )
-        else:
-            now = dt.datetime.now(ZoneInfo("Europe/Stockholm"))
-            night = now.date() if now.hour >= 2 else now.date() - dt.timedelta(days=1)
-            latest.write_text(
-                json.dumps({"outcome": "initialized", "night": night.isoformat()})
-                + "\n"
-            )
-        with args.plist.open("rb") as stream:
-            config = plistlib.load(stream)
+            raise SystemExit("Updater is running; retirement deferred") from None
+        # Keep this fence permanently; no old runner may resume unattended work.
+        (state / "paused").touch(mode=0o600)
         label = "org.nix-community.home.nightly-app-update"
-        if config["Label"] != label or config["StartInterval"] != 60:
-            raise SystemExit("Unexpected launch agent")
-        roots = state / "gcroots"
-        roots.mkdir(exist_ok=True)
-        root = roots / args.plist.name
-        if root.is_symlink():
-            if root.resolve() != args.plist.resolve():
-                raise SystemExit("Unexpected retained launch-agent GC root")
-        else:
-            subprocess.run(
-                [
-                    "nix-store",
-                    "--add-root",
-                    str(root),
-                    "--indirect",
-                    "--realise",
-                    str(args.plist.resolve()),
-                ],
-                check=True,
-            )
         domain = f"gui/{os.getuid()}"
+        service = f"{domain}/{label}"
         target = Path.home() / "Library/LaunchAgents" / f"{label}.plist"
-        target.parent.mkdir(parents=True, exist_ok=True)
-        # Only this scheduler is unloaded; no app/HM activation takes place.
+        if target.exists():
+            data = target.read_bytes()
+            archive = state / "retired-launchd"
+            archive.mkdir(mode=0o700, exist_ok=True)
+            (archive / f"{hashlib.sha256(data).hexdigest()}.plist").write_bytes(data)
+        # Disable before bootout so login/activation cannot revive the old label.
+        subprocess.run(["/bin/launchctl", "disable", service], check=True)
         loaded = subprocess.run(
-            ["/bin/launchctl", "print", f"{domain}/{label}"], capture_output=True
+            ["/bin/launchctl", "print", service], capture_output=True
         )
-
-        def operate(action, agent_file):
-            if action == "bootstrap":
-                subprocess.run(
-                    ["/bin/launchctl", "bootstrap", domain, str(agent_file)], check=True
-                )
-            elif action == "verify":
-                subprocess.run(
-                    ["/bin/launchctl", "print", f"{domain}/{label}"], check=True
-                )
-            else:
-                subprocess.run(
-                    ["/bin/launchctl", "bootout", f"{domain}/{label}"],
-                    check=action != "discard",
-                    capture_output=True,
-                )
-
-        marker = state / "installing"
-        marker.write_text(dt.datetime.now(dt.UTC).isoformat())
-        defer_dispatch(state, dt.datetime.now(dt.UTC))
-        # A failed/interrupted install keeps the marker: no maintenance may start
-        # until installation is explicitly completed and verified.
-        replace_agent(target, config, loaded.returncode == 0, operate)
-        defer_dispatch(state, dt.datetime.now(dt.UTC))
-        marker.unlink()
-        print("Installed; initial run is suppressed until the next Stockholm night.")
+        if loaded.returncode == 0:
+            subprocess.run(["/bin/launchctl", "bootout", service], check=True)
+        probe = subprocess.run(
+            ["/bin/launchctl", "print", service], capture_output=True
+        )
+        if probe.returncode == 0:
+            raise SystemExit("Legacy updater is still loaded")
+        # Keep all original receipts, backups and GC roots. Only its launch file
+        # is retired; the on-demand command has its own durable runtime root.
+        target.unlink(missing_ok=True)
+        subprocess.run(
+            [
+                "nix-store",
+                "--add-root",
+                str(state / "executor"),
+                "--indirect",
+                "--realise",
+                str(args.package.resolve()),
+            ],
+            check=True,
+        )
+        print("On-demand helpers installed; legacy updater disabled and unloaded.")
 
 
 if __name__ == "__main__":
