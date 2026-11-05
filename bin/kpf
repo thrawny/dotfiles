@@ -128,8 +128,12 @@ class PortForwardManager:
             if connection_duration >= self.STABLE_CONNECTION_THRESHOLD:
                 self.current_wait = self.INITIAL_RETRY_WAIT
 
-            # Transient errors get immediate retry
-            if self.is_transient_error(stderr):
+            # Retry the first transient failure immediately; repeated failures
+            # must wait for the backoff, even when the error stays transient.
+            if (
+                self.is_transient_error(stderr)
+                and self.current_wait == self.INITIAL_RETRY_WAIT
+            ):
                 self.log("Transient error detected, retrying immediately...")
                 # Still increase backoff to prevent hammering if pod keeps failing
                 self.current_wait = min(
