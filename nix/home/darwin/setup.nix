@@ -6,6 +6,13 @@ in
 {
   # macOS system defaults. Home Manager writes each domain with
   # `defaults import`, which keeps the keys not listed here.
+  # Remove cmd+m from the AppKit "Minimize" menu item in every app, because it
+  # is easy to hit by accident. A key equivalent of NUL means "no shortcut".
+  # Nix strings cannot hold NUL, so this goes through `defaults write`.
+  home.activation.unbindGlobalMinimize = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    $DRY_RUN_CMD /usr/bin/defaults write -g NSUserKeyEquivalents -dict-add "Minimize" '\0'
+  '';
+
   targets.darwin.defaults = {
     NSGlobalDomain = {
       AppleShowAllExtensions = true;
