@@ -2,20 +2,17 @@
 
 import os
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "bin/git-cleanup-repo"
+Repository = tuple[Path, dict[str, str], Callable[..., str]]
 
 
-@pytest.mark.parametrize(
-    "local_change",
-    [None, "tracked", "untracked", "ignored", "assume-unchanged", "skip-worktree"],
-)
-def test_merged_worktree_removal_preserves_local_changes(
-    tmp_path: Path, local_change: str | None
-) -> None:
+@pytest.fixture
+def repository(tmp_path: Path) -> Repository:
     environment = {
         **os.environ,
         "GIT_CONFIG_GLOBAL": os.devnull,
@@ -46,6 +43,18 @@ def test_merged_worktree_removal_preserves_local_changes(
     git("-C", str(repo), "add", "tracked", ".gitignore")
     git("-C", str(repo), "commit", "-m", "Initial commit")
     git("-C", str(repo), "push", "-u", "origin", "main")
+    git("-C", str(repo), "remote", "set-head", "origin", "--auto")
+    return repo, environment, git
+
+
+@pytest.mark.parametrize(
+    "local_change",
+    [None, "tracked", "untracked", "ignored", "assume-unchanged", "skip-worktree"],
+)
+def test_merged_worktree_removal_preserves_local_changes(
+    tmp_path: Path, repository: Repository, local_change: str | None
+) -> None:
+    repo, environment, git = repository
     worktree = tmp_path / "merged worktree"
     git("-C", str(repo), "worktree", "add", "-b", "topic", str(worktree))
     local_file = worktree / (local_change or "tracked")
@@ -72,3 +81,43 @@ def test_merged_worktree_removal_preserves_local_changes(
         assert result.returncode == 0, result.stderr
         assert not worktree.exists()
         assert git("-C", str(repo), "branch", "--list", "topic") == ""
+
+
+@pytest.mark.parametrize("failure", ["stash", "checkout", "fetch", "missing-upstream"])
+def test_failed_preparation_preserves_worktree_and_branch(
+    tmp_path: Path, repository: Repository, failure: str
+) -> None:
+    repo, environment, git = repository
+    worktree = tmp_path / "topic"
+    git("-C", str(repo), "worktree", "add", "-b", "topic", str(worktree))
+    if failure == "stash":
+        (repo / "tracked").write_text("Unstashed work\n")
+        (repo / ".git/index.lock").touch()
+    elif failure == "checkout":
+        git("-C", str(repo), "checkout", "-b", "caller")
+        git("-C", str(repo), "worktree", "add", str(tmp_path / "main"), "main")
+    elif failure == "fetch":
+        (tmp_path / "remote").rename(tmp_path / "unavailable-remote")
+    else:
+        (worktree / "unique").write_text("Unmerged work\n")
+        git("-C", str(worktree), "add", "unique")
+        git("-C", str(worktree), "commit", "-m", "Unmerged work")
+        git("-C", str(tmp_path / "remote"), "branch", "-m", "main", "trunk")
+    topic_head = git("-C", str(repo), "rev-parse", "topic")
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        cwd=repo,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode != 0
+    assert worktree.is_dir()
+    assert git("-C", str(repo), "rev-parse", "refs/heads/topic") == topic_head
+    if failure == "stash":
+        assert (repo / "tracked").read_text() == "Unstashed work\n"
+    if failure == "missing-upstream":
+        assert (worktree / "unique").read_text() == "Unmerged work\n"

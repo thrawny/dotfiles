@@ -16,16 +16,20 @@ fi
 eternal_branches="$main\$|test\$|sandbox\$|develop\$|master\$|development\$|staging\$"
 main_worktree=$(git rev-parse --show-toplevel)
 
-git stash
+git stash || exit $?
 
-git checkout $main &> /dev/null
+git checkout "$main" || exit $?
 
 # Make sure we're working with the most up-to-date version of main.
-git fetch
+git fetch || exit $?
 
 # Prune obsolete remote tracking branches. These are branches that we
 # once tracked, but have since been deleted on the remote.
-git remote prune origin
+git remote prune origin || exit $?
+
+# A renamed or deleted default branch must not turn failed ancestry checks into
+# permission to delete unmerged branches and their worktrees.
+git rev-parse --verify "refs/remotes/origin/$main^{commit}" > /dev/null || exit $?
 
 # Prune stale worktree references (directories that no longer exist)
 git worktree prune
