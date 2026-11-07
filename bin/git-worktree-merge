@@ -103,11 +103,11 @@ trap - EXIT
 
 if [[ "$remove" == true ]]; then
   echo "Removing worktree $branch..."
-  # First try clean removal, then force if needed
-  git worktree remove "$wt_dir" 2>/dev/null || git worktree remove --force "$wt_dir" 2>/dev/null || true
+  # Preserve Git's refusal to remove local work or a locked worktree.
+  git worktree remove "$wt_dir" || exit 1
   # Prune stale worktree references
-  git worktree prune 2>/dev/null || true
-  git branch -d "$branch" 2>/dev/null || true
+  git worktree prune || exit 1
+  git branch -d "$branch" || exit 1
   echo "Worktree and branch removed"
 fi
 
