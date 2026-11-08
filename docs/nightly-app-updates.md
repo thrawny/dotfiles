@@ -37,11 +37,16 @@ handed off. A handoff requires explicit acceptance by an existing surviving owne
 M1 T3 self-update would stop this agent's executor. It therefore **defers** unless
 an existing independent supervisor explicitly accepts the rollout, survives the
 restart and can verify it. There is no new dispatcher or babysitter service.
-Active/unknown affected sessions, pending work or auth operations defer disruptive
-changes. OpenClaw uses supported cooperative suspension with terminals preserved;
+Live/unknown affected sessions, pending execution or auth operations defer disruptive
+changes. The rollout contract explains how to reconcile stale aggregate provider
+rows and unstarted historical context without replaying or deleting them.
+OpenClaw uses supported cooperative suspension with terminals preserved;
 never kill sessions or weaken idle gates to make an update happen.
 
 Build Linux app packages from M1 using its Linux VM; never build on Obelisk.
+For emulation failures, the rollout contract permits the unchanged derivation on
+an existing approved native Linux host, with runtime checks and closure identity
+verification preserved.
 Backups must match the stopped service's runtime/config/state, preserve symlinks,
 and be verified before replacement. Stream Obelisk backups to private M1 storage,
 not another multi-gigabyte copy on its root filesystem. Measure current headroom;

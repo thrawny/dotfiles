@@ -43,9 +43,16 @@ Before any change:
 3. Check live work immediately before EACH affected service operation. For T3,
    inspect real read-only statev2 SQLite orchestration run/provider session tables,
    pending work/requests, open terminals, descendants and independent agents/auth
-   commands. Any attached/ready provider session, nonterminal run, background
-   command, unknown schema/status, or active login defers. Never rely only on PID
-   existence, stale projections, or automatic restart continuation. No silent
+   commands. Live attached/ready provider sessions, nonterminal runs, background
+   commands, unknown execution or active login defer. Reconcile aggregate rows with
+   fresh supported thread projections and native process evidence: a ready row is
+   stale only when its run is terminal, the supported projection has no attached
+   provider or unresolved requests, and no matching native execution remains.
+   An unstarted historical fork with no target run is retained context, not an
+   executing owner; preserve it without replay. Conflicting, missing or failed
+   evidence defers. Recheck for late/new input immediately before stopping.
+   Never edit/delete rows or repeat a rejected detach to manufacture idleness.
+   Never rely only on PID existence or automatic restart continuation. No silent
    session termination. This native agent is itself an active M1 T3 session: never
    exclude it from the M1 T3 restart gate. Defer that self-update unless an existing
    independent supervisor has explicitly accepted ownership, can survive restart
@@ -59,7 +66,16 @@ Before any change:
 4. Measure available bytes on both hosts, state sizes and missing candidate closure
    bytes BEFORE copying. Reserve at least 2 GiB free on Obelisk after copy and UI
    materialization. Never initiate builds on Obelisk; all Linux app/system builds
-   originate on M1 using its Linux VM. No full system build or switch is needed.
+   originate on M1 using its Linux VM by default. If an emulated runtime/install
+   check fails, retain its exact derivation/log and use an existing reachable,
+   inventory-approved native Linux host of the matching platform. Check its load
+   and capacity; transfer the unchanged derivation with `nix copy --derivation`,
+   build it there with every check enabled, then copy the output back to M1 over
+   authenticated SSH. Verify matching deriver and NAR hash before rollout. An
+   unsigned own-build import may use `nix copy --no-check-sigs` only from that
+   verified host; this does not waive runtime checks. Preserve failures and report
+   the actual builder. No permanent builder registration, new host infrastructure
+   or package workaround is required. No full system build or switch is needed.
    Never make a large duplicate backup on Obelisk's root filesystem. Stream any
    stopped-service Obelisk backup over SSH directly to private M1 storage beneath
    evidence_directory. Check M1 headroom for the uncompressed state PLUS 5 GiB
