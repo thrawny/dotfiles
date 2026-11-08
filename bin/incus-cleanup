@@ -74,8 +74,8 @@ main() {
   fi
 
   if [[ "$keep" == true ]]; then
+    incus stop "$container" --force
     echo "Keeping container '$container' (stopped)."
-    incus stop "$container" --force 2>/dev/null || true
   else
     echo "Deleting container '$container'..."
     incus delete "$container" --force
