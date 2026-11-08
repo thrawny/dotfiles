@@ -878,11 +878,15 @@ def live_versions():
 
 
 def linux_builder():
-    for line in Path("/etc/nix/linux-builder.conf").read_text().splitlines():
-        if line.startswith("extra-builders = "):
-            builder = line.split(" = ", 1)[1]
-            if builder.startswith("ssh-ng://builder@linux-builder "):
-                return builder
+    configuration = json.loads(run(["nix", "config", "show", "--json"], Path.cwd()))
+    for builder in re.split(r"[;\n]", configuration["builders"]["value"]):
+        fields = builder.split()
+        if (
+            len(fields) >= 2
+            and fields[0] == "ssh-ng://builder@linux-builder"
+            and "x86_64-linux" in fields[1].split(",")
+        ):
+            return builder.strip()
     raise ValueError("The Mac Linux VM builder is not configured")
 
 

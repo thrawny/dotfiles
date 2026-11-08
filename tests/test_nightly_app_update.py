@@ -2,6 +2,7 @@
 
 import datetime as dt
 import importlib.util
+import json
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,46 @@ def fleet(t3="0.1.3-nightly.20261025.3669", openclaw="2026.10.7"):
 
 def test_no_change():
     assert updater.changed_versions(fleet(), fleet()) == []
+
+
+@pytest.mark.parametrize("separator", [";", "\n"])
+def test_linux_builder_selects_effective_vm_and_preserves_machine_fields(
+    monkeypatch, separator
+):
+    builder = (
+        "ssh-ng://builder@linux-builder aarch64-linux,x86_64-linux "
+        "/etc/nix/builder_ed25519 1 1 benchmark,big-parallel - public-host-key"
+    )
+    machines = separator.join(
+        [
+            "ssh-ng://builder@other-host x86_64-linux",
+            "ssh-ng://builder@linux-builder aarch64-linux",
+            builder,
+        ]
+    )
+    monkeypatch.setattr(
+        updater, "run", lambda _, cwd: json.dumps({"builders": {"value": machines}})
+    )
+    assert updater.linux_builder() == builder
+
+
+@pytest.mark.parametrize(
+    "builder",
+    [
+        "",
+        "ssh-ng://builder@other-host x86_64-linux",
+        "ssh-ng://builder@linux-builder.example x86_64-linux",
+        "ssh-ng://builder@linux-builder aarch64-linux",
+        "ssh-ng://builder@linux-builder x86_64-darwin",
+        "ssh-ng://builder@linux-builder",
+    ],
+)
+def test_linux_builder_rejects_wrong_host_or_platform(monkeypatch, builder):
+    monkeypatch.setattr(
+        updater, "run", lambda _, cwd: json.dumps({"builders": {"value": builder}})
+    )
+    with pytest.raises(ValueError):
+        updater.linux_builder()
 
 
 def test_auth_readiness_uses_effective_selection_and_hides_profile_identity():
