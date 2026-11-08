@@ -116,6 +116,32 @@ Scoped rollout, only for the approved targets explicitly recorded in your plan:
   preserving symlinks without following them, service metadata and config refs.
   Verify archive integrity and exact restore procedure BEFORE replacing runtime.
   Protect all backups/evidence (directories0700/files0600). Never print auth data.
+  If a full stopped stream exceeds the admission window, measure traversal,
+  source-read and compression costs while services run. GNU tar's
+  `--listed-incremental` supports a full live pre-stage and live catch-up followed
+  by a stopped final delta over the SAME complete scope. Keep each archive and
+  its matching snapshot privately, record the exact parent chain and timestamps,
+  and keep only small snapshot metadata on the source; stream archive data to M1.
+  Preserve
+  numeric ownership, modes, symlinks, hardlinks, ACLs, xattrs and sparse files.
+  Do not reset source timestamps or the clock between captures. Live captures,
+  partial archives and incomplete chains are not recovery backups. Record actual
+  tar/compressor exits and changed-file warnings; missing/unreadable data or an
+  uncertain capture must be reconciled before using its snapshot as a parent.
+  Rehearse the real catch-up duration before requesting another stopped window.
+  While stopped, require a successful final delta and a separate full capture of
+  the app's database/WAL family, credentials and settings, so those files are
+  demonstrably from one quiescent point. Verify each archive's complete read and
+  integrity, chain identities and restored database integrity/counts against the
+  stopped baseline before activation. Prove the tool's restore semantics with
+  deletions, renames, timestamp-preserving writes and Linux metadata. GNU tar
+  restores the full archive and each delta in order with
+  `--listed-incremental=/dev/null`; apply the stopped critical-state capture last.
+  Restore into an empty isolated tree, preserving failed/newer state, and account
+  for restore capacity and the matching runtime/config boundary. A live pre-stage
+  becomes a usable backup only with that verified stopped chain. Set an abort
+  deadline that leaves time to restart and observe the old service without
+  changing runtime when capture or verification cannot finish.
 - For required OpenClaw migrations use documented Doctor mechanisms as the owning
   user, stopped gateway, writable PRIVATE config copy, same state/workspace and
   credential env, Nix mode disabled ONLY for that operation. Retain config/logs
