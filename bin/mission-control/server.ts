@@ -25,6 +25,10 @@ const [org, team] = teamSetting.split("/");
 const readyLabel = workConfig("github.review_label")[0] ?? "ready-for-review";
 const jiraBase = workConfig("jira.browse_url")[0] ?? "";
 const jiraProjects = workConfig("jira.projects");
+// Team members who do not open pull requests, such as a manager.
+const skipMembers = new Set(
+	workConfig("mission_control.skip_members").map((m) => m.toLowerCase()),
+);
 
 // A dedicated token wins. Otherwise reuse gh's login. The token stays in
 // this process's memory and is never written or logged.
@@ -52,7 +56,12 @@ let inflight: Promise<void> | null = null;
 async function refresh() {
 	const gh = client(token());
 	if (!members || Date.now() - members.at > MEMBERS_MS)
-		members = { list: await teamMembers(gh, org, team), at: Date.now() };
+		members = {
+			list: (await teamMembers(gh, org, team)).filter(
+				(m) => !skipMembers.has(m.toLowerCase()),
+			),
+			at: Date.now(),
+		};
 	const now = Date.now();
 	const raw = (
 		await Promise.all(members.list.map((login) => openPRs(gh, org, login)))
