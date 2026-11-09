@@ -102,6 +102,24 @@ interrupted=false
 trap - EXIT
 
 if [[ "$remove" == true ]]; then
+  # Index flags can hide tracked edits from Git's removal guard.
+  if ! indexed_files=$(git -C "$wt_dir" ls-files -v); then
+    echo "Could not inspect index flags; keeping worktree: $wt_dir" >&2
+    exit 1
+  fi
+  if grep -qE '^[a-zS] ' <<< "$indexed_files"; then
+    echo "Keeping worktree with assume-unchanged or skip-worktree files: $wt_dir" >&2
+    exit 1
+  fi
+  # Git's removal guard allows ignored files, which may still contain local work.
+  if ! ignored_files=$(git -C "$wt_dir" ls-files --others --ignored --exclude-standard --directory); then
+    echo "Could not inspect ignored files; keeping worktree: $wt_dir" >&2
+    exit 1
+  fi
+  if [[ -n "$ignored_files" ]]; then
+    echo "Keeping worktree with ignored files: $wt_dir" >&2
+    exit 1
+  fi
   echo "Removing worktree $branch..."
   # Preserve Git's refusal to remove local work or a locked worktree.
   git worktree remove "$wt_dir" || exit 1
