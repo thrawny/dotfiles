@@ -27,8 +27,18 @@ type Filters = {
 	side: boolean;
 };
 
+// A visit with no query gets the default view: two columns, PRs with the
+// review label that nobody has reviewed yet. The label name comes with the
+// data, so it is set once the first load arrives.
+let wantReadyLabel = false;
+
 function readFilters(): Filters {
 	const p = new URLSearchParams(location.search);
+	if (!location.search) {
+		wantReadyLabel = true;
+		p.set("review", "none");
+		p.set("layout", "side");
+	}
 	const list = (key: string) => (p.get(key) ?? "").split(",").filter(Boolean);
 	return {
 		author: list("author"),
@@ -51,9 +61,10 @@ function writeFilters(f: Filters) {
 	for (const key of ["repo", "ci", "review", "age", "tono", "q"] as const)
 		if (f[key]) p.set(key, f[key]);
 	if (f.drafts) p.set("drafts", "1");
-	if (f.side) p.set("layout", "side");
-	const query = p.toString();
-	history.replaceState(null, "", query ? `?${query}` : location.pathname);
+	// Layout is always written, so a view without filters keeps a query and
+	// is not replaced by the default view on reload.
+	p.set("layout", f.side ? "side" : "stack");
+	history.replaceState(null, "", `?${p}`);
 }
 
 function matches(pr: PR, f: Filters): boolean {
@@ -132,6 +143,11 @@ function App() {
 	}, []);
 
 	useEffect(() => writeFilters(filters), [filters]);
+	useEffect(() => {
+		if (!data || !wantReadyLabel) return;
+		wantReadyLabel = false;
+		setFilters((f) => ({ ...f, label: [data.readyLabel] }));
+	}, [data]);
 	const set = (patch: Partial<Filters>) =>
 		setFilters((f) => ({ ...f, ...patch }));
 
@@ -180,6 +196,9 @@ function App() {
 					<button type="button" onClick={() => set({ side: !filters.side })}>
 						{filters.side ? "Stack cards" : "Side by side"}
 					</button>
+					<a class="button" href={location.pathname}>
+						Default view
+					</a>
 					<ThemeButton />
 				</div>
 			</header>

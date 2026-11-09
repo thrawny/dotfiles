@@ -32,6 +32,13 @@ input {
 button {
 	cursor: pointer;
 }
+a.button {
+	color: inherit;
+	background: var(--code-bg);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 0.25rem 0.6rem;
+}
 .muted {
 	color: var(--muted);
 }
