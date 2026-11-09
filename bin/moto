@@ -1453,7 +1453,8 @@ def taken_over(
     child's report or a command moto submitted, which user_prompt decides. The
     first pass only records the latest one, so a task's history never holds it.
     A turn the driver has not seen a report for comes first, because holding
-    makes the watch skip it. A running handoff is moto's own typing.
+    makes the watch skip it. A wrap, snooze or handback it has not seen ends
+    the hold, so the typing is dropped. A running handoff is moto's own typing.
     """
     if task.get("held") or task.get("handoff"):
         return []
@@ -1466,6 +1467,11 @@ def taken_over(
         seen["user_turn"] = turn
         return []
     if turn is None or turn == seen["user_turn"]:
+        return []
+    if any(r["kind"] in ADOPT_KINDS for r in unseen_reports(task)):
+        # A wrap, snooze or handback the watch has not seen ends the hold, as for
+        # a manual hold, so it supersedes the typing: the normal path delivers it.
+        seen["user_turn"] = turn
         return []
     lines = [f"{name} {r['kind']}: {r['text']}" for r in new_reports(task)]
     hold_task(task, "the user typed in the pane")

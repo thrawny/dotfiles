@@ -1677,6 +1677,16 @@ def test_user_typing_hands_the_driver_the_report_the_hold_would_skip(
     ]
 
 
+def test_a_wrap_after_the_user_typed_supersedes_the_hold(moto: ModuleType):
+    report = {"kind": "wrap", "text": "wrapped", "at": 10.0}
+    tasks = {"abc-1": task(report=report, seen={"user_turn": "u1"})}
+    user_typed(moto, "u2")
+    assert moto.check(tasks, live("done", 2), 50) == ["abc-1 wrap: wrapped"]
+    assert not tasks["abc-1"].get("held")
+    assert [e for e in moto.pending_events if e["event"] == "hold"] == []
+    assert moto.check(tasks, live("done", 2), 51) == []  # typing is seen, no late hold
+
+
 def test_handoff_typing_and_an_unreadable_transcript_never_hold(moto: ModuleType):
     tasks = {"abc-1": task(seen={"user_turn": "u1"}, handoff={"at": 0.0})}
     user_typed(moto, "u2")
