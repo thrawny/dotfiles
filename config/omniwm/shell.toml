@@ -1,0 +1,11 @@
+profile = "default"
+
+# Keep the pre-0.8 bar: not full width, so macOS keeps the menu bar and its tray icons visible.
+[profiles.default.workspaceBar]
+position = "overlappingMenuBar"
+fullWidth = false
+height = 24
+reserveLayoutSpace = false
+backgroundOpacity = 0.1
+showItemBackgrounds = true
+systemStatsButton = false
