@@ -28,8 +28,9 @@ type Filters = {
 };
 
 // A visit with no query gets the default view: two columns, PRs with the
-// review label that nobody has reviewed yet. The label name comes with the
-// data, so it is set once the first load arrives.
+// review label, opened in the last 30 days, that nobody has reviewed yet.
+// The label name comes with the data, so it is set once the first load
+// arrives.
 let wantReadyLabel = false;
 
 function readFilters(): Filters {
@@ -37,6 +38,7 @@ function readFilters(): Filters {
 	if (!location.search) {
 		wantReadyLabel = true;
 		p.set("review", "none");
+		p.set("age", "-30");
 		p.set("layout", "side");
 	}
 	const list = (key: string) => (p.get(key) ?? "").split(",").filter(Boolean);
@@ -78,7 +80,10 @@ function matches(pr: PR, f: Filters): boolean {
 	if (f.repo && pr.repo !== f.repo) return false;
 	if (f.ci && pr.ci !== f.ci) return false;
 	if (f.review && pr.reviewed !== f.review) return false;
-	if (f.age && pr.ageDays <= Number(f.age)) return false;
+	// An age of `-30` keeps PRs up to 30 days old; `14` keeps older ones.
+	if (f.age.startsWith("-")) {
+		if (pr.ageDays > -Number(f.age)) return false;
+	} else if (f.age && pr.ageDays <= Number(f.age)) return false;
 	if (f.tono === "none" && pr.tono) return false;
 	if (f.tono === "todo" && pr.tono && !pr.tono.stale) return false;
 	if (f.tono === "lgtm" && !(pr.tono?.verdict === "lgtm" && !pr.tono.stale))
@@ -305,6 +310,7 @@ function FilterBar(props: {
 				])}
 				{select("age", [
 					["", "Any age"],
+					["-30", "Last 30 days"],
 					[String(WARN_DAYS), `Older than ${WARN_DAYS} days`],
 					[String(OLD_DAYS), `Older than ${OLD_DAYS} days`],
 				])}
