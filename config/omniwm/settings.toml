@@ -743,7 +743,7 @@ binding = "Unassigned"
 id = "moveColumnToWorkspace.9"
 
 [[hotkeys]]
-binding = "Unassigned"
+binding = "Option+Left Bracket"
 id = "move.left"
 
 [[hotkeys]]
@@ -755,7 +755,7 @@ binding = "Unassigned"
 id = "move.up"
 
 [[hotkeys]]
-binding = "Unassigned"
+binding = "Option+Right Bracket"
 id = "move.right"
 
 [[hotkeys]]
@@ -775,11 +775,11 @@ binding = "Unassigned"
 id = "moveWindowUpOrToWorkspaceUp"
 
 [[hotkeys]]
-binding = "Option+Left Bracket"
+binding = "Unassigned"
 id = "consumeWindowIntoColumn"
 
 [[hotkeys]]
-binding = "Option+Right Bracket"
+binding = "Option+Shift+Period"
 id = "expelWindowFromColumn"
 
 [[hotkeys]]
