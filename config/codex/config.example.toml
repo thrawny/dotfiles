@@ -26,3 +26,7 @@ trust_level = "trusted"
 
 [projects."/home/thrawny/code"]
 trust_level = "trusted"
+
+[mcp_servers.linear]
+url = "https://mcp.linear.app/mcp"
+bearer_token_env_var = "LINEAR_API_KEY"
