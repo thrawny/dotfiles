@@ -1,5 +1,11 @@
 profile = "default"
 
+# Only what the macOS menu bar does not already show.
+[profiles.default]
+leading = ["workspaces", "scratchpads"]
+center = []
+trailing = ["media"]
+
 # Keep the pre-0.8 bar: not full width, so macOS keeps the menu bar and its tray icons visible.
 [profiles.default.workspaceBar]
 position = "overlappingMenuBar"
@@ -9,3 +15,7 @@ reserveLayoutSpace = false
 backgroundOpacity = 0.1
 showItemBackgrounds = true
 systemStatsButton = false
+
+# The forked widget in config/omniwm/shell-widgets/workspaces hides empty workspaces after the 4th.
+[profiles.default.widgets.workspaces]
+alwaysShown = 4

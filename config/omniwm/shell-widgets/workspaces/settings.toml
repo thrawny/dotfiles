@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: GPL-2.0-only
+# Copyright (C) 2026 OmniNull — https://github.com/OmniNull/OmniWM
+
+[options.indicator]
+type = "choice"
+title = "Workspace indicator"
+default = "pills"
+choices = ["pills", "underline", "dots", "numbers", "minimal"]
+
+[options.compact]
+type = "boolean"
+title = "Compact workspace groups"
+default = false
+
+[options.occupiedBackground]
+type = "boolean"
+title = "Highlight occupied workspaces"
+default = false
+
+# dotfiles: hide empty workspaces past this position (0 shows all).
+[options.alwaysShown]
+type = "number"
+title = "Always show the first N workspaces"
+default = 0
+min = 0
+max = 20
+step = 1
