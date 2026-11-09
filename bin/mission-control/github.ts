@@ -12,6 +12,7 @@ query($q: String!, $after: String) {
     pageInfo { hasNextPage endCursor }
     nodes { ... on PullRequest {
       number title url isDraft createdAt updatedAt headRefName headRefOid
+      additions deletions changedFiles
       reviewDecision
       author { login }
       repository { name }

@@ -176,7 +176,7 @@ button {
 }
 .pr {
 	display: grid;
-	grid-template-columns: 0.8rem 9rem minmax(10rem, 1fr) 5.5rem 14rem 1.4rem 2.2rem 4rem;
+	grid-template-columns: 0.8rem 9rem minmax(10rem, 1fr) 5.5rem 6.5rem 11rem 1.4rem 2.2rem 4rem;
 	align-items: center;
 	gap: 0.6rem;
 	padding: 0.2rem 0;
@@ -197,6 +197,18 @@ button {
 .jira {
 	font-size: 0.8rem;
 	font-family: ui-monospace, monospace;
+}
+.size {
+	font-size: 0.8rem;
+	font-family: ui-monospace, monospace;
+	text-align: right;
+	white-space: nowrap;
+}
+.plus {
+	color: var(--add);
+}
+.minus {
+	color: var(--del);
 }
 .labels {
 	display: flex;
@@ -297,6 +309,7 @@ button {
 	}
 	.pr .repo,
 	.pr .labels,
+	.pr .size,
 	.pr .jira {
 		display: none;
 	}

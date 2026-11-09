@@ -10,6 +10,9 @@ export type RawPR = {
 	updatedAt: string;
 	headRefName: string;
 	headRefOid: string;
+	additions: number;
+	deletions: number;
+	changedFiles: number;
 	reviewDecision: "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | null;
 	author: { login: string } | null;
 	repository: { name: string };
@@ -66,6 +69,9 @@ export type PR = {
 	ageDays: number;
 	ageLevel: AgeLevel;
 	approvedIdle: boolean;
+	additions: number;
+	deletions: number;
+	files: number;
 };
 
 export const BUCKETS: { id: Bucket; title: string }[] = [
@@ -177,7 +183,8 @@ export function toPR(
 	);
 	const reviewed = reviewedState(reviews.map((r) => r.state));
 	const ci = ciState(raw.commits.nodes[0]?.commit.statusCheckRollup?.state);
-	const labels = raw.labels.nodes;
+	// The line counts replace size labels, such as `size/L`.
+	const labels = raw.labels.nodes.filter((l) => !/^size\//i.test(l.name));
 	const ready = labels.some((l) => l.name === opts.readyLabel);
 	const changes =
 		raw.reviewDecision === "CHANGES_REQUESTED" ||
@@ -228,6 +235,9 @@ export function toPR(
 							: "open",
 		ageDays,
 		ageLevel: ageLevel(ageDays),
+		additions: raw.additions,
+		deletions: raw.deletions,
+		files: raw.changedFiles,
 		approvedIdle:
 			approved &&
 			approvedAt > 0 &&

@@ -80,6 +80,10 @@ function matches(pr: PR, f: Filters): boolean {
 	return true;
 }
 
+function lines(n: number) {
+	return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);
+}
+
 function ago(iso: string, now: number) {
 	const mins = Math.round((now - Date.parse(iso)) / 60000);
 	if (mins < 60) return `${mins}m`;
@@ -412,6 +416,10 @@ function Row({ pr, jiraBase, now }: { pr: PR; jiraBase: string; now: number }) {
 				) : (
 					<span class="jira">{pr.jiraKey}</span>
 				))}
+			<span class="size" title={`${pr.files} files changed`}>
+				<span class="plus">+{lines(pr.additions)}</span>{" "}
+				<span class="minus">−{lines(pr.deletions)}</span>
+			</span>
 			<span class="labels">
 				{pr.labels.map((l) => (
 					<span class="label" style={{ "--label": `#${l.color}` }}>
