@@ -9,7 +9,18 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[1] / "bin/git-worktree-merge"
 
 
-@pytest.mark.parametrize("local_state", ["clean", "untracked", "tracked", "locked"])
+@pytest.mark.parametrize(
+    "local_state",
+    [
+        "clean",
+        "untracked",
+        "tracked",
+        "locked",
+        "ignored",
+        "assume-unchanged",
+        "skip-worktree",
+    ],
+)
 def test_merge_cleanup_preserves_refused_worktrees(
     tmp_path: Path, local_state: str
 ) -> None:
@@ -39,15 +50,20 @@ def test_merge_cleanup_preserves_refused_worktrees(
     git("clone", "remote", "repo")
     repo = tmp_path / "repo"
     (repo / "tracked").write_text("Committed content\n")
-    git("-C", str(repo), "add", "tracked")
+    (repo / ".gitignore").write_text("ignored\n")
+    git("-C", str(repo), "add", "tracked", ".gitignore")
     git("-C", str(repo), "commit", "-m", "Initial commit")
     git("-C", str(repo), "push", "-u", "origin", "main")
     git("-C", str(repo), "branch", "topic")
     worktree = tmp_path / "repo-worktrees/topic"
     # A detached worktree lets the command rebase topic in the main checkout.
     git("-C", str(repo), "worktree", "add", "--detach", str(worktree), "topic")
-    if local_state in ("untracked", "tracked"):
-        (worktree / local_state).write_text("Local work\n")
+    local_file = worktree / local_state
+    if local_state in ("assume-unchanged", "skip-worktree"):
+        git("-C", str(worktree), "update-index", f"--{local_state}", "tracked")
+        local_file = worktree / "tracked"
+    if local_state not in ("clean", "locked"):
+        local_file.write_text("Local work\n")
     elif local_state == "locked":
         git("-C", str(repo), "worktree", "lock", str(worktree))
     topic_head = git("-C", str(repo), "rev-parse", "topic")
@@ -69,5 +85,5 @@ def test_merge_cleanup_preserves_refused_worktrees(
         assert result.returncode != 0
         assert worktree.is_dir()
         assert git("-C", str(repo), "rev-parse", "refs/heads/topic") == topic_head
-        if local_state in ("untracked", "tracked"):
-            assert (worktree / local_state).read_text() == "Local work\n"
+        if local_state != "locked":
+            assert local_file.read_text() == "Local work\n"
