@@ -68,7 +68,7 @@ hotkeys = [
     { binding = "Option+J", id = "focus.down" },
     { binding = "Option+K", id = "focus.up" },
     { binding = "Option+L", id = "focus.right" },
-    { binding = "Option+Tab", id = "focusPrevious" },
+    { binding = "Option+M", id = "focusPrevious" },
     { binding = "Unassigned", id = "focusDownOrLeft" },
     { binding = "Unassigned", id = "focusUpOrRight" },
     { binding = "Unassigned", id = "focusWindowTop" },
