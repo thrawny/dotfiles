@@ -84,7 +84,20 @@ selected auth/expiry and each memory index's identity/provider/dirty/FTS status.
 Doctor has 120 seconds, other CLI checks 60 seconds and the remote pass eight
 minutes in an owned transient unit. Exit1/findings is not a clean-health claim;
 missing/unsupported output or timeouts remain failures. Auth selection validity
-and Codex runtime readiness are separate results. No bare Doctor,
+and Codex runtime readiness are separate results. A selected `expiring` credential
+with positive remaining time is usable but retains an expiry warning. Status
+`--check` exit 2 is advisory; exit 1 can indicate auth or runtime unavailability.
+Standalone route diagnostics remain visible alongside per-agent gateway
+`models.list` availability for the configured default and fallbacks. The gateway
+request uses `preparedOnly: true`, without refresh or native catalog loading;
+missing or unavailable routes cannot yield clean health. Neither status proves a
+model turn succeeds. Memory reads use per-agent `memory.status` RPC version 2,
+including `details.legacy` index identity, dirty state and FTS, rather than the
+retired CLI list format. Unsupported or incomplete evidence fails closed.
+`models.authRefresh` reloads runtime auth snapshots and is not proof of OAuth
+renewal. Credential renewal belongs to the credential owner's supported on-use
+path; inspect ownership and refreshability before deciding whether login is needed.
+No bare Doctor,
 `--non-interactive`, blind `--fix`, auth copying/refresh, indexing, model smoke,
 upgrade, restart or chat delivery occurs in the diagnostic helper itself.
 

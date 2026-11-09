@@ -97,6 +97,11 @@ def auth_summary(data):
         "route_issue_count": len(auth["modelRouteIssues"]),
         "runtime_ready": bool(routes)
         and all(route["status"] == "usable" for route in routes),
+        "expiry_warning": any(
+            profile["status"] == "expiring"
+            for provider in providers
+            for profile in provider["effective"]
+        ),
         "selection_ready": bool(routes)
         and bool(providers)
         and not auth["missingProvidersInUse"]
@@ -107,7 +112,7 @@ def auth_summary(data):
         and all(
             provider["effective"]
             and all(
-                profile["status"] in {"ok", "static"}
+                profile["status"] in {"ok", "expiring", "static"}
                 and (
                     profile["status"] == "static"
                     or isinstance(profile["remaining_ms"], (int, float))
@@ -120,20 +125,75 @@ def auth_summary(data):
     }
 
 
-def memory_summary(data):
-    return [
-        {
-            "agent": item["agentId"],
-            "provider": item["status"]["provider"],
-            "requested_provider": item["status"]["requestedProvider"],
-            "identity": item["status"]["custom"]["indexIdentity"]["status"],
-            "dirty": item["status"]["dirty"],
-            "fts_available": item["status"]["fts"]["available"],
-            "files": item["status"]["files"],
-            "chunks": item["status"]["chunks"],
-        }
-        for item in data
-    ]
+def memory_summary(data, agent):
+    """Read the installed v2 gateway contract, never the retired CLI list."""
+    if (
+        type(data["version"]) is not int
+        or data["version"] != 2
+        or data["agentId"] != agent
+        or data["providerId"] != "memory-core"
+    ):
+        raise ValueError("Unsupported memory status")
+    status = data["details"]["legacy"]
+    if (
+        type(status["dirty"]) is not bool
+        or type(status["fts"]["available"]) is not bool
+        or any(
+            type(status[key]) is not int or status[key] < 0
+            for key in ("files", "chunks")
+        )
+    ):
+        raise ValueError("Unsupported memory details")
+    return {
+        "agent": agent,
+        "provider": status["provider"],
+        "requested_provider": status["requestedProvider"],
+        "provider_status": data["status"],
+        "identity": status["custom"]["indexIdentity"]["status"],
+        "dirty": status["dirty"],
+        "fts_available": status["fts"]["available"],
+        "files": status["files"],
+        "chunks": status["chunks"],
+        "ready": data["status"] == "ready"
+        and status["custom"]["indexIdentity"]["status"] == "valid"
+        and status["dirty"] is False
+        and status["fts"].get("enabled") is True
+        and status["fts"]["available"] is True
+        and not status["fts"].get("error")
+        and not status.get("lastSyncError"),
+    }
+
+
+def gateway_routes_summary(data, models):
+    """Prepared gateway availability is separate from standalone CLI context."""
+    routes = []
+    for reference in models:
+        provider, model = reference.split("/", 1)
+        matches = [
+            item
+            for item in data["models"]
+            if item["provider"] == provider and item["id"] == model
+        ]
+        if len(matches) != 1:
+            raise ValueError("Configured model absent or ambiguous")
+        item = matches[0]
+        routes.append(
+            {
+                "provider": provider,
+                "model": model,
+                "runtime": item["agentRuntime"]["id"],
+                "available": item.get("available") is True,
+                "has_unavailable_reason": bool(item.get("unavailableReason")),
+            }
+        )
+    return {
+        "routes": routes,
+        "ready": bool(routes)
+        and all(
+            route["available"] and not route["has_unavailable_reason"]
+            for route in routes
+        ),
+    }
 
 
 def doctor_summary(data):
@@ -234,6 +294,14 @@ def collect(runtime):
         },
     )
     agents = []
+    configured_models = {}
+
+    def summarize_auth(text, agent):
+        data = json.loads(text)
+        configured_models[agent] = list(
+            dict.fromkeys([data["resolvedDefault"], *data["fallbacks"]])
+        )
+        return auth_summary(data)
 
     def agent_summary(text):
         agents.extend(item["id"] for item in json.loads(text))
@@ -254,22 +322,53 @@ def collect(runtime):
             check(
                 "auth-" + agent,
                 ["models", "status", "--agent", agent, "--check", "--json"],
-                lambda text: auth_summary(json.loads(text)),
+                lambda text: summarize_auth(text, agent),
             )
-    check(
-        "memory",
-        ["memory", "status", "--json"],
-        lambda text: {"agents": memory_summary(json.loads(text))},
-    )
-    memory_agents = checks["memory"].get("agents", [])
-    checks["memory"]["ready"] = (
-        bool(agents)
-        and {item["agent"] for item in memory_agents} == set(agents)
-        and all(
-            item["identity"] == "valid" and not item["dirty"] and item["fts_available"]
-            for item in memory_agents
-        )
-    )
+            if agent in configured_models:
+                check(
+                    "gateway-routes-" + agent,
+                    [
+                        "gateway",
+                        "call",
+                        "models.list",
+                        "--params",
+                        json.dumps(
+                            {
+                                "agentId": agent,
+                                "preparedOnly": True,
+                            }
+                        ),
+                        "--json",
+                    ],
+                    lambda text: gateway_routes_summary(
+                        json.loads(text), configured_models[agent]
+                    ),
+                )
+            check(
+                "memory-" + agent,
+                [
+                    "gateway",
+                    "call",
+                    "memory.status",
+                    "--params",
+                    json.dumps(
+                        {
+                            "agentId": agent,
+                        }
+                    ),
+                    "--json",
+                ],
+                lambda text: memory_summary(json.loads(text), agent),
+            )
+    memory_agents = [checks.get("memory-" + agent, {}) for agent in agents]
+    checks["memory"] = {
+        "outcome": "passed"
+        if agents and all(item.get("outcome") == "passed" for item in memory_agents)
+        else "failed",
+        "agents": memory_agents,
+        "ready": bool(agents)
+        and all(item.get("ready") is True for item in memory_agents),
+    }
     print(
         json.dumps(
             {

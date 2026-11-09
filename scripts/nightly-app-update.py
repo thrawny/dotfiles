@@ -739,6 +739,8 @@ def diagnostic_result(output, exit_code):
         and all(
             checks.get("auth-" + agent, {}).get("selection_ready") is True
             and checks.get("auth-" + agent, {}).get("runtime_ready") is True
+            and not checks.get("auth-" + agent, {}).get("expiry_warning", False)
+            and checks.get("gateway-routes-" + agent, {}).get("ready") is True
             for agent in agents
         )
     )

@@ -111,6 +111,13 @@ def test_auth_readiness_uses_effective_selection_and_hides_profile_identity():
         }
     ]
     assert diagnostics.auth_summary(data)["selection_ready"] is True
+    profile = data["auth"]["oauth"]["providers"][0]["effectiveProfiles"][0]
+    profile["status"] = "expiring"
+    assert diagnostics.auth_summary(data)["selection_ready"] is True
+    assert diagnostics.auth_summary(data)["expiry_warning"] is True
+    profile["remainingMs"] = 0
+    assert diagnostics.auth_summary(data)["selection_ready"] is False
+    profile["remainingMs"] = 1000
     data["auth"]["runtimeAuthRoutes"][0].update(
         {"status": "unavailable", "runtimeStatus": "unavailable"}
     )
@@ -127,6 +134,9 @@ def test_auth_readiness_uses_effective_selection_and_hides_profile_identity():
         "doctor-separate-warning",
         "failed-check",
         "runtime-unavailable",
+        "gateway-unavailable",
+        "gateway-missing",
+        "expiring",
     ],
 )
 def test_diagnostic_receipt_retains_warnings_and_failures(finding):
@@ -140,6 +150,7 @@ def test_diagnostic_receipt_retains_warnings_and_failures(finding):
         "nodes": {"outcome": "passed", "nodes": [{"paired": True, "connected": True}]},
         "memory": {"outcome": "passed", "ready": True},
         "agents": {"outcome": "passed", "agents": ["main"]},
+        "gateway-routes-main": {"outcome": "passed", "ready": True},
         "auth-main": {
             "outcome": "passed",
             "selection_ready": True,
@@ -180,11 +191,76 @@ def test_diagnostic_receipt_retains_warnings_and_failures(finding):
         }
     elif finding == "runtime-unavailable":
         checks["auth-main"]["runtime_ready"] = False
+    elif finding == "gateway-unavailable":
+        checks["gateway-routes-main"]["ready"] = False
+    elif finding == "gateway-missing":
+        del checks["gateway-routes-main"]
+    elif finding == "expiring":
+        checks["auth-main"]["expiry_warning"] = True
     else:
         checks["ui"] = {"outcome": "failed", "error": "TimeoutExpired"}
     result = updater.diagnostic_result(json.dumps(record), 0)
     assert result["outcome"] == ("failed" if finding == "failed-check" else "findings")
     assert result["checks"] == checks
+
+
+def test_memory_gateway_status_requires_current_complete_index_evidence():
+    data = {
+        "version": 2,
+        "agentId": "main",
+        "providerId": "memory-core",
+        "status": "ready",
+        "details": {
+            "legacy": {
+                "provider": "none",
+                "requestedProvider": "none",
+                "dirty": False,
+                "custom": {"indexIdentity": {"status": "valid"}},
+                "fts": {"enabled": True, "available": True},
+                "files": 3,
+                "chunks": 5,
+            }
+        },
+    }
+    assert diagnostics.memory_summary(data, "main")["ready"] is True
+    data["details"]["legacy"]["dirty"] = True
+    assert diagnostics.memory_summary(data, "main")["ready"] is False
+    data["details"]["legacy"]["dirty"] = False
+    data["status"] = "degraded"
+    assert diagnostics.memory_summary(data, "main")["ready"] is False
+    data["version"] = 3
+    with pytest.raises(ValueError):
+        diagnostics.memory_summary(data, "main")
+    data["version"] = 2
+    with pytest.raises(ValueError):
+        diagnostics.memory_summary(data, "other")
+    del data["details"]["legacy"]["custom"]
+    with pytest.raises(KeyError):
+        diagnostics.memory_summary(data, "main")
+
+
+def test_gateway_route_readiness_requires_each_configured_model():
+    data = {
+        "models": [
+            {
+                "provider": "openai",
+                "id": "example",
+                "agentRuntime": {"id": "codex"},
+                "available": True,
+            }
+        ]
+    }
+    assert diagnostics.gateway_routes_summary(data, ["openai/example"])["ready"] is True
+    data["models"][0]["available"] = False
+    assert (
+        diagnostics.gateway_routes_summary(data, ["openai/example"])["ready"] is False
+    )
+    del data["models"][0]["available"]
+    assert (
+        diagnostics.gateway_routes_summary(data, ["openai/example"])["ready"] is False
+    )
+    with pytest.raises(ValueError):
+        diagnostics.gateway_routes_summary(data, ["openai/missing"])
 
 
 def test_diagnostic_timeout_keeps_completed_streamed_checks():
