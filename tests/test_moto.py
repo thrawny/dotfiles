@@ -33,6 +33,7 @@ def moto() -> ModuleType:
     # Unit tests never read a real pane or transcript.
     footer_says(module, None)
     turn_in(module, None, None)
+    user_typed(module, None)
     context_holds(module, None)
     setattr(module, "pr_updated", no_pr_update)
     return module
@@ -54,6 +55,13 @@ def turn_in(moto: ModuleType, turn: str | None, prompt: str | None) -> None:
         return turn, prompt
 
     setattr(moto, "last_turn", last_turn)
+
+
+def user_typed(moto: ModuleType, uuid: str | None) -> None:
+    def user_prompt(_task: Any, _agent: Any) -> str | None:
+        return uuid
+
+    setattr(moto, "user_prompt", user_prompt)
 
 
 @pytest.fixture(autouse=True)
@@ -993,6 +1001,7 @@ def test_attach_moves_a_task_to_its_resumed_pane(moto: ModuleType):
         "status": "done",
         "seq": 9,
         "report_at": 100.0,
+        "user_turn": None,
         "turn": "t9",
     }
     assert "closed_at" not in saved
@@ -1604,6 +1613,95 @@ def test_user_turns_skip_tagged_prompts_and_those_before_the_report(
     snoozed = task(snoozed={"session": "s", "cwd": "/code/widgets-ABC-1-fix"})
     assert real.user_turns(snoozed, None, 200) == [400, 500, 800]
     assert real.user_turns(task(title="other"), None, 200) == []
+
+
+def test_user_prompt_skips_what_the_driver_the_parent_and_moto_typed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    real = load_moto()
+    monkeypatch.setattr(real, "CLAUDE_HOME", tmp_path / "claude")
+    directory = real.session_dir("/code/widgets-ABC-1-fix")
+    directory.mkdir(parents=True)
+    entries = [
+        {"type": "custom-title", "customTitle": "ABC-1 fix"},
+        typed(100, "rebase it", uuid="mine"),
+        typed(200, "[driver] carry on", uuid="d"),
+        typed(300, '<pasted_content id="1">\n[abc-0] from my parent', uuid="p"),
+        typed(400, "[abc-2 done] PR ready", uuid="c"),
+        typed(500, "/takeoff handoff.md", uuid="t"),
+        typed(600, "/compact", uuid="k"),
+        typed(700, "a subagent's prompt", uuid="s", isSidechain=True),
+        typed(800, "no uuid"),
+    ]
+    entries[-1]["uuid"] = ""
+    (directory / "s.jsonl").write_text("".join(json.dumps(e) + "\n" for e in entries))
+    child = task(title="ABC-1 fix", parent="abc-0")
+    assert real.user_prompt(child, None) == "mine"
+    with pytest.raises(real.MotoError):
+        real.user_prompt(task(title="other"), None)
+
+
+def test_user_typing_in_a_worker_holds_it_once_and_tells_the_driver(moto: ModuleType):
+    tasks = {"abc-1": task()}
+    user_typed(moto, "u1")
+    assert moto.check(tasks, live("working", 1), 0) == []  # the history is a baseline
+    assert not tasks["abc-1"].get("held")
+    user_typed(moto, "u2")
+    assert moto.check(tasks, live("working", 2), 1) == [
+        "abc-1: the user took it over, held"
+    ]
+    assert tasks["abc-1"]["held"]
+    holds = [e for e in moto.pending_events if e["event"] == "hold"]
+    assert [e["agent"] for e in holds] == ["abc-1"]
+    user_typed(moto, "u3")
+    assert moto.check(tasks, live("done", 3), 2) == []  # held, so it stays quiet
+
+
+def test_user_typing_holds_a_worker_that_another_worker_started(moto: ModuleType):
+    tasks = {"abc-2": task(agent="abc-2", parent="abc-1", seen={"user_turn": "u1"})}
+    user_typed(moto, "u2")
+    assert moto.check(tasks, live("working", 1), 0) == [
+        "abc-2: the user took it over, held"
+    ]
+
+
+def test_user_typing_hands_the_driver_the_report_the_hold_would_skip(
+    moto: ModuleType,
+):
+    report = {"kind": "done", "text": "PR ready", "at": 10.0}
+    tasks = {"abc-1": task(report=report, seen={"user_turn": "u1"})}
+    user_typed(moto, "u2")
+    assert moto.check(tasks, live("done", 2), 50) == [
+        "abc-1 done: PR ready",
+        "abc-1: the user took it over, held",
+    ]
+
+
+def test_handoff_typing_and_an_unreadable_transcript_never_hold(moto: ModuleType):
+    tasks = {"abc-1": task(seen={"user_turn": "u1"}, handoff={"at": 0.0})}
+    user_typed(moto, "u2")
+    assert moto.check(tasks, live("working", 1), 1) == []
+    assert not tasks["abc-1"].get("held")
+
+    def unreadable(_task: Any, _agent: Any) -> str | None:
+        raise moto.MotoError("no transcript")
+
+    setattr(moto, "user_prompt", unreadable)
+    fresh = {"abc-1": task()}
+    assert moto.check(fresh, live("working", 1), 1) == []
+    assert "user_turn" not in fresh["abc-1"]["seen"]  # the baseline waits
+
+
+def test_resumed_task_holds_again_only_on_a_later_user_turn(moto: ModuleType):
+    tasks = {"abc-1": task(held=True, seen={"user_turn": "u1"})}
+    user_typed(moto, "u2")
+    moto.resume(tasks["abc-1"], live("done", 5))
+    assert not tasks["abc-1"]["held"]
+    assert moto.check(tasks, live("done", 5), 0) == []
+    user_typed(moto, "u3")
+    assert moto.check(tasks, live("working", 6), 1) == [
+        "abc-1: the user took it over, held"
+    ]
 
 
 def commit(cwd: Path, message: str, at: int, email: str = "t@t") -> None:

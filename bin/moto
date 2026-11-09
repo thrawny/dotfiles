@@ -33,6 +33,13 @@ worker that waits on something: it reports snooze with what the task waits on,
 and the driver runs moto snooze, since a worker that snoozes itself closes its
 own pane mid-turn. All three end a hold, so the driver hears of them.
 
+When the user types into a worker's pane, the watch holds the task by itself,
+as moto hold does, and tells the driver once. Prompts from the driver, from the
+worker's parent and its children's reports, and the /handoff, /takeoff and
+/compact commands moto submits are not the user's typing, and the /moto-*
+commands the user runs end in a report instead. moto resume treats what was
+typed so far as seen, so only a later user turn holds the task again.
+
 moto watch skips a held worker's ordinary reports. When the user asks a held
 worker to pass something on, the worker runs moto report --to-driver, which the
 watch delivers without ending the hold. A worker that another worker started
@@ -237,6 +244,10 @@ DRIVER_TAG = "[driver]"
 # with there, as in "[abc-2 done] PR ready".
 CHILD_KINDS = ("done", "question", "blocked", "phase")
 CHILD_REPORT = re.compile(rf"\[\S+ (?:{'|'.join(CHILD_KINDS)})\] ")
+# Slash commands moto itself submits to a worker's pane as typed, so they are not the user's.
+MOTO_COMMANDS = ("/handoff", "/takeoff", "/compact")
+# The watch looks for the user's latest prompt in this much of a transcript's end.
+USER_PROMPT_TAIL = 2 * 1024 * 1024
 # Herdr states of a parent that can take a child's report: its turn has ended.
 TURN_OVER = ("idle", "done")
 REPORT_RULES = """\
@@ -1383,6 +1394,7 @@ def check(
             continue
         if closed := pane_closed(name, task, status == "gone", now):
             lines.append(closed)
+        lines += taken_over(name, task, agent)
         if parent := task.get("parent"):
             lines += child_report(name, task, parent)
             lines += to_parent(name, task, parent, tasks, live, now, outbox)
@@ -1430,6 +1442,69 @@ def check(
             seen.pop("pending", None)
             lines.append(line)
     return lines
+
+
+def taken_over(
+    name: str, task: dict[str, Any], agent: dict[str, Any] | None
+) -> list[str]:
+    """Hold a task whose worker the user started talking to, and say so once.
+
+    The user's turn is a typed prompt that is not the driver's, the parent's, a
+    child's report or a command moto submitted, which user_prompt decides. The
+    first pass only records the latest one, so a task's history never holds it.
+    A turn the driver has not seen a report for comes first, because holding
+    makes the watch skip it. A running handoff is moto's own typing.
+    """
+    if task.get("held") or task.get("handoff"):
+        return []
+    seen = task["seen"]
+    try:
+        turn = user_prompt(task, agent)
+    except (MotoError, OSError):
+        return []  # nothing to read yet, so the baseline waits
+    if "user_turn" not in seen:
+        seen["user_turn"] = turn
+        return []
+    if turn is None or turn == seen["user_turn"]:
+        return []
+    lines = [f"{name} {r['kind']}: {r['text']}" for r in new_reports(task)]
+    hold_task(task, "the user typed in the pane")
+    return lines + [f"{name}: the user took it over, held"]
+
+
+def user_prompt(task: dict[str, Any], agent: dict[str, Any] | None) -> str | None:
+    """The uuid of the latest prompt the user typed into the worker's pane, or
+    None when the transcript has none.
+
+    Raises MotoError or OSError when there is no transcript to read. Prompts
+    from the driver, from the worker's parent and the reports of its children
+    carry a tag, and moto's own slash commands have a known name; none of them
+    is the user's. Only the end of a long transcript is read.
+    """
+    path = transcript(task, agent)
+    if path is None:
+        raise MotoError("no transcript")
+    with path.open("rb") as handle:
+        handle.seek(max(0, path.stat().st_size - USER_PROMPT_TAIL))
+        lines = handle.read().decode(errors="replace").splitlines()
+    tags = (DRIVER_TAG,) + ((f"[{task['parent']}]",) if task.get("parent") else ())
+    for line in reversed(lines):
+        if '"typed"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        if entry.get("promptSource") != "typed" or entry.get("isSidechain"):
+            continue
+        text = typed_text(entry)
+        if (
+            entry.get("uuid")
+            and not text.startswith(tags + MOTO_COMMANDS)
+            and not CHILD_REPORT.match(text)
+        ):
+            return str(entry["uuid"])
+    return None
 
 
 def unseen_reports(task: dict[str, Any]) -> list[dict[str, Any]]:
@@ -2115,10 +2190,15 @@ def print_cancelled(agent: str) -> None:
         print(f"Cancelled check {name}, which would have woken {agent}")
 
 
+def hold_task(task: dict[str, Any], reason: str | None = None) -> None:
+    """Stop the watch covering a task until moto resume, as moto hold does."""
+    task["held"] = True
+    record("hold", task["agent"], **({"reason": reason} if reason else {}))
+
+
 def cmd_hold(args: argparse.Namespace) -> int:
     with tasks_for_update() as tasks:
-        find_task(tasks, args.agent)["held"] = True
-        record("hold", args.agent)
+        hold_task(find_task(tasks, args.agent))
     print(f"Holding {args.agent}: moto watch skips it until moto resume")
     return 0
 
@@ -2132,6 +2212,11 @@ def mark_seen(task: dict[str, Any], live: dict[str, dict[str, Any]]) -> None:
         "seq": agent.get("state_change_seq") if agent else None,
         "report_at": report.get("at"),
     }
+    try:
+        # Only a user turn after this one holds the task again.
+        task["seen"]["user_turn"] = user_prompt(task, agent)
+    except (MotoError, OSError):
+        pass  # the watch records the first one it can read
 
 
 def resume(task: dict[str, Any], live: dict[str, dict[str, Any]]) -> None:
@@ -4016,7 +4101,11 @@ def parser() -> argparse.ArgumentParser:
     )
     close.set_defaults(handler=cmd_close)
 
-    hold = commands.add_parser("hold", help="Keep a task but stop watching it")
+    hold = commands.add_parser(
+        "hold",
+        help="Keep a task but stop watching it; the watch also does this when the"
+        + " user types in the worker's pane",
+    )
     hold.add_argument("agent")
     hold.set_defaults(handler=cmd_hold)
 
