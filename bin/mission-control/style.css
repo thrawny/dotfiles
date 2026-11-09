@@ -117,10 +117,11 @@ button {
 	gap: 0.9rem;
 }
 .cards.side {
-	grid-template-columns: repeat(auto-fill, minmax(36rem, 1fr));
+	grid-template-columns: repeat(2, minmax(0, 1fr));
 	align-items: start;
 }
 .card {
+	container-type: inline-size;
 	border: 1px solid var(--line);
 	border-radius: 10px;
 	background: var(--code-bg);
@@ -312,5 +313,52 @@ button {
 	.pr .size,
 	.pr .jira {
 		display: none;
+	}
+}
+
+/* A narrow card, as in the two-column layout, puts each PR on two lines:
+   the title and its status on top, the repo and details below. */
+@container (max-width: 56rem) {
+	.pr {
+		grid-template-columns: 0.8rem auto auto auto 1fr 1.4rem 2.2rem 4rem;
+		grid-template-areas:
+			"dot title title title title review tono age"
+			". repo jira size labels labels labels labels";
+		row-gap: 0.1rem;
+		padding: 0.3rem 0;
+	}
+	.pr .dot {
+		grid-area: dot;
+	}
+	.pr .title {
+		grid-area: title;
+	}
+	.pr .review {
+		grid-area: review;
+	}
+	.pr .tono {
+		grid-area: tono;
+	}
+	.pr .age {
+		grid-area: age;
+	}
+	.pr .repo {
+		grid-area: repo;
+		font-size: 0.8rem;
+	}
+	.pr .jira {
+		grid-area: jira;
+	}
+	.pr .size {
+		grid-area: size;
+	}
+	.pr .labels {
+		grid-area: labels;
+		justify-content: flex-start;
+	}
+}
+@media (max-width: 1100px) {
+	.cards.side {
+		grid-template-columns: minmax(0, 1fr);
 	}
 }
