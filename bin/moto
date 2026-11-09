@@ -100,7 +100,11 @@ is gone. A check that errors several runs in a row tells the driver, and one
 that has not passed by its expiry, a week by default, tells the driver it gave
 up. Checks live in when.json beside jobs.json, never in MOTO_HOME. moto job
 list shows them, moto job rm cancels one, and moto snooze --until-check parks
-a task with the check that wakes it.
+a task with the check that wakes it. For a task that waits on a pull request,
+--until-pr (on snooze and on when) builds that check: it passes once the PR is
+closed or merged, has a review decision, a review or comment newer than the
+snooze, a conflict with its base, or a failed required CI check, and its output
+says which.
 
 A worker can start workers of its own, which the driver's watch leaves to it,
 apart from what the user does in one: a wrap, snooze or handback, or closing its
@@ -143,6 +147,7 @@ import fcntl
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import socket
@@ -2367,6 +2372,12 @@ def task_title(task: dict[str, Any], agent: dict[str, Any] | None) -> str:
 def cmd_snooze(args: argparse.Namespace) -> int:
     reason = " ".join(args.reason).strip()
     check = getattr(args, "until_check", None)
+    if until_pr := getattr(args, "until_pr", None):
+        if check:
+            raise MotoError("Pass --until-check or --until-pr, not both")
+        # The counts are the ones the check compares against, so take them
+        # before the task closes.
+        check = pr_check_command(until_pr)
     if check:
         # Run before anything closes, so a check that errors or already
         # passes leaves the task as it was.
@@ -3539,6 +3550,116 @@ def tail(text: str) -> str:
     return "\n".join(text.splitlines()[-WHEN_TAIL_LINES:])
 
 
+UNTIL_PR_HELP = (
+    "The check passes, and wakes the task with which of these fired, once the PR"
+    + " is merged or closed, has a review decision (approved or changes"
+    + " requested), has a review or comment newer than the snooze, conflicts"
+    + " with its base branch, or fails a required CI check"
+)
+PR_REF = re.compile(
+    r"(?:https?://[^/\s]+/)?(?P<repo>[\w.-]+/[\w.-]+)(?:/pull/|#)(?P<number>\d+)"
+)
+
+
+def parse_pr_ref(text: str) -> tuple[str, int]:
+    """The repo and number in a PR URL or an owner/repo#N reference."""
+    match = PR_REF.fullmatch(text.strip().rstrip("/"))
+    if not match:
+        raise MotoError(f"{text!r} is not a PR URL or owner/repo#N")
+    return match["repo"], int(match["number"])
+
+
+def gh_json(args: list[str]) -> Any:
+    return json.loads(run(["gh", *args], timeout=60) or "null")
+
+
+def pr_activity(repo: str, number: int) -> tuple[int, int]:
+    """The PR's review count and comment count, inline review comments included."""
+    view = gh_json(
+        ["pr", "view", str(number), "-R", repo, "--json", "reviews,comments"]
+    )
+    inline = gh_json(["api", "--paginate", f"repos/{repo}/pulls/{number}/comments"])
+    return len(view["reviews"]), len(view["comments"]) + len(inline or [])
+
+
+def required_checks(repo: str, number: int) -> list[dict[str, Any]]:
+    """The required CI checks on the PR's head commit, as gh reports them.
+
+    A PR with no required checks, or a merged one, has none to report: gh
+    says so on stderr and exits 1, which is not an error here.
+    """
+    result = subprocess.run(
+        ["gh", "pr", "checks", str(number), "-R", repo, "--required"]
+        + ["--json", "name,bucket"],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    if result.stdout.strip():
+        return json.loads(result.stdout)
+    if "no required checks" in result.stderr or "no checks" in result.stderr:
+        return []
+    raise MotoError(result.stderr.strip() or "gh pr checks failed")
+
+
+def pr_reasons(
+    view: dict[str, Any],
+    checks: list[dict[str, Any]],
+    seen: tuple[int, int],
+    now: tuple[int, int],
+) -> list[str]:
+    """Why a snoozed task's PR needs it again: one line per reason, none to wait.
+
+    seen and now are (reviews, comments) at snooze time and now. A mergeable
+    state of UNKNOWN is GitHub still working it out, so it never counts.
+    """
+    number, base = view["number"], view["baseRefName"]
+    reasons: list[str] = []
+    if view["state"] != "OPEN":
+        reasons.append(f"PR #{number} is {view['state'].lower()}")
+        return reasons
+    if view["reviewDecision"] == "APPROVED":
+        reasons.append(f"PR #{number} is approved")
+    elif view["reviewDecision"] == "CHANGES_REQUESTED":
+        reasons.append(f"PR #{number} has changes requested")
+    if now[0] > seen[0]:
+        reasons.append(f"PR #{number} has {now[0] - seen[0]} new review(s)")
+    if now[1] > seen[1]:
+        reasons.append(f"PR #{number} has {now[1] - seen[1]} new comment(s)")
+    if view["mergeable"] == "CONFLICTING":
+        reasons.append(f"PR #{number} conflicts with {base}")
+    if failed := [c["name"] for c in checks if c["bucket"] == "fail"]:
+        reasons.append(f"PR #{number} has failing required CI: {', '.join(failed)}")
+    return reasons
+
+
+def cmd_pr_check(args: argparse.Namespace) -> int:
+    """The check that --until-pr stores: exit 0 and say why, or exit 1 quietly."""
+    repo, number = parse_pr_ref(args.pr)
+    view = gh_json(
+        ["pr", "view", str(number), "-R", repo]
+        + ["--json", "number,state,reviewDecision,mergeable,baseRefName"]
+    )
+    now = pr_activity(repo, number)
+    # A closed PR needs no CI read, and a PR with no new activity is not waiting on it.
+    checks = required_checks(repo, number) if view["state"] == "OPEN" else []
+    reasons = pr_reasons(view, checks, (args.reviews, args.comments), now)
+    print("\n".join(reasons))
+    return 0 if reasons else 1
+
+
+def pr_check_command(pr: str) -> str:
+    """The shell check that waits on a PR, with its review and comment counts now."""
+    repo, number = parse_pr_ref(pr)
+    reviews, comments = pr_activity(repo, number)
+    me = shlex.quote(str(Path(__file__).resolve()))
+    return (
+        f"{shlex.quote(sys.executable)} {me} pr-check {shlex.quote(f'{repo}#{number}')}"
+        + f" --reviews {reviews} --comments {comments}"
+    )
+
+
 def add_when(
     check: str,
     brief: str,
@@ -3737,8 +3858,11 @@ def cmd_when(args: argparse.Namespace) -> int:
         )
     if args.wake:
         find_task(tasks, args.wake)
+    if bool(args.check) == bool(args.until_pr):
+        raise MotoError("Pass --check or --until-pr, one of them")
+    check = args.check or pr_check_command(args.until_pr)
     name, output = add_when(
-        args.check, brief, args.wake, args.name, args.every, args.expires, time.time()
+        check, brief, args.wake, args.name, args.every, args.expires, time.time()
     )
     if name is None:
         print("The check passes already, so nothing was scheduled.")
@@ -3928,8 +4052,26 @@ def parser() -> argparse.ArgumentParser:
         metavar="COMMAND",
         help="Also add a moto when check that wakes the task once COMMAND exits 0",
     )
+    snooze.add_argument(
+        "--until-pr",
+        metavar="PR",
+        help="Also add a moto when check on a pull request, given as a URL or"
+        + " owner/repo#N, instead of a hand-written --until-check. "
+        + UNTIL_PR_HELP,
+    )
     add_when_timing(snooze)
     snooze.set_defaults(handler=cmd_snooze)
+
+    pr_check = commands.add_parser(
+        "pr-check",
+        help=argparse.SUPPRESS,
+        description="The check --until-pr stores: exit 0 and print why when the PR"
+        + " needs its task, else exit 1 quietly.",
+    )
+    pr_check.add_argument("pr", metavar="PR")
+    pr_check.add_argument("--reviews", type=int, required=True)
+    pr_check.add_argument("--comments", type=int, required=True)
+    pr_check.set_defaults(handler=cmd_pr_check)
 
     when = commands.add_parser(
         "when",
@@ -3943,8 +4085,11 @@ def parser() -> argparse.ArgumentParser:
         + " moto when runs COMMAND once first, from the current folder, and later"
         + " runs use that folder too.",
     )
+    when.add_argument("--check", metavar="COMMAND", help="Shell command to run")
     when.add_argument(
-        "--check", required=True, metavar="COMMAND", help="Shell command to run"
+        "--until-pr",
+        metavar="PR",
+        help=UNTIL_PR_HELP + "; use it in place of --check",
     )
     when.add_argument(
         "--wake",

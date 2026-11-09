@@ -2088,6 +2088,45 @@ def test_a_check_wakes_its_snoozed_task_with_the_brief(
     assert "woke abc-1" in moto.take_notes()
 
 
+def pr_view(**fields: Any) -> dict[str, Any]:
+    return {
+        "number": 14,
+        "state": "OPEN",
+        "reviewDecision": "REVIEW_REQUIRED",
+        "mergeable": "MERGEABLE",
+        "baseRefName": "main",
+    } | fields
+
+
+def test_a_pr_check_names_what_fired_and_waits_on_nothing_else(moto: ModuleType):
+    def reasons(checks: list[dict[str, Any]] | None = None, **fields: Any):
+        return moto.pr_reasons(pr_view(**fields), checks or [], (2, 3), (2, 3))
+
+    assert reasons() == []
+    assert reasons(reviewDecision="") == []
+    # GitHub still working out mergeability is not a conflict.
+    assert reasons(mergeable="UNKNOWN") == []
+    assert reasons(checks=[{"name": "lint", "bucket": "pending"}]) == []
+    assert reasons(state="MERGED") == ["PR #14 is merged"]
+    assert reasons(reviewDecision="APPROVED") == ["PR #14 is approved"]
+    assert reasons(mergeable="CONFLICTING") == ["PR #14 conflicts with main"]
+    (failed,) = reasons(checks=[{"name": "unit", "bucket": "fail"}])
+    assert "unit" in failed
+    assert moto.pr_reasons(pr_view(), [], (2, 3), (3, 5)) == [
+        "PR #14 has 1 new review(s)",
+        "PR #14 has 2 new comment(s)",
+    ]
+
+
+def test_pr_references_take_a_url_or_owner_repo_number(moto: ModuleType):
+    want = ("acme/widgets", 14)
+    assert moto.parse_pr_ref("https://github.com/acme/widgets/pull/14") == want
+    assert moto.parse_pr_ref("https://github.com/acme/widgets/pull/14/") == want
+    assert moto.parse_pr_ref("acme/widgets#14") == want
+    with pytest.raises(moto.MotoError):
+        moto.parse_pr_ref("#14")
+
+
 @pytest.mark.usefixtures("jobs_home")
 def test_closing_a_task_cancels_the_checks_that_would_wake_it(moto: ModuleType):
     with moto.tasks_for_update() as tasks:
