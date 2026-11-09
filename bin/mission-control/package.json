@@ -1,0 +1,13 @@
+{
+	"name": "dotfiles-mission-control",
+	"private": true,
+	"type": "module",
+	"dependencies": {
+		"@octokit/graphql": "9.0.5",
+		"preact": "11.2.0"
+	},
+	"devDependencies": {
+		"@types/bun": "1.4.4",
+		"typescript": "7.0.2"
+	}
+}

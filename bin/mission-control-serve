@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Open mission control: the open pull requests of each member of the work
+# GitHub team (github.review_team in work-config), with filters.
+#
+#   mission-control-serve         start the server if needed, open the page
+#   mission-control-serve --run   run the server in this terminal
+#
+# In herdr the server runs in a `mission-control` tab of the `background`
+# workspace. Outside herdr it runs in the current terminal.
+set -euo pipefail
+
+name=mission-control
+self=$(realpath "$0")
+app="$(dirname "$self")/mission-control"
+export PORTLESS_PORT="${PORTLESS_PORT:-1355}"
+url="https://$name.localhost:$PORTLESS_PORT"
+
+# portless signs with its own CA, which a Nix curl does not trust.
+up() { curl -skf -o /dev/null --max-time 2 "$url/theme.css"; }
+
+open_page() {
+  if [[ "$(uname)" == Darwin && -d /Applications/Island.app ]]; then
+    open -a Island "$url"
+  else
+    open-url "$url"
+  fi
+}
+
+if [[ "${1:-}" == --run ]]; then
+  exec portless "$name" bun run --install=fallback "$app/server.ts"
+fi
+
+if up; then
+  echo "already running at $url"
+  open_page
+  exit 0
+fi
+
+if [[ "${HERDR_ENV:-}" != 1 ]]; then
+  echo "$url"
+  (for _ in $(seq 60); do up && open_page && exit; sleep 1; done) &
+  exec "$self" --run
+fi
+
+# Herdr restores tabs as idle shells after a restart, so reuse a tab with
+# this label whose shell runs nothing before opening a new one.
+idle_pane() {
+  local ws=$1 tab pane
+  for tab in $(herdr tab list --workspace "$ws" |
+    jq -r --arg label "$name" '.result.tabs[] | select(.label == $label) | .tab_id'); do
+    for pane in $(herdr pane list --workspace "$ws" |
+      jq -r --arg tab "$tab" '.result.panes[] | select(.tab_id == $tab) | .pane_id'); do
+      if herdr pane process-info --pane "$pane" 2>/dev/null |
+        jq -e '.result.process_info | (.foreground_processes | length) == 1 and .foreground_processes[0].pid == .shell_pid' \
+          >/dev/null; then
+        echo "$pane"
+        return
+      fi
+    done
+  done
+}
+
+ws=$(herdr workspace list | jq -r 'first(.result.workspaces[] | select(.label == "background") | .workspace_id) // empty')
+pane=""
+[[ -n "$ws" ]] && pane=$(idle_pane "$ws")
+if [[ -z "$pane" && -z "$ws" ]]; then
+  created=$(herdr workspace create --label background --no-focus)
+  pane=$(jq -r '.result.root_pane.pane_id' <<<"$created")
+  herdr tab rename "$(jq -r '.result.tab.tab_id' <<<"$created")" "$name" >/dev/null
+elif [[ -z "$pane" ]]; then
+  pane=$(herdr tab create --workspace "$ws" --label "$name" --no-focus | jq -r '.result.root_pane.pane_id')
+fi
+herdr pane run "$pane" "$(printf '%q' "$self") --run" >/dev/null
+
+for _ in $(seq 60); do
+  if up; then
+    echo "started in herdr pane $pane: $url"
+    open_page
+    exit 0
+  fi
+  sleep 1
+done
+echo "$name did not come up within 60s; its pane shows:" >&2
+herdr pane read "$pane" --source recent-unwrapped --lines 20 >&2
+exit 1

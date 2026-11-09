@@ -150,6 +150,16 @@ check-blueprint: blueprint-install
     biome check --write bin/blueprint
     bun run bin/blueprint/node_modules/typescript/bin/tsc --project bin/blueprint/tsconfig.json
 
+# Install mission control's pinned runtime and development dependencies
+mission-control-install:
+    bun install --cwd bin/mission-control --frozen-lockfile --ignore-scripts
+
+# Format, typecheck and test mission control's server and page
+check-mission-control: mission-control-install
+    biome check --write bin/mission-control
+    bun run bin/mission-control/node_modules/typescript/bin/tsc --project bin/mission-control/tsconfig.json
+    cd bin/mission-control && bun test
+
 # Typecheck Python, optionally selecting files, with the locked environments
 typecheck *files:
     TY_UV=scripts uv run --locked ty check {{files}}
@@ -205,7 +215,7 @@ check:
     nix develop ./nix --command just fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi check-blueprint test check-theme shell::check nix::eval
+check-parallel: lint typecheck pi check-blueprint check-mission-control test check-theme shell::check nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

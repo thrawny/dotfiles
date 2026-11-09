@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width,initial-scale=1" />
+		<title>Mission control</title>
+		<link rel="stylesheet" href="./style.css" />
+		<script>
+			try {
+				const saved = localStorage.getItem("bp-theme");
+				if (saved === "light" || saved === "dark")
+					document.documentElement.dataset.theme = saved;
+			} catch {}
+		</script>
+	</head>
+	<body>
+		<div id="app"></div>
+		<script type="module" src="./app.tsx"></script>
+	</body>
+</html>
