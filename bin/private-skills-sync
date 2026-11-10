@@ -93,6 +93,7 @@ def sync(checkout: Path, repository: str) -> bool:
                 "merge",
                 "--ff-only",
                 "--no-autostash",
+                "--no-overwrite-ignore",
                 "FETCH_HEAD",
             )
     except RuntimeError as error:

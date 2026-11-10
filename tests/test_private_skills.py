@@ -132,15 +132,20 @@ def test_failed_clone_leaves_no_checkout(skills: Skills) -> None:
     assert all(not target.exists() for target in skills.targets)
 
 
-def test_dirty_checkout_is_not_modified(skills: Skills) -> None:
+@pytest.mark.parametrize("ignored", [False, True])
+def test_dirty_checkout_is_not_modified(skills: Skills, ignored: bool) -> None:
     assert skills.run().returncode == 0
+    before = skills.git(skills.checkout, "rev-parse", "HEAD")
     inventory = skills.checkout / "fleet/inventory.md"
     inventory.write_text("Local draft")
+    if ignored:
+        (skills.checkout / ".git/info/exclude").write_text("fleet/inventory.md\n")
+    (skills.remote / "fleet/inventory.md").write_text("Upstream inventory")
     skills.skill("new")
     skills.commit(skills.remote)
     result = skills.run()
     assert result.returncode == 1
-    assert "local changes" in result.stderr
+    assert skills.git(skills.checkout, "rev-parse", "HEAD") == before
     assert inventory.read_text() == "Local draft"
     assert not (skills.checkout / "new").exists()
 
