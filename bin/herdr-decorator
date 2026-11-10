@@ -800,7 +800,9 @@ def app_tokens(raw: str) -> dict[str, dict[str, Any]]:
     ]
     prs = fetch_prs(targets) or {}
     shells = {
-        pid: p.pane_id for p in panes if (pid := hc_shell_pid(p.pane_id[3:])) is not None
+        pid: p.pane_id
+        for p in panes
+        if (pid := hc_shell_pid(p.pane_id[3:])) is not None
     }
     table = process_table()
     babysat = babysat_panes(table, shells) if table else set()
