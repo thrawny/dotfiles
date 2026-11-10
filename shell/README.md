@@ -90,10 +90,19 @@ enabled = true
 wifi_ssid = "YOUR_WIFI_SSID"
 ```
 
-The Wi-Fi rule applies only while connected to that SSID. All sessions and rules
-release their holds at or below the battery floor when unplugged, and have no
-battery limit on AC. Manual sessions end at the floor; automatic rules can
-reactivate when their conditions and power requirements match again.
+Wi-Fi rules retain the last observed connection for **20 minutes** after Wi-Fi
+disconnects or its status cannot be read. Reconnecting resets this grace period;
+connecting to a different SSID replaces the old connection immediately. Set
+`wifi_grace_seconds` (default `1200`, `0` disables it) to adjust the delay, including
+in existing configs. A daemon restart or wake clears Wi-Fi history, so grace
+requires an observed connection first. Other rule conditions still apply during
+grace: unplugging immediately stops an AC-only rule, and pausing or disabling a
+rule releases its hold.
+
+All sessions and rules release their holds at or below the battery floor when
+unplugged, and have no battery limit on AC. Manual sessions end at the floor;
+automatic rules can reactivate when their conditions and power requirements match
+again.
 
 The desktop selects the [desktop example](../config/keepawake/desktop.example.toml)
 instead. It uses `device_type = "desktop"`, skips power monitoring, hides battery
@@ -147,3 +156,15 @@ daemon permits normal sleep. Changes to power and Wi-Fi are sampled every five
 seconds, and a deferred idle action is retried every ten seconds. Sessions and
 the pause state clear when the service stops, including at logout. Manual sessions
 also end after system sleep; automatic rules reevaluate on wake.
+
+State changes are logged to the user journal, including Wi-Fi loss/recovery,
+grace start/expiry, power changes, rule/session holds, pause state, and read or
+configuration errors. Unchanged polls are silent. Idle guards log why they allow
+sleep, including missing, stale, or dead-daemon snapshots:
+
+```sh
+journalctl --user -u dotfiles-keepawake -u hypridle -u closed-lid-suspend-safety --since today
+```
+
+`keepawake status` includes the observed `wifi_ssids` and remaining grace seconds.
+Logs contain local Wi-Fi and rule names; redact these before sharing.

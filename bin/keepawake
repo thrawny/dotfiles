@@ -6,6 +6,7 @@ import contextlib
 import datetime as dt
 import fcntl
 import json
+import logging
 import math
 import os
 import re
@@ -30,6 +31,7 @@ DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 NM = "org.freedesktop.NetworkManager"
 UP = "org.freedesktop.UPower"
 MAX_AGE = 30
+LOG = logging.getLogger("keepawake")
 
 
 class KeepawakeError(Exception):
@@ -127,6 +129,7 @@ def load_config(filename: Path) -> dict[str, Any]:
         "device_type",
         "battery_floor",
         "poll_seconds",
+        "wifi_grace_seconds",
         "notifications",
         "keep_display_awake",
         "allow_lid_closed",
@@ -137,12 +140,18 @@ def load_config(filename: Path) -> dict[str, Any]:
     data.setdefault("device_type", "laptop")
     if data["device_type"] not in ("laptop", "desktop"):
         raise KeepawakeError("device_type must be laptop or desktop.")
-    for key, default in (("battery_floor", 20), ("poll_seconds", 5)):
+    for key, default in (
+        ("battery_floor", 20),
+        ("poll_seconds", 5),
+        ("wifi_grace_seconds", 1200),
+    ):
         data.setdefault(key, default)
         if type(data[key]) not in (int, float) or not math.isfinite(data[key]):
             raise KeepawakeError(f"{key} must be a finite number.")
     if not 0 <= data["battery_floor"] <= 100 or not 1 <= data["poll_seconds"] <= 10:
         raise KeepawakeError("battery_floor must be 0–100; poll_seconds must be 1–10.")
+    if not 0 <= data["wifi_grace_seconds"] <= 86400:
+        raise KeepawakeError("wifi_grace_seconds must be 0–86400.")
     for key in ("notifications", "keep_display_awake", "allow_lid_closed"):
         data.setdefault(key, key == "notifications")
         if type(data[key]) is not bool:
@@ -411,6 +420,9 @@ class Engine:
         self.paused = False
         self.suspend_offset = suspend_offset()
         self.sessions: list[dict[str, Any]] = []
+        self.last_wifi_ssids: list[str] = []
+        self.wifi_lost_at: float | None = None
+        self.logged_state: dict[str, Any] = {}
         self.snapshot: dict[str, Any] = {
             "active": False,
             "sessions": [],
@@ -430,10 +442,21 @@ class Engine:
             # sessions after sleep without monitoring logind or blocking it.
             offset = suspend_offset()
             if offset > self.suspend_offset + 1:
+                LOG.info(
+                    "Resumed from sleep; clearing manual sessions and Wi-Fi history"
+                )
                 self.sessions = []
+                self.last_wifi_ssids = []
+                self.wifi_lost_at = None
             self.suspend_offset = offset
+            now = time.monotonic()
+            if facts["wifi_ssids"]:
+                self.last_wifi_ssids = list(facts["wifi_ssids"])
+                self.wifi_lost_at = None
+            elif self.last_wifi_ssids and self.wifi_lost_at is None:
+                self.wifi_lost_at = now
             self.config, self.config_error = config, config_error
-            self.facts, self.errors, self.sampled_at = facts, errors, time.monotonic()
+            self.facts, self.errors, self.sampled_at = facts, errors, now
             self.update()
 
     def update(self) -> dict[str, Any]:
@@ -471,13 +494,24 @@ class Engine:
             else:
                 retained.append(session)
         self.sessions = retained
+        wifi_remaining = (
+            max(
+                0.0,
+                self.config.get("wifi_grace_seconds", 1200) - (now - self.wifi_lost_at),
+            )
+            if self.wifi_lost_at is not None
+            else 0.0
+        )
+        rule_facts = self.facts
+        if wifi_remaining > 0:
+            rule_facts = {**self.facts, "wifi_ssids": self.last_wifi_ssids}
         rules = [
             {
                 "name": rule["name"],
                 "active": allowed
                 and not self.paused
                 and rule.get("enabled", True)
-                and rule_matches(rule, self.facts, wall),
+                and rule_matches(rule, rule_facts, wall),
             }
             for rule in self.config.get("rules", [])
         ]
@@ -529,12 +563,47 @@ class Engine:
             "battery_floor": self.config.get("battery_floor", 20),
             "on_ac": self.facts["on_ac"],
             "battery_percent": self.facts["battery_percent"],
+            "wifi_ssids": self.facts["wifi_ssids"],
+            "wifi_grace_seconds": self.config.get("wifi_grace_seconds", 1200),
+            "wifi_grace_remaining_seconds": math.ceil(wifi_remaining),
             "reasons": [hold["name"] for hold in holds],
             "sessions": public_sessions,
             "rules": rules,
             "config_path": str(self.filename),
             "error": self.config_error or "; ".join(self.errors),
         }
+        state = {
+            key: self.snapshot[key]
+            for key in (
+                "active",
+                "keep_display_awake",
+                "allow_lid_closed",
+                "paused",
+                "power_allowed",
+                "on_ac",
+                "wifi_ssids",
+                "wifi_grace_seconds",
+                "reasons",
+                "rules",
+                "error",
+            )
+        }
+        state["sessions"] = [session["id"] for session in public_sessions]
+        state["wifi_grace_active"] = wifi_remaining > 0
+        state["facts_stale"] = now - self.sampled_at > MAX_AGE
+        if state != self.logged_state:
+            LOG.info(
+                "State changed: %s",
+                json.dumps(
+                    {
+                        **state,
+                        "battery_percent": self.facts["battery_percent"],
+                        "wifi_grace_remaining_seconds": math.ceil(wifi_remaining),
+                        "last_wifi_ssids": self.last_wifi_ssids,
+                    }
+                ),
+            )
+            self.logged_state = state
         if self.directory.is_dir():
             with tempfile.NamedTemporaryFile(
                 mode="w", dir=self.directory, delete=False
@@ -678,13 +747,18 @@ def can_idle(action: str, directory: Path) -> bool:
     try:
         data = json.loads((directory / "status.json").read_text())
         age = time.monotonic() - data["sampled_at"]
+        if not 0 <= age <= MAX_AGE:
+            LOG.warning(
+                "%s allowed: snapshot age %.1fs is invalid or stale", action, age
+            )
+            return True
         if (
-            not 0 <= age <= MAX_AGE
-            or pid_identity(data["pid"]) != data.get("pid_start")
+            pid_identity(data["pid"]) != data.get("pid_start")
             or data.get("pid_start") is None
         ):
+            LOG.warning("%s allowed: snapshot daemon is no longer alive", action)
             return True
-        return not data.get(
+        held = data.get(
             {
                 "can-suspend": "active",
                 "can-screen-sleep": "keep_display_awake",
@@ -692,7 +766,30 @@ def can_idle(action: str, directory: Path) -> bool:
             }[action],
             False,
         )
-    except (OSError, ValueError, KeyError, TypeError):
+        if not held:
+            LOG.info(
+                "%s allowed: %s",
+                action,
+                json.dumps(
+                    {
+                        key: data.get(key)
+                        for key in (
+                            "active",
+                            "paused",
+                            "power_allowed",
+                            "on_ac",
+                            "battery_percent",
+                            "wifi_ssids",
+                            "wifi_grace_remaining_seconds",
+                            "reasons",
+                            "error",
+                        )
+                    }
+                ),
+            )
+        return not held
+    except (OSError, ValueError, KeyError, TypeError) as error:
+        LOG.warning("%s allowed: snapshot unavailable or invalid: %s", action, error)
         return True
 
 
@@ -775,6 +872,7 @@ def serve(filename: Path, directory: Path) -> None:
 
 
 def main() -> int:
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, default=config_path())
     sub = parser.add_subparsers(dest="action", required=True)
@@ -830,6 +928,7 @@ def main() -> int:
     except (OSError, ValueError, subprocess.SubprocessError, KeepawakeError) as error:
         # Missing runtime/daemon releases automatic sleep rather than disabling it.
         if args.action.startswith("can-"):
+            LOG.warning("%s allowed: guard unavailable: %s", args.action, error)
             return 0
         print(f"keepawake: {error}", file=sys.stderr)
         return 1

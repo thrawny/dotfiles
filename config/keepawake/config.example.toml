@@ -3,6 +3,8 @@ version = 1
 device_type = "laptop"
 battery_floor = 20
 poll_seconds = 5
+# Retain the last Wi-Fi connection through brief disconnects or failed reads.
+wifi_grace_seconds = 1200
 notifications = true
 keep_display_awake = false
 allow_lid_closed = false

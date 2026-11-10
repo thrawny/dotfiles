@@ -42,7 +42,7 @@ def engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr(keepawake.time, "monotonic", lambda: clock[0])
     filename = tmp_path / "config.toml"
     filename.write_text(
-        'version = 1\nbattery_floor = 20\nnotifications = false\n[[rules]]\nname = "Wi-Fi"\n[rules.when]\nwifi_ssid = "Test Wi-Fi"\n'
+        'version = 1\nbattery_floor = 20\nnotifications = false\nwifi_grace_seconds = 0\n[[rules]]\nname = "Wi-Fi"\n[rules.when]\nwifi_ssid = "Test Wi-Fi"\n'
     )
     directory = tmp_path / "runtime"
     directory.mkdir(mode=0o700)
@@ -82,6 +82,131 @@ def test_wifi_power_transitions(engine: Any, device_type: str):
     facts.data["battery_percent"] = 20.01
     daemon.poll(facts)
     assert daemon.snapshot["active"]
+
+
+@pytest.mark.parametrize(
+    "wifi_condition", ['wifi_ssid = "Test Wi-Fi"', "wifi_connected = true"]
+)
+@pytest.mark.parametrize("read_failure", [False, True])
+def test_wifi_grace_expires_after_continuous_loss_and_rearms_on_reconnect(
+    engine: Any, wifi_condition: str, read_failure: bool
+):
+    daemon, facts, clock = engine
+    daemon.filename.write_text(
+        daemon.filename.read_text()
+        .replace("wifi_grace_seconds = 0\n", "")
+        .replace('wifi_ssid = "Test Wi-Fi"', wifi_condition)
+    )
+    daemon.poll(facts)
+    clock[0] += 60
+    facts.data["wifi_ssids"] = []
+    facts.errors = ["Wi-Fi information unavailable."] if read_failure else []
+    daemon.poll(facts)
+    assert daemon.snapshot["active"]
+    assert daemon.snapshot["wifi_grace_remaining_seconds"] == 1200
+    clock[0] += 1199
+    daemon.poll(facts)
+    assert not keepawake.can_idle("can-suspend", daemon.directory)
+    clock[0] += 1
+    daemon.poll(facts)
+    assert keepawake.can_idle("can-suspend", daemon.directory)
+
+    facts.data["wifi_ssids"] = ["Test Wi-Fi"]
+    facts.errors = []
+    daemon.poll(facts)
+    assert daemon.snapshot["active"]
+    facts.data["wifi_ssids"] = []
+    daemon.poll(facts)
+    clock[0] += 600
+    daemon.poll(facts)
+    facts.data["wifi_ssids"] = ["Test Wi-Fi"]
+    daemon.poll(facts)
+    facts.data["wifi_ssids"] = []
+    daemon.poll(facts)
+    clock[0] += 1199
+    daemon.poll(facts)
+    assert daemon.snapshot["active"], "Reconnection must reset the loss timer"
+    clock[0] += 1
+    daemon.poll(facts)
+    assert not daemon.snapshot["active"]
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        "battery",
+        "unknown-power",
+        "ac-rule",
+        "pause",
+        "disabled",
+        "other-wifi",
+        "stale",
+        "sleep",
+    ],
+)
+def test_wifi_grace_preserves_other_sleep_safety_conditions(
+    engine: Any, monkeypatch: pytest.MonkeyPatch, override: str
+):
+    daemon, facts, clock = engine
+    daemon.filename.write_text(
+        daemon.filename.read_text().replace("wifi_grace_seconds = 0\n", "")
+        + ("ac_power = true\n" if override == "ac-rule" else "")
+    )
+    facts.data["on_ac"] = True
+    daemon.poll(facts)
+    facts.data["wifi_ssids"] = []
+    daemon.poll(facts)
+    assert not keepawake.can_idle("can-suspend", daemon.directory)
+    if override == "battery":
+        facts.data.update(on_ac=False, battery_percent=20)
+    elif override == "unknown-power":
+        facts.data["on_ac"] = None
+    elif override == "ac-rule":
+        facts.data["on_ac"] = False
+    elif override == "pause":
+        daemon.command({"action": "pause"})
+    elif override == "disabled":
+        daemon.filename.write_text(
+            daemon.filename.read_text().replace(
+                'name = "Wi-Fi"', 'name = "Wi-Fi"\nenabled = false'
+            )
+        )
+    elif override == "other-wifi":
+        facts.data["wifi_ssids"] = ["Other Wi-Fi"]
+    elif override == "stale":
+        clock[0] += keepawake.MAX_AGE + 1
+        assert keepawake.can_idle("can-suspend", daemon.directory)
+        return
+    elif override == "sleep":
+        monkeypatch.setattr(
+            keepawake, "suspend_offset", lambda: daemon.suspend_offset + 60
+        )
+    daemon.poll(facts)
+    assert keepawake.can_idle("can-suspend", daemon.directory)
+
+
+def test_wifi_grace_requires_an_observed_connection(engine: Any):
+    previous, facts, _ = engine
+    previous.filename.write_text(
+        previous.filename.read_text().replace("wifi_grace_seconds = 0\n", "")
+    )
+    daemon = keepawake.Engine(previous.filename, previous.directory)
+    facts.data["wifi_ssids"] = []
+    daemon.poll(facts)
+    assert not daemon.snapshot["active"]
+    assert daemon.snapshot["wifi_grace_remaining_seconds"] == 0
+
+
+@pytest.mark.parametrize("value", ["-1", "86401", '"1200"', "true", "nan", "inf"])
+def test_wifi_grace_rejects_invalid_durations(engine: Any, value: str):
+    daemon, _, _ = engine
+    daemon.filename.write_text(
+        daemon.filename.read_text().replace(
+            "wifi_grace_seconds = 0", f"wifi_grace_seconds = {value}"
+        )
+    )
+    with pytest.raises(keepawake.KeepawakeError):
+        keepawake.load_config(daemon.filename)
 
 
 def test_independent_manual_and_automatic_sessions(engine: Any):
