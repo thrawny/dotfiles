@@ -363,6 +363,33 @@ def test_held_task_passes_on_only_what_the_user_asks_and_stays_held(
     assert moto.read_tasks()["abc-1"]["held"] is True
 
 
+def test_held_done_reaches_the_driver_once_and_question_and_blocked_do_not(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
+        for kind in ("question", "blocked", "done"):
+            args = argparse.Namespace(
+                kind=kind, text=[kind], agent=None, to_driver=False
+            )
+            capsys.readouterr()
+            assert moto.cmd_report(args) == 0
+            printed = capsys.readouterr().out
+            tasks = moto.read_tasks()
+            now = moto.time.time()
+            news = moto.check(tasks, live("done", 2), now)
+            if kind == "done":
+                assert "The hold stays" in printed
+                assert news == ["abc-1 done (held, passed on): done"]
+            else:
+                assert news == []
+            assert moto.check(tasks, live("done", 3), now) == []
+            with moto.tasks_for_update() as saved:
+                saved.update(tasks)
+    assert moto.read_tasks()["abc-1"]["held"] is True
+
+
 @pytest.mark.parametrize("held", [False, True])
 def test_reports_sent_between_two_watches_all_reach_the_driver_in_order(
     moto: ModuleType, held: bool

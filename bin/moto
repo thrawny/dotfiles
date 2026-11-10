@@ -40,9 +40,11 @@ worker's parent and its children's reports, and the /handoff, /takeoff and
 commands the user runs end in a report instead. moto resume treats what was
 typed so far as seen, so only a later user turn holds the task again.
 
-moto watch skips a held worker's ordinary reports. When the user asks a held
-worker to pass something on, the worker runs moto report --to-driver, which the
-watch delivers without ending the hold. A worker that another worker started
+moto watch skips a held worker's question and blocked reports, which are the
+user's. A held worker's done reaches the driver as if it had passed --to-driver,
+because a done is when the driver updates tickets and notes. When the user asks
+a held worker to pass something else on, the worker runs moto report
+--to-driver. The watch delivers both without ending the hold. A worker that another worker started
 uses the same flag to reach the driver instead of its parent.
 
 The user also runs those skills in Claude sessions they started by hand, which
@@ -1124,8 +1126,14 @@ def cmd_report(args: argparse.Namespace) -> int:
                 k: v for k, v in task.get("seen", {}).items() if k != "pending"
             } | {"report_at": previous.get("at")}
             record("resume", task["agent"], by=args.kind)
+        # A held worker's done is when the driver updates tickets and notes, so
+        # it is passed on as if --to-driver were given. question and blocked
+        # stay with the user. A child's done is for its parent.
+        passes_on = args.to_driver or (
+            args.kind == "done" and bool(task.get("held")) and not task.get("parent")
+        )
         task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
-        if args.to_driver:
+        if passes_on:
             task["report"]["to_driver"] = True
         # report keeps the last one for moto list. The watch reads reports, so
         # several reports between two watches all reach the driver.
@@ -1135,7 +1143,7 @@ def cmd_report(args: argparse.Namespace) -> int:
             task["agent"],
             kind=args.kind,
             text=text,
-            **({"to_driver": True} if args.to_driver else {}),
+            **({"to_driver": True} if passes_on else {}),
         )
         if (match := PR_URL.search(text)) and match.group(0) != task.get("pr"):
             task["pr"] = match.group(0)
@@ -1154,9 +1162,9 @@ def cmd_report(args: argparse.Namespace) -> int:
             "The user holds this session, so moto does not hand it off. The driver"
             + " hears of the phase. Carry on with the user in this pane."
         )
-    elif held and args.to_driver:
+    elif held and passes_on:
         print(
-            f"Passed {args.kind} on to the driver. The hold stays, so carry on with"
+            f"The driver got your {args.kind}. The hold stays, so carry on with"
             + " the user in this pane."
         )
     elif held:
@@ -1371,7 +1379,8 @@ def check(
     that ended while nothing was watching. A done worker that someone looked at
     turns idle, and that is not news. turn_end decides which turn ends are news.
     A held task is news only when its pane closes and when it passes a report on
-    with --to-driver; pane_closed and passed_on decide when. A task another
+    with --to-driver, which a done does by itself; pane_closed and passed_on
+    decide when. A task another
     worker started is news only when its pane closes, when the user ends or
     hands it back, and when it passes a report on. Its done, question and
     blocked reports go to that worker through outbox, which the caller sends
@@ -1607,7 +1616,8 @@ def to_parent(
 def passed_on(name: str, task: dict[str, Any]) -> list[str]:
     """The lines for a held task's new --to-driver and phase reports, once each.
 
-    The user asked the worker to send the first, so they are the driver's news.
+    The user asked the worker to send the first, or it is a done, which
+    cmd_report marks to_driver in a held task. Both are the driver's news.
     A phase report is never handed off in a held task, but the driver hears
     of it. The held task's other reports are the user's, so they pass unseen.
     """

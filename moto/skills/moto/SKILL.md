@@ -43,7 +43,7 @@ Read the target repo's own `AGENTS.md` or `CLAUDE.md` before you choose:
 
 End a turn with `moto report done|question|blocked "<one line>"` when the task is finished, needs an answer only the user has, or is blocked. Put the PR URL in a `done` line. The report goes to whoever started you: the driver, or the worker that spawned you.
 
-Add `--to-driver` whenever the report asks the driver to act, such as creating a ticket or starting a worker, and whenever the user asks you to pass something on. Without it, a report from a session the user holds reaches only the sidebar, never the driver. With it, the report reaches the driver even if the user holds this session or another worker started you, and a hold stays in place.
+Add `--to-driver` whenever the report asks the driver to act, such as creating a ticket or starting a worker, and whenever the user asks you to pass something on. Without it, a `question` or `blocked` report from a session the user holds reaches only the sidebar, never the driver. A `done` report from a held session reaches the driver without the flag, and the hold stays. With it, the report reaches the driver even if the user holds this session or another worker started you, and a hold stays in place.
 
 ### Phase boundaries
 
