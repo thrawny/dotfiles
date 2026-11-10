@@ -9,6 +9,7 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
+from moto import backend
 from moto.common import DRIVER_TAG, EVENTS_VERSION, MotoError, pending_events, state_dir
 from moto.sessions import user_prompt
 
@@ -89,7 +90,7 @@ def find_task(tasks: dict[str, dict[str, Any]], agent: str) -> dict[str, Any]:
 
 def caller(tasks: dict[str, dict[str, Any]]) -> str | None:
     """The task in the caller's Herdr pane, or None when the driver calls."""
-    pane_id = os.environ.get("HERDR_PANE_ID")
+    pane_id = backend.here()
     return next((n for n, t in tasks.items() if t["pane_id"] == pane_id), None)
 
 

@@ -6,6 +6,8 @@ import subprocess
 import time
 from typing import Any
 
+from moto import backend
+from moto.backend import live_agents
 from moto.common import (
     ADOPT_KINDS,
     BACKGROUND_WORK,
@@ -26,10 +28,6 @@ from moto.common import (
     MotoError,
     Step,
     age,
-    herdr,
-    herdr_binary,
-    live_agents,
-    run,
     state_dir,
 )
 from moto.driverstate import take_notes
@@ -421,7 +419,7 @@ def handoff_turn(task: dict[str, Any], now: float) -> str | None:
 def background_work(pane_id: str) -> str | None:
     """What the worker's footer says still runs, as in "1 shell", or None."""
     try:
-        screen = run([herdr_binary(), "pane", "read", pane_id, "--source", "visible"])
+        screen = backend.screen(pane_id)
     except (MotoError, subprocess.TimeoutExpired):
         return None
     found = BACKGROUND_WORK.findall("\n".join(screen.splitlines()[-3:]))
@@ -461,7 +459,8 @@ def watch() -> dict[str, Any]:
     # Sent after the update, so a slow Herdr never holds the task lock.
     for delivery in outbox:
         try:
-            herdr("agent", "prompt", delivery.parent, delivery.text)
+            terminal = tasks[delivery.parent]["pane_id"]
+            backend.prompt(delivery.parent, terminal, delivery.text)
         except (MotoError, subprocess.TimeoutExpired) as error:
             lines.append(
                 f"{delivery.child} could not reach {delivery.parent} ({error}):"
@@ -469,7 +468,7 @@ def watch() -> dict[str, Any]:
             )
     for step in steps:
         try:
-            run_step(step)
+            run_step(step, tasks[step.agent]["pane_id"])
         except (MotoError, OSError, subprocess.TimeoutExpired) as error:
             lines.append(f"{step.agent}: could not {step.action} ({error})")
     return {
@@ -480,7 +479,7 @@ def watch() -> dict[str, Any]:
     }
 
 
-def run_step(step: Step) -> None:
+def run_step(step: Step, terminal: str) -> None:
     """Run what phase_step or compact_line decided for a worker.
 
     A handoff waits minutes for the new session, longer than a watch pass may
@@ -488,9 +487,9 @@ def run_step(step: Step) -> None:
     tells the driver if it fails.
     """
     if step.action == "tell":
-        herdr("agent", "prompt", step.agent, f"{DRIVER_TAG} {step.text}")
+        backend.prompt(step.agent, terminal, f"{DRIVER_TAG} {step.text}")
     elif step.action == "compact":
-        herdr("agent", "prompt", step.agent, step.text)
+        backend.prompt(step.agent, terminal, step.text)
     elif step.action == "handoff":
         state_dir().mkdir(parents=True, exist_ok=True)
         brief = (

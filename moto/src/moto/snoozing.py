@@ -7,16 +7,10 @@ import sys
 import time
 from typing import Any
 
-from moto.closing import checkout_workspace, owns_worktree, release_adopted
-from moto.common import (
-    CLAUDE_HOME,
-    MODEL_FLAGS,
-    WORKER_ENV,
-    MotoError,
-    herdr,
-    live_agents,
-    run,
-)
+from moto import backend
+from moto.backend import live_agents
+from moto.closing import owns_worktree, release_adopted
+from moto.common import CLAUDE_HOME, MODEL_FLAGS, WORKER_ENV, MotoError, run
 from moto.roles import role_file
 from moto.sessions import (
     find_session,
@@ -83,10 +77,8 @@ def cmd_snooze(args: argparse.Namespace) -> int:
             # All three keep the branch; wake checks it out again at the same path.
             if task.get("adopted"):
                 release_adopted(task, True, False)
-            elif exists and (workspace := checkout_workspace(cwd)):
-                herdr("worktree", "remove", "--workspace", workspace, timeout=120)
             elif exists:
-                run(["git", "worktree", "remove", cwd], cwd=repo, timeout=120)
+                backend.remove_worktree(task["pane_id"], cwd, repo, False)
         else:
             # The main checkout, or a worktree an adopted task shares, stays as
             # it is, on whatever branch it is on.
@@ -96,10 +88,7 @@ def cmd_snooze(args: argparse.Namespace) -> int:
                 ).strip()
             except MotoError:
                 branch = None  # detached HEAD
-            try:
-                herdr("tab", "close", task["tab_id"])
-            except MotoError:
-                pass  # the tab is already gone
+            backend.close_tab(task["pane_id"], task["tab_id"])
         task["snoozed"] = {
             "session": session,
             "title": title,

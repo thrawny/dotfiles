@@ -7,16 +7,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from moto.common import (
-    BACKGROUND_WORKSPACE,
-    BUSY,
-    ENDED_BY_USER,
-    MotoError,
-    age,
-    herdr,
-    live_agents,
-    run,
-)
+from moto import backend
+from moto.backend import live_agents
+from moto.common import BUSY, ENDED_BY_USER, MotoError, age, run
 from moto.sessions import user_turns
 from moto.store import find_task, hold_task, record, resume, tasks_for_update
 from moto.whenstore import cancel_whens
@@ -53,34 +46,6 @@ def unsaved_work(cwd: str, branch: str | None = None) -> str | None:
         return None
     commits = "1 commit is" if unpushed == 1 else f"{unpushed} commits are"
     return f"{commits} on no remote and in no merged PR"
-
-
-def checkout_workspace(path: str) -> str | None:
-    """The Herdr workspace opened on this checkout, if any.
-
-    The background workspace never counts: its long-running tabs often sit in a
-    repo's main checkout, and Herdr may record that checkout as its own.
-    """
-    workspaces = [
-        w
-        for w in herdr("workspace", "list")["workspaces"]
-        if w.get("label") != BACKGROUND_WORKSPACE
-    ]
-    for workspace in workspaces:
-        worktree: dict[str, Any] = workspace.get("worktree") or {}
-        if worktree.get("checkout_path") == path:
-            return workspace["workspace_id"]
-    # `workspace create --cwd` records no checkout, so fall back to a pane
-    # there, in the workspace named after the folder first.
-    folder = Path(path).name
-    labels = {w["workspace_id"]: w.get("label") for w in workspaces}
-    found = [
-        pane["workspace_id"]
-        for pane in herdr("pane", "list")["panes"]
-        if pane.get("cwd") == path and pane.get("workspace_id") in labels
-    ]
-    found.sort(key=lambda workspace_id: labels[workspace_id] != folder)
-    return found[0] if found else None
 
 
 def still_working(
@@ -135,17 +100,9 @@ def owns_worktree(task: dict[str, Any]) -> bool:
         )
     except (MotoError, OSError):
         return True  # the worktree is gone; its branch is still checked for work
-    try:
-        panes = herdr("pane", "list")["panes"]
-    except MotoError:
-        return False  # without Herdr nobody can tell who else works there
-    for pane in panes:
-        if pane.get("tab_id") == task["tab_id"]:
-            continue
-        for key in ("cwd", "foreground_cwd"):
-            if (folder := pane.get(key)) and Path(folder).is_relative_to(top):
-                return False
-    return True
+    others = backend.others_in(task["pane_id"], task["tab_id"], str(top))
+    # Without the backend nobody can tell who else works there.
+    return others is False
 
 
 def release_adopted(task: dict[str, Any], own: bool, force: bool) -> None:
@@ -155,10 +112,7 @@ def release_adopted(task: dict[str, Any], own: bool, force: bool) -> None:
     sessions as tabs beside it; Herdr closes a workspace with its last tab.
     """
     if not task.get("snoozed"):
-        try:
-            herdr("tab", "close", task["tab_id"])
-        except MotoError:
-            pass  # the tab is already gone
+        backend.close_tab(task["pane_id"], task["tab_id"])
     if own and os.path.isdir(task["cwd"]):
         top = run(["git", "rev-parse", "--show-toplevel"], cwd=task["cwd"]).strip()
         flags = ["--force"] if force else []
@@ -194,19 +148,9 @@ def cmd_close(args: argparse.Namespace) -> int:
         if task.get("adopted"):
             release_adopted(task, bool(branch), args.force)
         elif branch:
-            workspace = checkout_workspace(cwd)
-            force = ["--force"] if args.force else []
-            if workspace:
-                herdr(
-                    "worktree", "remove", "--workspace", workspace, *force, timeout=120
-                )
-            elif exists:
-                run(["git", "worktree", "remove", *force, cwd], cwd=repo, timeout=120)
+            backend.remove_worktree(task["pane_id"], cwd, repo, args.force)
         else:
-            try:
-                herdr("tab", "close", task["tab_id"])
-            except MotoError:
-                pass  # the tab is already gone
+            backend.close_tab(task["pane_id"], task["tab_id"])
         # Its commits are pushed or merged, so the local branch is a copy.
         if branch and not args.force:
             try:

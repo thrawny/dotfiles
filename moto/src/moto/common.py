@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-import json
 import os
 import re
-import shutil
-import socket
 import subprocess
 import sys
 import time
@@ -241,42 +238,6 @@ def run(
             result.stderr.strip() or result.stdout.strip() or f"{args[0]} failed"
         )
     return result.stdout
-
-
-def herdr_binary() -> str:
-    return os.environ.get("HERDR_BIN_PATH") or shutil.which("herdr") or "herdr"
-
-
-def herdr(*args: str, timeout: int = 30) -> dict[str, Any]:
-    output = run([herdr_binary(), *args], timeout=timeout)
-    try:
-        return json.loads(output)["result"]
-    except (ValueError, KeyError, TypeError) as error:
-        raise MotoError(f"herdr {' '.join(args[:2])} returned no result") from error
-
-
-def herdr_request(method: str, params: dict[str, Any]) -> dict[str, Any]:
-    """One socket API call, for methods the herdr CLI has no command for."""
-    path = os.environ.get("HERDR_SOCKET_PATH") or os.path.expanduser(
-        "~/.config/herdr/herdr.sock"
-    )
-    request = {"id": method, "method": method, "params": params}
-    try:
-        with socket.socket(socket.AF_UNIX) as sock:
-            sock.settimeout(10)
-            sock.connect(path)
-            sock.sendall((json.dumps(request) + "\n").encode())
-            reply = json.loads(sock.makefile().readline() or "{}")
-    except (OSError, ValueError) as error:
-        raise MotoError(f"herdr {method}: {error}") from error
-    if "result" not in reply:
-        raise MotoError(f"herdr {method}: {reply.get('error') or 'no result'}")
-    return reply["result"]
-
-
-def live_agents() -> dict[str, dict[str, Any]]:
-    """Herdr's agents by pane id."""
-    return {a["pane_id"]: a for a in herdr("agent", "list")["agents"]}
 
 
 def age(seconds: float) -> str:

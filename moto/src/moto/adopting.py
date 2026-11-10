@@ -6,7 +6,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-from moto.common import MotoError, herdr, live_agents, run
+from moto import backend
+from moto.backend import live_agents
+from moto.common import MotoError, run
 from moto.driverstate import driver_session, read_driver
 from moto.sessions import last_title, last_turn, session_dir
 from moto.store import forked, mark_seen, record
@@ -36,12 +38,6 @@ def git_checkout(cwd: str) -> tuple[str, str | None, str | None]:
     if Path(common) == Path(git_dir):
         return top, None, current
     return str(Path(common).parent), current, current
-
-
-def name_claude_tab(tab_id: str) -> None:
-    """Label the tab claude, so it tells a Claude session from a tab of
-    servers. The agent name, not the label, carries the task."""
-    herdr("tab", "rename", tab_id, "claude")
 
 
 def adopted_name(
@@ -128,8 +124,8 @@ def adopt(tasks: dict[str, dict[str, Any]], pane_id: str | None) -> str | None:
         )
     )
     # moto tell and the watch reach a worker by its Herdr name.
-    herdr("agent", "rename", pane_id, name)
-    name_claude_tab(agent["tab_id"])
+    backend.rename(pane_id, name)
+    backend.name_tab(pane_id, agent["tab_id"])
     now = time.time()
     tasks[name] = {
         "agent": name,
@@ -177,9 +173,9 @@ def attach(
     # The old pane may still carry the name, and Herdr names are unique.
     for other in live.values():
         if other.get("name") == name and other["pane_id"] != pane_id:
-            herdr("agent", "rename", other["pane_id"], "--clear")
-    herdr("agent", "rename", pane_id, name)
-    name_claude_tab(agent["tab_id"])
+            backend.rename(other["pane_id"], None)
+    backend.rename(pane_id, name)
+    backend.name_tab(pane_id, agent["tab_id"])
     old = task["pane_id"]
     task["pane_id"] = pane_id
     task["workspace_id"] = agent["workspace_id"]

@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from typing import Any
 
+from moto import backend
 from moto.adopting import attach
-from moto.common import MotoError, live_agents
+from moto.backend import live_agents
+from moto.common import MotoError
 from moto.driverstate import driver_session, read_driver, write_driver
 from moto.store import find_task, forked, pane_owner, read_tasks, tasks_for_update
 
@@ -22,7 +23,7 @@ def cmd_attach(args: argparse.Namespace) -> int:
         return 0
     if not args.agent:
         raise MotoError("Name the task to attach, or pass --hook")
-    pane_id = args.pane or os.environ.get("HERDR_PANE_ID")
+    pane_id = args.pane or backend.here()
     if not pane_id:
         raise MotoError("Pass --pane, or run it from inside the worker's Herdr pane")
     live = live_agents()
@@ -68,7 +69,7 @@ def attach_hook(payload: dict[str, Any]) -> None:
     A fork gets a session id of its own, and the hook skips it anyway. A clear
     gives the task's own pane a new session, which moto handoff waits for.
     """
-    pane_id = os.environ.get("HERDR_PANE_ID")
+    pane_id = backend.here()
     session = payload.get("session_id")
     if not pane_id or not session or forked():
         return

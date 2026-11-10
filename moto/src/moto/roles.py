@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from moto import backend
 from moto.common import (
     CLAUDE_HOME,
     CORE_SKILLS,
@@ -61,7 +62,7 @@ def session_role(cwd: Any) -> str | None:
     """
     if role := os.environ.get("MOTO_ROLE"):
         return role
-    pane_id = os.environ.get("HERDR_PANE_ID")
+    pane_id = backend.here()
     if not pane_id or os.environ.get(WORKER_ENV) or pane_owner(read_tasks(), pane_id):
         return None
     # The session may have moved out of MOTO_HOME since the pane was recorded.

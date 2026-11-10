@@ -8,7 +8,9 @@ import time
 from collections.abc import Callable
 from typing import Any
 
+from moto import backend
 from moto.adopting import adopt
+from moto.backend import live_agents
 from moto.common import (
     ADOPT_KINDS,
     BUSY,
@@ -24,8 +26,6 @@ from moto.common import (
     UNTRACKED,
     MotoError,
     age,
-    herdr,
-    live_agents,
 )
 from moto.driverstate import driver_path, read_driver, wake_driver, write_driver
 from moto.sessions import last_turn
@@ -40,7 +40,7 @@ from moto.store import (
 
 
 def cmd_report(args: argparse.Namespace) -> int:
-    pane_id = os.environ.get("HERDR_PANE_ID")
+    pane_id = backend.here()
     text = " ".join(args.text).strip()
     with tasks_for_update() as tasks:
         if args.agent:
@@ -163,7 +163,7 @@ def tell_task(name: str, text: str, sender: str | None) -> str:
     if task.get("snoozed"):
         raise MotoError(f"{name} is snoozed; pass the message to moto wake")
     agent = task["agent"]
-    herdr("agent", "prompt", agent, f"{tag(sender)} {text}")
+    backend.prompt(agent, task["pane_id"], f"{tag(sender)} {text}")
     with tasks_for_update() as tasks:
         if agent in tasks:
             tasks[agent]["told"] = time.time()
@@ -221,7 +221,7 @@ def hand_off(args: argparse.Namespace) -> int:
         old = task.get("session")
         task["handoff"] = {"at": time.time(), "old": old}
     try:
-        herdr("agent", "prompt", task["agent"], f"/handoff {goal}".strip())
+        backend.prompt(task["agent"], task["pane_id"], f"/handoff {goal}".strip())
         new = wait_for(
             lambda: (read_tasks().get(name, {}).get("handoff") or {}).get("new"),
             HANDOFF_SESSION_WAIT,
@@ -304,9 +304,9 @@ def cmd_ask(args: argparse.Namespace) -> int:
         print("Cleared the driver's question.")
         return 0
     text = " ".join(args.text).strip()
-    pane_id = os.environ.get("HERDR_PANE_ID")
+    pane_id = backend.here()
     if not text or not pane_id:
-        raise MotoError("Pass the question, from inside the driver's Herdr pane")
+        raise MotoError("Pass the question, from inside the driver's own terminal")
     write_driver(pane_id=pane_id, kind="question", text=text, at=time.time())
     print("The question shows under the driver's sidebar row until moto ask --clear.")
     return 0

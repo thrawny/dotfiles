@@ -5,6 +5,7 @@ import subprocess
 import sys
 
 import moto
+from moto import backend
 from moto.afk import cmd_afk, cmd_back, cmd_log, cmd_log_action
 from moto.attaching import cmd_attach
 from moto.closing import cmd_close, cmd_drop, cmd_hold, cmd_resume
@@ -15,7 +16,6 @@ from moto.common import (
     REPORT_KINDS,
     SPAWN_DEFAULTS,
     MotoError,
-    herdr,
 )
 from moto.focusing import cmd_focus, cmd_pin
 from moto.listing import cmd_list
@@ -380,8 +380,5 @@ def main() -> int:
     except (MotoError, OSError) as error:
         print(f"moto: {error}", file=sys.stderr)
         if args.command == "focus":
-            try:
-                herdr("notification", "show", f"moto: {error}", "--sound", "none")
-            except (MotoError, OSError, subprocess.TimeoutExpired):
-                pass
+            backend.notify(f"moto: {error}")
     return 1

@@ -9,7 +9,8 @@ from typing import Any
 
 from moto.activity import activity_line, since_report
 from moto.afk import read_afk, read_events
-from moto.common import MotoError, age, clock, live_agents
+from moto.backend import live_agents
+from moto.common import MotoError, age, clock
 from moto.scheduler import print_jobs
 from moto.store import decorator_links, read_tasks
 
