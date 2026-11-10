@@ -164,6 +164,16 @@ check-mission-control: mission-control-install
 typecheck *files:
     TY_UV=scripts uv run --locked ty check {{files}}
 
+# Check the installed Herdr desktop, core and shared personal mods.
+check-herdr-app:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    herdr-app --version
+    herdr-core --version
+    for mod in "$HOME"/.config/herdr-app/mods/thrawny-*; do
+        herdr-app check "$mod"
+    done
+
 # === Theme ===
 
 # Validate the central theme and reject color-literal drift in consumers

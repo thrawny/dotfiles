@@ -5,6 +5,7 @@
   lib,
   pkgs,
   theme,
+  thrawny-pkgs,
   ...
 }:
 let
@@ -47,6 +48,12 @@ in
   options.dotfiles.herdrApp.enable = lib.mkEnableOption "personal Herdr desktop bindings and mods";
 
   config = lib.mkIf cfg.enable {
+    # macOS keeps its native app install; Linux packages come from nix-pkgs.
+    home.packages = lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+      thrawny-pkgs.packages.${pkgs.stdenv.hostPlatform.system}.herdr-app
+      thrawny-pkgs.packages.${pkgs.stdenv.hostPlatform.system}.herdr-core
+    ];
+
     xdg.configFile = lib.genAttrs (map (name: "herdr-app/mods/${name}") mods) (name: {
       source = configSource name;
     });

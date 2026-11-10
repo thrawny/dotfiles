@@ -8,6 +8,13 @@ Home Manager installs the personal mods and reapplies
 Settings, sessions, machine connections and other app state remain app-owned.
 The TUI configuration still works independently.
 
+Linux installs `herdr-app` and `herdr-core` from
+[nix-pkgs](https://github.com/thrawny/nix-pkgs), not local dotfiles derivations.
+Update the `thrawny-pkgs` input and run `just switch` to install a newer release.
+Run `just check-herdr-app` to check the installed versions and personal mods.
+macOS keeps its native app installation; both platforms share the same personal
+mods, keys and layout, with fonts adapted to the host.
+
 ## Keys
 
 Cmd means Command on macOS and Super on Linux. The complete binding inventory

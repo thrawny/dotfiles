@@ -1307,11 +1307,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1794071505,
-        "narHash": "sha256-GxRqUZxtdisBKOLCknAHVKcZXygc1yZ9J2gXNwe7fg4=",
+        "lastModified": 1794317390,
+        "narHash": "sha256-5513SC7bkX4VKKzof57vlY+OcPk/YORCB1c3FBJKbwQ=",
         "owner": "thrawny",
         "repo": "nix-pkgs",
-        "rev": "ed42b4db897c047a62eb5445c82ac6d918485fd1",
+        "rev": "6169563624e91bf172f060aad5b5432a1f0e2409",
         "type": "github"
       },
       "original": {

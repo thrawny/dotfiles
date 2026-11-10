@@ -2,7 +2,6 @@
   lib,
   config,
   pkgs,
-  self,
   thrawny-pkgs,
   ...
 }:
@@ -344,8 +343,6 @@ in
 
     home.packages = [
       t3codeDesktop
-      self.packages.${pkgs.stdenv.hostPlatform.system}.herdr-app
-      self.packages.${pkgs.stdenv.hostPlatform.system}.herdr-core
       pkgs.google-chrome
       pkgs.slack
       pkgs.terraform
