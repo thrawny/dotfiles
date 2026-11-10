@@ -174,16 +174,16 @@ red = 0.3
 
 [quakeTerminal]
 animationDuration = 0.2
-autoHide = false
+autoHide = true
 backgroundBlurRadius = 0
 backgroundEffect = "standardBlur"
 enabled = true
-heightPercent = 50.0
+heightPercent = 80.0
 monitorMode = "focusedWindow"
 opacity = 1.0
 position = "center"
 provider = "ghostty"
-widthPercent = 50.0
+widthPercent = 80.0
 
 [routing]
 arrangements = []
@@ -1147,7 +1147,7 @@ binding = "Unassigned"
 id = "newShellAppWindow.example"
 
 [[hotkeys]]
-binding = "Unassigned"
+binding = "Option+Space"
 id = "openCommandPalette"
 
 [[hotkeys]]
@@ -1215,7 +1215,7 @@ binding = "Unassigned"
 id = "toggleHiddenBarPanel"
 
 [[hotkeys]]
-binding = "Unassigned"
+binding = "Option+Q"
 id = "toggleQuakeTerminal"
 
 [[hotkeys]]
@@ -1245,6 +1245,10 @@ id = "toggleShellWidget.system-stats"
 [[hotkeys]]
 binding = "Unassigned"
 id = "toggleShellWidget.workspaces"
+
+[[hotkeys]]
+binding = "Option+O"
+id = "openApp.com.1password.1password"
 
 [[workspaces]]
 displayName = "main"
