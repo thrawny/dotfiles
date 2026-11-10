@@ -198,7 +198,7 @@ herdr-decorator-dev:
 # Start it in a background-workspace tab, where it has Herdr's socket, and keep
 # its cwd out of ~/code/<repo> so job workers open in their own workspaces.
 moto-jobs-dev:
-    watchexec --restart --watch bin/moto -- bin/moto job loop
+    watchexec --restart --watch moto/src -- moto job loop
 
 # Run Python tests with the locked development dependencies
 test-python *args:

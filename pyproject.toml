@@ -6,6 +6,7 @@ requires-python = ">=3.13"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--import-mode=importlib"]
+pythonpath = ["moto/src"]
 
 [tool.ty.src]
 include = [
@@ -13,7 +14,6 @@ include = [
   "bin/private-skills-sync",
   "bin/fork-window",
   "bin/spawn-session",
-  "bin/moto",
   "bin/desktop-broker",
   "bin/shell-clipboard-image",
   "bin/keepawake",
@@ -58,7 +58,6 @@ extend-include = [
   "bin/private-skills-sync",
   "bin/fork-window",
   "bin/spawn-session",
-  "bin/moto",
   "bin/desktop-broker",
   "bin/shell-clipboard-image",
   "bin/keepawake",

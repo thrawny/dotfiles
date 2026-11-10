@@ -1,13 +1,14 @@
 """Task records, wake rules, reports and cleanup checks. No live Herdr or GitHub."""
 
 import argparse
-import importlib.util
+import importlib
 import io
 import json
 import os
+import pkgutil
 import subprocess
+import sys
 from datetime import UTC, datetime
-from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -18,13 +19,49 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def load_moto() -> ModuleType:
-    loader = SourceFileLoader("moto", str(ROOT / "bin/moto"))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
-    return module
+class Moto:
+    """The moto package's modules as one namespace.
+
+    Setting a name sets it in every module that holds it, so a test can swap
+    a function once, whichever modules import it.
+    """
+
+    __slots__ = ("_modules",)
+
+    def __init__(self, modules: list[ModuleType]) -> None:
+        object.__setattr__(self, "_modules", modules)
+
+    @property
+    def __dict__(self) -> dict[str, Any]:  # type: ignore[override]
+        """Every module's names, for unittest.mock.patch.object to read."""
+        merged: dict[str, Any] = {}
+        for module in reversed(self._modules):
+            merged.update(vars(module))
+        return merged
+
+    def __getattr__(self, name: str) -> Any:
+        for module in self._modules:
+            if name in vars(module):
+                return vars(module)[name]
+        raise AttributeError(name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        holders = [m for m in self._modules if name in vars(m)]
+        if not holders:
+            raise AttributeError(name)
+        for module in holders:
+            setattr(module, name, value)
+
+
+def load_moto() -> Any:
+    """A fresh copy of the moto package, so one test's swaps never reach another."""
+    for name in [n for n in sys.modules if n == "moto" or n.startswith("moto.")]:
+        del sys.modules[name]
+    package = importlib.import_module("moto")
+    names = [info.name for info in pkgutil.iter_modules(package.__path__)]
+    return Moto(
+        [importlib.import_module(f"moto.{n}") for n in names if n != "__main__"]
+    )
 
 
 @pytest.fixture

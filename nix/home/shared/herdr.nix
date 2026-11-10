@@ -64,8 +64,8 @@ in
       key = "super+shift+o";
       type = "shell";
       # Herdr runs shell bindings with the server's bare PATH, which has
-      # neither moto nor the nix python it needs.
-      command = ''PATH="${config.home.homeDirectory}/.nix-profile/bin:${config.home.homeDirectory}/dotfiles/bin:$PATH" moto focus'';
+      # neither moto nor the tools it calls.
+      command = ''PATH="${config.home.homeDirectory}/.nix-profile/bin:${config.home.homeDirectory}/.local/bin:${config.home.homeDirectory}/dotfiles/bin:$PATH" moto focus'';
       description = "Jump to the driver session";
     }
     {

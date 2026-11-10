@@ -1,0 +1,12 @@
+[project]
+name = "moto"
+version = "0.1.0"
+description = "Track the worker sessions a driver session starts in Herdr."
+requires-python = ">=3.13"
+
+[project.scripts]
+moto = "moto.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.9,<0.14"]
+build-backend = "uv_build"

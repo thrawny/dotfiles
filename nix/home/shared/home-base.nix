@@ -75,6 +75,16 @@ in
       createProtectedDirectory = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
         install -d -m0700 "${config.home.homeDirectory}/Protected"
       '';
+    }
+    // lib.optionalAttrs repoBacked {
+      # moto is an editable uv tool, so an edit in dotfiles takes effect at once.
+      # A failed install leaves the old moto in place and the switch going.
+      installMoto = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        if ! run ${pkgs.uv}/bin/uv tool install --quiet --editable \
+          --python ${pkgs.python3}/bin/python3 "${dotfiles}/moto"; then
+          echo "moto: uv tool install failed, so moto stays as it was" >&2
+        fi
+      '';
     };
 
     sessionPath = [

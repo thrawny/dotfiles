@@ -1,0 +1,210 @@
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+from typing import Any
+
+from moto.closing import checkout_workspace, owns_worktree, release_adopted
+from moto.common import (
+    CLAUDE_HOME,
+    MODEL_FLAGS,
+    WORKER_ENV,
+    MotoError,
+    herdr,
+    live_agents,
+    run,
+)
+from moto.roles import role_file
+from moto.sessions import (
+    find_session,
+    session_cwd,
+    session_dir,
+    session_path,
+    task_title,
+    transcript,
+)
+from moto.store import (
+    find_task,
+    message_sender,
+    read_tasks,
+    record,
+    resume,
+    tag,
+    tasks_for_update,
+)
+from moto.whenstore import add_when, check_verdict, pr_check_command, tail
+
+
+def cmd_snooze(args: argparse.Namespace) -> int:
+    reason = " ".join(args.reason).strip()
+    check = getattr(args, "until_check", None)
+    if until_pr := getattr(args, "until_pr", None):
+        if check:
+            raise MotoError("Pass --until-check or --until-pr, not both")
+        # The counts are the ones the check compares against, so take them
+        # before the task closes.
+        check = pr_check_command(until_pr)
+    if check:
+        # Run before anything closes, so a check that errors or already
+        # passes leaves the task as it was.
+        verdict, output = check_verdict(check, os.getcwd())
+        if verdict == "error":
+            raise MotoError(f"{output}; {args.agent} was not snoozed")
+        if verdict == "pass":
+            printed = f" It printed:\n{tail(output)}" if output else ""
+            raise MotoError(
+                f"The check passes already, so {args.agent} was not snoozed.{printed}"
+            )
+    live = live_agents()
+    with tasks_for_update() as tasks:
+        task = find_task(tasks, args.agent)
+        if task.get("snoozed"):
+            raise MotoError(f"{args.agent} is already snoozed")
+        agent = live.get(task["pane_id"])
+        if agent and agent.get("agent_status") == "working":
+            raise MotoError(f"{args.agent} is mid-turn; snooze it once the turn ends")
+        cwd, repo, linked = task["cwd"], task["repo"], owns_worktree(task)
+        path = transcript(task, agent)
+        if path:
+            # A session the user started may have no name; its id is enough.
+            title = task.get("title") or (agent or {}).get("terminal_title_stripped")
+            session = path.stem
+        else:
+            title = task_title(task, agent)
+            session = find_session(cwd, title)
+        if linked:
+            branch = task["branch"]
+            exists = os.path.isdir(cwd)
+            if exists and run(["git", "status", "--porcelain"], cwd=cwd).strip():
+                raise MotoError(f"{args.agent}: the worktree has uncommitted changes")
+            # All three keep the branch; wake checks it out again at the same path.
+            if task.get("adopted"):
+                release_adopted(task, True, False)
+            elif exists and (workspace := checkout_workspace(cwd)):
+                herdr("worktree", "remove", "--workspace", workspace, timeout=120)
+            elif exists:
+                run(["git", "worktree", "remove", cwd], cwd=repo, timeout=120)
+        else:
+            # The main checkout, or a worktree an adopted task shares, stays as
+            # it is, on whatever branch it is on.
+            try:
+                branch = run(
+                    ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=cwd
+                ).strip()
+            except MotoError:
+                branch = None  # detached HEAD
+            try:
+                herdr("tab", "close", task["tab_id"])
+            except MotoError:
+                pass  # the tab is already gone
+        task["snoozed"] = {
+            "session": session,
+            "title": title,
+            "reason": reason,
+            "repo": repo,
+            "cwd": cwd,
+            "branch": branch,
+            "worktree": linked,
+            "at": time.time(),
+        }
+        record("snooze", args.agent, **task["snoozed"])
+    print(f"Snoozed {args.agent} (session {session}); bring it back with moto wake")
+    if check:
+        brief = f"You were snoozed waiting on: {reason}. That wait looks over."
+        name, _ = add_when(
+            check, brief, args.agent, None, args.every, args.expires, time.time()
+        )
+        if name is None:
+            print("The check passed while it snoozed; wake it with moto wake.")
+        else:
+            print(
+                f"Check {name} wakes it once `{check}` passes, every {args.every},"
+                + f" giving up in {args.expires}."
+            )
+    return 0
+
+
+def cmd_wake(args: argparse.Namespace) -> int:
+    text = " ".join(args.text).strip()
+    sender = message_sender(read_tasks(), args.agent, text)
+    session = wake_task(args.agent, text, sender)
+    print(f"Woke {args.agent} on session {session}: moto watch covers it again")
+    return 0
+
+
+def wake_task(name: str, text: str, sender: str | None) -> str:
+    """Bring a snoozed task back with text as its prompt, and return its session."""
+    task = find_task(read_tasks(), name)
+    snooze: dict[str, Any] | None = task.get("snoozed")
+    if not snooze:
+        raise MotoError(f"{name} is not snoozed")
+    session = snooze["session"]
+    repo = snooze.get("repo") or task["repo"]
+    cwd = snooze.get("cwd") or task["cwd"]
+    linked = snooze.get("worktree", bool(task.get("branch")))
+    path = session_path(cwd, session)
+    if not path:
+        raise MotoError(f"Session {session} is not in {CLAUDE_HOME / 'projects'}")
+    # claude --resume finds a session only from the folder it ran in, which
+    # can be another checkout than the task's.
+    if path.parent != session_dir(cwd):
+        folder = session_cwd(path)
+        if not folder or not os.path.isdir(folder):
+            raise MotoError(f"Session {session} ran in a folder that is gone: {path}")
+        cwd, linked = folder, False
+    role = task.get("role")
+    # A checkout that stayed may be a worktree an adopted task shared, not the
+    # repo. A role's folder is in MOTO_HOME, which spawn-session takes as is.
+    checkout = repo if linked or role else cwd
+    command = ["spawn-session", "--json", "--repo", checkout, "--name", task["agent"]]
+    if role:
+        role_file(role)
+        command += ["--cwd", cwd, "--env", f"MOTO_ROLE={role}"]
+    if linked:
+        command += ["--worktree", snooze.get("branch") or task["branch"], "--path", cwd]
+    elif not os.path.isdir(cwd):
+        raise MotoError(f"The checkout {cwd} is gone")
+    else:
+        command += ["--env", f"{WORKER_ENV}=1"]
+    if title := snooze.get("title") or task.get("title"):
+        command += ["--title", title]
+    command += ["--resume", session]
+    # claude --resume starts on the default model, not the one the session used.
+    for flag in MODEL_FLAGS:
+        if value := task.get(flag):
+            command += [f"--{flag}", value]
+    stdin = f"{tag(sender)} {text}\n" if text else ""
+    output = run(command, timeout=600, stdin=stdin)
+    try:
+        info: dict[str, Any] = json.loads(output)
+    except ValueError as error:
+        raise MotoError(f"spawn-session printed no JSON: {output.strip()}") from error
+    if info["cwd"] != cwd:
+        print(
+            f"moto: the worktree came back at {info['cwd']}, not {cwd}", file=sys.stderr
+        )
+    live = live_agents()
+    with tasks_for_update() as tasks:
+        task = find_task(tasks, name)
+        for key in ("pane_id", "workspace_id", "tab_id", "cwd"):
+            task[key] = info[key]
+        task["title"] = title or task.get("title")
+        task["session"] = session
+        task.pop("closed_at", None)
+        del task["snoozed"]
+        resume(task, live)
+        if text:
+            task["told"] = time.time()
+        record(
+            "wake",
+            name,
+            session=session,
+            message=text or None,
+            cwd=info["cwd"],
+            **{"from": sender or "driver"},
+            pane_id=info["pane_id"],
+        )
+    return session
