@@ -94,7 +94,7 @@
             "pane": {
               "header": {
                 "content": {
-                  "mod": "pane"
+                  "mod": "thrawny-pane"
                 },
                 "reveal": "hover",
                 "height": 30,

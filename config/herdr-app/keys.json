@@ -40,7 +40,7 @@
     "ctrl-shift-x": "pane.close",
     "ctrl-shift-z": "pane.zoom",
     "ctrl-shift-p": "app.palette",
-    "ctrl-shift-k": "mod.open:picker",
+    "ctrl-shift-k": "mod.open:thrawny-picker",
     "ctrl-,": "app.settings",
     "ctrl-shift-b": "layout.toggle:sidebar",
     "ctrl-shift-n": "space.new",

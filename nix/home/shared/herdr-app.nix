@@ -28,6 +28,8 @@ let
       ghosttySettings.font-size * 4 / 3;
   mods = [
     "thrawny-agents"
+    "thrawny-pane"
+    "thrawny-picker"
     "thrawny-prefix"
     "thrawny-projects"
     "thrawny-tabs"
