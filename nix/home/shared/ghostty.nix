@@ -25,7 +25,7 @@ in
       cursor-color = app.cursor;
       cursor-text = app.cursorText;
       font-family = "CaskaydiaMono Nerd Font";
-      font-size = 12;
+      font-size = lib.mkDefault 12;
       window-padding-x = 10;
       window-padding-y = 5;
       gtk-titlebar = false;

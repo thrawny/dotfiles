@@ -29,11 +29,11 @@ let
   # Terminals use Ghostty's font too. Ghostty sizes fonts in points, which
   # are 4/3 of a pixel on Linux and one pixel on macOS. Herdr takes pixels.
   ghosttySettings = config.programs.ghostty.settings;
-  fontSize =
-    if pkgs.stdenv.hostPlatform.isDarwin then
-      ghosttySettings.font-size
-    else
-      ghosttySettings.font-size * 4 / 3;
+  # Home Manager's key-value format normalizes settings to lists. Ghostty
+  # uses the last size and the first font family (the rest are fallbacks).
+  fontFamily = lib.head (lib.toList ghosttySettings.font-family);
+  fontSizePoints = lib.last (lib.toList ghosttySettings.font-size);
+  fontSize = if pkgs.stdenv.hostPlatform.isDarwin then fontSizePoints else fontSizePoints * 4.0 / 3;
   mods = [
     "thrawny-agents"
     "thrawny-pane"
@@ -59,7 +59,7 @@ in
         "$HOME/.config/herdr-app/keys.json"
       layout=$(${pkgs.coreutils}/bin/mktemp)
       ${pkgs.jq}/bin/jq \
-        --arg font ${lib.escapeShellArg ghosttySettings.font-family} \
+        --arg font ${lib.escapeShellArg fontFamily} \
         --argjson size ${toString fontSize} \
         '.font = $font | .font_size = $size' \
         ${lib.escapeShellArg (configPath "herdr-app/layouts/thrawny.json")} >"$layout"
