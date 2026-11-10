@@ -26,11 +26,20 @@ def herdr(*args: str, timeout: int = 30) -> dict[str, Any]:
         raise MotoError(f"herdr {' '.join(args[:2])} returned no result") from error
 
 
-def herdr_request(method: str, params: dict[str, Any]) -> dict[str, Any]:
-    """One socket API call, for methods the herdr CLI has no command for."""
-    path = os.environ.get("HERDR_SOCKET_PATH") or os.path.expanduser(
+def socket_path() -> str:
+    return os.environ.get("HERDR_SOCKET_PATH") or os.path.expanduser(
         "~/.config/herdr/herdr.sock"
     )
+
+
+def herdr_up() -> bool:
+    """Whether a Herdr server may be up: its socket exists."""
+    return os.path.exists(socket_path())
+
+
+def herdr_request(method: str, params: dict[str, Any]) -> dict[str, Any]:
+    """One socket API call, for methods the herdr CLI has no command for."""
+    path = socket_path()
     request = {"id": method, "method": method, "params": params}
     try:
         with socket.socket(socket.AF_UNIX) as sock:
@@ -116,7 +125,7 @@ def others_in(tab: str, top: str) -> bool | None:
     return False
 
 
-def remove_worktree(path: str, repo: str, force: bool) -> None:
+def remove_worktree(_tab: str, path: str, repo: str, force: bool) -> None:
     """Remove the worktree with its Herdr workspace, or with git when no
     workspace is open on it."""
     flags = ["--force"] if force else []

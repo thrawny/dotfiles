@@ -78,7 +78,9 @@ def cmd_snooze(args: argparse.Namespace) -> int:
             if task.get("adopted"):
                 release_adopted(task, True, False)
             elif exists:
-                backend.remove_worktree(task["pane_id"], cwd, repo, False)
+                backend.remove_worktree(
+                    task["pane_id"], task["tab_id"], cwd, repo, False
+                )
         else:
             # The main checkout, or a worktree an adopted task shares, stays as
             # it is, on whatever branch it is on.

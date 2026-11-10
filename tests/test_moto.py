@@ -59,9 +59,14 @@ def load_moto() -> Any:
         del sys.modules[name]
     package = importlib.import_module("moto")
     names = [info.name for info in pkgutil.iter_modules(package.__path__)]
-    return Moto(
+    moto = Moto(
         [importlib.import_module(f"moto.{n}") for n in names if n != "__main__"]
     )
+    # Herdr answers through the herdr function the tests swap, and no test
+    # reaches a real hc.
+    moto.herdr_up = lambda: True
+    moto.hc_installed = lambda: False
+    return moto
 
 
 @pytest.fixture

@@ -17,7 +17,7 @@ import os
 from types import ModuleType
 from typing import Any
 
-from moto import herdr_backend
+from moto import hc_backend, herdr_backend
 
 HERDR = "herdr"
 HC = "hc"
@@ -29,14 +29,16 @@ def kind(terminal: str) -> str:
 
 
 def module(terminal: str) -> ModuleType:
-    if kind(terminal) == HERDR:
-        return herdr_backend
-    raise NotImplementedError(f"no backend for terminal {terminal}")
+    return herdr_backend if kind(terminal) == HERDR else hc_backend
 
 
 def here() -> str | None:
-    """The caller's own terminal, or None outside Herdr and hc."""
-    return os.environ.get("HERDR_PANE_ID") or None
+    """The caller's own terminal, or None outside Herdr and hc.
+
+    A Herdr pane id wins, because a Herdr TUI that runs inside an hc
+    terminal passes HC_TERMINAL_ID on to its panes.
+    """
+    return os.environ.get("HERDR_PANE_ID") or os.environ.get("HC_TERMINAL_ID") or None
 
 
 def here_kind() -> str | None:
@@ -46,8 +48,18 @@ def here_kind() -> str | None:
 
 
 def live_agents() -> dict[str, dict[str, Any]]:
-    """Every live agent by terminal."""
-    return herdr_backend.agents()
+    """Every live agent by terminal, from each backend that runs.
+
+    Herdr runs when its socket exists, and hc when it is installed. Their
+    errors still raise, so a backend that fails never passes for one whose
+    panes all closed.
+    """
+    found: dict[str, dict[str, Any]] = {}
+    if herdr_backend.herdr_up():
+        found |= herdr_backend.agents()
+    if hc_backend.hc_installed():
+        found |= hc_backend.agents()
+    return found
 
 
 def prompt(name: str, terminal: str, text: str) -> None:
@@ -82,12 +94,12 @@ def others_in(terminal: str, tab: str, top: str) -> bool | None:
     return module(terminal).others_in(tab, top)
 
 
-def remove_worktree(terminal: str, path: str, repo: str, force: bool) -> None:
-    """Remove a worker's worktree, and the workspace on it when there is one."""
-    module(terminal).remove_worktree(path, repo, force)
+def remove_worktree(terminal: str, tab: str, path: str, repo: str, force: bool) -> None:
+    """Remove a worker's worktree, and the workspace or tab on it."""
+    module(terminal).remove_worktree(tab, path, repo, force)
 
 
 def notify(text: str) -> None:
     """Show a notice where the user looks, if the caller's backend has one."""
-    if here_kind() in (HERDR, None):
+    if here_kind() != HC:
         herdr_backend.notify(text)

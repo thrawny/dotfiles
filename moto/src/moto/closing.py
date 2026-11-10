@@ -148,7 +148,9 @@ def cmd_close(args: argparse.Namespace) -> int:
         if task.get("adopted"):
             release_adopted(task, bool(branch), args.force)
         elif branch:
-            backend.remove_worktree(task["pane_id"], cwd, repo, args.force)
+            backend.remove_worktree(
+                task["pane_id"], task["tab_id"], cwd, repo, args.force
+            )
         else:
             backend.close_tab(task["pane_id"], task["tab_id"])
         # Its commits are pushed or merged, so the local branch is a copy.
