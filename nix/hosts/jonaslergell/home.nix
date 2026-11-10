@@ -12,6 +12,7 @@
   nixpkgs.config.allowUnfree = true;
 
   dotfiles.agentSkills.herdrTui = true;
+  dotfiles.herdrApp.enable = true;
 
   # Dev servers here run in Herdr tabs, not zmx. Pi keeps zmx-pi, its own
   # skill for background tasks.
