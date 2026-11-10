@@ -19,6 +19,7 @@ from moto.common import (
     COMPACT_GROWTH,
     DRIVER_TAG,
     HANDOFF_MARKER_LIFE,
+    HC_NOTE,
     PANE_GONE_GRACE,
     REPORT_SETTLE_SECONDS,
     SELF,
@@ -169,7 +170,8 @@ def child_report(name: str, task: dict[str, Any], parent: str) -> list[str]:
     closed = " (pane closed)" if task.get("closed_at") else ""
     for report in new_reports(task):
         if not (report["kind"] in ADOPT_KINDS or report.get("to_driver")):
-            if report["kind"] in CHILD_KINDS:
+            # A report sent straight to its parent under hc is delivered.
+            if report["kind"] in CHILD_KINDS and not report.get("direct"):
                 task["seen"].setdefault("for_parent", []).append(report)
             continue
         lines.append(
@@ -321,7 +323,7 @@ def from_user(prompt: str | None) -> bool:
     or a child's report."""
     return (
         prompt is not None
-        and not prompt.startswith(DRIVER_TAG)
+        and not prompt.startswith((DRIVER_TAG, HC_NOTE))
         and not CHILD_REPORT.match(prompt)
     )
 

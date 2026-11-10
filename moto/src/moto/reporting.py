@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import subprocess
 import sys
 import time
 from collections.abc import Callable
@@ -14,6 +15,7 @@ from moto.backend import live_agents
 from moto.common import (
     ADOPT_KINDS,
     BUSY,
+    CHILD_KINDS,
     HANDOFF_POLL_SECONDS,
     HANDOFF_SESSION_WAIT,
     HANDOFF_STAY,
@@ -97,8 +99,16 @@ def cmd_report(args: argparse.Namespace) -> int:
             record("pr", task["agent"], pr=task["pr"])
         held = bool(task.get("held"))
         parent = task.get("parent")
+        host = direct_host(tasks, parent, args.kind, passes_on)
+        if host:
+            task["report"]["direct"] = True
+        name = task["agent"]
+    if host:
+        send_to_parent(name, host, task["report"])
     if parent and (args.kind in ADOPT_KINDS or args.to_driver):
         print(f"Reported {args.kind} to the driver, and {parent} can read it here.")
+    elif parent and host:
+        print(f"Sent to {parent}, which started you. {PASS_ON_RULE}")
     elif parent:
         print(
             f"Recorded. {parent} started you, not the driver, so moto delivers it to"
@@ -130,6 +140,46 @@ def cmd_report(args: argparse.Namespace) -> int:
         again = "; moto watch covers this task again" if handed_back else ""
         print(f"Reported {args.kind} to the driver{again}.")
     return 0
+
+
+def direct_host(
+    tasks: dict[str, dict[str, Any]], parent: str | None, kind: str, passes_on: bool
+) -> dict[str, Any] | None:
+    """The parent task a child's report goes straight to, or None.
+
+    Under hc, a child's done, question and blocked reports go to its parent's
+    terminal at once, as hc's own reports do, even mid-turn. In Herdr the
+    watch holds them until the parent's turn ends.
+    """
+    host = tasks.get(parent) if parent else None
+    if (
+        not host
+        or kind not in CHILD_KINDS
+        or passes_on
+        or host.get("snoozed")
+        or host.get("closed_at")
+        or backend.kind(host["pane_id"]) != backend.HC
+    ):
+        return None
+    return host
+
+
+def send_to_parent(name: str, host: dict[str, Any], report: dict[str, Any]) -> None:
+    """Type a child's report into its parent. If that fails, the report goes
+    back to the watch, which delivers it as it does in Herdr."""
+    text = f"[{name} {report['kind']}] {report['text']}"
+    try:
+        backend.prompt(host["agent"], host["pane_id"], text)
+    except (MotoError, subprocess.TimeoutExpired):
+        with tasks_for_update() as tasks:
+            for kept in tasks.get(name, {}).get("reports", []):
+                if kept["at"] == report["at"]:
+                    kept.pop("direct", None)
+        return
+    with tasks_for_update() as tasks:
+        if host["agent"] in tasks:
+            tasks[host["agent"]]["told"] = time.time()
+        record("deliver", name, to=host["agent"], kind=report["kind"], at=report["at"])
 
 
 def cmd_settle(args: argparse.Namespace) -> int:

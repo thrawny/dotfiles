@@ -83,6 +83,9 @@ WATCH_MOD = MOTO_DIR / "claude/mods/moto-watch"
 # Marks every prompt the driver sends, so a worker can tell it from the user's own typing.
 # A worker's prompts to the workers it started carry its own name instead.
 DRIVER_TAG = "[driver]"
+# How hc's notes start, such as the one it types into a parent whose child
+# blocked or ended. They are never the user's typing.
+HC_NOTE = "<hc "
 # Reports the watch carries from a child to its parent, and the tag each starts
 # with there, as in "[abc-2 done] PR ready".
 CHILD_KINDS = ("done", "question", "blocked", "phase")
@@ -220,12 +223,14 @@ def run(
     cwd: str | Path | None = None,
     timeout: int = 30,
     stdin: str | None = None,
+    env: dict[str, str] | None = None,
 ) -> str:
     try:
         result = subprocess.run(
             args,
             cwd=cwd,
             input=stdin,
+            env=env,
             capture_output=True,
             text=True,
             timeout=timeout,

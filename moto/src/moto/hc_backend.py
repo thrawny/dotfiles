@@ -91,8 +91,16 @@ def agents() -> dict[str, dict[str, Any]]:
     return {a["pane_id"]: a for a in found if a}
 
 
+# What tells hc which terminal calls. A send that carries it arrives wrapped
+# in an <hc from="t1"> tag, and Claude then runs no slash command in it.
+IDENTITY = ("HC_TERMINAL_ID", "HC_TERMINAL_SOCKET", "HC_SCOPE")
+
+
 def prompt(_name: str, terminal: str, text: str) -> None:
-    hc("send", terminal, text, timeout=60)
+    """Type text into the terminal as plain input, so /handoff and /compact
+    run as commands and moto's own tags lead the prompt."""
+    env = {k: v for k, v in os.environ.items() if k not in IDENTITY}
+    run([hc_binary(), "send", terminal, text], timeout=60, env=env)
 
 
 def screen(terminal: str) -> str:

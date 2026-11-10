@@ -11,6 +11,7 @@ from moto.common import (
     CLAUDE_HOME,
     CONTEXT_USAGE,
     DRIVER_TAG,
+    HC_NOTE,
     MOTO_COMMANDS,
     MOTO_HOME,
     PASTED,
@@ -40,7 +41,9 @@ def user_turns(
         lines = path.read_text(errors="replace").splitlines() if path else []
     except (MotoError, OSError):
         return []
-    tags = (DRIVER_TAG,) + ((f"[{task['parent']}]",) if task.get("parent") else ())
+    tags = (DRIVER_TAG, HC_NOTE) + (
+        (f"[{task['parent']}]",) if task.get("parent") else ()
+    )
     times: list[float] = []
     for line in lines:
         if '"typed"' not in line:
@@ -78,7 +81,9 @@ def user_prompt(task: dict[str, Any], agent: dict[str, Any] | None) -> str | Non
     with path.open("rb") as handle:
         handle.seek(max(0, path.stat().st_size - USER_PROMPT_TAIL))
         lines = handle.read().decode(errors="replace").splitlines()
-    tags = (DRIVER_TAG,) + ((f"[{task['parent']}]",) if task.get("parent") else ())
+    tags = (DRIVER_TAG, HC_NOTE) + (
+        (f"[{task['parent']}]",) if task.get("parent") else ()
+    )
     for line in reversed(lines):
         if '"typed"' not in line:
             continue

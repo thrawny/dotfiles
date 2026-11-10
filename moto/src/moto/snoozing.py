@@ -163,6 +163,8 @@ def wake_task(name: str, text: str, sender: str | None) -> str:
     if title := snooze.get("title") or task.get("title"):
         command += ["--title", title]
     command += ["--resume", session]
+    if task.get("parent"):
+        command.append("--child")
     # claude --resume starts on the default model, not the one the session used.
     for flag in MODEL_FLAGS:
         if value := task.get(flag):

@@ -13,7 +13,6 @@ include = [
   ".",
   "bin/private-skills-sync",
   "bin/fork-window",
-  "bin/spawn-session",
   "bin/desktop-broker",
   "bin/shell-clipboard-image",
   "bin/keepawake",
@@ -57,7 +56,6 @@ exclude = [
 extend-include = [
   "bin/private-skills-sync",
   "bin/fork-window",
-  "bin/spawn-session",
   "bin/desktop-broker",
   "bin/shell-clipboard-image",
   "bin/keepawake",

@@ -1,5 +1,9 @@
-#!/usr/bin/env python3
 """Start a new agent session in a Herdr tab and give it a task brief.
+
+Run inside the Herdr TUI, it opens a Herdr tab. Run inside an hc terminal,
+such as one in the Herdr desktop app, it starts an hc terminal labelled with
+the app space and tab it shows in. A worktree then comes from git, at
+WORKTREES/<repo>/<branch>, where Herdr puts its own.
 
 The brief is read from stdin. The session opens in the repo's Herdr workspace,
 or in a linked worktree workspace with --worktree, and starts on the brief
@@ -19,6 +23,7 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -39,6 +44,10 @@ PASTE_END = "\x1b[201~"
 SUBMIT_TRIES = 3
 # A horizontal rule around Claude's input box; the top one may carry a title.
 RULE = re.compile(r"─{10,}.*─")
+# Where Herdr puts linked worktrees, which code-sync cleans up.
+WORKTREES = Path.home() / ".herdr/worktrees"
+# How long a new hc agent may take to start working on its brief.
+HC_START_SECONDS = 90
 
 
 class SpawnError(Exception):
@@ -362,7 +371,244 @@ def name_claude_tab(tab_id: str) -> None:
     herdr("tab", "rename", tab_id, "claude")
 
 
-def agent_name(requested: str | None, fallback: str) -> str:
+def hc(*args: str, timeout: int = 30, stdin: str | None = None) -> str:
+    binary = os.environ.get("HC_BIN_PATH") or shutil.which("hc")
+    if not binary:
+        raise SpawnError("Required executable not found: hc")
+    result = subprocess.run(
+        [binary, *args],
+        input=stdin,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=False,
+    )
+    if result.returncode:
+        raise SpawnError(
+            result.stderr.strip() or result.stdout.strip() or f"hc {args[0]} failed"
+        )
+    return result.stdout
+
+
+def hc_terminals() -> list[dict[str, Any]]:
+    """Every live hc terminal with its labels, which `hc ls` leaves out."""
+    request = {"jsonrpc": "2.0", "id": 1, "method": "terminal.list", "params": {}}
+    for line in hc("connect", stdin=json.dumps(request) + "\n").splitlines():
+        try:
+            reply = json.loads(line)
+        except ValueError:
+            continue
+        if reply.get("id") == 1 and "result" in reply:
+            return reply["result"]["terminals"]
+    raise SpawnError("hc terminal.list returned no result")
+
+
+def hc_app(command: str, **params: Any) -> None:
+    run(["herdr-app", "do", command, json.dumps(params)])
+
+
+def worktree_slug(branch: str) -> str:
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", branch).strip("-")
+
+
+def git_worktree(repo: Path, branch: str, base: str | None, path: str | None) -> Path:
+    """The branch's linked worktree, made with git when it has none.
+
+    A new one goes where Herdr puts its own, so code-sync finds it.
+    """
+    listing = run(["git", "worktree", "list", "--porcelain"], cwd=repo)
+    current: str | None = None
+    for line in listing.splitlines():
+        if line.startswith("worktree "):
+            current = line.removeprefix("worktree ")
+        elif line == f"branch refs/heads/{branch}" and current:
+            return Path(current)
+    target = (
+        Path(path).expanduser()
+        if path
+        else WORKTREES / repo.name / worktree_slug(branch)
+    )
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        run(
+            ["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"],
+            cwd=repo,
+        )
+        exists = True
+    except SpawnError:
+        exists = False
+    if exists:
+        args = ["git", "worktree", "add", str(target), branch]
+    else:
+        base = base or default_base(repo)
+        args = [
+            "git",
+            "worktree",
+            "add",
+            "-b",
+            branch,
+            str(target),
+            *([base] if base else []),
+        ]
+    run(args, cwd=repo, timeout=120)
+    copy_local_files(repo, target)
+    allow_direnv(target)
+    return target
+
+
+def hc_space(checkout: Path, terminals: list[dict[str, Any]]) -> str:
+    """The app space for a checkout: the caller's own when it works in that
+    checkout, else one whose terminals do, else a new one.
+
+    An id the app does not know becomes a new space, called after the folder
+    of its first terminal.
+    """
+
+    def space_of(terminal: dict[str, Any]) -> str | None:
+        return (terminal.get("labels") or {}).get("herdr.space")
+
+    me = os.environ.get("HC_TERMINAL_ID")
+    mine = next((t for t in terminals if t["address"] == me), None)
+    if mine and space_of(mine) and Path.cwd().resolve().is_relative_to(checkout):
+        return space_of(mine) or ""
+    for terminal in terminals:
+        folder = terminal.get("cwd")
+        if space_of(terminal) and folder and Path(folder).resolve() == checkout:
+            return space_of(terminal) or ""
+    return f"sp{uuid.uuid4().hex}"
+
+
+def hc_name(
+    requested: str | None, fallback: str, terminals: list[dict[str, Any]]
+) -> str:
+    taken = {(t.get("labels") or {}).get("moto.name") for t in terminals}
+    if requested:
+        return agent_name(requested, fallback, taken)
+    return agent_name(None, fallback, taken)
+
+
+def hc_command(
+    cwd: Path, env: list[str], agent_args: list[str], brief: str
+) -> list[str]:
+    """The login shell command that starts Claude with its brief as the first
+    prompt, in the folder's direnv environment, with env set."""
+    words = ["claude", *agent_args, *([brief] if brief else [])]
+    if shutil.which("direnv") and any(
+        (folder / ".envrc").is_file() for folder in (cwd, *cwd.parents)
+    ):
+        words = ["direnv", "exec", str(cwd), *words]
+    if env:
+        words = ["env", *env, *words]
+    shell = os.environ.get("SHELL") or "/bin/zsh"
+    return [shell, "-lc", "exec " + shlex.join(words)]
+
+
+def hc_start(address: str, brief: str) -> None:
+    """Wait until the new agent works on its brief, or idles without one,
+    accepting Claude's folder trust prompt for a new worktree path."""
+    deadline = time.monotonic() + HC_START_SECONDS
+    trusted = False
+    while time.monotonic() < deadline:
+        facts = json.loads(hc("get", address, "--json"))
+        if facts.get("state") != "live":
+            raise SpawnError(
+                f"Terminal {address} ended: {facts.get('reason') or 'exited'}"
+            )
+        word = (facts.get("status") or {}).get("state")
+        if word == "working" or (word == "idle" and not brief):
+            return
+        if word == "blocked":
+            raise SpawnError(f"Agent in {address} is blocked during startup")
+        if not trusted and "Yes, I trust this folder" in hc("read", address):
+            hc("keys", address, "enter")
+            trusted = True
+        time.sleep(1)
+    raise SpawnError(f"Agent in {address} did not start within {HC_START_SECONDS}s")
+
+
+def hc_spawn(
+    args: argparse.Namespace, brief: str, agent_args: list[str]
+) -> dict[str, Any]:
+    """Start the agent in a new hc terminal, in a new tab of its checkout's
+    app space. A worker another worker starts is that worker's child, which
+    hc tells when it blocks or ends. Any other has no parent, so a driver or
+    job loop gets no notes. Either outlives whoever started it."""
+    if args.pane:
+        raise SpawnError("--pane is for Herdr panes, and hc has none")
+    if args.kind != "claude":
+        raise SpawnError(f"Under hc, only --kind claude starts, not {args.kind}")
+    env = [pair for pair in (args.env or []) if ENV_PATTERN.fullmatch(pair)]
+    if len(env) != len(args.env or []):
+        raise SpawnError("Every --env must be a KEY=VALUE pair")
+    if args.cwd:
+        repo = repo_folder(args.repo).resolve()
+        cwd = Path(args.cwd).expanduser().resolve()
+        if not cwd.is_dir() or not cwd.is_relative_to(repo):
+            raise SpawnError(f"Not a folder in {repo}: {cwd}")
+    else:
+        repo = resolve_repo(args.repo)
+        cwd = repo
+    if args.worktree:
+        cwd = git_worktree(repo, args.worktree, args.base, args.path)
+    terminals = hc_terminals()
+    name = hc_name(args.name, args.worktree or repo.name, terminals)
+    space = hc_space(cwd if args.worktree else repo, terminals)
+    tab = f"tb{uuid.uuid4().hex}"
+    family = [] if args.child else ["--no-parent"]
+    started = json.loads(
+        hc(
+            "run",
+            "--json",
+            "--bg",
+            "--keep",
+            "--outlive-parent",
+            *family,
+            "--cwd",
+            str(cwd),
+            "--label",
+            f"herdr.space={space}",
+            "--label",
+            f"herdr.tab={tab}",
+            "--label",
+            f"moto.name={name}",
+            "--",
+            *hc_command(cwd, env, agent_args, brief),
+            timeout=60,
+        )
+    )
+    address = started["address"]
+    try:
+        hc_start(address, brief)
+    except (SpawnError, subprocess.TimeoutExpired) as error:
+        raise SpawnError(
+            f"Launch in hc terminal {address} at {cwd} was not confirmed; inspect it"
+            + f" before retrying: {error}"
+        ) from error
+    try:
+        hc_app("tab.rename", id=tab, name="claude")
+        if args.focus:
+            hc_app("agent.focus", terminal=address)
+    except SpawnError:
+        pass  # the window is closed, or the app has not shown the tab yet
+    return {
+        "agent": name,
+        "kind": args.kind,
+        "repo": str(repo),
+        "branch": args.worktree,
+        "cwd": str(cwd),
+        "pane_id": address,
+        "tab_id": tab,
+        "workspace_id": space,
+    }
+
+
+def herdr_names() -> set[str | None]:
+    return {a.get("name") for a in herdr("agent", "list")["agents"]}
+
+
+def agent_name(
+    requested: str | None, fallback: str, taken: set[str | None] | None = None
+) -> str:
     if requested:
         if not NAME_PATTERN.fullmatch(requested):
             raise SpawnError(
@@ -373,7 +619,8 @@ def agent_name(requested: str | None, fallback: str) -> str:
     if not base or not base[0].isalpha():
         base = f"agent-{base}".rstrip("-")
     base = base[:28]
-    taken = {a.get("name") for a in herdr("agent", "list")["agents"]}
+    if taken is None:
+        taken = herdr_names()
     name, suffix = base, 2
     while name in taken:
         name, suffix = f"{base}-{suffix}", suffix + 1
@@ -482,14 +729,21 @@ def main() -> int:
     parser.add_argument(
         "--json", action="store_true", help="Print the new session's details as JSON"
     )
+    parser.add_argument(
+        "--child",
+        action="store_true",
+        help="Under hc, make the caller the new terminal's parent, which hc tells"
+        + " when it blocks or ends",
+    )
     args = parser.parse_args()
     try:
         if os.environ.get("SANDBOX") == "1":
             raise SpawnError(
                 "Unavailable inside the container sandbox; run from the host"
             )
-        if os.environ.get("HERDR_ENV") != "1":
-            raise SpawnError("Not running inside Herdr")
+        under_hc = os.environ.get("HERDR_ENV") != "1"
+        if under_hc and not os.environ.get("HC_TERMINAL_ID"):
+            raise SpawnError("Not running inside Herdr or an hc terminal")
         brief = sys.stdin.read().strip()
         if not brief and not args.resume:
             raise SpawnError("Pass the task brief on stdin")
@@ -498,6 +752,16 @@ def main() -> int:
             + title_args(args.title, args.kind, bool(args.resume))
             + model_args(args.model, args.effort, args.kind)
         )
+        if under_hc:
+            details = hc_spawn(args, brief, agent_args)
+            if args.json:
+                print(json.dumps(details))
+            else:
+                print(
+                    f"Started {args.kind} agent {details['agent']} in hc terminal"
+                    + f" {details['pane_id']} at {details['cwd']}"
+                )
+            return 0
         env = env_args(args.env)
         if args.cwd and (args.worktree or args.pane):
             raise SpawnError(

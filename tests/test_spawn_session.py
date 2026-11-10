@@ -1,9 +1,8 @@
 """Repo lookup and agent naming without Herdr or model turns."""
 
-import importlib.util
+import importlib
 import os
 import subprocess
-from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from types import ModuleType
 from unittest.mock import patch
@@ -15,12 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 @pytest.fixture
 def spawn() -> ModuleType:
-    loader = SourceFileLoader("spawn_session", str(ROOT / "bin/spawn-session"))
-    spec = importlib.util.spec_from_loader(loader.name, loader)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    loader.exec_module(module)
-    return module
+    return importlib.reload(importlib.import_module("moto.spawn_session"))
 
 
 @pytest.fixture(autouse=True)

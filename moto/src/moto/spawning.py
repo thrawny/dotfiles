@@ -51,6 +51,8 @@ def start_worker(
         command += ["--env", f"MOTO_ROLE={role}"]
     if not spec.get("worktree") and not spec.get("pane"):
         command += ["--env", f"{WORKER_ENV}=1"]
+    if parent:
+        command.append("--child")
     # Worktree creation, agent startup and the first prompt each wait on Herdr.
     output = run(command, timeout=600, stdin=prompt)
     try:
