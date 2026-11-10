@@ -18,6 +18,14 @@ let
       ansi = ghostty.palette;
     }
   );
+  # Terminals use Ghostty's font too. Ghostty sizes fonts in points, which
+  # are 4/3 of a pixel on Linux and one pixel on macOS. Herdr takes pixels.
+  ghosttySettings = config.programs.ghostty.settings;
+  fontSize =
+    if pkgs.stdenv.hostPlatform.isDarwin then
+      ghosttySettings.font-size
+    else
+      ghosttySettings.font-size * 4 / 3;
   mods = [
     "thrawny-agents"
     "thrawny-prefix"
@@ -39,9 +47,15 @@ in
       $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -Dm644 \
         ${lib.escapeShellArg (configPath "herdr-app/keys.json")} \
         "$HOME/.config/herdr-app/keys.json"
-      $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -Dm644 \
-        ${lib.escapeShellArg (configPath "herdr-app/layouts/thrawny.json")} \
+      layout=$(${pkgs.coreutils}/bin/mktemp)
+      ${pkgs.jq}/bin/jq \
+        --arg font ${lib.escapeShellArg ghosttySettings.font-family} \
+        --argjson size ${toString fontSize} \
+        '.font = $font | .font_size = $size' \
+        ${lib.escapeShellArg (configPath "herdr-app/layouts/thrawny.json")} >"$layout"
+      $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -Dm644 "$layout" \
         "$HOME/.config/herdr-app/layouts/thrawny.json"
+      ${pkgs.coreutils}/bin/rm -f "$layout"
       $DRY_RUN_CMD ${pkgs.coreutils}/bin/install -Dm644 ${terminalTheme} \
         "$HOME/.config/herdr-app/themes/thrawny.json"
       if [ ! -e "$HOME/.config/herdr-app/shared.json" ]; then
