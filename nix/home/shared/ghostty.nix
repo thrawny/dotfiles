@@ -21,7 +21,9 @@ in
     # Only install package on Linux (macOS users install via Homebrew or direct download)
     package = if pkgs.stdenv.hostPlatform.isLinux then pkgs.ghostty else null;
     settings = {
-      inherit (app) theme background foreground;
+      inherit (app) background foreground;
+      cursor-color = app.cursor;
+      cursor-text = app.cursorText;
       font-family = "CaskaydiaMono Nerd Font";
       font-size = 12;
       window-padding-x = 10;
@@ -36,10 +38,8 @@ in
       mouse-scroll-multiplier = "precision:1,discrete:6";
       selection-background = app.selectionBackground;
       selection-foreground = app.selectionForeground;
-      palette = [
-        "0=${app.palette0}"
-        "8=${app.palette8}"
-      ];
+      # The Herdr desktop app's terminal theme reads the same palette.
+      palette = lib.imap0 (i: color: "${toString i}=${color}") app.palette;
       keybind = [
         "ctrl+enter=unbind"
         "ctrl+shift+j=unbind"

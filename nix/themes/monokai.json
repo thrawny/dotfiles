@@ -77,13 +77,30 @@
       "syntaxTheme": "Monokai Extended"
     },
     "ghostty": {
-      "theme": "Molokai",
       "background": "#1c1c1c",
       "foreground": "#f0f0f0",
+      "cursor": "#bbbbbb",
+      "cursorText": "#ffffff",
       "selectionBackground": "#49483e",
       "selectionForeground": "#f8f8f2",
-      "palette0": "#5c5c5c",
-      "palette8": "#808080"
+      "palette": [
+        "#5c5c5c",
+        "#fa2573",
+        "#98e123",
+        "#dfd460",
+        "#1080d0",
+        "#8700ff",
+        "#43a8d0",
+        "#bbbbbb",
+        "#808080",
+        "#f6669d",
+        "#b1e05f",
+        "#fff26d",
+        "#00afff",
+        "#af87ff",
+        "#51ceff",
+        "#ffffff"
+      ]
     },
     "k9s": {
       "currentLine": "#2d2a2e",
