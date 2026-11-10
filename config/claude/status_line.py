@@ -138,7 +138,11 @@ def report_herdr_cwd(cwd: str) -> None:
     """Tell herdr-decorator where this agent works; its process cwd can be stale."""
     pane_id = os.getenv("HERDR_PANE_ID")
     if os.getenv("HERDR_ENV") != "1" or not pane_id:
-        return
+        # Under the Herdr desktop app, terminals run in herdr-core instead.
+        terminal = os.getenv("HC_TERMINAL_ID")
+        if not terminal:
+            return
+        pane_id = f"hc-{terminal}"
     base = os.getenv("XDG_STATE_HOME") or os.path.expanduser("~/.local/state")
     target = os.path.join(base, "herdr-decorator", "agent-cwd", pane_id)
     try:

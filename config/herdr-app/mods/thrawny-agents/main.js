@@ -3,7 +3,7 @@
 
 import { View, div, image, svg } from "gpui-kit";
 import { v_flex, h_flex } from "gpui-base";
-import { agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, nextCommand, notify } from "herdr";
+import { exec, agents, terminals, panes, focused, spaces, run, theme, shared, setShared, setAgentOrder, openOverlay, closeOverlay, props, window, layout, nextCommand, notify } from "herdr";
 
 function find(node, id) {
   if (node?.id === id) return node;
@@ -82,6 +82,62 @@ export default class Agents extends View {
     this.changed = JSON.parse(localStorage.getItem("changed") ?? "{}");
     this.pins = JSON.parse(localStorage.getItem("pins") ?? "[]");
     cx.timer.every(30000, (cx) => cx.notify());
+    // PR, Jira, place and babysit lines under each agent, as the TUI's
+    // herdr-decorator shows them. GitHub is asked every 2 minutes, and at once
+    // when an agent comes or goes or changes folder.
+    this.deco = {};
+    this.decoKey = null;
+    this.decoBusy = false;
+    this.decorate(cx, true);
+    cx.timer.every(5000, (cx) => this.decorate(cx, false));
+    cx.timer.every(120000, (cx) => this.decorate(cx, true));
+  }
+
+  decorate(cx, force) {
+    const cwd = new Map(panes().map((p) => [p.terminal, p.cwd]));
+    // Agents on other machines are left out: their folders are not here.
+    const list = agents().filter((a) => !a.address.includes("/")).map((a) => ({
+      address: a.address, cwd: cwd.get(a.address) ?? null, title: a.title, space: a.space_name,
+    }));
+    const key = JSON.stringify(list.map((a) => [a.address, a.cwd]));
+    if (this.decoBusy || (!force && key === this.decoKey)) return;
+    this.decoKey = key;
+    this.decoBusy = true;
+    cx.spawn(async (cx) => {
+      try {
+        const r = await exec("herdr-decorator", ["app-tokens", JSON.stringify(list)], { timeout: 60000 });
+        if (r.code === 0) this.deco = JSON.parse(r.stdout);
+      } catch (_e) {
+        // Keep the last lines; the next poll tries again.
+      }
+      this.decoBusy = false;
+      cx.notify();
+    });
+  }
+
+  // The TUI's colour rules, on the blue/yellow axis: yellow needs you,
+  // green is approved, purple is merged.
+  decoLine(t, a) {
+    const tokens = this.deco[a.address]?.tokens;
+    if (!tokens) return null;
+    const parts = [];
+    const add = (text, color) => parts.push(div().flex_none().text_color(color).child(text));
+    const pr = tokens.pr;
+    if (pr) {
+      const color = pr.startsWith("\uf419") ? t.ansi13
+        : pr.startsWith("\uf4dc") || pr.startsWith("\uf4dd") ? t.dim
+        : pr.includes("\uf467") || pr.includes("±") ? t.blocked
+        : pr.includes("\uf42e") ? t.done
+        : t.foreground;
+      add(pr, color);
+    }
+    if (tokens.babysit) add(tokens.babysit, t.working);
+    if (tokens.jira) add(tokens.jira, t.accent);
+    const where = tokens.where;
+    if (where) add(where, where.startsWith("→") ? t.ansi13 : where.startsWith("wt:") ? t.dim : t.muted);
+    if (!parts.length) return null;
+    return h_flex().pl(25).pb(4).gap(8).min_w(0).overflow_hidden().text_size(11)
+      .when(Boolean(layout()?.font), (el) => el.font_family(layout().font)).children(parts);
   }
 
   // Extra actions from the TUI, using this very list's displayed order.
@@ -408,23 +464,12 @@ export default class Agents extends View {
         })
         .child(svg(`mods/workspace-chrome/${isPinned ? "pin-off" : "pin"}.svg`).size(13));
       const name = label(a);
-      return h_flex()
-        .id(`ag-${a.address}`)
-        .px(8)
+      const line = this.decoLine(t, a);
+      const top = h_flex()
         .h(30)
         .flex_none()
-        .rounded(8)
         .items_center()
         .gap(9)
-        .when(a.focused, (el) => el.bg(t.selected))
-        .cursor_pointer()
-        .hover((s) => s.bg(t.hover))
-        .on_hover((on, cx) => {
-          if (on) this.hovered = a.address;
-          else if (this.hovered === a.address) this.hovered = null;
-          cx.notify();
-        })
-        .on_click(() => run("pane.focus", { pane: a.pane }))
         .when(Boolean(pic), el => el.child(div().id(`agent-fold-${a.address}`)
           .when(subs.length > 0, el => el.on_click((_e, cx) => {
             cx.stop_propagation();
@@ -438,6 +483,22 @@ export default class Agents extends View {
         .when(this.hovered === a.address, el => el.child(pin))
         .when(this.hovered !== a.address && Boolean(when), el => el.child(div().flex_none().text_size(11).text_color(t.dim).child(duration(now - when))))
         .child(this.status(t, a, byPriority && !isPinned));
+      return v_flex()
+        .id(`ag-${a.address}`)
+        .px(8)
+        .flex_none()
+        .rounded(8)
+        .when(a.focused, (el) => el.bg(t.selected))
+        .cursor_pointer()
+        .hover((s) => s.bg(t.hover))
+        .on_hover((on, cx) => {
+          if (on) this.hovered = a.address;
+          else if (this.hovered === a.address) this.hovered = null;
+          cx.notify();
+        })
+        .on_click(() => run("pane.focus", { pane: a.pane }))
+        .child(top)
+        .when(Boolean(line), (el) => el.child(line));
     };
 
     // Groups in list order: spaces (grouped) or priority sections. Agents of a

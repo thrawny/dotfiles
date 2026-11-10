@@ -762,7 +762,68 @@ class Decorator:
         tmp.replace(path)
 
 
+def hc_shell_pid(address: str) -> int | None:
+    """The shell pid of a herdr-core terminal, from `hc get`."""
+    try:
+        out = subprocess.run(
+            ["hc", "get", address, "--json"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        return int(json.loads(out.stdout)["pid"])
+    except (OSError, subprocess.TimeoutExpired, ValueError, KeyError, TypeError):
+        return None
+
+
+def app_tokens(raw: str) -> dict[str, dict[str, Any]]:
+    """Tokens for the Herdr desktop app's agent list, computed once.
+
+    raw is a JSON list of {"address", "cwd", "title", "space"} for local
+    herdr-core terminals. The app has no metadata call, so its agents mod runs
+    this on a timer and draws the result itself. moto tracks Herdr TUI panes
+    only, so there is no $moto token here.
+    """
+    panes: list[Pane] = []
+    for item in json.loads(raw):
+        # status_line.py writes agent-cwd/hc-<address> under herdr-core.
+        pane = Pane(pane_id=f"hc-{item['address']}", cwd=item.get("cwd"), agent=None)
+        pane.title = item.get("title")
+        pane.workspace_id = item.get("space")
+        locate(pane)
+        panes.append(pane)
+    targets = [
+        (p.repo, p.branch)
+        for p in panes
+        if p.repo and p.branch and p.branch not in DEFAULT_BRANCHES
+    ]
+    prs = fetch_prs(targets) or {}
+    shells = {
+        pid: p.pane_id for p in panes if (pid := hc_shell_pid(p.pane_id[3:])) is not None
+    }
+    table = process_table()
+    babysat = babysat_panes(table, shells) if table else set()
+    jira_base = jira_browse_url()
+    result: dict[str, dict[str, Any]] = {}
+    for pane in panes:
+        target = (pane.repo, pane.branch) if pane.repo and pane.branch else None
+        pr = prs.get(target) if target else None
+        tokens, links = decorate(
+            pane,
+            pr,
+            jira_base,
+            pane.workspace_id,
+            babysit=pane.pane_id in babysat,
+        )
+        result[pane.pane_id[3:]] = {"tokens": tokens, "links": links}
+    return result
+
+
 def main() -> int:
+    if sys.argv[1:2] == ["app-tokens"]:
+        print(json.dumps(app_tokens(sys.argv[2] if len(sys.argv) > 2 else "[]")))
+        return 0
     log(f"herdr-decorator: poll every {POLL_SECONDS}s, socket {socket_path()}")
     try:
         Decorator().run()

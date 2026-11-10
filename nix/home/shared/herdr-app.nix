@@ -16,6 +16,14 @@ let
       inherit (ghostty) background foreground cursor;
       selection = ghostty.selectionBackground;
       ansi = ghostty.palette;
+      # Red-green colour-blind safe, as in the TUI (herdr.nix): colour means
+      # "look here", on a blue/yellow axis only.
+      colors = {
+        idle = theme.semantic.muted;
+        working = theme.syntax.type;
+        blocked = theme.syntax.function;
+        done = theme.semantic.success;
+      };
     }
   );
   # Terminals use Ghostty's font too. Ghostty sizes fonts in points, which
