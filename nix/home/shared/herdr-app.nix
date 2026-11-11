@@ -34,7 +34,10 @@ let
   # uses the last size and the first font family (the rest are fallbacks).
   fontFamily = lib.head (lib.toList ghosttySettings.font-family);
   fontSizePoints = lib.last (lib.toList ghosttySettings.font-size);
-  fontSize = if pkgs.stdenv.hostPlatform.isDarwin then fontSizePoints else fontSizePoints * 4.0 / 3;
+  # On Linux, Ghostty's points become px at 4/3; Herdr draws the same px
+  # slightly smaller than Ghostty does, so it gets 5% more.
+  fontSize =
+    if pkgs.stdenv.hostPlatform.isDarwin then fontSizePoints else fontSizePoints * 4.0 / 3 * 1.05;
   mods = [
     "thrawny-agents"
     "thrawny-pane"
