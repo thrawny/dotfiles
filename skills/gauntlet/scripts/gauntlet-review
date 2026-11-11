@@ -79,6 +79,8 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+normalize() { printf '%s' "$1" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]'; }
+
 # Resolve reviewer selection. Default is Claude only; Codex runs only when a
 # caller selects it. An explicit selection fails loudly on a typo rather than
 # silently running the wrong set.
@@ -89,7 +91,7 @@ if [[ -n "$reviewers" ]]; then
   run_codex=0
   IFS=',' read -ra selected <<<"$reviewers"
   for r in "${selected[@]}"; do
-    case "$(printf '%s' "$r" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')" in
+    case "$(normalize "$r")" in
       claude) run_claude=1 ;;
       codex) run_codex=1 ;;
       both | all) run_claude=1; run_codex=1 ;;
@@ -105,8 +107,8 @@ fi
 
 # Claude ignores an unknown --effort value and runs at its default, so reject
 # it here, before a round number is spent.
-claude_effort="$(printf '%s' "${GAUNTLET_CLAUDE_EFFORT:-high}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
-readonly claude_effort
+claude_effort="$(normalize "${GAUNTLET_CLAUDE_EFFORT:-}")"
+readonly claude_effort="${claude_effort:-high}"
 if [[ "$run_claude" -eq 1 ]]; then
   case "$claude_effort" in
     low | medium | high | xhigh | max) ;;
@@ -276,16 +278,17 @@ touch "$claude_out"
 # own model override, and user/project settings may configure fallback models.
 # Use the full ID: the bare `claude-opus-5` resolves to Opus 5, not 5.5. Keep
 # this policy hard-coded; gauntlet reviews must never consume Fable quota.
-# Effort is pinned too, since --setting-sources "" drops the user's setting,
-# and the effort variables are set because Claude ranks them above --effort.
+# Effort is pinned with --effort, since --setting-sources "" drops the user's
+# setting. Inherited effort variables are cleared rather than set: Claude ranks
+# them above both --effort and the per-turn effort a skill declares.
 readonly claude_review_model="claude-opus-5-5"
 readonly claude_review_settings="{\"availableModels\":[\"$claude_review_model\"],\"enforceAvailableModels\":true,\"fallbackModel\":[]}"
 claude_pid=""
 if [[ "$run_claude" -eq 1 ]]; then
-  CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
-  ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
-  CLAUDE_CODE_EFFORT_LEVEL="$claude_effort" \
-  CLAUDE_CODE_SUBAGENT_EFFORT="$claude_effort" \
+  env -u CLAUDE_CODE_EFFORT_LEVEL -u CLAUDE_CODE_SUBAGENT_EFFORT \
+    CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
+    CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL="$claude_review_model" \
+    ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
     python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --model "$claude_review_model" --effort "$claude_effort" --setting-sources "" \
       --settings "$claude_review_settings" --no-session-persistence \
       --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
