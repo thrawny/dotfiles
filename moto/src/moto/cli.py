@@ -155,7 +155,11 @@ def parser() -> argparse.ArgumentParser:
     )
     watch.set_defaults(handler=cmd_watch)
 
-    close = commands.add_parser("close", help="Remove a worker's tab and worktree")
+    close = commands.add_parser(
+        "close",
+        help="Remove a worker's tab and its linked worktree; in a main checkout,"
+        + " only its own tab or pane",
+    )
     close.add_argument("agent")
     close.add_argument(
         "--force",

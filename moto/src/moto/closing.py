@@ -79,21 +79,51 @@ def still_working(
     return "; ".join(problems) or None
 
 
+def branch_checkout(repo: str, branch: str) -> tuple[str, bool] | None:
+    """Where the branch is checked out, and whether that is a linked worktree.
+
+    None when no checkout of the repo has the branch. Git lists the main
+    checkout first, so only the entries after it are linked worktrees.
+    """
+    listing = run(["git", "worktree", "list", "--porcelain"], cwd=repo)
+    entries = [e for e in listing.split("\n\n") if e.strip()]
+    for index, entry in enumerate(entries):
+        lines = entry.splitlines()
+        if f"branch refs/heads/{branch}" in lines:
+            return lines[0].removeprefix("worktree "), index > 0
+    return None
+
+
+def linked_checkout(cwd: str) -> bool | None:
+    """Whether cwd is in a linked worktree, or None when it is no checkout."""
+    try:
+        git_dir, common = run(
+            ["git", "rev-parse", "--path-format=absolute", "--git-dir"]
+            + ["--git-common-dir"],
+            cwd=cwd,
+        ).splitlines()
+    except (MotoError, OSError, ValueError):
+        return None
+    return git_dir != common
+
+
 def owns_worktree(task: dict[str, Any]) -> bool:
     """Whether close and snooze may remove the task's checkout.
 
-    A spawned task with a branch made its own worktree. An adopted task ran
+    A spawned task with a branch made its own worktree, unless it ended up in
+    a main checkout, as a wake did before it refused to. An adopted task ran
     where the user put it, often a tab in a repo workspace that other sessions
     share, so its checkout counts as its own only when it is a linked worktree
-    that no pane outside the task's tab works in. A snoozed adopted task
-    already settled this when it snoozed.
+    that no pane outside the task's tab works in. A snoozed task already
+    settled this when it snoozed.
     """
     if not task.get("branch"):
         return False
-    if not task.get("adopted"):
-        return True
     if snooze := task.get("snoozed"):
-        return bool(snooze.get("worktree"))
+        return bool(snooze.get("worktree", not task.get("adopted")))
+    if not task.get("adopted"):
+        # A gone worktree still counts, so close checks its branch for work.
+        return linked_checkout(task["cwd"]) is not False
     try:
         top = Path(
             run(["git", "rev-parse", "--show-toplevel"], cwd=task["cwd"]).strip()
@@ -105,14 +135,30 @@ def owns_worktree(task: dict[str, Any]) -> bool:
     return others is False
 
 
-def release_adopted(task: dict[str, Any], own: bool, force: bool) -> None:
-    """Close an adopted task's tab, and remove its worktree when it owns one.
+def close_own(task: dict[str, Any], tasks: dict[str, Any]) -> None:
+    """Close the task's tab, or only its pane when another task works in that tab.
 
-    Only the tab goes, never the workspace, because the user may run other
-    sessions as tabs beside it; Herdr closes a workspace with its last tab.
+    Never the workspace, because other sessions may run as tabs beside it;
+    Herdr closes a workspace with its last tab.
     """
-    if not task.get("snoozed"):
+    shared = any(
+        other is not task
+        and not other.get("snoozed")
+        and other.get("tab_id") == task["tab_id"]
+        for other in tasks.values()
+    )
+    if shared:
+        backend.close_pane(task["pane_id"], task["tab_id"])
+    else:
         backend.close_tab(task["pane_id"], task["tab_id"])
+
+
+def release_adopted(
+    task: dict[str, Any], tasks: dict[str, Any], own: bool, force: bool
+) -> None:
+    """Close an adopted task's tab, and remove its worktree when it owns one."""
+    if not task.get("snoozed"):
+        close_own(task, tasks)
     if own and os.path.isdir(task["cwd"]):
         top = run(["git", "rev-parse", "--show-toplevel"], cwd=task["cwd"]).strip()
         flags = ["--force"] if force else []
@@ -146,13 +192,14 @@ def cmd_close(args: argparse.Namespace) -> int:
                     f"{args.agent}: {problem}; pass --force to remove anyway"
                 )
         if task.get("adopted"):
-            release_adopted(task, bool(branch), args.force)
+            release_adopted(task, tasks, bool(branch), args.force)
         elif branch:
             backend.remove_worktree(
                 task["pane_id"], task["tab_id"], cwd, repo, args.force
             )
-        else:
-            backend.close_tab(task["pane_id"], task["tab_id"])
+        elif not task.get("snoozed"):
+            # A main checkout, or one another task shares: only its own pane goes.
+            close_own(task, tasks)
         # Its commits are pushed or merged, so the local branch is a copy.
         if branch and not args.force:
             try:

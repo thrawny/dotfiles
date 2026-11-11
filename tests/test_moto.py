@@ -615,7 +615,8 @@ def test_close_counts_a_pane_closed_after_the_last_prompt_as_done(
 
 def test_close_ignores_the_pane_of_a_snoozed_task(moto: ModuleType):
     herdr, _ = close(moto, "working", [], report=DONE, snoozed=SNOOZE)
-    herdr.assert_called_once_with("tab", "close", "w1:t1")
+    # Snooze closed its tab, and Herdr may have given that id to another one.
+    herdr.assert_not_called()
 
 
 def test_forced_close_skips_the_busy_checks(moto: ModuleType):
@@ -1010,6 +1011,145 @@ def test_wake_resumes_a_session_filed_under_another_checkout(
     assert command[2:4] == ["--repo", str(worktree)]
     assert command[-2:] == ["--resume", "s1"]
     assert moto.read_tasks()["abc-1"]["cwd"] == str(worktree)
+
+
+def no_workspaces(*args: str, **_: Any) -> dict[str, Any]:
+    """A herdr stand-in with no workspace or pane open on any checkout."""
+    return {"workspaces": [], "panes": []}
+
+
+def spawn_session_restoring(moto: ModuleType) -> MagicMock:
+    """A run stand-in whose spawn-session puts the worktree back with git, as
+    spawn-session under hc does, and runs every other command for real."""
+    real_run = sys.modules["moto.common"].run
+
+    def fake(command: list[str], **kwargs: Any) -> str:
+        if command[0] != "spawn-session":
+            return real_run(command, **kwargs)
+        repo = Path(command[command.index("--repo") + 1])
+        branch = command[command.index("--worktree") + 1]
+        path = command[command.index("--path") + 1]
+        cwd = moto.git_worktree(repo, branch, None, path)
+        return json.dumps(
+            {
+                "cwd": str(cwd),
+                "pane_id": "w5:p1",
+                "tab_id": "w5:t1",
+                "workspace_id": "w5",
+            }
+        )
+
+    return MagicMock(side_effect=fake)
+
+
+def snoozed_worker(moto: ModuleType, repo: Path, worktree: Path) -> None:
+    """Snooze a worker spawned in worktree, which removes the worktree."""
+    session_file(moto.session_dir(str(worktree)), "s7", mtime=100)
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-7"] = task(
+            agent="abc-7",
+            pane_id="w4:p2",
+            tab_id="w4:t1",
+            workspace_id="w4",
+            repo=str(repo),
+            branch="ABC-7-fix",
+            cwd=str(worktree),
+            session="s7",
+        )
+    with (
+        patch.object(moto, "live_agents", return_value=live("idle", 1, "w4:p2")),
+        patch.object(moto, "herdr", MagicMock(side_effect=no_workspaces)),
+    ):
+        moto.cmd_snooze(argparse.Namespace(agent="abc-7", reason=["review"]))
+
+
+@pytest.mark.usefixtures("claude_home")
+def test_wake_after_a_snooze_restores_the_worktree_and_its_branch(
+    moto: ModuleType, pushed_clone: Path, worktree: Path
+):
+    snoozed_worker(moto, pushed_clone, worktree)
+    assert not worktree.exists()
+    snoozing = sys.modules["moto.snoozing"]
+    wake = argparse.Namespace(agent="abc-7", text=["Go", "on."])
+    # While the main checkout has the branch, a wake would land there: refuse.
+    git(pushed_clone, "switch", "-q", "ABC-7-fix")
+    with (
+        patch.object(snoozing, "run", spawn_session_restoring(moto)) as run,
+        pytest.raises(moto.MotoError, match="not the task's own worktree"),
+    ):
+        moto.cmd_wake(wake)
+    assert not any(c.args[0][0] == "spawn-session" for c in run.call_args_list)
+    assert "snoozed" in moto.read_tasks()["abc-7"]
+    git(pushed_clone, "switch", "-q", "-")
+    with (
+        patch.object(snoozing, "run", spawn_session_restoring(moto)),
+        patch.object(moto, "live_agents", return_value=live("working", 3, "w5:p1")),
+    ):
+        assert moto.cmd_wake(wake) == 0
+    head = subprocess.run(
+        ["git", "-C", str(worktree), "branch", "--show-current"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    assert head == "ABC-7-fix"
+    saved = moto.read_tasks()["abc-7"]
+    assert (saved["cwd"], saved["branch"]) == (str(worktree), "ABC-7-fix")
+    woke = events(moto)[-1]
+    assert (woke["event"], woke["branch"], woke["worktree"]) == (
+        "wake",
+        "ABC-7-fix",
+        True,
+    )
+
+
+@pytest.mark.usefixtures("claude_home")
+def test_wake_refuses_when_the_snoozed_branch_is_gone(
+    moto: ModuleType, pushed_clone: Path, worktree: Path
+):
+    snoozed_worker(moto, pushed_clone, worktree)
+    git(pushed_clone, "branch", "-q", "-D", "ABC-7-fix")
+    snoozing = sys.modules["moto.snoozing"]
+    with (
+        patch.object(snoozing, "run", spawn_session_restoring(moto)) as run,
+        pytest.raises(moto.MotoError, match="its branch is gone"),
+    ):
+        moto.cmd_wake(argparse.Namespace(agent="abc-7", text=[]))
+    assert not any(c.args[0][0] == "spawn-session" for c in run.call_args_list)
+    assert not worktree.exists()
+    assert "snoozed" in moto.read_tasks()["abc-7"]
+
+
+@pytest.mark.parametrize("same_tab", [True, False])
+def test_closing_a_task_in_a_shared_main_checkout_closes_only_its_own_pane(
+    moto: ModuleType, pushed_clone: Path, same_tab: bool
+):
+    # A task with a branch that ended up in the main checkout, beside another task.
+    git(pushed_clone, "switch", "-q", "-c", "ABC-7-fix")
+    git(pushed_clone, "push", "-q", "-u", "origin", "ABC-7-fix")
+    here = {"repo": str(pushed_clone), "cwd": str(pushed_clone), "workspace_id": "w4"}
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-7"] = task(
+            agent="abc-7", pane_id="w4:p2", tab_id="w4:t2", branch="ABC-7-fix", **here
+        )
+        tasks["other"] = task(
+            agent="other",
+            pane_id="w4:p1",
+            tab_id="w4:t2" if same_tab else "w4:t1",
+            branch="main",
+            **here,
+        )
+    with (
+        patch.object(moto, "live_agents", return_value=live("idle", 1, "w4:p2")),
+        patch.object(moto, "user_turns", return_value=[]),
+        patch.object(moto, "herdr") as herdr,
+    ):
+        moto.cmd_close(argparse.Namespace(agent="abc-7", force=False))
+    expected = ("pane", "close", "w4:p2") if same_tab else ("tab", "close", "w4:t2")
+    assert [c.args for c in herdr.call_args_list] == [expected]
+    assert pushed_clone.is_dir()
+    assert branch_exists(pushed_clone, "ABC-7-fix")
+    assert list(moto.read_tasks()) == ["other"]
 
 
 def test_wake_refuses_a_session_missing_from_its_folder(

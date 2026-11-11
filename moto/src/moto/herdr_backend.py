@@ -83,6 +83,13 @@ def close_tab(tab: str) -> None:
         pass  # the tab is already gone
 
 
+def close_pane(pane: str, _tab: str) -> None:
+    try:
+        herdr("pane", "close", pane)
+    except MotoError:
+        pass  # the pane is already gone
+
+
 def checkout_workspace(path: str) -> str | None:
     """The Herdr workspace opened on this checkout, if any.
 

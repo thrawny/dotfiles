@@ -212,12 +212,21 @@ def repo_pane(
     )["root_pane"]
 
 
+def main_checkout_error(checkout: str, branch: str) -> str:
+    return (
+        f"{checkout} has {branch} checked out, and it is not a linked worktree;"
+        + f" switch {checkout} to another branch first"
+    )
+
+
 def worktree_pane(
     repo: Path, branch: str, base: str | None, path: str | None
 ) -> dict[str, Any]:
     """A pane in the branch's linked worktree workspace, creating the worktree if needed."""
     listing = herdr("worktree", "list", "--cwd", str(repo))["worktrees"]
     existing = next((w for w in listing if w.get("branch") == branch), None)
+    if existing and not existing.get("is_linked_worktree"):
+        raise SpawnError(main_checkout_error(existing["path"], branch))
     if existing and existing.get("open_workspace_id"):
         pane = open_tab(existing["open_workspace_id"], Path(existing["path"]))
     elif existing:
@@ -417,11 +426,13 @@ def git_worktree(repo: Path, branch: str, base: str | None, path: str | None) ->
     A new one goes where Herdr puts its own, so code-sync finds it.
     """
     listing = run(["git", "worktree", "list", "--porcelain"], cwd=repo)
-    current: str | None = None
-    for line in listing.splitlines():
-        if line.startswith("worktree "):
-            current = line.removeprefix("worktree ")
-        elif line == f"branch refs/heads/{branch}" and current:
+    entries = [e.splitlines() for e in listing.split("\n\n") if e.strip()]
+    for index, lines in enumerate(entries):
+        if f"branch refs/heads/{branch}" in lines:
+            current = lines[0].removeprefix("worktree ")
+            # Git lists the main checkout first.
+            if index == 0:
+                raise SpawnError(main_checkout_error(current, branch))
             return Path(current)
     target = (
         Path(path).expanduser()

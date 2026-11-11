@@ -5,7 +5,13 @@ session in its own Herdr tab, usually in its own worktree. This command is the
 driver's toolbelt. It starts workers, lists them with their live Herdr state,
 takes reports from workers, waits until a worker needs the driver, and cleans
 up after a merge. A task blocked for a while can be snoozed: its worktree and
-workspace go away, and wake brings them back on the same Claude session.
+workspace go away, its branch stays, and wake brings them back on the same
+Claude session, in a linked worktree at the old path and its own workspace.
+Wake refuses rather than fall back to the main checkout: when the branch is
+gone, when the main checkout has the branch checked out, or when the session
+ran outside the worktree. Close removes a worktree only when the task's
+checkout is a linked worktree. A task in a main checkout loses only its tab,
+or only its pane when another task works in the same tab.
 When the user resumes a worker's session in a new pane, moto attach moves the
 task to that pane, so moto stops calling it gone. Claude's SessionStart hook
 runs moto attach --hook, which records each worker's session id, including the

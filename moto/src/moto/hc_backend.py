@@ -125,6 +125,13 @@ def close_tab(tab: str) -> None:
         pass  # the tab is already gone
 
 
+def close_pane(terminal: str, _tab: str) -> None:
+    try:
+        hc("kill", terminal)
+    except MotoError:
+        pass  # the terminal is already gone
+
+
 def others_in(tab: str, top: str) -> bool | None:
     try:
         found = terminals()

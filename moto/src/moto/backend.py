@@ -88,6 +88,11 @@ def close_tab(terminal: str, tab: str) -> None:
     module(terminal).close_tab(tab)
 
 
+def close_pane(terminal: str, tab: str) -> None:
+    """Close only this terminal, leaving the rest of its tab open."""
+    module(terminal).close_pane(terminal, tab)
+
+
 def others_in(terminal: str, tab: str, top: str) -> bool | None:
     """Whether a tab other than this one works inside the checkout at top, or
     None when the backend cannot tell."""

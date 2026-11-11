@@ -9,7 +9,7 @@ from typing import Any
 
 from moto import backend
 from moto.backend import live_agents
-from moto.closing import owns_worktree, release_adopted
+from moto.closing import branch_checkout, close_own, owns_worktree, release_adopted
 from moto.common import CLAUDE_HOME, MODEL_FLAGS, WORKER_ENV, MotoError, run
 from moto.roles import role_file
 from moto.sessions import (
@@ -79,7 +79,7 @@ def cmd_snooze(args: argparse.Namespace) -> int:
                 raise MotoError(f"{args.agent}: the worktree has uncommitted changes")
             # All three keep the branch; wake checks it out again at the same path.
             if task.get("adopted"):
-                release_adopted(task, True, False)
+                release_adopted(task, tasks, True, False)
             elif exists:
                 backend.remove_worktree(
                     task["pane_id"], task["tab_id"], cwd, repo, False
@@ -93,7 +93,7 @@ def cmd_snooze(args: argparse.Namespace) -> int:
                 ).strip()
             except MotoError:
                 branch = None  # detached HEAD
-            backend.close_tab(task["pane_id"], task["tab_id"])
+            close_own(task, tasks)
         task["snoozed"] = {
             "session": session,
             "title": title,
@@ -132,6 +132,34 @@ def cmd_wake(args: argparse.Namespace) -> int:
     return 0
 
 
+def check_branch(name: str, repo: str, branch: str | None) -> None:
+    """Refuse a wake that cannot bring the task's own worktree back.
+
+    The branch must still exist, and no checkout but a linked worktree may
+    have it, because a wake into the main checkout would work beside the
+    sessions already there.
+    """
+    if branch:
+        try:
+            run(
+                ["git", "rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"],
+                cwd=repo,
+            )
+        except MotoError:
+            branch = None
+    if not branch:
+        raise MotoError(
+            f"{name}: its branch is gone from {repo}, so wake cannot bring its"
+            + " worktree back; moto close or moto drop ends the task"
+        )
+    found = branch_checkout(repo, branch)
+    if found and not found[1]:
+        raise MotoError(
+            f"{name}: {found[0]} has {branch} checked out, and it is not the"
+            + f" task's own worktree; switch {found[0]} to another branch, then wake"
+        )
+
+
 def wake_task(name: str, text: str, sender: str | None) -> str:
     """Bring a snoozed task back with text as its prompt, and return its session."""
     task = find_task(read_tasks(), name)
@@ -142,16 +170,22 @@ def wake_task(name: str, text: str, sender: str | None) -> str:
     repo = snooze.get("repo") or task["repo"]
     cwd = snooze.get("cwd") or task["cwd"]
     linked = snooze.get("worktree", bool(task.get("branch")))
+    branch = snooze.get("branch") or task.get("branch")
     path = session_path(cwd, session)
     if not path:
         raise MotoError(f"Session {session} is not in {CLAUDE_HOME / 'projects'}")
+    if linked:
+        check_branch(name, repo, branch)
     # claude --resume finds a session only from the folder it ran in, which
     # can be another checkout than the task's.
     if path.parent != session_dir(cwd):
+        if linked:
+            # Resuming there would leave the task's worktree behind.
+            raise MotoError(f"Session {session} ran outside the worktree {cwd}: {path}")
         folder = session_cwd(path)
         if not folder or not os.path.isdir(folder):
             raise MotoError(f"Session {session} ran in a folder that is gone: {path}")
-        cwd, linked = folder, False
+        cwd = folder
     role = task.get("role")
     # A checkout that stayed may be a worktree an adopted task shared, not the
     # repo. A role's folder is in MOTO_HOME, which spawn-session takes as is.
@@ -161,7 +195,7 @@ def wake_task(name: str, text: str, sender: str | None) -> str:
         role_file(role)
         command += ["--cwd", cwd, "--env", f"MOTO_ROLE={role}"]
     if linked:
-        command += ["--worktree", snooze.get("branch") or task["branch"], "--path", cwd]
+        command += ["--worktree", str(branch), "--path", cwd]
     elif not os.path.isdir(cwd):
         raise MotoError(f"The checkout {cwd} is gone")
     else:
@@ -203,6 +237,8 @@ def wake_task(name: str, text: str, sender: str | None) -> str:
             session=session,
             message=text or None,
             cwd=info["cwd"],
+            branch=branch if linked else None,
+            worktree=linked,
             **{"from": sender or "driver"},
             pane_id=info["pane_id"],
         )
