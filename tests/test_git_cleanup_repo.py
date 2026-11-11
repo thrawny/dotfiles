@@ -83,6 +83,34 @@ def test_merged_worktree_removal_preserves_local_changes(
         assert git("-C", str(repo), "branch", "--list", "topic") == ""
 
 
+def test_unmerged_worktree_survives_similar_merged_branch(
+    tmp_path: Path, repository: Repository
+) -> None:
+    repo, environment, git = repository
+    git("-C", str(repo), "branch", "topicX1")
+    worktree = tmp_path / "unmerged worktree"
+    git("-C", str(repo), "worktree", "add", "-b", "topic.1", str(worktree))
+    (worktree / "unique").write_text("Unmerged work\n")
+    git("-C", str(worktree), "add", "unique")
+    git("-C", str(worktree), "commit", "-m", "Unmerged work")
+    topic_head = git("-C", str(worktree), "rev-parse", "HEAD")
+
+    result = subprocess.run(
+        ["bash", str(SCRIPT)],
+        cwd=repo,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (worktree / "unique").read_text() == "Unmerged work\n"
+    assert git("-C", str(worktree), "branch", "--show-current") == "topic.1"
+    assert git("-C", str(repo), "rev-parse", "refs/heads/topic.1") == topic_head
+    assert git("-C", str(repo), "branch", "--list", "topicX1") == ""
+
+
 @pytest.mark.parametrize("failure", ["stash", "checkout", "fetch", "missing-upstream"])
 def test_failed_preparation_preserves_worktree_and_branch(
     tmp_path: Path, repository: Repository, failure: str
