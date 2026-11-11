@@ -308,7 +308,7 @@ if [[ "$run_claude" -eq 1 ]]; then
   (
     if [[ -z "${SANDBOX:-}${CLAUDE_CODE_OAUTH_TOKEN:-}${ANTHROPIC_API_KEY:-}${CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR:-}" ]] &&
       ! claude auth status >/dev/null 2>&1 &&
-      token="$(claude_oauth_token)" && [[ -n "$token" ]]; then
+      token="$(claude_oauth_token)"; then
       export CLAUDE_CODE_OAUTH_TOKEN="$token"
     fi
     unset token
@@ -359,6 +359,7 @@ classify() {
   case "$txt" in
     *"blocked (auth)"*) echo "unavailable: not authenticated" ;;
     *"blocked (quota)"*) echo "unavailable: usage/quota exhausted" ;;
+    *"blocked ("*) echo "failed (exit $status)" ;;
     *"not logged in"* | *"log in"* | *"please login"* | *login* | *authenticat* | *unauthorized* | *"401"* | *"invalid api key"* | *"no credentials"* | *"logged out"* | *"session expired"*)
       echo "unavailable: not authenticated" ;;
     *"usage limit"* | *"rate limit"* | *"429"* | *quota* | *"ran out"* | *"out of credit"* | *credit* | *insufficient* | *"limit reached"* | *"too many requests"* | *upgrade*)

@@ -122,28 +122,38 @@ def test_retry_classification(diagnostic, expected):
     assert retry_review.classify(1, diagnostic) == expected
 
 
-def _claude_json(result, turns):
+def _claude_json(result, model_used):
+    # Shape of `claude -p --output-format json`. A forked /code-review reports
+    # num_turns 0 even when it ran; only modelUsage shows a model was called.
+    usage = {"claude-opus-5-5": {"outputTokens": 10}} if model_used else {}
     return json.dumps(
-        {"type": "result", "is_error": False, "num_turns": turns, "result": result}
+        {
+            "type": "result",
+            "is_error": False,
+            "num_turns": 0,
+            "result": result,
+            "modelUsage": usage,
+        }
     )
 
 
 @pytest.mark.parametrize(
     "output, expected",
     [
-        (_claude_json("Not logged in · Please run /login", 0), "auth"),
+        (_claude_json("Not logged in · Please run /login", False), "auth"),
         (
             _claude_json(
-                "Failed to authenticate. API Error: 401 Invalid bearer token", 0
+                "Failed to authenticate. API Error: 401 Invalid bearer token", False
             ),
             "auth",
         ),
-        (_claude_json("Weekly usage limit reached", 0), "quota"),
-        (_claude_json("No findings", 7), "ok"),
+        (_claude_json("Weekly usage limit reached", False), "quota"),
+        (_claude_json("a.py:1 — high — a 401 is retried as authenticated", True), "ok"),
+        ("Warning: no stdin data\n" + _claude_json("Not logged in", False), "auth"),
         ("No findings", "ok"),
     ],
 )
-def test_claude_run_without_a_model_turn_is_not_a_review(output, expected):
+def test_claude_run_that_called_no_model_is_not_a_review(output, expected):
     assert retry_review.classify(*retry_review.claude_reply(0, output)) == expected
 
 
@@ -511,7 +521,7 @@ def test_capped_adjudication_preserves_completed_review_after_fixes(
         (
             "claude",
             '#!/bin/sh\n[ "$1" = auth ] && exit 1\n'
-            f"echo '{_claude_json('Not logged in · Please run /login', 0)}'\n",
+            f"echo '{_claude_json('Not logged in · Please run /login', False)}'\n",
             "Not logged in",
         ),
     ],

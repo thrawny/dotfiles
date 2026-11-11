@@ -60,18 +60,23 @@ def claude_reply(code, text):
     """Read `claude -p --output-format json`; return (exit code, review text).
 
     Logged out or with a bad token, Claude answers the /code-review prompt with
-    an error line, `is_error: false` and exit 0, but runs no model turn. A run
-    with no turn is not a review, whatever its wording.
+    an error line, `is_error: false` and exit 0, without calling a model. Its
+    modelUsage is empty; a real review's is not. /code-review runs as a forked
+    command, which reports num_turns 0 even when it succeeds, so turns are no
+    signal. Warnings on stderr can precede the JSON, which is the last line.
     """
-    try:
-        data = json.loads(text)
-    except ValueError:
-        return code, text
+    data = None
+    for candidate in (text, text.strip().rsplit("\n", 1)[-1]):
+        try:
+            data = json.loads(candidate)
+            break
+        except ValueError:
+            continue
     if not isinstance(data, dict):
         return code, text
-    reply = str(data.get("result") or "")
-    if code == 0 and (data.get("is_error") or not data.get("num_turns")):
-        return 1, reply or "claude ran no model turn"
+    reply = str(data.get("result") or "") or text
+    if code == 0 and (data.get("is_error") or not data.get("modelUsage")):
+        return 1, reply
     return code, reply
 
 
