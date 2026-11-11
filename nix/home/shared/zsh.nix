@@ -294,6 +294,12 @@ in
             source ~/.secrets
             set +a
           fi
+          # Host-local CLAUDE_CODE_OAUTH_TOKEN, shared with T3 Code on the Mac.
+          if [[ -z "$SANDBOX" ]] && [ -f ~/.config/claude-code/oauth.env ]; then
+            set -a
+            source ~/.config/claude-code/oauth.env
+            set +a
+          fi
           [ -f ~/.zsh.local ] && source ~/.zsh.local
 
           if [[ -n "$SANDBOX" ]]; then

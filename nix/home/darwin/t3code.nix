@@ -35,10 +35,10 @@ let
       . "$HOME/.secrets"
       set +a
     fi
-    # Service-only credentials, such as CLAUDE_CODE_OAUTH_TOKEN; not tracked.
-    if [[ -r "$HOME/.config/t3code/env" ]]; then
+    # The same CLAUDE_CODE_OAUTH_TOKEN that interactive shells load.
+    if [[ -z "''${SANDBOX:-}" && -r "$HOME/.config/claude-code/oauth.env" ]]; then
       set -a
-      . "$HOME/.config/t3code/env"
+      . "$HOME/.config/claude-code/oauth.env"
       set +a
     fi
     exec ${lib.getExe cfg.package} "$@"
