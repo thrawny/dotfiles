@@ -14,14 +14,14 @@ LAUNCHER = (
 @pytest.mark.parametrize(
     ("configured", "arguments", "expected"),
     [
-        (None, [], {"codex"}),
-        ("", [], {"codex"}),
+        (None, [], {"claude"}),
+        ("", [], {"claude"}),
         ("claude", [], {"claude"}),
         ("claude,codex", [], {"claude", "codex"}),
         ("codex", ["--reviewers", "claude"], {"claude"}),
         ("claude,codex", ["--reviewers", "codex"], {"codex"}),
         ("invalid", [], set()),
-        ("codex", ["--base", "missing-ref"], set()),
+        (None, ["--base", "missing-ref"], set()),
     ],
 )
 def test_reviewer_selection(
@@ -82,7 +82,7 @@ def test_reviewer_selection(
             timeout=10,
         )
         assert followup.returncode == 0, followup.stderr
-        assert {entry.name for entry in calls.iterdir()} == {"codex"}
+        assert {entry.name for entry in calls.iterdir()} == {"claude"}
 
 
 # Retry policy is plain-data logic; these tests use no provider calls or sleeps.
@@ -487,7 +487,7 @@ def test_blocked_launcher_exposes_partial_and_result(tmp_path):
         GAUNTLET_STATE_DIR=str(tmp_path / "state"),
     )
     result = subprocess.run(
-        ["bash", str(LAUNCHER), "--uncommitted", "Fixture"],
+        ["bash", str(LAUNCHER), "--uncommitted", "--reviewers", "codex", "Fixture"],
         cwd=repo,
         env=environment,
         capture_output=True,

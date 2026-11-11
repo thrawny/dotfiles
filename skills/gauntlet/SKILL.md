@@ -1,17 +1,17 @@
 ---
 name: gauntlet
-description: Review current changes with configurable Codex and Claude reviewers, verify findings, fix major implementation bugs and summarize. Use for gauntlet review-and-fix requests or loops to convergence.
+description: Review current changes with Claude (Opus) by default, or an explicitly selected Codex reviewer, verify findings, fix major implementation bugs and summarize. Use for gauntlet review-and-fix requests or loops to convergence.
 ---
 
 # Gauntlet
 
-Run the current diff through the configured reviewers, **fix the major issues by default**, and summarize. Codex `review` runs by default. When Claude `/code-review` and Codex run together, merge their findings: the engines mostly surface *different* findings, so their union improves recall. Confidence comes from per-finding verification (§4), not from agreement.
+Run the current diff through the configured reviewers, **fix the major issues by default**, and summarize. Claude `/code-review` on Opus 5.5 runs by default; Codex `review` runs only when a run selects it. When both run, merge their findings: the engines mostly surface *different* findings, so their union improves recall. Confidence comes from per-finding verification (§4), not from agreement.
 
 Reviewer selection and launch are handled by the bundled `scripts/gauntlet-review` launcher; this skill owns the judgment around it.
 
 This skill is tuned for **recall at generation time and precision at judgment time**. The reviewers are deliberately asked to be exhaustive, so expect more raw findings than pass the bar — including some false positives. That is the intended shape: a finding you never generate cannot be caught in step 4, but a bad one can. Do not try to restore precision by softening the launcher's prompts; restore it by verifying and declining in step 4.
 
-Default behavior: fix major findings (high severity / Codex P1–P2) that triage as implementation bugs; design gaps and scope increases are escalated or deferred, not autofixed (§4). Minor and declined findings are reported, not fixed. If the user asks for report-only, do steps 1–3 and skip the fixing.
+Default behavior: fix major findings (high severity, or P1–P2 when Codex runs) that triage as implementation bugs; design gaps and scope increases are escalated or deferred, not autofixed (§4). Minor and declined findings are reported, not fixed. If the user asks for report-only, do steps 1–3 and skip the fixing.
 
 One run is one sample. When the user wants the change actually driven to convergence — before pushing, before a PR, or when they ask to "loop" or "keep going until it's clean" — follow the loop protocol in §6 rather than calling a single quiet round done.
 
@@ -35,9 +35,10 @@ bash <skill-dir>/scripts/gauntlet-review "<your context brief>"
 ```
 
 - Scope is auto-detected: the current branch's diff against origin's remote-tracking default branch (for example, `origin/main`), or uncommitted changes when already on the corresponding local branch. Override with `--base <branch>`, `--uncommitted`, or `--commit <sha>` (before the brief). For a long brief, pipe it on stdin with a trailing `-`.
-- Codex runs by default. Set `GAUNTLET_REVIEWERS=codex`, `claude`, or `claude,codex` to choose reviewers; an unset or empty variable uses Codex. `--reviewers <comma-list>` overrides the environment for one run. For example, `GAUNTLET_REVIEWERS=claude,codex bash <skill-dir>/scripts/gauntlet-review "<brief>"` runs both. Unlike quota degradation this is deterministic: a deselected engine never runs, even if its quota comes back mid-loop. A single-reviewer run generates a smaller union of findings — expect lower recall, not lower precision; verification (step 4.1) is unchanged.
+- Claude runs by default. Select Codex only for a single run, and only when asked: `--reviewers codex` or `--reviewers claude,codex`, or `GAUNTLET_REVIEWERS` set on that one command. An unset or empty variable uses Claude, and the flag overrides the variable. For example, `bash <skill-dir>/scripts/gauntlet-review --reviewers claude,codex "<brief>"` runs both. Never export `GAUNTLET_REVIEWERS` into a shell, service or job environment. Unlike quota degradation this is deterministic: a deselected engine never runs, even if its quota comes back mid-loop. A single-reviewer run generates a smaller union of findings — expect lower recall, not lower precision; verification (step 4.1) is unchanged.
 - It runs the selected reviewers (in parallel when both are selected) and prints two delimited blocks labeled with each reviewer's state — `===== CLAUDE REVIEW [ok] =====` and `===== CODEX REVIEW [ok] =====`. **Reviews take 5–20 minutes. If the harness offers managed background execution that notifies on completion, launch the command that way and continue other work until the notification arrives. Only without such a mechanism, run it in the foreground with the longest timeout available.**
-- Codex reasoning effort defaults to `high`; raise it for a single run with `GAUNTLET_CODEX_EFFORT` (for example `xhigh`) or change the model with `GAUNTLET_CODEX_MODEL`.
+- The Claude reviewer is pinned to `claude-opus-5-5` (subagents and fallbacks included) and ignores the user's model settings. Its effort defaults to `high`; raise it for a single run with `GAUNTLET_CLAUDE_EFFORT` (for example `xhigh`).
+- When Codex is selected, its reasoning effort defaults to `high`; change it for that run with `GAUNTLET_CODEX_EFFORT` or the model with `GAUNTLET_CODEX_MODEL`.
 - Every run saves each reviewer's raw output, the reviewed SHA, and the brief under a per-repo/per-branch state dir, and prints a `===== GAUNTLET STATE =====` footer with the round number, the output path, and the ledger path. **Note those paths** — the raw output is how you re-check a dedupe decision without paying for another 5–20 minute round.
 - If this branch already has a `ledger.md` (see §6), the launcher picks it up automatically and tells the reviewers not to repeat findings already adjudicated there. A `NOTE:` line always says which ledger was used. Suppress it with `--no-prior`, or point elsewhere with `--prior <file>`.
 - **Infrastructure retries:** the launcher retries only the failed reviewer, serially, with the same command/model/provider: at most three attempts and five minutes of retry scheduling per reviewer, with 30/60 second exponential backoff (120 second ceiling). A later `resetAt` (epoch seconds or ISO timestamp) or numeric `Retry-After` takes precedence; if it exceeds the budget, stop blocked. Running review time also counts toward that scheduling budget; individual reviewer duration is not limited. Capacity, rate-limit and temporary transport failures qualify; auth, quota, configuration, human stop, unknown failures and exhausted retries block. Partial findings stay available for triage, but all selected reviewers must succeed before the round can be dry or converged. Read the failure evidence instead of launching another invocation to reset its budget.
@@ -49,15 +50,15 @@ bash <skill-dir>/scripts/gauntlet-review "<your context brief>"
 
 ## 3. Dedupe
 
-Merge the blocks into one set of unique issues:
+With one reviewer there is nothing to merge: list its findings and go to step 4. When both ran, merge the blocks into one set of unique issues:
 
 - Two findings are the **same issue** when they point at the same file and overlapping location *and* describe the same root cause — even if worded or scored differently. Merge them.
 - For each unique issue, record who raised it: `claude`, `codex`, or **both**. This is telemetry, not confidence — every major finding gets the same verification in step 4.1 regardless of source. Two independent engines mostly find *different* things; a single-source finding is the normal case, not a mark against it, and agreement changes nothing about how a finding is handled.
-- Codex scores P1/P2/P3, Claude scores high/medium/low — normalize to one scale (high/medium/low); on conflict take the higher.
+- Claude scores high/medium/low and Codex scores P1/P2/P3. Map P1/P2/P3 to high/medium/low, and on conflict take the higher.
 
 ## 4. Triage, then fix
 
-For each finding that is **major** (high severity / Codex P1–P2):
+For each finding that is **major** (high severity, or Codex P1–P2):
 
 1. **Verify it against the real code first** — open the file and adjacent code and confirm the bug is real, in scope, and not already handled. Reading is usually enough; the gates were green before this run, so re-running them settles nothing. Probe directly only when the finding hinges on a case no test covers. This verification is the *primary* false-positive guard — the reviewers are asked to be exhaustive precisely because this step exists, so it is not optional and a healthy run declines a real share of findings. A false positive, a choice the brief marks intentional, or an out-of-scope finding is **declined** with the reason recorded — do not blindly apply findings.
 2. **Classify the fix, not the finding.** A verified-real finding is not automatically autofixable — what matters is what its fix would do. The change's **boundary** is the blueprint when one exists (its filetree is the set of touchable files; Decisions and Will-not-touch are the recorded calls); otherwise it is the footprint and evident intent of the diff under review.
@@ -68,7 +69,7 @@ For each finding that is **major** (high severity / Codex P1–P2):
 
 **Escalation:** finish the round — verify, classify, and fix the remaining implementation bugs — then stop the loop and put the design gaps to the user as a batch, each stated as the decision it requires, with your recommendation. Never start another round with design gaps unresolved: their resolution changes the code the next round would review. When a blueprint exists, record the resolution in it first, then implement. Conflicting findings (two fixes that can't both be applied) escalate the same way.
 
-Commit the fixes, then record every finding in the ledger (§6) with its verdict — fixed with the commit SHA, declined with the reason, design gap with the decision it requires, or deferred as scope. Leave **minor** findings (medium/low, Codex P3) as a reported list — don't fix them unless the user asks, but still ledger them, or the next round re-raises them.
+Commit the fixes, then record every finding in the ledger (§6) with its verdict — fixed with the commit SHA, declined with the reason, design gap with the decision it requires, or deferred as scope. Leave **minor** findings (medium/low, or Codex P3) as a reported list — don't fix them unless the user asks, but still ledger them, or the next round re-raises them.
 
 Committing is not just hygiene when looping. On a branch the scope is `git diff <base>...HEAD`, which is **committed work only**: uncommitted fixes are invisible to the next round, so it re-finds everything you just fixed and the loop cannot converge. The inverse holds on the default branch, where the scope is `--uncommitted` — committing there empties the scope and the next round reports a false dry round. So: **commit between rounds on a branch, never on the default branch.**
 
@@ -79,12 +80,12 @@ Present one unified report, highest severity first:
 | Severity | Location | Issue | Flagged by | Status |
 |----------|----------|-------|------------|--------|
 | high | `path:line` | one-line description | both | fixed |
-| high | `path:line` | … | codex | declined (false positive: …) |
+| high | `path:line` | … | claude | declined (false positive: …) |
 | high | `path:line` | … | both | design gap (escalated: needs decision on …) |
 | medium | `path:line` | … | codex | deferred (scope: …) |
 | medium | `path:line` | … | claude | reported |
 
-Close with a one-line tally: total unique findings, how many both reviewers agreed on, how many were fixed vs declined vs escalated as design gaps vs deferred vs left as minor, and whether either reviewer failed to run.
+Close with a one-line tally: total unique findings, how many both reviewers agreed on (when both ran), how many were fixed vs declined vs escalated as design gaps vs deferred vs left as minor, and whether either reviewer failed to run.
 
 ## 6. The ledger, and looping to convergence
 

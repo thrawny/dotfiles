@@ -12,7 +12,7 @@
 #
 # Scope defaults to the current branch vs origin's default branch
 # (--uncommitted when on that branch). The brief is extra review context passed
-# verbatim to both engines; omit it or
+# verbatim to the selected engines; omit it or
 # pass '-' to read from stdin (empty is allowed).
 #
 # Looping: each run persists its raw pass output and the reviewed SHA under a
@@ -26,12 +26,13 @@
 # failure blocks round completion; partial findings remain available.
 #
 # Reviewer selection: --reviewers takes a comma list of claude/codex (default
-# codex). A deselected engine is never launched — unlike quota degradation this
-# is deterministic, so a Codex-only loop stays Codex-only even after a Claude
-# quota reset mid-loop. GAUNTLET_REVIEWERS sets the default.
+# claude). A deselected engine is never launched — unlike quota degradation this
+# is deterministic, so a Claude-only loop stays Claude-only even after a Codex
+# quota reset mid-loop. GAUNTLET_REVIEWERS sets the default for a run.
 #
-# Env overrides: GAUNTLET_REVIEWERS (default codex),
-# GAUNTLET_CODEX_EFFORT (default high), GAUNTLET_CODEX_MODEL,
+# Env overrides: GAUNTLET_REVIEWERS (default claude),
+# GAUNTLET_CLAUDE_EFFORT (default high), GAUNTLET_CODEX_EFFORT (default high),
+# GAUNTLET_CODEX_MODEL,
 # GAUNTLET_PRIOR (ledger path), GAUNTLET_STATE_DIR (output root).
 #
 # Testable with stubs: put fake `claude`/`codex` earlier on PATH.
@@ -43,11 +44,11 @@ Usage: gauntlet-review [--base <branch> | --uncommitted | --commit <sha>]
                        [--reviewers claude,codex] [--prior <file> | --no-prior]
                        [brief]
 
-Runs Codex (review) by default, or selected Claude (/code-review) and Codex
-reviewers in parallel, printing each review's raw findings in a delimited section. The
+Runs Claude (/code-review on Opus) by default, or selected Claude and Codex
+(review) reviewers in parallel, printing each review's raw findings in a delimited section. The
 caller supplies the brief and does the dedupe/verify/fix/summarize.
 --reviewers restricts which engines run (comma list of claude/codex; default
-codex, or GAUNTLET_REVIEWERS). The CLI flag overrides the environment variable.
+claude, or GAUNTLET_REVIEWERS). The CLI flag overrides the environment variable.
 
 Raw output and the reviewed SHA are saved under the branch's state dir (printed
 at exit). Findings already adjudicated on this branch are read from that dir's
@@ -61,7 +62,7 @@ scope_set=0
 prior_file=""
 prior_set=0
 no_prior=0
-reviewers="${GAUNTLET_REVIEWERS:-codex}"
+reviewers="${GAUNTLET_REVIEWERS:-claude}"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --base) scope="--base $2"; scope_set=1; shift 2 ;;
@@ -78,10 +79,11 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Resolve reviewer selection. Default is Codex only; an explicit selection
-# fails loudly on a typo rather than silently running the wrong set.
-run_claude=0
-run_codex=1
+# Resolve reviewer selection. Default is Claude only; Codex runs only when a
+# caller selects it. An explicit selection fails loudly on a typo rather than
+# silently running the wrong set.
+run_claude=1
+run_codex=0
 if [[ -n "$reviewers" ]]; then
   run_claude=0
   run_codex=0
@@ -259,16 +261,19 @@ claude_out="$round_dir/claude.out"
 touch "$claude_out"
 
 # Claude reviewer — prints findings to stdout, then exits. Pin every model
-# selection surface to Opus 5: /code-review may spawn subagents or carry its
+# selection surface to Opus 5.5: /code-review may spawn subagents or carry its
 # own model override, and user/project settings may configure fallback models.
-# Keep this policy hard-coded; gauntlet reviews must never consume Fable quota.
-readonly claude_review_model="claude-opus-5"
-readonly claude_review_settings='{"availableModels":["claude-opus-5"],"enforceAvailableModels":true,"fallbackModel":[]}'
+# Use the full ID: the bare `claude-opus-5` resolves to Opus 5, not 5.5. Keep
+# this policy hard-coded; gauntlet reviews must never consume Fable quota.
+# Effort is pinned too, since --setting-sources "" drops the user's setting.
+readonly claude_review_model="claude-opus-5-5"
+readonly claude_review_settings='{"availableModels":["claude-opus-5-5"],"enforceAvailableModels":true,"fallbackModel":[]}'
+readonly claude_effort="${GAUNTLET_CLAUDE_EFFORT:-high}"
 claude_pid=""
 if [[ "$run_claude" -eq 1 ]]; then
   CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
   ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
-    python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --model "$claude_review_model" --setting-sources "" \
+    python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --model "$claude_review_model" --effort "$claude_effort" --setting-sources "" \
       --settings "$claude_review_settings" --no-session-persistence \
       --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
   claude_pid=$!
@@ -338,6 +343,8 @@ ok_count=0
   printf 'prior_ledger: %s\n' "${prior_src:-none}"
   printf 'reviewers: %s%s\n' "$([[ "$run_claude" -eq 1 ]] && printf 'claude')" \
     "$([[ "$run_codex" -eq 1 ]] && { [[ "$run_claude" -eq 1 ]] && printf ',codex' || printf 'codex'; })"
+  printf 'claude_model: %s\n' "$claude_review_model"
+  printf 'claude_effort: %s\n' "$claude_effort"
   printf 'codex_model: %s\n' "$codex_model"
   printf 'codex_effort: %s\n' "$codex_effort"
   printf 'claude: %s\n' "$claude_state"
