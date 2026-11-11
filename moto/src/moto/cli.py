@@ -27,6 +27,7 @@ from moto.spawning import cmd_spawn
 from moto.store import forked
 from moto.watching import cmd_watch
 from moto.whenstore import (
+    AUTOMERGE_HELP,
     UNTIL_PR_HELP,
     WHEN_ERROR_LIMIT,
     WHEN_EVERY,
@@ -210,6 +211,11 @@ def parser() -> argparse.ArgumentParser:
         + " owner/repo#N, instead of a hand-written --until-check. "
         + UNTIL_PR_HELP,
     )
+    snooze.add_argument(
+        "--automerge",
+        action="store_true",
+        help="With --until-pr, for a PR that merges by itself. " + AUTOMERGE_HELP,
+    )
     add_when_timing(snooze)
     snooze.set_defaults(handler=cmd_snooze)
 
@@ -222,6 +228,7 @@ def parser() -> argparse.ArgumentParser:
     pr_check.add_argument("pr", metavar="PR")
     pr_check.add_argument("--reviews", type=int, required=True)
     pr_check.add_argument("--comments", type=int, required=True)
+    pr_check.add_argument("--automerge", action="store_true")
     pr_check.set_defaults(handler=cmd_pr_check)
 
     when = commands.add_parser(
@@ -241,6 +248,13 @@ def parser() -> argparse.ArgumentParser:
         "--until-pr",
         metavar="PR",
         help=UNTIL_PR_HELP + "; use it in place of --check",
+    )
+    when.add_argument(
+        "--automerge",
+        action="store_true",
+        help="With --until-pr, for a PR that merges by itself. "
+        + AUTOMERGE_HELP
+        + "; a --wake task that is not snoozed is left as it is",
     )
     when.add_argument(
         "--wake",

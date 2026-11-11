@@ -35,22 +35,25 @@ from moto.whenstore import add_when, check_verdict, pr_check_command, tail
 def cmd_snooze(args: argparse.Namespace) -> int:
     reason = " ".join(args.reason).strip()
     check = getattr(args, "until_check", None)
+    automerge = getattr(args, "automerge", False)
+    if automerge and not getattr(args, "until_pr", None):
+        raise MotoError("--automerge goes with --until-pr")
     if until_pr := getattr(args, "until_pr", None):
         if check:
             raise MotoError("Pass --until-check or --until-pr, not both")
         # The counts are the ones the check compares against, so take them
         # before the task closes.
-        check = pr_check_command(until_pr)
+        check = pr_check_command(until_pr, automerge)
     if check:
         # Run before anything closes, so a check that errors or already
         # passes leaves the task as it was.
         verdict, output = check_verdict(check, os.getcwd())
         if verdict == "error":
             raise MotoError(f"{output}; {args.agent} was not snoozed")
-        if verdict == "pass":
+        if verdict in ("pass", "settled"):
             printed = f" It printed:\n{tail(output)}" if output else ""
             raise MotoError(
-                f"The check passes already, so {args.agent} was not snoozed.{printed}"
+                f"The check is over already, so {args.agent} was not snoozed.{printed}"
             )
     live = live_agents()
     with tasks_for_update() as tasks:
@@ -109,7 +112,10 @@ def cmd_snooze(args: argparse.Namespace) -> int:
             check, brief, args.agent, None, args.every, args.expires, time.time()
         )
         if name is None:
-            print("The check passed while it snoozed; wake it with moto wake.")
+            print(
+                "The check was over while it snoozed; moto wake brings it back,"
+                + " moto close closes it."
+            )
         else:
             print(
                 f"Check {name} wakes it once `{check}` passes, every {args.every},"

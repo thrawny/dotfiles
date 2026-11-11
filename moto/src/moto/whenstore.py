@@ -27,6 +27,9 @@ WHEN_EVERY = "10m"
 WHEN_EXPIRES = "7d"
 # Errors in a row before the driver hears that a check is broken, not waiting.
 WHEN_ERROR_LIMIT = 3
+# The exit code of a check that ends without waking anyone: its wait is over,
+# and nothing needs the task. Any other non-zero exit waits.
+SETTLED_EXIT = 3
 # How many lines of a passing check's stdout go out with its brief.
 WHEN_TAIL_LINES = 20
 DURATION = re.compile(r"(\d+)([smhd])")
@@ -46,9 +49,10 @@ def read_whens() -> dict[str, dict[str, Any]]:
 
 
 def check_verdict(command: str, cwd: str) -> tuple[str, str]:
-    """A check's verdict, pass, wait or error, and the text that goes with it.
+    """A check's verdict, pass, settled, wait or error, and its text.
 
-    Exit 0 passes and any other exit waits, quietly: a non-zero exit that
+    Exit 0 passes and SETTLED_EXIT settles, which ends the check without
+    waking anyone. Any other exit waits, quietly: a non-zero exit that
     writes to stderr is an error, as is 126 or 127, the shell finding no such
     command, or a check that could not start or timed out. Otherwise a broken
     check would look like a condition that never comes, until it expires.
@@ -58,6 +62,8 @@ def check_verdict(command: str, cwd: str) -> tuple[str, str]:
         return "pass", out
     if code is None:
         return "error", f"the check {err}"
+    if code == SETTLED_EXIT and not err:
+        return "settled", out
     if err or code in (126, 127) or code < 0:
         return "error", f"the check exited {code}: {err or out or 'no output'}"
     return "wait", out
@@ -72,6 +78,14 @@ UNTIL_PR_HELP = (
     + " is merged or closed, has a review decision (approved or changes"
     + " requested), has a review or comment newer than the snooze, conflicts"
     + " with its base branch, or fails a required CI check"
+)
+AUTOMERGE_HELP = (
+    "With --automerge, something else merges the PR once it is approved with CI"
+    + " green, so only what blocks the merge wakes the task: changes requested, a"
+    + " new review comment or PR comment from someone other than the PR's author,"
+    + " a conflict with the base branch, failing required CI, or the PR closed"
+    + " without merging. An approval does not wake it. A merge does not wake it"
+    + " either: the check ends quietly, and moto closes the snoozed task"
 )
 PR_REF = re.compile(
     r"(?:https?://[^/\s]+/)?(?P<repo>[\w.-]+/[\w.-]+)(?:/pull/|#)(?P<number>\d+)"
@@ -90,13 +104,31 @@ def gh_json(args: list[str]) -> Any:
     return json.loads(run(["gh", *args], timeout=60) or "null")
 
 
-def pr_activity(repo: str, number: int) -> tuple[int, int]:
-    """The PR's review count and comment count, inline review comments included."""
+def pr_activity(repo: str, number: int, automerge: bool = False) -> tuple[int, int]:
+    """The PR's review count and comment count, inline review comments included.
+
+    With automerge, approvals and the PR author's own reviews and comments do
+    not count: an approval is what the merge waits on, and the author is the
+    task itself.
+    """
     view = gh_json(
-        ["pr", "view", str(number), "-R", repo, "--json", "reviews,comments"]
+        ["pr", "view", str(number), "-R", repo, "--json", "reviews,comments,author"]
     )
     inline = gh_json(["api", "--paginate", f"repos/{repo}/pulls/{number}/comments"])
-    return len(view["reviews"]), len(view["comments"]) + len(inline or [])
+    reviews, comments, inline = view["reviews"], view["comments"], inline or []
+    if automerge:
+        author = (view.get("author") or {}).get("login")
+        reviews = [
+            r
+            for r in reviews
+            if r.get("state") != "APPROVED"
+            and (r.get("author") or {}).get("login") != author
+        ]
+        comments = [
+            c for c in comments if (c.get("author") or {}).get("login") != author
+        ]
+        inline = [c for c in inline if (c.get("user") or {}).get("login") != author]
+    return len(reviews), len(comments) + len(inline)
 
 
 def required_checks(repo: str, number: int) -> list[dict[str, Any]]:
@@ -125,11 +157,15 @@ def pr_reasons(
     checks: list[dict[str, Any]],
     seen: tuple[int, int],
     now: tuple[int, int],
+    automerge: bool = False,
 ) -> list[str]:
     """Why a snoozed task's PR needs it again: one line per reason, none to wait.
 
-    seen and now are (reviews, comments) at snooze time and now. A mergeable
-    state of UNKNOWN is GitHub still working it out, so it never counts.
+    seen and now are (reviews, comments) at snooze time and now, counted as
+    pr_activity counts them for the same automerge. A mergeable state of
+    UNKNOWN is GitHub still working it out, so it never counts. With
+    automerge, an approval is no reason. A merge is none either, but the
+    caller settles that before it asks, so only a closed PR gets here.
     """
     number, base = view["number"], view["baseRefName"]
     reasons: list[str] = []
@@ -137,7 +173,8 @@ def pr_reasons(
         reasons.append(f"PR #{number} is {view['state'].lower()}")
         return reasons
     if view["reviewDecision"] == "APPROVED":
-        reasons.append(f"PR #{number} is approved")
+        if not automerge:
+            reasons.append(f"PR #{number} is approved")
     elif view["reviewDecision"] == "CHANGES_REQUESTED":
         reasons.append(f"PR #{number} has changes requested")
     if now[0] > seen[0]:
@@ -152,27 +189,36 @@ def pr_reasons(
 
 
 def cmd_pr_check(args: argparse.Namespace) -> int:
-    """The check that --until-pr stores: exit 0 and say why, or exit 1 quietly."""
+    """The check that --until-pr stores.
+
+    Exit 0 and say why, or exit 1 quietly. With automerge, a merged PR exits
+    SETTLED_EXIT instead: nothing needs the task, and the check is over.
+    """
     repo, number = parse_pr_ref(args.pr)
+    automerge = args.automerge
     view = gh_json(
         ["pr", "view", str(number), "-R", repo]
         + ["--json", "number,state,reviewDecision,mergeable,baseRefName"]
     )
-    now = pr_activity(repo, number)
+    if automerge and view["state"] == "MERGED":
+        print(f"PR #{number} is merged")
+        return SETTLED_EXIT
+    now = pr_activity(repo, number, automerge)
     # A closed PR needs no CI read, and a PR with no new activity is not waiting on it.
     checks = required_checks(repo, number) if view["state"] == "OPEN" else []
-    reasons = pr_reasons(view, checks, (args.reviews, args.comments), now)
+    reasons = pr_reasons(view, checks, (args.reviews, args.comments), now, automerge)
     print("\n".join(reasons))
     return 0 if reasons else 1
 
 
-def pr_check_command(pr: str) -> str:
+def pr_check_command(pr: str, automerge: bool = False) -> str:
     """The shell check that waits on a PR, with its review and comment counts now."""
     repo, number = parse_pr_ref(pr)
-    reviews, comments = pr_activity(repo, number)
+    reviews, comments = pr_activity(repo, number, automerge)
     return (
         f"{shlex.join(SELF)} pr-check {shlex.quote(f'{repo}#{number}')}"
         + f" --reviews {reviews} --comments {comments}"
+        + (" --automerge" if automerge else "")
     )
 
 
@@ -187,8 +233,9 @@ def add_when(
 ) -> tuple[str | None, str]:
     """Run a new check once, and keep it unless that run settles it.
 
-    Returns the check's name, or None when it already passes, with what that
-    run printed. An error refuses the check, so a typo never waits a week.
+    Returns the check's name, or None when it already passes or is settled,
+    with what that run printed. An error refuses the check, so a typo never
+    waits a week.
     """
     seconds, lasts = parse_duration(every), parse_duration(expires)
     if seconds < JOB_TICK_SECONDS:
@@ -197,7 +244,7 @@ def add_when(
     verdict, text = check_verdict(check, cwd)
     if verdict == "error":
         raise MotoError(f"{text}; fix it, or make it exit non-zero quietly")
-    if verdict == "pass":
+    if verdict in ("pass", "settled"):
         return None, text
     whens = read_whens()
     jobs, _ = load_jobs()
@@ -261,12 +308,14 @@ def cmd_when(args: argparse.Namespace) -> int:
         find_task(tasks, args.wake)
     if bool(args.check) == bool(args.until_pr):
         raise MotoError("Pass --check or --until-pr, one of them")
-    check = args.check or pr_check_command(args.until_pr)
+    if args.automerge and not args.until_pr:
+        raise MotoError("--automerge goes with --until-pr")
+    check = args.check or pr_check_command(args.until_pr, args.automerge)
     name, output = add_when(
         check, brief, args.wake, args.name, args.every, args.expires, time.time()
     )
     if name is None:
-        print("The check passes already, so nothing was scheduled.")
+        print("The check is over already, so nothing was scheduled.")
         if output:
             print(f"It printed:\n{tail(output)}")
         return 0

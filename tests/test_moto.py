@@ -2295,6 +2295,97 @@ def test_a_pr_check_names_what_fired_and_waits_on_nothing_else(moto: ModuleType)
     ]
 
 
+def test_an_automerge_pr_check_wakes_only_for_what_blocks_the_merge(moto: ModuleType):
+    def reasons(
+        checks: list[dict[str, Any]] | None = None,
+        now: tuple[int, int] = (2, 3),
+        **fields: Any,
+    ):
+        return moto.pr_reasons(pr_view(**fields), checks or [], (2, 3), now, True)
+
+    # An approval is the merge's own trigger, so it wakes nothing.
+    assert reasons(reviewDecision="APPROVED") == []
+    assert reasons(checks=[{"name": "lint", "bucket": "pass"}]) == []
+    assert reasons(reviewDecision="CHANGES_REQUESTED") == [
+        "PR #14 has changes requested"
+    ]
+    assert reasons(now=(2, 4)) == ["PR #14 has 1 new comment(s)"]
+    assert reasons(mergeable="CONFLICTING") == ["PR #14 conflicts with main"]
+    (failed,) = reasons(checks=[{"name": "unit", "bucket": "fail"}])
+    assert "unit" in failed
+    assert reasons(state="CLOSED") == ["PR #14 is closed"]
+
+
+def test_automerge_counts_leave_out_approvals_and_the_authors_own_words(
+    moto: ModuleType,
+):
+    view = {
+        "author": {"login": "me"},
+        "reviews": [
+            {"state": "APPROVED", "author": {"login": "mate"}},
+            {"state": "COMMENTED", "author": {"login": "mate"}},
+            {"state": "COMMENTED", "author": {"login": "me"}},
+        ],
+        "comments": [{"author": {"login": "me"}}, {"author": {"login": "mate"}}],
+    }
+    inline = [{"user": {"login": "me"}}, {"user": {"login": "mate"}}]
+
+    def gh(args: list[str]) -> Any:
+        return inline if args[0] == "api" else view
+
+    with patch.object(moto, "gh_json", gh):
+        assert moto.pr_activity("acme/widgets", 14, automerge=True) == (1, 2)
+        assert moto.pr_activity("acme/widgets", 14) == (3, 4)
+
+
+def test_an_automerge_check_settles_on_a_merge_and_waits_otherwise(moto: ModuleType):
+    def check(state: str) -> int:
+        args = argparse.Namespace(
+            pr="acme/widgets#14", reviews=2, comments=3, automerge=True
+        )
+        with (
+            patch.object(moto, "gh_json", return_value=pr_view(state=state)),
+            patch.object(moto, "pr_activity", return_value=(2, 3)),
+            patch.object(moto, "required_checks", return_value=[]),
+        ):
+            return moto.cmd_pr_check(args)
+
+    assert check("MERGED") == moto.SETTLED_EXIT
+    assert check("OPEN") == 1
+    assert check("CLOSED") == 0
+    assert moto.check_verdict(f"exit {moto.SETTLED_EXIT}", ".")[0] == "settled"
+    assert moto.check_verdict("exit 1", ".")[0] == "wait"
+
+
+@pytest.mark.usefixtures("jobs_home")
+def test_a_settled_check_closes_its_snoozed_task_without_waking_anyone(
+    moto: ModuleType,
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(snoozed=SNOOZE, branch=None)
+    name = add_check(moto, "exit 1", target="abc-1")
+    setattr(moto, "wake_task", lambda *_: pytest.fail("woke the task"))
+    with moto.state_for_update("when") as whens:
+        whens[name]["check"] = f"echo 'PR #14 is merged'; exit {moto.SETTLED_EXIT}"
+    with patch.object(moto, "herdr"):
+        assert moto.tick(MONDAY_NOON + 600) == [f"{name}: settled; closed abc-1"]
+    assert "abc-1" not in moto.read_tasks()
+    assert moto.read_whens() == {}
+    assert moto.take_notes() is None
+
+
+@pytest.mark.usefixtures("jobs_home")
+def test_a_settled_check_leaves_a_working_task_alone(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    name = add_check(moto, "exit 1", target="abc-1")
+    with moto.state_for_update("when") as whens:
+        whens[name]["check"] = f"exit {moto.SETTLED_EXIT}"
+    assert moto.tick(MONDAY_NOON + 600) == [f"{name}: settled: done"]
+    assert "abc-1" in moto.read_tasks()
+    assert moto.read_whens() == {}
+
+
 def test_pr_references_take_a_url_or_owner_repo_number(moto: ModuleType):
     want = ("acme/widgets", 14)
     assert moto.parse_pr_ref("https://github.com/acme/widgets/pull/14") == want

@@ -112,7 +112,11 @@ a task with the check that wakes it. For a task that waits on a pull request,
 --until-pr (on snooze and on when) builds that check: it passes once the PR is
 closed or merged, has a review decision, a review or comment newer than the
 snooze, a conflict with its base, or a failed required CI check, and its output
-says which.
+says which. For a PR that something else merges once it is approved with CI
+green, add --automerge: the check then ignores an approval, and counts only
+reviews and comments from someone other than the PR's author. A merge ends it
+quietly, with no wake: the check exits SETTLED_EXIT, and the job loop closes the
+snoozed task as moto close does, or tells the driver if the close is refused.
 
 A worker can start workers of its own, which the driver's watch leaves to it,
 apart from what the user does in one: a wrap, snooze or handback, or closing its
