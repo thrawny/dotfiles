@@ -68,3 +68,5 @@ Colors live in one canonical document, `nix/themes/monokai.json` (semantic/synta
 ## Example/live settings pairs
 
 Claude (`config/claude/settings.example.json`), Codex (`config/codex/config.example.toml`), and Pi (`config/pi/settings.example.json`) each have a gitignored live counterpart without the `example` infix. Update the example first, then update the live file by default without asking. Only leave the live file unchanged when the user explicitly requests it.
+
+For Claude, `claude-settings-sync` (`bin/claude-settings-sync`, wrapped per host in `nix/home/shared/ai-tools.nix`) enforces this. Home Manager activation and every `just check` run make the live file equal the host's filtered example, so a direct edit to the live file is reverted on the next run. The overwritten copy goes to `~/backups/claude-settings/`. The sync compares against the example next to the live file, never the example in the worktree being checked.
