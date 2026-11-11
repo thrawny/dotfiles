@@ -245,7 +245,7 @@ Within that scope, be exhaustive: report every finding the author would fix if t
 # finding cheaply — and it must not touch the tree, which is the review artifact.
 verify="Before reporting a finding, confirm it against the real code: read the surrounding code and every caller of what changed. The test suite and the linters are already green, so re-running them proves nothing. Where a finding turns on behaviour no existing test covers — an empty or nil input, an error path, an ordering or concurrency case — probe that one case directly instead of reporting a maybe: call the function, script the sequence, print the value. Never create or modify files in the repository; the working tree is the artifact under review. Say what you probed, and drop candidates the probe disproves."
 
-claude_prompt="/code-review ${scope_desc}
+claude_prompt="/code-review ${claude_effort} ${scope_desc}
 
 ${brief}
 
@@ -279,19 +279,52 @@ touch "$claude_out"
 # Use the full ID: the bare `claude-opus-5` resolves to Opus 5, not 5.5. Keep
 # this policy hard-coded; gauntlet reviews must never consume Fable quota.
 # Effort is pinned with --effort, since --setting-sources "" drops the user's
-# setting. Inherited effort variables are cleared rather than set: Claude ranks
-# them above both --effort and the per-turn effort a skill declares.
+# setting, and as the /code-review level, which otherwise reuses the last level
+# typed interactively. Inherited effort variables are cleared rather than set:
+# Claude ranks them above both --effort and the per-turn effort a skill declares.
 readonly claude_review_model="claude-opus-5-5"
 readonly claude_review_settings="{\"availableModels\":[\"$claude_review_model\"],\"enforceAvailableModels\":true,\"fallbackModel\":[]}"
+
+# Claude Code strips CLAUDE_CODE_OAUTH_TOKEN from its tool subprocesses, so a
+# gauntlet started from a Claude session arrives without the token its T3 or
+# shell parent had. Without other credentials, read it from the env file that
+# provides it: ~/.secrets on the Mac and in zsh, or ~/env for Obelisk's t3code
+# service. Only the assignment is parsed; the file is not sourced, and the
+# value goes to the Claude reviewer's environment only, never its argv.
+claude_oauth_token() {
+  local file line value
+  for file in "$HOME/.secrets" "$HOME/env"; do
+    [[ -r "$file" ]] || continue
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      line="${line#"${line%%[![:space:]]*}"}"
+      line="${line#export }"
+      [[ "$line" == CLAUDE_CODE_OAUTH_TOKEN=* ]] || continue
+      value="${line#CLAUDE_CODE_OAUTH_TOKEN=}"
+      value="${value%"${value##*[![:space:]]}"}"
+      if [[ "$value" == \"*\" || "$value" == \'*\' ]]; then value="${value:1:${#value}-2}"; fi
+      if [[ -n "$value" ]]; then printf '%s' "$value"; return 0; fi
+    done <"$file"
+  done
+  return 1
+}
+
 claude_pid=""
 if [[ "$run_claude" -eq 1 ]]; then
-  env -u CLAUDE_CODE_EFFORT_LEVEL -u CLAUDE_CODE_SUBAGENT_EFFORT \
-    CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
-    CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL="$claude_review_model" \
-    ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
-    python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --model "$claude_review_model" --effort "$claude_effort" --setting-sources "" \
-      --settings "$claude_review_settings" --no-session-persistence \
-      --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
+  (
+    if [[ -z "${SANDBOX:-}${CLAUDE_CODE_OAUTH_TOKEN:-}${ANTHROPIC_API_KEY:-}${CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR:-}" ]] &&
+      token="$(claude_oauth_token)"; then
+      export CLAUDE_CODE_OAUTH_TOKEN="$token"
+    fi
+    unset token
+    exec env -u CLAUDE_CODE_EFFORT_LEVEL -u CLAUDE_CODE_SUBAGENT_EFFORT \
+      CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
+      CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 \
+      CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL="$claude_review_model" \
+      ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
+      python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --model "$claude_review_model" --effort "$claude_effort" --setting-sources "" \
+        --settings "$claude_review_settings" --no-session-persistence \
+        --permission-mode auto "$claude_prompt"
+  ) >"$claude_out" 2>&1 &
   claude_pid=$!
 fi
 
