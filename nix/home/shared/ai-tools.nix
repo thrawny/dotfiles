@@ -105,6 +105,12 @@ in
     // lib.optionalAttrs repoBacked {
       seedCodexConfig = seedExampleRepo "config/codex/config.example.toml" "config/codex/config.toml";
       seedClaudeSettings = seedClaudeSettingsRepo;
+      # Claude Code saves settings via a temp file beside the first symlink
+      # target, so a link through home-manager-files hits the read-only store.
+      linkClaudeSettings = hmLib.dag.entryAfter [ "linkGeneration" ] ''
+        run ln -sfn ${lib.escapeShellArg "${dotfiles}/config/claude/settings.json"} \
+          ${lib.escapeShellArg "${config.home.homeDirectory}/.claude/settings.json"}
+      '';
       seedClaudeLocalInstructions = seedClaudeLocalInstructionsRepo;
       seedPiSettings = seedExampleRepo "config/pi/settings.example.json" "config/pi/settings.json";
     }
@@ -164,7 +170,6 @@ in
     // lib.optionalAttrs repoBacked {
       ".codex/config.toml".source = configSource "codex/config.toml";
       ".pi/agent/settings.json".source = configSource "pi/settings.json";
-      ".claude/settings.json".source = configSource "claude/settings.json";
       ".claude/CLAUDE.local.md".source = configSource "claude/CLAUDE.local.md";
     }
     // lib.optionalAttrs storeBacked {
