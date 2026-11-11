@@ -35,12 +35,6 @@ let
       . "$HOME/.secrets"
       set +a
     fi
-    # The same CLAUDE_CODE_OAUTH_TOKEN that interactive shells load.
-    if [[ -z "''${SANDBOX:-}" && -r "$HOME/.config/claude-code/oauth.env" ]]; then
-      set -a
-      . "$HOME/.config/claude-code/oauth.env"
-      set +a
-    fi
     exec ${lib.getExe cfg.package} "$@"
   '';
   recovery = pkgs.writeShellScript "t3code-recovery" ''

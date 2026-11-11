@@ -61,8 +61,7 @@ claude auth status
 
 Provider authentication belongs to this Mac. Sign in with `codex login` when
 needed. Claude Code authenticates with `CLAUDE_CODE_OAUTH_TOKEN` in
-`~/.config/claude-code/oauth.env`, a one-year token from `claude setup-token`.
-Both your zsh and the T3 launcher load that file, so T3 and terminal sessions
-share one login. After replacing the token, open a new shell and restart the
-launch agent. The service log can contain pairing credentials;
+`~/.secrets`, a one-year token from `claude setup-token`. Both zsh and the T3
+launcher load that file, so T3 and terminal sessions share one login. After
+replacing the token, open a new shell and restart the launch agent. The service log can contain pairing credentials;
 do not publish it without redacting them.
