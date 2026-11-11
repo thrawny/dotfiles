@@ -57,9 +57,16 @@ def fingerprint(scope=None, root=None):
 
 
 def classify(code, text):
-    if code == 0:
-        return "ok"
     text = text.lower()
+    if code == 0:
+        # Logged out, `claude -p` answers a slash-command prompt with one
+        # "... · Please run /login" line and exit 0. That reply is no review.
+        brief = text.strip()
+        if len(brief) <= 300 and re.search(
+            r"please run /login|^not logged in|^invalid api key", brief
+        ):
+            return "auth"
+        return "ok"
     if code in (130, 143) or code < 0:
         return "human-stop"
     if re.search(

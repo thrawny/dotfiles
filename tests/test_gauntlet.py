@@ -115,6 +115,19 @@ def test_retry_classification(diagnostic, expected):
 
 
 @pytest.mark.parametrize(
+    "output, expected",
+    [
+        ("Not logged in · Please run /login", "auth"),
+        ("OAuth token has expired · Please run /login", "auth"),
+        ("Invalid API key", "auth"),
+        ("No findings", "ok"),
+    ],
+)
+def test_exit_zero_auth_reply_is_not_a_review(output, expected):
+    assert retry_review.classify(0, output) == expected
+
+
+@pytest.mark.parametrize(
     "codes, diagnostic, expected, attempts",
     [
         ([1, 0], "503 model capacity", 0, 2),
@@ -500,4 +513,41 @@ def test_blocked_launcher_exposes_partial_and_result(tmp_path):
     assert result.returncode != 0
     assert "PARTIAL_FINDING" in result.stdout
     assert str(evidence) in result.stdout
+    assert json.loads(evidence.read_text())["outcome"] == "blocked"
+
+
+def test_logged_out_claude_blocks_round(tmp_path):
+    """Claude prints a login error and exits 0 on a logged-out /code-review."""
+    import json
+
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init", "-q", str(repo)], check=True)
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    stub = tools / "claude"
+    stub.write_text('#!/bin/sh\necho "Not logged in · Please run /login"\n')
+    stub.chmod(0o755)
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith(("GAUNTLET_", "CLAUDE_CODE_OAUTH", "ANTHROPIC_API"))
+    }
+    environment.update(
+        HOME=str(tmp_path),
+        PATH=f"{tools}:{environment['PATH']}",
+        GAUNTLET_STATE_DIR=str(tmp_path / "state"),
+    )
+    result = subprocess.run(
+        ["bash", str(LAUNCHER), "--uncommitted", "Fixture"],
+        cwd=repo,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    meta = next((tmp_path / "state").glob("**/meta.txt")).read_text()
+    evidence = next((tmp_path / "state").glob("**/result.json"))
+    assert result.returncode != 0
+    assert "completed_review_round: no" in meta
     assert json.loads(evidence.read_text())["outcome"] == "blocked"
