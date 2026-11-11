@@ -53,6 +53,7 @@ Usage: pr-review [-r] [-b] [-a] [-c] [--review] [--model NAME] [--effort LEVEL]
 
 Pick a ready-for-review PR requesting review from your team (github.review_team
 in the work config) and open it in codediff, in that repo's Herdr workspace.
+The list leaves out PRs created more than 30 days ago. -a shows them.
 
   -r, --refresh   Ignore the cached PR list
       --json      Print the same PRs as JSON and exit, for a caller that reads
@@ -62,7 +63,8 @@ in the work config) and open it in codediff, in that repo's Herdr workspace.
                   Leave out PRs you have commented on. A plain comment does
                   not clear the team's review request the way a review does
   -a, --all       List every open PR in the team's repos, reviewed, labelled
-                  or not, your own included. ctrl-a toggles it in the picker
+                  or not, your own included, of any age. ctrl-a toggles it in
+                  the picker
   -j, --jira      Open the Jira ticket for REPO NUMBER instead of reviewing
   -w, --worktree  Check the PR branch out in a Herdr worktree, with Claude Code
                   and Neovim side by side, instead of reviewing
@@ -230,18 +232,21 @@ team_members() {
 # takes a reviewed PR out of the first search. Extra repos have no request to
 # clear, so a PR a teammate has reviewed there is left out by hand.
 # Each search takes two or three seconds, so they run side by side.
+# The default list only has PRs created in the last 30 days: older ones are
+# stale, and -a still shows them. -b keeps the same limit.
 review_prs() {
-  local repo repo_query='' members='[]' dir team_pid extra_pid=''
+  local repo repo_query='' members='[]' dir team_pid extra_pid='' since
+  since=$(date -d '30 days ago' +%F 2>/dev/null || date -v-30d +%F) || return 1
   for repo in $extra_repos; do
     repo_query+=" repo:$org/$repo"
   done
   dir=$(mktemp -d "$cache_dir/review.XXXXXX")
   fetch_dir=$dir
   echo '[]' >"$dir/extra.json"
-  search_prs "team-review-requested:$team" >"$dir/team.json" &
+  search_prs "created:>=$since team-review-requested:$team" >"$dir/team.json" &
   team_pid=$!
   if [[ -n $repo_query ]]; then
-    search_prs "$repo_query" >"$dir/extra.json" &
+    search_prs "created:>=$since$repo_query" >"$dir/extra.json" &
     extra_pid=$!
     members=$(team_members) || return 1
   fi
