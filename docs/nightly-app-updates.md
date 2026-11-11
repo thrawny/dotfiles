@@ -10,7 +10,10 @@ trigger an update. Diagnostics still run on no-change and deferred-update nights
 
 The authoritative prompt source is `scripts/openclaw-nightly-task.md`; the stored
 native task contains a copy, so update that same task through supported T3 tools
-when changing the prompt. Do not create another schedule. Native fixed-time
+when changing the prompt. The task is bound to one thread, and each run uses that
+thread's current model, not the task's own model field. To change the model, set
+it on the bound thread and update the model line in the prompt to match. Do not
+create another schedule. Native fixed-time
 scheduling uses the server's local timezone. M1 must remain logged in, awake and
 running T3; runs missed by more than ten minutes are skipped by the current native
 scheduler. Recheck the binding if the local timezone changes. Installing a task
