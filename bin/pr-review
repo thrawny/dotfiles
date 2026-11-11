@@ -693,7 +693,7 @@ build_rows() {
 }
 
 rows=$(build_rows)
-# An empty old list would close the picker before the refresh could land.
+# An empty old list would say there are no PRs until the refresh lands.
 if [[ -z $rows ]] && ((stale)); then
   fetch_prs
   stale=0
@@ -705,19 +705,9 @@ if ((print_json)); then
   exit 0
 fi
 
+# An empty list prints nothing: a lone blank line would show as a row in fzf.
 if ((print_rows)); then
-  printf '%s\n' "$rows"
-  exit 0
-fi
-
-if [[ -z $rows ]]; then
-  if ((all)); then
-    echo "No open PRs in $team's repos."
-  else
-    echo "No $review_label PRs waiting on $team."
-  fi
-  # In a popup the message would vanish with the pane before it could be read.
-  [[ -t 0 ]] && read -r -n 1 -s -p 'Press any key to close… '
+  [[ -z $rows ]] || printf '%s\n' "$rows"
   exit 0
 fi
 
@@ -743,17 +733,27 @@ refresh_list="[[ \$FZF_PROMPT == 'all> ' ]] &&
   echo 'reload($self --print-rows --refresh --all$flags_suffix)' ||
   echo 'reload($self --print-rows --refresh$flags_suffix)'"
 
+# An empty list still opens the picker, so ctrl-a can reach the other list. The
+# header says the list is empty, and fzf re-checks after every reload. The
+# texts go through the environment, so team names need no quoting here.
+export PR_REVIEW_KEYS='enter review · ctrl-w worktree · ctrl-a all · ctrl-r refresh · ctrl-o github · ctrl-t jira'
+export PR_REVIEW_EMPTY="No $review_label PR from the last 30 days waits on $team. ctrl-a shows every PR."
+export PR_REVIEW_EMPTY_ALL="No open PRs in $team's repos. ctrl-a goes back to the review list."
+header="if ((FZF_TOTAL_COUNT > 0)); then echo \"\$PR_REVIEW_KEYS\";
+  elif [[ \$FZF_PROMPT == 'all> ' ]]; then printf '%s\\n%s\\n' \"\$PR_REVIEW_KEYS\" \"\$PR_REVIEW_EMPTY_ALL\";
+  else printf '%s\\n%s\\n' \"\$PR_REVIEW_KEYS\" \"\$PR_REVIEW_EMPTY\"; fi"
+
 # ctrl-j and ctrl-k move through the list, so the Jira ticket goes on ctrl-t.
 # ctrl-w gives up fzf's delete-word for the worktree; become() replaces fzf so
 # the popup closes when the worktree is open, as it does after enter.
 selection=$(fzf --prompt="$prompt" --height=100% --ansi \
-  --header='enter review · ctrl-w worktree · ctrl-a all · ctrl-r refresh · ctrl-o github · ctrl-t jira' \
+  --header="$PR_REVIEW_KEYS" --bind="result:transform-header:$header" \
   --bind="ctrl-a:transform:$toggle" "${start[@]}" \
   --bind="ctrl-w:become($self --worktree {1} {2})" \
   --bind="ctrl-r:transform:$refresh_list" \
   --bind="ctrl-o:execute-silent(gh pr view --repo $org/{1} {2} --web)" \
   --bind="ctrl-t:execute-silent($self --jira {1} {2})" \
-  <<<"$rows") || exit 0
+  < <([[ -z $rows ]] || printf '%s\n' "$rows")) || exit 0
 
 [[ -n $selection ]] || exit 0
 read -r repo number _ <<<"$selection"
