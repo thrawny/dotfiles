@@ -59,6 +59,8 @@ codex login status
 claude auth status
 ```
 
-Provider authentication belongs to this Mac. Sign in with `codex login` or
-`claude auth login` when needed. The service log can contain pairing credentials;
+Provider authentication belongs to this Mac. Sign in with `codex login` when
+needed. Claude Code in T3 authenticates with `CLAUDE_CODE_OAUTH_TOKEN` in
+`~/.config/t3code/env`, a one-year token from `claude setup-token`. The launcher
+reads that file at startup, so restart the launch agent after replacing it. The service log can contain pairing credentials;
 do not publish it without redacting them.

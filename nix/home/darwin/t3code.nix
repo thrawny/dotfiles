@@ -35,6 +35,12 @@ let
       . "$HOME/.secrets"
       set +a
     fi
+    # Service-only credentials, such as CLAUDE_CODE_OAUTH_TOKEN; not tracked.
+    if [[ -r "$HOME/.config/t3code/env" ]]; then
+      set -a
+      . "$HOME/.config/t3code/env"
+      set +a
+    fi
     exec ${lib.getExe cfg.package} "$@"
   '';
   recovery = pkgs.writeShellScript "t3code-recovery" ''

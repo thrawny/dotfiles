@@ -75,3 +75,10 @@ The upstream T3 Code package remains unpatched. It still prefers Sol for new
 threads, independently of Codex's default. Choose Astra as the project default
 in T3 Code's UI when you want new threads to use it. Existing thread selections
 are not changed by deployment.
+
+## T3 Code provider logins
+
+The `t3code` service reads `/srv/t3code/env` at startup. Claude Code
+authenticates with `CLAUDE_CODE_OAUTH_TOKEN` in that file, a one-year token from
+`claude setup-token`. Codex keeps its login in `/srv/t3code/.codex/auth.json`.
+After replacing the token, restart the service with `systemctl restart t3code`.
