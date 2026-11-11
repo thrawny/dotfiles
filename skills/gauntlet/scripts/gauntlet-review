@@ -276,8 +276,8 @@ touch "$claude_out"
 # Claude reviewer — prints findings to stdout, then exits. Pin every model
 # selection surface to Opus 5.5: /code-review may spawn subagents or carry its
 # own model override, and user/project settings may configure fallback models.
-# Use the full ID: the bare `claude-opus-5` resolves to Opus 5, not 5.5. Keep
-# this policy hard-coded; gauntlet reviews must never consume Fable quota.
+# The full ID is required: the bare `claude-opus-5` resolves to Opus 5, not
+# 5.5, and the user's default model (Fable) must not run reviews.
 # Effort is pinned with --effort, since --setting-sources "" drops the user's
 # setting, and as the /code-review level, which otherwise reuses the last level
 # typed interactively. Inherited effort variables are cleared rather than set:
