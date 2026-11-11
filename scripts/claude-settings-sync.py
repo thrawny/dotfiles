@@ -63,16 +63,16 @@ def render(settings: Any, sort_keys: bool = False) -> str:
     )
 
 
-def read_live(target: Path) -> tuple[str | None, Any]:
-    """Return the live text and its parsed value; invalid JSON parses as None."""
+def read_live(target: Path) -> tuple[bytes | None, Any]:
+    """Return the live bytes and their parsed value; unparseable files give None."""
     try:
-        text = target.read_text()
+        raw = target.read_bytes()
     except FileNotFoundError:
         return None, None
     try:
-        return text, json.loads(text)
-    except json.JSONDecodeError:
-        return text, None
+        return raw, json.loads(raw.decode())
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return raw, None
 
 
 def diff_summary(old_text: str, new: Any) -> list[str]:
@@ -95,11 +95,11 @@ def diff_summary(old_text: str, new: Any) -> list[str]:
     return lines
 
 
-def backup(text: str, backup_dir: Path) -> Path:
+def backup(raw: bytes, backup_dir: Path) -> Path:
     backup_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
     path = backup_dir / f"settings.json.{stamp}"
-    path.write_text(text)
+    path.write_bytes(raw)
     for old in sorted(backup_dir.glob("settings.json.*"))[:-BACKUPS_KEPT]:
         old.unlink()
     return path
@@ -110,7 +110,7 @@ def write_atomic(target: Path, text: str) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     fd, temp = tempfile.mkstemp(dir=target.parent, prefix=".settings.json.")
     try:
-        with os.fdopen(fd, "w") as handle:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
             handle.write(text)
         os.chmod(temp, 0o644)
         os.replace(temp, target)
@@ -128,19 +128,22 @@ def sync(
     dry_run: bool = False,
 ) -> str:
     """Sync target to the filtered example and return what happened."""
-    wanted = filtered(json.loads(example.read_text()), agent_switch, store)
-    text, live = read_live(target)
-    if text is not None and text.strip() and live == wanted:
+    wanted = filtered(
+        json.loads(example.read_text(encoding="utf-8")), agent_switch, store
+    )
+    raw, live = read_live(target)
+    present = raw is not None and raw.strip() != b""
+    if present and live == wanted:
         return "in sync"
-    if not text or not text.strip():
+    if not present:
         state = "missing"
         lines: list[str] = []
     else:
         state = "drifted" if live is not None else "invalid JSON"
-        lines = diff_summary(text, wanted)
+        lines = diff_summary(raw.decode(errors="replace"), wanted)
     if dry_run:
         return "\n".join([f"{state}; would update {target}", *lines])
-    saved = backup(text, backup_dir) if text and text.strip() else None
+    saved = backup(raw, backup_dir) if raw is not None and present else None
     write_atomic(target, render(wanted))
     report = [f"{state}; updated {target}"]
     if saved:

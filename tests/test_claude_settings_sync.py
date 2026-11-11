@@ -120,6 +120,21 @@ def test_store_variant_drops_plugins_and_uses_home_status_line(tmp_path: Path) -
     assert settings["hooks"] == STRIPPED["hooks"]
 
 
+def test_undecodable_file_is_backed_up_byte_for_byte_then_replaced(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "live/settings.json"
+    target.parent.mkdir()
+    target.write_bytes(b'{"model": "\xff"}')
+
+    run(tmp_path)
+
+    assert live(tmp_path) == STRIPPED
+    assert [p.read_bytes() for p in (tmp_path / "backups").iterdir()] == [
+        b'{"model": "\xff"}'
+    ]
+
+
 def test_stale_symlink_is_replaced_by_a_regular_file(tmp_path: Path) -> None:
     target = tmp_path / "live/settings.json"
     target.parent.mkdir()
