@@ -27,7 +27,7 @@ let
   claudeSettingsSync = pkgs.writeShellApplication {
     name = "claude-settings-sync";
     text = ''
-      exec ${pkgs.python3}/bin/python3 ${../../../scripts/claude-settings-sync.py} ${
+      exec ${pkgs.python3}/bin/python3 ${../../../bin/claude-settings-sync} ${
         lib.escapeShellArgs (
           [
             "--example"

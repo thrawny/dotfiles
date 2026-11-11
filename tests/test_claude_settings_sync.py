@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPT = ROOT / "scripts/claude-settings-sync.py"
+SCRIPT = ROOT / "bin/claude-settings-sync"
 
 SWITCH = {"type": "command", "command": "agent-switch track stop --agent claude"}
 MOTO = {"type": "command", "command": "moto attach --hook"}
