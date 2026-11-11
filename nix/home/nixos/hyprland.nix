@@ -49,18 +49,22 @@ in
       # otherwise start before NetworkManager returns and stay offline forever.
       # Wait for daemon startup, not connectivity, so offline sessions still work.
       ExecStartPre = "${pkgs.networkmanager}/bin/nm-online --quiet --wait-for-startup --timeout=30";
-      ExecStart = "${pkgs.quickshell}/bin/quickshell -c dotfiles";
+      # Apps the shell launches, such as the Herdr app and the hc core it
+      # starts, inherit this PATH, so it extends the session's PATH (which UWSM
+      # fills with home.sessionPath) rather than replacing it. The project
+      # picker calls hyprland-project from the mutable checkout.
+      ExecStart = "${pkgs.writeShellScript "dotfiles-shell" ''
+        export PATH="${
+          pkgs.lib.makeBinPath [
+            agentSwitchPackage
+            quotabarPackage
+            clipboardImagePackage
+          ]
+        }''${PATH:+:$PATH}:${dotfiles}/bin:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin"
+        exec ${pkgs.quickshell}/bin/quickshell -c dotfiles
+      ''}";
       # Apps launched with execDetached must survive shell restarts.
       KillMode = "process";
-      # Systemd does not inherit home.sessionPath. The project picker calls
-      # hyprland-project from the mutable checkout, not the package profile.
-      Environment = "PATH=${
-        pkgs.lib.makeBinPath [
-          agentSwitchPackage
-          quotabarPackage
-          clipboardImagePackage
-        ]
-      }:${dotfiles}/bin:/etc/profiles/per-user/${config.home.username}/bin:/run/current-system/sw/bin";
       Restart = "on-failure";
       RestartSec = 2;
     };
