@@ -22,36 +22,20 @@ let
   agentInstructions = agentInstructionLib.mkInstructions (
     lib.mapAttrs (_: block: block.enable) config.dotfiles.agentInstructions
   );
-  # One command keeps the live Claude settings equal to this host's filtered
-  # example; activation and `just check` both run it.
-  claudeSettingsSync = pkgs.writeShellApplication {
-    name = "claude-settings-sync";
-    text = ''
-      exec ${pkgs.python3}/bin/python3 ${../../../bin/claude-settings-sync} ${
-        lib.escapeShellArgs (
-          [
-            "--example"
-            (toString (configPath "claude/settings.example.json"))
-            "--target"
-            (
-              if repoBacked then
-                "${dotfiles}/config/claude/settings.json"
-              else
-                "${config.home.homeDirectory}/.claude/settings.json"
-            )
-            "--backup-dir"
-            "${config.home.homeDirectory}/backups/claude-settings"
-          ]
-          ++ lib.optional enableAgentSwitchIntegration "--agent-switch"
-          ++ lib.optional storeBacked "--store"
+  stripAgentSwitchHooks = ''
+    if .hooks then
+      .hooks |= with_entries(
+        .value |= map(
+          .hooks |= map(select(((.command // "") | contains("agent-switch")) | not))
+          | select((.hooks | length) > 0)
         )
-      } "$@"
-    '';
-  };
-  syncClaudeSettings = hmLib.dag.entryBefore [ "linkGeneration" ] ''
-    ${claudeSettingsSync}/bin/claude-settings-sync ''${DRY_RUN_CMD:+--dry-run} || \
-      echo "Claude settings sync failed; retry with just sync-claude-settings" >&2
+        | select((.value | length) > 0)
+      )
+    else
+      .
+    end
   '';
+  claudeSettingsFilter = if enableAgentSwitchIntegration then "." else stripAgentSwitchHooks;
 
   seedExampleRepo =
     example: destination:
@@ -71,6 +55,16 @@ let
         install -Dm0644 ${lib.escapeShellArg (toString example)} "$dest_path"
       fi
     '';
+  seedClaudeSettingsRepo = hmLib.dag.entryBefore [ "linkGeneration" ] ''
+    repo=${lib.escapeShellArg dotfiles}
+    example_path="$repo/config/claude/settings.example.json"
+    dest_path="$repo/config/claude/settings.json"
+    if [ ! -s "$dest_path" ] && [ -e "$example_path" ]; then
+      install -d -m0755 "$(dirname "$dest_path")"
+      ${pkgs.jq}/bin/jq ${lib.escapeShellArg claudeSettingsFilter} "$example_path" > "$dest_path"
+      chmod 0644 "$dest_path"
+    fi
+  '';
   seedClaudeLocalInstructionsRepo = hmLib.dag.entryBefore [ "linkGeneration" ] ''
     local_instructions=${lib.escapeShellArg "${dotfiles}/config/claude/CLAUDE.local.md"}
     if [ ! -e "$local_instructions" ]; then
@@ -95,8 +89,6 @@ in
   };
 
   config.home = {
-    packages = [ claudeSettingsSync ];
-
     sessionVariables = {
       CLAUDE_CONFIG_DIR = "${config.home.homeDirectory}/.claude";
     };
@@ -112,7 +104,7 @@ in
     }
     // lib.optionalAttrs repoBacked {
       seedCodexConfig = seedExampleRepo "config/codex/config.example.toml" "config/codex/config.toml";
-      inherit syncClaudeSettings;
+      seedClaudeSettings = seedClaudeSettingsRepo;
       # Claude Code saves settings via a temp file beside the first symlink
       # target, so a link through home-manager-files hits the read-only store.
       linkClaudeSettings = hmLib.dag.entryAfter [ "linkGeneration" ] ''
@@ -125,7 +117,21 @@ in
     // lib.optionalAttrs storeBacked {
       seedCodexConfig = seedExampleStore (configPath "codex/config.example.toml") "${config.home.homeDirectory}/.codex/config.toml";
 
-      inherit syncClaudeSettings;
+      seedClaudeSettings = hmLib.dag.entryBefore [ "linkGeneration" ] ''
+        dest_path=${lib.escapeShellArg "${config.home.homeDirectory}/.claude/settings.json"}
+        if [ -L "$dest_path" ]; then
+          rm "$dest_path"
+        fi
+        if [ ! -s "$dest_path" ]; then
+          install -d -m0755 "$(dirname "$dest_path")"
+          ${pkgs.jq}/bin/jq ${lib.escapeShellArg ''
+            ${claudeSettingsFilter}
+            | del(.enabledPlugins)
+            | .statusLine.command = "python3 ~/.claude/status_line.py"
+          ''} ${lib.escapeShellArg (toString (configPath "claude/settings.example.json"))} > "$dest_path"
+          chmod 0644 "$dest_path"
+        fi
+      '';
 
       seedPiSettings = seedExampleStore (configPath "pi/settings.example.json") "${config.home.homeDirectory}/.pi/agent/settings.json";
     };

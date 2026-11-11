@@ -109,16 +109,6 @@ sync-t3code-preferences target="thrawny-z13":
 private-skills-sync:
     private-skills-sync
 
-# Make this host's live Claude settings equal its filtered example, backing up drift
-sync-claude-settings:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if command -v claude-settings-sync >/dev/null; then
-        claude-settings-sync
-    else
-        echo "claude-settings-sync is not installed for $USER; skipping"
-    fi
-
 # Refresh private skill links without network access
 private-skills-link:
     private-skills-sync --link-only
@@ -226,13 +216,12 @@ test-nvim:
 
 # === Combined workflows ===
 
-# Sync live Claude settings, then format, lint, typecheck, evaluate current host, and check Pi extensions
+# Format, lint, typecheck, evaluate current host, and check Pi extensions
 check:
     #!/usr/bin/env bash
     set -euo pipefail
     # Check tools also need small local builds on hosts with max-jobs = 0.
     export NIX_CONFIG="$(printf '%s\n' "${NIX_CONFIG:-}" 'max-jobs = 1' 'cores = 2')"
-    {{just_executable()}} sync-claude-settings
     nix develop ./nix --command just fmt check-parallel
 
 [parallel]
