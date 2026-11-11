@@ -90,7 +90,6 @@ skip_commented=0
 all=0
 print_rows=0
 print_json=0
-preview=0
 jira=0
 worktree=0
 brief=0
@@ -118,8 +117,6 @@ while (($#)); do
       shift
       ;;
     --no-focus) focus=--no-focus ;;
-    # fzf runs the preview as its own process, so it re-enters the script too.
-    --preview) preview=1 ;;
     # fzf's reload bindings re-run this script for the list, so the row
     # building has to be reachable without the picker.
     --print-rows) print_rows=1 ;;
@@ -177,19 +174,18 @@ for tool in gh jq fzf; do
   command -v "$tool" >/dev/null || die "$tool is not installed"
 done
 
-# gh search prs cannot return a PR's review decision or check status, so both
-# lists go through GraphQL. The PR fields are shared, and flatten turns them
+# gh search prs cannot return a PR's review decision, so both lists go through
+# GraphQL. The CI state is left out on purpose: statusCheckRollup nearly
+# doubled the query time, and a review queue does not need it. The PR fields are shared, and flatten turns them
 # into the shape gh search prints.
 pr_fields='number title isDraft updatedAt reviewDecision
   author { login }
   comments(last: 100) { nodes { viewerDidAuthor } }
-  labels(first: 20) { nodes { name } }
-  commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }'
+  labels(first: 20) { nodes { name } }'
 # shellcheck disable=SC2016 # jq, not shell
 flatten='def flatten:
-  . + { checks: .commits.nodes[0].commit.statusCheckRollup.state,
-        commented: any(.comments.nodes[]?; .viewerDidAuthor) }
-  | del(.commits, .labels, .comments);'
+  . + { commented: any(.comments.nodes[]?; .viewerDidAuthor) }
+  | del(.labels, .comments);'
 
 # The search also says whether the repo has the label, which sets ready for
 # build_rows to filter on. The label filter runs here rather than in the
@@ -377,29 +373,6 @@ open_jira() {
     exit 1
   fi
   open_url "$jira_base/$ticket"
-}
-
-# gh prints the PR's fields as key:value lines, then `--`, then the markdown
-# body. The fields read as YAML, so highlight them that way and leave the body
-# to the markdown lexer. bat is optional; without it the preview is plain.
-show_preview() {
-  local repo=$1 number=$2 text head_text body_text
-  text=$(gh pr view --repo "$org/$repo" "$number" 2>&1) || {
-    printf '%s\n' "$text"
-    return 0
-  }
-  if ! command -v bat >/dev/null; then
-    printf '%s\n' "$text"
-    return 0
-  fi
-  # Tabs after the field names would read as indentation to the YAML lexer.
-  head_text=$(sed -n '1,/^--$/p' <<<"$text" | sed '/^--$/d; s/:\t/: /')
-  body_text=$(sed -n '/^--$/,$p' <<<"$text" | sed '1d')
-  bat --color=always --style=plain --language=yaml <<<"$head_text"
-  if [[ -n $body_text ]]; then
-    printf '\n'
-    bat --color=always --style=plain --language=markdown <<<"$body_text"
-  fi
 }
 
 ensure_clone() {
@@ -635,9 +608,7 @@ find_workspace() {
 }
 
 if ((${#args[@]} == 2)); then
-  if ((preview)); then
-    show_preview "${args[0]#*/}" "${args[1]}"
-  elif ((jira)); then
+  if ((jira)); then
     open_jira "${args[0]#*/}" "${args[1]}"
   elif ((worktree)); then
     open_worktree "${args[0]#*/}" "${args[1]}"
@@ -684,7 +655,6 @@ build_json() {
           isDraft,
           ready,
           reviewDecision,
-          checks,
           url: "https://github.com/\($org)/\(.repository.name)/pull/\(.number)" })
 ' "$cache"
 }
@@ -709,12 +679,6 @@ build_rows() {
       ({ APPROVED: ["32", "✓"],
          CHANGES_REQUESTED: ["31", "✗"],
          REVIEW_REQUIRED: ["33", "○"] }[.reviewDecision // ""]
-        // ["90", "–"] | paint),
-      ({ SUCCESS: ["32", "✓"],
-         FAILURE: ["31", "✗"],
-         ERROR: ["31", "✗"],
-         PENDING: ["33", "●"],
-         EXPECTED: ["33", "●"] }[.checks // ""]
         // ["90", "–"] | paint),
       (.updatedAt | fromdateiso8601 | strflocaltime("%Y-%m-%d %H:%M")),
       .author.login,
@@ -781,7 +745,6 @@ selection=$(fzf --prompt="$prompt" --height=100% --ansi \
   --header='enter review · ctrl-w worktree · ctrl-a all · ctrl-r refresh · ctrl-o github · ctrl-t jira' \
   --bind="ctrl-a:transform:$toggle" "${start[@]}" \
   --bind="ctrl-w:become($self --worktree {1} {2})" \
-  --preview="$self --preview {1} {2}" --preview-window=right,55%,wrap \
   --bind="ctrl-r:transform:$refresh_list" \
   --bind="ctrl-o:execute-silent(gh pr view --repo $org/{1} {2} --web)" \
   --bind="ctrl-t:execute-silent($self --jira {1} {2})" \
