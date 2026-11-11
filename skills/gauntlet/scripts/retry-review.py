@@ -56,17 +56,29 @@ def fingerprint(scope=None, root=None):
     return digest.hexdigest()
 
 
+def claude_reply(code, text):
+    """Read `claude -p --output-format json`; return (exit code, review text).
+
+    Logged out or with a bad token, Claude answers the /code-review prompt with
+    an error line, `is_error: false` and exit 0, but runs no model turn. A run
+    with no turn is not a review, whatever its wording.
+    """
+    try:
+        data = json.loads(text)
+    except ValueError:
+        return code, text
+    if not isinstance(data, dict):
+        return code, text
+    reply = str(data.get("result") or "")
+    if code == 0 and (data.get("is_error") or not data.get("num_turns")):
+        return 1, reply or "claude ran no model turn"
+    return code, reply
+
+
 def classify(code, text):
-    text = text.lower()
     if code == 0:
-        # Logged out, `claude -p` answers a slash-command prompt with one
-        # "... · Please run /login" line and exit 0. That reply is no review.
-        brief = text.strip()
-        if len(brief) <= 300 and re.search(
-            r"please run /login|^not logged in|^invalid api key", brief
-        ):
-            return "auth"
         return "ok"
+    text = text.lower()
     if code in (130, 143) or code < 0:
         return "human-stop"
     if re.search(
@@ -187,7 +199,10 @@ def run(
             with raw.open("wb") as stream:
                 result = invoke(argv, stdout=stream, stderr=subprocess.STDOUT)
             text = raw.read_text(errors="replace")
-            kind = classify(result.returncode, text)
+            code = result.returncode
+            if engine == "claude":
+                code, text = claude_reply(code, text)
+            kind = classify(code, text)
         except OSError as error:
             raw.write_text(str(error))
             kind = "terminal"
@@ -197,7 +212,7 @@ def run(
         if kind == "ok" and (
             not answer.exists() or not answer.stat().st_size
             if engine == "codex"
-            else not raw.stat().st_size
+            else not text.strip()
         ):
             kind = "empty-result"
         last_reset = reset_at(text) if kind == "transient" else None
@@ -205,9 +220,10 @@ def run(
         retry = kind == "transient" and attempt < 3 and clock() + wait - started <= 300
         if kind == "ok":
             try:
-                Path(output).write_bytes(
-                    answer.read_bytes() if engine == "codex" else raw.read_bytes()
-                )
+                if engine == "codex":
+                    Path(output).write_bytes(answer.read_bytes())
+                else:
+                    Path(output).write_text(text)
             except OSError:
                 kind = "output-error"
         record(

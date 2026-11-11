@@ -1,5 +1,6 @@
 """Reviewer selection runs only the requested tools, without model invocations."""
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -9,6 +10,21 @@ import pytest
 LAUNCHER = (
     Path(__file__).resolve().parents[1] / "skills/gauntlet/scripts/gauntlet-review"
 )
+
+
+def _isolated_environment(tmp_path: Path, tools: Path) -> dict[str, str]:
+    """Stub reviewers first on PATH, with no host credentials or secrets file."""
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith(("GAUNTLET_", "CLAUDE_CODE_OAUTH", "ANTHROPIC_API"))
+    }
+    environment.update(
+        HOME=str(tmp_path),
+        PATH=f"{tools}:{environment['PATH']}",
+        GAUNTLET_STATE_DIR=str(tmp_path / "state"),
+    )
+    return environment
 
 
 @pytest.mark.parametrize(
@@ -49,16 +65,8 @@ def test_reviewer_selection(
             'printf "No findings\\n"\n'
         )
         stub.chmod(0o755)
-    environment = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith("GAUNTLET_")
-    }
-    environment.update(
-        PATH=f"{tools}:{environment['PATH']}",
-        CALLS=str(calls),
-        GAUNTLET_STATE_DIR=str(tmp_path / "state"),
-    )
+    environment = _isolated_environment(tmp_path, tools)
+    environment["CALLS"] = str(calls)
     if configured is not None:
         environment["GAUNTLET_REVIEWERS"] = configured
     result = subprocess.run(
@@ -114,17 +122,29 @@ def test_retry_classification(diagnostic, expected):
     assert retry_review.classify(1, diagnostic) == expected
 
 
+def _claude_json(result, turns):
+    return json.dumps(
+        {"type": "result", "is_error": False, "num_turns": turns, "result": result}
+    )
+
+
 @pytest.mark.parametrize(
     "output, expected",
     [
-        ("Not logged in · Please run /login", "auth"),
-        ("OAuth token has expired · Please run /login", "auth"),
-        ("Invalid API key", "auth"),
+        (_claude_json("Not logged in · Please run /login", 0), "auth"),
+        (
+            _claude_json(
+                "Failed to authenticate. API Error: 401 Invalid bearer token", 0
+            ),
+            "auth",
+        ),
+        (_claude_json("Weekly usage limit reached", 0), "quota"),
+        (_claude_json("No findings", 7), "ok"),
         ("No findings", "ok"),
     ],
 )
-def test_exit_zero_auth_reply_is_not_a_review(output, expected):
-    assert retry_review.classify(0, output) == expected
+def test_claude_run_without_a_model_turn_is_not_a_review(output, expected):
+    assert retry_review.classify(*retry_review.claude_reply(0, output)) == expected
 
 
 @pytest.mark.parametrize(
@@ -479,28 +499,37 @@ def test_capped_adjudication_preserves_completed_review_after_fixes(
         module["build"](directory, "converged")
 
 
-def test_blocked_launcher_exposes_partial_and_result(tmp_path):
+@pytest.mark.parametrize(
+    ("reviewer", "script", "partial"),
+    [
+        (
+            "codex",
+            '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do\n  if [ "$1" = "-o" ]; then shift; echo PARTIAL_FINDING > "$1"; fi\n  shift\ndone\necho "invalid model" >&2\nexit 1\n',
+            "PARTIAL_FINDING",
+        ),
+        # Logged out, claude -p answers /code-review with exit 0 and no model turn.
+        (
+            "claude",
+            '#!/bin/sh\n[ "$1" = auth ] && exit 1\n'
+            f"echo '{_claude_json('Not logged in · Please run /login', 0)}'\n",
+            "Not logged in",
+        ),
+    ],
+)
+def test_blocked_launcher_exposes_partial_and_result(
+    tmp_path, reviewer, script, partial
+):
     repo = tmp_path / "repo"
     repo.mkdir()
     subprocess.run(["git", "init", "-q", str(repo)], check=True)
     tools = tmp_path / "tools"
     tools.mkdir()
-    stub = tools / "codex"
-    stub.write_text(
-        '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do\n  if [ "$1" = "-o" ]; then shift; echo PARTIAL_FINDING > "$1"; fi\n  shift\ndone\necho "invalid model" >&2\nexit 1\n'
-    )
+    stub = tools / reviewer
+    stub.write_text(script)
     stub.chmod(0o755)
-    environment = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith("GAUNTLET_")
-    }
-    environment.update(
-        PATH=f"{tools}:{environment['PATH']}",
-        GAUNTLET_STATE_DIR=str(tmp_path / "state"),
-    )
+    environment = _isolated_environment(tmp_path, tools)
     result = subprocess.run(
-        ["bash", str(LAUNCHER), "--uncommitted", "--reviewers", "codex", "Fixture"],
+        ["bash", str(LAUNCHER), "--uncommitted", "--reviewers", reviewer, "Fixture"],
         cwd=repo,
         env=environment,
         capture_output=True,
@@ -511,43 +540,6 @@ def test_blocked_launcher_exposes_partial_and_result(tmp_path):
 
     evidence = next((tmp_path / "state").glob("**/result.json"))
     assert result.returncode != 0
-    assert "PARTIAL_FINDING" in result.stdout
+    assert partial in result.stdout
     assert str(evidence) in result.stdout
-    assert json.loads(evidence.read_text())["outcome"] == "blocked"
-
-
-def test_logged_out_claude_blocks_round(tmp_path):
-    """Claude prints a login error and exits 0 on a logged-out /code-review."""
-    import json
-
-    repo = tmp_path / "repo"
-    repo.mkdir()
-    subprocess.run(["git", "init", "-q", str(repo)], check=True)
-    tools = tmp_path / "tools"
-    tools.mkdir()
-    stub = tools / "claude"
-    stub.write_text('#!/bin/sh\necho "Not logged in · Please run /login"\n')
-    stub.chmod(0o755)
-    environment = {
-        key: value
-        for key, value in os.environ.items()
-        if not key.startswith(("GAUNTLET_", "CLAUDE_CODE_OAUTH", "ANTHROPIC_API"))
-    }
-    environment.update(
-        HOME=str(tmp_path),
-        PATH=f"{tools}:{environment['PATH']}",
-        GAUNTLET_STATE_DIR=str(tmp_path / "state"),
-    )
-    result = subprocess.run(
-        ["bash", str(LAUNCHER), "--uncommitted", "Fixture"],
-        cwd=repo,
-        env=environment,
-        capture_output=True,
-        text=True,
-        timeout=10,
-    )
-    meta = next((tmp_path / "state").glob("**/meta.txt")).read_text()
-    evidence = next((tmp_path / "state").glob("**/result.json"))
-    assert result.returncode != 0
-    assert "completed_review_round: no" in meta
     assert json.loads(evidence.read_text())["outcome"] == "blocked"

@@ -287,23 +287,18 @@ readonly claude_review_settings="{\"availableModels\":[\"$claude_review_model\"]
 
 # Claude Code strips CLAUDE_CODE_OAUTH_TOKEN from its tool subprocesses, so a
 # gauntlet started from a Claude session arrives without the token its T3 or
-# shell parent had. Without other credentials, read it from the env file that
-# provides it: ~/.secrets on the Mac and in zsh, or ~/env for Obelisk's t3code
-# service. Only the assignment is parsed; the file is not sourced, and the
-# value goes to the Claude reviewer's environment only, never its argv.
+# shell parent had. When Claude has no credential at all, take the token from
+# the env file that gave it to that parent: ~/.secrets on the Mac and in zsh, or
+# ~/env for Obelisk's t3code service. The file is read the way its loaders read
+# it (`set -a; .`), in a clean subshell, and only the token comes back; it goes
+# to the Claude reviewer's environment only, never its argv, logs or state.
 claude_oauth_token() {
-  local file line value
+  local file value
   for file in "$HOME/.secrets" "$HOME/env"; do
     [[ -r "$file" ]] || continue
-    while IFS= read -r line || [[ -n "$line" ]]; do
-      line="${line#"${line%%[![:space:]]*}"}"
-      line="${line#export }"
-      [[ "$line" == CLAUDE_CODE_OAUTH_TOKEN=* ]] || continue
-      value="${line#CLAUDE_CODE_OAUTH_TOKEN=}"
-      value="${value%"${value##*[![:space:]]}"}"
-      if [[ "$value" == \"*\" || "$value" == \'*\' ]]; then value="${value:1:${#value}-2}"; fi
-      if [[ -n "$value" ]]; then printf '%s' "$value"; return 0; fi
-    done <"$file"
+    value="$(env -i HOME="$HOME" PATH="$PATH" bash -c \
+      'set -a; . "$1" >/dev/null 2>&1; printf "%s" "${CLAUDE_CODE_OAUTH_TOKEN:-}"' _ "$file")" || true
+    if [[ -n "$value" ]]; then printf '%s' "$value"; return 0; fi
   done
   return 1
 }
@@ -312,7 +307,8 @@ claude_pid=""
 if [[ "$run_claude" -eq 1 ]]; then
   (
     if [[ -z "${SANDBOX:-}${CLAUDE_CODE_OAUTH_TOKEN:-}${ANTHROPIC_API_KEY:-}${CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR:-}" ]] &&
-      token="$(claude_oauth_token)"; then
+      ! claude auth status >/dev/null 2>&1 &&
+      token="$(claude_oauth_token)" && [[ -n "$token" ]]; then
       export CLAUDE_CODE_OAUTH_TOKEN="$token"
     fi
     unset token
@@ -321,7 +317,7 @@ if [[ "$run_claude" -eq 1 ]]; then
       CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 \
       CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL="$claude_review_model" \
       ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
-      python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --model "$claude_review_model" --effort "$claude_effort" --setting-sources "" \
+      python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --output-format json --model "$claude_review_model" --effort "$claude_effort" --setting-sources "" \
         --settings "$claude_review_settings" --no-session-persistence \
         --permission-mode auto "$claude_prompt"
   ) >"$claude_out" 2>&1 &
@@ -361,6 +357,8 @@ classify() {
   [[ "$status" -eq 0 ]] && { echo "ok"; return; }
   txt="$(tr '[:upper:]' '[:lower:]' <"$file" 2>/dev/null || true)"
   case "$txt" in
+    *"blocked (auth)"*) echo "unavailable: not authenticated" ;;
+    *"blocked (quota)"*) echo "unavailable: usage/quota exhausted" ;;
     *"not logged in"* | *"log in"* | *"please login"* | *login* | *authenticat* | *unauthorized* | *"401"* | *"invalid api key"* | *"no credentials"* | *"logged out"* | *"session expired"*)
       echo "unavailable: not authenticated" ;;
     *"usage limit"* | *"rate limit"* | *"429"* | *quota* | *"ran out"* | *"out of credit"* | *credit* | *insufficient* | *"limit reached"* | *"too many requests"* | *upgrade*)
