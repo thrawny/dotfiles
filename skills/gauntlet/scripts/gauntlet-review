@@ -103,6 +103,14 @@ if [[ -n "$reviewers" ]]; then
   fi
 fi
 
+# Claude ignores an unknown --effort value and runs at its default, so reject
+# it here, before a round number is spent.
+readonly claude_effort="${GAUNTLET_CLAUDE_EFFORT:-high}"
+case "$claude_effort" in
+  low | medium | high | xhigh | max) ;;
+  *) echo "gauntlet-review: unknown GAUNTLET_CLAUDE_EFFORT '$claude_effort' (expected low, medium, high, xhigh, max)" >&2; exit 1 ;;
+esac
+
 # Auto-detect scope when none was given: current branch vs origin's default
 # branch, or uncommitted changes when already on the corresponding local branch.
 # Compare against the remote-tracking ref so a stale local branch does not add
@@ -265,14 +273,16 @@ touch "$claude_out"
 # own model override, and user/project settings may configure fallback models.
 # Use the full ID: the bare `claude-opus-5` resolves to Opus 5, not 5.5. Keep
 # this policy hard-coded; gauntlet reviews must never consume Fable quota.
-# Effort is pinned too, since --setting-sources "" drops the user's setting.
+# Effort is pinned too, since --setting-sources "" drops the user's setting,
+# and the effort variables are set because Claude ranks them above --effort.
 readonly claude_review_model="claude-opus-5-5"
-readonly claude_review_settings='{"availableModels":["claude-opus-5-5"],"enforceAvailableModels":true,"fallbackModel":[]}'
-readonly claude_effort="${GAUNTLET_CLAUDE_EFFORT:-high}"
+readonly claude_review_settings="{\"availableModels\":[\"$claude_review_model\"],\"enforceAvailableModels\":true,\"fallbackModel\":[]}"
 claude_pid=""
 if [[ "$run_claude" -eq 1 ]]; then
   CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
   ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
+  CLAUDE_CODE_EFFORT_LEVEL="$claude_effort" \
+  CLAUDE_CODE_SUBAGENT_EFFORT="$claude_effort" \
     python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --model "$claude_review_model" --effort "$claude_effort" --setting-sources "" \
       --settings "$claude_review_settings" --no-session-persistence \
       --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
@@ -321,8 +331,8 @@ classify() {
   esac
 }
 
-if [[ "$run_claude" -eq 1 ]]; then claude_state="$(classify "$claude_status" "$claude_out")"; else claude_state="skipped (--reviewers)"; fi
-if [[ "$run_codex" -eq 1 ]]; then codex_state="$(classify "$codex_status" "$codex_log")"; else codex_state="skipped (--reviewers)"; fi
+if [[ "$run_claude" -eq 1 ]]; then claude_state="$(classify "$claude_status" "$claude_out")"; else claude_state="not selected"; fi
+if [[ "$run_codex" -eq 1 ]]; then codex_state="$(classify "$codex_status" "$codex_log")"; else codex_state="not selected"; fi
 
 ok_count=0
 [[ "$run_claude" -eq 1 && "$claude_status" -eq 0 ]] && ok_count=$((ok_count + 1))
@@ -359,12 +369,12 @@ if [[ "$ok_count" -eq 0 ]]; then
     "$claude_state" "$codex_state" >&2
 else
   if [[ "$run_claude" -eq 0 ]]; then
-    printf 'NOTE: claude skipped by --reviewers.\n'
+    printf 'NOTE: claude not selected for this run.\n'
   elif [[ "$claude_status" -ne 0 ]]; then
     printf 'NOTE: claude %s — blocked; Codex findings remain available.\n' "$claude_state"
   fi
   if [[ "$run_codex" -eq 0 ]]; then
-    printf 'NOTE: codex skipped by --reviewers.\n'
+    printf 'NOTE: codex not selected for this run.\n'
   elif [[ "$codex_status" -ne 0 ]]; then
     printf 'NOTE: codex %s — blocked; Claude findings remain available.\n' "$codex_state"
   fi
