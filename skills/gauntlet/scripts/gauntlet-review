@@ -105,11 +105,14 @@ fi
 
 # Claude ignores an unknown --effort value and runs at its default, so reject
 # it here, before a round number is spent.
-readonly claude_effort="${GAUNTLET_CLAUDE_EFFORT:-high}"
-case "$claude_effort" in
-  low | medium | high | xhigh | max) ;;
-  *) echo "gauntlet-review: unknown GAUNTLET_CLAUDE_EFFORT '$claude_effort' (expected low, medium, high, xhigh, max)" >&2; exit 1 ;;
-esac
+claude_effort="$(printf '%s' "${GAUNTLET_CLAUDE_EFFORT:-high}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')"
+readonly claude_effort
+if [[ "$run_claude" -eq 1 ]]; then
+  case "$claude_effort" in
+    low | medium | high | xhigh | max) ;;
+    *) echo "gauntlet-review: unknown GAUNTLET_CLAUDE_EFFORT '$GAUNTLET_CLAUDE_EFFORT' (expected low, medium, high, xhigh, max)" >&2; exit 1 ;;
+  esac
+fi
 
 # Auto-detect scope when none was given: current branch vs origin's default
 # branch, or uncommitted changes when already on the corresponding local branch.
@@ -261,7 +264,7 @@ ${verify}
 
 ${prior_block}"
 
-# Output is kept, not scratched. A round costs two reviews at 5-20 minutes and
+# Output is kept, not scratched. A review takes 5-20 minutes and uses
 # real quota; discarding the raw findings the moment the caller has read them
 # once means a bad dedupe forces a full re-run, and a loop that crosses a
 # context compaction loses the basis it is supposed to dedupe against.
