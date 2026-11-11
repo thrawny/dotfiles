@@ -178,10 +178,7 @@ function parseZmxSessions(output: string): ZmxSession[] {
 		for (const item of line.split("\t")) {
 			const separator = item.indexOf("=");
 			if (separator < 0) continue;
-			const key = item
-				.slice(0, separator)
-				.trim()
-				.replace(/^→\s*/, "");
+			const key = item.slice(0, separator).trim().replace(/^→\s*/, "");
 			fields.set(key, item.slice(separator + 1));
 		}
 
