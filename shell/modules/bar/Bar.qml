@@ -134,7 +134,7 @@ PanelWindow {
             onClicked: Quickshell.execDetached(["ghostty", "-e", "btop"])
         }
         BarButton {
-            text: Qt.formatDateTime(clock.date, barWindow.alternateClock ? "dddd" : barWindow.compact ? "MM-dd HH:mm" : "yyyy-MM-dd HH:mm")
+            text: Qt.formatDateTime(clock.date, barWindow.alternateClock ? "dddd" : "yyyy-MM-dd HH:mm")
             hint: Qt.formatDateTime(clock.date, "dddd, d MMMM yyyy") + "\nClick to change display, right-click to lock"
             onClicked: barWindow.alternateClock = !barWindow.alternateClock
             onSecondaryClicked: Quickshell.execDetached(["hyprlock"])
