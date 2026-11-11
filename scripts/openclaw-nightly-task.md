@@ -1,5 +1,5 @@
 Run the nightly agent check for OpenClaw AND T3 on BOTH M1 and Obelisk, using
-codex/gpt-6.1-sol with reasoningEffort=high. This visible T3 run owns the decision
+claudeAgent/claude-opus-5-5 with effort=medium. This visible T3 run owns the decision
 and any rollout through verification. There is no independent recurring release
 updater. Do not launch a parallel daily job or call the retired --scheduled runner.
 

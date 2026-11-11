@@ -1,7 +1,7 @@
 # Nightly fleet maintenance by the M1 T3 agent
 
 One native T3 Code scheduled task runs at **04:00 Europe/Stockholm** on M1 with
-`codex/gpt-6.1-sol`, explicitly `reasoningEffort=high`. Its visible T3 thread owns
+`claudeAgent/claude-opus-5-5`, explicitly `effort=medium`. Its visible T3 thread owns
 assessment, decisions, any rollout and the final report for **OpenClaw and T3 on
 both M1 and Obelisk**. It checks current health, available supported releases,
 release notes, migrations and relevant known issues, then records a reasoned
