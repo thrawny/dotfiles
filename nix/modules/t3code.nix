@@ -45,7 +45,9 @@ let
     EOF
   '';
 
-  codexSkills = agentAssets.skillEntriesFor pkgs "codex";
+  skillsFor =
+    agent: builtins.removeAttrs (agentAssets.skillEntriesFor pkgs agent) agentAssets.pausedSkills;
+  codexSkills = skillsFor "codex";
   codexSkillLinks = lib.concatStringsSep "\n" (
     lib.mapAttrsToList (name: skill: ''
       link_store_path ${lib.escapeShellArg "${codexHome}/skills/${name}"} ${lib.escapeShellArg (toString skill.source)}
@@ -55,15 +57,7 @@ let
   # Claude Code never writes under skills/, so the whole folder is one store
   # link. Each deploy replaces the set, and dropped skills leave with it.
   claudeSkills = pkgs.linkFarm "t3code-claude-skills" (
-    lib.mapAttrs (_: skill: skill.source) (
-      # Herdr is paused on every host (nix/home/shared/agent-skills.nix) and is
-      # not installed here.
-      builtins.removeAttrs (agentAssets.skillEntriesFor pkgs "claude") [
-        "herdr"
-        "herdr-core"
-        "herdr-demo"
-      ]
-    )
+    lib.mapAttrs (_: skill: skill.source) (skillsFor "claude")
   );
   # Unattended work only: T3 sets the permission mode per thread, and Jonas's
   # interactive settings (hooks, status line, output style) stay out.
@@ -346,6 +340,11 @@ let
       link_store_path ${lib.escapeShellArg "${codexHome}/hooks.json"} ${lib.escapeShellArg (toString agentAssets.codexFiles.hooks)}
       link_store_path ${lib.escapeShellArg "${codexHome}/hooks"} ${lib.escapeShellArg (toString agentAssets.codexFiles.hooksDir)}
       ${codexSkillLinks}
+      for paused in ${lib.escapeShellArgs agentAssets.pausedSkills}; do
+        if [ -L ${lib.escapeShellArg "${codexHome}/skills"}/"$paused" ]; then
+          rm ${lib.escapeShellArg "${codexHome}/skills"}/"$paused"
+        fi
+      done
 
       link_store_path ${lib.escapeShellArg "${claudeHome}/CLAUDE.md"} ${lib.escapeShellArg (toString agentAssets.claudeFiles.instructions)}
       link_store_path ${lib.escapeShellArg "${claudeHome}/skills"} ${lib.escapeShellArg (toString claudeSkills)}

@@ -124,6 +124,13 @@ rec {
     skillTargets
     ;
 
+  # Herdr skills are paused everywhere without removing their sources.
+  pausedSkills = [
+    "herdr"
+    "herdr-core"
+    "herdr-demo"
+  ];
+
   claudeFiles = {
     instructions = builtins.toFile "claude-CLAUDE.md" agentInstructions.claudeGlobal;
     commands = configRoot + "/claude/commands";

@@ -76,6 +76,14 @@ threads, independently of Codex's default. Choose Astra as the project default
 in T3 Code's UI when you want new threads to use it. Existing thread selections
 are not changed by deployment.
 
+## T3 Code agent files
+
+`t3code-prepare` runs before each `t3code` start and rebuilds the agents' global
+files from `nix/modules/t3code.nix`. `~/.claude/CLAUDE.md`, `~/.claude/skills`
+and `~/.claude/commands` are read-only store links, and `~/.claude/settings.json`
+is overwritten on every start. Codex gets the same skills as per-skill links in
+`~/.codex/skills`. Change them in dotfiles and deploy; edits on the host are lost.
+
 ## T3 Code provider logins
 
 The `t3code` service reads `/srv/t3code/env` at startup. Claude Code

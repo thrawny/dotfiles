@@ -33,12 +33,7 @@ in
     herdrTui = lib.mkEnableOption "legacy Herdr TUI skills instead of the herdr-core trigger";
   };
 
-  # Pause Herdr skills without removing their sources or applications.
-  config.dotfiles.agentSkills.disabled = [
-    "herdr"
-    "herdr-core"
-    "herdr-demo"
-  ];
+  config.dotfiles.agentSkills.disabled = agentAssets.pausedSkills;
 
   config.home.file =
     agentAssets.skillFiles "claude" (enabledSkillsFor "claude")
