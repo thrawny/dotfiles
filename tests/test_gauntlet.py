@@ -71,7 +71,7 @@ def test_reviewer_selection(
             '  if [ "$1" = "-o" ]; then shift; printf "No findings\\n" > "$1"; fi\n'
             "  shift\n"
             "done\n"
-            'printf "No findings\\n"\n'
+            f"printf '%s\\n' '{_claude_json('No findings', True)}'\n"
         )
         stub.chmod(0o755)
     environment = _isolated_environment(tmp_path, tools)
@@ -159,7 +159,8 @@ def _claude_json(result, model_used):
         (_claude_json("Weekly usage limit reached", False), "quota"),
         (_claude_json("a.py:1 — high — a 401 is retried as authenticated", True), "ok"),
         ("Warning: no stdin data\n" + _claude_json("Not logged in", False), "auth"),
-        ("No findings", "ok"),
+        (_claude_json("Not logged in", False) + "\nWarning: after\n", "auth"),
+        ("No findings", "terminal"),
     ],
 )
 def test_claude_run_that_called_no_model_is_not_a_review(output, expected):
@@ -183,7 +184,7 @@ def test_retry_outcomes(tmp_path, monkeypatch, codes, diagnostic, expected, atte
 
     def invoke(command, stdout, stderr):
         code = next(remaining)
-        stdout.write((diagnostic if code else "No findings").encode())
+        stdout.write((diagnostic if code else _claude_json("No findings", True)).encode())
         return subprocess.CompletedProcess(command, code)
 
     output = tmp_path / "result.out"
@@ -213,7 +214,7 @@ def test_retry_scope_change_blocks(tmp_path, monkeypatch):
     monkeypatch.setattr(retry_review, "fingerprint", lambda: next(scopes))
 
     def invoke(command, stdout, stderr):
-        stdout.write(b"No findings")
+        stdout.write(_claude_json("No findings", True).encode())
         return subprocess.CompletedProcess(command, 0)
 
     output = tmp_path / "result"
@@ -388,7 +389,7 @@ def test_output_error_cannot_publish_success(tmp_path, monkeypatch):
     monkeypatch.setattr(retry_review, "fingerprint", lambda: "scope")
 
     def invoke(command, stdout, stderr):
-        stdout.write(b"No findings")
+        stdout.write(_claude_json("No findings", True).encode())
         return subprocess.CompletedProcess(command, 0)
 
     assert (
@@ -569,7 +570,7 @@ def test_blocked_launcher_exposes_partial_and_result(
 
 def _token_file(tmp_path, content="tok-file\n", mode=0o600):
     path = tmp_path / "token"
-    path.write_text(content)
+    path.write_bytes(content if isinstance(content, bytes) else content.encode())
     path.chmod(mode)
     return path
 
@@ -582,7 +583,9 @@ def _token_file(tmp_path, content="tok-file\n", mode=0o600):
         ("\n \n", 0o600, None, "is empty"),
         ("tok-file\n", 0o640, None, "group or others"),
         ("tok-file\n", 0o604, None, "group or others"),
-        ("CLAUDE_CODE_OAUTH_TOKEN=tok extra", 0o600, None, "only the token"),
+        ("CLAUDE_CODE_OAUTH_TOKEN=tok", 0o600, None, "only the token"),
+        ('"tok-file"', 0o600, None, "only the token"),
+        (b"\xff\xfe", 0o600, None, "not text"),
     ],
 )
 def test_claude_token_file(tmp_path, content, mode, token, problem):
@@ -622,8 +625,6 @@ def test_blocked_claude_records_auth_without_launching(tmp_path, monkeypatch):
         )
         == 1
     )
-    import json
-
     event = json.loads((tmp_path / "claude.attempts.jsonl").read_text().splitlines()[-1])
     assert launched == []
     assert event["state"] == "auth"

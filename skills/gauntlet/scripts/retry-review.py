@@ -64,21 +64,25 @@ def claude_reply(code, text):
     an error line, `is_error: false` and exit 0, without calling a model. Its
     modelUsage is empty; a real review's is not. /code-review runs as a forked
     command, which reports num_turns 0 even when it succeeds, so turns are no
-    signal. Warnings on stderr can precede the JSON, which is the last line.
+    signal. Stderr shares the capture, so the result object may sit on any
+    line; an exit-0 run without one is no review either.
     """
     data = None
-    for candidate in (text, text.strip().rsplit("\n", 1)[-1]):
+    for candidate in [text, *reversed(text.splitlines())]:
         try:
-            data = json.loads(candidate)
-            break
+            parsed = json.loads(candidate)
         except ValueError:
             continue
-    if not isinstance(data, dict):
-        return code, text
-    reply = str(data.get("result") or "") or text
+        if isinstance(parsed, dict) and "modelUsage" in parsed:
+            data = parsed
+            break
+    if data is None:
+        return (1 if code == 0 else code), text
+    reply = str(data.get("result") or "")
     if code == 0 and (data.get("is_error") or not data.get("modelUsage")):
-        return 1, reply
-    return code, reply
+        return 1, reply or text
+    # An empty reply from a real run stays empty, so run() reports empty-result.
+    return code, reply if code == 0 else (reply or text)
 
 
 CLAUDE_CREDENTIALS = (
@@ -102,11 +106,16 @@ def claude_token(environ):
         return None, None
     if environ.get("SANDBOX"):
         return None, "SANDBOX is set, so the Claude token file is not read; pass CLAUDE_CODE_OAUTH_TOKEN in the environment"
+    config = environ.get("XDG_CONFIG_HOME") or ""
+    if not os.path.isabs(config):  # the XDG spec ignores a relative value
+        home = environ.get("HOME") or os.path.expanduser("~")
+        config = os.path.join(home, ".config")
     path = environ.get("GAUNTLET_CLAUDE_TOKEN_FILE") or os.path.join(
-        environ.get("XDG_CONFIG_HOME") or os.path.join(environ.get("HOME", ""), ".config"),
-        "gauntlet",
-        "claude-oauth-token",
+        config, "gauntlet", "claude-oauth-token"
     )
+    # Never resolve against the cwd, which is the repository under review.
+    if not os.path.isabs(path):
+        return None, f"Claude token file path {path} is not absolute"
     try:
         mode = os.stat(path).st_mode
         if mode & 0o077:
@@ -114,11 +123,14 @@ def claude_token(environ):
         token = Path(path).read_text().strip()
     except FileNotFoundError:
         return None, f"Claude token file {path} is missing; write the token from `claude setup-token` to it with mode 600, or set GAUNTLET_CLAUDE_TOKEN_FILE"
-    except (OSError, UnicodeDecodeError) as error:
+    except OSError as error:
         return None, f"Claude token file {path} is unreadable: {error.strerror or error}"
+    except UnicodeDecodeError:
+        return None, f"Claude token file {path} is not text"
     if not token:
         return None, f"Claude token file {path} is empty"
-    if any(character.isspace() for character in token):
+    # Catches a copied KEY=value line or a quoted value as well as stray text.
+    if not re.fullmatch(r"[A-Za-z0-9_.~+/-]+=*", token):
         return None, f"Claude token file {path} must hold only the token"
     return token, None
 
@@ -203,6 +215,31 @@ def run(
     ).stdout.strip()
     started = clock()
     last_reset = None
+    if blocked:
+        # No credential: the same outcome as a logged-out run, with no launch.
+        with events.open("a") as stream:
+            stream.write(
+                json.dumps(
+                    dict(
+                        schemaVersion=1,
+                        engine=engine,
+                        attempt=1,
+                        maxAttempts=3,
+                        fingerprint=original,
+                        head_sha=head,
+                        state="auth",
+                        retry_owner="gauntlet",
+                        retryable=False,
+                        exhausted=False,
+                        message=blocked,
+                    )
+                )
+                + "\n"
+            )
+            stream.flush()
+            os.fsync(stream.fileno())
+        print(f"{engine}: blocked (auth): {blocked}", file=sys.stderr)
+        return 1
     for attempt in range(1, 4):
         raw = directory / f"{engine}.attempt-{attempt}.log"
         answer = directory / f"{engine}.attempt-{attempt}.out"
@@ -231,12 +268,6 @@ def run(
                 stream.flush()
                 os.fsync(stream.fileno())
 
-        if blocked:
-            # No credential: the same outcome as a logged-out run, without one.
-            raw.write_text(blocked + "\n")
-            record(state="auth", retryable=False, exhausted=False, message=blocked)
-            print(f"{engine}: blocked (auth): {blocked}", file=sys.stderr)
-            return 1
         if attempt > 1 and clock() - started > 300:
             record(
                 state="transient",
