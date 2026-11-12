@@ -87,19 +87,13 @@ let
   claudeSkills = pkgs.linkFarm "t3code-claude-skills" (
     lib.mapAttrs (_: skill: skill.source) (skillsFor "claude")
   );
-  # Copied, not linked, like the commands folder it replaces.
+  # Copied, not linked, like the commands folder it replaces. rm fails the
+  # build if an excluded command is renamed.
   claudeCommands = pkgs.runCommand "t3code-claude-commands" { } ''
-    mkdir "$out"
-    ${lib.concatMapStringsSep "\n"
-      (
-        name:
-        "cp ${lib.escapeShellArg "${agentAssets.claudeFiles.commands}/${name}"} \"$out\"/${lib.escapeShellArg name}"
-      )
-      (
-        lib.attrNames (
-          builtins.removeAttrs (builtins.readDir agentAssets.claudeFiles.commands) unavailableClaudeCommands
-        )
-      )
+    cp -r ${agentAssets.claudeFiles.commands} "$out"
+    chmod -R u+w "$out"
+    rm ${
+      lib.concatMapStringsSep " " (name: "\"$out\"/${lib.escapeShellArg name}") unavailableClaudeCommands
     }
   '';
   # Unattended work only: T3 sets the permission mode per thread, and Jonas's
@@ -397,20 +391,20 @@ let
       # state, so set only the Linear entry. A file that is not one JSON
       # object is left as it is for inspection, and the service still starts.
       claude_state=${lib.escapeShellArg "${home}/.claude.json"}
-      if [ ! -s "$claude_state" ]; then
+      if [ ! -e "$claude_state" ]; then
         printf '{}\n' > "$claude_state"
       fi
       claude_state_tmp="$(mktemp "$claude_state.XXXXXX")"
+      trap 'rm -f "$claude_state_tmp"' EXIT
       if jq --slurp --slurpfile linear ${claudeLinearMcp} '
-          if length == 1 and (.[0] | type) == "object"
-          then .[0] | .mcpServers.linear = $linear[0]
+          if length == 0 then {}
+          elif length == 1 and (.[0] | type) == "object" then .[0]
           else error("not one JSON object")
           end
+          | .mcpServers.linear = $linear[0]
         ' "$claude_state" > "$claude_state_tmp"; then
-        chmod 0600 "$claude_state_tmp"
         mv "$claude_state_tmp" "$claude_state"
       else
-        rm -f "$claude_state_tmp"
         echo "t3code-prepare: cannot update $claude_state; Claude has no Linear MCP server" >&2
       fi
 
