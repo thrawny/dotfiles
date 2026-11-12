@@ -32,12 +32,23 @@ let
   forgejoUser = "thrawny";
   gitIgnores = import ../lib/git-ignore.nix;
 
+  # Both agents reach Linear with LINEAR_API_KEY from /srv/t3code/env.
+  linearMcpUrl = "https://mcp.linear.app/mcp";
+  claudeLinearMcp = pkgs.writeText "t3code-claude-linear-mcp.json" (
+    builtins.toJSON {
+      type = "http";
+      url = linearMcpUrl;
+      # Claude Code expands the variable when it starts the server.
+      headers.Authorization = "Bearer \${LINEAR_API_KEY}";
+    }
+  );
+
   codexConfig = pkgs.runCommand "t3code-codex-config.toml" { } ''
     cat ${lib.escapeShellArg (toString agentAssets.codexFiles.config)} > "$out"
     cat >> "$out" <<'EOF'
 
     [mcp_servers.linear]
-    url = "https://mcp.linear.app/mcp"
+    url = "${linearMcpUrl}"
     bearer_token_env_var = "LINEAR_API_KEY"
 
     [projects."/srv/t3code/repos"]
@@ -45,8 +56,24 @@ let
     EOF
   '';
 
+  # Each of these needs a tool t3code lacks: prctl, nvim-here,
+  # blueprint-html, fork-window or spawn-session.
+  unavailableSkills = [
+    "blueprint"
+    "fork-window"
+    "nvim-here"
+    "pr"
+  ];
+  unavailableClaudeCommands = [
+    "fork-window.md"
+    "spawn.md"
+  ];
+
   skillsFor =
-    agent: builtins.removeAttrs (agentAssets.skillEntriesFor pkgs agent) agentAssets.pausedSkills;
+    agent:
+    builtins.removeAttrs (agentAssets.skillEntriesFor pkgs agent) (
+      agentAssets.pausedSkills ++ unavailableSkills
+    );
   codexSkills = skillsFor "codex";
   codexSkillLinks = lib.concatStringsSep "\n" (
     lib.mapAttrsToList (name: skill: ''
@@ -58,6 +85,11 @@ let
   # link. Each deploy replaces the set, and dropped skills leave with it.
   claudeSkills = pkgs.linkFarm "t3code-claude-skills" (
     lib.mapAttrs (_: skill: skill.source) (skillsFor "claude")
+  );
+  claudeCommands = pkgs.linkFarm "t3code-claude-commands" (
+    lib.mapAttrs (name: _: agentAssets.claudeFiles.commands + "/${name}") (
+      builtins.removeAttrs (builtins.readDir agentAssets.claudeFiles.commands) unavailableClaudeCommands
+    )
   );
   # Unattended work only: T3 sets the permission mode per thread, and Jonas's
   # interactive settings (hooks, status line, output style) stay out.
@@ -340,16 +372,34 @@ let
       link_store_path ${lib.escapeShellArg "${codexHome}/hooks.json"} ${lib.escapeShellArg (toString agentAssets.codexFiles.hooks)}
       link_store_path ${lib.escapeShellArg "${codexHome}/hooks"} ${lib.escapeShellArg (toString agentAssets.codexFiles.hooksDir)}
       ${codexSkillLinks}
-      for paused in ${lib.escapeShellArgs agentAssets.pausedSkills}; do
-        if [ -L ${lib.escapeShellArg "${codexHome}/skills"}/"$paused" ]; then
-          rm ${lib.escapeShellArg "${codexHome}/skills"}/"$paused"
+      # Drop links to skills no longer in the set. Codex's own .system folder
+      # is not a link, so it stays.
+      declare -A codex_skills=()
+      for name in ${lib.escapeShellArgs (lib.attrNames codexSkills)}; do
+        codex_skills[$name]=1
+      done
+      for link in ${lib.escapeShellArg "${codexHome}/skills"}/*; do
+        if [ -L "$link" ] && [ -z "''${codex_skills[''${link##*/}]:-}" ]; then
+          rm "$link"
         fi
       done
 
       link_store_path ${lib.escapeShellArg "${claudeHome}/CLAUDE.md"} ${lib.escapeShellArg (toString agentAssets.claudeFiles.instructions)}
       link_store_path ${lib.escapeShellArg "${claudeHome}/skills"} ${lib.escapeShellArg (toString claudeSkills)}
-      link_store_path ${lib.escapeShellArg "${claudeHome}/commands"} ${lib.escapeShellArg (toString agentAssets.claudeFiles.commands)}
+      link_store_path ${lib.escapeShellArg "${claudeHome}/commands"} ${lib.escapeShellArg (toString claudeCommands)}
       install -m 0644 ${claudeSettings} ${lib.escapeShellArg "${claudeHome}/settings.json"}
+
+      # Claude Code keeps user MCP servers in ~/.claude.json beside its own
+      # state, so set only the Linear entry.
+      claude_state=${lib.escapeShellArg "${home}/.claude.json"}
+      if [ ! -e "$claude_state" ]; then
+        printf '{}\n' > "$claude_state"
+      fi
+      claude_state_tmp="$(mktemp)"
+      jq --slurpfile linear ${claudeLinearMcp} '.mcpServers.linear = $linear[0]' \
+        "$claude_state" > "$claude_state_tmp"
+      install -m 0600 "$claude_state_tmp" "$claude_state"
+      rm -f "$claude_state_tmp"
 
       settings_path=${lib.escapeShellArg "${state}/userdata/settings.json"}
       if [ ! -e "$settings_path" ]; then
