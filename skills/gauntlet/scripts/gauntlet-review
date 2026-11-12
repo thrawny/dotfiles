@@ -33,6 +33,7 @@
 # Env overrides: GAUNTLET_REVIEWERS (default claude),
 # GAUNTLET_CLAUDE_EFFORT (default high), GAUNTLET_CODEX_EFFORT (default high),
 # GAUNTLET_CODEX_MODEL,
+# GAUNTLET_CLAUDE_TOKEN_FILE (default ~/.config/gauntlet/claude-oauth-token),
 # GAUNTLET_PRIOR (ledger path), GAUNTLET_STATE_DIR (output root).
 #
 # Testable with stubs: put fake `claude`/`codex` earlier on PATH.
@@ -285,42 +286,18 @@ touch "$claude_out"
 readonly claude_review_model="claude-opus-5-5"
 readonly claude_review_settings="{\"availableModels\":[\"$claude_review_model\"],\"enforceAvailableModels\":true,\"fallbackModel\":[]}"
 
-# Claude Code strips CLAUDE_CODE_OAUTH_TOKEN from its tool subprocesses, so a
-# gauntlet started from a Claude session arrives without the token its T3 or
-# shell parent had. When Claude has no credential at all, take the token from
-# the env file that gave it to that parent: ~/.secrets on the Mac and in zsh, or
-# ~/env for Obelisk's t3code service. The file is read the way its loaders read
-# it (`set -a; .`), in a clean subshell, and only the token comes back; it goes
-# to the Claude reviewer's environment only, never its argv, logs or state.
-claude_oauth_token() {
-  local file value
-  for file in "$HOME/.secrets" "$HOME/env"; do
-    [[ -r "$file" ]] || continue
-    value="$(env -i HOME="$HOME" PATH="$PATH" bash -c \
-      'set -a; . "$1" >/dev/null 2>&1; printf "%s" "${CLAUDE_CODE_OAUTH_TOKEN:-}"' _ "$file")" || true
-    if [[ -n "$value" ]]; then printf '%s' "$value"; return 0; fi
-  done
-  return 1
-}
-
 claude_pid=""
 if [[ "$run_claude" -eq 1 ]]; then
-  (
-    if [[ -z "${SANDBOX:-}${CLAUDE_CODE_OAUTH_TOKEN:-}${ANTHROPIC_API_KEY:-}${CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR:-}" ]] &&
-      ! claude auth status >/dev/null 2>&1 &&
-      token="$(claude_oauth_token)"; then
-      export CLAUDE_CODE_OAUTH_TOKEN="$token"
-    fi
-    unset token
-    exec env -u CLAUDE_CODE_EFFORT_LEVEL -u CLAUDE_CODE_SUBAGENT_EFFORT \
-      CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
-      CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 \
-      CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL="$claude_review_model" \
-      ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
-      python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --output-format json --model "$claude_review_model" --effort "$claude_effort" --setting-sources "" \
-        --settings "$claude_review_settings" --no-session-persistence \
-        --permission-mode auto "$claude_prompt"
-  ) >"$claude_out" 2>&1 &
+  # retry-review.py supplies the token from GAUNTLET_CLAUDE_TOKEN_FILE when the
+  # environment has no Claude credential, and blocks the reviewer without one.
+  env -u CLAUDE_CODE_EFFORT_LEVEL -u CLAUDE_CODE_SUBAGENT_EFFORT \
+    CLAUDE_CODE_SUBAGENT_MODEL="$claude_review_model" \
+    CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 \
+    CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL="$claude_review_model" \
+    ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
+    python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --output-format json --model "$claude_review_model" --effort "$claude_effort" --setting-sources "" \
+      --settings "$claude_review_settings" --no-session-persistence \
+      --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &
   claude_pid=$!
 fi
 

@@ -2,6 +2,7 @@
 """Run one reviewer serially; persist evidence before any retry or result use."""
 
 import datetime
+import functools
 import hashlib
 import json
 import os
@@ -80,6 +81,48 @@ def claude_reply(code, text):
     return code, reply
 
 
+CLAUDE_CREDENTIALS = (
+    "CLAUDE_CODE_OAUTH_TOKEN",
+    "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
+    "ANTHROPIC_API_KEY",
+    "ANTHROPIC_AUTH_TOKEN",
+)
+
+
+def claude_token(environ):
+    """Return (token, problem) for a Claude reviewer with no credential in env.
+
+    Claude Code strips CLAUDE_CODE_OAUTH_TOKEN from its tool subprocesses, so a
+    gauntlet started from a Claude session arrives without the token its parent
+    had. The token then comes from a file holding only the token. The file is
+    read, never sourced or executed, and refused unless only its owner can read
+    it. (None, None) means the environment already has a credential.
+    """
+    if any(environ.get(name) for name in CLAUDE_CREDENTIALS):
+        return None, None
+    if environ.get("SANDBOX"):
+        return None, "SANDBOX is set, so the Claude token file is not read; pass CLAUDE_CODE_OAUTH_TOKEN in the environment"
+    path = environ.get("GAUNTLET_CLAUDE_TOKEN_FILE") or os.path.join(
+        environ.get("XDG_CONFIG_HOME") or os.path.join(environ.get("HOME", ""), ".config"),
+        "gauntlet",
+        "claude-oauth-token",
+    )
+    try:
+        mode = os.stat(path).st_mode
+        if mode & 0o077:
+            return None, f"Claude token file {path} is accessible to group or others; run chmod 600 on it"
+        token = Path(path).read_text().strip()
+    except FileNotFoundError:
+        return None, f"Claude token file {path} is missing; write the token from `claude setup-token` to it with mode 600, or set GAUNTLET_CLAUDE_TOKEN_FILE"
+    except (OSError, UnicodeDecodeError) as error:
+        return None, f"Claude token file {path} is unreadable: {error.strerror or error}"
+    if not token:
+        return None, f"Claude token file {path} is empty"
+    if any(character.isspace() for character in token):
+        return None, f"Claude token file {path} must hold only the token"
+    return token, None
+
+
 def classify(code, text):
     if code == 0:
         return "ok"
@@ -150,6 +193,7 @@ def run(
     invoke=subprocess.run,
     sleep=time.sleep,
     clock=time.time,
+    blocked=None,
 ):
     directory = Path(directory)
     events = directory / f"{engine}.attempts.jsonl"
@@ -187,6 +231,12 @@ def run(
                 stream.flush()
                 os.fsync(stream.fileno())
 
+        if blocked:
+            # No credential: the same outcome as a logged-out run, without one.
+            raw.write_text(blocked + "\n")
+            record(state="auth", retryable=False, exhausted=False, message=blocked)
+            print(f"{engine}: blocked (auth): {blocked}", file=sys.stderr)
+            return 1
         if attempt > 1 and clock() - started > 300:
             record(
                 state="transient",
@@ -257,4 +307,13 @@ def run(
 
 
 if __name__ == "__main__":
-    sys.exit(run(*sys.argv[1:4], sys.argv[4:]))
+    options = {}
+    if sys.argv[2] == "claude":
+        token, problem = claude_token(os.environ)
+        if token:
+            # Only the reviewer process gets the token, never argv or logs.
+            options["invoke"] = functools.partial(
+                subprocess.run, env={**os.environ, "CLAUDE_CODE_OAUTH_TOKEN": token}
+            )
+        options["blocked"] = problem
+    sys.exit(run(*sys.argv[1:4], sys.argv[4:], **options))

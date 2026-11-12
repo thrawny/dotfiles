@@ -12,18 +12,27 @@ LAUNCHER = (
 )
 
 
-def _isolated_environment(tmp_path: Path, tools: Path) -> dict[str, str]:
-    """Stub reviewers first on PATH, with no host credentials or secrets file."""
+def _isolated_environment(
+    tmp_path: Path, tools: Path, token_file: bool = True
+) -> dict[str, str]:
+    """Stub reviewers first on PATH, with a fixture token file and no host login."""
     environment = {
         key: value
         for key, value in os.environ.items()
-        if not key.startswith(("GAUNTLET_", "CLAUDE_CODE_OAUTH", "ANTHROPIC_API"))
+        if not key.startswith(
+            ("GAUNTLET_", "CLAUDE_CODE_OAUTH", "ANTHROPIC_", "XDG_CONFIG", "SANDBOX")
+        )
     }
     environment.update(
         HOME=str(tmp_path),
         PATH=f"{tools}:{environment['PATH']}",
         GAUNTLET_STATE_DIR=str(tmp_path / "state"),
     )
+    if token_file:
+        path = tmp_path / ".config/gauntlet/claude-oauth-token"
+        path.parent.mkdir(parents=True)
+        path.write_text("fixture-token\n")
+        path.chmod(0o600)
     return environment
 
 
@@ -509,25 +518,28 @@ def test_capped_adjudication_preserves_completed_review_after_fixes(
         module["build"](directory, "converged")
 
 
+_LOGGED_OUT_CLAUDE = (
+    f"#!/bin/sh\necho '{_claude_json('Not logged in · Please run /login', False)}'\n"
+)
+
+
 @pytest.mark.parametrize(
-    ("reviewer", "script", "partial"),
+    ("reviewer", "script", "partial", "token_file"),
     [
         (
             "codex",
             '#!/bin/sh\nwhile [ "$#" -gt 0 ]; do\n  if [ "$1" = "-o" ]; then shift; echo PARTIAL_FINDING > "$1"; fi\n  shift\ndone\necho "invalid model" >&2\nexit 1\n',
             "PARTIAL_FINDING",
+            True,
         ),
         # Logged out, claude -p answers /code-review with exit 0 and no model turn.
-        (
-            "claude",
-            '#!/bin/sh\n[ "$1" = auth ] && exit 1\n'
-            f"echo '{_claude_json('Not logged in · Please run /login', False)}'\n",
-            "Not logged in",
-        ),
+        ("claude", _LOGGED_OUT_CLAUDE, "Not logged in", True),
+        # Without a token anywhere, the reviewer is blocked before it starts.
+        ("claude", _LOGGED_OUT_CLAUDE, "is missing", False),
     ],
 )
 def test_blocked_launcher_exposes_partial_and_result(
-    tmp_path, reviewer, script, partial
+    tmp_path, reviewer, script, partial, token_file
 ):
     repo = tmp_path / "repo"
     repo.mkdir()
@@ -537,7 +549,7 @@ def test_blocked_launcher_exposes_partial_and_result(
     stub = tools / reviewer
     stub.write_text(script)
     stub.chmod(0o755)
-    environment = _isolated_environment(tmp_path, tools)
+    environment = _isolated_environment(tmp_path, tools, token_file)
     result = subprocess.run(
         ["bash", str(LAUNCHER), "--uncommitted", "--reviewers", reviewer, "Fixture"],
         cwd=repo,
@@ -553,3 +565,65 @@ def test_blocked_launcher_exposes_partial_and_result(
     assert partial in result.stdout
     assert str(evidence) in result.stdout
     assert json.loads(evidence.read_text())["outcome"] == "blocked"
+
+
+def _token_file(tmp_path, content="tok-file\n", mode=0o600):
+    path = tmp_path / "token"
+    path.write_text(content)
+    path.chmod(mode)
+    return path
+
+
+@pytest.mark.parametrize(
+    ("content", "mode", "token", "problem"),
+    [
+        ("  tok-file\n", 0o600, "tok-file", None),
+        ("", 0o600, None, "is empty"),
+        ("\n \n", 0o600, None, "is empty"),
+        ("tok-file\n", 0o640, None, "group or others"),
+        ("tok-file\n", 0o604, None, "group or others"),
+        ("CLAUDE_CODE_OAUTH_TOKEN=tok extra", 0o600, None, "only the token"),
+    ],
+)
+def test_claude_token_file(tmp_path, content, mode, token, problem):
+    path = _token_file(tmp_path, content, mode)
+    found, reason = retry_review.claude_token(
+        {"HOME": "/nonexistent", "GAUNTLET_CLAUDE_TOKEN_FILE": str(path)}
+    )
+    assert found == token
+    assert (reason is None) if problem is None else (problem in reason)
+
+
+def test_claude_token_default_path_missing_and_env_precedence(tmp_path):
+    found, reason = retry_review.claude_token({"HOME": str(tmp_path)})
+    assert found is None and "missing" in reason
+    default = tmp_path / ".config/gauntlet/claude-oauth-token"
+    default.parent.mkdir(parents=True)
+    default.write_text("tok-default")
+    default.chmod(0o600)
+    assert retry_review.claude_token({"HOME": str(tmp_path)}) == ("tok-default", None)
+    # A credential already in the environment wins; the file is not consulted.
+    assert retry_review.claude_token(
+        {"HOME": str(tmp_path), "CLAUDE_CODE_OAUTH_TOKEN": "tok-env"}
+    ) == (None, None)
+
+
+def test_blocked_claude_records_auth_without_launching(tmp_path, monkeypatch):
+    monkeypatch.setattr(retry_review, "fingerprint", lambda: "scope")
+    launched = []
+    assert (
+        retry_review.run(
+            tmp_path,
+            "claude",
+            str(tmp_path / "out"),
+            ["reviewer"],
+            invoke=lambda *args, **kwargs: launched.append(args),
+            blocked="Claude token file x is missing",
+        )
+        == 1
+    )
+    import json
+
+    event = json.loads((tmp_path / "claude.attempts.jsonl").read_text().splitlines()[-1])
+    assert launched == []
+    assert event["state"] == "auth"
