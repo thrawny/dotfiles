@@ -274,10 +274,10 @@ def add_when(
     return name, text
 
 
-def cancel_whens(target: str) -> list[str]:
-    """Remove the checks that would wake target, which is going away."""
+def cancel_whens(target: str, keep: str | None = None) -> list[str]:
+    """Remove the checks that would wake target, except keep, a new one."""
     with state_for_update("when") as whens:
-        names = [n for n, e in whens.items() if e.get("target") == target]
+        names = [n for n, e in whens.items() if e.get("target") == target and n != keep]
         for name in names:
             del whens[name]
     for name in names:

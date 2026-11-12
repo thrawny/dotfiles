@@ -2405,6 +2405,66 @@ def test_a_check_wakes_its_snoozed_task_with_the_brief(
     assert "woke abc-1" in moto.take_notes()
 
 
+def resnooze(moto: ModuleType, check: str, *reason: str, **fields: Any) -> int:
+    args = argparse.Namespace(
+        agent="abc-1", reason=list(reason), until_check=check, every="10m"
+    )
+    args.expires = "7d"
+    vars(args).update(fields)
+    return moto.cmd_snooze(args)
+
+
+@pytest.mark.usefixtures("jobs_home")
+def test_snoozing_a_snoozed_task_replaces_its_check_and_wakes_nothing(
+    moto: ModuleType,
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(snoozed=SNOOZE)
+    old = add_check(moto, "exit 1", target="abc-1")
+    before = moto.read_tasks()["abc-1"]
+    woke = MagicMock()
+    with (
+        patch.object(moto, "wake_task", woke),
+        patch.object(moto, "tell_task", woke),
+        patch.object(moto, "live_agents", woke),
+        patch.object(moto, "herdr", woke),
+    ):
+        resnooze(moto, "exit 1 # new", "now merging by itself")
+    woke.assert_not_called()
+    (new,) = moto.read_whens()
+    assert new != old and moto.read_whens()[new]["check"] == "exit 1 # new"
+    assert "now merging by itself" in moto.read_whens()[new]["brief"]
+    after = moto.read_tasks()["abc-1"]
+    assert after["snoozed"] == {**before["snoozed"], "reason": "now merging by itself"}
+    assert after == {**before, "snoozed": after["snoozed"]}
+
+
+@pytest.mark.usefixtures("jobs_home")
+def test_a_replacement_without_a_reason_keeps_the_old_one(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(snoozed=SNOOZE)
+    resnooze(moto, "exit 1")
+    assert moto.read_tasks()["abc-1"]["snoozed"] == SNOOZE
+    (entry,) = moto.read_whens().values()
+    assert SNOOZE["reason"] in entry["brief"]
+
+
+@pytest.mark.usefixtures("jobs_home")
+def test_a_refused_replacement_leaves_the_old_check_running(moto: ModuleType):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(snoozed=SNOOZE)
+    old = add_check(moto, "exit 1", target="abc-1")
+    for bad in ("no-such-command-anywhere", "true"):
+        with pytest.raises(moto.MotoError):
+            resnooze(moto, bad, "new reason")
+    assert list(moto.read_whens()) == [old]
+    assert moto.read_tasks()["abc-1"]["snoozed"] == SNOOZE
+    # With no new check there is nothing to replace.
+    with pytest.raises(moto.MotoError, match="already snoozed"):
+        resnooze(moto, None, "new reason")
+    assert list(moto.read_whens()) == [old]
+
+
 def pr_view(**fields: Any) -> dict[str, Any]:
     return {
         "number": 14,

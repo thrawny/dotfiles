@@ -29,10 +29,17 @@ from moto.store import (
     tag,
     tasks_for_update,
 )
-from moto.whenstore import add_when, check_verdict, pr_check_command, tail
+from moto.whenstore import (
+    add_when,
+    cancel_whens,
+    check_verdict,
+    pr_check_command,
+    tail,
+)
 
 
 def cmd_snooze(args: argparse.Namespace) -> int:
+    """Park a task, or on one that is snoozed already, replace its wake check."""
     reason = " ".join(args.reason).strip()
     check = getattr(args, "until_check", None)
     automerge = getattr(args, "automerge", False)
@@ -44,6 +51,17 @@ def cmd_snooze(args: argparse.Namespace) -> int:
         # The counts are the ones the check compares against, so take them
         # before the task closes.
         check = pr_check_command(until_pr, automerge)
+    already = bool(find_task(read_tasks(), args.agent).get("snoozed"))
+    if already and not check:
+        raise MotoError(
+            f"{args.agent} is already snoozed; pass --until-pr or --until-check"
+            + " to replace its wake check"
+        )
+    if not already and not reason:
+        raise MotoError("Say why it waits: moto snooze TASK REASON")
+    if already:
+        assert check
+        return replace_check(args, check, reason)
     if check:
         # Run before anything closes, so a check that errors or already
         # passes leaves the task as it was.
@@ -59,7 +77,7 @@ def cmd_snooze(args: argparse.Namespace) -> int:
     with tasks_for_update() as tasks:
         task = find_task(tasks, args.agent)
         if task.get("snoozed"):
-            raise MotoError(f"{args.agent} is already snoozed")
+            raise MotoError(f"{args.agent} is already snoozed")  # raced a snooze
         agent = live.get(task["pane_id"])
         if agent and agent.get("agent_status") == "working":
             raise MotoError(f"{args.agent} is mid-turn; snooze it once the turn ends")
@@ -121,6 +139,43 @@ def cmd_snooze(args: argparse.Namespace) -> int:
                 f"Check {name} wakes it once `{check}` passes, every {args.every},"
                 + f" giving up in {args.expires}."
             )
+    return 0
+
+
+def replace_check(args: argparse.Namespace, check: str, reason: str) -> int:
+    """Swap a snoozed task's wake check, leaving the task as it is.
+
+    Nothing wakes, opens or is sent: the session, its worktree state and the
+    snooze record stay, apart from the reason when a new one is given. The new
+    check goes in first, so one that errors or already passes leaves the old
+    check running. Every check that would wake the task then goes, the one the
+    old snooze added included.
+    """
+    snooze = find_task(read_tasks(), args.agent)["snoozed"]
+    reason = reason or snooze["reason"]
+    brief = f"You were snoozed waiting on: {reason}. That wait looks over."
+    name, output = add_when(
+        check, brief, args.agent, None, args.every, args.expires, time.time()
+    )
+    if name is None:
+        printed = f" It printed:\n{tail(output)}" if output else ""
+        raise MotoError(
+            f"The check is over already, so {args.agent}'s check was not"
+            + f" replaced.{printed}"
+        )
+    old = cancel_whens(args.agent, keep=name)
+    with tasks_for_update() as tasks:
+        snoozed = find_task(tasks, args.agent).get("snoozed")
+        if not snoozed:
+            cancel_whens(args.agent)
+            raise MotoError(f"{args.agent} was woken meanwhile; snooze it again")
+        snoozed["reason"] = reason
+        record("recheck", args.agent, reason=reason, check=check, replaced=old)
+    gone = f", replacing {', '.join(old)}" if old else ""
+    print(
+        f"Check {name} wakes {args.agent} once `{check}` passes, every {args.every},"
+        + f" giving up in {args.expires}{gone}. {args.agent} stays snoozed."
+    )
     return 0
 
 

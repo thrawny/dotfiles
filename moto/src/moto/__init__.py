@@ -123,6 +123,13 @@ green, add --automerge: the check then ignores an approval, and counts only
 reviews and comments from someone other than the PR's author. A merge ends it
 quietly, with no wake: the check exits SETTLED_EXIT, and the job loop closes the
 snoozed task as moto close does, or tells the driver if the close is refused.
+To change what a snoozed task waits on, run moto snooze on it again with
+--until-pr (and --automerge) or --until-check, and an optional new reason: it
+cancels every check that would wake the task, adds the new one and updates the
+reason, and the task stays snoozed. Nothing wakes, opens a pane or is sent, and
+the session, worktree state and snooze record stay. The new check goes in first,
+so one that errors or already passes leaves the old one running. moto when
+--wake only adds a check.
 
 A worker can start workers of its own, which the driver's watch leaves to it,
 apart from what the user does in one: a wrap, snooze or handback, or closing its

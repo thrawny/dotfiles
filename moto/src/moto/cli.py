@@ -199,20 +199,32 @@ def parser() -> argparse.ArgumentParser:
     snooze = commands.add_parser(
         "snooze",
         help="Park a blocked task: save its Claude session, remove its worktree"
-        + " (keeping the branch) and close its workspace",
+        + " (keeping the branch) and close its workspace; on a snoozed task,"
+        + " replace its wake check without waking it",
+        description="Park a blocked task. On a task that is snoozed already, give"
+        + " --until-pr or --until-check to replace its wake check in place: the"
+        + " old check is cancelled, the new one added, and the reason updated if"
+        + " you give one. The task stays snoozed: nothing wakes, opens or is sent.",
     )
     snooze.add_argument("agent")
-    snooze.add_argument("reason", nargs="+", help="Why it waits, shown in moto list")
+    snooze.add_argument(
+        "reason",
+        nargs="*",
+        help="Why it waits, shown in moto list; needed to snooze, optional to"
+        + " replace a check",
+    )
     snooze.add_argument(
         "--until-check",
         metavar="COMMAND",
-        help="Also add a moto when check that wakes the task once COMMAND exits 0",
+        help="Also add a moto when check that wakes the task once COMMAND exits 0;"
+        + " on a snoozed task, it replaces the task's checks",
     )
     snooze.add_argument(
         "--until-pr",
         metavar="PR",
         help="Also add a moto when check on a pull request, given as a URL or"
-        + " owner/repo#N, instead of a hand-written --until-check. "
+        + " owner/repo#N, instead of a hand-written --until-check; on a snoozed"
+        + " task, it replaces the task's checks. "
         + UNTIL_PR_HELP,
     )
     snooze.add_argument(
@@ -264,7 +276,8 @@ def parser() -> argparse.ArgumentParser:
         "--wake",
         metavar="TASK",
         help="Prompt this task with the brief, waking it first if it is snoozed;"
-        + " default: the driver",
+        + " default: the driver. This adds a check; moto snooze TASK --until-pr"
+        + " replaces a snoozed task's",
     )
     when.add_argument(
         "--name", help="Name in moto job list; default: from --wake or the brief"
