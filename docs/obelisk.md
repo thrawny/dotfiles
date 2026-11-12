@@ -79,10 +79,11 @@ are not changed by deployment.
 ## T3 Code agent files
 
 `t3code-prepare` runs before each `t3code` start and rebuilds the agents' global
-files from `nix/modules/t3code.nix`. `~/.claude/CLAUDE.md`, `~/.claude/skills`
-and `~/.claude/commands` are read-only store links, and `~/.claude/settings.json`
+files from `nix/modules/t3code.nix`. `/srv/t3code/.claude/CLAUDE.md`, `skills`
+and `commands` are read-only store links, and `/srv/t3code/.claude/settings.json`
 is overwritten on every start. Codex gets the same skills as per-skill links in
-`~/.codex/skills`. Change them in dotfiles and deploy; edits on the host are lost.
+`/srv/t3code/.codex/skills`, plus the Codex slash commands, which it loads as
+skills. Change them in dotfiles and deploy; edits on the host are lost.
 
 ## T3 Code provider logins
 
