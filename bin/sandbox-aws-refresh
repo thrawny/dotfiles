@@ -48,9 +48,20 @@ config_tmp="$(mktemp "$cache_dir/.config.XXXXXX")"
 cleanup() { rm -f "$config_tmp"; }
 trap cleanup EXIT
 
+# Single-quote a value for credential_process, which SDKs split shell-style.
+shell_quote() {
+  local quote="'" escaped="'\\''"
+  printf "'%s'" "${1//$quote/$escaped}"
+}
+
 for spec in "${specs[@]}"; do
   name="${spec%%=*}"
   host_profile="${spec#*=}"
+  # The name becomes a cache file name and a config section header.
+  if [[ ! "$name" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]]; then
+    echo "sandbox-aws-refresh: invalid profile name '$name' in spec '$spec'" >&2
+    exit 1
+  fi
 
   creds_tmp="$(mktemp "$cache_dir/.${name}.XXXXXX")"
   if ! aws configure export-credentials \
@@ -70,7 +81,7 @@ for spec in "${specs[@]}"; do
     else
       echo "[profile $name]"
     fi
-    echo "credential_process = cat $cache_dir/$name.json"
+    echo "credential_process = cat $(shell_quote "$cache_dir/$name.json")"
     [[ -n "$region" ]] && echo "region = $region"
     echo
   } >>"$config_tmp"
