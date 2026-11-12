@@ -3223,7 +3223,7 @@ HELD_MARK = ("pane", "report-metadata", "w1:p1", "--source", "moto")
 SET_HELD = (
     *HELD_MARK,
     "--token",
-    "held=h",
+    "held=held",
 )
 CLEAR_HELD = (*HELD_MARK, "--clear-token", "held")
 

@@ -183,13 +183,13 @@ METADATA_SOURCE = "moto"
 def mark_held(pane: str, held: bool) -> None:
     """Show in the sidebar that the user holds this pane, or clear the mark.
 
-    A held pane gets the held token, shown as "h", because a worker that stops
+    A held pane gets the held token, shown as "held", because a worker that stops
     between phases looks finished. The mark is display only, so a failure never
     stops the command that asked.
     """
     command = ["pane", "report-metadata", pane, "--source", METADATA_SOURCE]
     if held:
-        command += ["--token", "held=h"]
+        command += ["--token", "held=held"]
     else:
         command += ["--clear-token", "held"]
     with suppress(MotoError, OSError, subprocess.TimeoutExpired):
