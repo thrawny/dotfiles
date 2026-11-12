@@ -12,25 +12,20 @@ def since_report(
     task: dict[str, Any],
     agent: dict[str, Any] | None,
     pr: str | None,
-    events: list[dict[str, Any]],
 ) -> dict[str, Any] | None:
-    """What happened in a held or snoozed task since its last report.
+    """What happened since its last report in a task the user is talking to, or
+    a snoozed one.
 
     The driver sees none of it, so the report may be stale. A task with no
-    report counts from the hold. Every source is optional: a missing
+    report counts from its start. Every source is optional: a missing
     transcript, checkout or answer from GitHub leaves its count out.
     """
     if report := task.get("report"):
         mark, since = "report", report["at"]
+    elif started := task.get("started"):
+        mark, since = "start", started
     else:
-        holds = [
-            e["ts"]
-            for e in events
-            if e.get("event") == "hold" and e.get("agent") == task["agent"]
-        ]
-        if not holds:
-            return None
-        mark, since = "hold", holds[-1]
+        return None
     turns = user_turns(task, agent, since)
     updated = pr_updated(pr) if pr else None
     return {

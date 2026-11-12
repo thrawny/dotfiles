@@ -28,13 +28,14 @@ BACKGROUND_WORKSPACE = "background"
 BACKGROUND_WORK = re.compile(
     r"· (\d+ (?:shells?|monitors?|local agents?))(?= ·|$)", re.M
 )
-REPORT_KINDS = ("done", "question", "blocked", "wrap", "handback", "snooze", "phase")
+REPORT_KINDS = ("done", "question", "blocked", "wrap", "snooze", "phase")
 # Reports that make a session the user started, which no task owns, a task:
-# the user handing it to the driver to finish, park or carry on.
-ADOPT_KINDS = ("wrap", "snooze", "handback")
+# the user handing it to the driver to finish or park.
+ADOPT_KINDS = ("wrap", "snooze")
 # Reports that end the task's work, so it needs no watch once the driver saw them.
 FINISHED = ("done", "wrap")
-# Reports from the user ending the worker on purpose, so close needs no idle pane.
+# Reports from the user ending the worker on purpose, so close needs no idle pane
+# and the user's earlier prompts no longer keep the driver hands-off.
 ENDED_BY_USER = ("wrap", "snooze")
 # A closed pane is news only once it has stayed gone this long, because the user
 # may be resuming its session in a new pane, which attach then moves the task to.
@@ -49,13 +50,16 @@ HANDOFF_MARKER_LIFE = 30 * 60
 HANDOFF_STAY = "--stay"
 # Herdr states of an agent that is mid-turn or waiting at a prompt.
 BUSY = ("working", "blocked")
-# The defaults for MOTO_HOME/settings.toml, in tokens of a worker's context.
+# The defaults for MOTO_HOME/settings.toml.
 SETTINGS = {
     # A phase report above this hands the worker off to a fresh session, and
     # below it tells the worker to carry on.
     "handoff_tokens": 100_000,
     # A turn that ends above this, without a report, gets /compact.
     "compact_tokens": 500_000,
+    # A worker is with the user while the user typed in its pane this many
+    # minutes ago or less, and the driver stays hands-off until then.
+    "user_window_minutes": 30,
 }
 # The context must grow this much after one /compact before the next.
 COMPACT_GROWTH = 200_000
@@ -66,7 +70,7 @@ CONTEXT_USAGE = (
     "cache_read_input_tokens",
     "output_tokens",
 )
-# moto list asks GitHub when a held task's PR last changed, and gives up after this.
+# moto list asks GitHub when a task's PR last changed, and gives up after this.
 PR_TIMEOUT = 3
 PR_URL = re.compile(r"https://github\.com/[^/\s]+/[^/\s]+/pull/\d+")
 CLAUDE_HOME = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
@@ -114,7 +118,7 @@ pane once your turn ends, tagged with its name and the kind, as in \
 PASS_ON_RULE = """\
 When the user asks you to pass something to the driver, run \
 `moto report --to-driver done|question|blocked "<one line>"`. The driver gets \
-it even while it does not watch you, and a hold stays in place."""
+it even while the user is talking to you."""
 BRIEF_FOOTER = f"""\
 A driver session started you and tracks this task for the user. {REPORT_RULES}
 

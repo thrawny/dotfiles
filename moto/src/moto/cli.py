@@ -8,7 +8,7 @@ import moto
 from moto import backend
 from moto.afk import cmd_afk, cmd_back, cmd_log, cmd_log_action
 from moto.attaching import cmd_attach
-from moto.closing import cmd_close, cmd_drop, cmd_hold, cmd_resume
+from moto.closing import cmd_close, cmd_drop
 from moto.common import (
     EFFORTS,
     FORK_SAFE,
@@ -128,8 +128,8 @@ def parser() -> argparse.ArgumentParser:
 
     report = commands.add_parser(
         "report",
-        help="Run by a worker to report to the driver; wrap, handback and"
-        + " snooze also end a hold, and phase asks for a fresh session",
+        help="Run by a worker to report to the driver; wrap and snooze hand the"
+        + " task back to the driver, and phase asks for a fresh session",
     )
     report.add_argument("kind", choices=REPORT_KINDS)
     report.add_argument("text", nargs="+")
@@ -137,8 +137,8 @@ def parser() -> argparse.ArgumentParser:
     report.add_argument(
         "--to-driver",
         action="store_true",
-        help="Reach the driver even from a held task or one another worker"
-        + " started, without ending a hold; for when the user asks",
+        help="Reach the driver even while the user talks to this worker, or"
+        + " from one another worker started; for when the user asks",
     )
     report.set_defaults(handler=cmd_report)
 
@@ -167,20 +167,6 @@ def parser() -> argparse.ArgumentParser:
         help="Remove even with unsaved work, a busy pane or the user's new prompts",
     )
     close.set_defaults(handler=cmd_close)
-
-    hold = commands.add_parser(
-        "hold",
-        help="Keep a task but stop watching it; the watch also does this when the"
-        + " user types in the worker's pane",
-    )
-    hold.add_argument("agent")
-    hold.set_defaults(handler=cmd_hold)
-
-    resume_ = commands.add_parser(
-        "resume", help="Watch a held task again; a snoozed one needs wake"
-    )
-    resume_.add_argument("agent")
-    resume_.set_defaults(handler=cmd_resume)
 
     attach_ = commands.add_parser(
         "attach",

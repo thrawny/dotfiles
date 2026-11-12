@@ -11,15 +11,7 @@ from moto import backend
 from moto.backend import live_agents
 from moto.common import BUSY, ENDED_BY_USER, MotoError, age, run
 from moto.sessions import user_turns
-from moto.store import (
-    clear_hold_mark,
-    end_hold,
-    find_task,
-    hold_task,
-    record,
-    resume,
-    tasks_for_update,
-)
+from moto.store import find_task, record, tasks_for_update, user_window, with_user
 from moto.whenstore import cancel_whens
 
 
@@ -65,7 +57,8 @@ def still_working(
     into the pane since. A wrap or snooze report means the user ended the
     worker, so a busy pane is that turn finishing, but prompts after it still
     count, unless the user closed the pane after the last of them, which ends
-    the worker too.
+    the worker too. A prompt before the last report counts while the worker
+    is still with the user.
     """
     report: dict[str, Any] = task.get("report") or {}
     problems: list[str] = []
@@ -83,6 +76,12 @@ def still_working(
         problems.append(
             f"the user typed in {name}'s pane {len(turns)} {times} since {mark},"
             + f" last {last} ago"
+        )
+    elif (at := with_user(task, agent, time.time())) and at > (closed or 0):
+        minutes = round(user_window() / 60)
+        problems.append(
+            f"the user typed in {name}'s pane {age(time.time() - at)} ago, so it is"
+            + f" with the user until {minutes} minutes pass with no new prompt"
         )
     return "; ".join(problems) or None
 
@@ -199,7 +198,6 @@ def cmd_close(args: argparse.Namespace) -> int:
                 raise MotoError(
                     f"{args.agent}: {problem}; pass --force to remove anyway"
                 )
-        clear_hold_mark(task)
         if task.get("adopted"):
             release_adopted(task, tasks, bool(branch), args.force)
         elif branch:
@@ -223,7 +221,7 @@ def cmd_close(args: argparse.Namespace) -> int:
 
 def cmd_drop(args: argparse.Namespace) -> int:
     with tasks_for_update() as tasks:
-        clear_hold_mark(find_task(tasks, args.agent))
+        find_task(tasks, args.agent)
         record("drop", args.agent, task=tasks.pop(args.agent))
     print(f"Dropped {args.agent}; its tab and worktree are untouched")
     print_cancelled(args.agent)
@@ -233,22 +231,3 @@ def cmd_drop(args: argparse.Namespace) -> int:
 def print_cancelled(agent: str) -> None:
     for name in cancel_whens(agent):
         print(f"Cancelled check {name}, which would have woken {agent}")
-
-
-def cmd_hold(args: argparse.Namespace) -> int:
-    with tasks_for_update() as tasks:
-        hold_task(find_task(tasks, args.agent))
-    print(f"Holding {args.agent}: moto watch skips it until moto resume")
-    return 0
-
-
-def cmd_resume(args: argparse.Namespace) -> int:
-    live = live_agents()
-    with tasks_for_update() as tasks:
-        task = find_task(tasks, args.agent)
-        if task.get("snoozed"):
-            raise MotoError(f"{args.agent} is snoozed; bring it back with moto wake")
-        resume(task, live)
-        record("resume", args.agent)
-    print(f"Resumed {args.agent}: moto watch covers it again")
-    return 0

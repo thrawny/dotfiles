@@ -16,13 +16,13 @@ from moto.common import (
     ADOPT_KINDS,
     BUSY,
     CHILD_KINDS,
+    ENDED_BY_USER,
     HANDOFF_POLL_SECONDS,
     HANDOFF_SESSION_WAIT,
     HANDOFF_STAY,
     HANDOFF_TAKEOFF_WAIT,
     PASS_ON_RULE,
     PR_URL,
-    REPORT_RULES,
     REPORTS_KEPT,
     TURN_OVER,
     UNTRACKED,
@@ -32,13 +32,14 @@ from moto.common import (
 from moto.driverstate import driver_path, read_driver, wake_driver, write_driver
 from moto.sessions import last_turn
 from moto.store import (
-    end_hold,
     find_task,
     message_sender,
     read_tasks,
     record,
     tag,
     tasks_for_update,
+    user_window,
+    with_user,
 )
 
 
@@ -54,8 +55,6 @@ def cmd_report(args: argparse.Namespace) -> int:
                 if adopted := adopt(tasks, pane_id):
                     task = tasks[adopted]
                     print(f"moto now tracks this session as {adopted} for the driver.")
-                    if args.kind == "handback":
-                        print(REPORT_RULES)
             if task is None:
                 # Dropped tasks keep the brief that asks for reports.
                 print(UNTRACKED)
@@ -64,24 +63,18 @@ def cmd_report(args: argparse.Namespace) -> int:
             # new worker's session id arrives with its first report.
             if session := os.environ.get("CLAUDE_CODE_SESSION_ID"):
                 task["session"] = session
-        handed_back = args.kind in ("wrap", "handback", "snooze") and bool(
-            task.get("held")
+        # A wrap or snooze hands the task to the driver, so the user's earlier
+        # prompts no longer count. A child is its parent's whoever types to it.
+        talking = (
+            args.kind not in ENDED_BY_USER
+            and not task.get("parent")
+            and with_user(task, None, time.time()) is not None
         )
-        if handed_back:
-            # The watch takes the task back from here, so this report is news to
-            # it and whatever happened while held is not.
-            end_hold(task)
-            previous: dict[str, Any] = task.get("report") or {}
-            task["seen"] = {
-                k: v for k, v in task.get("seen", {}).items() if k != "pending"
-            } | {"report_at": previous.get("at")}
-            record("resume", task["agent"], by=args.kind)
-        # A held worker's done is when the driver updates tickets and notes, so
-        # it is passed on as if --to-driver were given. question and blocked
-        # stay with the user. A child's done is for its parent.
-        passes_on = args.to_driver or (
-            args.kind == "done" and bool(task.get("held")) and not task.get("parent")
-        )
+        # A done while the user talks to the worker is when the driver updates
+        # tickets and notes, so it is passed on as if --to-driver were given.
+        # question and blocked stay with the user. A child's done is for its
+        # parent.
+        passes_on = args.to_driver or (args.kind == "done" and talking)
         task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
         if passes_on:
             task["report"]["to_driver"] = True
@@ -98,7 +91,6 @@ def cmd_report(args: argparse.Namespace) -> int:
         if (match := PR_URL.search(text)) and match.group(0) != task.get("pr"):
             task["pr"] = match.group(0)
             record("pr", task["agent"], pr=task["pr"])
-        held = bool(task.get("held"))
         parent = task.get("parent")
         host = direct_host(tasks, parent, args.kind, passes_on)
         if host:
@@ -115,23 +107,26 @@ def cmd_report(args: argparse.Namespace) -> int:
             f"Recorded. {parent} started you, not the driver, so moto delivers it to"
             + f" {parent}'s pane once its turn ends. {PASS_ON_RULE}"
         )
-    elif held and args.kind == "phase":
+    elif talking and args.kind == "phase":
         print(
-            "The user holds this session, so moto does not hand it off. The driver"
-            + " hears of the phase. End your turn with one line that names the next"
-            + " phase and asks the user to say go, such as: Phase done. Say go to"
-            + " start the tono loop on PR #138."
+            "The user is talking to you in this pane, so moto does not hand you off."
+            + " The driver hears of the phase. End your turn with one line that"
+            + " names the next phase and asks the user to say go, such as: Phase"
+            + " done. Say go to start the tono loop on PR #138."
         )
-    elif held and passes_on:
+    elif talking and passes_on:
         print(
-            f"The driver got your {args.kind}. The hold stays, so carry on with"
-            + " the user in this pane."
+            f"The driver got your {args.kind}. The user is talking to you, so carry"
+            + " on with the user in this pane."
         )
-    elif held:
-        # The driver's watch skips a held task's ordinary reports.
+    elif talking:
+        # The driver's watch skips the ordinary reports of a worker the user
+        # is talking to, until the user window passes.
+        minutes = round(user_window() / 60)
         print(
-            "Recorded. The user is driving this session and the driver is not"
-            + " watching it, so ask the user directly in this pane."
+            "Recorded. The user is talking to you in this pane, so the driver"
+            + f" leaves this report alone until {minutes} minutes pass with no new"
+            + " prompt from the user. Ask the user directly in this pane."
             + f" {PASS_ON_RULE}"
         )
     elif args.kind == "phase":
@@ -140,8 +135,7 @@ def cmd_report(args: argparse.Namespace) -> int:
             + " you off to a fresh session or tells you to carry on."
         )
     else:
-        again = "; moto watch covers this task again" if handed_back else ""
-        print(f"Reported {args.kind} to the driver{again}.")
+        print(f"Reported {args.kind} to the driver.")
     return 0
 
 

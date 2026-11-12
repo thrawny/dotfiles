@@ -18,8 +18,8 @@ from moto.common import (
     CHILD_REPORT,
     COMPACT_GROWTH,
     DRIVER_TAG,
+    ENDED_BY_USER,
     HANDOFF_MARKER_LIFE,
-    HC_NOTE,
     PANE_GONE_GRACE,
     REPORT_SETTLE_SECONDS,
     SELF,
@@ -32,8 +32,16 @@ from moto.common import (
     state_dir,
 )
 from moto.driverstate import take_notes
-from moto.sessions import context_tokens, last_turn, settings, user_prompt
-from moto.store import hold_task, new_reports, record, tasks_for_update, unseen_reports
+from moto.sessions import context_tokens, last_turn, settings, user_prompt_at
+from moto.store import (
+    drop_held,
+    in_window,
+    new_reports,
+    record,
+    tasks_for_update,
+    unseen_reports,
+    user_window,
+)
 
 
 def check(
@@ -49,9 +57,10 @@ def check(
     prompt, and when its pane closes. Herdr's state_change_seq catches a turn
     that ended while nothing was watching. A done worker that someone looked at
     turns idle, and that is not news. turn_end decides which turn ends are news.
-    A held task is news only when its pane closes and when it passes a report on
-    with --to-driver, which a done does by itself; pane_closed and passed_on
-    decide when. A task another
+    A task the user is talking to is news only when its pane closes, when it
+    passes a report on with --to-driver, which a done does by itself, and once
+    the user window passes; pane_closed, passed_on and user_talk decide when.
+    A task another
     worker started is news only when its pane closes, when the user ends or
     hands it back, and when it passes a report on. Its done, question and
     blocked reports go to that worker through outbox, which the caller sends
@@ -74,12 +83,13 @@ def check(
             continue
         if closed := pane_closed(name, task, status == "gone", now):
             lines.append(closed)
-        lines += taken_over(name, task, agent)
         if parent := task.get("parent"):
             lines += child_report(name, task, parent)
             lines += to_parent(name, task, parent, tasks, live, now, outbox)
             continue
-        if task.get("held"):
+        news, talking = user_talk(name, task, agent, status, now)
+        lines += news
+        if talking:
             lines += passed_on(name, task)
             continue
         unseen = unseen_reports(task)
@@ -124,47 +134,96 @@ def check(
     return lines
 
 
-def taken_over(
-    name: str, task: dict[str, Any], agent: dict[str, Any] | None
-) -> list[str]:
-    """Hold a task whose worker the user started talking to, and say so once.
+def user_talk(
+    name: str,
+    task: dict[str, Any],
+    agent: dict[str, Any] | None,
+    status: str,
+    now: float,
+) -> tuple[list[str], bool]:
+    """The driver's lines about the user talking to a worker, and whether the
+    user still is.
 
-    The user's turn is a typed prompt that is not the driver's, the parent's, a
-    child's report or a command moto submitted, which user_prompt decides. The
-    first pass only records the latest one, so a task's history never holds it.
-    A turn the driver has not seen a report for comes first, because holding
-    makes the watch skip it. A wrap, snooze or handback it has not seen ends
-    the hold, so the typing is dropped. A running handoff is moto's own typing.
+    The worker is with the user while the user's last prompt in its pane, which
+    user_prompt_at finds, is within the user window. The driver hears once when
+    that starts, with the reports it has not seen, since passed_on skips them.
+    Once the window passes and the turn the user started has ended, the worker
+    is the driver's again, and the driver hears once with the worker's latest
+    state. A wrap or snooze report ends the window early, and the normal path
+    delivers it. While a handoff runs, the typing is moto's own, so nothing
+    changes. with_user in task keeps the last prompt's time between passes.
     """
-    if task.get("held") or task.get("handoff"):
-        return []
-    seen = task["seen"]
+    since: float | None = task.get("with_user")
+    if task.get("handoff"):
+        return [], since is not None
     try:
-        turn = user_prompt(task, agent)
+        at = user_prompt_at(task, agent)
     except (MotoError, OSError):
-        return []  # nothing to read yet, so the baseline waits
-    if "user_turn" not in seen:
-        seen["user_turn"] = turn
-        return []
-    if turn is None or turn == seen["user_turn"]:
-        return []
-    if any(r["kind"] in ADOPT_KINDS for r in unseen_reports(task)):
-        # A wrap, snooze or handback the watch has not seen ends the hold, as for
-        # a manual hold, so it supersedes the typing: the normal path delivers it.
-        seen["user_turn"] = turn
-        return []
-    lines = [f"{name} {r['kind']}: {r['text']}" for r in new_reports(task)]
-    hold_task(task, "the user typed in the pane")
-    return lines + [f"{name}: the user took it over, held"]
+        return [], since is not None  # nothing to read now, so nothing changes
+    if in_window(task, at, now):
+        task["with_user"] = at
+        if since is not None:
+            return [], True
+        lines = [f"{name} {r['kind']}: {r['text']}" for r in new_reports(task)]
+        record("with_user", name, at=at)
+        minutes = round(user_window() / 60)
+        return lines + [
+            f"{name}: the user is talking to it, so the driver stays hands-off"
+            + f" until {minutes} minutes pass with no new prompt"
+        ], True
+    if since is None:
+        return [], False
+    if any(r["kind"] in ENDED_BY_USER for r in unseen_reports(task)):
+        del task["with_user"]
+        return [], False
+    if status == "working":
+        return [], True  # the turn the user started still runs
+    del task["with_user"]
+    record("back_to_driver", name, at=since)
+    return [back_to_driver(name, task, agent, status, since, now)], False
+
+
+def back_to_driver(
+    name: str,
+    task: dict[str, Any],
+    agent: dict[str, Any] | None,
+    status: str,
+    since: float,
+    now: float,
+) -> str:
+    """The line that hands a worker back to the driver after the user window,
+    marking its state seen so the normal path does not repeat it.
+
+    The worker's last report counts as its state only when it came after the
+    user's last prompt.
+    """
+    seen = task["seen"]
+    seen.pop("pending", None)
+    seen["status"] = status
+    seen["seq"] = agent.get("state_change_seq") if agent else None
+    seen["turn"], _ = last_turn(task, agent)
+    new_reports(task)
+    report: dict[str, Any] | None = task.get("report")
+    if report and report["at"] >= since:
+        ago = age(now - report["at"])
+        state = f"last report {report['kind']} ({ago} ago): {report['text']}"
+    elif status == "blocked":
+        state = "it waits at an approval or question prompt"
+    else:
+        state = "its last turn ended without a report"
+    last = age(now - since)
+    return (
+        f"{name}: back with the driver, the user's last prompt was {last} ago; {state}"
+    )
 
 
 def child_report(name: str, task: dict[str, Any], parent: str) -> list[str]:
-    """The lines for a child task's new wrap, snooze, handback and passed-on
-    reports, once each.
+    """The lines for a child task's new wrap, snooze and passed-on reports, once
+    each.
 
     The user runs or asks for those in the child's pane, so they are the
     driver's news. The child's done, question and blocked reports are for its
-    parent, held or not, so they queue in seen.for_parent for to_parent.
+    parent, so they queue in seen.for_parent for to_parent.
     """
     lines: list[str] = []
     closed = " (pane closed)" if task.get("closed_at") else ""
@@ -191,8 +250,8 @@ def to_parent(
 ) -> list[str]:
     """Hand a child's queued reports to its parent once, returning driver lines.
 
-    The parent takes them once its turn ends, held or not, since the child is
-    its own work; mid-turn, at a prompt or between panes, they wait. A parent
+    The parent takes them once its turn ends, even while the user talks to the
+    parent, since the child is its own work; mid-turn, at a prompt or between panes, they wait. A parent
     that is gone, snoozed or closed would never take them, so the driver gets
     them instead. Delivering counts as writing to the parent, like moto tell.
     """
@@ -229,19 +288,24 @@ def to_parent(
 
 
 def passed_on(name: str, task: dict[str, Any]) -> list[str]:
-    """The lines for a held task's new --to-driver and phase reports, once each.
+    """The lines for new --to-driver and phase reports of a task the user is
+    talking to, once each.
 
     The user asked the worker to send the first, or it is a done, which
-    cmd_report marks to_driver in a held task. Both are the driver's news.
-    A phase report is never handed off in a held task, but the driver hears
-    of it. The held task's other reports are the user's, so they pass unseen.
+    cmd_report marks to_driver while the worker is with the user. Both are the
+    driver's news. A phase report is never handed off then, but the driver
+    hears of it. The other reports are the user's, so they pass unseen.
     """
     lines: list[str] = []
     for report in new_reports(task):
         if report.get("to_driver"):
-            lines.append(f"{name} {report['kind']} (held, passed on): {report['text']}")
+            lines.append(
+                f"{name} {report['kind']} (with the user, passed on): {report['text']}"
+            )
         elif report["kind"] == "phase":
-            lines.append(f"{name} phase (held, not handed off): {report['text']}")
+            lines.append(
+                f"{name} phase (with the user, not handed off): {report['text']}"
+            )
     return lines
 
 
@@ -273,15 +337,14 @@ def turn_end(
     """The line for a turn that ended without a report, or None to stay quiet.
 
     Quiet, and logged as an absorb event, when moto handoff is moving the worker
-    to a new session, when the user is talking to the worker, when the worker
-    reported since the driver last wrote to it, or when Herdr announces a turn
+    to a new session, when the worker reported since the driver last wrote to it, or when Herdr announces a turn
     the watch already handled. A turn end stays pending while
     the worker's background work runs, up to BUSY_LIMIT, and is rechecked every
     poll. With no transcript to read, every turn end is news.
     """
     seen = task["seen"]
     pending: dict[str, Any] = seen.setdefault("pending", {"since": now})
-    turn, prompt = last_turn(task, agent)
+    turn, _ = last_turn(task, agent)
     reason = None
     report: dict[str, Any] | None = task.get("report")
     told = task.get("told")
@@ -291,8 +354,6 @@ def turn_end(
         if now - pending["since"] < TURN_SETTLE_SECONDS:
             return None  # the transcript may not hold the new turn yet
         reason = "Herdr announced a turn the watch already handled"
-    elif from_user(prompt):
-        reason = "the user is talking to the worker"
     elif report and told is not None and report["at"] >= told:
         reason = "it reported since the driver last wrote to it"
     work = None if reason else background_work(task["pane_id"])
@@ -318,16 +379,6 @@ def turn_end(
     return f"{name}: turn ended without a report"
 
 
-def from_user(prompt: str | None) -> bool:
-    """Whether the worker's last typed prompt is the user's, not the driver's
-    or a child's report."""
-    return (
-        prompt is not None
-        and not prompt.startswith((DRIVER_TAG, HC_NOTE))
-        and not CHILD_REPORT.match(prompt)
-    )
-
-
 def kilo(tokens: int) -> str:
     return f"{round(tokens / 1000)}k"
 
@@ -344,15 +395,14 @@ def phase_step(
 
     A worker over the handoff limit starts the next phase in a fresh session,
     and one under it carries on. The driver gets the line either way. When the
-    user is talking to the worker, or the context size is unknown, the watch
-    does neither and the line leaves it to the driver.
+    context size is unknown, the watch does neither and the line leaves it to
+    the driver. A worker the user is talking to never gets here.
     """
     phase = report["text"]
     head = f"{name} phase: {phase}"
-    _, prompt = last_turn(task, agent)
-    tokens = None if from_user(prompt) else context_tokens(task, agent)
+    tokens = context_tokens(task, agent)
     if tokens is None:
-        why = "the user is talking to it" if from_user(prompt) else "no transcript"
+        why = "no transcript"
         record("phase", name, phase=phase, action="driver", reason=why)
         return f"{head} (not handed off: {why})"
     limit = settings()["handoff_tokens"]
@@ -380,11 +430,10 @@ def compact_line(
 
     seen.compact_at holds the context size at the last /compact, or the size
     since, if the context shrank. The worker gets /compact again only once its
-    context grew COMPACT_GROWTH past that. A worker the user is talking to, or
-    one a handoff is moving, is left alone.
+    context grew COMPACT_GROWTH past that. A worker a handoff is moving is
+    left alone, and one the user is talking to never gets here.
     """
-    _, prompt = last_turn(task, agent)
-    if task.get("handoff") or from_user(prompt):
+    if task.get("handoff"):
         return None
     tokens = context_tokens(task, agent)
     if tokens is None:
@@ -429,16 +478,16 @@ def background_work(pane_id: str) -> str | None:
 
 
 def unwatched(task: dict[str, Any]) -> bool:
-    """A held task is the user's, a snoozed one has no pane, and a worker that
-    started another one takes its reports, so moto watch counts none of the
-    three, apart from what pane_watched, child_report, to_parent and passed_on
-    cover."""
-    return bool(task.get("held") or task.get("snoozed") or task.get("parent"))
+    """A task the user is talking to is the user's, a snoozed one has no pane,
+    and a worker that started another one takes its reports, so moto watch
+    counts none of the three, apart from what pane_watched, child_report,
+    to_parent, passed_on and user_talk cover."""
+    return bool(task.get("with_user") or task.get("snoozed") or task.get("parent"))
 
 
 def pane_watched(task: dict[str, Any]) -> bool:
-    """Whether moto watch looks for a closed pane, which it does for held tasks
-    and those another worker started too."""
+    """Whether moto watch looks for a closed pane, which it does for tasks the
+    user is talking to and those another worker started too."""
     return not task.get("snoozed")
 
 
@@ -453,6 +502,7 @@ def watch() -> dict[str, Any]:
     outbox: list[Delivery] = []
     steps: list[Step] = []
     with tasks_for_update() as tasks:
+        drop_held(tasks)
         names = sorted(tasks)
         watching = sum(1 for t in tasks.values() if not unwatched(t))
         panes = any(pane_watched(t) for t in tasks.values())

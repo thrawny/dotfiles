@@ -78,14 +78,20 @@ def moto() -> ModuleType:
     user_typed(module, None)
     context_holds(module, None)
     setattr(module, "pr_updated", no_pr_update)
-    # No unit test reaches a real pane: a held mark goes nowhere unless a test
-    # swaps in marks_to().
+    # The user window never reads the real MOTO_HOME settings.
+    setattr(module, "user_window", lambda: WINDOW)
+    # No unit test reaches a real pane: a metadata call goes nowhere unless a
+    # test swaps in marks_to().
     marks_to(module, [])
     return module
 
 
+# The user window the tests run with, in seconds.
+WINDOW = 30 * 60
+
+
 def marks_to(moto: ModuleType, calls: list[tuple[str, ...]]) -> None:
-    """Record the Herdr held-mark commands instead of running them."""
+    """Record the Herdr pane metadata commands instead of running them."""
 
     def herdr_silent(*args: str, **_: Any) -> None:
         calls.append(args)
@@ -111,11 +117,13 @@ def turn_in(moto: ModuleType, turn: str | None, prompt: str | None) -> None:
     setattr(moto, "last_turn", last_turn)
 
 
-def user_typed(moto: ModuleType, uuid: str | None) -> None:
-    def user_prompt(_task: Any, _agent: Any) -> str | None:
-        return uuid
+def user_typed(moto: ModuleType, at: float | None) -> None:
+    """Make the user's last prompt in every pane one typed at this time."""
 
-    setattr(moto, "user_prompt", user_prompt)
+    def user_prompt_at(_task: Any, _agent: Any) -> float | None:
+        return at
+
+    setattr(moto, "user_prompt_at", user_prompt_at)
 
 
 @pytest.fixture(autouse=True)
@@ -206,11 +214,14 @@ def test_prompt_and_closed_pane_wake(moto: ModuleType):
     assert tasks["abc-1"]["closed_at"] == 10
 
 
-def test_held_task_s_closed_pane_wakes_once_and_nothing_else(moto: ModuleType):
+def test_closed_pane_of_a_task_with_the_user_wakes_once_and_nothing_else(
+    moto: ModuleType,
+):
     report = {"kind": "question", "text": "Which base?", "at": 100.0}
     grace = moto.PANE_GONE_GRACE
+    user_typed(moto, 150.0)
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True, report=report)
+        tasks["abc-1"] = task(report=report, with_user=150.0)
         assert moto.check(tasks, live("done", 2), 200) == []
         assert moto.check(tasks, {}, 300) == []
         assert moto.check(tasks, {}, 300 + grace) == ["abc-1: pane closed"]
@@ -227,7 +238,11 @@ def test_held_task_s_closed_pane_wakes_once_and_nothing_else(moto: ModuleType):
 
 
 def test_pane_back_within_the_grace_period_is_not_news(moto: ModuleType):
-    tasks = {"abc-1": task(held=True), "abc-2": task(pane_id="w2:p1")}
+    user_typed(moto, 1.0)
+    tasks = {
+        "abc-1": task(with_user=1.0),
+        "abc-2": task(pane_id="w2:p1", with_user=1.0),
+    }
     grace = moto.PANE_GONE_GRACE
     assert moto.check(tasks, {}, 0) == []
     both = live("done", 2) | live("working", 1, "w2:p1")
@@ -237,7 +252,7 @@ def test_pane_back_within_the_grace_period_is_not_news(moto: ModuleType):
 
 
 def test_closed_mark_clears_when_the_pane_comes_back(moto: ModuleType):
-    tasks = {"abc-1": task(held=True)}
+    tasks = {"abc-1": task()}
     grace = moto.PANE_GONE_GRACE
     moto.check(tasks, {}, 0)
     assert moto.check(tasks, {}, grace) == ["abc-1: pane closed"]
@@ -262,10 +277,8 @@ def test_closed_pane_of_a_child_task_is_news_once(moto: ModuleType):
     assert moto.check(tasks, {}, 200 + grace) == []
 
 
-@pytest.mark.parametrize("kind", ["wrap", "snooze", "handback"])
-def test_child_wrap_snooze_and_handback_reach_the_driver_once(
-    moto: ModuleType, kind: str
-):
+@pytest.mark.parametrize("kind", ["wrap", "snooze"])
+def test_child_wrap_and_snooze_reach_the_driver_once(moto: ModuleType, kind: str):
     with moto.tasks_for_update() as tasks:
         tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1")
     args = argparse.Namespace(
@@ -284,8 +297,11 @@ def test_child_wrap_snooze_and_handback_reach_the_driver_once(
 def test_child_done_question_and_blocked_reach_the_parent_once_its_turn_ends(
     moto: ModuleType, kind: str
 ):
+    # The user talks to both, which changes nothing for the child's reports.
+    typed = moto.time.time()
+    user_typed(moto, typed)
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True)
+        tasks["abc-1"] = task(with_user=typed)
         tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1")
     args = argparse.Namespace(kind=kind, text=["x"], agent=None, to_driver=False)
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}):
@@ -324,20 +340,6 @@ def test_child_report_goes_to_the_driver_when_the_parent_cannot_take_it(
     assert outbox == []
 
 
-def test_held_child_handing_back_reaches_the_driver(moto: ModuleType):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", parent="abc-1", held=True)
-    args = argparse.Namespace(
-        kind="handback", text=["Over", "to", "you"], agent=None, to_driver=False
-    )
-    with patch.dict("os.environ", {"HERDR_PANE_ID": "w2:p1"}):
-        assert moto.cmd_report(args) == 0
-    tasks = moto.read_tasks()
-    assert moto.check(tasks, live("done", 2, "w2:p1"), moto.time.time()) == [
-        "abc-2 handback (child of abc-1): Over to you"
-    ]
-
-
 def test_unknown_state_is_skipped(moto: ModuleType):
     tasks = {"abc-1": task()}
     assert moto.check(tasks, live("unknown", 2), 0) == []
@@ -360,106 +362,74 @@ def test_report_finds_its_task_by_pane_and_keeps_the_pr(moto: ModuleType):
     assert saved["pr"] == "https://github.com/o/r/pull/7"
 
 
-def test_resume_treats_what_happened_while_held_as_seen(moto: ModuleType):
-    report = {"kind": "question", "text": "Which base?", "at": 100.0}
-    tasks = {"abc-1": task(held=True, report=report)}
-    moto.resume(tasks["abc-1"], live("done", 5))
-    assert tasks["abc-1"]["held"] is False
-    assert moto.check(tasks, live("done", 5), 200) == []
-    assert moto.check(tasks, live("done", 7), 200) == [
-        "abc-1: turn ended without a report"
-    ]
-
-
-@pytest.mark.parametrize("kind", ["handback", "snooze"])
-def test_handback_and_snooze_end_the_hold_and_wake_the_driver(
+@pytest.mark.parametrize("kind", ["wrap", "snooze"])
+def test_wrap_and_snooze_end_the_user_window_and_wake_the_driver(
     moto: ModuleType, kind: str
 ):
-    old = {"kind": "question", "text": "Which base?", "at": 100.0}
-    seen = {"status": "working", "seq": 1, "pending": {"since": 90.0}}
+    now = moto.time.time()
+    user_typed(moto, now - 60)
+    old = {"kind": "question", "text": "Which base?", "at": now - 30}
+    seen = {"status": "working", "seq": 1, "report_at": now - 30}
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True, report=old, seen=seen)
+        tasks["abc-1"] = task(report=old, seen=seen, with_user=now - 60)
     args = argparse.Namespace(
         kind=kind, text=["Ship", "it"], agent=None, to_driver=False
     )
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
         assert moto.cmd_report(args) == 0
     tasks = moto.read_tasks()
-    assert tasks["abc-1"]["held"] is False
-    now = moto.time.time()
-    assert moto.check(tasks, live("done", 5), now) == [f"abc-1 {kind}: Ship it"]
-    assert [(e["event"], e.get("by")) for e in events(moto)][-2:] == [
-        ("resume", kind),
-        ("report", None),
-    ]
+    assert moto.check(tasks, live("done", 5), now + 1) == [f"abc-1 {kind}: Ship it"]
+    assert "with_user" not in tasks["abc-1"]
+    assert moto.check(tasks, live("done", 5), now + 2) == []
 
 
-def test_held_task_passes_on_only_what_the_user_asks_and_stays_held(
+def test_reports_while_with_the_user_reach_the_driver_only_when_passed_on(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    user_typed(moto, moto.time.time())
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+        assert moto.check(tasks, live("working", 1), moto.time.time()) == [
+            "abc-1: the user is talking to it, so the driver stays hands-off until"
+            + " 30 minutes pass with no new prompt"
+        ]
+    sent = (
+        ("question", False, []),
+        ("blocked", False, []),
+        ("question", True, ["abc-1 question (with the user, passed on): question"]),
+        # A done is the driver's news without the flag.
+        ("done", False, ["abc-1 done (with the user, passed on): done"]),
+    )
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
+        for kind, to_driver, news in sent:
+            args = argparse.Namespace(
+                kind=kind, text=[kind], agent=None, to_driver=to_driver
+            )
+            assert moto.cmd_report(args) == 0
+            if kind == "done":
+                assert "carry on with the user" in capsys.readouterr().out
+            tasks = moto.read_tasks()
+            now = moto.time.time()
+            assert moto.check(tasks, live("done", 2), now) == news
+            assert moto.check(tasks, live("done", 3), now) == []
+            with moto.tasks_for_update() as saved:
+                saved.update(tasks)
+
+
+def test_reports_sent_between_two_watches_all_reach_the_driver_in_order(
     moto: ModuleType,
 ):
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True)
-    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
-        for text, to_driver in (("Mine", False), ("Yours", True)):
-            args = argparse.Namespace(
-                kind="question", text=[text], agent=None, to_driver=to_driver
-            )
-            assert moto.cmd_report(args) == 0
-            tasks = moto.read_tasks()
-            now = moto.time.time()
-            news = moto.check(tasks, live("done", 2), now)
-            assert news == (
-                ["abc-1 question (held, passed on): Yours"] if to_driver else []
-            )
-            assert moto.check(tasks, live("done", 3), now) == []
-            with moto.tasks_for_update() as saved:
-                saved.update(tasks)
-    assert moto.read_tasks()["abc-1"]["held"] is True
-
-
-def test_held_done_reaches_the_driver_once_and_question_and_blocked_do_not(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True)
-    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
-        for kind in ("question", "blocked", "done"):
-            args = argparse.Namespace(
-                kind=kind, text=[kind], agent=None, to_driver=False
-            )
-            capsys.readouterr()
-            assert moto.cmd_report(args) == 0
-            printed = capsys.readouterr().out
-            tasks = moto.read_tasks()
-            now = moto.time.time()
-            news = moto.check(tasks, live("done", 2), now)
-            if kind == "done":
-                assert "The hold stays" in printed
-                assert news == ["abc-1 done (held, passed on): done"]
-            else:
-                assert news == []
-            assert moto.check(tasks, live("done", 3), now) == []
-            with moto.tasks_for_update() as saved:
-                saved.update(tasks)
-    assert moto.read_tasks()["abc-1"]["held"] is True
-
-
-@pytest.mark.parametrize("held", [False, True])
-def test_reports_sent_between_two_watches_all_reach_the_driver_in_order(
-    moto: ModuleType, held: bool
-):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=held)
+        tasks["abc-1"] = task()
     with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
         for text in ("one", "two", "three"):
             args = argparse.Namespace(
-                kind="question", text=[text], agent=None, to_driver=held
+                kind="question", text=[text], agent=None, to_driver=False
             )
             assert moto.cmd_report(args) == 0
     tasks = moto.read_tasks()
-    tag = " (held, passed on)" if held else ""
     assert moto.check(tasks, live("done", 2), moto.time.time()) == [
-        f"abc-1 question{tag}: {text}" for text in ("one", "two", "three")
+        f"abc-1 question: {text}" for text in ("one", "two", "three")
     ]
     assert moto.check(tasks, live("done", 2), moto.time.time()) == []
     assert tasks["abc-1"]["report"]["text"] == "three"
@@ -943,16 +913,9 @@ def test_session_is_the_newest_whose_last_title_matches(
 SNOOZE = {"session": "s1", "reason": "waiting on infra", "at": 100.0}
 
 
-def test_snoozed_task_never_wakes_and_resume_refuses_it(moto: ModuleType):
+def test_snoozed_task_never_wakes(moto: ModuleType):
     tasks = {"abc-1": task(snoozed=SNOOZE)}
     assert moto.check(tasks, {}, 200) == []
-    with moto.tasks_for_update() as saved:
-        saved.update(tasks)
-    with (
-        patch.object(moto, "live_agents", return_value={}),
-        pytest.raises(moto.MotoError, match="moto wake"),
-    ):
-        moto.cmd_resume(argparse.Namespace(agent="abc-1"))
 
 
 def test_wake_resumes_the_session_at_the_same_worktree_path(
@@ -963,7 +926,7 @@ def test_wake_resumes_the_session_at_the_same_worktree_path(
     session_file(moto.session_dir(cwd), "s1", "ABC-1 fix", mtime=100)
     snooze = {**SNOOZE, "title": "ABC-1 fix", "cwd": cwd, "worktree": True}
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(snoozed=snooze, held=True)
+        tasks["abc-1"] = task(snoozed=snooze, with_user=50.0)
     details = {"cwd": cwd, "pane_id": "w5:p1", "tab_id": "w5:t1", "workspace_id": "w5"}
     args = argparse.Namespace(agent="abc-1", text=["Infra", "is", "done."])
     with (
@@ -989,7 +952,9 @@ def test_wake_resumes_the_session_at_the_same_worktree_path(
     ]
     assert run.call_args.kwargs["stdin"] == "[driver] Infra is done.\n"
     saved = moto.read_tasks()["abc-1"]
-    assert "snoozed" not in saved and saved["held"] is False
+    assert "snoozed" not in saved and "with_user" not in saved
+    # The user's typing before the snooze no longer keeps the driver away.
+    assert not moto.in_window(saved, saved["user_reset"] - 1, saved["user_reset"])
     assert (saved["pane_id"], saved["seen"]["status"]) == ("w5:p1", "working")
 
 
@@ -1271,9 +1236,7 @@ def claude_in(pane_id: str, status: str = "idle", **fields: Any) -> dict[str, An
 def test_attach_moves_a_task_to_its_resumed_pane(moto: ModuleType):
     report = {"kind": "done", "text": "PR ready", "at": 100.0}
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(
-            held=True, report=report, seen={"status": "gone"}, closed_at=50.0
-        )
+        tasks["abc-1"] = task(report=report, seen={"status": "gone"}, closed_at=50.0)
     # The closed pane's process lingers in Herdr under the task's name.
     live = {
         "w1:p1": claude_in("w1:p1", name="abc-1"),
@@ -1294,16 +1257,11 @@ def test_attach_moves_a_task_to_its_resumed_pane(moto: ModuleType):
         ("tab", "rename", "w1:t1", "claude"),
     ]
     saved = moto.read_tasks()["abc-1"]
-    assert (saved["pane_id"], saved["tab_id"], saved["held"]) == (
-        "w1:p7",
-        "w1:t1",
-        True,
-    )
+    assert (saved["pane_id"], saved["tab_id"]) == ("w1:p7", "w1:t1")
     assert saved["seen"] == {
         "status": "done",
         "seq": 9,
         "report_at": 100.0,
-        "user_turn": None,
         "turn": "t9",
     }
     assert "closed_at" not in saved
@@ -1316,7 +1274,6 @@ def test_attach_moves_a_task_to_its_resumed_pane(moto: ModuleType):
         "previous": "w1:p1",
     }
     # Once resumed, the old turn and the done status are not news to the watch.
-    saved["held"] = False
     assert moto.check({"abc-1": saved}, {"w1:p7": live["w1:p7"]}, 1000) == []
 
 
@@ -1412,7 +1369,7 @@ def test_a_fork_runs_no_task_commands(
             ["watch"],
             ["ask", "which one?"],
             ["attach", "abc-1"],
-            ["hold", "abc-1"],
+            ["drop", "abc-1"],
         ):
             assert moto_main(moto, *argv) == 1
             assert f"cannot run moto {argv[0]}" in capsys.readouterr().err
@@ -1498,21 +1455,21 @@ def test_first_write_snapshots_the_existing_tasks(moto: ModuleType):
     path.parent.mkdir(parents=True)
     path.write_text(json.dumps({"tasks": {"abc-1": task()}}))
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"]["held"] = True
-        moto.record("hold", "abc-1")
-    first, hold = events(moto)
+        tasks["abc-1"]["pr"] = "https://x/pull/1"
+        moto.record("pr", "abc-1")
+    first, pr = events(moto)
     assert (first["v"], first["event"], first["agent"]) == (1, "snapshot", "abc-1")
-    assert "held" not in first["task"]
-    assert hold["event"] == "hold"
+    assert first["task"]["pr"] is None
+    assert pr["event"] == "pr"
     with moto.tasks_for_update():
-        moto.record("resume", "abc-1")
-    assert [e["event"] for e in events(moto)] == ["snapshot", "hold", "resume"]
+        moto.record("tell", "abc-1")
+    assert [e["event"] for e in events(moto)] == ["snapshot", "pr", "tell"]
 
 
 def test_failed_update_logs_nothing(moto: ModuleType):
     with pytest.raises(moto.MotoError):
         with moto.tasks_for_update():
-            moto.record("hold", "abc-1")
+            moto.record("tell", "abc-1")
             raise moto.MotoError("boom")
     with moto.tasks_for_update():
         pass
@@ -1554,14 +1511,6 @@ def test_settle_replaces_a_question_without_news(moto: ModuleType):
 
 def absorbed(moto: ModuleType) -> list[str]:
     return [e["reason"] for e in moto.pending_events if e["event"] == "absorb"]
-
-
-def test_turn_answering_the_user_is_absorbed_and_logged(moto: ModuleType):
-    tasks = {"abc-1": task()}
-    turn_in(moto, "t1", "what does this do?")
-    assert moto.check(tasks, live("done", 2), 0) == []
-    assert absorbed(moto) == ["the user is talking to the worker"]
-    assert "pending" not in tasks["abc-1"]["seen"]
 
 
 def test_turn_answering_the_driver_without_a_report_wakes(moto: ModuleType):
@@ -1910,8 +1859,8 @@ def test_user_turns_skip_tagged_prompts_and_those_before_the_report(
         typed(800, [{"type": "text", "text": "push it"}]),
     ]
     (directory / "s.jsonl").write_text("".join(json.dumps(e) + "\n" for e in entries))
-    held = task(title="ABC-1 fix", parent="abc-0")
-    assert real.user_turns(held, None, 200) == [500, 800]
+    child = task(title="ABC-1 fix", parent="abc-0")
+    assert real.user_turns(child, None, 200) == [500, 800]
     snoozed = task(snoozed={"session": "s", "cwd": "/code/widgets-ABC-1-fix"})
     assert real.user_turns(snoozed, None, 200) == [400, 500, 800]
     assert real.user_turns(task(title="other"), None, 200) == []
@@ -1933,86 +1882,138 @@ def test_user_prompt_skips_what_the_driver_the_parent_and_moto_typed(
         typed(500, "/takeoff handoff.md", uuid="t"),
         typed(600, "/compact", uuid="k"),
         typed(700, "a subagent's prompt", uuid="s", isSidechain=True),
-        typed(800, "no uuid"),
     ]
-    entries[-1]["uuid"] = ""
     (directory / "s.jsonl").write_text("".join(json.dumps(e) + "\n" for e in entries))
     child = task(title="ABC-1 fix", parent="abc-0")
-    assert real.user_prompt(child, None) == "mine"
+    assert real.user_prompt_at(child, None) == 100
     with pytest.raises(real.MotoError):
-        real.user_prompt(task(title="other"), None)
+        real.user_prompt_at(task(title="other"), None)
 
 
-def test_user_typing_in_a_worker_holds_it_once_and_tells_the_driver(moto: ModuleType):
+TALKING = (
+    "abc-1: the user is talking to it, so the driver stays hands-off until 30"
+    + " minutes pass with no new prompt"
+)
+
+
+def test_user_window_keeps_the_driver_away_then_hands_back_once(moto: ModuleType):
+    tasks = {"abc-1": task(told=0.0)}
+    user_typed(moto, 100.0)
+    assert moto.check(tasks, live("working", 1), 101) == [TALKING]
+    assert [e["event"] for e in moto.pending_events] == ["with_user"]
+    # The turn ends inside the window: the user's, so no news.
+    assert moto.check(tasks, live("done", 2), 200) == []
+    assert moto.check(tasks, live("done", 2), 100 + WINDOW - 1) == []
+    # Just past the window, the driver hears once, with the latest state.
+    assert moto.check(tasks, live("done", 2), 100 + WINDOW) == [
+        "abc-1: back with the driver, the user's last prompt was 30m ago; its last"
+        + " turn ended without a report"
+    ]
+    assert "with_user" not in tasks["abc-1"]
+    assert moto.check(tasks, live("done", 2), 200 + WINDOW) == []
+    # A new prompt starts a new window.
+    user_typed(moto, 300 + WINDOW)
+    assert moto.check(tasks, live("working", 3), 301 + WINDOW) == [TALKING]
+
+
+def test_back_to_driver_note_carries_a_report_from_the_window(moto: ModuleType):
     tasks = {"abc-1": task()}
-    user_typed(moto, "u1")
-    assert moto.check(tasks, live("working", 1), 0) == []  # the history is a baseline
-    assert not tasks["abc-1"].get("held")
-    user_typed(moto, "u2")
-    assert moto.check(tasks, live("working", 2), 1) == [
-        "abc-1: the user took it over, held"
+    user_typed(moto, 100.0)
+    assert moto.check(tasks, live("working", 1), 101) == [TALKING]
+    with moto.tasks_for_update() as saved:
+        saved.update(tasks)
+    with (
+        patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}),
+        patch.object(moto.time, "time", return_value=150.0),
+    ):
+        args = argparse.Namespace(
+            kind="question", text=["Which", "base?"], agent=None, to_driver=False
+        )
+        assert moto.cmd_report(args) == 0
+    tasks = moto.read_tasks()
+    assert moto.check(tasks, live("done", 2), 160) == []
+    assert moto.check(tasks, live("done", 2), 100 + WINDOW) == [
+        "abc-1: back with the driver, the user's last prompt was 30m ago; last"
+        + " report question (29m ago): Which base?"
     ]
-    assert tasks["abc-1"]["held"]
-    holds = [e for e in moto.pending_events if e["event"] == "hold"]
-    assert [e["agent"] for e in holds] == ["abc-1"]
-    user_typed(moto, "u3")
-    assert moto.check(tasks, live("done", 3), 2) == []  # held, so it stays quiet
+    assert moto.check(tasks, live("done", 2), 200 + WINDOW) == []
 
 
-def test_user_typing_holds_a_worker_that_another_worker_started(moto: ModuleType):
-    tasks = {"abc-2": task(agent="abc-2", parent="abc-1", seen={"user_turn": "u1"})}
-    user_typed(moto, "u2")
-    assert moto.check(tasks, live("working", 1), 0) == [
-        "abc-2: the user took it over, held"
+def test_user_window_waits_for_the_user_s_turn_to_end(moto: ModuleType):
+    tasks = {"abc-1": task(with_user=100.0)}
+    user_typed(moto, 100.0)
+    assert moto.check(tasks, live("working", 1), 100 + WINDOW) == []
+    assert moto.check(tasks, live("blocked", 2), 101 + WINDOW) == [
+        "abc-1: back with the driver, the user's last prompt was 30m ago; it waits"
+        + " at an approval or question prompt"
     ]
 
 
-def test_user_typing_hands_the_driver_the_report_the_hold_would_skip(
+def test_user_typing_hands_the_driver_the_report_it_had_not_seen(
     moto: ModuleType,
 ):
     report = {"kind": "done", "text": "PR ready", "at": 10.0}
-    tasks = {"abc-1": task(report=report, seen={"user_turn": "u1"})}
-    user_typed(moto, "u2")
-    assert moto.check(tasks, live("done", 2), 50) == [
-        "abc-1 done: PR ready",
-        "abc-1: the user took it over, held",
-    ]
+    tasks = {"abc-1": task(report=report)}
+    user_typed(moto, 20.0)
+    assert moto.check(tasks, live("done", 2), 50) == ["abc-1 done: PR ready", TALKING]
 
 
-def test_a_wrap_after_the_user_typed_supersedes_the_hold(moto: ModuleType):
-    report = {"kind": "wrap", "text": "wrapped", "at": 10.0}
-    tasks = {"abc-1": task(report=report, seen={"user_turn": "u1"})}
-    user_typed(moto, "u2")
+def test_a_wrap_after_the_user_typed_ends_the_window(moto: ModuleType):
+    report = {"kind": "wrap", "text": "wrapped", "at": 30.0}
+    tasks = {"abc-1": task(report=report, reports=[report])}
+    user_typed(moto, 20.0)
     assert moto.check(tasks, live("done", 2), 50) == ["abc-1 wrap: wrapped"]
-    assert not tasks["abc-1"].get("held")
-    assert [e for e in moto.pending_events if e["event"] == "hold"] == []
-    assert moto.check(tasks, live("done", 2), 51) == []  # typing is seen, no late hold
+    assert "with_user" not in tasks["abc-1"]
+    assert moto.check(tasks, live("done", 2), 51) == []
 
 
-def test_handoff_typing_and_an_unreadable_transcript_never_hold(moto: ModuleType):
-    tasks = {"abc-1": task(seen={"user_turn": "u1"}, handoff={"at": 0.0})}
-    user_typed(moto, "u2")
-    assert moto.check(tasks, live("working", 1), 1) == []
-    assert not tasks["abc-1"].get("held")
+def test_old_typing_handoffs_children_and_unreadable_transcripts_never_start_a_window(
+    moto: ModuleType,
+):
+    user_typed(moto, 100.0)
+    old = {"abc-1": task()}
+    assert moto.check(old, live("working", 1), 100 + WINDOW) == []
+    handoff = {"abc-1": task(handoff={"at": 100.0 + WINDOW})}
+    assert moto.check(handoff, live("working", 1), 101) == []
+    child = {"abc-2": task(agent="abc-2", parent="abc-1")}
+    assert moto.check(child, live("working", 1), 101) == []
 
-    def unreadable(_task: Any, _agent: Any) -> str | None:
+    def unreadable(_task: Any, _agent: Any) -> float | None:
         raise moto.MotoError("no transcript")
 
-    setattr(moto, "user_prompt", unreadable)
+    setattr(moto, "user_prompt_at", unreadable)
     fresh = {"abc-1": task()}
-    assert moto.check(fresh, live("working", 1), 1) == []
-    assert "user_turn" not in fresh["abc-1"]["seen"]  # the baseline waits
+    assert moto.check(fresh, live("working", 1), 101) == []
+    assert "with_user" not in fresh["abc-1"]
 
 
-def test_resumed_task_holds_again_only_on_a_later_user_turn(moto: ModuleType):
-    tasks = {"abc-1": task(held=True, seen={"user_turn": "u1"})}
-    user_typed(moto, "u2")
-    moto.resume(tasks["abc-1"], live("done", 5))
-    assert not tasks["abc-1"]["held"]
-    assert moto.check(tasks, live("done", 5), 0) == []
-    user_typed(moto, "u3")
-    assert moto.check(tasks, live("working", 6), 1) == [
-        "abc-1: the user took it over, held"
+def test_with_user_counts_only_prompts_inside_the_window_after_a_wrap(
+    moto: ModuleType,
+):
+    user_typed(moto, 100.0)
+    assert moto.with_user(task(), None, 101) == 100.0
+    assert moto.with_user(task(), None, 100 + WINDOW) is None
+    wrap = {"kind": "wrap", "text": "x", "at": 150.0}
+    assert moto.with_user(task(reports=[wrap]), None, 200) is None
+    assert moto.with_user(task(user_reset=150.0), None, 200) is None
+    assert moto.with_user(task(snoozed=SNOOZE), None, 101) is None
+
+
+def test_drop_held_clears_old_marks_and_flags_once(moto: ModuleType):
+    marks: list[tuple[str, ...]] = []
+    marks_to(moto, marks)
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
+        tasks["abc-2"] = task(pane_id="w2:p1", agent="abc-2", held=False)
+        tasks["abc-3"] = task(pane_id="w3:p1", agent="abc-3", held=True, snoozed=SNOOZE)
+        tasks["abc-4"] = task(pane_id="w4:p1", agent="abc-4")
+        moto.drop_held(tasks)
+        moto.drop_held(tasks)
+    assert not any("held" in t for t in moto.read_tasks().values())
+    clear = ("--source", "moto", "--clear-token", "held", "--clear-state-labels")
+    assert marks == [
+        ("pane", "report-metadata", "w1:p1", *clear),
+        ("pane", "report-metadata", "w2:p1", *clear),
     ]
 
 
@@ -2069,49 +2070,49 @@ def list_output(
     return capsys.readouterr().out
 
 
-def test_list_shows_what_happened_in_a_held_task_since_its_report(
+def test_list_shows_a_task_with_the_user_and_what_happened_since_its_report(
     moto: ModuleType, capsys: pytest.CaptureFixture[str]
 ):
     report = {"kind": "done", "text": "Fixed.", "at": 1000.0}
+
+    def user_prompt_at(task: dict[str, Any], _agent: Any) -> float:
+        return 7000.0 if task["agent"] == "abc-1" else 900.0
+
+    setattr(moto, "user_prompt_at", user_prompt_at)
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True, report=report, pr="https://x/pull/1")
-        tasks["abc-2"] = task(pane_id="w2:p1", report=report)
+        tasks["abc-1"] = task(report=report, pr="https://x/pull/1")
+        tasks["abc-2"] = task(agent="abc-2", pane_id="w2:p1", report=report)
     out = list_output(moto, capsys, 7300, [2000.0, 7000.0], 3, 6000.0)
-    held, watched = out.split("abc-2")
+    talking, watched = out.split("abc-2")
+    assert "· idle · with the user, last prompt 5m ago\n" in talking
     assert (
         "  done (1h ago): Fixed.\n  since the report: 2 turns with the user, last 5m"
         + " ago · 3 commits · PR updated 21m ago\n"
-    ) in held
-    assert "since the" not in watched
+    ) in talking
+    assert "since the" not in watched and "with the user" not in watched
 
 
 def test_list_adds_nothing_when_nothing_happened_since_the_report(
     moto: ModuleType, capsys: pytest.CaptureFixture[str]
 ):
     report = {"kind": "done", "text": "Fixed.", "at": 1000.0}
+    user_typed(moto, 7000.0)
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True, report=report, pr="https://x/pull/1")
+        tasks["abc-1"] = task(report=report, pr="https://x/pull/1")
     # The PR changed before the report.
     assert "since the" not in list_output(moto, capsys, 7300, [], None, 900.0)
 
 
-def test_held_task_without_a_report_counts_from_the_hold(moto: ModuleType):
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    moto.cmd_hold(argparse.Namespace(agent="abc-1"))
-    held_at = events(moto)[-1]["ts"]
-    held = moto.read_tasks()["abc-1"]
+def test_task_without_a_report_counts_from_its_start(moto: ModuleType):
+    started = task(started=500.0)
     with (
         patch.object(moto, "user_turns", return_value=[]) as turns,
         patch.object(moto, "commits_since", return_value=1),
     ):
-        info = moto.since_report(held, None, None, moto.read_events())
-    turns.assert_called_once_with(held, None, held_at)
-    assert info["since"] == "hold"
-    assert moto.activity_line(info, held_at) == "since the hold: 1 commit"
-    assert (
-        moto.since_report(task(agent="other"), None, None, moto.read_events()) is None
-    )
+        info = moto.since_report(started, None, None)
+    turns.assert_called_once_with(started, None, 500.0)
+    assert moto.activity_line(info, 600.0) == "since the start: 1 commit"
+    assert moto.since_report(task(), None, None) is None
 
 
 # Scheduled jobs: schedules, gates and how a due job reaches the driver.
@@ -2369,9 +2370,14 @@ def test_watch_checks_a_child_task_without_counting_it(moto: ModuleType):
         assert moto.watch()["lines"] == []
 
 
-def test_watch_checks_a_held_task_s_pane_without_counting_it(moto: ModuleType):
+def test_watch_checks_the_pane_of_a_task_with_the_user_without_counting_it(
+    moto: ModuleType,
+):
+    now = moto.time.time()
+    user_typed(moto, now)
+    seen = {"status": "done", "gone_since": 0.0}
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True, seen={"status": "done", "gone_since": 0.0})
+        tasks["abc-1"] = task(with_user=now, seen=seen)
     with patch.object(moto, "live_agents", return_value={}):
         assert moto.watch() == {
             "watching": 0,
@@ -3078,30 +3084,24 @@ def test_handoff_limit_comes_from_the_settings(moto: ModuleType, phase_home: Pat
         moto.settings()
 
 
-def test_phase_report_of_a_worker_the_user_talks_to_goes_to_the_driver(
+def test_phase_report_of_a_worker_with_the_user_is_never_handed_off(
     moto: ModuleType, phase_home: Path
 ):
-    tasks = {"abc-1": phase_task()}
-    turn_in(moto, "t1", "looks good, go ahead")
+    tasks = {"abc-1": phase_task(with_user=90.0)}
+    user_typed(moto, 90.0)
     context_holds(moto, 150_000)
     steps: list[Any] = []
-    [line] = moto.check(tasks, live("done", 2), 101, [], steps)
-    assert line.startswith("abc-1 phase: implementation")
+    assert moto.check(tasks, live("done", 2), 101, [], steps) == [
+        "abc-1 phase (with the user, not handed off): implementation"
+    ]
+    assert moto.check(tasks, live("done", 2), 102, [], steps) == []
+    # After the window, the driver hears the phase in the note, and still no
+    # handoff starts.
+    [line] = moto.check(tasks, live("done", 2), 90 + WINDOW, [], steps)
+    assert line.endswith("last report phase (29m ago): implementation")
+    assert moto.check(tasks, live("done", 2), 91 + WINDOW, [], steps) == []
     assert steps == []
     assert "handoff" not in tasks["abc-1"]
-
-
-def test_phase_report_of_a_held_worker_goes_to_the_driver(
-    moto: ModuleType, phase_home: Path
-):
-    tasks = {"abc-1": phase_task(held=True)}
-    turn_in(moto, "t1", "[driver] grill CON-1")
-    context_holds(moto, 150_000)
-    steps: list[Any] = []
-    [line] = moto.check(tasks, live("done", 2), 101, [], steps)
-    assert line.startswith("abc-1 phase")
-    assert steps == []
-    assert moto.check(tasks, live("done", 2), 102, [], steps) == []
 
 
 def test_long_phase_gets_compact_once_per_growth_step(
@@ -3127,9 +3127,10 @@ def test_long_phase_gets_compact_once_per_growth_step(
     assert compacted == [520_000, 730_000, 510_000]
 
 
-def test_held_worker_never_gets_compact(moto: ModuleType, phase_home: Path):
-    tasks = {"abc-1": task(held=True, told=0.0)}
-    turn_in(moto, "t1", "[driver] babysit the PR")
+def test_worker_with_the_user_never_gets_compact(moto: ModuleType, phase_home: Path):
+    tasks = {"abc-1": task(told=0.0)}
+    user_typed(moto, 1.0)
+    turn_in(moto, "t1", "babysit the PR")
     context_holds(moto, 900_000)
     steps: list[Any] = []
     moto.check(tasks, live("working", 1), 1, [], steps)
@@ -3219,68 +3220,12 @@ def test_checkout_workspace_skips_background_and_prefers_the_folder_name(
         assert moto.checkout_workspace(checkout) is None
 
 
-HELD_MARK = ("pane", "report-metadata", "w1:p1", "--source", "moto")
-SET_HELD = (
-    *HELD_MARK,
-    "--token",
-    "held=held",
-)
-CLEAR_HELD = (*HELD_MARK, "--clear-token", "held")
-
-
-def test_hold_marks_the_pane_and_resume_clears_it(moto: ModuleType):
-    marks: list[tuple[str, ...]] = []
-    marks_to(moto, marks)
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    moto.cmd_hold(argparse.Namespace(agent="abc-1"))
-    assert marks == [SET_HELD]
-    with patch.object(moto, "live_agents", return_value=live("done", 3)):
-        moto.cmd_resume(argparse.Namespace(agent="abc-1"))
-    assert marks == [SET_HELD, CLEAR_HELD]
-
-
-def test_a_failing_mark_never_stops_the_hold(moto: ModuleType):
-    def refuse(*_: str, **__: Any) -> None:
-        raise moto.MotoError("herdr is down")
-
-    setattr(moto, "herdr_silent", refuse)
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    moto.cmd_hold(argparse.Namespace(agent="abc-1"))
-    assert moto.read_tasks()["abc-1"]["held"] is True
-
-
-@pytest.mark.parametrize("kind", ["wrap", "handback", "snooze"])
-def test_a_report_that_ends_the_hold_clears_the_mark(moto: ModuleType, kind: str):
-    marks: list[tuple[str, ...]] = []
-    marks_to(moto, marks)
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True)
-    args = argparse.Namespace(kind=kind, text=["Ship"], agent=None, to_driver=False)
-    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
-        moto.cmd_report(args)
-    assert marks == [CLEAR_HELD]
-
-
-@pytest.mark.parametrize("kind", ["phase", "done", "question"])
-def test_a_report_that_leaves_the_hold_keeps_the_mark(moto: ModuleType, kind: str):
-    marks: list[tuple[str, ...]] = []
-    marks_to(moto, marks)
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True)
-    args = argparse.Namespace(kind=kind, text=["Next"], agent=None, to_driver=False)
-    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
-        moto.cmd_report(args)
-    assert marks == []
-    assert moto.read_tasks()["abc-1"]["held"] is True
-
-
-def test_a_phase_report_in_a_held_task_asks_for_a_go(
+def test_a_phase_report_while_with_the_user_asks_for_a_go(
     moto: ModuleType, capsys: pytest.CaptureFixture[str]
 ):
+    user_typed(moto, moto.time.time())
     with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True)
+        tasks["abc-1"] = task()
     args = argparse.Namespace(
         kind="phase", text=["review"], agent=None, to_driver=False
     )
@@ -3292,51 +3237,20 @@ def test_a_phase_report_in_a_held_task_asks_for_a_go(
     assert "Carry on" not in out
 
 
-def test_close_and_drop_clear_a_held_task_s_mark_and_others_get_no_call(
+def test_close_refuses_a_worker_with_the_user_until_the_window_passes(
     moto: ModuleType,
 ):
-    marks: list[tuple[str, ...]] = []
-    marks_to(moto, marks)
-    herdr, _ = close(moto, "done", [], report=DONE, held=True)
-    herdr.assert_called_once_with("tab", "close", "w1:t1")
-    assert marks == [CLEAR_HELD]
-    marks.clear()
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True)
-    moto.cmd_drop(argparse.Namespace(agent="abc-1"))
-    assert marks == [CLEAR_HELD]
-    marks.clear()
-    close(moto, "done", [], report=DONE)
-    assert marks == []
-
-
-@pytest.mark.usefixtures("claude_home")
-def test_snooze_clears_the_mark_of_a_held_task(
-    moto: ModuleType, pushed_clone: Path, worktree: Path
-):
-    marks: list[tuple[str, ...]] = []
-    marks_to(moto, marks)
-    snoozed_worker(moto, pushed_clone, worktree, held=True)
-    assert marks == [(*CLEAR_HELD[:2], "w4:p2", *CLEAR_HELD[3:])]
-
-
-def test_attach_marks_the_new_pane_of_a_held_task(moto: ModuleType):
-    marks: list[tuple[str, ...]] = []
-    marks_to(moto, marks)
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task(held=True, closed_at=50.0)
-    live_panes = {"w1:p7": claude_in("w1:p7", "done")}
-    with (
-        patch.object(moto, "live_agents", return_value=live_panes),
-        patch.object(moto, "herdr"),
-    ):
-        moto.cmd_attach(argparse.Namespace(agent="abc-1", pane="w1:p7", hook=False))
-    assert marks == [(*SET_HELD[:2], "w1:p7", *SET_HELD[3:])]
-
-
-def test_a_task_with_no_pane_gets_no_mark_call(moto: ModuleType):
-    marks: list[tuple[str, ...]] = []
-    marks_to(moto, marks)
-    moto.show_hold(task(held=True, snoozed=SNOOZE))
-    moto.show_hold(task(held=True, closed_at=50.0))
-    assert marks == []
+    # The user typed before the done report, so only the window stops the close.
+    user_typed(moto, 800.0)
+    with pytest.raises(moto.MotoError, match="it is with the user"):
+        close(moto, "idle", [], report=DONE)
+    assert "abc-1" in moto.read_tasks()
+    close(moto, "idle", [], force=True, report=DONE)
+    assert "abc-1" not in moto.read_tasks()
+    # A wrap hands the worker to the driver at once.
+    wrap = {**DONE, "kind": "wrap"}
+    close(moto, "idle", [], report=wrap, reports=[wrap])
+    assert "abc-1" not in moto.read_tasks()
+    user_typed(moto, 1015.0 - WINDOW)
+    close(moto, "idle", [], report=DONE)
+    assert "abc-1" not in moto.read_tasks()

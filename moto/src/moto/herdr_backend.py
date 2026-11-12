@@ -180,18 +180,13 @@ def remove_worktree(_tab: str, path: str, repo: str, force: bool) -> None:
 METADATA_SOURCE = "moto"
 
 
-def mark_held(pane: str, held: bool) -> None:
-    """Show in the sidebar that the user holds this pane, or clear the mark.
+def clear_held_mark(pane: str) -> None:
+    """Clear the held token and state labels that moto hold once put on a pane.
 
-    A held pane gets the held token, shown as "held", because a worker that stops
-    between phases looks finished. The mark is display only, so a failure never
-    stops the command that asked.
+    The mark is display only, so a failure never stops the command that asked.
     """
     command = ["pane", "report-metadata", pane, "--source", METADATA_SOURCE]
-    if held:
-        command += ["--token", "held=held"]
-    else:
-        command += ["--clear-token", "held"]
+    command += ["--clear-token", "held", "--clear-state-labels"]
     with suppress(MotoError, OSError, subprocess.TimeoutExpired):
         herdr_silent(*command)
 

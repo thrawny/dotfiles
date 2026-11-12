@@ -104,9 +104,9 @@ def remove_worktree(terminal: str, tab: str, path: str, repo: str, force: bool) 
     module(terminal).remove_worktree(tab, path, repo, force)
 
 
-def mark_held(terminal: str, held: bool) -> None:
-    """Show that the user holds this terminal's task, or clear the mark."""
-    module(terminal).mark_held(terminal, held)
+def clear_held_mark(terminal: str) -> None:
+    """Clear the held mark moto hold once put on this terminal."""
+    module(terminal).clear_held_mark(terminal)
 
 
 def notify(text: str) -> None:

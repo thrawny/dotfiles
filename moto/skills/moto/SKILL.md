@@ -5,7 +5,7 @@ description: How a worker session runs moto. Load before any `moto` command, suc
 
 # moto for workers
 
-A driver session started you with `moto spawn`. moto tracks each worker as a task, with a Herdr agent name, and carries reports between workers and the driver. Everything below is the worker's side. The driver's commands, such as `moto ask`, `hold`, `snooze` and `watch`, are not yours to run.
+A driver session started you with `moto spawn`. moto tracks each worker as a task, with a Herdr agent name, and carries reports between workers and the driver. Everything below is the worker's side. The driver's commands, such as `moto ask`, `snooze` and `watch`, are not yours to run.
 
 ## Spawn a worker
 
@@ -43,17 +43,19 @@ Read the target repo's own `AGENTS.md` or `CLAUDE.md` before you choose:
 
 End a turn with `moto report done|question|blocked "<one line>"` when the task is finished, needs an answer only the user has, or is blocked. Put the PR URL in a `done` line. The report goes to whoever started you: the driver, or the worker that spawned you.
 
-Add `--to-driver` whenever the report asks the driver to act, such as creating a ticket or starting a worker, and whenever the user asks you to pass something on. Without it, a `question` or `blocked` report from a session the user holds reaches only the sidebar, never the driver. A `done` report from a held session reaches the driver without the flag, and the hold stays. With it, the report reaches the driver even if the user holds this session or another worker started you, and a hold stays in place.
+While the user typed in your pane in the last 30 minutes (a setting), you are with the user, and the driver leaves you alone. Your `question` and `blocked` reports then reach only the sidebar, never the driver. A `done` report reaches the driver without the flag. Once 30 minutes pass with no new prompt from the user, the driver takes you back and sees your last report.
+
+Add `--to-driver` whenever the report asks the driver to act, such as creating a ticket or starting a worker, and whenever the user asks you to pass something on. With it, the report reaches the driver at once, even while you are with the user or another worker started you.
 
 ### Phase boundaries
 
 A phase boundary is where one kind of work ends and the next starts: grilling to implementation, implementation to shipping a PR, shipping to babysitting it. At a boundary, first write down what the next phase needs, such as the ticket or the PR description. Then run `moto report phase "<next phase>"` and end your turn.
 
-The watch then reads how much context your session holds. Over the limit, it hands you off to a fresh session in the same pane, with the next phase as its goal. Under it, a `[driver]` message tells you to carry on in this session. While the user holds your session, or after the user typed in your pane, moto never hands you off: carry on with the user.
+The watch then reads how much context your session holds. Over the limit, it hands you off to a fresh session in the same pane, with the next phase as its goal. Under it, a `[driver]` message tells you to carry on in this session. While you are with the user, moto never hands you off: end your turn with one line that names the next phase and asks the user to say go.
 
 A helper's phase report reaches you as `[helper phase] <next phase>`. Answer with `moto handoff <helper> "<next phase>"` for a fresh session, or `moto tell <helper> "carry on"`.
 
-The report kinds `wrap`, `handback` and `snooze` belong to the moto-wrap, moto-handback and moto-snooze skills. Use those skills, not a bare report.
+The report kinds `wrap` and `snooze` belong to the moto-wrap and moto-snooze skills. Use those skills, not a bare report.
 
 ## See your workers
 

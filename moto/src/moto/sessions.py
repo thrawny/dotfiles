@@ -66,9 +66,9 @@ def user_turns(
     return times
 
 
-def user_prompt(task: dict[str, Any], agent: dict[str, Any] | None) -> str | None:
-    """The uuid of the latest prompt the user typed into the worker's pane, or
-    None when the transcript has none.
+def user_prompt_at(task: dict[str, Any], agent: dict[str, Any] | None) -> float | None:
+    """When the user last typed a prompt into the worker's pane, or None when the
+    transcript has none.
 
     Raises MotoError or OSError when there is no transcript to read. Prompts
     from the driver, from the worker's parent and the reports of its children
@@ -94,12 +94,13 @@ def user_prompt(task: dict[str, Any], agent: dict[str, Any] | None) -> str | Non
         if entry.get("promptSource") != "typed" or entry.get("isSidechain"):
             continue
         text = typed_text(entry)
+        at = timestamp(entry.get("timestamp"))
         if (
-            entry.get("uuid")
+            at is not None
             and not text.startswith(tags + MOTO_COMMANDS)
             and not CHILD_REPORT.match(text)
         ):
-            return str(entry["uuid"])
+            return at
     return None
 
 
@@ -148,7 +149,7 @@ def settings() -> dict[str, int]:
         )
     for key, value in found.items():
         if type(value) is not int or value <= 0:
-            raise MotoError(f"{path}: {key} must be a positive number of tokens")
+            raise MotoError(f"{path}: {key} must be a positive whole number")
     return SETTINGS | found
 
 

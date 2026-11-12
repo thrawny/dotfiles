@@ -64,8 +64,6 @@ def return_brief(
         name, kind, at = event["agent"], event["event"], clock(event["ts"])
         if kind == "pr" and name in tasks:
             prs[event["pr"]] = f"{at} {name}: {event['pr']}"
-        # A handback is addressed to the driver, whose actions on it show as
-        # log-action lines, so it gets no line of its own.
         elif kind == "report" and event.get("kind") in FINISHED:
             finished.append(f"{at} {name} {event['kind']}: {event['text']}")
             if (match := PR_URL.search(event["text"])) and name in tasks:

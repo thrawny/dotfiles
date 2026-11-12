@@ -15,4 +15,4 @@ When the user makes the wrap depend on something, as in "push it, and wrap if CI
 
 3. **Settle unsaved work.** Look for uncommitted changes (`git status`) and for commits on no remote (`git log --oneline HEAD --not --remotes`). Commits in a merged PR count as saved: `gh pr view --json state,headRefOid` shows `MERGED` with your `HEAD`. For anything unsaved, ask the user whether to commit it (and push, if they say so), keep it as it is, or throw it away, and do what they choose. Discard work only on the user's explicit word. Done when nothing is unsaved or the user has chosen for every piece.
 
-4. **Report.** End with `moto report wrap "<summary>"`. The summary covers what got done, the PR URL if there is one, what still runs and why, and anything left over, such as unsaved work the user kept or a follow-up.
+4. **Report.** End with `moto report wrap "<summary>"`. The wrap reaches the driver at once, even while the user is talking to you, and ends that. The summary covers what got done, the PR URL if there is one, what still runs and why, and anything left over, such as unsaved work the user kept or a follow-up.

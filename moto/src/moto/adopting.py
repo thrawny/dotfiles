@@ -11,7 +11,7 @@ from moto.backend import live_agents
 from moto.common import MotoError, run
 from moto.driverstate import driver_session, read_driver
 from moto.sessions import last_title, last_turn, session_dir
-from moto.store import forked, mark_seen, record, show_hold
+from moto.store import forked, mark_seen, record
 
 
 def git_checkout(cwd: str) -> tuple[str, str | None, str | None]:
@@ -184,6 +184,4 @@ def attach(
     mark_seen(task, live)
     turn, _ = last_turn(task, agent)
     task["seen"]["turn"] = turn
-    if task.get("held"):
-        show_hold(task)  # the new pane has no mark yet
     record("attach", name, pane_id=pane_id, previous=old)

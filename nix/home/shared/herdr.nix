@@ -263,14 +263,6 @@ in
                       }
                     ];
                   }
-                  # Reported by `moto hold` while the user holds a worker. The
-                  # token's value is the "h" shown.
-                  {
-                    token = "$held";
-                    fg = theme.semantic.accentAlt;
-                    bold = true;
-                    dim = false;
-                  }
                 ]
                 ++ lib.optional config.dotfiles.herdr.showAgentName {
                   token = "agent";

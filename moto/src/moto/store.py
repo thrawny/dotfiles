@@ -10,8 +10,15 @@ from pathlib import Path
 from typing import Any
 
 from moto import backend
-from moto.common import DRIVER_TAG, EVENTS_VERSION, MotoError, pending_events, state_dir
-from moto.sessions import user_prompt
+from moto.common import (
+    DRIVER_TAG,
+    ENDED_BY_USER,
+    EVENTS_VERSION,
+    MotoError,
+    pending_events,
+    state_dir,
+)
+from moto.sessions import settings, user_prompt_at
 
 
 def read_tasks() -> dict[str, dict[str, Any]]:
@@ -161,35 +168,41 @@ def new_reports(task: dict[str, Any]) -> list[dict[str, Any]]:
     return reports
 
 
-def hold_task(task: dict[str, Any], reason: str | None = None) -> None:
-    """Stop the watch covering a task until moto resume, as moto hold does."""
-    task["held"] = True
-    show_hold(task)
-    record("hold", task["agent"], **({"reason": reason} if reason else {}))
+def user_window() -> float:
+    """How long after the user's last prompt a worker stays with the user, in seconds."""
+    return settings()["user_window_minutes"] * 60
 
 
-def show_hold(task: dict[str, Any], held: bool | None = None) -> None:
-    """Make the task's pane show whether the user holds it, or the given state.
+def window_reset(task: dict[str, Any]) -> float:
+    """When the user last handed the task to the driver: a wrap or snooze report,
+    or a wake. The user's prompts before it no longer count."""
+    reports: list[dict[str, Any]] = task.get("reports") or []
+    ended = [r["at"] for r in reports if r["kind"] in ENDED_BY_USER]
+    return max([*ended, task.get("user_reset") or 0])
 
-    A snoozed or closed task has no pane, and Herdr may have reused its id for
-    another worker, so it gets no call.
+
+def in_window(task: dict[str, Any], at: float | None, now: float) -> bool:
+    """Whether a user prompt typed at this time keeps the worker with the user."""
+    return at is not None and at > window_reset(task) and now - at < user_window()
+
+
+def with_user(
+    task: dict[str, Any], agent: dict[str, Any] | None, now: float
+) -> float | None:
+    """When the user last typed in the worker's pane, while the worker is with
+    the user, else None.
+
+    A worker is with the user for user_window after the user's last prompt in
+    its pane. A snoozed task has no pane, and an unreadable transcript counts
+    as no prompt.
     """
-    if task.get("snoozed") or task.get("closed_at"):
-        return
-    backend.mark_held(task["pane_id"], bool(task.get("held")) if held is None else held)
-
-
-def clear_hold_mark(task: dict[str, Any]) -> None:
-    """Clear the mark of a held task whose pane is about to close or stay open
-    without the task, leaving its held flag as the record of the task."""
-    if task.get("held"):
-        show_hold(task, False)
-
-
-def end_hold(task: dict[str, Any]) -> None:
-    """Hand a held task back and clear its mark in the pane."""
-    task["held"] = False
-    show_hold(task)
+    if task.get("snoozed"):
+        return None
+    try:
+        at = user_prompt_at(task, agent)
+    except (MotoError, OSError):
+        return None
+    return at if at is not None and in_window(task, at, now) else None
 
 
 def mark_seen(task: dict[str, Any], live: dict[str, dict[str, Any]]) -> None:
@@ -201,17 +214,22 @@ def mark_seen(task: dict[str, Any], live: dict[str, dict[str, Any]]) -> None:
         "seq": agent.get("state_change_seq") if agent else None,
         "report_at": report.get("at"),
     }
-    try:
-        # Only a user turn after this one holds the task again.
-        task["seen"]["user_turn"] = user_prompt(task, agent)
-    except (MotoError, OSError):
-        pass  # the watch records the first one it can read
 
 
-def resume(task: dict[str, Any], live: dict[str, dict[str, Any]]) -> None:
-    """Hand a held task back, treating what happened while held as seen."""
-    end_hold(task)
-    mark_seen(task, live)
+def drop_held(tasks: dict[str, dict[str, Any]]) -> None:
+    """Remove what moto hold left behind: the held flag, and the held mark in
+    the pane of each task that still has the flag.
+
+    moto hold is gone. A task kept its flag for as long as its pane had the
+    mark, so the flag also says which panes to clear. Dropping it in the same
+    update makes this run once. A snoozed task's pane id may belong to another
+    worker by now, so it gets no call.
+    """
+    for task in tasks.values():
+        if "held" in task:
+            del task["held"]
+            if not task.get("snoozed"):
+                backend.clear_held_mark(task["pane_id"])
 
 
 def pane_owner(tasks: dict[str, dict[str, Any]], pane_id: str) -> str | None:

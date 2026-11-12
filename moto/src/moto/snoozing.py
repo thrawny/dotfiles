@@ -21,12 +21,11 @@ from moto.sessions import (
     transcript,
 )
 from moto.store import (
-    clear_hold_mark,
     find_task,
+    mark_seen,
     message_sender,
     read_tasks,
     record,
-    resume,
     tag,
     tasks_for_update,
 )
@@ -96,7 +95,6 @@ def cmd_snooze(args: argparse.Namespace) -> int:
             exists = os.path.isdir(cwd)
             if exists and run(["git", "status", "--porcelain"], cwd=cwd).strip():
                 raise MotoError(f"{args.agent}: the worktree has uncommitted changes")
-            clear_hold_mark(task)
             # All three keep the branch; wake checks it out again at the same path.
             if task.get("adopted"):
                 release_adopted(task, tasks, True, False)
@@ -107,7 +105,6 @@ def cmd_snooze(args: argparse.Namespace) -> int:
         else:
             # The main checkout, or a worktree an adopted task shares, stays as
             # it is, on whatever branch it is on.
-            clear_hold_mark(task)
             try:
                 branch = run(
                     ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=cwd
@@ -286,7 +283,10 @@ def wake_task(name: str, text: str, sender: str | None) -> str:
         task["session"] = session
         task.pop("closed_at", None)
         del task["snoozed"]
-        resume(task, live)
+        mark_seen(task, live)
+        # The task is the driver's again, whatever the user typed before.
+        task.pop("with_user", None)
+        task["user_reset"] = time.time()
         if text:
             task["told"] = time.time()
         record(
