@@ -63,5 +63,8 @@ Provider authentication belongs to this Mac. Sign in with `codex login` when
 needed. Claude Code authenticates with `CLAUDE_CODE_OAUTH_TOKEN` in
 `~/.secrets`, a one-year token from `claude setup-token`. Both zsh and the T3
 launcher load that file, so T3 and terminal sessions share one login. After
-replacing the token, open a new shell and restart the launch agent. The service log can contain pairing credentials;
+replacing the token, open a new shell and restart the launch agent. Gauntlet
+reviews started from a Claude session cannot inherit the token, so they read it
+from `~/.config/gauntlet/claude-oauth-token` (mode 600, the token only); replace
+it there too. The service log can contain pairing credentials;
 do not publish it without redacting them.

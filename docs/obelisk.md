@@ -82,3 +82,6 @@ The `t3code` service reads `/srv/t3code/env` at startup. Claude Code
 authenticates with `CLAUDE_CODE_OAUTH_TOKEN` in that file, a one-year token from
 `claude setup-token`. Codex keeps its login in `/srv/t3code/.codex/auth.json`.
 After replacing the token, restart the service with `systemctl restart t3code`.
+Gauntlet reviews read their copy from
+`/srv/t3code/.config/gauntlet/claude-oauth-token` (mode 600, the token only);
+replace it there too.
