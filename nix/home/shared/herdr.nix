@@ -263,8 +263,8 @@ in
                       }
                     ];
                   }
-                  # Reported by `moto hold` while the user holds a worker, which
-                  # also relabels its idle and done states "held, waiting".
+                  # Reported by `moto hold` while the user holds a worker. The
+                  # token's value is the "h" shown.
                   {
                     token = "$held";
                     fg = theme.semantic.accentAlt;

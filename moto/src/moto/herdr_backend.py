@@ -175,26 +175,23 @@ def remove_worktree(_tab: str, path: str, repo: str, force: bool) -> None:
         run(["git", "worktree", "remove", *flags, path], cwd=repo, timeout=120)
 
 
-# The source of moto's own pane metadata. Herdr keeps each source's tokens and
-# state labels apart, so clearing them never touches another reporter's.
+# The source of moto's own pane metadata. Herdr keeps each source's tokens apart,
+# so clearing one never touches another reporter's.
 METADATA_SOURCE = "moto"
-HELD_LABEL = "held, waiting"
 
 
 def mark_held(pane: str, held: bool) -> None:
     """Show in the sidebar that the user holds this pane, or clear the mark.
 
-    A held pane gets the held token, and its idle and done rows read "held,
-    waiting", because a worker that stops between phases looks finished. The
-    mark is display only, so a failure never stops the command that asked.
+    A held pane gets the held token, shown as "h", because a worker that stops
+    between phases looks finished. The mark is display only, so a failure never
+    stops the command that asked.
     """
     command = ["pane", "report-metadata", pane, "--source", METADATA_SOURCE]
     if held:
-        command += ["--token", "held=held"]
-        for state in ("idle", "done"):
-            command += ["--state-label", f"{state}={HELD_LABEL}"]
+        command += ["--token", "held=h"]
     else:
-        command += ["--clear-token", "held", "--clear-state-labels"]
+        command += ["--clear-token", "held"]
     with suppress(MotoError, OSError, subprocess.TimeoutExpired):
         herdr_silent(*command)
 

@@ -3223,13 +3223,9 @@ HELD_MARK = ("pane", "report-metadata", "w1:p1", "--source", "moto")
 SET_HELD = (
     *HELD_MARK,
     "--token",
-    "held=held",
-    "--state-label",
-    "idle=held, waiting",
-    "--state-label",
-    "done=held, waiting",
+    "held=h",
 )
-CLEAR_HELD = (*HELD_MARK, "--clear-token", "held", "--clear-state-labels")
+CLEAR_HELD = (*HELD_MARK, "--clear-token", "held")
 
 
 def test_hold_marks_the_pane_and_resume_clears_it(moto: ModuleType):
