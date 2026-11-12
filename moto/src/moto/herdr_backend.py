@@ -76,18 +76,46 @@ def name_tab(tab: str) -> None:
     herdr("tab", "rename", tab, "claude")
 
 
+def error_code(error: MotoError) -> str | None:
+    """The code of a Herdr error, which the CLI prints as JSON."""
+    try:
+        return json.loads(str(error))["error"]["code"]
+    except (ValueError, KeyError, TypeError):
+        return None
+
+
+def close_keeping_group(close: tuple[str, ...], tab: str, gone: str) -> None:
+    """Run a Herdr close command, tolerating a target that is already gone.
+
+    Herdr refuses a close that would end a worktree group, which happens when
+    the target is the last tab of the group's parent workspace. Open an empty
+    shell tab there first, so the group and the workspaces of its other
+    workers stay. Any other Herdr error raises: the target is still open.
+    """
+    try:
+        herdr(*close)
+        return
+    except MotoError as error:
+        code = error_code(error)
+        if code == gone:
+            return
+        if code != "confirmation_required":
+            raise
+    workspace = herdr("tab", "get", tab)["tab"]["workspace_id"]
+    herdr("tab", "create", "--workspace", workspace, "--no-focus")
+    try:
+        herdr(*close)
+    except MotoError as error:
+        if error_code(error) != gone:
+            raise
+
+
 def close_tab(tab: str) -> None:
-    try:
-        herdr("tab", "close", tab)
-    except MotoError:
-        pass  # the tab is already gone
+    close_keeping_group(("tab", "close", tab), tab, "tab_not_found")
 
 
-def close_pane(pane: str, _tab: str) -> None:
-    try:
-        herdr("pane", "close", pane)
-    except MotoError:
-        pass  # the pane is already gone
+def close_pane(pane: str, tab: str) -> None:
+    close_keeping_group(("pane", "close", pane), tab, "pane_not_found")
 
 
 def checkout_workspace(path: str) -> str | None:

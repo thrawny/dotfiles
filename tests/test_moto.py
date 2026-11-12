@@ -1152,6 +1152,86 @@ def test_closing_a_task_in_a_shared_main_checkout_closes_only_its_own_pane(
     assert list(moto.read_tasks()) == ["other"]
 
 
+def herdr_backend(_moto: ModuleType) -> ModuleType:
+    return importlib.import_module("moto.herdr_backend")
+
+
+def closing_with(moto: ModuleType, refusals: dict[tuple[str, ...], list[str]]):
+    """A herdr stand-in that fails each command with its queued codes, then works."""
+    calls: list[tuple[str, ...]] = []
+
+    def herdr(*args: str, **_: Any) -> dict[str, Any]:
+        calls.append(args)
+        if refusals.get(args):
+            raise moto.MotoError(
+                json.dumps({"error": {"code": refusals[args].pop(0), "message": "x"}})
+            )
+        if args[:2] == ("tab", "get"):
+            return {"tab": {"tab_id": args[2], "workspace_id": args[2].split(":")[0]}}
+        return {}
+
+    return calls, herdr
+
+
+@pytest.mark.parametrize(
+    ("close", "close_it"),
+    [
+        (
+            ("tab", "close", "w1:t1"),
+            lambda moto: herdr_backend(moto).close_tab("w1:t1"),
+        ),
+        (
+            ("pane", "close", "w1:p1"),
+            lambda moto: herdr_backend(moto).close_pane("w1:p1", "w1:t1"),
+        ),
+    ],
+)
+def test_a_close_that_would_end_a_worktree_group_leaves_a_shell_tab_behind(
+    moto: ModuleType, close: tuple[str, ...], close_it: Any
+):
+    calls, herdr = closing_with(moto, {close: ["confirmation_required"]})
+    with patch.object(moto, "herdr", herdr):
+        close_it(moto)
+    assert calls == [
+        close,
+        ("tab", "get", "w1:t1"),
+        ("tab", "create", "--workspace", "w1", "--no-focus"),
+        close,
+    ]
+
+
+@pytest.mark.parametrize(
+    ("close", "gone", "close_it"),
+    [
+        (
+            ("tab", "close", "w1:t1"),
+            "tab_not_found",
+            lambda moto: herdr_backend(moto).close_tab("w1:t1"),
+        ),
+        (
+            ("pane", "close", "w1:p1"),
+            "pane_not_found",
+            lambda moto: herdr_backend(moto).close_pane("w1:p1", "w1:t1"),
+        ),
+    ],
+)
+def test_a_close_of_something_already_gone_is_not_an_error(
+    moto: ModuleType, close: tuple[str, ...], gone: str, close_it: Any
+):
+    calls, herdr = closing_with(moto, {close: [gone]})
+    with patch.object(moto, "herdr", herdr):
+        close_it(moto)
+    assert calls == [close]
+
+
+def test_any_other_refused_close_raises_and_opens_no_tab(moto: ModuleType):
+    close = ("tab", "close", "w1:t1")
+    calls, herdr = closing_with(moto, {close: ["internal_error"]})
+    with patch.object(moto, "herdr", herdr), pytest.raises(moto.MotoError):
+        herdr_backend(moto).close_tab("w1:t1")
+    assert calls == [close]
+
+
 def test_wake_refuses_a_session_missing_from_its_folder(
     moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):
