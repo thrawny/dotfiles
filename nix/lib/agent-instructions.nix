@@ -90,7 +90,7 @@ rec {
   backgroundTasks = on: ''
     ## Background tasks and long-running processes
 
-    Run builds, tests, linters, and other gates in the foreground — their result decides your next step, so backgrounding them only adds latency and invites moving on without the verdict. Reserve background tasks for work that genuinely runs while you do something else: delegated agent turns (Claude subagents) and bounded readiness waits.
+    Run builds, tests, linters, and other gates in the foreground — their result decides your next step, so backgrounding them only adds latency and invites moving on without the verdict. Reserve background tasks for work that genuinely runs while you do something else: delegated agent turns, such as Claude subagents or a gauntlet review, and bounded readiness waits.
 
     Only background commands that provably exit. The completion notification only fires on process exit, so a never-terminating background command hangs silently forever.
 

@@ -87,11 +87,21 @@ let
   claudeSkills = pkgs.linkFarm "t3code-claude-skills" (
     lib.mapAttrs (_: skill: skill.source) (skillsFor "claude")
   );
-  claudeCommands = pkgs.linkFarm "t3code-claude-commands" (
-    lib.mapAttrs (name: _: agentAssets.claudeFiles.commands + "/${name}") (
-      builtins.removeAttrs (builtins.readDir agentAssets.claudeFiles.commands) unavailableClaudeCommands
-    )
-  );
+  # Copied, not linked, like the commands folder it replaces.
+  claudeCommands = pkgs.runCommand "t3code-claude-commands" { } ''
+    mkdir "$out"
+    ${lib.concatMapStringsSep "\n"
+      (
+        name:
+        "cp ${lib.escapeShellArg "${agentAssets.claudeFiles.commands}/${name}"} \"$out\"/${lib.escapeShellArg name}"
+      )
+      (
+        lib.attrNames (
+          builtins.removeAttrs (builtins.readDir agentAssets.claudeFiles.commands) unavailableClaudeCommands
+        )
+      )
+    }
+  '';
   # Unattended work only: T3 sets the permission mode per thread, and Jonas's
   # interactive settings (hooks, status line, output style) stay out.
   claudeSettings = pkgs.writeText "t3code-claude-settings.json" (
@@ -316,6 +326,7 @@ let
     name = "t3code-prepare";
     runtimeInputs = [
       pkgs.coreutils
+      pkgs.findutils
       pkgs.jq
     ];
     text = ''
@@ -372,18 +383,10 @@ let
       link_store_path ${lib.escapeShellArg "${codexHome}/config.toml"} ${lib.escapeShellArg (toString codexConfig)}
       link_store_path ${lib.escapeShellArg "${codexHome}/hooks.json"} ${lib.escapeShellArg (toString agentAssets.codexFiles.hooks)}
       link_store_path ${lib.escapeShellArg "${codexHome}/hooks"} ${lib.escapeShellArg (toString agentAssets.codexFiles.hooksDir)}
+      # Replace every skill link, so skills dropped from the set leave.
+      # Codex's own .system folder is not a link, so it stays.
+      find ${lib.escapeShellArg "${codexHome}/skills"} -mindepth 1 -maxdepth 1 -type l -delete
       ${codexSkillLinks}
-      # Drop links to skills no longer in the set. Codex's own .system folder
-      # is not a link, so it stays.
-      declare -A codex_skills=()
-      for name in ${lib.escapeShellArgs (lib.attrNames codexSkills)}; do
-        codex_skills[$name]=1
-      done
-      for link in ${lib.escapeShellArg "${codexHome}/skills"}/*; do
-        if [ -L "$link" ] && [ -z "''${codex_skills[''${link##*/}]:-}" ]; then
-          rm "$link"
-        fi
-      done
 
       link_store_path ${lib.escapeShellArg "${claudeHome}/CLAUDE.md"} ${lib.escapeShellArg (toString agentAssets.claudeFiles.instructions)}
       link_store_path ${lib.escapeShellArg "${claudeHome}/skills"} ${lib.escapeShellArg (toString claudeSkills)}
@@ -391,15 +394,19 @@ let
       install -m 0644 ${claudeSettings} ${lib.escapeShellArg "${claudeHome}/settings.json"}
 
       # Claude Code keeps user MCP servers in ~/.claude.json beside its own
-      # state, so set only the Linear entry. A file jq cannot read is left
-      # as it is for inspection, and the service still starts.
+      # state, so set only the Linear entry. A file that is not one JSON
+      # object is left as it is for inspection, and the service still starts.
       claude_state=${lib.escapeShellArg "${home}/.claude.json"}
       if [ ! -s "$claude_state" ]; then
         printf '{}\n' > "$claude_state"
       fi
       claude_state_tmp="$(mktemp "$claude_state.XXXXXX")"
-      if jq --slurpfile linear ${claudeLinearMcp} '.mcpServers.linear = $linear[0]' \
-        "$claude_state" > "$claude_state_tmp"; then
+      if jq --slurp --slurpfile linear ${claudeLinearMcp} '
+          if length == 1 and (.[0] | type) == "object"
+          then .[0] | .mcpServers.linear = $linear[0]
+          else error("not one JSON object")
+          end
+        ' "$claude_state" > "$claude_state_tmp"; then
         chmod 0600 "$claude_state_tmp"
         mv "$claude_state_tmp" "$claude_state"
       else
