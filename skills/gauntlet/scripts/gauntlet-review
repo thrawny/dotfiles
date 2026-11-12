@@ -295,6 +295,7 @@ if [[ "$run_claude" -eq 1 ]]; then
     CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1 \
     CLAUDE_CODE_WORKFLOW_SUBAGENT_MODEL="$claude_review_model" \
     ANTHROPIC_DEFAULT_OPUS_MODEL="$claude_review_model" \
+    GAUNTLET_CLAUDE_REVIEW_MODEL="$claude_review_model" \
     python3 "$retry_script" "$round_dir" claude "$claude_out" claude -p --output-format json --model "$claude_review_model" --effort "$claude_effort" --setting-sources "" \
       --settings "$claude_review_settings" --no-session-persistence \
       --permission-mode auto "$claude_prompt" >"$claude_out" 2>&1 &

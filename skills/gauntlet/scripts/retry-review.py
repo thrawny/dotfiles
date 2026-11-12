@@ -7,6 +7,7 @@ import hashlib
 import json
 import os
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -57,7 +58,7 @@ def fingerprint(scope=None, root=None):
     return digest.hexdigest()
 
 
-def claude_reply(code, text):
+def claude_reply(code, text, model=None):
     """Read `claude -p --output-format json`; return (exit code, review text).
 
     Logged out or with a bad token, Claude answers the /code-review prompt with
@@ -65,29 +66,42 @@ def claude_reply(code, text):
     modelUsage is empty; a real review's is not. /code-review runs as a forked
     command, which reports num_turns 0 even when it succeeds, so turns are no
     signal. Stderr shares the capture, so the result object may sit on any
-    line; an exit-0 run without one is no review either.
+    line; an exit-0 run without one is no review either. When `model` is
+    given, a run that never used it is no review: an internal call to another
+    model can record usage while the pinned review request fails.
     """
-    data = None
-    for candidate in [text, *reversed(text.splitlines())]:
+    data, other = None, text
+    lines = text.splitlines()
+    for index in [None, *reversed(range(len(lines)))]:
         try:
-            parsed = json.loads(candidate)
+            parsed = json.loads(text if index is None else lines[index])
         except ValueError:
             continue
         if isinstance(parsed, dict) and "modelUsage" in parsed:
             data = parsed
+            other = "" if index is None else "\n".join(lines[:index] + lines[index + 1 :])
             break
     if data is None:
         return (1 if code == 0 else code), text
     reply = str(data.get("result") or "")
-    if code == 0 and (data.get("is_error") or not data.get("modelUsage")):
-        return 1, reply or text
-    # An empty reply from a real run stays empty, so run() reports empty-result.
-    return code, reply if code == 0 else (reply or text)
+    usage = data.get("modelUsage") or {}
+    reviewed = bool(usage) and (model is None or model in usage)
+    if code == 0 and not data.get("is_error") and reviewed:
+        # An empty reply from a real run stays empty: run() reports empty-result.
+        return 0, reply
+    # Classify on the error text and the rest of the capture (stderr, which may
+    # carry Retry-After), never the serialized object with its ids and timings.
+    errors = data.get("errors") or []
+    detail = "\n".join(
+        part
+        for part in [reply, *map(str, errors if isinstance(errors, list) else [errors]), other]
+        if part.strip()
+    )
+    return (1 if code == 0 else code), detail or "claude reported no review"
 
 
 CLAUDE_CREDENTIALS = (
     "CLAUDE_CODE_OAUTH_TOKEN",
-    "CLAUDE_CODE_OAUTH_TOKEN_FILE_DESCRIPTOR",
     "ANTHROPIC_API_KEY",
     "ANTHROPIC_AUTH_TOKEN",
 )
@@ -118,6 +132,8 @@ def claude_token(environ):
         return None, f"Claude token file path {path} is not absolute"
     try:
         mode = os.stat(path).st_mode
+        if not stat.S_ISREG(mode):
+            return None, f"Claude token file {path} is not a regular file"
         if mode & 0o077:
             return None, f"Claude token file {path} is accessible to group or others; run chmod 600 on it"
         token = Path(path).read_text().strip()
@@ -215,58 +231,40 @@ def run(
     ).stdout.strip()
     started = clock()
     last_reset = None
-    if blocked:
-        # No credential: the same outcome as a logged-out run, with no launch.
+    attempt = 1
+
+    # Record launch intent durably. An interrupted/unknown attempt is never replayed.
+    def record(**data):
+        data.setdefault("retry_owner", "gauntlet")
+        data.setdefault("raw", str(directory / f"{engine}.attempt-{attempt}.log"))
+        data.setdefault("answer", str(directory / f"{engine}.attempt-{attempt}.out"))
         with events.open("a") as stream:
             stream.write(
                 json.dumps(
                     dict(
                         schemaVersion=1,
                         engine=engine,
-                        attempt=1,
+                        attempt=attempt,
                         maxAttempts=3,
                         fingerprint=original,
                         head_sha=head,
-                        state="auth",
-                        retry_owner="gauntlet",
-                        retryable=False,
-                        exhausted=False,
-                        message=blocked,
+                        **data,
                     )
                 )
                 + "\n"
             )
             stream.flush()
             os.fsync(stream.fileno())
+
+    if blocked:
+        # No credential: the same outcome as a logged-out run, with no launch.
+        record(state="auth", retryable=False, exhausted=False, message=blocked)
         print(f"{engine}: blocked (auth): {blocked}", file=sys.stderr)
         return 1
     for attempt in range(1, 4):
         raw = directory / f"{engine}.attempt-{attempt}.log"
         answer = directory / f"{engine}.attempt-{attempt}.out"
         argv = [str(answer) if arg == output else arg for arg in command]
-
-        # Record launch intent durably. An interrupted/unknown attempt is never replayed.
-        def record(**data):
-            data.setdefault("retry_owner", "gauntlet")
-            data.setdefault("raw", str(raw))
-            data.setdefault("answer", str(answer))
-            with events.open("a") as stream:
-                stream.write(
-                    json.dumps(
-                        dict(
-                            schemaVersion=1,
-                            engine=engine,
-                            attempt=attempt,
-                            maxAttempts=3,
-                            fingerprint=original,
-                            head_sha=head,
-                            **data,
-                        )
-                    )
-                    + "\n"
-                )
-                stream.flush()
-                os.fsync(stream.fileno())
 
         if attempt > 1 and clock() - started > 300:
             record(
@@ -287,7 +285,9 @@ def run(
             text = raw.read_text(errors="replace")
             code = result.returncode
             if engine == "claude":
-                code, text = claude_reply(code, text)
+                code, text = claude_reply(
+                    code, text, os.environ.get("GAUNTLET_CLAUDE_REVIEW_MODEL")
+                )
             kind = classify(code, text)
         except OSError as error:
             raw.write_text(str(error))
@@ -309,7 +309,8 @@ def run(
                 if engine == "codex":
                     Path(output).write_bytes(answer.read_bytes())
                 else:
-                    Path(output).write_text(text)
+                    # Claude's JSON can carry lone surrogates; never crash here.
+                    Path(output).write_bytes(text.encode("utf-8", "replace"))
             except OSError:
                 kind = "output-error"
         record(

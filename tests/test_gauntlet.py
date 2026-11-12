@@ -161,6 +161,20 @@ def _claude_json(result, model_used):
         ("Warning: no stdin data\n" + _claude_json("Not logged in", False), "auth"),
         (_claude_json("Not logged in", False) + "\nWarning: after\n", "auth"),
         ("No findings", "terminal"),
+        # Ids and timings in the object must not drive the verdict.
+        (
+            json.dumps(
+                {
+                    "is_error": True,
+                    "subtype": "error_during_execution",
+                    "session_id": "3f2a9c4e-1b7d-4a29-9e0f-8c4291d6b7aa",
+                    "duration_ms": 40123,
+                    "errors": ["invalid model"],
+                    "modelUsage": {"claude-opus-5-5": {}},
+                }
+            ),
+            "terminal",
+        ),
     ],
 )
 def test_claude_run_that_called_no_model_is_not_a_review(output, expected):
