@@ -12,7 +12,7 @@ let
   };
 in
 rec {
-  codexQuestions = ''
+  questions = ''
     ## Questions
 
     When clarification is needed, use an available structured question tool that supports the current mode. Prefer asynchronous questions when available, and continue independent work while waiting. If no suitable tool is available, ask in plain text. Never treat an unanswered question as approval.
@@ -132,9 +132,12 @@ rec {
       agents = allAgents;
     }
     {
-      name = "codexQuestions";
-      text = codexQuestions;
-      agents = [ "codex" ];
+      name = "questions";
+      text = questions;
+      agents = [
+        "claude"
+        "codex"
+      ];
     }
     {
       name = "goModernize";
