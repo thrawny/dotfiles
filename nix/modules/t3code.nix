@@ -56,13 +56,14 @@ let
     EOF
   '';
 
-  # Each of these needs a tool t3code lacks: prctl, nvim-here,
+  # Each of these needs a tool t3code lacks: prctl, gh, nvim-here,
   # blueprint-html, fork-window or spawn-session.
   unavailableSkills = [
     "blueprint"
     "fork-window"
     "nvim-here"
     "pr"
+    "pr-explain"
   ];
   unavailableClaudeCommands = [
     "fork-window.md"
@@ -390,16 +391,21 @@ let
       install -m 0644 ${claudeSettings} ${lib.escapeShellArg "${claudeHome}/settings.json"}
 
       # Claude Code keeps user MCP servers in ~/.claude.json beside its own
-      # state, so set only the Linear entry.
+      # state, so set only the Linear entry. A file jq cannot read is left
+      # as it is for inspection, and the service still starts.
       claude_state=${lib.escapeShellArg "${home}/.claude.json"}
-      if [ ! -e "$claude_state" ]; then
+      if [ ! -s "$claude_state" ]; then
         printf '{}\n' > "$claude_state"
       fi
-      claude_state_tmp="$(mktemp)"
-      jq --slurpfile linear ${claudeLinearMcp} '.mcpServers.linear = $linear[0]' \
-        "$claude_state" > "$claude_state_tmp"
-      install -m 0600 "$claude_state_tmp" "$claude_state"
-      rm -f "$claude_state_tmp"
+      claude_state_tmp="$(mktemp "$claude_state.XXXXXX")"
+      if jq --slurpfile linear ${claudeLinearMcp} '.mcpServers.linear = $linear[0]' \
+        "$claude_state" > "$claude_state_tmp"; then
+        chmod 0600 "$claude_state_tmp"
+        mv "$claude_state_tmp" "$claude_state"
+      else
+        rm -f "$claude_state_tmp"
+        echo "t3code-prepare: cannot update $claude_state; Claude has no Linear MCP server" >&2
+      fi
 
       settings_path=${lib.escapeShellArg "${state}/userdata/settings.json"}
       if [ ! -e "$settings_path" ]; then

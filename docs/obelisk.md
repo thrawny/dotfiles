@@ -83,8 +83,10 @@ files from `nix/modules/t3code.nix`. `/srv/t3code/.claude/CLAUDE.md`, `skills`
 and `commands` are read-only store links, and `/srv/t3code/.claude/settings.json`
 is overwritten on every start. Codex gets the same skills as per-skill links in
 `/srv/t3code/.codex/skills`, plus the Codex slash commands, which it loads as
-skills. Each start deletes any other link there. Skills and commands that need
-a tool the service lacks, such as `pr` and `/spawn`, are left out of both sets.
+skills. Each start deletes any other link there. The `blueprint`,
+`fork-window`, `nvim-here`, `pr` and `pr-explain` skills and Claude's `/spawn`
+and `/fork-window` commands are left out, because each needs a tool the service
+lacks.
 Change them in dotfiles and deploy; edits on the host are lost.
 
 Both agents reach Linear through its MCP server with `LINEAR_API_KEY` from
