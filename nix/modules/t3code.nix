@@ -55,7 +55,15 @@ let
   # Claude Code never writes under skills/, so the whole folder is one store
   # link. Each deploy replaces the set, and dropped skills leave with it.
   claudeSkills = pkgs.linkFarm "t3code-claude-skills" (
-    lib.mapAttrs (_: skill: skill.source) (agentAssets.skillEntriesFor pkgs "claude")
+    lib.mapAttrs (_: skill: skill.source) (
+      # Herdr is paused on every host (nix/home/shared/agent-skills.nix) and is
+      # not installed here.
+      builtins.removeAttrs (agentAssets.skillEntriesFor pkgs "claude") [
+        "herdr"
+        "herdr-core"
+        "herdr-demo"
+      ]
+    )
   );
   # Unattended work only: T3 sets the permission mode per thread, and Jonas's
   # interactive settings (hooks, status line, output style) stay out.
@@ -295,7 +303,7 @@ let
       install -d -m 0750 ${lib.escapeShellArg state}
       install -d -m 0700 ${lib.escapeShellArg codexHome}
       install -d -m 0750 ${lib.escapeShellArg "${codexHome}/skills"}
-      install -d -m 0750 ${lib.escapeShellArg claudeHome}
+      install -d -m 0700 ${lib.escapeShellArg claudeHome}
       # gauntlet's Claude reviewer keeps its token in ~/.config/gauntlet.
       install -d -m 0700 ${lib.escapeShellArg "${home}/.config"}
       install -d -m 0700 ${lib.escapeShellArg "${home}/.config/gauntlet"}
@@ -341,9 +349,7 @@ let
 
       link_store_path ${lib.escapeShellArg "${claudeHome}/CLAUDE.md"} ${lib.escapeShellArg (toString agentAssets.claudeFiles.instructions)}
       link_store_path ${lib.escapeShellArg "${claudeHome}/skills"} ${lib.escapeShellArg (toString claudeSkills)}
-      link_store_path ${lib.escapeShellArg "${claudeHome}/commands"} ${
-        lib.escapeShellArg (toString (agentAssets.configRoot + "/claude/commands"))
-      }
+      link_store_path ${lib.escapeShellArg "${claudeHome}/commands"} ${lib.escapeShellArg (toString agentAssets.claudeFiles.commands)}
       install -m 0644 ${claudeSettings} ${lib.escapeShellArg "${claudeHome}/settings.json"}
 
       settings_path=${lib.escapeShellArg "${state}/userdata/settings.json"}
@@ -515,6 +521,7 @@ in
     "d ${home} 0750 t3code t3code -"
     "d ${codexHome} 0700 t3code t3code -"
     "d ${codexHome}/skills 0750 t3code t3code -"
+    "d ${claudeHome} 0700 t3code t3code -"
     "d ${state} 0750 t3code t3code -"
     "d ${repos} 0750 t3code t3code -"
   ];

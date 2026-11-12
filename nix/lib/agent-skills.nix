@@ -124,7 +124,10 @@ rec {
     skillTargets
     ;
 
-  claudeFiles.instructions = builtins.toFile "claude-CLAUDE.md" agentInstructions.claudeGlobal;
+  claudeFiles = {
+    instructions = builtins.toFile "claude-CLAUDE.md" agentInstructions.claudeGlobal;
+    commands = configRoot + "/claude/commands";
+  };
 
   codexFiles = {
     agents = builtins.toFile "codex-AGENTS.md" agentInstructions.codexGlobal;
