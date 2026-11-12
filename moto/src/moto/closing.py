@@ -11,7 +11,15 @@ from moto import backend
 from moto.backend import live_agents
 from moto.common import BUSY, ENDED_BY_USER, MotoError, age, run
 from moto.sessions import user_turns
-from moto.store import find_task, hold_task, record, resume, tasks_for_update
+from moto.store import (
+    clear_hold_mark,
+    end_hold,
+    find_task,
+    hold_task,
+    record,
+    resume,
+    tasks_for_update,
+)
 from moto.whenstore import cancel_whens
 
 
@@ -191,6 +199,7 @@ def cmd_close(args: argparse.Namespace) -> int:
                 raise MotoError(
                     f"{args.agent}: {problem}; pass --force to remove anyway"
                 )
+        clear_hold_mark(task)
         if task.get("adopted"):
             release_adopted(task, tasks, bool(branch), args.force)
         elif branch:
@@ -214,7 +223,7 @@ def cmd_close(args: argparse.Namespace) -> int:
 
 def cmd_drop(args: argparse.Namespace) -> int:
     with tasks_for_update() as tasks:
-        find_task(tasks, args.agent)
+        clear_hold_mark(find_task(tasks, args.agent))
         record("drop", args.agent, task=tasks.pop(args.agent))
     print(f"Dropped {args.agent}; its tab and worktree are untouched")
     print_cancelled(args.agent)

@@ -78,7 +78,19 @@ def moto() -> ModuleType:
     user_typed(module, None)
     context_holds(module, None)
     setattr(module, "pr_updated", no_pr_update)
+    # No unit test reaches a real pane: a held mark goes nowhere unless a test
+    # swaps in marks_to().
+    marks_to(module, [])
     return module
+
+
+def marks_to(moto: ModuleType, calls: list[tuple[str, ...]]) -> None:
+    """Record the Herdr held-mark commands instead of running them."""
+
+    def herdr_silent(*args: str, **_: Any) -> None:
+        calls.append(args)
+
+    setattr(moto, "herdr_silent", herdr_silent)
 
 
 def no_pr_update(_url: str) -> None:
@@ -1042,7 +1054,7 @@ def spawn_session_restoring(moto: ModuleType) -> MagicMock:
     return MagicMock(side_effect=fake)
 
 
-def snoozed_worker(moto: ModuleType, repo: Path, worktree: Path) -> None:
+def snoozed_worker(moto: ModuleType, repo: Path, worktree: Path, **fields: Any) -> None:
     """Snooze a worker spawned in worktree, which removes the worktree."""
     session_file(moto.session_dir(str(worktree)), "s7", mtime=100)
     with moto.tasks_for_update() as tasks:
@@ -1055,6 +1067,7 @@ def snoozed_worker(moto: ModuleType, repo: Path, worktree: Path) -> None:
             branch="ABC-7-fix",
             cwd=str(worktree),
             session="s7",
+            **fields,
         )
     with (
         patch.object(moto, "live_agents", return_value=live("idle", 1, "w4:p2")),
@@ -3204,3 +3217,130 @@ def test_checkout_workspace_skips_background_and_prefers_the_folder_name(
         assert moto.checkout_workspace(checkout) == "wX"
         panes["panes"].pop()
         assert moto.checkout_workspace(checkout) is None
+
+
+HELD_MARK = ("pane", "report-metadata", "w1:p1", "--source", "moto")
+SET_HELD = (
+    *HELD_MARK,
+    "--token",
+    "held=held",
+    "--state-label",
+    "idle=held, waiting",
+    "--state-label",
+    "done=held, waiting",
+)
+CLEAR_HELD = (*HELD_MARK, "--clear-token", "held", "--clear-state-labels")
+
+
+def test_hold_marks_the_pane_and_resume_clears_it(moto: ModuleType):
+    marks: list[tuple[str, ...]] = []
+    marks_to(moto, marks)
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    moto.cmd_hold(argparse.Namespace(agent="abc-1"))
+    assert marks == [SET_HELD]
+    with patch.object(moto, "live_agents", return_value=live("done", 3)):
+        moto.cmd_resume(argparse.Namespace(agent="abc-1"))
+    assert marks == [SET_HELD, CLEAR_HELD]
+
+
+def test_a_failing_mark_never_stops_the_hold(moto: ModuleType):
+    def refuse(*_: str, **__: Any) -> None:
+        raise moto.MotoError("herdr is down")
+
+    setattr(moto, "herdr_silent", refuse)
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task()
+    moto.cmd_hold(argparse.Namespace(agent="abc-1"))
+    assert moto.read_tasks()["abc-1"]["held"] is True
+
+
+@pytest.mark.parametrize("kind", ["wrap", "handback", "snooze"])
+def test_a_report_that_ends_the_hold_clears_the_mark(moto: ModuleType, kind: str):
+    marks: list[tuple[str, ...]] = []
+    marks_to(moto, marks)
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
+    args = argparse.Namespace(kind=kind, text=["Ship"], agent=None, to_driver=False)
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
+        moto.cmd_report(args)
+    assert marks == [CLEAR_HELD]
+
+
+@pytest.mark.parametrize("kind", ["phase", "done", "question"])
+def test_a_report_that_leaves_the_hold_keeps_the_mark(moto: ModuleType, kind: str):
+    marks: list[tuple[str, ...]] = []
+    marks_to(moto, marks)
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
+    args = argparse.Namespace(kind=kind, text=["Next"], agent=None, to_driver=False)
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
+        moto.cmd_report(args)
+    assert marks == []
+    assert moto.read_tasks()["abc-1"]["held"] is True
+
+
+def test_a_phase_report_in_a_held_task_asks_for_a_go(
+    moto: ModuleType, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
+    args = argparse.Namespace(
+        kind="phase", text=["review"], agent=None, to_driver=False
+    )
+    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
+        moto.cmd_report(args)
+    out = capsys.readouterr().out
+    assert "End your turn with one line that names the next phase" in out
+    assert "say go" in out.lower()
+    assert "Carry on" not in out
+
+
+def test_close_and_drop_clear_a_held_task_s_mark_and_others_get_no_call(
+    moto: ModuleType,
+):
+    marks: list[tuple[str, ...]] = []
+    marks_to(moto, marks)
+    herdr, _ = close(moto, "done", [], report=DONE, held=True)
+    herdr.assert_called_once_with("tab", "close", "w1:t1")
+    assert marks == [CLEAR_HELD]
+    marks.clear()
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True)
+    moto.cmd_drop(argparse.Namespace(agent="abc-1"))
+    assert marks == [CLEAR_HELD]
+    marks.clear()
+    close(moto, "done", [], report=DONE)
+    assert marks == []
+
+
+@pytest.mark.usefixtures("claude_home")
+def test_snooze_clears_the_mark_of_a_held_task(
+    moto: ModuleType, pushed_clone: Path, worktree: Path
+):
+    marks: list[tuple[str, ...]] = []
+    marks_to(moto, marks)
+    snoozed_worker(moto, pushed_clone, worktree, held=True)
+    assert marks == [(*CLEAR_HELD[:2], "w4:p2", *CLEAR_HELD[3:])]
+
+
+def test_attach_marks_the_new_pane_of_a_held_task(moto: ModuleType):
+    marks: list[tuple[str, ...]] = []
+    marks_to(moto, marks)
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(held=True, closed_at=50.0)
+    live_panes = {"w1:p7": claude_in("w1:p7", "done")}
+    with (
+        patch.object(moto, "live_agents", return_value=live_panes),
+        patch.object(moto, "herdr"),
+    ):
+        moto.cmd_attach(argparse.Namespace(agent="abc-1", pane="w1:p7", hook=False))
+    assert marks == [(*SET_HELD[:2], "w1:p7", *SET_HELD[3:])]
+
+
+def test_a_task_with_no_pane_gets_no_mark_call(moto: ModuleType):
+    marks: list[tuple[str, ...]] = []
+    marks_to(moto, marks)
+    moto.show_hold(task(held=True, snoozed=SNOOZE))
+    moto.show_hold(task(held=True, closed_at=50.0))
+    assert marks == []

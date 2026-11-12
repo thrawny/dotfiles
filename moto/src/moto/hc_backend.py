@@ -132,6 +132,10 @@ def close_pane(terminal: str, _tab: str) -> None:
         pass  # the terminal is already gone
 
 
+def mark_held(_terminal: str, _held: bool) -> None:
+    """The Herdr app has no held mark for hc terminals."""
+
+
 def others_in(tab: str, top: str) -> bool | None:
     try:
         found = terminals()

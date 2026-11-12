@@ -21,6 +21,7 @@ from moto.sessions import (
     transcript,
 )
 from moto.store import (
+    clear_hold_mark,
     find_task,
     message_sender,
     read_tasks,
@@ -95,6 +96,7 @@ def cmd_snooze(args: argparse.Namespace) -> int:
             exists = os.path.isdir(cwd)
             if exists and run(["git", "status", "--porcelain"], cwd=cwd).strip():
                 raise MotoError(f"{args.agent}: the worktree has uncommitted changes")
+            clear_hold_mark(task)
             # All three keep the branch; wake checks it out again at the same path.
             if task.get("adopted"):
                 release_adopted(task, tasks, True, False)
@@ -105,6 +107,7 @@ def cmd_snooze(args: argparse.Namespace) -> int:
         else:
             # The main checkout, or a worktree an adopted task shares, stays as
             # it is, on whatever branch it is on.
+            clear_hold_mark(task)
             try:
                 branch = run(
                     ["git", "symbolic-ref", "--quiet", "--short", "HEAD"], cwd=cwd

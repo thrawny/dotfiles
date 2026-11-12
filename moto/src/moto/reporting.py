@@ -32,6 +32,7 @@ from moto.common import (
 from moto.driverstate import driver_path, read_driver, wake_driver, write_driver
 from moto.sessions import last_turn
 from moto.store import (
+    end_hold,
     find_task,
     message_sender,
     read_tasks,
@@ -69,7 +70,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         if handed_back:
             # The watch takes the task back from here, so this report is news to
             # it and whatever happened while held is not.
-            task["held"] = False
+            end_hold(task)
             previous: dict[str, Any] = task.get("report") or {}
             task["seen"] = {
                 k: v for k, v in task.get("seen", {}).items() if k != "pending"
@@ -117,7 +118,9 @@ def cmd_report(args: argparse.Namespace) -> int:
     elif held and args.kind == "phase":
         print(
             "The user holds this session, so moto does not hand it off. The driver"
-            + " hears of the phase. Carry on with the user in this pane."
+            + " hears of the phase. End your turn with one line that names the next"
+            + " phase and asks the user to say go, such as: Phase done. Say go to"
+            + " start the tono loop on PR #138."
         )
     elif held and passes_on:
         print(

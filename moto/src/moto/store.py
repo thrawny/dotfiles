@@ -164,7 +164,32 @@ def new_reports(task: dict[str, Any]) -> list[dict[str, Any]]:
 def hold_task(task: dict[str, Any], reason: str | None = None) -> None:
     """Stop the watch covering a task until moto resume, as moto hold does."""
     task["held"] = True
+    show_hold(task)
     record("hold", task["agent"], **({"reason": reason} if reason else {}))
+
+
+def show_hold(task: dict[str, Any], held: bool | None = None) -> None:
+    """Make the task's pane show whether the user holds it, or the given state.
+
+    A snoozed or closed task has no pane, and Herdr may have reused its id for
+    another worker, so it gets no call.
+    """
+    if task.get("snoozed") or task.get("closed_at"):
+        return
+    backend.mark_held(task["pane_id"], bool(task.get("held")) if held is None else held)
+
+
+def clear_hold_mark(task: dict[str, Any]) -> None:
+    """Clear the mark of a held task whose pane is about to close or stay open
+    without the task, leaving its held flag as the record of the task."""
+    if task.get("held"):
+        show_hold(task, False)
+
+
+def end_hold(task: dict[str, Any]) -> None:
+    """Hand a held task back and clear its mark in the pane."""
+    task["held"] = False
+    show_hold(task)
 
 
 def mark_seen(task: dict[str, Any], live: dict[str, dict[str, Any]]) -> None:
@@ -185,7 +210,7 @@ def mark_seen(task: dict[str, Any], live: dict[str, dict[str, Any]]) -> None:
 
 def resume(task: dict[str, Any], live: dict[str, dict[str, Any]]) -> None:
     """Hand a held task back, treating what happened while held as seen."""
-    task["held"] = False
+    end_hold(task)
     mark_seen(task, live)
 
 

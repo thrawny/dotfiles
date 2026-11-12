@@ -263,6 +263,14 @@ in
                       }
                     ];
                   }
+                  # Reported by `moto hold` while the user holds a worker, which
+                  # also relabels its idle and done states "held, waiting".
+                  {
+                    token = "$held";
+                    fg = theme.semantic.accentAlt;
+                    bold = true;
+                    dim = false;
+                  }
                 ]
                 ++ lib.optional config.dotfiles.herdr.showAgentName {
                   token = "agent";

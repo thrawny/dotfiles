@@ -104,6 +104,11 @@ def remove_worktree(terminal: str, tab: str, path: str, repo: str, force: bool) 
     module(terminal).remove_worktree(tab, path, repo, force)
 
 
+def mark_held(terminal: str, held: bool) -> None:
+    """Show that the user holds this terminal's task, or clear the mark."""
+    module(terminal).mark_held(terminal, held)
+
+
 def notify(text: str) -> None:
     """Show a notice where the user looks, if the caller's backend has one."""
     if here_kind() != HC:
