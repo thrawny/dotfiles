@@ -18,6 +18,7 @@ let
   uid = 3103;
   home = "/srv/t3code";
   codexHome = "${home}/.codex";
+  claudeHome = "${home}/.claude";
   state = "${home}/.t3code";
   repos = "${home}/repos";
   port = 3773;
@@ -49,6 +50,21 @@ let
     lib.mapAttrsToList (name: skill: ''
       link_store_path ${lib.escapeShellArg "${codexHome}/skills/${name}"} ${lib.escapeShellArg (toString skill.source)}
     '') codexSkills
+  );
+
+  # Claude Code never writes under skills/, so the whole folder is one store
+  # link. Each deploy replaces the set, and dropped skills leave with it.
+  claudeSkills = pkgs.linkFarm "t3code-claude-skills" (
+    lib.mapAttrs (_: skill: skill.source) (agentAssets.skillEntriesFor pkgs "claude")
+  );
+  # Unattended work only: T3 sets the permission mode per thread, and Jonas's
+  # interactive settings (hooks, status line, output style) stay out.
+  claudeSettings = pkgs.writeText "t3code-claude-settings.json" (
+    builtins.toJSON {
+      env.DISABLE_AUTOUPDATER = "1";
+      skipDangerousModePermissionPrompt = true;
+      attribution.commit = "🤖 Generated with Claude Code";
+    }
   );
 
   package = thrawny-pkgs.packages.${system}.t3code-nightly;
@@ -279,6 +295,7 @@ let
       install -d -m 0750 ${lib.escapeShellArg state}
       install -d -m 0700 ${lib.escapeShellArg codexHome}
       install -d -m 0750 ${lib.escapeShellArg "${codexHome}/skills"}
+      install -d -m 0750 ${lib.escapeShellArg claudeHome}
       install -d -m 0750 ${lib.escapeShellArg "${home}/.config/direnv"}
       install -d -m 0750 ${lib.escapeShellArg "${home}/.config/git"}
       install -d -m 0700 ${lib.escapeShellArg "${home}/.config/forgejo"}
@@ -318,6 +335,13 @@ let
       link_store_path ${lib.escapeShellArg "${codexHome}/hooks.json"} ${lib.escapeShellArg (toString agentAssets.codexFiles.hooks)}
       link_store_path ${lib.escapeShellArg "${codexHome}/hooks"} ${lib.escapeShellArg (toString agentAssets.codexFiles.hooksDir)}
       ${codexSkillLinks}
+
+      link_store_path ${lib.escapeShellArg "${claudeHome}/CLAUDE.md"} ${lib.escapeShellArg (toString agentAssets.claudeFiles.instructions)}
+      link_store_path ${lib.escapeShellArg "${claudeHome}/skills"} ${lib.escapeShellArg (toString claudeSkills)}
+      link_store_path ${lib.escapeShellArg "${claudeHome}/commands"} ${
+        lib.escapeShellArg (toString (agentAssets.configRoot + "/claude/commands"))
+      }
+      install -m 0644 ${claudeSettings} ${lib.escapeShellArg "${claudeHome}/settings.json"}
 
       settings_path=${lib.escapeShellArg "${state}/userdata/settings.json"}
       if [ ! -e "$settings_path" ]; then

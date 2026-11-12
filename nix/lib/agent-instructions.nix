@@ -6,7 +6,7 @@ let
     "pi"
   ];
   # Callers without a host platform get Linux defaults. obelisk's T3 Code
-  # server is the one such caller: it uses codexGlobal.
+  # server is the one such caller: it uses codexGlobal and claudeGlobal.
   linux = {
     isDarwin = false;
   };
