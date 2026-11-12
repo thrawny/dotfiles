@@ -525,7 +525,7 @@ def test_capped_adjudication_preserves_completed_review_after_fixes(
     module = runpy.run_path(str(LAUNCHER.with_name("review-result.py")))
     module["publish"](directory)
     (repo / "fix").write_text("post-review fix")
-    for outcome in ("capped", "escalated"):
+    for outcome in ("minor-only", "round-limit", "capped", "escalated"):
         result = module["build"](directory, outcome)
         assert result["outcome"] == outcome
         assert result["reviewedHead"] == "reviewed-head"

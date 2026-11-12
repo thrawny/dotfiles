@@ -7,6 +7,9 @@ import runpy
 import sys
 from pathlib import Path
 
+# The loop's terminal states (SKILL.md §6) that the skill publishes after triage.
+ADJUDICATED = ("converged", "minor-only", "round-limit", "capped", "escalated")
+
 
 def build(directory, outcome=None):
     directory = Path(directory)
@@ -44,7 +47,7 @@ def build(directory, outcome=None):
         "fingerprint"
     ](meta["scope"], meta.get("repo_root"))
     if outcome is not None:
-        if outcome not in ("converged", "capped", "escalated"):
+        if outcome not in ADJUDICATED:
             raise ValueError("unknown adjudicated outcome")
         if not all(r["reasonClass"] == "ok" for r in reviewers):
             raise ValueError("failed review cannot have an adjudicated outcome")
@@ -53,8 +56,7 @@ def build(directory, outcome=None):
             previous.get("schemaVersion") != 1
             or previous.get("kind") != "gauntlet-review-result"
             or not previous.get("completedReviewRound")
-            or previous.get("outcome")
-            not in ("review-complete", "converged", "capped", "escalated")
+            or previous.get("outcome") not in ("review-complete", *ADJUDICATED)
             or previous.get("reviewedHead") != meta["head_sha"]
             or previous.get("roundIdentity") != str(directory.resolve())
             or any(
