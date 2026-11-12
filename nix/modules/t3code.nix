@@ -296,6 +296,9 @@ let
       install -d -m 0700 ${lib.escapeShellArg codexHome}
       install -d -m 0750 ${lib.escapeShellArg "${codexHome}/skills"}
       install -d -m 0750 ${lib.escapeShellArg claudeHome}
+      # gauntlet's Claude reviewer keeps its token in ~/.config/gauntlet.
+      install -d -m 0700 ${lib.escapeShellArg "${home}/.config"}
+      install -d -m 0700 ${lib.escapeShellArg "${home}/.config/gauntlet"}
       install -d -m 0750 ${lib.escapeShellArg "${home}/.config/direnv"}
       install -d -m 0750 ${lib.escapeShellArg "${home}/.config/git"}
       install -d -m 0700 ${lib.escapeShellArg "${home}/.config/forgejo"}
