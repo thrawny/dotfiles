@@ -79,7 +79,9 @@ def claude_reply(code, text, model=None):
             continue
         if isinstance(parsed, dict) and "modelUsage" in parsed:
             data = parsed
-            other = "" if index is None else "\n".join(lines[:index] + lines[index + 1 :])
+            other = (
+                "" if index is None else "\n".join(lines[:index] + lines[index + 1 :])
+            )
             break
     if data is None:
         return (1 if code == 0 else code), text
@@ -94,7 +96,11 @@ def claude_reply(code, text, model=None):
     errors = data.get("errors") or []
     detail = "\n".join(
         part
-        for part in [reply, *map(str, errors if isinstance(errors, list) else [errors]), other]
+        for part in [
+            reply,
+            *map(str, errors if isinstance(errors, list) else [errors]),
+            other,
+        ]
         if part.strip()
     )
     return (1 if code == 0 else code), detail or "claude reported no review"
@@ -119,7 +125,10 @@ def claude_token(environ):
     if any(environ.get(name) for name in CLAUDE_CREDENTIALS):
         return None, None
     if environ.get("SANDBOX"):
-        return None, "SANDBOX is set, so the Claude token file is not read; pass CLAUDE_CODE_OAUTH_TOKEN in the environment"
+        return (
+            None,
+            "SANDBOX is set, so the Claude token file is not read; pass CLAUDE_CODE_OAUTH_TOKEN in the environment",
+        )
     config = environ.get("XDG_CONFIG_HOME") or ""
     if not os.path.isabs(config):  # the XDG spec ignores a relative value
         home = environ.get("HOME") or os.path.expanduser("~")
@@ -135,12 +144,21 @@ def claude_token(environ):
         if not stat.S_ISREG(mode):
             return None, f"Claude token file {path} is not a regular file"
         if mode & 0o077:
-            return None, f"Claude token file {path} is accessible to group or others; run chmod 600 on it"
+            return (
+                None,
+                f"Claude token file {path} is accessible to group or others; run chmod 600 on it",
+            )
         token = Path(path).read_text().strip()
     except FileNotFoundError:
-        return None, f"Claude token file {path} is missing; write the token from `claude setup-token` to it with mode 600, or set GAUNTLET_CLAUDE_TOKEN_FILE"
+        return (
+            None,
+            f"Claude token file {path} is missing; write the token from `claude setup-token` to it with mode 600, or set GAUNTLET_CLAUDE_TOKEN_FILE",
+        )
     except OSError as error:
-        return None, f"Claude token file {path} is unreadable: {error.strerror or error}"
+        return (
+            None,
+            f"Claude token file {path} is unreadable: {error.strerror or error}",
+        )
     except UnicodeDecodeError:
         return None, f"Claude token file {path} is not text"
     if not token:

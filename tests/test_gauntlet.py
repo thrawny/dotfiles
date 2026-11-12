@@ -198,7 +198,9 @@ def test_retry_outcomes(tmp_path, monkeypatch, codes, diagnostic, expected, atte
 
     def invoke(command, stdout, stderr):
         code = next(remaining)
-        stdout.write((diagnostic if code else _claude_json("No findings", True)).encode())
+        stdout.write(
+            (diagnostic if code else _claude_json("No findings", True)).encode()
+        )
         return subprocess.CompletedProcess(command, code)
 
     output = tmp_path / "result.out"
@@ -639,6 +641,8 @@ def test_blocked_claude_records_auth_without_launching(tmp_path, monkeypatch):
         )
         == 1
     )
-    event = json.loads((tmp_path / "claude.attempts.jsonl").read_text().splitlines()[-1])
+    event = json.loads(
+        (tmp_path / "claude.attempts.jsonl").read_text().splitlines()[-1]
+    )
     assert launched == []
     assert event["state"] == "auth"
