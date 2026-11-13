@@ -389,10 +389,7 @@ def test_reports_while_with_the_user_reach_the_driver_only_when_passed_on(
     user_typed(moto, moto.time.time())
     with moto.tasks_for_update() as tasks:
         tasks["abc-1"] = task()
-        assert moto.check(tasks, live("working", 1), moto.time.time()) == [
-            "abc-1: the user is talking to it, so the driver stays hands-off until"
-            + " 30 minutes pass with no new prompt"
-        ]
+        assert moto.check(tasks, live("working", 1), moto.time.time()) == []
     sent = (
         ("question", False, []),
         ("blocked", False, []),
@@ -1890,16 +1887,10 @@ def test_user_prompt_skips_what_the_driver_the_parent_and_moto_typed(
         real.user_prompt_at(task(title="other"), None)
 
 
-TALKING = (
-    "abc-1: the user is talking to it, so the driver stays hands-off until 30"
-    + " minutes pass with no new prompt"
-)
-
-
 def test_user_window_keeps_the_driver_away_then_hands_back_once(moto: ModuleType):
     tasks = {"abc-1": task(told=0.0)}
     user_typed(moto, 100.0)
-    assert moto.check(tasks, live("working", 1), 101) == [TALKING]
+    assert moto.check(tasks, live("working", 1), 101) == []
     assert [e["event"] for e in moto.pending_events] == ["with_user"]
     # The turn ends inside the window: the user's, so no news.
     assert moto.check(tasks, live("done", 2), 200) == []
@@ -1913,13 +1904,14 @@ def test_user_window_keeps_the_driver_away_then_hands_back_once(moto: ModuleType
     assert moto.check(tasks, live("done", 2), 200 + WINDOW) == []
     # A new prompt starts a new window.
     user_typed(moto, 300 + WINDOW)
-    assert moto.check(tasks, live("working", 3), 301 + WINDOW) == [TALKING]
+    assert moto.check(tasks, live("working", 3), 301 + WINDOW) == []
+    assert tasks["abc-1"]["with_user"] == 300 + WINDOW
 
 
 def test_back_to_driver_note_carries_a_report_from_the_window(moto: ModuleType):
     tasks = {"abc-1": task()}
     user_typed(moto, 100.0)
-    assert moto.check(tasks, live("working", 1), 101) == [TALKING]
+    assert moto.check(tasks, live("working", 1), 101) == []
     with moto.tasks_for_update() as saved:
         saved.update(tasks)
     with (
@@ -1939,6 +1931,96 @@ def test_back_to_driver_note_carries_a_report_from_the_window(moto: ModuleType):
     assert moto.check(tasks, live("done", 2), 200 + WINDOW) == []
 
 
+@pytest.mark.parametrize("kind", ["question", "blocked"])
+def test_the_first_user_prompt_settles_an_open_question_or_blocked_report(
+    moto: ModuleType, kind: str
+):
+    report = {"kind": kind, "text": "Which base?", "at": 10.0}
+    tasks = {
+        "abc-1": task(report=report, seen={"status": "working", "report_at": 10.0})
+    }
+    user_typed(moto, 100.0)
+    assert moto.check(tasks, live("working", 1), 101) == []
+    settled = tasks["abc-1"]["report"]
+    assert (settled["kind"], settled["text"]) == (
+        "done",
+        "the user answers in the pane",
+    )
+    assert tasks["abc-1"]["seen"]["report_at"] == settled["at"]
+    assert [e["event"] for e in moto.pending_events] == ["with_user", "settle"]
+    # The settled report is not news at the window's end either.
+    assert moto.check(tasks, live("working", 1), 200) == []
+
+
+def test_the_first_user_prompt_leaves_other_reports_alone(moto: ModuleType):
+    for report in (None, {"kind": "phase", "text": "Ship it", "at": 10.0}):
+        tasks = {
+            "abc-1": task(report=report, seen={"status": "working", "report_at": 10.0})
+        }
+        user_typed(moto, 100.0)
+        moto.check(tasks, live("working", 1), 101)
+        assert tasks["abc-1"]["report"] == report
+        assert "settle" not in [e["event"] for e in moto.pending_events]
+
+
+def window_end(
+    moto: ModuleType, report: dict[str, Any] | None, status: str
+) -> list[str]:
+    """The lines for a task the user left at 100, checked when its window ends."""
+    tasks = {"abc-1": task(report=report, with_user=100.0)}
+    user_typed(moto, 100.0)
+    return moto.check(tasks, live(status, 2), 100 + WINDOW)
+
+
+@pytest.mark.parametrize(
+    ("report", "status", "state"),
+    [
+        (
+            {"kind": "question", "text": "Which base?", "at": 150.0},
+            "done",
+            "last report question (29m ago): Which base?",
+        ),
+        (
+            {"kind": "blocked", "text": "No access", "at": 150.0},
+            "done",
+            "last report blocked (29m ago): No access",
+        ),
+        (None, "done", "its last turn ended without a report"),
+        (
+            {"kind": "done", "text": "Old", "at": 50.0},
+            "done",
+            "its last turn ended without a report",
+        ),
+        (
+            {
+                "kind": "done",
+                "text": "the user answers in the pane",
+                "at": 150.0,
+                "settled": True,
+            },
+            "done",
+            "its last turn ended without a report",
+        ),
+        (None, "blocked", "it waits at an approval or question prompt"),
+    ],
+)
+def test_the_window_end_reaches_the_driver_when_the_worker_needs_action(
+    moto: ModuleType, report: dict[str, Any] | None, status: str, state: str
+):
+    assert window_end(moto, report, status) == [
+        f"abc-1: back with the driver, the user's last prompt was 30m ago; {state}"
+    ]
+
+
+@pytest.mark.parametrize("kind", ["done", "phase"])
+def test_the_window_end_is_quiet_after_a_report_the_driver_saw(
+    moto: ModuleType, kind: str
+):
+    report = {"kind": kind, "text": "Seen", "at": 150.0}
+    assert window_end(moto, report, "done") == []
+    assert [e["event"] for e in moto.pending_events] == ["back_to_driver"]
+
+
 def test_user_window_waits_for_the_user_s_turn_to_end(moto: ModuleType):
     tasks = {"abc-1": task(with_user=100.0)}
     user_typed(moto, 100.0)
@@ -1955,7 +2037,7 @@ def test_user_typing_hands_the_driver_the_report_it_had_not_seen(
     report = {"kind": "done", "text": "PR ready", "at": 10.0}
     tasks = {"abc-1": task(report=report)}
     user_typed(moto, 20.0)
-    assert moto.check(tasks, live("done", 2), 50) == ["abc-1 done: PR ready", TALKING]
+    assert moto.check(tasks, live("done", 2), 50) == ["abc-1 done: PR ready"]
 
 
 def test_a_wrap_after_the_user_typed_ends_the_window(moto: ModuleType):
@@ -3095,10 +3177,9 @@ def test_phase_report_of_a_worker_with_the_user_is_never_handed_off(
         "abc-1 phase (with the user, not handed off): implementation"
     ]
     assert moto.check(tasks, live("done", 2), 102, [], steps) == []
-    # After the window, the driver hears the phase in the note, and still no
-    # handoff starts.
-    [line] = moto.check(tasks, live("done", 2), 90 + WINDOW, [], steps)
-    assert line.endswith("last report phase (29m ago): implementation")
+    # After the window, the driver already heard the phase, so the note stays
+    # quiet, and still no handoff starts.
+    assert moto.check(tasks, live("done", 2), 90 + WINDOW, [], steps) == []
     assert moto.check(tasks, live("done", 2), 91 + WINDOW, [], steps) == []
     assert steps == []
     assert "handoff" not in tasks["abc-1"]

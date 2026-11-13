@@ -43,7 +43,7 @@ Read the target repo's own `AGENTS.md` or `CLAUDE.md` before you choose:
 
 End a turn with `moto report done|question|blocked "<one line>"` when the task is finished, needs an answer only the user has, or is blocked. Put the PR URL in a `done` line. The report goes to whoever started you: the driver, or the worker that spawned you.
 
-While the user typed in your pane in the last 30 minutes (a setting), you are with the user, and the driver leaves you alone. Your `question` and `blocked` reports then reach only the sidebar, never the driver. A `done` report reaches the driver without the flag. Once 30 minutes pass with no new prompt from the user, the driver takes you back and sees your last report.
+While the user typed in your pane in the last 30 minutes (a setting), you are with the user, and the driver leaves you alone. When the user first prompts you, moto settles your open `question` or `blocked` report, because the user answers in the pane. Your later `question` and `blocked` reports reach only the sidebar, never the driver. A `done` report reaches the driver without the flag. Once 30 minutes pass with no new prompt from the user, the driver takes you back. It hears from moto only if you need action: your last report is a `question` or `blocked`, your last turn ended without a report, or you wait at an approval or question prompt.
 
 Add `--to-driver` whenever the report asks the driver to act, such as creating a ticket or starting a worker, and whenever the user asks you to pass something on. With it, the report reaches the driver at once, even while you are with the user or another worker started you.
 

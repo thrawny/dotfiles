@@ -38,10 +38,12 @@ from moto.store import (
     in_window,
     new_reports,
     record,
+    settle_report,
     tasks_for_update,
     unseen_reports,
-    user_window,
 )
+
+USER_ANSWERS = "the user answers in the pane"
 
 
 def check(
@@ -145,11 +147,13 @@ def user_talk(
     user still is.
 
     The worker is with the user while the user's last prompt in its pane, which
-    user_prompt_at finds, is within the user window. The driver hears once when
-    that starts, with the reports it has not seen, since passed_on skips them.
-    Once the window passes and the turn the user started has ended, the worker
-    is the driver's again, and the driver hears once with the worker's latest
-    state. A wrap or snooze report ends the window early, and the normal path
+    user_prompt_at finds, is within the user window. When that starts, the
+    driver hears the reports it has not seen, since passed_on skips them, and
+    an open question or blocked report is settled, as moto settle would, since
+    the user answers in the pane. Once the window passes and the turn the user
+    started has ended, the worker is the driver's again. The driver hears once
+    with the worker's latest state, and only when that state needs action
+    (back_to_driver decides). A wrap or snooze report ends the window early, and the normal path
     delivers it. While a handoff runs, the typing is moto's own, so nothing
     changes. with_user in task keeps the last prompt's time between passes.
     """
@@ -166,11 +170,11 @@ def user_talk(
             return [], True
         lines = [f"{name} {r['kind']}: {r['text']}" for r in new_reports(task)]
         record("with_user", name, at=at)
-        minutes = round(user_window() / 60)
-        return lines + [
-            f"{name}: the user is talking to it, so the driver stays hands-off"
-            + f" until {minutes} minutes pass with no new prompt"
-        ], True
+        report: dict[str, Any] | None = task.get("report")
+        if report and report["kind"] in ("question", "blocked"):
+            settle_report(task, USER_ANSWERS, now)
+            record("settle", name, text=USER_ANSWERS)
+        return lines, True
     if since is None:
         return [], False
     if any(r["kind"] in ENDED_BY_USER for r in unseen_reports(task)):
@@ -180,7 +184,8 @@ def user_talk(
         return [], True  # the turn the user started still runs
     del task["with_user"]
     record("back_to_driver", name, at=since)
-    return [back_to_driver(name, task, agent, status, since, now)], False
+    line = back_to_driver(name, task, agent, status, since, now)
+    return [line] if line else [], False
 
 
 def back_to_driver(
@@ -190,12 +195,16 @@ def back_to_driver(
     status: str,
     since: float,
     now: float,
-) -> str:
-    """The line that hands a worker back to the driver after the user window,
-    marking its state seen so the normal path does not repeat it.
+) -> str | None:
+    """The line that hands a worker back to the driver after the user window, or
+    None when the worker needs no action. Marks its state seen, so the normal
+    path does not repeat it.
 
     The worker's last report counts as its state only when it came after the
-    user's last prompt.
+    user's last prompt, and a settled one never counts. The worker needs action
+    when that report is a question or blocked, when it waits at a prompt, and
+    when its last turn ended without a report. Any other report, such as a done,
+    wrap, snooze or phase, reached the driver already.
     """
     seen = task["seen"]
     seen.pop("pending", None)
@@ -204,7 +213,9 @@ def back_to_driver(
     seen["turn"], _ = last_turn(task, agent)
     new_reports(task)
     report: dict[str, Any] | None = task.get("report")
-    if report and report["at"] >= since:
+    if report and report["at"] >= since and not report.get("settled"):
+        if report["kind"] not in ("question", "blocked"):
+            return None
         ago = age(now - report["at"])
         state = f"last report {report['kind']} ({ago} ago): {report['text']}"
     elif status == "blocked":

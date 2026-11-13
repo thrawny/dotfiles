@@ -168,6 +168,13 @@ def new_reports(task: dict[str, Any]) -> list[dict[str, Any]]:
     return reports
 
 
+def settle_report(task: dict[str, Any], text: str, at: float) -> None:
+    """Replace the task's last report with a done report the watch has already
+    seen. The settled flag lets the user window's end tell it from a real one."""
+    task["report"] = {"kind": "done", "text": text, "at": at, "settled": True}
+    task.setdefault("seen", {})["report_at"] = at
+
+
 def user_window() -> float:
     """How long after the user's last prompt a worker stays with the user, in seconds."""
     return settings()["user_window_minutes"] * 60

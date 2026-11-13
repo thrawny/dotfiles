@@ -36,6 +36,7 @@ from moto.store import (
     message_sender,
     read_tasks,
     record,
+    settle_report,
     tag,
     tasks_for_update,
     user_window,
@@ -187,8 +188,7 @@ def cmd_settle(args: argparse.Namespace) -> int:
     text = " ".join(args.text).strip()
     with tasks_for_update() as tasks:
         task = find_task(tasks, args.agent)
-        task["report"] = {"kind": "done", "text": text, "at": time.time()}
-        task.setdefault("seen", {})["report_at"] = task["report"]["at"]
+        settle_report(task, text, time.time())
         record("settle", task["agent"], text=text)
     print(f"Settled {task['agent']}; the watch skips it.")
     return 0
