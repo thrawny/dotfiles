@@ -25,8 +25,9 @@ sudo -v
 exec 3< <(sudo -n bash -c '
   set -euo pipefail
   # A process substitution, unlike a background job, does not ignore SIGINT.
-  # Ignore it so a Ctrl-C cannot stop the job before it restores the thresholds.
-  trap "" INT
+  # Ignore it, and SIGPIPE in case the caller exits before reading the status,
+  # so neither can stop the job before it restores the thresholds.
+  trap "" INT PIPE
   bat="$1"
   target="$2"
   start="$3"
@@ -37,10 +38,10 @@ exec 3< <(sudo -n bash -c '
 
   echo "$(date -Is) setting $bat thresholds to $start-$target (was $orig_start-$orig_stop)" >> "$log"
   if ! tlp setcharge "$start" "$target" "$bat" >> "$log" 2>&1; then
-    echo failed
+    echo failed || true
     exit 1
   fi
-  echo ok
+  echo ok || true
   exec >/dev/null
 
   while [ "$(cat "$sysfs/capacity")" -lt "$target" ]; do
