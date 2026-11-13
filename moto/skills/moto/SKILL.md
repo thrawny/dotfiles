@@ -57,7 +57,7 @@ Any message from the user in your pane, one with no `[driver]` or parent tag, pa
 
 A phase boundary is where one kind of work ends and the next starts: grilling to implementation, implementation to shipping a PR, shipping to babysitting it. At a boundary, first write down what the next phase needs, such as the ticket or the PR description. Then run `moto report phase "<next phase>"` and do what its reply says.
 
-moto reads your context size when you report. Under the handoff limit, or when it cannot read the size, the reply tells you to carry on with the next phase in the same turn. Over the limit, with the user not in your pane, the reply tells you to end your turn, and the watch hands you off to a fresh session with the next phase as its goal. Over the limit, with the user in your pane, moto does not hand you off. The reply tells you to carry on and to tell the user in one line that `/handoff` would start a fresh session. The driver hears of the phase once in every case.
+moto reads your context size when you report. With the user in your pane, the reply always tells you to carry on with the next phase in the same turn, whatever the context size, and moto does not hand you off. Otherwise, under the handoff limit, or when it cannot read the size, the reply tells you to carry on in the same turn. Over the limit, it tells you to end your turn, and the watch hands you off to a fresh session with the next phase as its goal. The driver hears of the phase once in every case.
 
 A helper's phase report reaches you as `[helper phase] <next phase>`. Answer with `moto handoff <helper> "<next phase>"` for a fresh session, or `moto tell <helper> "carry on"`.
 

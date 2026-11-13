@@ -100,8 +100,8 @@ size in the reporting session's transcript, and the reply says what to do.
 Under handoff_tokens, or with the size unknown, the worker carries on in the
 same turn and the watch types nothing. Over it, the worker ends its turn and the
 watch starts moto handoff in the background. When the user is typing to the
-worker, moto does not hand it off: the worker carries on and tells the user that
-/handoff would start a fresh session. The driver gets one line either way, and a
+worker, moto does not hand it off and says nothing of the context size: the
+worker always carries on. The driver gets one line either way, and a
 handoff that fails leaves it a note. A worker that ends a turn
 without a report over compact_tokens gets /compact, at most once per
 COMPACT_GROWTH tokens of growth. Both limits live in MOTO_HOME/settings.toml.

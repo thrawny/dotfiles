@@ -3207,8 +3207,8 @@ def phase_report(
         (40_000, False, "carry on"),
         (100_000, False, "carry on"),
         (None, False, "carry on"),
-        (None, True, "carry on"),
-        (40_000, True, "carry on"),
+        (None, True, "stay"),
+        (40_000, True, "stay"),
         (150_000, False, "handoff"),
         (150_000, True, "stay"),
     ],
@@ -3227,7 +3227,9 @@ def test_phase_report_is_decided_from_the_context_size_when_it_is_made(
     assert ("End your turn now" in out) == (action == "handoff")
     assert ("Carry on with review" in out) == (action != "handoff")
     assert "say go" not in out.lower()
-    assert ("/handoff" in out) == (action == "stay")
+    # With the user in the pane the reply is plain: no tokens, no /handoff.
+    if action == "stay":
+        assert out.strip() == "Phase recorded. Carry on with review in this turn."
 
 
 def test_phase_report_limit_comes_from_the_settings(moto: ModuleType, phase_home: Path):

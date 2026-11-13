@@ -137,20 +137,21 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 
 def decide_phase(task: dict[str, Any], talking: bool) -> dict[str, Any]:
-    """What a phase report does, from the context size of the reporting session.
+    """What a phase report does, from who is in the pane and the context size.
 
-    The worker carries on in its own turn when the context is under the handoff
-    limit or its size is unknown, and when the user is typing to it, because moto
-    never types into that pane. Otherwise it ends its turn and the watch hands it
-    off. The decision rides on the report, so the watch acts on what the worker
-    was told.
+    While the user is typing to the worker, moto never types into that pane, so
+    the worker always carries on in its own turn, whatever the context size. The
+    user starts a fresh session with /handoff when they want one. Otherwise the
+    worker carries on when the context is under the handoff limit or its size is
+    unknown, and ends its turn over it so the watch hands it off. The decision
+    rides on the report, so the watch acts on what the worker was told.
     """
     tokens = context_tokens(task, None)
     limit = settings()["handoff_tokens"]
-    if tokens is None or tokens <= limit:
-        action = "carry on"
-    elif talking:
+    if talking:
         action = "stay"
+    elif tokens is None or tokens <= limit:
+        action = "carry on"
     else:
         action = "handoff"
     record("phase", task["agent"], action=action, tokens=tokens, limit=limit)
@@ -161,6 +162,8 @@ def phase_reply(phase: str, decision: dict[str, Any]) -> str:
     """What moto tells the worker after a phase report."""
     tokens, limit = decision["tokens"], decision["limit"]
     head = "Phase recorded."
+    if decision["action"] == "stay":
+        return f"{head} Carry on with {phase} in this turn."
     if tokens is None:
         return (
             f"{head} Moto cannot read your context size, so it does not hand you"
@@ -172,15 +175,9 @@ def phase_reply(phase: str, decision: dict[str, Any]) -> str:
             f"{held}, under the {limit:,} that start a fresh session. Carry on"
             + f" with {phase} in this turn."
         )
-    if decision["action"] == "handoff":
-        return (
-            f"{held}, over {limit:,}. End your turn now: the watch hands you off"
-            + f" to a fresh session for {phase}."
-        )
     return (
-        f"{held}, over {limit:,}. The user is in this pane, so moto does not hand"
-        + f" you off. Carry on with {phase}, and tell the user in one line that"
-        + " /handoff would start a fresh session."
+        f"{held}, over {limit:,}. End your turn now: the watch hands you off"
+        + f" to a fresh session for {phase}."
     )
 
 
