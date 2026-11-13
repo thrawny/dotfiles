@@ -186,7 +186,16 @@ def test_claude_run_that_called_no_model_is_not_a_review(output, expected):
     [
         ([1, 0], "503 model capacity", 0, 2),
         ([1, 1, 1], "429 rate limit", 1, 3),
-        ([1], "invalid API key", 1, 1),
+        (
+            [1, 0],
+            "Failed to authenticate. API Error: 403 Attention Required! | Cloudflare",
+            0,
+            2,
+        ),
+        ([1, 0], "Failed to authenticate. API Error: 401 Invalid bearer token", 0, 2),
+        ([1, 0], "Weekly usage limit reached", 0, 2),
+        ([1, 0], "invalid model", 0, 2),
+        ([1, 1, 1], "invalid API key", 1, 3),
         ([130], "temporary transport error", 1, 1),
         ([1], "429 resetAt: 9999999999", 1, 1),
     ],
@@ -223,6 +232,95 @@ def test_retry_outcomes(tmp_path, monkeypatch, codes, diagnostic, expected, atte
     assert sum(event["state"] == "running" for event in events) == attempts
     assert output.exists() is (expected == 0)
     assert len(waits) == attempts - 1
+
+
+def test_claude_auth_retries_exhaust_to_blocked_auth(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(retry_review, "fingerprint", lambda: "scope")
+    waits = []
+
+    def invoke(command, stdout, stderr):
+        stdout.write(_claude_json("Not logged in · Please run /login", False).encode())
+        return subprocess.CompletedProcess(command, 0)
+
+    output = tmp_path / "out"
+    assert (
+        retry_review.run(
+            tmp_path,
+            "claude",
+            str(output),
+            ["reviewer"],
+            invoke=invoke,
+            sleep=waits.append,
+            clock=lambda: 0,
+        )
+        == 1
+    )
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "claude.attempts.jsonl").read_text().splitlines()
+    ]
+    assert sum(e["state"] == "running" for e in events) == 3
+    assert events[-1]["state"] == "auth"
+    assert events[-1]["exhausted"] is True
+    assert waits == [30, 60]
+    assert not output.exists()
+    assert "blocked (auth)" in capsys.readouterr().err
+
+
+def test_retry_budget_expiry_keeps_last_failure_class(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(retry_review, "fingerprint", lambda: "scope")
+    now = [0]
+
+    def invoke(command, stdout, stderr):
+        now[0] += 280  # the review itself ran long; the second try overruns
+        stdout.write(b"API Error: 403 Attention Required! | Cloudflare")
+        return subprocess.CompletedProcess(command, 1)
+
+    assert (
+        retry_review.run(
+            tmp_path,
+            "claude",
+            str(tmp_path / "out"),
+            ["reviewer"],
+            invoke=invoke,
+            sleep=lambda seconds: now.__setitem__(0, now[0] + seconds),
+            clock=lambda: now[0],
+        )
+        == 1
+    )
+    terminal = json.loads(
+        (tmp_path / "claude.attempts.jsonl").read_text().splitlines()[-1]
+    )
+    assert terminal["state"] == "auth"
+    assert terminal["exhausted"] is True
+    assert "blocked (auth)" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("engine", ["codex", "claude"])
+def test_non_provider_failures_are_not_retried(tmp_path, monkeypatch, engine):
+    monkeypatch.setattr(retry_review, "fingerprint", lambda: "scope")
+    launches = []
+
+    def invoke(command, stdout, stderr):
+        launches.append(command)
+        if engine == "claude":
+            raise OSError("claude: not found")
+        stdout.write(b"401 unauthorized")
+        return subprocess.CompletedProcess(command, 1)
+
+    assert (
+        retry_review.run(
+            tmp_path,
+            engine,
+            str(tmp_path / "out"),
+            ["reviewer"],
+            invoke=invoke,
+            sleep=lambda _: None,
+            clock=lambda: 0,
+        )
+        == 1
+    )
+    assert len(launches) == 1
 
 
 def test_retry_scope_change_blocks(tmp_path, monkeypatch):
@@ -549,8 +647,8 @@ _LOGGED_OUT_CLAUDE = (
             "PARTIAL_FINDING",
             True,
         ),
-        # Logged out, claude -p answers /code-review with exit 0 and no model turn.
-        ("claude", _LOGGED_OUT_CLAUDE, "Not logged in", True),
+        # A logged-out reviewer now retries with real backoff first; see
+        # test_claude_auth_retries_exhaust_to_blocked_auth.
         # Without a token anywhere, the reviewer is blocked before it starts.
         ("claude", _LOGGED_OUT_CLAUDE, "is missing", False),
     ],

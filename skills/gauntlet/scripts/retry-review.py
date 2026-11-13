@@ -194,6 +194,16 @@ def classify(code, text):
     return "terminal"
 
 
+# Every Claude failure is retried within the budget: Cloudflare 403 challenges,
+# 401 login refusals, 429 limits and unknown errors have all cleared on their own.
+# A token that is really missing or invalid still ends blocked (auth) once the
+# budget is spent. Codex retries only transient failures.
+RETRYABLE = {
+    "claude": {"transient", "auth", "quota", "terminal", "empty-result"},
+    "codex": {"transient"},
+}
+
+
 def reset_at(text):
     match = re.search(r'"?resetAt"?\s*[:=]\s*"?([^"\s,}]+)', text)
     if match:
@@ -249,6 +259,7 @@ def run(
     ).stdout.strip()
     started = clock()
     last_reset = None
+    last_kind = "transient"
     attempt = 1
 
     # Record launch intent durably. An interrupted/unknown attempt is never replayed.
@@ -285,18 +296,24 @@ def run(
         argv = [str(answer) if arg == output else arg for arg in command]
 
         if attempt > 1 and clock() - started > 300:
+            # Keep the last failure's class, so a bad token still reads as auth.
             record(
-                state="transient",
+                state=last_kind,
                 retry_owner="gauntlet",
                 retryable=True,
                 exhausted=True,
                 resetAt=last_reset,
+            )
+            print(
+                f"{engine}: blocked ({last_kind}); retry budget exhausted; evidence: {events}",
+                file=sys.stderr,
             )
             return 1
         if fingerprint() != original:
             record(state="scope-changed", retry_owner="gauntlet")
             return 1
         record(state="running", argv=argv, at=clock())
+        launched = True
         try:
             with raw.open("wb") as stream:
                 result = invoke(argv, stdout=stream, stderr=subprocess.STDOUT)
@@ -308,7 +325,9 @@ def run(
                 )
             kind = classify(code, text)
         except OSError as error:
+            # The reviewer never started, so no provider error to retry.
             raw.write_text(str(error))
+            launched = False
             kind = "terminal"
             text = str(error)
         if fingerprint() != original:
@@ -319,9 +338,11 @@ def run(
             else not text.strip()
         ):
             kind = "empty-result"
-        last_reset = reset_at(text) if kind == "transient" else None
-        wait = delay(attempt, text, clock()) if kind == "transient" else 0
-        retry = kind == "transient" and attempt < 3 and clock() + wait - started <= 300
+        retryable = launched and kind in RETRYABLE.get(engine, {"transient"})
+        last_kind = kind
+        last_reset = reset_at(text) if retryable else None
+        wait = delay(attempt, text, clock()) if retryable else 0
+        retry = retryable and attempt < 3 and clock() + wait - started <= 300
         if kind == "ok":
             try:
                 if engine == "codex":
@@ -333,9 +354,9 @@ def run(
                 kind = "output-error"
         record(
             state="retry-wait" if retry else kind,
-            retryable=kind == "transient",
+            retryable=retryable,
             retry_owner="gauntlet",
-            exhausted=kind == "transient" and not retry,
+            exhausted=retryable and not retry,
             next_attempt_at=clock() + wait if retry else None,
             resetAt=last_reset,
             raw=str(raw),
@@ -346,7 +367,7 @@ def run(
             print(f"{engine}: blocked ({kind}); evidence: {events}", file=sys.stderr)
             return 1
         print(
-            f"{engine}: transient failure; retry {attempt + 1}/3 in {wait:.0f}s; evidence: {events}",
+            f"{engine}: {kind} failure; retry {attempt + 1}/3 in {wait:.0f}s; evidence: {events}",
             file=sys.stderr,
         )
         sleep(wait)
