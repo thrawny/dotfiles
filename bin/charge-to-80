@@ -16,33 +16,29 @@ fi
 orig_start=$(cat "$sysfs/charge_control_start_threshold")
 orig_stop=$(cat "$sysfs/charge_control_end_threshold")
 
-# Prompt once now. Set the thresholds in the foreground so a failure reaches the
-# caller, then launch the privileged monitor in the background. Root writes the
-# log in both steps, so the file keeps one owner.
+# Prompt once now, then start one privileged job that sets the thresholds,
+# monitors charging and restores the originals. The job prints one status line
+# on the pipe after setting the thresholds, so a failure, including sudo
+# refusing to run, reaches the caller before the job carries on in the
+# background.
 sudo -v
-if ! sudo -n bash -c '
+exec 3< <(sudo -n bash -c '
+  set -euo pipefail
   bat="$1"
   target="$2"
   start="$3"
   orig_start="$4"
   orig_stop="$5"
   log="$6"
+  sysfs="/sys/class/power_supply/$bat"
 
   echo "$(date -Is) setting $bat thresholds to $start-$target (was $orig_start-$orig_stop)" >> "$log"
-  tlp setcharge "$start" "$target" "$bat" >> "$log" 2>&1
-' bash "$bat" "$target" "$start" "$orig_start" "$orig_stop" "$log" </dev/null; then
-  echo "Failed to set $bat thresholds to $start-$target. Log: $log" >&2
-  exit 1
-fi
-
-sudo -n bash -c '
-  set -euo pipefail
-  bat="$1"
-  target="$2"
-  orig_start="$3"
-  orig_stop="$4"
-  log="$5"
-  sysfs="/sys/class/power_supply/$bat"
+  if ! tlp setcharge "$start" "$target" "$bat" >> "$log" 2>&1; then
+    echo failed
+    exit 1
+  fi
+  echo ok
+  exec >/dev/null
 
   while [ "$(cat "$sysfs/capacity")" -lt "$target" ]; do
     if [ "$(cat /sys/class/power_supply/AC/online 2>/dev/null || echo 0)" != "1" ]; then
@@ -54,7 +50,23 @@ sudo -n bash -c '
 
   echo "$(date -Is) restoring $bat thresholds to $orig_start-$orig_stop" >> "$log"
   tlp setcharge "$orig_start" "$orig_stop" "$bat" >> "$log" 2>&1
-' bash "$bat" "$target" "$orig_start" "$orig_stop" "$log" </dev/null >/dev/null 2>&1 &
+' bash "$bat" "$target" "$start" "$orig_start" "$orig_stop" "$log" </dev/null 2>/dev/null)
+
+setup_status=""
+read -r setup_status <&3 || true
+exec 3<&-
+
+case "$setup_status" in
+  ok) ;;
+  failed)
+    echo "Failed to set $bat thresholds to $start-$target. Log: $log" >&2
+    exit 1
+    ;;
+  *)
+    echo "Could not start the privileged charge job for $bat." >&2
+    exit 1
+    ;;
+esac
 
 echo "Charging $bat to $target%, then restoring $orig_start-$orig_stop in background."
 echo "Log: $log"
