@@ -150,6 +150,7 @@ def settled(directory, expected=None):
         "quota",
         "human-stop",
         "terminal",
+        "launch-error",
         "scope-changed",
         "empty-result",
         "output-error",
