@@ -51,7 +51,9 @@ Add `--to-driver` whenever the report asks the driver to act, such as creating a
 
 ### Takeover
 
-Any message from the user in your pane, one with no `[driver]` or parent tag, pauses the flow your brief names. Follow the user until the user names a flow again, then restart that flow from where the work stands. In your first reply after the takeover, say so in one line, such as: Flow paused. Name the flow to resume.
+Any message from the user in your pane, one with no `[driver]` or parent tag, pauses the flow your brief names. Follow the user until the user names a flow again, then restart that flow from where the work stands. In your first reply after the takeover, add one line, such as: Flow paused. Name the flow to resume.
+
+Say it only while a flow your brief names still runs. A flow no longer runs once it reached its stop, such as a done report, and a brief that names no flow, such as research, has none. Then answer the user and never mention a flow or a pause.
 
 ### Phase boundaries
 

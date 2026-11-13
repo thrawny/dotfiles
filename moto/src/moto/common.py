@@ -120,8 +120,11 @@ pane once your turn ends, tagged with its name and the kind, as in \
 TAKEOVER_RULE = """\
 Any message from the user in your pane pauses the flow your brief names, and \
 you follow the user. When the user names a flow again, restart that flow from \
-where the work stands. In your first reply after the user takes over, say so \
-in one line, such as: Flow paused. Name the flow to resume."""
+where the work stands. In your first reply after the user takes over, add one \
+line, such as: Flow paused. Name the flow to resume. Say it only while a flow \
+your brief names still runs. A flow no longer runs once it reached its stop, \
+such as a done report, and a brief that names no flow, such as research, has \
+none. Then answer the user and never mention a flow or a pause."""
 # Taught wherever a worker learns the driver is not watching it.
 PASS_ON_RULE = """\
 When the user asks you to pass something to the driver, run \
