@@ -22,7 +22,8 @@
 # Codex PR reviewer, which re-reads the full diff every round with prior
 # findings suppressed. See SKILL.md for the ledger format and loop protocol.
 #
-# Selected reviewers retry transient failures independently. Any remaining
+# Selected reviewers retry failures independently, by the rules in SKILL.md
+# ("Infrastructure retries"). Any remaining
 # failure blocks round completion; partial findings remain available.
 #
 # Reviewer selection: --reviewers takes a comma list of claude/codex (default

@@ -272,7 +272,7 @@ def test_retry_budget_expiry_keeps_last_failure_class(tmp_path, monkeypatch, cap
     now = [0]
 
     def invoke(command, stdout, stderr):
-        now[0] += 280  # the review itself ran long; the second try overruns
+        now[0] += 260  # the review ran long, then the backoff sleep overran
         stdout.write(b"API Error: 403 Attention Required! | Cloudflare")
         return subprocess.CompletedProcess(command, 1)
 
@@ -283,16 +283,20 @@ def test_retry_budget_expiry_keeps_last_failure_class(tmp_path, monkeypatch, cap
             str(tmp_path / "out"),
             ["reviewer"],
             invoke=invoke,
-            sleep=lambda seconds: now.__setitem__(0, now[0] + seconds),
+            sleep=lambda seconds: now.__setitem__(0, now[0] + seconds + 50),
             clock=lambda: now[0],
         )
         == 1
     )
-    terminal = json.loads(
-        (tmp_path / "claude.attempts.jsonl").read_text().splitlines()[-1]
-    )
+    events = [
+        json.loads(line)
+        for line in (tmp_path / "claude.attempts.jsonl").read_text().splitlines()
+    ]
+    assert sum(e["state"] == "running" for e in events) == 1
+    terminal = events[-1]
     assert terminal["state"] == "auth"
     assert terminal["exhausted"] is True
+    assert Path(terminal["raw"]).exists()
     assert "blocked (auth)" in capsys.readouterr().err
 
 

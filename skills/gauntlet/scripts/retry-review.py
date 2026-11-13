@@ -259,7 +259,7 @@ def run(
     ).stdout.strip()
     started = clock()
     last_reset = None
-    last_kind = "transient"
+    last_kind = None
     attempt = 1
 
     # Record launch intent durably. An interrupted/unknown attempt is never replayed.
@@ -296,9 +296,12 @@ def run(
         argv = [str(answer) if arg == output else arg for arg in command]
 
         if attempt > 1 and clock() - started > 300:
-            # Keep the last failure's class, so a bad token still reads as auth.
+            # Keep the last failure's class, so a bad token still reads as auth,
+            # and point at the attempt that produced it.
             record(
                 state=last_kind,
+                raw=str(directory / f"{engine}.attempt-{attempt - 1}.log"),
+                answer=str(directory / f"{engine}.attempt-{attempt - 1}.out"),
                 retry_owner="gauntlet",
                 retryable=True,
                 exhausted=True,
@@ -338,7 +341,7 @@ def run(
             else not text.strip()
         ):
             kind = "empty-result"
-        retryable = launched and kind in RETRYABLE.get(engine, {"transient"})
+        retryable = launched and kind in RETRYABLE[engine]
         last_kind = kind
         last_reset = reset_at(text) if retryable else None
         wait = delay(attempt, text, clock()) if retryable else 0
@@ -364,7 +367,11 @@ def run(
         if kind == "ok":
             return 0
         if not retry:
-            print(f"{engine}: blocked ({kind}); evidence: {events}", file=sys.stderr)
+            spent = "; retry budget exhausted" if retryable else ""
+            print(
+                f"{engine}: blocked ({kind}){spent}; evidence: {events}",
+                file=sys.stderr,
+            )
             return 1
         print(
             f"{engine}: {kind} failure; retry {attempt + 1}/3 in {wait:.0f}s; evidence: {events}",
