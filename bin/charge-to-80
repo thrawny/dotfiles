@@ -24,6 +24,9 @@ orig_stop=$(cat "$sysfs/charge_control_end_threshold")
 sudo -v
 exec 3< <(sudo -n bash -c '
   set -euo pipefail
+  # A process substitution, unlike a background job, does not ignore SIGINT.
+  # Ignore it so a Ctrl-C cannot stop the job before it restores the thresholds.
+  trap "" INT
   bat="$1"
   target="$2"
   start="$3"
