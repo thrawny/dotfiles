@@ -52,13 +52,15 @@ HANDOFF_STAY = "--stay"
 BUSY = ("working", "blocked")
 # The defaults for MOTO_HOME/settings.toml.
 SETTINGS = {
-    # A phase report above this hands the worker off to a fresh session, and
-    # below it tells the worker to carry on.
+    # A phase report above this, from a worker the user is not typing to, ends the
+    # worker's turn so the watch hands it off to a fresh session. Below it, the
+    # worker carries on in the same turn.
     "handoff_tokens": 100_000,
     # A turn that ends above this, without a report, gets /compact.
     "compact_tokens": 500_000,
     # A worker is with the user while the user typed in its pane this many
-    # minutes ago or less, and the driver stays hands-off until then.
+    # minutes ago or less. Until then the driver stays hands-off and moto types
+    # nothing into the pane. The worker itself is never told to stop.
     "user_window_minutes": 30,
 }
 # The context must grow this much after one /compact before the next.
@@ -114,6 +116,12 @@ watches it. Start a helper you supervise yourself, such as a test worker, with \
 plain `moto spawn`. Its done, question and blocked reports arrive in your \
 pane once your turn ends, tagged with its name and the kind, as in \
 `[helper done]`; answer a question with `moto tell`."""
+# Taught in every brief, next to the rule that an untagged message is the user's.
+TAKEOVER_RULE = """\
+Any message from the user in your pane pauses the flow your brief names, and \
+you follow the user. When the user names a flow again, restart that flow from \
+where the work stands. In your first reply after the user takes over, say so \
+in one line, such as: Flow paused. Name the flow to resume."""
 # Taught wherever a worker learns the driver is not watching it.
 PASS_ON_RULE = """\
 When the user asks you to pass something to the driver, run \
@@ -127,6 +135,8 @@ message without it is from the user, typing in this pane. Answer the user here, 
 and when the user and the driver disagree, follow the user. Still report to the \
 driver when the task finishes, gets stuck or needs a decision. {PASS_ON_RULE}
 
+{TAKEOVER_RULE}
+
 {SPAWN_RULES}"""
 CHILD_FOOTER = f"""\
 Another worker, {{parent}}, started you and takes your reports, which moto \
@@ -138,6 +148,8 @@ message that starts with {DRIVER_TAG} is from the driver, and a message with \
 neither tag is from the user, typing in this pane. Answer the user here. When \
 they disagree, follow the user first, then the driver, then {{parent}}. \
 {PASS_ON_RULE}
+
+{TAKEOVER_RULE}
 
 {SPAWN_RULES}"""
 
@@ -187,7 +199,9 @@ Messages from the driver start with {DRIVER_TAG}. A message without it is from \
 the user, typing in this pane. Answer the user here, and when the user and the \
 driver disagree, follow the user. A job is a trigger, not an authority: follow \
 exactly the rules a worker the driver started follows, the user's away rules \
-included."""
+included.
+
+{TAKEOVER_RULE}"""
 
 EVENTS_VERSION = 1
 

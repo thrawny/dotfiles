@@ -43,15 +43,21 @@ Read the target repo's own `AGENTS.md` or `CLAUDE.md` before you choose:
 
 End a turn with `moto report done|question|blocked "<one line>"` when the task is finished, needs an answer only the user has, or is blocked. Put the PR URL in a `done` line. The report goes to whoever started you: the driver, or the worker that spawned you.
 
-While the user typed in your pane in the last 30 minutes (a setting), you are with the user, and the driver leaves you alone. When the user first prompts you, moto settles your open `question` or `blocked` report, because the user answers in the pane. Your later `question` and `blocked` reports reach only the sidebar, never the driver. A `done` report reaches the driver without the flag. Once 30 minutes pass with no new prompt from the user, the driver takes you back. It hears from moto only if you need action: your last report is a `question` or `blocked`, your last turn ended without a report, or you wait at an approval or question prompt.
+While the user typed in your pane in the last 30 minutes (a setting), you are with the user. The driver leaves you alone and moto types nothing into your pane: no handoff, no carry on, no `/compact`. The window never makes you stop.
+
+When you need an answer only the user has, ask the user in the pane and also run `moto report question "<one line>"`, so the sidebar shows it. Do the same for `blocked`. moto settles the report on the user's next prompt in the pane, and a report you make after that prompt stays open until the one after it. While you are with the user, `question` and `blocked` reports reach only the sidebar, never the driver. A `done` report reaches the driver without the flag. Once 30 minutes pass with no new prompt from the user, the driver takes you back. It hears from moto only if you need action: your last report is an unsettled `question` or `blocked`, your last turn ended without a report, or you wait at an approval or question prompt.
 
 Add `--to-driver` whenever the report asks the driver to act, such as creating a ticket or starting a worker, and whenever the user asks you to pass something on. With it, the report reaches the driver at once, even while you are with the user or another worker started you.
 
+### Takeover
+
+Any message from the user in your pane, one with no `[driver]` or parent tag, pauses the flow your brief names. Follow the user until the user names a flow again, then restart that flow from where the work stands. In your first reply after the takeover, say so in one line, such as: Flow paused. Name the flow to resume.
+
 ### Phase boundaries
 
-A phase boundary is where one kind of work ends and the next starts: grilling to implementation, implementation to shipping a PR, shipping to babysitting it. At a boundary, first write down what the next phase needs, such as the ticket or the PR description. Then run `moto report phase "<next phase>"` and end your turn.
+A phase boundary is where one kind of work ends and the next starts: grilling to implementation, implementation to shipping a PR, shipping to babysitting it. At a boundary, first write down what the next phase needs, such as the ticket or the PR description. Then run `moto report phase "<next phase>"` and do what its reply says.
 
-The watch then reads how much context your session holds. Over the limit, it hands you off to a fresh session in the same pane, with the next phase as its goal. Under it, a `[driver]` message tells you to carry on in this session. While you are with the user, moto never hands you off: end your turn with one line that names the next phase and asks the user to say go.
+moto reads your context size when you report. Under the handoff limit, or when it cannot read the size, the reply tells you to carry on with the next phase in the same turn. Over the limit, with the user not in your pane, the reply tells you to end your turn, and the watch hands you off to a fresh session with the next phase as its goal. Over the limit, with the user in your pane, moto does not hand you off. The reply tells you to carry on and to tell the user in one line that `/handoff` would start a fresh session. The driver hears of the phase once in every case.
 
 A helper's phase report reaches you as `[helper phase] <next phase>`. Answer with `moto handoff <helper> "<next phase>"` for a fresh session, or `moto tell <helper> "carry on"`.
 

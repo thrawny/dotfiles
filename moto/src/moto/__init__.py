@@ -49,8 +49,10 @@ window has passed and the turn the user started has ended, with the worker's
 latest state: its last report, or a turn that ended without one.
 
 While a worker is with the user, moto watch skips its turn ends and its
-question and blocked reports, which are the user's, and never hands it off on a
-phase report. Its done reaches the driver as if it had passed --to-driver,
+question and blocked reports, which are the user's, and types nothing into its
+pane: no handoff, no carry on, no /compact. The window never makes the worker
+stop. Each new user prompt settles an open question or blocked report that came
+before it, so the sidebar shows no question the user answered. Its done reaches the driver as if it had passed --to-driver,
 because a done is when the driver updates tickets and notes. When the user asks
 the worker to pass something else on, the worker runs moto report --to-driver.
 A worker that another worker started uses the same flag to reach the driver
@@ -93,12 +95,14 @@ tell tags it. While a handoff runs, a marker on the task makes the watch absorb
 the handoff turn and the takeoff turn, since neither needs the driver.
 
 A worker that reaches a phase boundary, such as from grilling to implementing,
-runs moto report phase with the next phase and ends its turn. The watch then
-reads the context size from the worker's transcript. Over handoff_tokens it
-starts moto handoff in the background, and under it tells the worker to carry
-on. The driver gets one line either way, and a handoff that fails leaves it a
-note. A worker the user is talking to is never handed off: its phase report
-reaches the driver as a plain line. A worker that ends a turn
+runs moto report phase with the next phase. moto decides then, from the context
+size in the reporting session's transcript, and the reply says what to do.
+Under handoff_tokens, or with the size unknown, the worker carries on in the
+same turn and the watch types nothing. Over it, the worker ends its turn and the
+watch starts moto handoff in the background. When the user is typing to the
+worker, moto does not hand it off: the worker carries on and tells the user that
+/handoff would start a fresh session. The driver gets one line either way, and a
+handoff that fails leaves it a note. A worker that ends a turn
 without a report over compact_tokens gets /compact, at most once per
 COMPACT_GROWTH tokens of growth. Both limits live in MOTO_HOME/settings.toml.
 A phase report from a worker another worker started goes to that worker.

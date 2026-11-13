@@ -68,10 +68,11 @@ def check(
     blocked reports go to that worker through outbox, which the caller sends
     after the update; to_parent decides when. Without an outbox they wait.
 
-    A phase report waits for the worker's turn to end, then phase_step decides
-    whether the worker hands off or carries on. A turn end without a report may
-    earn /compact, which compact_line decides. Both add to steps, which the
-    caller runs after the update. Without steps, phase reports wait.
+    A phase report was decided when the worker made it: cmd_report told the
+    worker to carry on in its turn, or to end it for a handoff. Only a handoff
+    waits for the turn to end, and then phase_step adds it to steps. A turn end
+    without a report may earn /compact, which compact_line decides. Both add to
+    steps, which the caller runs after the update. Without steps, handoffs wait.
     """
     lines: list[str] = []
     for name, task in sorted(tasks.items()):
@@ -93,9 +94,10 @@ def check(
         lines += news
         if talking:
             lines += passed_on(name, task)
+            settle_answered(name, task, now)
             continue
         unseen = unseen_reports(task)
-        if unseen and unseen[-1]["kind"] == "phase":
+        if unseen and unseen[-1].get("action") == "handoff":
             if steps is None or status in BUSY:
                 unseen = unseen[:-1]  # the handoff needs the turn to end
         fresh = bool(unseen)
@@ -116,8 +118,8 @@ def check(
             closed = " (pane closed)" if task.get("closed_at") else ""
             *earlier, last = unseen
             lines += [f"{name} {r['kind']}: {r['text']}{closed}" for r in earlier]
-            if last["kind"] == "phase" and steps is not None and status != "gone":
-                line = phase_step(name, task, agent, last, now, steps)
+            if last["kind"] == "phase" and status != "gone":
+                line = phase_step(name, task, last, now, steps)
             else:
                 line = f"{name} {last['kind']}: {last['text']}{closed}"
         elif changed and status == "blocked":
@@ -148,9 +150,10 @@ def user_talk(
 
     The worker is with the user while the user's last prompt in its pane, which
     user_prompt_at finds, is within the user window. When that starts, the
-    driver hears the reports it has not seen, since passed_on skips them, and
-    an open question or blocked report is settled, as moto settle would, since
-    the user answers in the pane. Once the window passes and the turn the user
+    driver hears the reports it has not seen, since passed_on skips them. The
+    window keeps the driver hands-off and moto from typing into the pane, and
+    nothing more: it never makes the worker stop. settle_answered reads the
+    prompt's time from with_user. Once the window passes and the turn the user
     started has ended, the worker is the driver's again. The driver hears once
     with the worker's latest state, and only when that state needs action
     (back_to_driver decides). A wrap or snooze report ends the window early, and the normal path
@@ -170,10 +173,6 @@ def user_talk(
             return [], True
         lines = [f"{name} {r['kind']}: {r['text']}" for r in new_reports(task)]
         record("with_user", name, at=at)
-        report: dict[str, Any] | None = task.get("report")
-        if report and report["kind"] in ("question", "blocked"):
-            settle_report(task, USER_ANSWERS, now)
-            record("settle", name, text=USER_ANSWERS)
         return lines, True
     if since is None:
         return [], False
@@ -186,6 +185,27 @@ def user_talk(
     record("back_to_driver", name, at=since)
     line = back_to_driver(name, task, agent, status, since, now)
     return [line] if line else [], False
+
+
+def settle_answered(name: str, task: dict[str, Any], now: float) -> None:
+    """Settle an open question or blocked report that the user's last prompt came
+    after, as moto settle would, since the user answers in the pane.
+
+    This runs on every pass while the user is with the worker, after passed_on
+    has taken the reports the driver hears of, so the sidebar never shows a
+    question the user already answered. A report made after the prompt stays
+    open until the user's next one.
+    """
+    at: float | None = task.get("with_user")
+    report: dict[str, Any] | None = task.get("report")
+    if (
+        at is not None
+        and report
+        and report["kind"] in ("question", "blocked")
+        and report["at"] < at
+    ):
+        settle_report(task, USER_ANSWERS, now)
+        record("settle", name, text=USER_ANSWERS)
 
 
 def back_to_driver(
@@ -304,8 +324,8 @@ def passed_on(name: str, task: dict[str, Any]) -> list[str]:
 
     The user asked the worker to send the first, or it is a done, which
     cmd_report marks to_driver while the worker is with the user. Both are the
-    driver's news. A phase report is never handed off then, but the driver
-    hears of it. The other reports are the user's, so they pass unseen.
+    driver's news. The driver hears of a phase report too, which moto does not
+    act on while the user is typing to the worker. The other reports are the user's, so they pass unseen.
     """
     lines: list[str] = []
     for report in new_reports(task):
@@ -314,9 +334,7 @@ def passed_on(name: str, task: dict[str, Any]) -> list[str]:
                 f"{name} {report['kind']} (with the user, passed on): {report['text']}"
             )
         elif report["kind"] == "phase":
-            lines.append(
-                f"{name} phase (with the user, not handed off): {report['text']}"
-            )
+            lines.append(f"{name} phase (with the user): {report['text']}")
     return lines
 
 
@@ -397,41 +415,28 @@ def kilo(tokens: int) -> str:
 def phase_step(
     name: str,
     task: dict[str, Any],
-    agent: dict[str, Any] | None,
     report: dict[str, Any],
     now: float,
-    steps: list[Step],
+    steps: list[Step] | None,
 ) -> str:
-    """Hand a worker whose turn ended on a phase report off, or tell it to carry on.
+    """The driver's line for a phase report, and for one decided to hand off
+    whose turn has ended, the handoff step.
 
-    A worker over the handoff limit starts the next phase in a fresh session,
-    and one under it carries on. The driver gets the line either way. When the
-    context size is unknown, the watch does neither and the line leaves it to
-    the driver. A worker the user is talking to never gets here.
+    cmd_report decided the report's action from the worker's context size. A
+    worker that carries on already did, in its own turn, so the watch types
+    nothing. One over the limit was told to end its turn, and now it has, so the
+    handoff starts. The driver hears of the phase once either way.
     """
     phase = report["text"]
     head = f"{name} phase: {phase}"
-    tokens = context_tokens(task, agent)
-    if tokens is None:
-        why = "no transcript"
-        record("phase", name, phase=phase, action="driver", reason=why)
-        return f"{head} (not handed off: {why})"
-    limit = settings()["handoff_tokens"]
-    if tokens > limit:
-        record("phase", name, phase=phase, action="handoff", tokens=tokens)
-        # Absorbs the /handoff turn until moto handoff sets its own marker.
-        task["handoff"] = {"at": now, "old": task.get("session")}
-        steps.append(Step(name, "handoff", phase))
-        return f"{head}; handing it off to a fresh session at {kilo(tokens)} tokens"
-    text = (
-        f"Carry on with {phase} in this session. Its context holds"
-        + f" {kilo(tokens)} tokens, under the {kilo(limit)} that start a fresh one."
-    )
-    record("phase", name, phase=phase, action="carry on", tokens=tokens)
-    record("tell", name, text=text, **{"from": "watch"})
-    task["told"] = now
-    steps.append(Step(name, "tell", text))
-    return f"{head}; told it to carry on at {kilo(tokens)} tokens"
+    tokens = report.get("tokens")
+    size = f" at {kilo(tokens)} tokens" if tokens is not None else ""
+    if report.get("action") != "handoff" or steps is None:
+        return f"{head} (carrying on in the same session{size})"
+    # Absorbs the /handoff turn until moto handoff sets its own marker.
+    task["handoff"] = {"at": now, "old": task.get("session")}
+    steps.append(Step(name, "handoff", phase))
+    return f"{head}; handing it off to a fresh session{size}"
 
 
 def compact_line(

@@ -30,7 +30,7 @@ from moto.common import (
     age,
 )
 from moto.driverstate import driver_path, read_driver, wake_driver, write_driver
-from moto.sessions import last_turn
+from moto.sessions import context_tokens, last_turn, settings
 from moto.store import (
     find_task,
     message_sender,
@@ -79,6 +79,12 @@ def cmd_report(args: argparse.Namespace) -> int:
         task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
         if passes_on:
             task["report"]["to_driver"] = True
+        # A child's phase report is its parent's to answer, so only the rest
+        # get a decision here.
+        phase = None
+        if args.kind == "phase" and not task.get("parent"):
+            phase = decide_phase(task, talking)
+            task["report"].update(phase)
         # report keeps the last one for moto list. The watch reads reports, so
         # several reports between two watches all reach the driver.
         task["reports"] = [*task.get("reports", []), task["report"]][-REPORTS_KEPT:]
@@ -108,13 +114,8 @@ def cmd_report(args: argparse.Namespace) -> int:
             f"Recorded. {parent} started you, not the driver, so moto delivers it to"
             + f" {parent}'s pane once its turn ends. {PASS_ON_RULE}"
         )
-    elif talking and args.kind == "phase":
-        print(
-            "The user is talking to you in this pane, so moto does not hand you off."
-            + " The driver hears of the phase. End your turn with one line that"
-            + " names the next phase and asks the user to say go, such as: Phase"
-            + " done. Say go to start the tono loop on PR #138."
-        )
+    elif phase:
+        print(phase_reply(text, phase))
     elif talking and passes_on:
         print(
             f"The driver got your {args.kind}. The user is talking to you, so carry"
@@ -130,14 +131,57 @@ def cmd_report(args: argparse.Namespace) -> int:
             + " prompt from the user. Ask the user directly in this pane."
             + f" {PASS_ON_RULE}"
         )
-    elif args.kind == "phase":
-        print(
-            "Reported the phase. End your turn now. Once it ends, the watch hands"
-            + " you off to a fresh session or tells you to carry on."
-        )
     else:
         print(f"Reported {args.kind} to the driver.")
     return 0
+
+
+def decide_phase(task: dict[str, Any], talking: bool) -> dict[str, Any]:
+    """What a phase report does, from the context size of the reporting session.
+
+    The worker carries on in its own turn when the context is under the handoff
+    limit or its size is unknown, and when the user is typing to it, because moto
+    never types into that pane. Otherwise it ends its turn and the watch hands it
+    off. The decision rides on the report, so the watch acts on what the worker
+    was told.
+    """
+    tokens = context_tokens(task, None)
+    limit = settings()["handoff_tokens"]
+    if tokens is None or tokens <= limit:
+        action = "carry on"
+    elif talking:
+        action = "stay"
+    else:
+        action = "handoff"
+    record("phase", task["agent"], action=action, tokens=tokens, limit=limit)
+    return {"action": action, "tokens": tokens, "limit": limit}
+
+
+def phase_reply(phase: str, decision: dict[str, Any]) -> str:
+    """What moto tells the worker after a phase report."""
+    tokens, limit = decision["tokens"], decision["limit"]
+    head = "Phase recorded."
+    if tokens is None:
+        return (
+            f"{head} Moto cannot read your context size, so it does not hand you"
+            + f" off. Carry on with {phase} in this turn."
+        )
+    held = f"{head} Your context holds {tokens:,} tokens"
+    if decision["action"] == "carry on":
+        return (
+            f"{held}, under the {limit:,} that start a fresh session. Carry on"
+            + f" with {phase} in this turn."
+        )
+    if decision["action"] == "handoff":
+        return (
+            f"{held}, over {limit:,}. End your turn now: the watch hands you off"
+            + f" to a fresh session for {phase}."
+        )
+    return (
+        f"{held}, over {limit:,}. The user is in this pane, so moto does not hand"
+        + f" you off. Carry on with {phase}, and tell the user in one line that"
+        + " /handoff would start a fresh session."
+    )
 
 
 def direct_host(

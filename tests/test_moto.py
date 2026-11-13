@@ -1952,6 +1952,24 @@ def test_the_first_user_prompt_settles_an_open_question_or_blocked_report(
     assert moto.check(tasks, live("working", 1), 200) == []
 
 
+def test_every_user_prompt_settles_the_question_before_it(moto: ModuleType):
+    # The window began with the prompt at 100, and the worker asked at 150.
+    report = {"kind": "question", "text": "Which base?", "at": 150.0}
+    tasks = {"abc-1": task(report=report, seen={"report_at": 150.0}, with_user=100.0)}
+    user_typed(moto, 100.0)
+    assert moto.check(tasks, live("working", 1), 160) == []
+    assert tasks["abc-1"]["report"]["kind"] == "question"
+    # The user answers in the pane: the next prompt settles it.
+    user_typed(moto, 200.0)
+    assert moto.check(tasks, live("working", 1), 210) == []
+    assert tasks["abc-1"]["report"]["settled"] is True
+    # A question asked after the latest prompt stays open until the next one.
+    later = {"kind": "blocked", "text": "No access", "at": 250.0}
+    tasks["abc-1"]["report"] = later
+    assert moto.check(tasks, live("working", 1), 260) == []
+    assert tasks["abc-1"]["report"] == later
+
+
 def test_the_first_user_prompt_leaves_other_reports_alone(moto: ModuleType):
     for report in (None, {"kind": "phase", "text": "Ship it", "at": 10.0}):
         tasks = {
@@ -3113,8 +3131,15 @@ def context_holds(moto: ModuleType, tokens: int | None) -> None:
     setattr(moto, "context_tokens", context_tokens)
 
 
-def phase_task(**fields: Any) -> dict[str, Any]:
-    report = {"kind": "phase", "text": "implementation", "at": 100.0}
+def phase_task(action: str = "handoff", **fields: Any) -> dict[str, Any]:
+    """A task whose phase report cmd_report decided on at 150k tokens."""
+    report = {
+        "kind": "phase",
+        "text": "implementation",
+        "at": 100.0,
+        "action": action,
+        "tokens": 150_000,
+    }
     return task(session="s1", told=50.0, report=report, **fields)
 
 
@@ -3123,7 +3148,6 @@ def test_phase_report_over_the_limit_hands_off_once_the_turn_ends(
 ):
     tasks = {"abc-1": phase_task()}
     turn_in(moto, "t1", "[driver] grill CON-1")
-    context_holds(moto, 150_000)
     steps: list[Any] = []
     settled = 100 + moto.REPORT_SETTLE_SECONDS
     assert moto.check(tasks, live("working", 1), settled, [], steps) == []
@@ -3139,31 +3163,87 @@ def test_phase_report_over_the_limit_hands_off_once_the_turn_ends(
     assert len(steps) == 1
 
 
-def test_phase_report_under_the_limit_tells_the_worker_to_carry_on(
-    moto: ModuleType, phase_home: Path
+@pytest.mark.parametrize("action", ["carry on", "stay"])
+def test_phase_report_that_carries_on_tells_the_driver_and_types_nothing(
+    moto: ModuleType, phase_home: Path, action: str
 ):
-    tasks = {"abc-1": phase_task()}
+    tasks = {"abc-1": phase_task(action)}
     turn_in(moto, "t1", "[driver] grill CON-1")
-    context_holds(moto, 40_000)
     steps: list[Any] = []
-    [line] = moto.check(tasks, live("done", 2), 101, [], steps)
+    # The worker is mid-turn, and the driver still hears at once.
+    settled = 100 + moto.REPORT_SETTLE_SECONDS
+    [line] = moto.check(tasks, live("working", 1), settled, [], steps)
     assert line.startswith("abc-1 phase: implementation")
-    assert [(s.agent, s.action) for s in steps] == [("abc-1", "tell")]
-    assert tasks["abc-1"]["told"] == 101
+    # The turn end after the phase report is not news, and nothing is typed.
+    assert moto.check(tasks, live("done", 2), settled + 1, [], steps) == []
+    assert steps == []
+    assert tasks["abc-1"]["told"] == 50.0
     assert "handoff" not in tasks["abc-1"]
 
 
-def test_handoff_limit_comes_from_the_settings(moto: ModuleType, phase_home: Path):
+def phase_report(
+    moto: ModuleType, tokens: int | None, talking: bool, **fields: Any
+) -> tuple[str, dict[str, Any]]:
+    """What moto tells a worker that reports a phase, and the stored report."""
+    user_typed(moto, moto.time.time() if talking else None)
+    context_holds(moto, tokens)
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(session="s1", **fields)
+    args = argparse.Namespace(
+        kind="phase", text=["review"], agent=None, to_driver=False
+    )
+    out = io.StringIO()
+    with (
+        patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}),
+        patch.object(sys, "stdout", out),
+    ):
+        moto.cmd_report(args)
+    return out.getvalue(), moto.read_tasks()["abc-1"]["report"]
+
+
+@pytest.mark.parametrize(
+    ("tokens", "talking", "action"),
+    [
+        (40_000, False, "carry on"),
+        (100_000, False, "carry on"),
+        (None, False, "carry on"),
+        (None, True, "carry on"),
+        (40_000, True, "carry on"),
+        (150_000, False, "handoff"),
+        (150_000, True, "stay"),
+    ],
+)
+def test_phase_report_is_decided_from_the_context_size_when_it_is_made(
+    moto: ModuleType,
+    phase_home: Path,
+    tokens: int | None,
+    talking: bool,
+    action: str,
+):
+    out, report = phase_report(moto, tokens, talking)
+    assert report["action"] == action
+    assert report["tokens"] == tokens
+    # Only a worker that must end its turn is told to; none is told to say go.
+    assert ("End your turn now" in out) == (action == "handoff")
+    assert ("Carry on with review" in out) == (action != "handoff")
+    assert "say go" not in out.lower()
+    assert ("/handoff" in out) == (action == "stay")
+
+
+def test_phase_report_limit_comes_from_the_settings(moto: ModuleType, phase_home: Path):
     (phase_home / "settings.toml").write_text("handoff_tokens = 30000\n")
-    tasks = {"abc-1": phase_task()}
-    turn_in(moto, "t1", "[driver] grill CON-1")
-    context_holds(moto, 40_000)
-    steps: list[Any] = []
-    moto.check(tasks, live("done", 2), 101, [], steps)
-    assert [s.action for s in steps] == ["handoff"]
+    _, report = phase_report(moto, 40_000, False)
+    assert report["action"] == "handoff"
     (phase_home / "settings.toml").write_text("handoff = 30000\n")
     with pytest.raises(moto.MotoError, match="handoff"):
         moto.settings()
+
+
+def test_a_child_s_phase_report_is_left_for_its_parent(
+    moto: ModuleType, phase_home: Path
+):
+    _, report = phase_report(moto, 150_000, False, parent="abc-0")
+    assert "action" not in report
 
 
 def test_phase_report_of_a_worker_with_the_user_is_never_handed_off(
@@ -3171,10 +3251,9 @@ def test_phase_report_of_a_worker_with_the_user_is_never_handed_off(
 ):
     tasks = {"abc-1": phase_task(with_user=90.0)}
     user_typed(moto, 90.0)
-    context_holds(moto, 150_000)
     steps: list[Any] = []
     assert moto.check(tasks, live("done", 2), 101, [], steps) == [
-        "abc-1 phase (with the user, not handed off): implementation"
+        "abc-1 phase (with the user): implementation"
     ]
     assert moto.check(tasks, live("done", 2), 102, [], steps) == []
     # After the window, the driver already heard the phase, so the note stays
@@ -3253,7 +3332,6 @@ def test_watch_runs_the_phase_handoff_outside_the_lock(
     with moto.tasks_for_update() as tasks:
         tasks["abc-1"] = phase_task()
     turn_in(moto, "t1", "[driver] grill CON-1")
-    context_holds(moto, 150_000)
     with (
         patch.object(moto, "live_agents", return_value=live("idle", 2)),
         patch.object(moto, "herdr") as prompt,
@@ -3299,23 +3377,6 @@ def test_checkout_workspace_skips_background_and_prefers_the_folder_name(
         assert moto.checkout_workspace(checkout) == "wX"
         panes["panes"].pop()
         assert moto.checkout_workspace(checkout) is None
-
-
-def test_a_phase_report_while_with_the_user_asks_for_a_go(
-    moto: ModuleType, capsys: pytest.CaptureFixture[str]
-):
-    user_typed(moto, moto.time.time())
-    with moto.tasks_for_update() as tasks:
-        tasks["abc-1"] = task()
-    args = argparse.Namespace(
-        kind="phase", text=["review"], agent=None, to_driver=False
-    )
-    with patch.dict("os.environ", {"HERDR_PANE_ID": "w1:p1"}):
-        moto.cmd_report(args)
-    out = capsys.readouterr().out
-    assert "End your turn with one line that names the next phase" in out
-    assert "say go" in out.lower()
-    assert "Carry on" not in out
 
 
 def test_close_refuses_a_worker_with_the_user_until_the_window_passes(
