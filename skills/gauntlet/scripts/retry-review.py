@@ -173,7 +173,8 @@ def classify(code, text):
     if code == 0:
         return "ok"
     text = text.lower()
-    if code in (130, 143) or code < 0:
+    # SIGINT/SIGTERM, as an exit status or a signal. Other signals are crashes.
+    if code in (130, 143, -2, -15):
         return "human-stop"
     if re.search(
         r"401|unauthorized|authenticat|not logged in|invalid.api.key|no credentials",
@@ -265,15 +266,15 @@ def run(
     # Record launch intent durably. An interrupted/unknown attempt is never replayed.
     def record(**data):
         data.setdefault("retry_owner", "gauntlet")
-        data.setdefault("raw", str(directory / f"{engine}.attempt-{attempt}.log"))
-        data.setdefault("answer", str(directory / f"{engine}.attempt-{attempt}.out"))
+        number = data.setdefault("attempt", attempt)
+        data.setdefault("raw", str(directory / f"{engine}.attempt-{number}.log"))
+        data.setdefault("answer", str(directory / f"{engine}.attempt-{number}.out"))
         with events.open("a") as stream:
             stream.write(
                 json.dumps(
                     dict(
                         schemaVersion=1,
                         engine=engine,
-                        attempt=attempt,
                         maxAttempts=3,
                         fingerprint=original,
                         head_sha=head,
@@ -300,8 +301,7 @@ def run(
             # and point at the attempt that produced it.
             record(
                 state=last_kind,
-                raw=str(directory / f"{engine}.attempt-{attempt - 1}.log"),
-                answer=str(directory / f"{engine}.attempt-{attempt - 1}.out"),
+                attempt=attempt - 1,
                 retry_owner="gauntlet",
                 retryable=True,
                 exhausted=True,
@@ -316,23 +316,25 @@ def run(
             record(state="scope-changed", retry_owner="gauntlet")
             return 1
         record(state="running", argv=argv, at=clock())
-        launched = True
         try:
             with raw.open("wb") as stream:
                 result = invoke(argv, stdout=stream, stderr=subprocess.STDOUT)
-            text = raw.read_text(errors="replace")
+        except OSError as error:
+            # The reviewer never started, so there is no provider error to retry.
+            raw.write_text(str(error))
+            kind = "launch-error"
+            text = str(error)
+        else:
+            try:
+                text = raw.read_text(errors="replace")
+            except OSError as error:
+                text = str(error)
             code = result.returncode
             if engine == "claude":
                 code, text = claude_reply(
                     code, text, os.environ.get("GAUNTLET_CLAUDE_REVIEW_MODEL")
                 )
             kind = classify(code, text)
-        except OSError as error:
-            # The reviewer never started, so no provider error to retry.
-            raw.write_text(str(error))
-            launched = False
-            kind = "terminal"
-            text = str(error)
         if fingerprint() != original:
             kind = "scope-changed"
         if kind == "ok" and (
@@ -341,7 +343,7 @@ def run(
             else not text.strip()
         ):
             kind = "empty-result"
-        retryable = launched and kind in RETRYABLE[engine]
+        retryable = kind in RETRYABLE[engine]
         last_kind = kind
         last_reset = reset_at(text) if retryable else None
         wait = delay(attempt, text, clock()) if retryable else 0

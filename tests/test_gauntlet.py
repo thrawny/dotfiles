@@ -234,6 +234,12 @@ def test_retry_outcomes(tmp_path, monkeypatch, codes, diagnostic, expected, atte
     assert len(waits) == attempts - 1
 
 
+@pytest.fixture(autouse=True)
+def _no_ambient_scope(monkeypatch):
+    # A gauntlet session exports its own scope fingerprint; run() prefers it.
+    monkeypatch.delenv("GAUNTLET_SCOPE_FINGERPRINT", raising=False)
+
+
 def test_claude_auth_retries_exhaust_to_blocked_auth(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(retry_review, "fingerprint", lambda: "scope")
     waits = []
@@ -296,8 +302,36 @@ def test_retry_budget_expiry_keeps_last_failure_class(tmp_path, monkeypatch, cap
     terminal = events[-1]
     assert terminal["state"] == "auth"
     assert terminal["exhausted"] is True
+    assert terminal["attempt"] == 1
     assert Path(terminal["raw"]).exists()
     assert "blocked (auth)" in capsys.readouterr().err
+
+
+def test_crashed_claude_reviewer_is_retried(tmp_path, monkeypatch):
+    monkeypatch.setattr(retry_review, "fingerprint", lambda: "scope")
+    codes = iter([-11, 0])
+
+    def invoke(command, stdout, stderr):
+        code = next(codes)
+        stdout.write(
+            b"Segmentation fault"
+            if code
+            else _claude_json("No findings", True).encode()
+        )
+        return subprocess.CompletedProcess(command, code)
+
+    assert (
+        retry_review.run(
+            tmp_path,
+            "claude",
+            str(tmp_path / "out"),
+            ["reviewer"],
+            invoke=invoke,
+            sleep=lambda _: None,
+            clock=lambda: 0,
+        )
+        == 0
+    )
 
 
 @pytest.mark.parametrize("engine", ["codex", "claude"])
