@@ -239,13 +239,27 @@ def pull_codex_sessions(
 
 
 def remote_dir_exists(container: str, remote_dir: str) -> bool:
-    result = subprocess.run(
-        ["incus", "exec", container, "--", "test", "-d", remote_dir],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-        check=False,
+    # Answer on stdout so a failed exec, such as a stopped container, exits
+    # nonzero instead of reading as a missing directory.
+    result = run(
+        [
+            "incus",
+            "exec",
+            container,
+            "--",
+            "sh",
+            "-c",
+            'if test -d "$1"; then echo yes; else echo no; fi',
+            "sh",
+            remote_dir,
+        ],
+        stdout=subprocess.PIPE,
+        text=True,
     )
-    return result.returncode == 0
+    answer = result.stdout.strip()
+    if answer not in {"yes", "no"}:
+        raise SystemExit(f"Unexpected answer checking {container}:{remote_dir}")
+    return answer == "yes"
 
 
 def pull_file(container: str, remote_file: str, local_file: pathlib.Path) -> None:
