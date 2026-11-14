@@ -184,6 +184,11 @@ def gateway_routes_summary(data, models):
                 "runtime": item["agentRuntime"]["id"],
                 "available": item.get("available") is True,
                 "has_unavailable_reason": bool(item.get("unavailableReason")),
+                # A short status code such as "auth-failed"; never free text.
+                "unavailable_reason": reason
+                if isinstance(reason := item.get("unavailableReason"), str)
+                and re.fullmatch(r"[a-z0-9-]{1,40}", reason)
+                else None,
             }
         )
     return {
@@ -232,7 +237,13 @@ def collect(runtime):
             )
             entry = {"exit_code": result.returncode}
             entry.update(summarize(result.stdout))
-            entry["outcome"] = "passed" if result.returncode == 0 else "findings"
+            # A check can exit 0 yet report something unusable, such as an
+            # unavailable prepared route; that is a finding, not a pass.
+            entry["outcome"] = (
+                "passed"
+                if result.returncode == 0 and entry.get("ready") is not False
+                else "findings"
+            )
             checks[name] = entry
         except (
             OSError,
