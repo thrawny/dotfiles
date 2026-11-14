@@ -191,6 +191,8 @@ in
           ];
           EnvironmentVariables = {
             HOME = home;
+            # Shells get this from Home Manager's session variables; launchd does not.
+            inherit (config.home.sessionVariables) CLAUDE_CONFIG_DIR;
             PATH = lib.concatStringsSep ":" [
               "${config.home.profileDirectory}/bin"
               "${home}/.local/bin"
