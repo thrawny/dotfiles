@@ -25,18 +25,23 @@ if [[ ! -d "$wt_dir" ]]; then
   fi
 fi
 
+# Seed local files git does not carry. An existing worktree keeps its own
+# copies: it may have edited them, and Claude records permissions granted there
+# in settings.local.json. moto's copy_local_files follows the same rule.
+copy_local_file() {
+  local dest="${wt_dir}/$1"
+  [[ -e "$dest" ]] && return 0
+  mkdir -p "$(dirname "$dest")"
+  cp "${root}/$1" "$dest"
+}
+
 while IFS= read -r -d '' src; do
-  f="${src#"${root}/"}"
-  mkdir -p "$(dirname "${wt_dir}/${f}")"
-  cp "${src}" "${wt_dir}/${f}"
+  copy_local_file "${src#"${root}/"}"
 done < <(fd -H -I -0 -t f -E .git '^\.(env|env\..*|envrc|envrc\..*|secrets.*)$' "$root")
 
-for f in .claude/settings.local.json; do
-  if [[ -f "${root}/${f}" ]]; then
-    mkdir -p "$(dirname "${wt_dir}/${f}")"
-    cp "${root}/${f}" "${wt_dir}/${f}"
-  fi
-done
+if [[ -f "${root}/.claude/settings.local.json" ]]; then
+  copy_local_file .claude/settings.local.json
+fi
 
 if [[ -n "${NIRI_SOCKET:-}" ]] && command -v niri >/dev/null 2>&1; then
   niri-project --terminals 1 "$wt_dir"
