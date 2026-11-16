@@ -5,14 +5,22 @@
 
 PIDFILE="${XDG_RUNTIME_DIR}/caffeine.pid"
 
-is_active() {
-  [ -f "$PIDFILE" ] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null
+# Print the inhibitor's PID if it is still running. The PID file outlives an
+# inhibitor that exits on its own, and its PID can be reused by an unrelated
+# process, so check the process is still our systemd-inhibit before trusting
+# or signalling it.
+inhibitor_pid() {
+  local pid
+  pid=$(cat "$PIDFILE" 2>/dev/null) || return 1
+  [[ "$pid" =~ ^[0-9]+$ ]] || return 1
+  tr '\0' '\n' 2>/dev/null <"/proc/$pid/cmdline" | grep -qx -- '--who=caffeine' || return 1
+  echo "$pid"
 }
 
 case "${1:-status}" in
   toggle)
-    if is_active; then
-      kill "$(cat "$PIDFILE")"
+    if pid=$(inhibitor_pid); then
+      kill "$pid"
       rm -f "$PIDFILE"
     else
       systemd-inhibit --what=idle --who=caffeine --why="User requested" sleep infinity &
@@ -21,7 +29,7 @@ case "${1:-status}" in
     pkill -RTMIN+8 waybar
     ;;
   status)
-    if is_active; then
+    if inhibitor_pid >/dev/null; then
       echo '{"text":"󰅶","tooltip":"Caffeine: ON","class":"activated"}'
     else
       echo '{"text":"󰛊","tooltip":"Caffeine: OFF","class":"deactivated"}'
