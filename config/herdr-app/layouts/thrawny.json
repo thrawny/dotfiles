@@ -135,5 +135,6 @@
     12,
     16
   ],
-  "theme": "thrawny"
+  "theme": "thrawny",
+  "font_weight": 400
 }
