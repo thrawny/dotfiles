@@ -118,13 +118,13 @@ pane once your turn ends, tagged with its name and the kind, as in \
 `[helper done]`; answer a question with `moto tell`."""
 # Taught in every brief, next to the rule that an untagged message is the user's.
 TAKEOVER_RULE = """\
-Any message from the user in your pane pauses the flow your brief names, and \
-you follow the user. When the user names a flow again, restart that flow from \
-where the work stands. In your first reply after the user takes over, add one \
-line, such as: Flow paused. Name the flow to resume. Say it only while a flow \
-your brief names still runs. A flow no longer runs once it reached its stop, \
-such as a done report, and a brief that names no flow, such as research, has \
-none. Then answer the user and never mention a flow or a pause."""
+If your brief names no flow, or its flow reached its stop, such as a done \
+report, there is nothing to pause. Then answer the user, and never mention a \
+flow or a pause. While the flow your brief names still runs, any message from \
+the user in your pane pauses it, and you follow the user. In your first reply \
+after the user takes over, add one line: Flow paused. Name the flow to \
+resume. When the user names a flow again, restart that flow from where the \
+work stands."""
 # Taught wherever a worker learns the driver is not watching it.
 PASS_ON_RULE = """\
 When the user asks you to pass something to the driver, run \
