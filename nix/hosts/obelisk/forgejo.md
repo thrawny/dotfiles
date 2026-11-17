@@ -6,6 +6,21 @@ Configuration lives in [the Forgejo module](../../modules/forgejo.nix) and
 [the Tailscale Serve module](../../modules/tailscale-serve.nix).
 See [runner operations](forgejo-runner.md) and [backup recovery](backup.md).
 
+## Creating a repo
+
+Agent tokens lack the `write:user` scope, so `fj repo create` and
+`POST /api/v1/user/repos` return 403. Create a user repo by pushing to a remote
+that does not exist yet:
+
+```sh
+git remote add origin https://forgejo.tailf85bba.ts.net/thrawny/<name>.git
+git push -u origin main
+```
+
+Forgejo creates the repo as private. A push to a mistyped name also succeeds
+and creates a stray repo, so check the remote URL first. Push-to-create is off
+for organisations.
+
 ## One device times out while Forgejo is healthy
 
 On 2026-10-27, Safari on an iPhone timed out at the Forgejo URL despite an
