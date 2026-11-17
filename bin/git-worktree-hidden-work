@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# Usage: git-worktree-hidden-work <worktree>
+#
+# Names the local work in a worktree that `git worktree remove` deletes without
+# asking. Git refuses to remove a worktree with untracked files or modified
+# tracked files, but it deletes ignored files, such as a .env, and tracked edits
+# hidden by the assume-unchanged or skip-worktree index flags.
+#
+# Prints one line naming that work, or nothing when there is none. Exits 2 when
+# the worktree cannot be inspected; the caller must then keep it.
+set -euo pipefail
+
+if [[ $# -ne 1 ]]; then
+  echo 'usage: git-worktree-hidden-work <worktree>' >&2
+  exit 2
+fi
+worktree=$1
+
+if ! index=$(git -C "$worktree" ls-files -v); then
+  echo "git-worktree-hidden-work: could not read the index flags of $worktree" >&2
+  exit 2
+fi
+# Lowercase tags mark assume-unchanged entries, S marks skip-worktree.
+if grep -qE '^[a-zS] ' <<<"$index"; then
+  echo 'assume-unchanged or skip-worktree files'
+  exit 0
+fi
+
+if ! ignored=$(git -C "$worktree" ls-files --others --ignored --exclude-standard --directory); then
+  echo "git-worktree-hidden-work: could not list the ignored files of $worktree" >&2
+  exit 2
+fi
+if [[ -n $ignored ]]; then
+  echo 'ignored files'
+fi

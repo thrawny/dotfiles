@@ -5,6 +5,8 @@
 # Adapted from the original by Yorick Sijsling
 # Further adaptions by Jonas Lergell
 
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
+
 if ! main=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@') || [[ -z "$main" ]]; then
   git remote set-head origin --auto > /dev/null 2>&1
   main=$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')
@@ -65,25 +67,13 @@ while IFS= read -r worktree_path; do
   fi
 
   if [[ "$should_remove" == "true" ]]; then
-    # Index flags can hide tracked edits from Git's removal guard.
-    if ! indexed_files=$(git -C "$worktree_path" ls-files -v); then
-      echo "Could not inspect index flags; keeping worktree: $worktree_path" >&2
+    if ! hidden_work=$("$script_dir/git-worktree-hidden-work" "$worktree_path"); then
+      echo "Could not inspect worktree; keeping it: $worktree_path" >&2
       cleanup_failed=true
       continue
     fi
-    if printf '%s\n' "$indexed_files" | grep -qE '^[a-zS] '; then
-      echo "Keeping worktree with assume-unchanged or skip-worktree files: $worktree_path" >&2
-      cleanup_failed=true
-      continue
-    fi
-    # Git's removal guard allows ignored files, which may still contain local work.
-    if ! ignored_files=$(git -C "$worktree_path" ls-files --others --ignored --exclude-standard --directory); then
-      echo "Could not inspect ignored files; keeping worktree: $worktree_path" >&2
-      cleanup_failed=true
-      continue
-    fi
-    if [[ -n "$ignored_files" ]]; then
-      echo "Keeping worktree with ignored files: $worktree_path" >&2
+    if [[ -n "$hidden_work" ]]; then
+      echo "Keeping worktree with $hidden_work: $worktree_path" >&2
       cleanup_failed=true
       continue
     fi

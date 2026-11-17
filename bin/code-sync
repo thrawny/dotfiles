@@ -22,9 +22,10 @@
 # updated default branch and the merged branch is deleted, as long as the tree
 # is clean and the branch holds nothing the PR did not. Linked worktrees get the
 # same treatment: one whose branch's PR has merged is removed along with the
-# branch, under the same conditions. Nothing here rewrites history or touches a
-# dirty tree. A branch moto has snoozed always stays, merged or not: its task
-# comes back on it.
+# branch, under the same conditions, unless it holds ignored files or tracked
+# edits hidden by index flags, which `git worktree remove` deletes. Nothing
+# here rewrites history or touches a dirty tree. A branch moto has snoozed
+# always stays, merged or not: its task comes back on it.
 #
 # With --park, a main checkout left idle on some other branch switches back to
 # the freshly updated default branch. The branch stays as it is, unpushed
@@ -38,6 +39,7 @@
 # list and prints the status table.
 set -euo pipefail
 
+script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 code_dir=${CODE_DIR:-"$HOME/code"}
 # Same precedence gita uses (gita/common.py).
 repos_csv=${GITA_PROJECT_HOME:-${XDG_CONFIG_HOME:-$HOME/.config}}/gita/repos.csv
@@ -59,7 +61,8 @@ A repo on some other branch stays on it: only its local default branch moves.
 If that branch's PR has merged, the repo switches to the default branch and
 deletes the merged one, unless the tree is dirty or the branch has commits the
 PR did not. Linked worktrees on a merged PR's branch are removed, with the
-same conditions, unless Herdr has them open or they live under $CODE_DIR.
+same conditions, unless Herdr has them open, they live under $CODE_DIR, or
+they hold ignored files or tracked edits hidden by index flags.
 Branches of tasks snoozed with `moto snooze` are always kept.
 
 With -p, a checkout that is idle on some other branch switches to its default
@@ -250,7 +253,7 @@ retire_branch() {
 # checkout code-sync tracks as a repo of its own, or part of a multi-service
 # stack grouped in one folder.
 retire_worktrees() {
-  local repo=$1 line wt_path='' wt_branch='' open_paths='' pr number head_oid reason log
+  local repo=$1 line wt_path='' wt_branch='' open_paths='' pr number head_oid reason log hidden_work
   local i git_dirs main_seen=false
   local -a wt_paths=() wt_branches=()
 
@@ -298,6 +301,10 @@ retire_worktrees() {
       reason='Herdr has it open'
     elif snoozed "$repo" "$wt_branch"; then
       reason='moto has it snoozed'
+    elif ! hidden_work=$("$script_dir/git-worktree-hidden-work" "$wt_path" 2>/dev/null); then
+      reason='its files could not be inspected'
+    elif [[ -n $hidden_work ]]; then
+      reason="it has $hidden_work"
     else
       reason=$(keep_reason "$wt_path" "$head_oid")
     fi
@@ -307,7 +314,8 @@ retire_worktrees() {
       continue
     fi
     # No --force: git refuses a worktree with untracked files or a lock, and
-    # either one is a reason to keep it.
+    # either one is a reason to keep it. It deletes ignored files and tracked
+    # edits hidden by index flags, so git-worktree-hidden-work checked above.
     if ! log=$(git -C "$repo" worktree remove "$wt_path" 2>&1); then
       printf 'worktree\tkept\tPR #%s merged, but removing worktree %s failed: %s\n' \
         "$number" "$wt_path" "$(error_line "$log")"
