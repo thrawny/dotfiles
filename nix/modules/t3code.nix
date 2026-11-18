@@ -22,10 +22,10 @@ let
   state = "${home}/.t3code";
   repos = "${home}/repos";
   port = 3773;
-  defaultCodexModel = "gpt-6-astra";
+  defaultCodexModel = "gpt-6.2-astra";
   customCodexModels = [
     defaultCodexModel
-    "gpt-6.1-sol"
+    "gpt-6.2-sol"
   ];
   forgejoHost = "forgejo.${config.dotfiles.tailnetDomain}";
   forgejoUrl = "https://${forgejoHost}";

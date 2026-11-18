@@ -1,6 +1,6 @@
 {
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-6.1-sol",
+  "defaultModel": "gpt-6.2-sol",
   "defaultThinkingLevel": "high",
   "defaultTools": ["+codemode"],
   "subagents": {
@@ -29,8 +29,8 @@
   },
   "shellPath": "/run/current-system/sw/bin/zsh",
   "enabledModels": [
-    "openai-codex/gpt-6.1-sol",
-    "openai-codex/gpt-6-astra"
+    "openai-codex/gpt-6.2-sol",
+    "openai-codex/gpt-6.2-astra"
   ],
   "packages": [
     "npm:pi-subdir-context",

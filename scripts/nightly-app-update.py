@@ -422,7 +422,7 @@ def launch_maintenance(candidate, directory, task_file, manifest):
                     "codex",
                     "exec",
                     "--model",
-                    "gpt-6.1-sol",
+                    "gpt-6.2-sol",
                     "-c",
                     'model_reasoning_effort="high"',
                     "--ephemeral",
