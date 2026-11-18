@@ -548,7 +548,7 @@ start_review_agent() {
   # moto titles are one to three lowercase words; an odd repo name falls back.
   [[ $title =~ ^$word\ $word\ $word$ ]] || title="pr review $number"
   if review_brief "$number" "$repo" |
-    moto spawn --json --repo "$repo" --worktree "$branch" --pane "$pane" \
+    moto spawn --json --user --repo "$repo" --worktree "$branch" --pane "$pane" \
       --title "$title" ${spawn_opts[@]+"${spawn_opts[@]}"} >/dev/null
   then
     return 0
