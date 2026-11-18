@@ -45,9 +45,6 @@ model routing.
 The ChatGPT model list offers Sol 6.2 only to Codex 0.166.0 and newer; 0.164.0
 does not get it. Update the Codex runtime together with the default model. The
 pinned OpenClaw catalog predates Sol 6.2, so Nix declares the model entry.
-Since November 18, 2026 the live scoped config is the generation's own
-`openclaw.json`, with Sol 6.2 and Codex 0.169.0. That Codex is the pinned live
-runtime now; the stopped-service backup from before the switch is on M1.
 
 ## Configuration and state
 
@@ -64,11 +61,15 @@ The private group requires a bot mention. Node pairing remains independent of
 chat routing; the agent still runs on the gateway with the M1 available as a
 command target. Do not copy OAuth credentials into the new agent's store.
 
-The initial shared-chat deployment retains the running Codex runtime instead of
-activating unrelated pending system updates. Its immutable config is derived
-from the generated Nix config with only that runtime path retained. The service
-env file pins `OPENCLAW_CONFIG_PATH` and `OPENCLAW_INCLUDE_ROOTS`; both the gateway
-and administrative wrapper read those overrides. Deployment provenance, the
+The service env file pins `OPENCLAW_CONFIG_PATH` and `OPENCLAW_INCLUDE_ROOTS`;
+both the gateway and administrative wrapper read those overrides, and they mask
+the config of any later generation. The shared-chat deployment first pinned a
+config derived from the generated Nix config with the older Codex runtime path
+retained. On November 18, 2026 the pin moved to the unmodified `openclaw.json`
+of the system generation deployed that day, for Sol 6.2; it carries that
+generation's Codex runtime. Read the pinned path from the env file and the
+runtime from the config it names. The stopped-service backup from before that
+switch is on M1. Deployment provenance, the
 baseline config GC root and recovery state are retained privately on the host.
 When intentionally deploying a complete generation, reconcile those env overrides
 so they do not mask the new generation's config. Do not remove them before the
