@@ -63,26 +63,37 @@ command target. Do not copy OAuth credentials into the new agent's store.
 
 The service env file pins `OPENCLAW_CONFIG_PATH` and `OPENCLAW_INCLUDE_ROOTS`;
 both the gateway and administrative wrapper read those overrides, and they mask
-the config of any later generation. The shared-chat deployment first pinned a
-config derived from the generated Nix config with the older Codex runtime path
-retained. On November 18, 2026 the pin moved to the unmodified `openclaw.json`
-of the system generation deployed that day, for Sol 6.2; it carries that
-generation's Codex runtime. Read the pinned path from the env file and the
-runtime from the config it names. The stopped-service backup from before that
-switch is on M1. Obelisk collects old generations daily, so every pinned config
-needs its own GC root under `/nix/var/nix/gcroots`; that root also keeps the
-Codex runtime the config names. Deployment provenance, the config GC roots and
-recovery state are retained privately on the host. The pinned config already
-contains the shared route and its private include. When intentionally deploying
-a complete generation, reconcile those env overrides so they do not mask the new
-generation's config.
+the config of any later generation. Nightly maintenance rolls out scoped configs
+through this pin, so keep the mechanism. Earlier pins were configs derived from
+the generated Nix config with the older Codex runtime path retained; the last
+one before November 18, 2026 was the nightly candidate config. That day the pin
+moved to the unmodified `openclaw.json` of the system generation deployed then,
+for Sol 6.2, and it carries that generation's Codex runtime. Read the pinned path
+from the env file and the runtime from the config it names. The stopped-service
+backup from before that switch is on M1.
+
+Obelisk collects generations older than a day, and `obelisk-storage` also
+collects under disk pressure, so every pinned config needs its own GC root under
+`/nix/var/nix/gcroots`. A Nix-built config's root also keeps the Codex runtime it
+names. A derived config has no store references, so its root does not: keep a
+separate root for that runtime. Deployment provenance, the config GC roots and
+recovery state are retained privately on the host.
+
+A persistent drop-in,
+`/etc/systemd/system.control/openclaw.service.d/90-nightly-maintenance.conf`,
+also overrides the unit. It pins `ExecStart` to a gateway path and clears
+`ExecStartPre`, so the Forgejo bootstrap does not run on start, and it survives
+deploys. The pinned config already contains the shared route and its private
+include. When intentionally deploying a complete generation, reconcile the env
+overrides and that drop-in so they do not mask the new generation.
 
 - The service reads `OPENCLAW_CONFIG_PATH` directly from the Nix store.
 - `/srv/agents/openclaw/home/.openclaw` contains mutable state and credentials.
 - `/srv/agents/openclaw/workspace` contains the existing agent workspace.
-- `/srv/agents/openclaw/env` supplies the gateway and Telegram tokens, the
-  `OPENCLAW_CONFIG_PATH` and `OPENCLAW_INCLUDE_ROOTS` overrides, and private
-  group and approver identifiers. Discord
+- `/srv/agents/openclaw/env` supplies the gateway and Telegram tokens, other
+  provider and GitHub API keys, the `OPENCLAW_CONFIG_PATH` and
+  `OPENCLAW_INCLUDE_ROOTS` overrides, and private group and approver
+  identifiers. Edit single lines; never regenerate it from this list. Discord
   uses the existing private JSON token file referenced by the Nix config.
 - Credentials are required for configured channels. Startup no longer silently
   disables channels when credentials are missing.
