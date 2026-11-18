@@ -38,7 +38,7 @@ the app's encrypted connection catalog, not in this public repository.
 
 Model defaults and shortcuts live in
 [`config/t3code/preferences.json`](../config/t3code/preferences.json). New threads
-default to **Sol 6.1 / High** unless a project has its own override. Nix activation
+default to **Sol 6.2 / High** unless a project has its own override. Nix activation
 reapplies these preferences; apply them live without a server restart with
 `just sync-t3code-preferences` (Z13), `just sync-t3code-preferences thrawnym1`, or
 `just sync-t3code-preferences obelisk`.
