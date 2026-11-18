@@ -69,16 +69,20 @@ retained. On November 18, 2026 the pin moved to the unmodified `openclaw.json`
 of the system generation deployed that day, for Sol 6.2; it carries that
 generation's Codex runtime. Read the pinned path from the env file and the
 runtime from the config it names. The stopped-service backup from before that
-switch is on M1. Deployment provenance, the
-baseline config GC root and recovery state are retained privately on the host.
-When intentionally deploying a complete generation, reconcile those env overrides
-so they do not mask the new generation's config. Do not remove them before the
-generation includes the shared route and its private include.
+switch is on M1. Obelisk collects old generations daily, so every pinned config
+needs its own GC root under `/nix/var/nix/gcroots`; that root also keeps the
+Codex runtime the config names. Deployment provenance, the config GC roots and
+recovery state are retained privately on the host. The pinned config already
+contains the shared route and its private include. When intentionally deploying
+a complete generation, reconcile those env overrides so they do not mask the new
+generation's config.
 
 - The service reads `OPENCLAW_CONFIG_PATH` directly from the Nix store.
 - `/srv/agents/openclaw/home/.openclaw` contains mutable state and credentials.
 - `/srv/agents/openclaw/workspace` contains the existing agent workspace.
-- `/srv/agents/openclaw/env` supplies the gateway and Telegram tokens. Discord
+- `/srv/agents/openclaw/env` supplies the gateway and Telegram tokens, the
+  `OPENCLAW_CONFIG_PATH` and `OPENCLAW_INCLUDE_ROOTS` overrides, and private
+  group and approver identifiers. Discord
   uses the existing private JSON token file referenced by the Nix config.
 - Credentials are required for configured channels. Startup no longer silently
   disables channels when credentials are missing.

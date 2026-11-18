@@ -72,10 +72,11 @@ The server settings register Astra 6.2 (`gpt-6.2-astra`) and Sol 6.2
 (`gpt-6.2-sol`) with Codex and select Astra 6.2 for text generation. Codex's
 shared configuration also defaults to Astra 6.2.
 
-The upstream T3 Code package remains unpatched. It still prefers Sol for new
-threads, independently of Codex's default. Choose Astra 6.2 as the project default
-in T3 Code's UI when you want new threads to use it. Existing thread selections
-are not changed by deployment.
+New threads default to Sol 6.2, independently of Codex's default. Every T3
+start writes that default from `config/t3code/preferences.json`, so a global
+default changed in the UI does not survive a restart. Choose Astra 6.2 as the
+project default in T3 Code's UI when you want new threads to use it. Existing
+thread selections are not changed by deployment.
 
 ## T3 Code agent files
 
