@@ -38,7 +38,8 @@ Use `--json` only when structured output is useful. The snapshot separates:
 - current, failed, pending, and absent checks;
 - current-head, stale, resolved, and unresolved review threads;
 - active or finished optional AI reviewers;
-- machine blockers from required human approval.
+- machine blockers from required human approval;
+- the PR's review decision and each reviewer's standing approval or changes request, which show even when branch protection requires no approval.
 
 Treat commit IDs, Codex's `Reviewed commit` marker, and GitHub's outdated state as stronger freshness evidence than timestamps. Never fix an old-head finding blindly.
 
@@ -85,7 +86,7 @@ When the loop has nothing left to do but wait on people, such as a review from w
 prctl watch [<pr>] --timeout 1h
 ```
 
-Each `woke reason=` line names one change, with the new comments' authors, excerpts and links. A PR that already conflicts wakes the watcher at once. Pass its `next-since=` value, which also records whether the PR conflicted, to the next watcher's `--since` so activity that lands between the two still counts and a conflict already reported stays quiet. `--on` narrows the events and `--ignore-author` mutes a noisy account. Timeout exits nonzero.
+Each `woke reason=` line names one change, with the new comments' authors, excerpts and links. A PR that already conflicts wakes the watcher at once, and so does an approval or changes request that already stands when a watcher starts without `--since`, reported as an `activity` item such as `review approved @octocat`. Pass its `next-since=` value, which also records whether the PR conflicted, to the next watcher's `--since` so activity that lands between the two still counts and a conflict already reported stays quiet. `--on` narrows the events and `--ignore-author` mutes a noisy account. Timeout exits nonzero.
 
 Do not manually post `@codex review` after every push when the repository automatically reviews pushes. Trigger it only when repository behavior requires manual activation or Codex stayed inactive beyond the grace period and a new review is actually needed. After triggering a reviewer, launch `prctl wait` directly; do not separately poll reactions. Avoid duplicate review requests.
 

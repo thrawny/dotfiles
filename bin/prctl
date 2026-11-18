@@ -715,6 +715,7 @@ def command_snapshot(args: argparse.Namespace) -> int:
         active_reviewers=tuple(active_reviewers),
     )
     human_approval = pr.review_decision == "REVIEW_REQUIRED"
+    decisions = review_decisions(review_activity(host, repo, pr.number))
 
     def thread_dicts(values: list[ReviewThread]) -> list[dict[str, object]]:
         return [
@@ -757,6 +758,15 @@ def command_snapshot(args: argparse.Namespace) -> int:
             "machineBlockers": blockers,
             "humanApprovalRequired": human_approval,
         },
+        "reviewDecisions": [
+            {
+                "author": item.author,
+                "state": item.state,
+                "submittedAt": iso_utc(item.created_at),
+                "url": item.url,
+            }
+            for item in decisions
+        ],
     }
     if args.json:
         print(json.dumps(data, indent=2, sort_keys=True))
@@ -781,6 +791,9 @@ def command_snapshot(args: argparse.Namespace) -> int:
     )
     print(f"merge: mergeable={pr.mergeable.lower()} state={pr.merge_state.lower()}")
     print(f"human approval: {'required' if human_approval else 'not required'}")
+    print(f"review decision: {pr.review_decision.lower() or 'none'}")
+    for item in decisions:
+        print(f"  {item.state} by @{item.author} at {iso_utc(item.created_at)}")
     print(f"machine state: {'blocked' if blockers else 'ready'}")
     if blockers:
         print(f"machine blockers: {', '.join(blockers)}")
@@ -1333,6 +1346,7 @@ def command_wait(args: argparse.Namespace) -> int:
             time.sleep(min(args.interval, remaining))
 
 
+DECISION_STATES = frozenset({"approved", "changes-requested"})
 WATCH_EVENTS = ("commit", "checks", "merge", "state", "activity")
 
 
@@ -1413,6 +1427,50 @@ def viewer_login(host: str) -> str:
     return login
 
 
+def review_activity(host: str, repo: str, pr_number: int) -> list[Activity]:
+    """Every submitted review on the PR, in the order GitHub lists them."""
+
+    def author(item: dict[str, Any]) -> str:
+        user = item.get("user") or {}
+        login = user.get("login") if isinstance(user, dict) else None
+        return str(login or "unknown")
+
+    activity: list[Activity] = []
+    for item in paginated_items(host, f"repos/{repo}/pulls/{pr_number}/reviews"):
+        state = str(item.get("state") or "").upper()
+        # A pending review is an unsent draft that only its author can see.
+        if state == "PENDING" or not isinstance(item.get("submitted_at"), str):
+            continue
+        activity.append(
+            Activity(
+                key=f"review:{item.get('id')}",
+                kind="review",
+                author=author(item),
+                created_at=timestamp(item["submitted_at"]),
+                state=state.lower().replace("_", "-"),
+                body=str(item.get("body") or ""),
+                url=str(item.get("html_url") or ""),
+                location="",
+            )
+        )
+    return activity
+
+
+def review_decisions(items: list[Activity]) -> list[Activity]:
+    """Each reviewer's standing approval or changes request.
+
+    The latest approved, changes-requested or dismissed review of a reviewer
+    counts. A comment-only review leaves the decision as it was, and a dismissed
+    one withdraws it. This holds whether or not branch protection requires an
+    approval, which is the case where GitHub's reviewDecision stays empty.
+    """
+    latest: dict[str, Activity] = {}
+    for item in sorted(items, key=lambda value: value.created_at):
+        if item.kind == "review" and item.state in DECISION_STATES | {"dismissed"}:
+            latest[normalize_login(item.author)] = item
+    return [item for item in latest.values() if item.state in DECISION_STATES]
+
+
 def pr_activity(host: str, repo: str, pr_number: int) -> list[Activity]:
     """Every comment, review and inline comment on the PR, newest last."""
 
@@ -1437,23 +1495,7 @@ def pr_activity(host: str, repo: str, pr_number: int) -> list[Activity]:
                 location="",
             )
         )
-    for item in paginated_items(host, f"repos/{repo}/pulls/{pr_number}/reviews"):
-        state = str(item.get("state") or "").upper()
-        # A pending review is an unsent draft that only its author can see.
-        if state == "PENDING" or not isinstance(item.get("submitted_at"), str):
-            continue
-        activity.append(
-            Activity(
-                key=f"review:{item.get('id')}",
-                kind="review",
-                author=author(item),
-                created_at=timestamp(item["submitted_at"]),
-                state=state.lower().replace("_", "-"),
-                body=str(item.get("body") or ""),
-                url=str(item.get("html_url") or ""),
-                location="",
-            )
-        )
+    activity.extend(review_activity(host, repo, pr_number))
     for item in paginated_items(host, f"repos/{repo}/pulls/{pr_number}/comments"):
         if not isinstance(item.get("created_at"), str):
             continue
@@ -1502,12 +1544,24 @@ def command_watch(args: argparse.Namespace) -> int:
     # Activity is matched by ID, so an edited comment is not news. --since
     # leaves items created at or after it out of the baseline, which lets a
     # follow-up watcher catch what landed between two watchers.
+    #
+    # Without --since, an approval or changes request that already stands is
+    # news too: a caller that starts watching after the review landed would
+    # otherwise wait for a second one. A follow-up watcher passes --since, so
+    # one decision is reported once.
     seen: set[str] = set()
     if "activity" in events:
+        baseline = pr_activity(host, repo, initial.number)
+        standing = (
+            {item.key for item in review_decisions(baseline)}
+            if args.since is None
+            else set()
+        )
         seen = {
             item.key
-            for item in pr_activity(host, repo, initial.number)
-            if args.since is None or item.created_at < args.since.at
+            for item in baseline
+            if item.key not in standing
+            and (args.since is None or item.created_at < args.since.at)
         }
     head = initial.head_sha
     failed = {check.name for check in initial.checks_failed}
@@ -1714,7 +1768,8 @@ def build_parser() -> argparse.ArgumentParser:
         help=(
             "count activity created at or after this ISO 8601 time as new, and"
             " with ,merge=conflicting stay quiet about a conflict already"
-            " reported; pass the previous watcher's next-since"
+            " reported; pass the previous watcher's next-since. Without it,"
+            " an approval or changes request that already stands is reported"
         ),
     )
     watch_parser.add_argument("-i", "--interval", type=duration, default=30)
