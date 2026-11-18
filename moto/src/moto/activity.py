@@ -13,7 +13,7 @@ def since_report(
     agent: dict[str, Any] | None,
     pr: str | None,
 ) -> dict[str, Any] | None:
-    """What happened since its last report in a task the user is talking to, or
+    """What happened since its last report in a task the user owns, or
     a snoozed one.
 
     The driver sees none of it, so the report may be stale. A task with no

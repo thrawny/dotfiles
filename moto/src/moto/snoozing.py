@@ -26,6 +26,7 @@ from moto.store import (
     message_sender,
     read_tasks,
     record,
+    release,
     tag,
     tasks_for_update,
 )
@@ -285,8 +286,7 @@ def wake_task(name: str, text: str, sender: str | None) -> str:
         del task["snoozed"]
         mark_seen(task, live)
         # The task is the driver's again, whatever the user typed before.
-        task.pop("with_user", None)
-        task["user_reset"] = time.time()
+        release(task, time.time())
         if text:
             task["told"] = time.time()
         record(

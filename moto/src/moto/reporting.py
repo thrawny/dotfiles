@@ -34,13 +34,14 @@ from moto.sessions import context_tokens, last_turn, settings
 from moto.store import (
     find_task,
     message_sender,
+    new_reports,
     read_tasks,
     record,
+    release,
     settle_report,
     tag,
     tasks_for_update,
-    user_window,
-    with_user,
+    user_owns,
 )
 
 
@@ -64,18 +65,9 @@ def cmd_report(args: argparse.Namespace) -> int:
             # new worker's session id arrives with its first report.
             if session := os.environ.get("CLAUDE_CODE_SESSION_ID"):
                 task["session"] = session
-        # A wrap or snooze hands the task to the driver, so the user's earlier
-        # prompts no longer count. A child is its parent's whoever types to it.
-        talking = (
-            args.kind not in ENDED_BY_USER
-            and not task.get("parent")
-            and with_user(task, None, time.time()) is not None
-        )
-        # A done while the user talks to the worker is when the driver updates
-        # tickets and notes, so it is passed on as if --to-driver were given.
-        # question and blocked stay with the user. A child's done is for its
-        # parent.
-        passes_on = args.to_driver or (args.kind == "done" and talking)
+        # A wrap or snooze gives the task back, so it never counts as the user's.
+        owned = args.kind not in ENDED_BY_USER and user_owns(task, None)
+        passes_on = args.to_driver
         task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
         if passes_on:
             task["report"]["to_driver"] = True
@@ -83,7 +75,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         # get a decision here.
         phase = None
         if args.kind == "phase" and not task.get("parent"):
-            phase = decide_phase(task, talking)
+            phase = decide_phase(task, owned)
             task["report"].update(phase)
         # report keeps the last one for moto list. The watch reads reports, so
         # several reports between two watches all reach the driver.
@@ -99,47 +91,92 @@ def cmd_report(args: argparse.Namespace) -> int:
             task["pr"] = match.group(0)
             record("pr", task["agent"], pr=task["pr"])
         parent = task.get("parent")
-        host = direct_host(tasks, parent, args.kind, passes_on)
+        host = None if owned else direct_host(tasks, parent, args.kind, passes_on)
         if host:
             task["report"]["direct"] = True
         name = task["agent"]
     if host:
         send_to_parent(name, host, task["report"])
-    if parent and (args.kind in ADOPT_KINDS or args.to_driver):
-        print(f"Reported {args.kind} to the driver, and {parent} can read it here.")
-    elif parent and host:
-        print(f"Sent to {parent}, which started you. {PASS_ON_RULE}")
-    elif parent:
-        print(
-            f"Recorded. {parent} started you, not the driver, so moto delivers it to"
-            + f" {parent}'s pane once its turn ends. {PASS_ON_RULE}"
-        )
-    elif phase:
+    if phase:
         print(phase_reply(text, phase))
-    elif talking and passes_on:
-        print(
-            f"The driver got your {args.kind}. The user is talking to you, so carry"
-            + " on with the user in this pane."
-        )
-    elif talking:
-        # The driver's watch skips the ordinary reports of a worker the user
-        # is talking to, until the user window passes.
-        minutes = round(user_window() / 60)
-        print(
-            "Recorded. The user is talking to you in this pane, so the driver"
-            + f" leaves this report alone until {minutes} minutes pass with no new"
-            + " prompt from the user. Ask the user directly in this pane."
-            + f" {PASS_ON_RULE}"
-        )
     else:
-        print(f"Reported {args.kind} to the driver.")
+        print(report_reply(args.kind, parent, host is not None, owned, passes_on))
     return 0
 
 
-def decide_phase(task: dict[str, Any], talking: bool) -> dict[str, Any]:
-    """What a phase report does, from who is in the pane and the context size.
+def report_reply(
+    kind: str,
+    parent: str | None,
+    direct: bool,
+    owned: bool,
+    passes_on: bool,
+) -> str:
+    """What moto tells the worker about where its report went."""
+    owner = parent or "the driver"
+    if kind in ADOPT_KINDS or passes_on:
+        return f"Reported {kind} to the driver."
+    if owned:
+        return (
+            f"Recorded. The user owns this task, so {owner} does not hear it."
+            + " Ask or answer the user in this pane; moto marks the sidebar row"
+            + f" when your turn ends. {PASS_ON_RULE}"
+        )
+    if parent and direct:
+        return f"Sent to {parent}, which started you. {PASS_ON_RULE}"
+    if parent:
+        return (
+            f"Recorded. {parent} started you, not the driver, so moto delivers it to"
+            + f" {parent}'s pane once its turn ends. {PASS_ON_RULE}"
+        )
+    return f"Reported {kind} to the driver."
 
-    While the user is typing to the worker, moto never types into that pane, so
+
+def cmd_handback(args: argparse.Namespace) -> int:
+    """Give a user-owned task back to its default owner, quietly.
+
+    The worker runs it when the user names a flow or says "back to the
+    driver". The reports and turns from the user's time count as seen, so the
+    driver hears only what happens after.
+    """
+    text = " ".join(args.text).strip()
+    live = live_agents()
+    with tasks_for_update() as tasks:
+        if args.agent:
+            task = find_task(tasks, args.agent)
+        else:
+            pane_id = backend.here()
+            task = next((t for t in tasks.values() if t["pane_id"] == pane_id), None)
+            if task is None:
+                print(UNTRACKED)
+                return 0
+        name = task["agent"]
+        agent = live.get(task["pane_id"])
+        if not user_owns(task, agent):
+            print(f"{name} is not the user's, so there is nothing to give back.")
+            return 0
+        now = time.time()
+        release(task, now)
+        new_reports(task)
+        seen = task.setdefault("seen", {})
+        seen.pop("pending", None)
+        seen["turn"], _ = last_turn(task, agent)
+        if agent:
+            seen["status"] = agent.get("agent_status")
+            seen["seq"] = agent.get("state_change_seq")
+        record("handback", name, text=text or None)
+        owner = task.get("parent") or "The driver"
+    print(
+        f"{owner} owns {name} again."
+        + (f" Run the {text} flow now." if text else "")
+        + " Report when that flow reaches its stop."
+    )
+    return 0
+
+
+def decide_phase(task: dict[str, Any], owned: bool) -> dict[str, Any]:
+    """What a phase report does, from who owns the task and the context size.
+
+    While the user owns the worker, moto never types into its pane, so
     the worker always carries on in its own turn, whatever the context size. The
     user starts a fresh session with /handoff when they want one. Otherwise the
     worker carries on when the context is under the handoff limit or its size is
@@ -148,7 +185,7 @@ def decide_phase(task: dict[str, Any], talking: bool) -> dict[str, Any]:
     """
     tokens = context_tokens(task, None)
     limit = settings()["handoff_tokens"]
-    if talking:
+    if owned:
         action = "stay"
     elif tokens is None or tokens <= limit:
         action = "carry on"

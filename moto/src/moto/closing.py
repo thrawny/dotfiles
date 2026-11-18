@@ -11,7 +11,7 @@ from moto import backend
 from moto.backend import live_agents
 from moto.common import BUSY, ENDED_BY_USER, MotoError, age, run
 from moto.sessions import user_turns
-from moto.store import find_task, record, tasks_for_update, user_window, with_user
+from moto.store import find_task, record, tasks_for_update, user_owns
 from moto.whenstore import cancel_whens
 
 
@@ -57,8 +57,7 @@ def still_working(
     into the pane since. A wrap or snooze report means the user ended the
     worker, so a busy pane is that turn finishing, but prompts after it still
     count, unless the user closed the pane after the last of them, which ends
-    the worker too. A prompt before the last report counts while the worker
-    is still with the user.
+    the worker too. A task the user owns ends only by the user.
     """
     report: dict[str, Any] = task.get("report") or {}
     problems: list[str] = []
@@ -77,11 +76,9 @@ def still_working(
             f"the user typed in {name}'s pane {len(turns)} {times} since {mark},"
             + f" last {last} ago"
         )
-    elif (at := with_user(task, agent, time.time())) and at > (closed or 0):
-        minutes = round(user_window() / 60)
+    elif not closed and user_owns(task, agent):
         problems.append(
-            f"the user typed in {name}'s pane {age(time.time() - at)} ago, so it is"
-            + f" with the user until {minutes} minutes pass with no new prompt"
+            f"the user owns {name} until they wrap it, close its pane or hand it back"
         )
     return "; ".join(problems) or None
 

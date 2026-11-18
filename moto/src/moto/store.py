@@ -18,7 +18,7 @@ from moto.common import (
     pending_events,
     state_dir,
 )
-from moto.sessions import settings, user_prompt_at
+from moto.sessions import user_prompt_at
 
 
 def read_tasks() -> dict[str, dict[str, Any]]:
@@ -170,46 +170,60 @@ def new_reports(task: dict[str, Any]) -> list[dict[str, Any]]:
 
 def settle_report(task: dict[str, Any], text: str, at: float) -> None:
     """Replace the task's last report with a done report the watch has already
-    seen. The settled flag lets the user window's end tell it from a real one."""
+    seen."""
     task["report"] = {"kind": "done", "text": text, "at": at, "settled": True}
     task.setdefault("seen", {})["report_at"] = at
 
 
-def user_window() -> float:
-    """How long after the user's last prompt a worker stays with the user, in seconds."""
-    return settings()["user_window_minutes"] * 60
-
-
-def window_reset(task: dict[str, Any]) -> float:
-    """When the user last handed the task to the driver: a wrap or snooze report,
-    or a wake. The user's prompts before it no longer count."""
+def handed_back_at(task: dict[str, Any]) -> float:
+    """When the user last gave the task back: a wrap or snooze report, a
+    hand-back, or a wake. The user's prompts before it no longer take it."""
     reports: list[dict[str, Any]] = task.get("reports") or []
     ended = [r["at"] for r in reports if r["kind"] in ENDED_BY_USER]
-    return max([*ended, task.get("user_reset") or 0])
+    back = task.get("handed_back", task.get("user_reset")) or 0
+    return max([*ended, back])
 
 
-def in_window(task: dict[str, Any], at: float | None, now: float) -> bool:
-    """Whether a user prompt typed at this time keeps the worker with the user."""
-    return at is not None and at > window_reset(task) and now - at < user_window()
+def user_owns(task: dict[str, Any], agent: dict[str, Any] | None) -> bool:
+    """Whether the user owns the task, taking it for the user on a new prompt.
 
-
-def with_user(
-    task: dict[str, Any], agent: dict[str, Any] | None, now: float
-) -> float | None:
-    """When the user last typed in the worker's pane, while the worker is with
-    the user, else None.
-
-    A worker is with the user for user_window after the user's last prompt in
-    its pane. A snoozed task has no pane, and an unreadable transcript counts
-    as no prompt.
+    The user takes a task by typing in its pane, and keeps it until they give
+    it back on purpose: a wrap or snooze report, or moto handback. There is no
+    time limit. A prompt the user typed before the last hand-back does not
+    count. An unreadable transcript changes nothing. A snoozed task has no
+    pane, so nothing takes it.
     """
-    if task.get("snoozed"):
-        return None
+    if "with_user" in task:  # a task saved under the old user window
+        task["owner"], task["owned_since"] = "user", task.pop("with_user")
+    elif "owner" not in task and "handed_back" not in task:
+        # Saved before ownership: earlier typing does not take it now.
+        task["handed_back"] = max(task.get("user_reset") or 0, time.time())
+    if task.get("owner") == "user":
+        if any(r["kind"] in ENDED_BY_USER for r in unseen_reports(task)):
+            release(task)
+            return False
+        return True
+    if task.get("snoozed") or task.get("handoff"):
+        return False
     try:
         at = user_prompt_at(task, agent)
     except (MotoError, OSError):
-        return None
-    return at if at is not None and in_window(task, at, now) else None
+        return False
+    if at is None or at <= handed_back_at(task):
+        return False
+    task["owner"], task["owned_since"] = "user", at
+    record("taken", task["agent"], at=at)
+    return True
+
+
+def release(task: dict[str, Any], at: float | None = None) -> None:
+    """Give a user-owned task back to its default owner: the driver, or the
+    worker that started it."""
+    task.pop("owner", None)
+    task.pop("owned_since", None)
+    task.pop("with_user", None)
+    if at is not None:
+        task["handed_back"] = at
 
 
 def mark_seen(task: dict[str, Any], live: dict[str, dict[str, Any]]) -> None:

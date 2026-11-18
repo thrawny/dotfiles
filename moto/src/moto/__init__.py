@@ -17,46 +17,33 @@ task to that pane, so moto stops calling it gone. Claude's SessionStart hook
 runs moto attach --hook, which records each worker's session id, including the
 new one after /clear, and does that move by itself.
 
-When the user closes a worker's pane by hand, the watch tells the driver once
-the pane has stayed gone for PANE_GONE_GRACE, even while the user is talking
-to the worker, and marks
-the task closed_at. moto list shows the mark, a later attach clears it, and
-close counts a pane that closed after the user's last turn in it as the user
-being done with it.
+Who decides, who owns a task, what a report means and what the driver hears
+are in moto/MODEL.md in dotfiles. This help covers the mechanism only.
 
-The watch stays quiet about a turn end that is not the driver's business: the
-user talking to a worker, a worker whose background shells still run, or a
-turn it already reported. It logs each one as an absorb event instead. Each
-moto watch is one pass, printed as JSON. The moto-watch Claude Code mod, which
-moto focus loads into the driver, runs a pass every few seconds and prompts the
-driver with the news. Notes that scheduled jobs left ride along.
+Ownership: the watch and moto report give a task to the user when the user's
+last prompt in its pane came after the task was last given back. Prompts from
+the driver, from the worker's parent, its children's reports and the /handoff,
+/takeoff and /compact commands moto submits are not the user's. The user gives
+a task back with a wrap or snooze report, or by naming a flow, after which the
+worker runs moto handback. A wake gives it back too. moto spawn --user starts a
+task the user owns. tasks.json marks a task the user owns with owner = "user",
+and herdr-decorator shows "waiting for you" under its row between turns.
+
+Each moto watch is one pass, printed as JSON. The moto-watch Claude Code mod,
+which moto focus loads into the driver, runs a pass every few seconds and
+prompts the driver with the lines. Notes that scheduled jobs left ride along.
+The watch stays quiet about everything else and logs it as an absorb event:
+a turn the worker already reported, a turn its background work outlives, and
+the turns of a running handoff. A closed pane is news once it has stayed gone
+for PANE_GONE_GRACE, so a session resumed in a new pane, which attach moves the
+task to, is never news. The task keeps a closed_at mark until a live pane
+clears it.
 
 The user ends a worker's work by running the moto-wrap skill in its pane, which
 reports wrap, a done that also lists what still runs. The moto-snooze skill
 parks a worker that waits on something: it reports snooze with what the task
 waits on, and the driver runs moto snooze, since a worker that snoozes itself
-closes its own pane mid-turn. Both hand the task to the driver at once, so the
-driver hears of them even while the user is talking to the worker.
-
-A worker is with the user while the user typed in its pane within the user
-window, user_window_minutes in MOTO_HOME/settings.toml, 30 by default. The
-window counts from the user's last prompt, not from the worker's last report.
-Prompts from the driver, from the worker's parent and its children's reports,
-and the /handoff, /takeoff and /compact commands moto submits are not the
-user's typing. A wrap or snooze report and a wake end the window early. The
-watch tells the driver once when a worker is with the user, and once when the
-window has passed and the turn the user started has ended, with the worker's
-latest state: its last report, or a turn that ended without one.
-
-While a worker is with the user, moto watch skips its turn ends and its
-question and blocked reports, which are the user's, and types nothing into its
-pane: no handoff, no carry on, no /compact. The window never makes the worker
-stop. Each new user prompt settles an open question or blocked report that came
-before it, so the sidebar shows no question the user answered. Its done reaches the driver as if it had passed --to-driver,
-because a done is when the driver updates tickets and notes. When the user asks
-the worker to pass something else on, the worker runs moto report --to-driver.
-A worker that another worker started uses the same flag to reach the driver
-instead of its parent, and the user window does not apply to it.
+closes its own pane mid-turn.
 
 The user also runs those skills in Claude sessions they started by hand, which
 no task owns. A wrap or snooze from one adopts the session first: it
@@ -66,10 +53,10 @@ none of that session's surroundings, so close and snooze close only its tab,
 and remove its checkout only when it is a linked worktree that no other tab
 works in.
 
-moto list shows which workers are with the user, with the time since the
-user's last prompt, and what happened since the last report in those and in
-snoozed tasks, because the driver sees none of it: the user's turns in the worker's
-pane, the user's new commits on its branch, and the last change to its PR.
+moto list shows which tasks the user owns, and what happened since the last
+report in those and in snoozed tasks, because the driver sees none of it: the
+user's turns in the worker's pane, the user's new commits on its branch, and
+the last change to its PR.
 
 moto afk records that the user is away, with their note word for word, and
 moto back ends it with a brief of what happened meanwhile. moto stores and
@@ -83,7 +70,7 @@ Every command that changes a task also appends a line to events.jsonl in the
 same folder, which nothing rewrites: a task's history outlives the task.
 close and drop copy the whole task into their line before deleting it.
 close refuses a worker that is mid-turn, that the user typed to since its last
-report, or that is with the user, because a done report can be stale by then.
+report, or that the user owns, because a done report can be stale by then.
 moto log prints those lines.
 
 moto handoff moves a worker to a fresh session in the same pane. It checks that
@@ -97,15 +84,17 @@ the handoff turn and the takeoff turn, since neither needs the driver.
 A worker that reaches a phase boundary, such as from grilling to implementing,
 runs moto report phase with the next phase. moto decides then, from the context
 size in the reporting session's transcript, and the reply says what to do.
-Under handoff_tokens, or with the size unknown, the worker carries on in the
-same turn and the watch types nothing. Over it, the worker ends its turn and the
-watch starts moto handoff in the background. When the user is typing to the
-worker, moto does not hand it off and says nothing of the context size: the
-worker always carries on. The driver gets one line either way, and a
-handoff that fails leaves it a note. A worker that ends a turn
-without a report over compact_tokens gets /compact, at most once per
-COMPACT_GROWTH tokens of growth. Both limits live in MOTO_HOME/settings.toml.
-A phase report from a worker another worker started goes to that worker.
+Under handoff_tokens, or with the size unknown, or when the user owns the task,
+the worker carries on in the same turn. Over it, the worker ends its turn and
+the watch starts moto handoff in the background. The driver hears only of a
+handoff that fails. A worker that ends a turn without a report over
+compact_tokens gets /compact, at most once per COMPACT_GROWTH tokens of growth.
+Both limits live in MOTO_HOME/settings.toml. A phase report from a worker
+another worker started goes to that worker.
+
+moto doc-sizes warns when MODEL.md or the moto skill passes its character
+limit, and checks the files a [doc_limits] table in MOTO_HOME/settings.toml
+names, as in "roles/driver.md" = 15000.
 
 moto link puts every moto skill in ~/.claude/skills as symlinks, outside Home
 Manager: the generic ones from moto/skills in dotfiles, and the work ones from
@@ -145,7 +134,8 @@ apart from what the user does in one: a wrap or snooze, or closing its
 pane, which reach the driver as for any task. The watch carries a child's done,
 question and blocked reports to its parent instead: it prompts the parent's
 pane with each one, tagged as in [child done], once the parent is not mid-turn,
-even while the user talks to the parent. A parent that is gone, snoozed or closed cannot take them, so the
+even while the user owns the parent. While the user owns the child, its
+reports reach neither. A parent that is gone, snoozed or closed cannot take them, so the
 driver gets them. moto tell and wake from a
 worker's pane reach only the tasks it started, and tag the message with the
 worker's name instead of [driver]. A worker that hands work off instead runs

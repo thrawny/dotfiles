@@ -24,7 +24,9 @@ pane's terminal title, which a Claude session sets to its session title.
 
 A worker that bin/moto started reports questions and blockers to
 $XDG_STATE_HOME/moto/tasks.json, and $moto shows the latest one while the worker
-waits. It clears once the worker starts working again. The driver's own
+waits. It clears once the worker starts working again. A worker the user
+owns asks in its pane instead, so $moto shows "waiting for you" whenever its
+turn has ended. The driver's own
 question, from `moto ask`, is in $XDG_STATE_HOME/moto/driver.json. It stays
 until the driver clears it, since the driver also works on turns that are
 not the user's answer.
@@ -78,7 +80,9 @@ PR_MARKS = {
     "approved": "\uf42e",  # oct-check
 }
 # Only reports that wait on the user; a done report's PR already has a token.
-MOTO_MARKS = {"question": "?", "blocked": "!"}
+MOTO_MARKS = {"question": "?", "blocked": "!", "waiting": "»"}
+# A worker the user owns asks in its pane, so its row shows this between turns.
+MOTO_WAITING = {"kind": "waiting", "text": "waiting for you", "owned": True}
 MOTO_NOTE_CHARS = 60
 BABYSIT_ICON = "\uf441"  # oct-eye
 
@@ -114,7 +118,11 @@ def moto_reports() -> dict[str, dict[str, Any]]:
     reports: dict[str, dict[str, Any]] = {}
     for task in tasks.values():
         report: dict[str, Any] = task.get("report") or {}
-        if report.get("kind") in MOTO_MARKS and task.get("pane_id"):
+        if not task.get("pane_id"):
+            continue
+        if task.get("owner") == "user":
+            reports[task["pane_id"]] = MOTO_WAITING
+        elif report.get("kind") in MOTO_MARKS:
             reports[task["pane_id"]] = report
     try:
         ask: dict[str, Any] = json.loads((Path(base) / "moto/driver.json").read_text())
@@ -129,6 +137,16 @@ def moto_note(pane: Pane, report: dict[str, Any] | None) -> str | None:
     """The sidebar note for a waiting worker, or None once it has moved on."""
     if not report:
         return None
+    if report.get("owned"):
+        return (
+            f"{MOTO_MARKS['waiting']} {report['text']}"
+            if pane.status
+            in (
+                "idle",
+                "done",
+            )
+            else None
+        )
     moved_on = pane.status == "working" or (
         pane.working_since is not None and pane.working_since > report.get("at", 0)
     )

@@ -12,7 +12,7 @@ from moto.afk import read_afk
 from moto.backend import live_agents
 from moto.common import MotoError, age, clock
 from moto.scheduler import print_jobs
-from moto.store import decorator_links, read_tasks, with_user
+from moto.store import decorator_links, read_tasks
 
 
 def cmd_list(args: argparse.Namespace) -> int:
@@ -24,7 +24,7 @@ def cmd_list(args: argparse.Namespace) -> int:
     links = decorator_links()
     now = time.time()
     rows: list[dict[str, Any]] = []
-    # Tasks with the user and snoozed ones, whose last report may be stale.
+    # Tasks the user owns and snoozed ones, whose last report may be stale.
     stale: list[tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]] = []
     for name, task in sorted(tasks.items()):
         agent = live.get(task["pane_id"]) if live is not None else None
@@ -36,11 +36,9 @@ def cmd_list(args: argparse.Namespace) -> int:
         elif status == "gone" and (closed := task.get("closed_at")):
             status = f"pane closed by hand {age(now - closed)} ago"
         pr = task.get("pr") or links.get(task["pane_id"], {}).get("pr")
-        talking = with_user(task, agent, now)
-        rows.append(
-            {**task, "name": name, "status": status, "pr": pr, "user_at": talking}
-        )
-        if talking or task.get("snoozed"):
+        owned = task.get("owner") == "user"
+        rows.append({**task, "name": name, "status": status, "pr": pr})
+        if owned or task.get("snoozed"):
             stale.append((rows[-1], task, agent))
     if stale:
         # Each task's checks run side by side, so a slow GitHub costs PR_TIMEOUT once.
@@ -71,8 +69,11 @@ def cmd_list(args: argparse.Namespace) -> int:
             continue
         branch = row.get("branch") or "main checkout"
         extra = ""
-        if at := row.get("user_at"):
-            extra = f" · with the user, last prompt {age(now - at)} ago"
+        if row.get("owner") == "user":
+            since = row.get("owned_since")
+            extra = " · owned by the user" + (
+                f" for {age(now - since)}" if since else ""
+            )
         if role := row.get("role"):
             extra = f" · role {role}{extra}"
         if parent := row.get("parent"):

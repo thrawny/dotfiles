@@ -55,6 +55,8 @@ Two symlink styles, and the difference matters:
 `just moto-jobs-dev` runs the scheduler in the foreground for iteration.
 `moto when` adds a one-off check that the same scheduler runs until it passes or expires. It lives in moto's state folder (`~/.local/state/moto/when.json`), so it needs no file in `$MOTO_HOME`. `moto job list` shows it, and `moto job rm` cancels it.
 
+Before changing moto's code, skills or briefs, read [moto/MODEL.md](moto/MODEL.md) and name its change case in the commit message.
+
 `moto/skills/` is outside Home Manager: `moto link` symlinks each skill into `~/.claude/skills/`, and a skill of the same name in `$MOTO_HOME/skills/` replaces it. Run `moto link` after adding or renaming one.
 
 Zsh, ghostty, direnv, starship etc. are generated entirely by Nix — no files in `config/`; edit the module in `nix/`.

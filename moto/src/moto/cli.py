@@ -17,9 +17,17 @@ from moto.common import (
     SPAWN_DEFAULTS,
     MotoError,
 )
+from moto.docsizes import cmd_doc_sizes
 from moto.focusing import cmd_focus, cmd_pin
 from moto.listing import cmd_list
-from moto.reporting import cmd_ask, cmd_handoff, cmd_report, cmd_settle, cmd_tell
+from moto.reporting import (
+    cmd_ask,
+    cmd_handback,
+    cmd_handoff,
+    cmd_report,
+    cmd_settle,
+    cmd_tell,
+)
 from moto.roles import cmd_link, cmd_role
 from moto.scheduler import cmd_job_list, cmd_job_loop, cmd_job_run, cmd_job_tick
 from moto.snoozing import cmd_snooze, cmd_wake
@@ -90,6 +98,13 @@ def parser() -> argparse.ArgumentParser:
         help="From a worker: hand the task to the driver, which watches it and"
         + " takes its reports, instead of supervising it yourself",
     )
+    spawn.add_argument(
+        "--user",
+        action="store_true",
+        help="Start a task the user owns from the start, such as a review session:"
+        + " the driver hears only its wrap, snooze, --to-driver reports and"
+        + " closed pane",
+    )
     spawn.add_argument("--json", action="store_true", help="Print the new task as JSON")
     spawn.set_defaults(handler=cmd_spawn)
 
@@ -112,6 +127,23 @@ def parser() -> argparse.ArgumentParser:
     )
     handoff.add_argument("--from-watch", action="store_true", help=argparse.SUPPRESS)
     handoff.set_defaults(handler=cmd_handoff)
+
+    handback = commands.add_parser(
+        "handback",
+        help="Give a task the user owns back to the driver, or to the worker that"
+        + " started it; run when the user names a flow or says back to the driver",
+    )
+    handback.add_argument("text", nargs="*", help="The flow the user named")
+    handback.add_argument("--agent", help="Task name; default: the task in this pane")
+    handback.set_defaults(handler=cmd_handback)
+
+    doc_sizes = commands.add_parser(
+        "doc-sizes", help="Warn about each moto doc over its character limit"
+    )
+    doc_sizes.add_argument(
+        "--strict", action="store_true", help="Exit 1 when a doc is over"
+    )
+    doc_sizes.set_defaults(handler=cmd_doc_sizes)
 
     ask = commands.add_parser(
         "ask", help="Show the driver's question to the user in the sidebar"
@@ -137,7 +169,7 @@ def parser() -> argparse.ArgumentParser:
     report.add_argument(
         "--to-driver",
         action="store_true",
-        help="Reach the driver even while the user talks to this worker, or"
+        help="Reach the driver even while the user owns this task, or"
         + " from one another worker started; for when the user asks",
     )
     report.set_defaults(handler=cmd_report)

@@ -14,6 +14,7 @@ from moto.common import (
     MODEL_FLAGS,
     MOTO_HOME,
     SPAWN_DEFAULTS,
+    USER_FOOTER,
     WORKER_ENV,
     MotoError,
     run,
@@ -27,6 +28,7 @@ def start_worker(
     prompt: str,
     parent: str | None,
     requested_by: str | None = None,
+    user: bool = False,
 ) -> dict[str, Any]:
     """Open a worker's pane on this prompt and record its task.
 
@@ -75,7 +77,11 @@ def start_worker(
             "report": None,
             "pr": None,
             "seen": {"status": "working"},
+            # The user's earlier typing never takes a new task.
+            "handed_back": now,
         } | ({"parent": parent} if parent else {})
+        if user:
+            tasks[info["agent"]] |= {"owner": "user", "owned_since": now}
         if requested_by:
             tasks[info["agent"]]["requested_by"] = requested_by
         if role:
@@ -97,6 +103,7 @@ def start_worker(
             model=spec.get("model"),
             effort=spec.get("effort"),
             role=role,
+            **({"owner": "user"} if user else {}),
         )
     return info
 
@@ -110,7 +117,13 @@ def cmd_spawn(args: argparse.Namespace) -> int:
     worker = caller(read_tasks())
     requested_by = worker if getattr(args, "to_driver", False) else None
     parent = None if requested_by else worker
-    footer = CHILD_FOOTER.format(parent=parent) if parent else BRIEF_FOOTER
+    user = bool(getattr(args, "user", False))
+    if user:
+        footer = USER_FOOTER
+    elif parent:
+        footer = CHILD_FOOTER.format(parent=parent)
+    else:
+        footer = BRIEF_FOOTER
     spec = {
         flag: getattr(args, flag, None)
         for flag in (
@@ -143,14 +156,16 @@ def cmd_spawn(args: argparse.Namespace) -> int:
     elif not spec["repo"]:
         raise MotoError("Pass --repo, or --role for a session in MOTO_HOME")
     info = start_worker(
-        spec, f"{tag(parent)} {brief}\n\n{footer}\n", parent, requested_by
+        spec, f"{tag(parent)} {brief}\n\n{footer}\n", parent, requested_by, user
     )
     if getattr(args, "json", False):
         print(json.dumps(info))
         return 0
     where = f"{Path(info['repo']).name} {info.get('branch') or '(main checkout)'}"
     print(f"Started {info['agent']} on {where}")
-    if parent:
+    if user:
+        print(f"The user owns {info['agent']}; the driver hears only its wrap.")
+    elif parent:
         print(
             f"{info['agent']}'s done, question and blocked reports arrive in this"
             + f" pane once your turn ends, tagged as in [{info['agent']} done]."

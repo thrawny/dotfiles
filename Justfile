@@ -200,6 +200,10 @@ herdr-decorator-dev:
 moto-jobs-dev:
     watchexec --restart --watch moto/src -- moto job loop
 
+# Warn when a moto doc, such as moto/MODEL.md, grows past its character limit
+check-moto-docs:
+    PYTHONPATH=moto/src uv run --locked python -m moto doc-sizes
+
 # Run Python tests with the locked development dependencies
 test-python *args:
     uv run --locked python -B -m pytest {{args}}
@@ -225,7 +229,7 @@ check:
     nix develop ./nix --command just fmt check-parallel
 
 [parallel]
-check-parallel: lint typecheck pi check-blueprint check-mission-control test check-theme shell::check nix::eval
+check-parallel: lint typecheck pi check-blueprint check-mission-control test check-theme check-moto-docs shell::check nix::eval
 
 # Format, lint, and evaluate all hosts
 check-all: fmt lint nix::eval-all

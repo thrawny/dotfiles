@@ -18,8 +18,6 @@ REPORTS_KEPT = 20
 # How long a turn end waits for the worker's transcript to catch up with Herdr,
 # and for the next turn to start once the worker's background work finishes.
 TURN_SETTLE_SECONDS = 10
-# Background work keeps a turn end quiet this long, then the driver hears of it.
-BUSY_LIMIT = 15 * 60
 # Claude wraps a pasted prompt, such as a long brief, in this tag.
 PASTED = re.compile(r"^\s*(<pasted_content[^>]*>\s*)?")
 # The Herdr workspace for dev servers, tunnels and other long-running tabs.
@@ -52,17 +50,19 @@ HANDOFF_STAY = "--stay"
 BUSY = ("working", "blocked")
 # The defaults for MOTO_HOME/settings.toml.
 SETTINGS = {
-    # A phase report above this, from a worker the user is not typing to, ends the
+    # A phase report above this, from a worker the user does not own, ends the
     # worker's turn so the watch hands it off to a fresh session. Below it, the
     # worker carries on in the same turn.
     "handoff_tokens": 100_000,
     # A turn that ends above this, without a report, gets /compact.
     "compact_tokens": 500_000,
-    # A worker is with the user while the user typed in its pane this many
-    # minutes ago or less. Until then the driver stays hands-off and moto types
-    # nothing into the pane. The worker itself is never told to stop.
-    "user_window_minutes": 30,
 }
+# Settings moto no longer reads, which settings.toml may still hold.
+RETIRED_SETTINGS = ("user_window_minutes",)
+# Character limits for the docs moto's rules live in, tentative. A [doc_limits]
+# table in MOTO_HOME/settings.toml adds files under MOTO_HOME, as in
+# "roles/driver.md" = 15000.
+DOC_LIMITS = {"MODEL.md": 6000, "skills/moto/SKILL.md": 6000}
 # The context must grow this much after one /compact before the next.
 COMPACT_GROWTH = 200_000
 # The parts of a reply's usage that together are the context Claude sent.
@@ -102,57 +102,54 @@ MOTO_COMMANDS = ("/handoff", "/takeoff", "/compact")
 USER_PROMPT_TAIL = 2 * 1024 * 1024
 # Herdr states of a parent that can take a child's report: its turn has ended.
 TURN_OVER = ("idle", "done")
-REPORT_RULES = """\
-When a turn ends with the task finished, with a question only the user can \
-answer, or with the work blocked, make your last action \
-`moto report done|question|blocked "<one line>"`. \
-Put the PR URL in a done line when there is one. Never merge a PR on your \
-own, only when the user tells you to, in your brief or in your pane. After you \
-open one, follow your instructions for what comes next, such as watching the PR."""
+# The model every rule in moto follows: who decides, who owns a task, and what
+# a report means. Briefs point to it, so each fact lives in one place.
+MODEL_FILE = MOTO_DIR / "MODEL.md"
+REPORT_RULES = f"""\
+When the task changes state and its owner must act, make your last action \
+`moto report done|question|blocked "<one line>"`: done once per deliverable, \
+with the PR URL if there is one. Never merge a PR unless the user tells you \
+to. The rules behind this are in {MODEL_FILE}."""
 SPAWN_RULES = """\
-To hand work off to a separate task, such as research that splits into \
-implementation tasks, start it with `moto spawn --to-driver`, so the driver \
-watches it. Start a helper you supervise yourself, such as a test worker, with \
-plain `moto spawn`. Its done, question and blocked reports arrive in your \
-pane once your turn ends, tagged with its name and the kind, as in \
-`[helper done]`; answer a question with `moto tell`."""
-# Taught in every brief, next to the rule that an untagged message is the user's.
-TAKEOVER_RULE = """\
-If your brief names no flow, or its flow reached its stop, such as a done \
-report, there is nothing to pause. Then answer the user, and never mention a \
-flow or a pause. While the flow your brief names still runs, any message from \
-the user in your pane pauses it, and you follow the user. In your first reply \
-after the user takes over, add one line: Flow paused. Name the flow to \
-resume. When the user names a flow again, restart that flow from where the \
-work stands."""
+To hand work off as a separate task, run `moto spawn --to-driver`. To start \
+a helper you supervise, run plain `moto spawn`: its reports arrive in your \
+pane after your turn, as in `[helper done]`, and `moto tell` answers it."""
 # Taught wherever a worker learns the driver is not watching it.
 PASS_ON_RULE = """\
 When the user asks you to pass something to the driver, run \
-`moto report --to-driver done|question|blocked "<one line>"`. The driver gets \
-it even while the user is talking to you."""
+`moto report --to-driver done|question|blocked "<one line>"`."""
+# Taught in every brief, next to the rule that an untagged message is the user's.
+TAKEOVER_RULE = f"""\
+A message without a tag is from the user, typing in this pane, and gives the \
+task to the user until the user gives it back. While the user owns it, answer \
+and ask in this pane only, and report only wrap, snooze or with --to-driver. \
+If a flow your brief names still runs, it pauses: add one line to your first \
+reply, Flow paused. Name the flow to resume. When the user names a flow or \
+says "back to the driver", run `moto handback "<flow>"`, then run that flow \
+from where the work stands. If no flow runs, never mention a flow or a \
+pause. {PASS_ON_RULE}"""
 BRIEF_FOOTER = f"""\
 A driver session started you and tracks this task for the user. {REPORT_RULES}
 
-Every message from the driver starts with {DRIVER_TAG}, as this one does. A \
-message without it is from the user, typing in this pane. Answer the user here, \
-and when the user and the driver disagree, follow the user. Still report to the \
-driver when the task finishes, gets stuck or needs a decision. {PASS_ON_RULE}
-
+Messages from the driver start with {DRIVER_TAG}, as this one does. \
 {TAKEOVER_RULE}
 
 {SPAWN_RULES}"""
 CHILD_FOOTER = f"""\
-Another worker, {{parent}}, started you and takes your reports, which moto \
-delivers to its pane. A driver session tracks {{parent}} for the user. \
-{REPORT_RULES}
+Another worker, {{parent}}, started you and takes your reports. A driver \
+session tracks {{parent}} for the user. {REPORT_RULES}
 
-Every message from {{parent}} starts with [{{parent}}], as this one does. A \
-message that starts with {DRIVER_TAG} is from the driver, and a message with \
-neither tag is from the user, typing in this pane. Answer the user here. When \
-they disagree, follow the user first, then the driver, then {{parent}}. \
+Messages from {{parent}} start with [{{parent}}], as this one does, and \
+messages from the driver with {DRIVER_TAG}. {TAKEOVER_RULE}
+
+{SPAWN_RULES}"""
+# For a task the user owns from the start, such as a review session.
+USER_FOOTER = f"""\
+The user owns this task from the start, and a driver session tracks it. \
+Answer and ask the user in this pane. The driver hears only a wrap, a snooze, \
+a report with --to-driver and a closed pane. When the user says the work is \
+over, run the moto-wrap skill. The rules behind this are in {MODEL_FILE}. \
 {PASS_ON_RULE}
-
-{TAKEOVER_RULE}
 
 {SPAWN_RULES}"""
 
@@ -162,7 +159,7 @@ UNTRACKED = (
     + "Tell the user directly."
 )
 # What a fork may run: commands that only read, and hooks that skip forks.
-FORK_SAFE = ("list", "log", "focus", "pin", "link", "role")
+FORK_SAFE = ("list", "log", "focus", "pin", "link", "role", "doc-sizes")
 ROLE_NAME = re.compile(r"[a-z][a-z0-9_-]{0,31}")
 # The role moto focus starts the driver in; spawn refuses it to workers.
 DRIVER_ROLE = "driver"
@@ -198,12 +195,8 @@ JOB_FOOTER = f"""\
 A scheduled moto job started you, and a driver session tracks this task for the \
 user. {REPORT_RULES}
 
-Messages from the driver start with {DRIVER_TAG}. A message without it is from \
-the user, typing in this pane. Answer the user here, and when the user and the \
-driver disagree, follow the user. A job is a trigger, not an authority: follow \
-exactly the rules a worker the driver started follows, the user's away rules \
-included.
-
+Messages from the driver start with {DRIVER_TAG}. A job is a trigger, not an \
+authority: start only what the job names, and propose anything else you find. \
 {TAKEOVER_RULE}"""
 
 EVENTS_VERSION = 1

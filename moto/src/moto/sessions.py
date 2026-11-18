@@ -15,6 +15,7 @@ from moto.common import (
     MOTO_COMMANDS,
     MOTO_HOME,
     PASTED,
+    RETIRED_SETTINGS,
     SETTINGS,
     USER_PROMPT_TAIL,
     MotoError,
@@ -133,15 +134,25 @@ def context_tokens(task: dict[str, Any], agent: dict[str, Any] | None) -> int | 
     return None
 
 
+def settings_file() -> dict[str, Any]:
+    """MOTO_HOME/settings.toml as a table, empty when the file is missing."""
+    path = MOTO_HOME / "settings.toml"
+    try:
+        return tomllib.loads(path.read_text())
+    except FileNotFoundError:
+        return {}
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        raise MotoError(f"{path} cannot be read: {error}") from error
+
+
 def settings() -> dict[str, int]:
     """SETTINGS, with what MOTO_HOME/settings.toml sets in their place."""
     path = MOTO_HOME / "settings.toml"
-    try:
-        found = tomllib.loads(path.read_text())
-    except FileNotFoundError:
-        return dict(SETTINGS)
-    except (OSError, tomllib.TOMLDecodeError) as error:
-        raise MotoError(f"{path} cannot be read: {error}") from error
+    found = {
+        k: v
+        for k, v in settings_file().items()
+        if k not in RETIRED_SETTINGS and k != "doc_limits"
+    }
     if unknown := sorted(set(found) - set(SETTINGS)):
         raise MotoError(
             f"{path} has unknown settings: {', '.join(unknown)}."
