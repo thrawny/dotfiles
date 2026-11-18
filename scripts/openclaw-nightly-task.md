@@ -94,3 +94,9 @@ and optional offline nodes from the paired M1. Never claim a deferred upgrade
 updated anything or that a scheduled future run has succeeded. Do not wait for a
 reply without purpose; defer safely when procedure, capacity or idleness is missing.
 Ask Jonas only when a concrete missing decision falls outside existing authority.
+
+End the run by calling t3_thread_organize with action "settle" and no threadId;
+it settles this thread when the turn ends. Skip it only when the run leaves
+something Jonas must act on: a failed check, a decision waiting for him, or a
+request for his input. Routine upgrade deferrals with a recorded reason do not
+count. When you skip it, leave the thread unsettled and say why in the summary.
