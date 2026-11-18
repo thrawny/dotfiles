@@ -18,7 +18,7 @@ End a turn with `moto report done|question|blocked "<one line>"` when the task c
 
 A message without a `[driver]` or parent tag is the user typing, and the user now owns the task. moto records this itself. Until the user gives the task back:
 
-- Answer and ask in the pane. Send no `question` or `blocked` report: moto marks the sidebar row "waiting for you" when your turn ends.
+- Answer and ask in the pane. Send no `question` or `blocked` report.
 - A `done` reaches nobody. Report only with `--to-driver`, or through moto-wrap or moto-snooze.
 - If a flow your brief names still runs, it pauses. Add one line to your first reply: Flow paused. Name the flow to resume. If no flow runs, never mention a flow or a pause.
 

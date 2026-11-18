@@ -37,7 +37,7 @@ While the user owns a task, the driver hears only a report sent with `--to-drive
 
 ## 4. Questions
 
-While the user owns a task, the worker asks in its pane only. It sends no `question` report. moto marks the task's sidebar row "waiting for you" whenever the worker's turn has ended.
+While the user owns a task, the worker asks in its pane only. It sends no `question` report.
 
 ## 5. Flows
 
@@ -64,6 +64,8 @@ When something looks wrong, name the case first:
 The commit message names the case. Dates and incidents go in commit messages, never in rule text.
 
 ## Where the mechanism lives
+
+moto adds nothing that Herdr already shows or does by itself.
 
 - `moto --help`: commands, state files, and how the watch works.
 - `skills/moto/SKILL.md`: the worker's side of each command.
