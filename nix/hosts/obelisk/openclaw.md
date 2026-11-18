@@ -45,6 +45,9 @@ model routing.
 The ChatGPT model list offers Sol 6.2 only to Codex 0.166.0 and newer; 0.164.0
 does not get it. Update the Codex runtime together with the default model. The
 pinned OpenClaw catalog predates Sol 6.2, so Nix declares the model entry.
+Since November 18, 2026 the live scoped config is the generation's own
+`openclaw.json`, with Sol 6.2 and Codex 0.169.0. That Codex is the pinned live
+runtime now; the stopped-service backup from before the switch is on M1.
 
 ## Configuration and state
 

@@ -68,8 +68,9 @@ separate copies per user. Editor state and caches still live in each user's home
 
 ## T3 Code and Astra
 
-The server settings register `gpt-6.2-astra` and `gpt-6.2-sol` with Codex and select
-Astra for text generation. Codex's shared configuration also defaults to Astra.
+Astra means Astra 6.2 (`gpt-6.2-astra`). The server settings register
+`gpt-6.2-astra` and `gpt-6.2-sol` with Codex and select Astra for text
+generation. Codex's shared configuration also defaults to Astra.
 
 The upstream T3 Code package remains unpatched. It still prefers Sol for new
 threads, independently of Codex's default. Choose Astra as the project default
