@@ -186,12 +186,11 @@ eval force="--force=false":
     #!/usr/bin/env bash
     set -euo pipefail
     host=$(hostname | sed 's/\.local$//')
+    # The flake reads ../bin, ../config, ../skills and non-.nix files, so the
+    # eval cache keys on every file git tracks, which is what the flake sees.
     if [ -f /etc/NIXOS ]; then
         echo "Evaluating NixOS config for $host..."
-        ../bin/run-if-changed --name "nix-eval-$host" "{{ force }}" \
-            --include 'flake.nix' \
-            --include 'flake.lock' \
-            --include '**/*.nix' \
+        ../bin/run-if-changed --name "nix-eval-$host" "{{ force }}" --git-tracked \
             -- nix eval ".#nixosConfigurations.$host.config.system.build.toplevel" --no-write-lock-file > /dev/null
     elif [ "$(uname -s)" = Darwin ]; then
         host=$(/usr/sbin/scutil --get LocalHostName)
@@ -204,10 +203,7 @@ eval force="--force=false":
         fi
     else
         echo "Evaluating Home Manager config for $host..."
-        ../bin/run-if-changed --name "home-eval-$host" "{{ force }}" \
-            --include 'flake.nix' \
-            --include 'flake.lock' \
-            --include '**/*.nix' \
+        ../bin/run-if-changed --name "home-eval-$host" "{{ force }}" --git-tracked \
             -- nix eval ".#homeConfigurations.$host.activationPackage" --no-write-lock-file > /dev/null
     fi
     echo "Config is valid"

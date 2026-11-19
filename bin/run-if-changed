@@ -8,6 +8,7 @@ import argparse
 import fnmatch
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -36,6 +37,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="input file glob to exclude from hashing; may be repeated",
     )
     parser.add_argument(
+        "--git-tracked",
+        action="store_true",
+        help="hash every file git tracks in the repository containing the working "
+        "directory, as a flake sees it; globs are then relative to its top level",
+    )
+    parser.add_argument(
         "--stamp-dir",
         default=str(Path.home() / ".cache" / "run-if-changed"),
         help="directory for stamp files (default: ~/.cache/run-if-changed)",
@@ -53,13 +60,39 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         ns.command = ns.command[1:]
     if not ns.command:
         parser.error("missing command; pass it after --")
-    if not ns.include:
-        parser.error("at least one --include glob is required")
+    if not ns.include and not ns.git_tracked:
+        parser.error("at least one --include glob or --git-tracked is required")
     return ns
 
 
-def project_root() -> Path:
-    return Path.cwd().resolve()
+def project_root(git_tracked: bool) -> Path:
+    if not git_tracked:
+        return Path.cwd().resolve()
+    result = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        raise SystemExit(
+            f"run-if-changed: not in a git repository: {result.stderr.strip()}"
+        )
+    return Path(result.stdout.strip()).resolve()
+
+
+def git_tracked_files(root: Path) -> set[Path]:
+    result = subprocess.run(
+        ["git", "-C", str(root), "ls-files", "-z", "--cached"], capture_output=True
+    )
+    if result.returncode != 0:
+        error = result.stderr.decode(errors="replace").strip()
+        raise SystemExit(f"run-if-changed: git ls-files failed: {error}")
+    names = (os.fsdecode(name) for name in result.stdout.split(b"\0") if name)
+    # A tracked path deleted from the working tree leaves the key, which changes
+    # it. Submodule directories are skipped, as a flake skips them by default.
+    return {
+        Path(name)
+        for name in names
+        if (root / name).is_symlink() or (root / name).is_file()
+    }
 
 
 def is_excluded(path: Path, patterns: list[str]) -> bool:
@@ -67,8 +100,11 @@ def is_excluded(path: Path, patterns: list[str]) -> bool:
     return any(fnmatch.fnmatch(text, pattern) for pattern in patterns)
 
 
-def collect_files(root: Path, includes: list[str], excludes: list[str]) -> list[Path]:
-    files: set[Path] = set()
+def collect_files(
+    root: Path, includes: list[str], excludes: list[str], *, git_tracked: bool
+) -> list[Path]:
+    files = git_tracked_files(root) if git_tracked else set()
+    files = {path for path in files if not is_excluded(path, excludes)}
     for pattern in includes:
         matches = list(root.glob(pattern))
         if not matches:
@@ -94,8 +130,12 @@ def digest_inputs(root: Path, files: list[Path], command: list[str]) -> str:
         path = root / rel
         digest.update(rel.as_posix().encode())
         digest.update(b"\0")
-        with path.open("rb") as stream:
-            digest.update(hashlib.file_digest(stream, "sha256").digest())
+        if path.is_symlink():
+            # Git and Nix both record the link itself, which may dangle.
+            digest.update(b"symlink\0" + os.fsencode(os.readlink(path)))
+        else:
+            with path.open("rb") as stream:
+                digest.update(hashlib.file_digest(stream, "sha256").digest())
         digest.update(b"\0")
     return digest.hexdigest()
 
@@ -134,8 +174,8 @@ def write_stamp(path: Path, *, key: str, files: list[Path], command: list[str]) 
 
 def main(argv: list[str]) -> int:
     ns = parse_args(argv)
-    root = project_root()
-    files = collect_files(root, ns.include, ns.exclude)
+    root = project_root(ns.git_tracked)
+    files = collect_files(root, ns.include, ns.exclude, git_tracked=ns.git_tracked)
     key = digest_inputs(root, files, ns.command)
     stamp = stamp_path(root, ns.stamp_dir, ns.name)
     previous = load_stamp(stamp)
