@@ -15,6 +15,7 @@ from moto.common import (
     MOTO_COMMANDS,
     MOTO_HOME,
     PASTED,
+    QUEUED_BY_CLAUDE,
     RETIRED_SETTINGS,
     SETTINGS,
     USER_PROMPT_TAIL,
@@ -23,15 +24,64 @@ from moto.common import (
 )
 
 
+def user_prompts(lines: list[str], task: dict[str, Any]) -> list[tuple[float, str]]:
+    """When and what the user typed into the worker's pane, in file order.
+
+    A prompt typed while the worker is mid-turn is queued, and Claude records
+    it as a queue-operation enqueue instead of a prompt. A popAll pulls the
+    queued messages back into the input box, so each one it names is
+    withdrawn unless the user sends it again. Prompts from the driver, from
+    the worker that started this one, the reports of the workers it started
+    and Claude's own task notifications carry a sender's tag or a known
+    shape and are not the user's.
+    """
+    tags = (DRIVER_TAG, HC_NOTE) + (
+        (f"[{task['parent']}]",) if task.get("parent") else ()
+    )
+    found: list[tuple[float, str]] = []
+    queued: list[tuple[float, str]] = []
+    for line in lines:
+        if '"typed"' not in line and '"queue-operation"' not in line:
+            continue
+        try:
+            entry = json.loads(line)
+        except ValueError:
+            continue
+        at = timestamp(entry.get("timestamp"))
+        if at is None:
+            continue
+        if entry.get("type") == "queue-operation":
+            content = entry.get("content")
+            if not isinstance(content, str):
+                continue
+            text = PASTED.sub("", content, count=1)
+            if entry.get("operation") == "enqueue":
+                queued.append((at, text))
+            elif entry.get("operation") == "popAll":
+                for index in range(len(queued) - 1, -1, -1):
+                    if queued[index][1] == text:
+                        del queued[index]
+                        break
+            continue
+        if entry.get("promptSource") != "typed" or entry.get("isSidechain"):
+            continue
+        found.append((at, typed_text(entry)))
+    # A dequeue or a remove only says Claude took the message in, so the
+    # message stays. Only a popAll takes it out of `queued`.
+    found += queued
+    found.sort(key=lambda item: item[0])
+    return [
+        (at, text)
+        for at, text in found
+        if not text.startswith(tags + QUEUED_BY_CLAUDE) and not CHILD_REPORT.match(text)
+    ]
+
+
 def user_turns(
     task: dict[str, Any], agent: dict[str, Any] | None, since: float
 ) -> list[float]:
-    """When the user typed each prompt into the worker's pane after since.
-
-    Prompts from the driver, from the worker that started this one, and the
-    reports of the workers this one started carry their sender's tag and do
-    not count.
-    """
+    """When the user typed each prompt into the worker's pane after since,
+    queued ones included."""
     snooze = task.get("snoozed")
     try:
         if snooze:
@@ -42,39 +92,16 @@ def user_turns(
         lines = path.read_text(errors="replace").splitlines() if path else []
     except (MotoError, OSError):
         return []
-    tags = (DRIVER_TAG, HC_NOTE) + (
-        (f"[{task['parent']}]",) if task.get("parent") else ()
-    )
-    times: list[float] = []
-    for line in lines:
-        if '"typed"' not in line:
-            continue
-        try:
-            entry = json.loads(line)
-        except ValueError:
-            continue
-        if entry.get("promptSource") != "typed" or entry.get("isSidechain"):
-            continue
-        at = timestamp(entry.get("timestamp"))
-        text = typed_text(entry)
-        if (
-            at is not None
-            and at > since
-            and not text.startswith(tags)
-            and not CHILD_REPORT.match(text)
-        ):
-            times.append(at)
-    return times
+    return [at for at, _ in user_prompts(lines, task) if at > since]
 
 
 def user_prompt_at(task: dict[str, Any], agent: dict[str, Any] | None) -> float | None:
     """When the user last typed a prompt into the worker's pane, or None when the
-    transcript has none.
+    transcript has none. A message queued mid-turn counts from when it was queued.
 
-    Raises MotoError or OSError when there is no transcript to read. Prompts
-    from the driver, from the worker's parent and the reports of its children
-    carry a tag, and moto's own slash commands have a known name; none of them
-    is the user's. Only the end of a long transcript is read.
+    Raises MotoError or OSError when there is no transcript to read. moto's own
+    slash commands have a known name and are not the user's. Only the end of a
+    long transcript is read.
     """
     path = transcript(task, agent)
     if path is None:
@@ -82,27 +109,12 @@ def user_prompt_at(task: dict[str, Any], agent: dict[str, Any] | None) -> float 
     with path.open("rb") as handle:
         handle.seek(max(0, path.stat().st_size - USER_PROMPT_TAIL))
         lines = handle.read().decode(errors="replace").splitlines()
-    tags = (DRIVER_TAG, HC_NOTE) + (
-        (f"[{task['parent']}]",) if task.get("parent") else ()
-    )
-    for line in reversed(lines):
-        if '"typed"' not in line:
-            continue
-        try:
-            entry = json.loads(line)
-        except ValueError:
-            continue
-        if entry.get("promptSource") != "typed" or entry.get("isSidechain"):
-            continue
-        text = typed_text(entry)
-        at = timestamp(entry.get("timestamp"))
-        if (
-            at is not None
-            and not text.startswith(tags + MOTO_COMMANDS)
-            and not CHILD_REPORT.match(text)
-        ):
-            return at
-    return None
+    times = [
+        at
+        for at, text in user_prompts(lines, task)
+        if not text.startswith(MOTO_COMMANDS)
+    ]
+    return max(times, default=None)
 
 
 def context_tokens(task: dict[str, Any], agent: dict[str, Any] | None) -> int | None:

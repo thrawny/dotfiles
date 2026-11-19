@@ -98,6 +98,9 @@ CHILD_KINDS = ("done", "question", "blocked", "phase")
 CHILD_REPORT = re.compile(rf"\[\S+ (?:{'|'.join(CHILD_KINDS)})\] ")
 # Slash commands moto itself submits to a worker's pane as typed, so they are not the user's.
 MOTO_COMMANDS = ("/handoff", "/takeoff", "/compact")
+# What Claude queues for itself in a transcript, such as a background task's
+# notification, so a queued message that starts this way is not the user's.
+QUEUED_BY_CLAUDE = ("<task-notification",)
 # The watch looks for the user's latest prompt in this much of a transcript's end.
 USER_PROMPT_TAIL = 2 * 1024 * 1024
 # Herdr states of a parent that can take a child's report: its turn has ended.

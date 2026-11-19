@@ -13,7 +13,7 @@ moto runs tasks for one user. A driver session hands each task to a worker sessi
 
 Every task has exactly one owner at a time: the user, the driver, or the worker that started it. The same rules apply at every level.
 
-- The user takes a task by typing in its pane. An answer to the worker's question counts too.
+- The user takes a task by typing in its pane, also while the worker is mid-turn and the message waits in the queue. An answer to the worker's question counts too.
 - The user gives the task back only on purpose: they name a flow, wrap it, snooze it, or say "back to the driver". There is no time limit.
 - Messages from the driver, from a parent worker, and the commands moto types itself never take a task.
 

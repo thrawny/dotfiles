@@ -1881,6 +1881,72 @@ def test_user_prompt_skips_what_the_driver_the_parent_and_moto_typed(
         real.user_prompt_at(task(title="other"), None)
 
 
+def queue_op(at: float, operation: str, text: str | None = None) -> dict[str, Any]:
+    entry: dict[str, Any] = {
+        "type": "queue-operation",
+        "operation": operation,
+        "timestamp": iso(at),
+    }
+    if text is not None:
+        entry["content"] = text
+    return entry
+
+
+def test_user_prompt_counts_a_message_queued_mid_turn_unless_withdrawn(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    real = load_moto()
+    monkeypatch.setattr(real, "CLAUDE_HOME", tmp_path / "claude")
+    directory = real.session_dir("/code/widgets-ABC-1-fix")
+    directory.mkdir(parents=True)
+    path = directory / "s.jsonl"
+    child = task(title="ABC-1 fix", parent="abc-0")
+
+    def write(*entries: dict[str, Any]) -> None:
+        body = [{"type": "custom-title", "customTitle": "ABC-1 fix"}, *entries]
+        path.write_text("".join(json.dumps(e) + "\n" for e in body))
+
+    brief = typed(100, "[driver] the brief")
+    # Mid-turn typing is a queue-operation enqueue, then a remove, never a prompt.
+    write(
+        brief,
+        queue_op(200, "enqueue", "verify flow"),
+        queue_op(202, "remove", "verify flow"),
+    )
+    assert real.user_prompt_at(child, None) == 200
+    assert real.user_turns(child, None, 150) == [200]
+    # What moto, the driver, the parent and Claude queue is not the user's.
+    write(
+        brief,
+        queue_op(200, "enqueue", '<pasted_content id="1">\n[driver] carry on'),
+        queue_op(210, "enqueue", "[abc-0] from my parent"),
+        queue_op(220, "enqueue", "[abc-2 done] PR ready"),
+        queue_op(230, "enqueue", "<task-notification>\n<task-id>x"),
+        queue_op(240, "enqueue", "/compact"),
+        queue_op(250, "enqueue"),
+        queue_op(260, "dequeue"),
+    )
+    assert real.user_prompt_at(child, None) is None
+    assert real.user_turns(child, None, 150) == [240]
+    # A message the user pulled back into the input box is withdrawn, and
+    # counts again only when they send it.
+    write(
+        brief,
+        queue_op(200, "enqueue", "first"),
+        queue_op(210, "enqueue", "second"),
+        queue_op(215, "popAll", "first"),
+        queue_op(215, "popAll", "second"),
+    )
+    assert real.user_prompt_at(child, None) is None
+    write(
+        brief,
+        queue_op(200, "enqueue", "first"),
+        queue_op(215, "popAll", "first"),
+        queue_op(220, "enqueue", "first"),
+    )
+    assert real.user_prompt_at(child, None) == 220
+
+
 def handback(moto: ModuleType, at: float, flow: str = "ship") -> None:
     """Run moto handback from the worker's pane at this time."""
     with (

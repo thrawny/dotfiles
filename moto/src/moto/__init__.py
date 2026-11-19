@@ -21,7 +21,9 @@ Who decides, who owns a task, what a report means and what the driver hears
 are in moto/MODEL.md in dotfiles. This help covers the mechanism only.
 
 Ownership: the watch and moto report give a task to the user when the user's
-last prompt in its pane came after the task was last given back. Prompts from
+last prompt in its pane came after the task was last given back. A message the
+user typed while the worker was mid-turn counts from when it was queued, unless
+they pulled it back into the input box before sending it. Prompts from
 the driver, from the worker's parent, its children's reports and the /handoff,
 /takeoff and /compact commands moto submits are not the user's. The user gives
 a task back with a wrap or snooze report, or by naming a flow, after which the
