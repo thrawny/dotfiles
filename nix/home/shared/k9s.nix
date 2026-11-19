@@ -91,6 +91,7 @@ in
     views = {
       # Columns for the `mine` alias. The alias itself, with its namespace
       # filter, lives in the per-context aliases file outside this repo.
+      mine.sortColumn = "NAME:asc";
       mine.columns = [
         "NAME"
         "PF"
