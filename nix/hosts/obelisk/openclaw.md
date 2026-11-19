@@ -108,25 +108,25 @@ overrides and that drop-in so they do not mask the new generation.
   `openclaw-admin cron` or the Gateway API to manage them. Use workspace-relative
   state paths and explicit delivery routes for notification jobs. `command`
   payload jobs run no model and need no profile.
-- Upstream's `docs/automation/cron-jobs/troubleshooting.md` and
-  `docs/cli/cron.md` in the gateway package own the scheduler rules. Two of them
-  matter on this host. An older agent-turn job with no recorded inference account
-  fails until it is bound to a stored profile. A login also replaces the
-  account behind its profile, so after any `models auth login` every job bound
-  to that profile fails with "inference account was replaced". In both cases,
-  list the owning agent's profiles with
-  `openclaw-admin models status --agent <agent>` and bind each job to one marked
-  `ok` that belongs to the subscription account:
-  `openclaw-admin cron edit <id> --model openai/<model>@<profileId> --thinking low`.
-  Pick the model from `modelPolicy.allow` in `nix/modules/openclaw.nix`, and keep
-  the job's fallbacks empty.
-- Recurring jobs auto-disable after 10 consecutive errors and stay disabled after
-  the cause is fixed. `openclaw-admin cron list --all` shows them, and
-  `openclaw-admin cron get <id>` records the reason in `state.autoDisabled` and
-  `state.lastError`. Fix the cause, then run the job
-  once with `openclaw-admin cron run <id> --wait --wait-timeout 20m`. It exits 0
-  only when the run completed, delivery included. Then run
-  `openclaw-admin cron enable <id>`.
+- The gateway package's `docs/cli/cron.md` and `docs/automation/cron-jobs/` pages
+  describe the scheduler. Two rules matter on this host. An older agent-turn job
+  fails with "Automation has no recorded inference account" until it is bound to a
+  stored profile (`troubleshooting.md`). A login also replaces the account behind
+  its profile, so after any `models auth login` every job bound to that profile
+  fails with "Automation inference account was replaced"; only the built
+  `inference-binding` runtime documents this. In both cases, list the owning
+  agent's profiles with `openclaw-admin models status --agent <agent>` and bind
+  each job to one marked `ok` that belongs to the subscription account:
+  `openclaw-admin cron edit <id> --model openai/<model>@<profileId> --thinking
+  low`. Pick the model from `modelPolicy.allow` in `nix/modules/openclaw.nix`, and
+  keep the job's fallbacks empty.
+- Recurring jobs auto-disable after 10 consecutive errors (`delivery.md`) and stay
+  disabled after the cause is fixed. `openclaw-admin cron list --all` shows them,
+  and `openclaw-admin cron get <id>` records the reason in `state.autoDisabled`
+  and `state.lastError`. Fix the cause, then run the job once with `openclaw-admin
+  cron run <id> --wait --wait-timeout 20m`. It exits 0 only for `completionStatus:
+  succeeded`, which a silent `NO_REPLY` run also reaches; check `delivery` in its
+  output when a message was expected. Then run `openclaw-admin cron enable <id>`.
 - Systemd tmpfiles copies the prebuilt UI into a package-specific, root-owned
   directory under `/var/lib/openclaw-ui`. This avoids runtime asset retention and
   the custom-UI handler's rejection of hardlinked Nix store files. The service
