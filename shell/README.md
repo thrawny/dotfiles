@@ -50,7 +50,7 @@ Walker is still available manually with `walker`.
   an indefinite manual session. Screen sleep and locking remain enabled by default.
   Sessions survive shell reloads and end at logout.
 
-Clipboard history is stored unencrypted in `~/.cache/cliphist/db`. Copied
+Cliphist stores clipboard history unencrypted in `~/.cache/cliphist/db`. Copied
 passwords, tokens and images may remain there after their source app closes.
 Cliphist 0.7 records entries up to 5 MB. Image previews use private temporary files
 under `$XDG_RUNTIME_DIR/dotfiles-clipboard`, cleared when the picker closes.
@@ -72,7 +72,7 @@ types: indefinite, duration, until a clock time, while an app or PID runs, and
 while a file downloads. Its configurable triggers cover Wi-Fi, running processes,
 AC power, external displays, and weekly schedules. The original app's
 [feature listing](https://apps.apple.com/us/app/amphetamine/id937984704) is the
-reference; there is no published usage ranking for individual features.
+reference.
 
 On first start, the service creates `~/.config/keepawake/config.toml` from the
 [laptop example](../config/keepawake/config.example.toml). Its example rules start
@@ -90,7 +90,7 @@ enabled = true
 wifi_ssid = "YOUR_WIFI_SSID"
 ```
 
-Wi-Fi rules retain the last observed connection for **20 minutes** after Wi-Fi
+Wi-Fi rules retain the last observed connection for 20 minutes after Wi-Fi
 disconnects or its status cannot be read. Reconnecting resets this grace period;
 connecting to a different SSID replaces the old connection immediately. Set
 `wifi_grace_seconds` (default `1200`, `0` disables it) to adjust the delay, including
@@ -104,13 +104,15 @@ unplugged, and have no battery limit on AC. Manual sessions end at the floor;
 automatic rules can reactivate when their conditions and power requirements match
 again.
 
-The desktop selects the [desktop example](../config/keepawake/desktop.example.toml)
-instead. It uses `device_type = "desktop"`, skips power monitoring, hides battery
-and lid controls, and prevents suspend while connected to any Wi-Fi network.
-Screen locking and monitor sleep remain enabled. Laptop configurations default
-to `device_type = "laptop"` and retain battery protection. The Home Manager option
-`dotfiles.keepawake.deviceType` selects the first-start template; an existing
-`~/.config/keepawake/config.toml` stays editable and is never overwritten by activation.
+Hosts that set the Home Manager option `dotfiles.keepawake.deviceType = "desktop"`
+start from the [desktop example](../config/keepawake/desktop.example.toml)
+instead. It uses `device_type = "desktop"`, skips power monitoring, hides
+battery and lid controls, and prevents suspend while connected to any Wi-Fi
+network. Screen locking and monitor sleep remain enabled. Laptop configurations
+default to `device_type = "laptop"` and retain battery protection. The service
+copies the selected template whenever `~/.config/keepawake/config.toml` is
+missing. Activation never overwrites an existing file, so edit it or delete it
+and restart `dotfiles-keepawake.service`.
 
 Each rule's `when` conditions use AND by default; `match = "any"` uses OR.
 Supported conditions are `wifi_ssid` and `process` strings, `wifi_connected`,
