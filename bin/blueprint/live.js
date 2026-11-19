@@ -18,6 +18,7 @@
 	let stopped = false;
 	function connect() {
 		const url = new URL("/_blueprint/events", location.href);
+		url.searchParams.set("page", location.pathname);
 		url.protocol = location.protocol === "https:" ? "wss:" : "ws:";
 		socket = new WebSocket(url);
 		socket.onmessage = ({ data }) => {

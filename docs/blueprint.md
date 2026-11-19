@@ -8,6 +8,7 @@ blueprint-serve ./lab --name designs          # stable hostname
 blueprint-serve ./lab --name designs --tailscale
 blueprint-serve ./lab --port 4321             # direct loopback server, no Portless
 blueprint-html lab/flow.blueprint.md          # standalone lab/flow.html
+blueprint-serve --repos ~/code --name docs    # docs of your repos at https://docs.localhost
 ```
 
 The index recursively lists Markdown and HTML files, newest first, with search by title, path, and description. Documents have links such as `/docs/reviews/auth/`. Their relative paths determine the URLs; changing a title keeps the link. When a Markdown source and matching HTML export coexist, the source appears once. Other filename collisions remain accessible under `/source/<filename>`.
@@ -15,6 +16,8 @@ The index recursively lists Markdown and HTML files, newest first, with search b
 Saving, adding, or removing a file refreshes open pages and the index. Refresh preserves scroll position, URL fragments, and the index search. Relative images, stylesheets, and document links resolve against the source directory. Hidden directories, dependency directories, and external symlinks are excluded; serve a directory containing only material you intend to expose, including its assets.
 
 Tailscale sharing is opt-in even on hosts where Portless normally enables it. The server binds to loopback; Portless manages the named URL and optional tailnet registration. Ctrl-C stops the server and lets Portless remove its registration.
+
+`--repos <folder>` serves the docs of many repos at one URL. The default view lists each checkout open in Herdr (workspace checkouts and pane folders, main checkouts and worktrees alike), grouped by repo and labelled with the branch. It reads the working tree with live reload, and it follows Herdr: a checkout closed in Herdr drops out, a new one appears. `/all/` lists every git repo directly under the folder, read from `origin/main` (or `origin/master`, then `origin/HEAD`) with git, so a checkout on an old branch shows no stale docs. Both views list only files git tracks; open checkouts add untracked files that git does not ignore. Only those files are served.
 
 `--link-base https://github.com/<owner>/<repo>/blob/<commit>/` works with either command and turns source citations into links.
 

@@ -16,6 +16,7 @@ const { values, positionals } = parseArgs({
 		port: { type: "string" },
 		tailscale: { type: "boolean" },
 		internal: { type: "boolean" },
+		repos: { type: "string" },
 	},
 });
 
@@ -43,13 +44,16 @@ Render Markdown and Blueprint typed fences to standalone HTML.
 Default output: lab/<source-name>.html`
 				: `Usage: blueprint-serve [directory] [--name hostname] [--tailscale] [--link-base URL] [--jira URL [--jira-projects KEYS]]
        blueprint-serve [directory] --port 4321
+       blueprint-serve --repos <code-folder> [--name hostname] [...]
 
 Serve Markdown and HTML with a searchable index, document links, and live refresh.
 Uses Portless by default, local-only. --tailscale opts into tailnet sharing.
 --port runs directly on loopback without Portless. Directory defaults to lab/.
 Hidden directories, dependencies, and symlinks are excluded from discovery.
 --jira links Jira keys such as ABC-123 in Markdown prose to URL/ABC-123.
---jira-projects ABC,DEF limits the keys to those projects.`,
+--jira-projects ABC,DEF limits the keys to those projects.
+--repos serves the docs of every checkout open in Herdr, and on /all/ the
+docs on origin's default branch of each git repo directly under the folder.`,
 		);
 		return;
 	}
@@ -86,7 +90,9 @@ Hidden directories, dependencies, and symlinks are excluded from discovery.
 	}
 	if (mode !== "serve") throw new Error("Expected render or serve.");
 	if (values.out) throw new Error("--out belongs to blueprint-html.");
-	const root = await realpath(positionals[0] || "lab");
+	if (values.repos && positionals.length)
+		throw new Error("--repos takes the code folder; omit the directory.");
+	const root = await realpath(values.repos || positionals[0] || "lab");
 	if (!(await stat(root)).isDirectory())
 		throw new Error(`Not a directory: ${root}`);
 	if (values.port && values.tailscale)
@@ -95,8 +101,17 @@ Hidden directories, dependencies, and symlinks are excluded from discovery.
 		const port = Number(values.port || Bun.env.PORT);
 		if (!Number.isInteger(port) || port < 1 || port > 65535)
 			throw new Error("Expected a port between 1 and 65535.");
+		const options = await renderOptions();
+		if (values.repos) {
+			const [{ serveSite }, { reposSite }] = await Promise.all([
+				import("./server.ts"),
+				import("./repos.ts"),
+			]);
+			await serveSite(reposSite(root), port, options);
+			return;
+		}
 		const { serve } = await import("./server.ts");
-		await serve(root, port, await renderOptions());
+		await serve(root, port, options);
 		return;
 	}
 	if (!Bun.which("portless"))
@@ -110,7 +125,7 @@ Hidden directories, dependencies, and symlinks are excluded from discovery.
 			.replace(/^-+|-+$/g, "")
 			.slice(0, 63)
 			.replace(/-+$/, "") || "blueprints";
-	const name = values.name || inferred;
+	const name = values.name || (values.repos ? "docs" : inferred);
 	if (!/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(name))
 		throw new Error(
 			"--name must be a hostname label (letters, digits, hyphens; up to 63 characters).",
@@ -124,7 +139,7 @@ Hidden directories, dependencies, and symlinks are excluded from discovery.
 		"--install=fallback",
 		import.meta.path,
 		"serve",
-		root,
+		...(values.repos ? ["--repos", root] : [root]),
 		"--internal",
 	];
 	await renderOptions();

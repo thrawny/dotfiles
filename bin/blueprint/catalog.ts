@@ -36,6 +36,15 @@ export async function safeFile(root: string, path: string) {
 	}
 }
 
+/** A servable file: its path relative to the source, when it last changed, and its text. */
+export type Entry = {
+	file: string;
+	modified: number;
+	text: () => Promise<string>;
+};
+
+export const isDocument = (file: string) => /\.(md|html?)$/i.test(file);
+
 export async function discover(root: string): Promise<Document[]> {
 	const files: string[] = [];
 	async function walk(folder: string, prefix = "") {
@@ -44,23 +53,43 @@ export async function discover(root: string): Promise<Document[]> {
 			if (!allowed(file) || entry.isSymbolicLink()) continue;
 			if (entry.isDirectory())
 				await walk(resolve(folder, entry.name), `${file}/`);
-			else if (entry.isFile() && /\.(md|html?)$/i.test(file)) files.push(file);
+			else if (entry.isFile() && isDocument(file)) files.push(file);
 		}
 	}
 	await walk(root);
-	files.sort();
+	const entries: Entry[] = [];
+	for (const file of files) {
+		const actual = await safeFile(root, file);
+		if (!actual) continue;
+		try {
+			const modified = (await stat(actual)).mtimeMs;
+			entries.push({ file, modified, text: () => Bun.file(actual).text() });
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+		}
+	}
+	return catalog(entries);
+}
+
+/** Builds the document list from the Markdown and HTML entries of one source. */
+export async function catalog(entries: Entry[]): Promise<Document[]> {
+	const byFile = new Map(
+		entries
+			.filter((entry) => isDocument(entry.file) && allowed(entry.file))
+			.map((entry) => [entry.file, entry]),
+	);
+	const files = [...byFile.keys()].sort();
 	const all = new Set(files);
 	const docs: Document[] = [];
 	for (const file of files) {
+		const entry = byFile.get(file) as Entry;
 		const html = /\.html?$/i.test(file);
 		const stem = file.replace(/(?:\.blueprint)?\.(md|html?)$/i, "");
 		// Exported HTML is a disposable view when its Markdown source is present.
 		if (html && (all.has(`${stem}.blueprint.md`) || all.has(`${stem}.md`)))
 			continue;
-		const actual = await safeFile(root, file);
-		if (!actual) continue;
 		try {
-			const text = await Bun.file(actual).text();
+			const text = await entry.text();
 			const meta = html ? {} : frontmatter(text).meta;
 			const title = html
 				? text.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.trim()
@@ -74,7 +103,7 @@ export async function discover(root: string): Promise<Document[]> {
 				route: collision ? `/source/${file}` : `/docs/${stem}/`,
 				title: title || stem.split("/").at(-1) || file,
 				description: meta.description || "",
-				modified: (await stat(actual)).mtimeMs,
+				modified: entry.modified,
 				kind: html
 					? "HTML"
 					: file.endsWith(".blueprint.md")
