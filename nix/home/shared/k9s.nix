@@ -89,6 +89,18 @@ in
     };
 
     views = {
+      # Columns for the `mine` alias. The alias itself, with its namespace
+      # filter, lives in the per-context aliases file outside this repo.
+      mine.columns = [
+        "NAME"
+        "PF"
+        "READY"
+        "STATUS"
+        "RESTARTS"
+        "AGE"
+        "CPU"
+        "MEM"
+      ];
       "v1/pods" = {
         sortColumn = "NAMESPACE:asc";
         columns = [
