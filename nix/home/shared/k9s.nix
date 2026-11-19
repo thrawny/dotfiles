@@ -101,6 +101,15 @@ in
         "AGE"
         "CPU"
         "MEM"
+        # k9s 0.51 still appends unlisted columns to an alias view, so hide
+        # them by name.
+        "NAMESPACE|H"
+        "%CPU/R|H"
+        "%CPU/L|H"
+        "%MEM/R|H"
+        "%MEM/L|H"
+        "IP|H"
+        "NODE|H"
       ];
       "v1/pods" = {
         sortColumn = "NAMESPACE:asc";
