@@ -55,6 +55,16 @@ export const css = `:root{${variables("light")}color-scheme:light}
 ${readFileSync(join(import.meta.dir, "style.css"), "utf8")}`;
 const themeScript = readFileSync(join(import.meta.dir, "theme.js"), "utf8");
 const zoomScript = readFileSync(join(import.meta.dir, "zoom.js"), "utf8");
+const mermaidDriver = readFileSync(join(import.meta.dir, "mermaid.js"), "utf8");
+// The 2.7 MB library is read only when a page has a Mermaid block.
+let mermaidLibrary: string | undefined;
+function mermaidScripts() {
+	mermaidLibrary ??= readFileSync(
+		join(import.meta.dir, "node_modules/mermaid/dist/mermaid.min.js"),
+		"utf8",
+	);
+	return `<script>${mermaidLibrary}</script><script>${mermaidDriver}</script>`;
+}
 
 export const icon = `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="12" fill="${palette.light.add}"/><path d="M16 20h32M16 30h24M16 40h28M16 50h18" stroke="${palette.light.bg}" stroke-width="5" stroke-linecap="round"/></svg>`)}`;
 
@@ -281,6 +291,7 @@ export async function render(
 		.enable("table")
 		.enable("strikethrough");
 	if (jira) linkJiraKeys(md, jira);
+	let hasMermaid = false;
 	const diagrams: { placeholder: string; content: string }[] = [];
 	// A per-render token prevents document text from colliding with placeholders.
 	const nonce = crypto.randomUUID();
@@ -290,6 +301,10 @@ export async function render(
 		if (diffKinds.has(kind)) return diffBlock(kind, content, linkBase);
 		if (kind === "mockup")
 			return `<div class="block"><span class="badge">mockup</span><iframe title="Mockup" class="mockup" sandbox="" srcdoc="${escapeHTML(content)}"></iframe></div>\n`;
+		if (kind === "mermaid") {
+			hasMermaid = true;
+			return `<div class="figure mermaid-figure" data-source="${escapeHTML(content)}"><div class="mermaid-svg"><div class="block"><span class="badge">mermaid</span><pre class="diffish">${escapeHTML(content)}</pre></div></div></div>\n`;
+		}
 		if (kind === "d2") {
 			const placeholder = `<!--${nonce}-${diagrams.length}-->`;
 			diagrams.push({ placeholder, content });
@@ -341,7 +356,8 @@ export async function render(
 			title,
 			header + nav + html + footer,
 			"",
-			diagrams.length ? `<script>${zoomScript}</script>` : "",
+			(diagrams.length || hasMermaid ? `<script>${zoomScript}</script>` : "") +
+				(hasMermaid ? mermaidScripts() : ""),
 		),
 		warnings,
 	};

@@ -32,7 +32,8 @@ main > * {
 	overflow-x: auto;
 	overscroll-behavior-x: contain;
 }
-.d2-figure > svg {
+.d2-figure > svg,
+.mermaid-svg > svg {
 	display: block;
 	margin-inline: auto;
 	max-width: 100%;
@@ -258,7 +259,13 @@ footer {
 main > .figure {
 	grid-column: wide;
 }
-main > .d2-figure {
+main > .d2-figure,
+main > .mermaid-figure {
 	grid-column: full;
 	padding-inline: 1.25rem;
+}
+.figwarn {
+	margin: 0 0 0.5rem;
+	color: var(--del);
+	font-size: 0.85rem;
 }
