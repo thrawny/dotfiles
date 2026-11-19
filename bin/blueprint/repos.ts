@@ -64,7 +64,7 @@ function unique(ids: Map<string, string>, key: string, id: string) {
 	return candidate;
 }
 
-/** A checkout open in Herdr: its working tree, with the files git tracks or does not ignore. */
+/** A checkout with an agent session in Herdr: its working tree, with the files git tracks or does not ignore. */
 class Checkout implements Source {
 	docs: Document[] = [];
 	files = new Set<string>();
@@ -289,23 +289,36 @@ class Origin implements Source {
 
 type Location = { toplevel: string; common: string; branch: string };
 
-/** Asks Herdr which folders its workspaces and panes have open right now. */
-async function herdrFolders() {
-	const folders = new Set<string>();
+/**
+ * Asks Herdr which folders have an agent session running right now: the cwd
+ * of every pane whose agent is set, except panes in an excluded workspace.
+ */
+async function herdrFolders(excluded: ReadonlySet<string>) {
+	type Lists = {
+		workspace: { workspaces?: { workspace_id: string; label?: string }[] };
+		pane: {
+			panes?: { agent?: string | null; cwd?: string; workspace_id: string }[];
+		};
+	};
+	const lists = {} as Lists;
 	for (const kind of ["workspace", "pane"]) {
 		const { bytes, code } = await run(["herdr", kind, "list"]);
 		if (code !== 0) return null;
 		try {
-			const { result } = JSON.parse(decoder.decode(bytes));
-			for (const workspace of result.workspaces ?? [])
-				if (workspace.worktree?.checkout_path)
-					folders.add(workspace.worktree.checkout_path);
-			for (const pane of result.panes ?? [])
-				if (pane.cwd) folders.add(pane.cwd);
+			lists[kind as keyof Lists] =
+				JSON.parse(decoder.decode(bytes)).result ?? {};
 		} catch {
 			return null;
 		}
 	}
+	const skipped = new Set<string>();
+	for (const workspace of lists.workspace.workspaces ?? [])
+		if (workspace.label && excluded.has(workspace.label))
+			skipped.add(workspace.workspace_id);
+	const folders = new Set<string>();
+	for (const pane of lists.pane.panes ?? [])
+		if (pane.agent && pane.cwd && !skipped.has(pane.workspace_id))
+			folders.add(pane.cwd);
 	return folders;
 }
 
@@ -361,20 +374,24 @@ function library(
 	const tab = (href: string, label: string, current: boolean) =>
 		`<a href="${href}"${current ? ' aria-current="page"' : ""}>${label}</a>`;
 	return page(
-		view === "open" ? "Docs: open in Herdr" : "Docs: all repos",
-		`<div class="library"><header class="meta"><h1>Docs</h1><nav class="views">${tab("/", "Open in Herdr", view === "open")}${tab("/all/", "All repos", view === "all")}</nav><p class="root">${escapeHTML(note)}</p></header>
+		view === "open" ? "Docs: agent sessions" : "Docs: all repos",
+		`<div class="library"><header class="meta"><h1>Docs</h1><nav class="views">${tab("/", "Agent sessions", view === "open")}${tab("/all/", "All repos", view === "all")}</nav><p class="root">${escapeHTML(note)}</p></header>
 <div class="search"><label for="search" class="sr-only">Find a document</label><input id="search" type="search" placeholder="Find a document…" autofocus><output id="count">${count} ${count === 1 ? "document" : "documents"}</output></div>
-${groups}<p class="empty" id="empty" ${count ? "hidden" : ""}>${count ? "No matching documents." : view === "open" ? "No checkout open in Herdr has Markdown or HTML documents." : "No repo has documents on origin."}</p></div>`,
+${groups}<p class="empty" id="empty" ${count ? "hidden" : ""}>${count ? "No matching documents." : view === "open" ? "No checkout with an agent session has Markdown or HTML documents." : "No repo has documents on origin."}</p></div>`,
 		siteCSS,
 		searchScript,
 	);
 }
 
 /**
- * Serves the docs of the checkouts open in Herdr, and of every repo under
+ * Serves the docs of the checkouts where an agent session runs in Herdr, and of every repo under
  * codeDir as origin's default branch has them.
  */
-export function reposSite(codeDir: string): Site {
+export function reposSite(
+	codeDir: string,
+	excludedWorkspaces: string[] = ["background"],
+): Site {
+	const excluded = new Set(excludedWorkspaces);
 	const listeners: ((topic: string) => void)[] = [];
 	const notify = (...topics: string[]) => {
 		for (const topic of topics)
@@ -389,7 +406,7 @@ export function reposSite(codeDir: string): Site {
 	let reposListed: Promise<void> | undefined;
 
 	async function poll() {
-		const folders = await herdrFolders();
+		const folders = await herdrFolders(excluded);
 		if (!folders) {
 			if (!herdrMissing)
 				console.error("blueprint-serve: herdr workspace or pane list failed");
@@ -552,7 +569,7 @@ export function reposSite(codeDir: string): Site {
 					.join("");
 				const note = herdrMissing
 					? "Herdr did not answer, so this list may be out of date."
-					: `${checkouts.size} ${checkouts.size === 1 ? "checkout" : "checkouts"} open in Herdr, read from the working tree.`;
+					: `${checkouts.size} ${checkouts.size === 1 ? "checkout" : "checkouts"} with an agent session, read from the working tree.`;
 				return library("open", note, groups, count);
 			}
 			if (path === "/all/" || path === "/all") {
@@ -612,7 +629,7 @@ export function reposSite(codeDir: string): Site {
 		},
 		subscribe: (listener) => listeners.push(listener),
 		describe: () =>
-			`Serving ${checkouts.size} checkouts open in Herdr, and the repos under ${codeDir}`,
+			`Serving ${checkouts.size} checkouts with an agent session, and the repos under ${codeDir}`,
 		close() {
 			clearInterval(poller);
 			clearInterval(originPoller);

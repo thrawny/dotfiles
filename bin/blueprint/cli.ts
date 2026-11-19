@@ -17,6 +17,7 @@ const { values, positionals } = parseArgs({
 		tailscale: { type: "boolean" },
 		internal: { type: "boolean" },
 		repos: { type: "string" },
+		"exclude-workspace": { type: "string" },
 	},
 });
 
@@ -44,7 +45,7 @@ Render Markdown and Blueprint typed fences to standalone HTML.
 Default output: lab/<source-name>.html`
 				: `Usage: blueprint-serve [directory] [--name hostname] [--tailscale] [--link-base URL] [--jira URL [--jira-projects KEYS]]
        blueprint-serve [directory] --port 4321
-       blueprint-serve --repos <code-folder> [--name hostname] [...]
+       blueprint-serve --repos <code-folder> [--exclude-workspace NAMES] [--name hostname] [...]
 
 Serve Markdown and HTML with a searchable index, document links, and live refresh.
 Uses Portless by default, local-only. --tailscale opts into tailnet sharing.
@@ -52,8 +53,11 @@ Uses Portless by default, local-only. --tailscale opts into tailnet sharing.
 Hidden directories, dependencies, and symlinks are excluded from discovery.
 --jira links Jira keys such as ABC-123 in Markdown prose to URL/ABC-123.
 --jira-projects ABC,DEF limits the keys to those projects.
---repos serves the docs of every checkout open in Herdr, and on /all/ the
-docs on origin's default branch of each git repo directly under the folder.`,
+--repos serves the docs of every checkout where an agent session runs in a
+Herdr pane, and on /all/ the docs on origin's default branch of each git repo
+directly under the folder.
+--exclude-workspace NAMES (comma-separated, default background) skips panes in
+Herdr workspaces with those labels.`,
 		);
 		return;
 	}
@@ -107,7 +111,16 @@ docs on origin's default branch of each git repo directly under the folder.`,
 				import("./server.ts"),
 				import("./repos.ts"),
 			]);
-			await serveSite(reposSite(root), port, options);
+			await serveSite(
+				reposSite(
+					root,
+					(values["exclude-workspace"] ?? "background")
+						.split(",")
+						.filter(Boolean),
+				),
+				port,
+				options,
+			);
 			return;
 		}
 		const { serve } = await import("./server.ts");
@@ -143,6 +156,8 @@ docs on origin's default branch of each git repo directly under the folder.`,
 		"--internal",
 	];
 	await renderOptions();
+	if (values["exclude-workspace"] !== undefined)
+		args.push("--exclude-workspace", values["exclude-workspace"]);
 	if (values["link-base"]) args.push("--link-base", values["link-base"]);
 	if (values.jira) args.push("--jira", values.jira);
 	if (values["jira-projects"])
