@@ -108,19 +108,25 @@ overrides and that drop-in so they do not mask the new generation.
   `openclaw-admin cron` or the Gateway API to manage them. Use workspace-relative
   state paths and explicit delivery routes for notification jobs. `command`
   payload jobs run no model and need no profile.
-- Agent-turn jobs that use a stored OpenAI login must name its profile:
-  `--model openai/<model>@<profileId>`, with thinking low and fallbacks empty.
-  Pick a model from `modelPolicy.allow` in `nix/modules/openclaw.nix`. Older jobs
-  without a profile fail with "no recorded inference account". List profiles with
-  `openclaw-admin models status --agent <agent>`, using the agent that owns the
-  job, and choose one marked `ok`. When the bound profile expires, renew that
-  login with the device-code command above. Rebind only to a profile of the same
-  ChatGPT account.
-- The scheduler auto-disables a recurring job after 10 consecutive errors, and
-  the job stays disabled after the cause is fixed. Plain `cron list` hides
-  disabled jobs; use `cron list --all`. Doctor reports auto-disable reasons. Fix
-  the cause, run the job once with `openclaw-admin cron run <id> --wait` and
-  check its status is `ok`, then `openclaw-admin cron enable <id>`.
+- Upstream's `docs/automation/cron-jobs/troubleshooting.md` and
+  `docs/cli/cron.md` in the gateway package own the scheduler rules. Two of them
+  matter on this host. An older agent-turn job with no recorded inference account
+  fails until it is bound to a stored profile. A login also replaces the
+  account behind its profile, so after any `models auth login` every job bound
+  to that profile fails with "inference account was replaced". In both cases,
+  list the owning agent's profiles with
+  `openclaw-admin models status --agent <agent>` and bind each job to one marked
+  `ok` that belongs to the subscription account:
+  `openclaw-admin cron edit <id> --model openai/<model>@<profileId> --thinking low`.
+  Pick the model from `modelPolicy.allow` in `nix/modules/openclaw.nix`, and keep
+  the job's fallbacks empty.
+- Recurring jobs auto-disable after 10 consecutive errors and stay disabled after
+  the cause is fixed. `openclaw-admin cron list --all` shows them, and
+  `openclaw-admin cron get <id>` records the reason in `state.autoDisabled` and
+  `state.lastError`. Fix the cause, then run the job
+  once with `openclaw-admin cron run <id> --wait --wait-timeout 20m`. It exits 0
+  only when the run completed, delivery included. Then run
+  `openclaw-admin cron enable <id>`.
 - Systemd tmpfiles copies the prebuilt UI into a package-specific, root-owned
   directory under `/var/lib/openclaw-ui`. This avoids runtime asset retention and
   the custom-UI handler's rejection of hardlinked Nix store files. The service
