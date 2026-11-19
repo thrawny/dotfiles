@@ -105,9 +105,22 @@ overrides and that drop-in so they do not mask the new generation.
   skill reviews are disabled. Memory dreaming uses Luna 6; its model override is
   restricted to that model.
 - Operator cron jobs live in the runtime SQLite store, not the Nix config. Use
-  `openclaw-admin cron` or the Gateway API to manage them. Keep their model set to
-  `openai/gpt-6-luna`, thinking low, and fallbacks empty. Use workspace-relative
-  state paths and explicit delivery routes for notification jobs.
+  `openclaw-admin cron` or the Gateway API to manage them. Use workspace-relative
+  state paths and explicit delivery routes for notification jobs. `command`
+  payload jobs run no model and need no profile.
+- Agent-turn jobs that use a stored OpenAI login must name its profile:
+  `--model openai/<model>@<profileId>`, with thinking low and fallbacks empty.
+  Pick a model from `modelPolicy.allow` in `nix/modules/openclaw.nix`. Older jobs
+  without a profile fail with "no recorded inference account". List profiles with
+  `openclaw-admin models status --agent <agent>`, using the agent that owns the
+  job, and choose one marked `ok`. When the bound profile expires, renew that
+  login with the device-code command above. Rebind only to a profile of the same
+  ChatGPT account.
+- The scheduler auto-disables a recurring job after 10 consecutive errors, and
+  the job stays disabled after the cause is fixed. Plain `cron list` hides
+  disabled jobs; use `cron list --all`. Doctor reports auto-disable reasons. Fix
+  the cause, run the job once with `openclaw-admin cron run <id> --wait` and
+  check its status is `ok`, then `openclaw-admin cron enable <id>`.
 - Systemd tmpfiles copies the prebuilt UI into a package-specific, root-owned
   directory under `/var/lib/openclaw-ui`. This avoids runtime asset retention and
   the custom-UI handler's rejection of hardlinked Nix store files. The service
