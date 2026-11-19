@@ -93,6 +93,8 @@ in
       # filter, lives in the per-context aliases file outside this repo.
       mine.sortColumn = "NAME:asc";
       mine.columns = [
+        # The alias filters on namespace, and k9s filters only shown columns.
+        "NAMESPACE"
         "NAME"
         "PF"
         "READY"
@@ -101,8 +103,6 @@ in
         "AGE"
         "CPU"
         "MEM"
-        # The alias filters on namespace, and k9s filters only shown columns.
-        "NAMESPACE"
         # k9s 0.51 still appends unlisted columns to an alias view, so hide
         # them by name.
         "%CPU/R|H"
