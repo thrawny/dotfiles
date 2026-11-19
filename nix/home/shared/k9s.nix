@@ -101,9 +101,10 @@ in
         "AGE"
         "CPU"
         "MEM"
+        # The alias filters on namespace, and k9s filters only shown columns.
+        "NAMESPACE"
         # k9s 0.51 still appends unlisted columns to an alias view, so hide
         # them by name.
-        "NAMESPACE|H"
         "%CPU/R|H"
         "%CPU/L|H"
         "%MEM/R|H"
