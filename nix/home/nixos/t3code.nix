@@ -101,7 +101,8 @@ in
         WorkingDirectory = home;
         Environment = [
           "HOME=${home}"
-          "PATH=${config.home.profileDirectory}/bin:${home}/.local/bin:${home}/dotfiles/bin:/run/current-system/sw/bin"
+          # Setuid wrappers (sudo) come first, as on a login shell.
+          "PATH=/run/wrappers/bin:${config.home.profileDirectory}/bin:${home}/.local/bin:${home}/dotfiles/bin:/run/current-system/sw/bin"
           "T3CODE_HOME=${state}"
           "T3CODE_TELEMETRY_ENABLED=false"
         ];
