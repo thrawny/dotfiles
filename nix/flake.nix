@@ -67,10 +67,6 @@
       url = "github:thrawny/quotabar";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    agent-switch = {
-      url = "github:thrawny/agent-switch";
-      flake = false;
-    };
     agent-browser = {
       url = "github:vercel-labs/agent-browser";
       flake = false;
@@ -119,7 +115,6 @@
       thrawny-pkgs,
       zmx,
       quotabar,
-      agent-switch,
       agent-browser,
       cursor-plugins,
       mattpocock-skills,
@@ -159,7 +154,6 @@
         inherit
           nix-openclaw
           quotabar
-          agent-switch
           agentAssets
           direnvAssets
           herdr
@@ -417,7 +411,6 @@
               quotabar = quotabar.packages.${system}.default;
               direnvrc = direnvAssets.rcFor pkgs;
               shell-clipboard-image = pkgs.callPackage ./packages/shell-clipboard-image.nix { };
-              agent-switch = pkgs.callPackage ./packages/agent-switch.nix { src = agent-switch; };
               nvim = import ./lib/nvim-package.nix {
                 inherit
                   lazy-nvim-nix

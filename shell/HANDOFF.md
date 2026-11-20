@@ -13,14 +13,6 @@ Read [AGENTS.md](AGENTS.md). This is the current Hyprland implementation;
   `5d6b3811303276081f1c510f4c9f3255bd64dffa` from `~/code/quotabar`.
   The QML presentation follows the original compact indicators and stacked
   provider popup, including SVG logos and the orange Claude mark.
-- The QML agents sidebar replaces the Hyprland GTK workflow. Its state and actions
-  use `agent-switch serve --sidebar`, owned by `dotfiles-agent-switch.service`.
-  The flake pins `6f7c9bb1c90cc0087f682a29bb19f03ebb7cc35c` from
-  `~/code/agent-switch`. Alt+S toggles the QML sidebar. The old Process Compose
-  development stack was stopped through `just watch-stop`; do not restart it
-  alongside the production sidebar daemon. The sidebar opens on the left, with
-  restored provider icons, status colors and compact shelves. Its global/local
-  scope setting persists in `$XDG_STATE_HOME/dotfiles-shell/agents.json`.
 - Workspace pills restore the original Waybar active gradient and state colors.
 - Image clipboard history shows asynchronous thumbnails and copies original
   bytes through the approved Python adapter `bin/shell-clipboard-image`.
@@ -30,16 +22,13 @@ Read [AGENTS.md](AGENTS.md). This is the current Hyprland implementation;
 - Caffeine survives QML reloads. Preserve its live state during development.
 
 `just check`, shell formatting and strict QML lint passed. The shell suite has
-53 tests, including rendered sidebar/rename regressions, quota layout and SVG
-loading, scope persistence across processes, failed/late backend responses,
+tests for quota layout and SVG loading, failed/late backend responses,
 image cancellation and cleanup. The Nix-built image adapter also
 passed PNG and animated GIF round-trips on a private headless Wayland compositor.
-Quotabar has 52 passing Rust tests; agent-switch has 81 Rust and 9
-lifecycle tests. Both Nix packages and the whole system built successfully.
+Quotabar has 52 passing Rust tests. Its Nix package and the whole system built successfully.
 `just switch` succeeded; production service commands use Nix store paths.
-Shell IPC reports ready. Both clipboard watchers run exactly once, and the
-agent daemon is healthy. The live sidebar and bar state were inspected.
-No destructive live thread operations or live clipboard-content tests were performed.
+Shell IPC reports ready. Both clipboard watchers run exactly once. The live
+bar state was inspected. No live clipboard-content tests were performed.
 
 ## Claude authentication
 

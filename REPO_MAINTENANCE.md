@@ -47,7 +47,6 @@ These tools are currently used from user-managed installations rather than the N
 | Tool | Active installation | Evidence of current use | Maintenance note |
 |---|---|---|---|
 | `agent-history` | `~/.cargo/bin/agent-history`, built from `~/code/agent-history` | Called by the Pi handoff extension | Installed binary predates repository `HEAD`; rebuild after reviewing the latest commit. |
-| `agent-switch` | `~/.cargo/bin/agent-switch`, built from `~/code/agent-switch` | Running daemon/dev loop; used by Pi, Claude, Codex, Niri, and Waybar integrations | Repository is 5 commits ahead of origin. The installed release binary predates current source; active development is running `target/debug/agent-switch`. |
 | `fastmail-cli` | `~/.cargo/bin/fastmail-cli`, built from `~/code/fastmail-cli` | Confirmed active CLI | Local source tracks upstream directly and is 22 commits behind. Update and rebuild when current upstream behavior is needed; the personal GitHub fork remains dormant. |
 | `niri-cu` | `~/.cargo/bin/niri-cu`, built from `~/code/niri-cu` | Used for the active nested/sandboxed Niri work | The repository has no remote. Add one if the project needs off-machine protection. |
 | `nirius` / `niriusd` | `~/.cargo/bin`, built from `~/code/nirius` | `niriusd` is running; Niri and helper scripts call `nirius` | Nix also installs `pkgs.nirius`, but the Cargo binaries win on the current `PATH`. Keep the Cargo build current while developing the fork, or remove it when returning to the Nix package. |

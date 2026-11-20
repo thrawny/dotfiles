@@ -78,13 +78,6 @@ PanelWindow {
             rightMargin: 8
         }
         spacing: barWindow.compact ? 0 : 6
-        BarButton {
-            text: Agents.indicator
-            hint: Agents.tooltip
-            selected: Agents.opened
-            attention: Agents.stale || (Agents.counts.done ?? 0) > 0
-            onClicked: Agents.toggle(barWindow.screen)
-        }
         QuotaButton {
             providerId: "claude"
             compact: barWindow.compact

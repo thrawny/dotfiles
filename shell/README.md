@@ -1,6 +1,6 @@
 # Desktop shell
 
-A Quickshell desktop bar, launcher and agents sidebar for Hyprland, using the
+A Quickshell desktop bar and launcher for Hyprland, using the
 shared Monokai theme. Includes quota details and text/image clipboard history.
 Niri keeps its existing setup.
 
@@ -40,12 +40,6 @@ Walker is still available manually with `walker`.
 - Click either quota indicator for usage windows, reset times, pace, spending
   and reset credits. Both providers appear together in the original Quotabar
   layout, with their logos. Failed refreshes keep the last data and label it stale.
-- Alt+S or the agents indicator opens the left sidebar. Enter focuses the selected
-  thread; Ctrl+J/K moves selection. The footer lists the remaining actions.
-  Provider icons and status colors distinguish approval, input, work and completion.
-  The global/local scope setting survives closing the sidebar and shell restarts.
-  Archive and deletion require confirmation. The daemon keeps tracking when
-  the sidebar closes or the shell reloads.
 - Click the coffee cup for keep-awake sessions and rules. Right-click toggles
   an indefinite manual session. Screen sleep and locking remain enabled by default.
   Sessions survive shell reloads and end at logout.
@@ -58,9 +52,8 @@ The next image request removes abandoned sessions after a crash or reload, and
 sessions older than one hour. Preview storage is capped at 32 images and 128 MiB;
 copying always prepares the selected original again if needed.
 
-Quotabar, agent-switch and the clipboard image adapter are installed through Nix.
-Claude quota data remains visibly unavailable until login. The sidebar uses
-the separate `dotfiles-agent-switch.service`.
+Quotabar and the clipboard image adapter are installed through Nix.
+Claude quota data remains visibly unavailable until login.
 
 For development, checks, and troubleshooting, see [AGENTS.md](AGENTS.md).
 The [Waybar parity checklist](PARITY.md) records the restored interactions.

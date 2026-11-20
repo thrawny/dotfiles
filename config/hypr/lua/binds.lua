@@ -23,7 +23,6 @@ bind("ALT + Return", function()
 	end
 end)
 bind("SUPER + Space", dsp.exec_cmd("quickshell ipc -c dotfiles call launcher toggle"))
-bind("ALT + S", dsp.exec_cmd("quickshell ipc -c dotfiles call agents toggle"))
 -- Right Alt+P remains the xremap dictation shortcut; use left Alt here.
 bind("ALT + P", dsp.exec_cmd("quickshell ipc -c dotfiles call launcher projects"))
 -- Anchor to the executable so pgrep cannot match the launcher shell itself.

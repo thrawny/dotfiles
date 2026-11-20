@@ -380,8 +380,6 @@ let
     // mediaBinds;
 in
 {
-  dotfiles.agentSwitch.enable = true;
-
   programs.niri.settings = {
     # Named workspaces
     workspaces = {
@@ -499,13 +497,6 @@ in
 
     # Spawn at startup (xwayland-satellite spawned on-demand by niri)
     spawn-at-startup = [
-      {
-        command = [
-          "agent-switch"
-          "serve"
-          "--niri"
-        ];
-      }
       { command = [ "swayosd-server" ]; }
       {
         command = [

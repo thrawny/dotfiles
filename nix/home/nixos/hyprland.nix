@@ -5,11 +5,9 @@
   dotfiles,
   pkgs,
   quotabar,
-  agent-switch,
   ...
 }:
 let
-  agentSwitchPackage = pkgs.callPackage ../../packages/agent-switch.nix { src = agent-switch; };
   quotabarPackage = quotabar.packages.${pkgs.stdenv.hostPlatform.system}.default;
   clipboardImagePackage = pkgs.callPackage ../../packages/shell-clipboard-image.nix { };
 in
@@ -18,7 +16,6 @@ in
     pkgs.cliphist
     pkgs.hyprshot
     pkgs.quickshell
-    agentSwitchPackage
     quotabarPackage
     clipboardImagePackage
   ];
@@ -33,14 +30,12 @@ in
       Description = "Dotfiles Quickshell desktop shell";
       PartOf = [ "graphical-session.target" ];
       Wants = [
-        "dotfiles-agent-switch.service"
         "dotfiles-keepawake.service"
         "shell-clipboard-text.service"
         "shell-clipboard-image.service"
       ];
       After = [
         "graphical-session.target"
-        "dotfiles-agent-switch.service"
         "dotfiles-keepawake.service"
       ];
     };
@@ -56,7 +51,6 @@ in
       ExecStart = "${pkgs.writeShellScript "dotfiles-shell" ''
         export PATH="${
           pkgs.lib.makeBinPath [
-            agentSwitchPackage
             quotabarPackage
             clipboardImagePackage
           ]
@@ -65,19 +59,6 @@ in
       ''}";
       # Apps launched with execDetached must survive shell restarts.
       KillMode = "process";
-      Restart = "on-failure";
-      RestartSec = 2;
-    };
-  };
-
-  systemd.user.services.dotfiles-agent-switch = {
-    Unit = {
-      Description = "Agent tracking and sidebar state";
-      PartOf = [ "graphical-session.target" ];
-      After = [ "graphical-session.target" ];
-    };
-    Service = {
-      ExecStart = "${agentSwitchPackage}/bin/agent-switch serve --sidebar";
       Restart = "on-failure";
       RestartSec = 2;
     };

@@ -21,46 +21,7 @@
     "defaultMode": "auto"
   },
   "hooks": {
-    "Stop": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track stop --agent claude; fi"
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track prompt-submit --agent claude; fi"
-          }
-        ]
-      }
-    ],
-    "Notification": [
-      {
-        "matcher": "permission_prompt",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track notification --agent claude; fi"
-          }
-        ]
-      }
-    ],
     "SessionStart": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track session-start --agent claude; fi"
-          }
-        ]
-      },
       {
         "matcher": "startup|resume|clear",
         "hooks": [
@@ -76,16 +37,6 @@
           {
             "type": "command",
             "command": "if [ -n \"${MOTO_ROLE:-}${HERDR_PANE_ID:-}${HC_TERMINAL_ID:-}\" ]; then moto role --hook; fi"
-          }
-        ]
-      }
-    ],
-    "SessionEnd": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "if [ \"${HERDR_ENV:-}\" != \"1\" ]; then agent-switch track session-end --agent claude; fi"
           }
         ]
       }

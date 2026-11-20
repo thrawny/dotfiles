@@ -4,8 +4,6 @@
 local home = os.getenv("HOME")
 
 hl.on("hyprland.start", function()
-	-- Systemd owns the headless tracker across Quickshell reloads.
-	hl.exec_cmd("systemctl --user start dotfiles-agent-switch.service")
 	hl.exec_cmd("swayosd-server")
 	hl.exec_cmd("mako")
 	hl.exec_cmd("systemctl --user start dotfiles-shell.service shell-clipboard-text.service")

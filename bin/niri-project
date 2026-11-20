@@ -104,7 +104,7 @@ main() {
   focused_output=$(niri msg -j workspaces | jq -r '.[] | select(.is_focused) | .output')
 
   # Prefer project workspaces before ad-hoc/numeric session workspaces on this monitor.
-  # agent-switch sessions are unnamed workspaces; numeric keybinds address them by idx.
+  # Session workspaces are unnamed or numeric; numeric keybinds address them by idx.
   local workspaces_json first_session_idx target_idx insert_before_idx=""
   workspaces_json=$(niri msg -j workspaces)
   first_session_idx=$(jq -r --arg output "$focused_output" \

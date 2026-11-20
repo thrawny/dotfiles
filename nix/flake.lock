@@ -16,22 +16,6 @@
         "type": "github"
       }
     },
-    "agent-switch": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1790181950,
-        "narHash": "sha256-EXymiHv1XQ29L8GBN649DypA0SNZHiaYPauLRyTd6u0=",
-        "owner": "thrawny",
-        "repo": "agent-switch",
-        "rev": "6f7c9bb1c90cc0087f682a29bb19f03ebb7cc35c",
-        "type": "github"
-      },
-      "original": {
-        "owner": "thrawny",
-        "repo": "agent-switch",
-        "type": "github"
-      }
-    },
     "anthropic-skills": {
       "flake": false,
       "locked": {
@@ -1093,7 +1077,6 @@
     "root": {
       "inputs": {
         "agent-browser": "agent-browser",
-        "agent-switch": "agent-switch",
         "anthropic-skills": "anthropic-skills",
         "cursor-plugins": "cursor-plugins",
         "disko": "disko",

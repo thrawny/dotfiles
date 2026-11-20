@@ -167,8 +167,6 @@
       "accent": "#f92672",
       "accentAlt": "#fd971f",
       "onAccent": "#050505",
-      "working": "#7dcfff",
-      "done": "#ffffff",
       "urgentFg": "#f7f1ff",
       "urgentBg": "#004466",
       "quotaWarning": "#e6db74"

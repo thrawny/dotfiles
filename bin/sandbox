@@ -238,11 +238,6 @@ sandbox() {
   # Hide host runtime sockets and give the sandbox its own empty runtime dir.
   if [[ -d "/run/user/${UID}" ]]; then
     args+=(--tmpfs "/run/user/${UID}")
-    args+=(
-      --ro-bind-try
-      "/run/user/${UID}/agent-switch"
-      "/run/user/${UID}/agent-switch"
-    )
 
     # Only the broker protocol is exposed, never raw niri/Hyprland IPC. Bind
     # its directory so socket replacement survives in already-running sandboxes.

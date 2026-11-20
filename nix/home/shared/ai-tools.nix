@@ -11,7 +11,6 @@ let
   hmLib = lib.hm;
   containerAssets = args.containerAssets or null;
   dotfiles = args.dotfiles or null;
-  enableAgentSwitchIntegration = config.dotfiles.agentSwitch.enable;
   repoBacked = homeSource == "repo";
   storeBacked = homeSource == "store";
   configPath =
@@ -22,21 +21,6 @@ let
   agentInstructions = agentInstructionLib.mkInstructions (
     lib.mapAttrs (_: block: block.enable) config.dotfiles.agentInstructions
   );
-  stripAgentSwitchHooks = ''
-    if .hooks then
-      .hooks |= with_entries(
-        .value |= map(
-          .hooks |= map(select(((.command // "") | contains("agent-switch")) | not))
-          | select((.hooks | length) > 0)
-        )
-        | select((.value | length) > 0)
-      )
-    else
-      .
-    end
-  '';
-  claudeSettingsFilter = if enableAgentSwitchIntegration then "." else stripAgentSwitchHooks;
-
   seedExampleRepo =
     example: destination:
     hmLib.dag.entryBefore [ "linkGeneration" ] ''
@@ -55,16 +39,6 @@ let
         install -Dm0644 ${lib.escapeShellArg (toString example)} "$dest_path"
       fi
     '';
-  seedClaudeSettingsRepo = hmLib.dag.entryBefore [ "linkGeneration" ] ''
-    repo=${lib.escapeShellArg dotfiles}
-    example_path="$repo/config/claude/settings.example.json"
-    dest_path="$repo/config/claude/settings.json"
-    if [ ! -s "$dest_path" ] && [ -e "$example_path" ]; then
-      install -d -m0755 "$(dirname "$dest_path")"
-      ${pkgs.jq}/bin/jq ${lib.escapeShellArg claudeSettingsFilter} "$example_path" > "$dest_path"
-      chmod 0644 "$dest_path"
-    fi
-  '';
   seedClaudeLocalInstructionsRepo = hmLib.dag.entryBefore [ "linkGeneration" ] ''
     local_instructions=${lib.escapeShellArg "${dotfiles}/config/claude/CLAUDE.local.md"}
     if [ ! -e "$local_instructions" ]; then
@@ -74,8 +48,6 @@ let
 in
 {
   options.dotfiles = {
-    agentSwitch.enable = lib.mkEnableOption "agent-switch integrations for AI tools";
-
     agentInstructions = lib.listToAttrs (
       map (block: {
         inherit (block) name;
@@ -104,7 +76,7 @@ in
     }
     // lib.optionalAttrs repoBacked {
       seedCodexConfig = seedExampleRepo "config/codex/config.example.toml" "config/codex/config.toml";
-      seedClaudeSettings = seedClaudeSettingsRepo;
+      seedClaudeSettings = seedExampleRepo "config/claude/settings.example.json" "config/claude/settings.json";
       # Claude Code saves settings via a temp file beside the first symlink
       # target, so a link through home-manager-files hits the read-only store.
       linkClaudeSettings = hmLib.dag.entryAfter [ "linkGeneration" ] ''
@@ -125,8 +97,7 @@ in
         if [ ! -s "$dest_path" ]; then
           install -d -m0755 "$(dirname "$dest_path")"
           ${pkgs.jq}/bin/jq ${lib.escapeShellArg ''
-            ${claudeSettingsFilter}
-            | del(.enabledPlugins)
+            del(.enabledPlugins)
             | .statusLine.command = "python3 ~/.claude/status_line.py"
           ''} ${lib.escapeShellArg (toString (configPath "claude/settings.example.json"))} > "$dest_path"
           chmod 0644 "$dest_path"
@@ -137,9 +108,7 @@ in
     };
 
     file = {
-      ".codex/hooks.json".source = configSource (
-        if enableAgentSwitchIntegration then "codex/hooks.agent-switch.json" else "codex/hooks.json"
-      );
+      ".codex/hooks.json".source = configSource "codex/hooks.json";
       ".codex/hooks".source = configSource "codex/hooks";
 
       ".codex/AGENTS.md".text = agentInstructions.codexGlobal;
