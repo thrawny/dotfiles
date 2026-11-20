@@ -88,6 +88,12 @@ function indexPage(root: string, docs: Document[]) {
 	);
 }
 
+/** Bun rejects an empty topic, so a directory's one topic needs a name. */
+const directoryTopic = "directory";
+
+const validTopic = (topic: unknown): topic is string =>
+	typeof topic === "string" && topic !== "";
+
 /** Serves one directory, as blueprint-serve always has. */
 function directorySite(root: string): Site {
 	const listeners: ((topic: string) => void)[] = [];
@@ -115,7 +121,7 @@ function directorySite(root: string): Site {
 			refreshing = refreshing
 				.then(async () => {
 					source.docs = await discover(root);
-					for (const listener of listeners) listener("");
+					for (const listener of listeners) listener(directoryTopic);
 				})
 				.catch((error) => console.error(`blueprint-serve: ${error.message}`));
 		}, 180);
@@ -132,7 +138,7 @@ function directorySite(root: string): Site {
 		async mount() {
 			return { prefix: "", source };
 		},
-		topic: () => "",
+		topic: () => directoryTopic,
 		subscribe: (listener) => listeners.push(listener),
 		describe: () => `Serving ${root} (${source.docs.length} documents)`,
 		close() {
@@ -224,6 +230,12 @@ export async function serveSite(
 	// Sites may report changes while they start, before the server exists.
 	let publish = (_topic: string, _revision: string) => {};
 	site.subscribe((topic) => {
+		if (!validTopic(topic)) {
+			console.error(
+				`blueprint-serve: ignored a change with topic ${JSON.stringify(topic)}`,
+			);
+			return;
+		}
 		caches.delete(topic);
 		revisions.set(topic, crypto.randomUUID());
 		publish(topic, revision(topic));
@@ -247,8 +259,10 @@ export async function serveSite(
 				try {
 					pagePath = decodeURIComponent(pagePath);
 				} catch {}
-				if (server.upgrade(request, { data: { topic: site.topic(pagePath) } }))
-					return;
+				const pageTopic = site.topic(pagePath);
+				if (!validTopic(pageTopic))
+					return new Response("No topic", { status: 400 });
+				if (server.upgrade(request, { data: { topic: pageTopic } })) return;
 				return new Response("WebSocket upgrade required", { status: 426 });
 			}
 			// D2 compilation can outlast Bun's default HTTP idle timeout.
@@ -367,8 +381,14 @@ export async function serveSite(
 		},
 		websocket: {
 			open(socket) {
-				socket.subscribe(socket.data.topic);
-				socket.send(revision(socket.data.topic));
+				// One bad client must never stop the server.
+				try {
+					socket.subscribe(socket.data.topic);
+					socket.send(revision(socket.data.topic));
+				} catch (error) {
+					console.error(`blueprint-serve: ${(error as Error).message}`);
+					socket.close(1011, "subscribe failed");
+				}
 			},
 			message() {},
 		},
@@ -381,7 +401,11 @@ export async function serveSite(
 		},
 	});
 	publish = (topic, value) => {
-		server.publish(topic, value);
+		try {
+			server.publish(topic, value);
+		} catch (error) {
+			console.error(`blueprint-serve: ${(error as Error).message}`);
+		}
 	};
 	function shutdown() {
 		site.close();
