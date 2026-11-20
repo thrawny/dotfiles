@@ -27,8 +27,9 @@ they pulled it back into the input box before sending it. Prompts from
 the driver, from the worker's parent, its children's reports and the /handoff,
 /takeoff and /compact commands moto submits are not the user's. The user gives
 a task back with a wrap or snooze report, or by naming a flow, after which the
-worker runs moto handback. A wake gives it back too. moto spawn --user starts a
-task the user owns. tasks.json marks a task the user owns with owner = "user".
+worker runs moto handback. A wake gives it back too. moto spawn --flow saves
+the task's flow. While it is grill, the user's prompts never take the task, and
+the worker's done report ends that. moto spawn --user starts a task the user owns. tasks.json marks a task the user owns with owner = "user".
 
 Each moto watch is one pass, printed as JSON. The moto-watch Claude Code mod,
 which moto focus loads into the driver, runs a pass every few seconds and

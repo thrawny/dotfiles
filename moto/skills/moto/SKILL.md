@@ -16,7 +16,7 @@ End a turn with `moto report done|question|blocked "<one line>"` when the task c
 
 ## The user owns the task
 
-A message without a `[driver]` or parent tag is the user typing, and the user now owns the task. moto records this itself. Until the user gives the task back:
+A message without a `[driver]` or parent tag is the user typing, and the user now owns the task. moto records this itself. The exception is an answer to a question you asked in the pane, such as a grill question: it does not take the task, pause the flow or need a "Flow paused" line. Until the user gives the task back:
 
 - Answer and ask in the pane. Send no `question` or `blocked` report.
 - A `done` reaches nobody. Report only with `--to-driver`, or through moto-wrap or moto-snooze.
@@ -50,6 +50,7 @@ EOF
 - The brief goes on stdin and must not be empty. Write it for a session that knows nothing: the goal, the flow, where to look. moto adds the tag and the report rules.
 - `--worktree <branch>` gives the worker its own linked worktree. Read the target repo's `AGENTS.md` first: leave it out when the repo commits on main. `--base <ref>` picks the new branch's start, by default the remote's default branch.
 - `--name <agent>`: the Herdr agent name, `[a-z][a-z0-9_-]{0,31}`. Default: the branch name, or the repo name.
+- `--flow ship|verify|grill|answer`: optional. moto saves the flow on the task and shows it in `moto list --json`. While it is `grill`, the user's answers in the pane do not take the task, and the worker's `done` from the grill ends that.
 - `--model` and `--effort low|medium|high|xhigh|max`: set them only when the brief or the user asks. Defaults: `opus` and `medium`.
 
 Spawn fails inside the sandbox (`SANDBOX=1`), outside Herdr, or on a bad flag. It can take a minute or more. If it ends with "Launch ... was not confirmed", run `moto list` before you retry, because the worker may already exist.

@@ -35,6 +35,7 @@ FINISHED = ("done", "wrap")
 # Reports from the user ending the worker on purpose, so close needs no idle pane
 # and the user's earlier prompts no longer keep the driver hands-off.
 ENDED_BY_USER = ("wrap", "snooze")
+FLOWS = ("ship", "verify", "grill", "answer")
 # A closed pane is news only once it has stayed gone this long, because the user
 # may be resuming its session in a new pane, which attach then moves the task to.
 PANE_GONE_GRACE = 2 * 60
@@ -127,7 +128,9 @@ A message without a tag is from the user, typing in this pane, and gives the \
 task to the user until the user gives it back. While the user owns it, answer \
 and ask in this pane only, and report only wrap, snooze or with --to-driver. \
 If a flow your brief names still runs, it pauses: add one line to your first \
-reply, Flow paused. Name the flow to resume. When the user names a flow or \
+reply, Flow paused. Name the flow to resume. Answering a question you asked \
+in this pane, such as a grill question, does not take the task, pause the flow \
+or need that line. When the user names a flow or \
 says "back to the driver", run `moto handback "<flow>"`, then run that flow \
 from where the work stands. If no flow runs, never mention a flow or a \
 pause. {PASS_ON_RULE}"""

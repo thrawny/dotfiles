@@ -43,7 +43,7 @@ While the user owns a task, the worker asks in its pane only. It sends no `quest
 
 Every task has a flow. A flow sets what the worker may do without asking, and where it stops. The flow definitions live outside this repository. Research uses an "answer" flow, whose stop is the first answer.
 
-When the user takes a task, its flow pauses. When the user names a flow, the worker gives the task back and runs that flow from where the work stands.
+When the user takes a task, its flow pauses. Answering a question the worker asked in its pane, such as a grill question, does not take the task. moto knows this only when `moto spawn --flow grill` saved the flow. The worker's `done` from the grill ends that, and normal takeover applies again. When the user names a flow, the worker gives the task back and runs that flow from where the work stands.
 
 ## 6. What ends a task
 

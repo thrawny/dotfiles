@@ -32,6 +32,7 @@ from moto.common import (
 from moto.driverstate import driver_path, read_driver, wake_driver, write_driver
 from moto.sessions import context_tokens, last_turn, settings
 from moto.store import (
+    end_grill,
     find_task,
     message_sender,
     new_reports,
@@ -69,6 +70,8 @@ def cmd_report(args: argparse.Namespace) -> int:
         owned = args.kind not in ENDED_BY_USER and user_owns(task, None)
         passes_on = args.to_driver
         task["report"] = {"kind": args.kind, "text": text, "at": time.time()}
+        if args.kind == "done":
+            end_grill(task, task["report"]["at"])
         if passes_on:
             task["report"]["to_driver"] = True
         # A child's phase report is its parent's to answer, so only the rest

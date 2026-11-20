@@ -2050,6 +2050,24 @@ def test_old_typing_handoffs_and_unreadable_transcripts_never_take_a_task(
     assert "owner" not in fresh["abc-1"]
 
 
+def test_a_grill_answer_never_takes_the_task_until_the_grill_reports_done(
+    moto: ModuleType,
+):
+    user_typed(moto, 100.0)
+    plain = task(handed_back=50.0)
+    assert moto.user_owns(plain, None) and plain["owner"] == "user"
+    grilling = task(handed_back=50.0, flow="grill")
+    assert not moto.user_owns(grilling, None) and "owner" not in grilling
+    moto.end_grill(grilling, 150.0)
+    # The answers typed during the grill stay answers; later typing takes it.
+    assert not moto.user_owns(grilling, None)
+    user_typed(moto, 200.0)
+    assert moto.user_owns(grilling, None) and grilling["owned_since"] == 200.0
+    shipping = task(handed_back=50.0, flow="ship")
+    moto.end_grill(shipping, 150.0)
+    assert shipping["flow"] == "ship" and shipping["handed_back"] == 50.0
+
+
 def test_a_task_saved_before_ownership_ignores_earlier_typing(moto: ModuleType):
     user_typed(moto, 100.0)
     saved = task()

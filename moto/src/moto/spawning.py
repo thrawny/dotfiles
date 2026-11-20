@@ -86,6 +86,8 @@ def start_worker(
             tasks[info["agent"]]["requested_by"] = requested_by
         if role:
             tasks[info["agent"]]["role"] = role
+        if flow := spec.get("flow"):
+            tasks[info["agent"]]["flow"] = flow
         # Kept so wake resumes the session on the model it started with.
         for flag in MODEL_FLAGS:
             if value := spec.get(flag):
@@ -103,6 +105,7 @@ def start_worker(
             model=spec.get("model"),
             effort=spec.get("effort"),
             role=role,
+            flow=spec.get("flow"),
             **({"owner": "user"} if user else {}),
         )
     return info
@@ -134,6 +137,7 @@ def cmd_spawn(args: argparse.Namespace) -> int:
             "title",
             "resume",
             "pane",
+            "flow",
             *MODEL_FLAGS,
         )
     }

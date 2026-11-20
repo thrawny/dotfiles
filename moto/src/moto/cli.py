@@ -11,6 +11,7 @@ from moto.attaching import cmd_attach
 from moto.closing import cmd_close, cmd_drop
 from moto.common import (
     EFFORTS,
+    FLOWS,
     FORK_SAFE,
     JOB_TICK_SECONDS,
     REPORT_KINDS,
@@ -104,6 +105,13 @@ def parser() -> argparse.ArgumentParser:
         help="Start a task the user owns from the start, such as a review session:"
         + " the driver hears only its wrap, snooze, --to-driver reports and"
         + " closed pane",
+    )
+    spawn.add_argument(
+        "--flow",
+        choices=FLOWS,
+        help="The flow the worker runs. moto saves it and shows it in moto list"
+        + " --json. While it is grill, the user's answers in the pane do not take"
+        + " the task; the worker's done report from the grill ends that",
     )
     spawn.add_argument("--json", action="store_true", help="Print the new task as JSON")
     spawn.set_defaults(handler=cmd_spawn)

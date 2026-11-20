@@ -191,7 +191,9 @@ def user_owns(task: dict[str, Any], agent: dict[str, Any] | None) -> bool:
     it back on purpose: a wrap or snooze report, or moto handback. There is no
     time limit. A prompt the user typed before the last hand-back does not
     count. An unreadable transcript changes nothing. A snoozed task has no
-    pane, so nothing takes it.
+    pane, so nothing takes it. While a task's flow is grill, the user's prompts
+    are answers to the worker's questions, so they never take it. The worker's
+    done report from the grill ends that: see end_grill.
     """
     if "with_user" in task:  # a task saved under the old user window
         task["owner"], task["owned_since"] = "user", task.pop("with_user")
@@ -205,6 +207,8 @@ def user_owns(task: dict[str, Any], agent: dict[str, Any] | None) -> bool:
         return True
     if task.get("snoozed") or task.get("handoff"):
         return False
+    if task.get("flow") == "grill":
+        return False
     try:
         at = user_prompt_at(task, agent)
     except (MotoError, OSError):
@@ -214,6 +218,14 @@ def user_owns(task: dict[str, Any], agent: dict[str, Any] | None) -> bool:
     task["owner"], task["owned_since"] = "user", at
     record("taken", task["agent"], at=at)
     return True
+
+
+def end_grill(task: dict[str, Any], at: float) -> None:
+    """The worker reported done from its grill: the flow no longer shields the
+    task, and the answers typed so far do not take it."""
+    if task.get("flow") == "grill":
+        task["flow"] = None
+        task["handed_back"] = max(handed_back_at(task), at)
 
 
 def release(task: dict[str, Any], at: float | None = None) -> None:
