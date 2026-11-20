@@ -115,6 +115,10 @@ function M.select_sql_statement()
 
   if statement_node then
     local sr, sc, er, ec = statement_node:range()
+    -- Newer SQL grammars end the statement node before its semicolon.
+    if vim.fn.getline(er + 1):sub(ec + 1, ec + 1) == ";" then
+      ec = ec + 1
+    end
     return select_range(sr, sc, er, ec)
   end
 
