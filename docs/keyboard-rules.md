@@ -1,6 +1,6 @@
 # Keyboard rules
 
-These are the intended rules for my keyboard-driven environments, including Hyprland, AeroSpace, Herdr, and Ghostty. They guide new bindings, rather than declaring every existing binding correct. Deliberate exceptions and known mismatches are separate below.
+These are the intended rules for my keyboard-driven environments, including Hyprland, OmniWM, Herdr, and Ghostty. They guide new bindings, rather than declaring every existing binding correct. Deliberate exceptions and known mismatches are separate below.
 
 ## Modifier ownership
 
@@ -26,7 +26,7 @@ Unbind conflicting terminal defaults rather than moving a Herdr shortcut merely 
 
 ## Consistency
 
-Use the same chord for equivalent operations in Hyprland and AeroSpace where supported. Match intent without requiring identical layouts or adding compatibility machinery solely for parity. Document meaningful differences; an unsupported action can remain unbound.
+Use the same chord for equivalent operations in Hyprland and OmniWM where supported. Match intent without requiring identical layouts or adding compatibility machinery solely for parity. Document meaningful differences; an unsupported action can remain unbound.
 
 Prefer the same base key for related actions across layers. Enter creates, W closes, M switches focus, and U/I navigate previous/next where those actions exist. These are guidelines, not a requirement to redesign every existing shortcut.
 
@@ -63,7 +63,7 @@ The native Herdr desktop app renders its own terminals. It uses the same Cmd
 ownership and Ctrl+A prefix; Ghostty's transport settings apply to the TUI only.
 Its bindings and migration choices are in [the desktop app guide](herdr-app.md).
 
-Known platform differences are not necessarily ownership violations. Hyprland's Alt+number selects by current workspace order, while AeroSpace uses fixed workspace names. Alt+F requests layout-aware maximization in Hyprland and AeroSpace fullscreen on macOS. AeroSpace deliberately leaves several actions unbound, including workspace cycling and scratchpads. On macOS, Ghostty's quick terminal takes Alt+Q instead, so the scratch terminal key matches Hyprland. Treat these as differences to account for, not evidence of exact cross-platform behavior.
+Known platform differences are not necessarily ownership violations. Hyprland's Alt+number selects by current workspace order, while OmniWM uses fixed workspace IDs. Alt+F requests layout-aware maximization in Hyprland and toggles the full-width column in OmniWM. OmniWM leaves several actions unbound; [its notes](../config/omniwm/AGENTS.md) list them. On macOS, Ghostty's quick terminal takes Alt+Q instead, so the scratch terminal key matches Hyprland. Treat these as differences to account for, not evidence of exact cross-platform behavior.
 
 ## When changing bindings
 
@@ -72,7 +72,7 @@ Check the proposed key against its owner, the reservations, and every layer that
 The configuration remains the source for the complete binding inventory:
 
 - [Hyprland bindings](../config/hypr/lua/binds.lua)
-- [AeroSpace bindings](../config/aerospace/aerospace.toml)
+- [OmniWM bindings](../config/omniwm/settings.toml)
 - [Herdr bindings](../nix/home/shared/herdr.nix)
 - [Herdr desktop bindings](../config/herdr-app/keys.json)
 - [Ghostty shared settings](../nix/home/shared/ghostty.nix) and [macOS settings](../nix/home/darwin/ghostty.nix)

@@ -11,20 +11,6 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
   fi
 
   exec "$(dirname "$(readlink -f "$0")")/hypr-display-recover" "$output"
-elif [[ -n "${NIRI_SOCKET:-}" ]]; then
-  # Match with sed, which exits 0 when the monitor is absent. A grep pipeline
-  # under pipefail would end the script before the error below.
-  outputs=$(niri msg outputs)
-  connector=$(sed -n '/LG Electronics 27GL850/{s/.*(\(.*\))/\1/p;q;}' <<<"$outputs")
-
-  if [[ -z "$connector" ]]; then
-    echo "LG monitor not found" >&2
-    exit 1
-  fi
-
-  niri msg output "$connector" off
-  sleep 1
-  niri msg output "$connector" on
 else
   echo "unsupported compositor" >&2
   exit 1

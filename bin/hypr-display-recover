@@ -11,9 +11,8 @@ case "${1:-}" in
 esac
 [[ $# -le 1 ]] || { echo "Usage: hypr-display-recover [--after-sleep|--on-only] [monitor]" >&2; exit 2; }
 
-# Niri keeps its existing wake behavior.
 if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-    if $after_sleep; then exec "$script_dir/dpms-on"; fi
+    if $after_sleep; then exit 0; fi
     echo "Run in the active Hyprland session" >&2
     exit 1
 fi

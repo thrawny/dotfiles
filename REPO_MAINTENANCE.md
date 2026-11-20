@@ -22,7 +22,6 @@ git branch --set-upstream-to=origin/main main
 
 | Repository | Upstream | Current state | Maintenance policy |
 |---|---|---:|---|
-| `nirius` | SourceHut `~tsdh/nirius` | 5 ahead / 0 behind | Continue following upstream and rebase only when upstream advances. |
 | `pi-diff` | `buddingnewinsights/pi-diff` | 21 ahead / 0 behind | Continue following upstream. It is loaded directly by the live Pi configuration. |
 | `zmx` | `neurosnap/zmx` | 4 ahead / 0 behind | Continue following upstream. |
 
@@ -48,9 +47,7 @@ These tools are currently used from user-managed installations rather than the N
 |---|---|---|---|
 | `agent-history` | `~/.cargo/bin/agent-history`, built from `~/code/agent-history` | Called by the Pi handoff extension | Installed binary predates repository `HEAD`; rebuild after reviewing the latest commit. |
 | `fastmail-cli` | `~/.cargo/bin/fastmail-cli`, built from `~/code/fastmail-cli` | Confirmed active CLI | Local source tracks upstream directly and is 22 commits behind. Update and rebuild when current upstream behavior is needed; the personal GitHub fork remains dormant. |
-| `niri-cu` | `~/.cargo/bin/niri-cu`, built from `~/code/niri-cu` | Used for the active nested/sandboxed Niri work | The repository has no remote. Add one if the project needs off-machine protection. |
-| `nirius` / `niriusd` | `~/.cargo/bin`, built from `~/code/nirius` | `niriusd` is running; Niri and helper scripts call `nirius` | Nix also installs `pkgs.nirius`, but the Cargo binaries win on the current `PATH`. Keep the Cargo build current while developing the fork, or remove it when returning to the Nix package. |
-| `quotabar` | `~/.cargo/bin/quotabar`, built from `~/code/quotabar` | Waybar invokes this exact absolute path | Repository is 3 commits ahead of origin. Rebuild/restart Waybar after code changes and push retained work. |
+| `quotabar` | `~/.cargo/bin/quotabar`, built from `~/code/quotabar` | The Quickshell bar uses the Nix-packaged build; this copy is for development | Repository is 3 commits ahead of origin. Rebuild/restart Waybar after code changes and push retained work. |
 
 ### Other active user-managed tools
 
@@ -73,7 +70,7 @@ cd ~/code/<repo>
 cargo install --path . --force
 ```
 
-Then restart any daemon, HUD, or Waybar process that holds the old binary. A successful source build does not update `~/.cargo/bin` unless the install command is run.
+Then restart any daemon or HUD that holds the old binary. A successful source build does not update `~/.cargo/bin` unless the install command is run.
 
 ## Review cadence
 

@@ -1,5 +1,4 @@
--- Per-workspace project directories: the Hyprland counterpart of niriusd's
--- workspace-directory map. The Lua table is only a live cache — hyprctl
+-- Per-workspace project directories. The Lua table is only a live cache — hyprctl
 -- reload destroys the Lua state (and fires on every config save), so the
 -- state file in XDG_RUNTIME_DIR is the source of truth and is re-read at
 -- config load. It must never be require'd or placed in the config dir, or

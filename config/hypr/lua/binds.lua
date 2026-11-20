@@ -1,4 +1,4 @@
--- Keybinds, ported from the niri config (Alt is the main mod there too).
+-- Keybinds. Alt is the main modifier.
 -- Scrolling-layout commands go through hl.dsp.layout("..."); see
 -- https://wiki.hypr.land/Configuring/Layouts/Scrolling-Layout/
 
@@ -215,7 +215,7 @@ bind("SUPER + SHIFT + 3", dsp.exec_cmd("hyprshot -m output --freeze"))
 bind("SUPER + SHIFT + 4", dsp.exec_cmd("hyprshot -m region --freeze"))
 bind("SUPER + SHIFT + 5", dsp.exec_cmd("hyprshot -m window --freeze"))
 
--- Volume / brightness / media (swayosd, same as niri)
+-- Volume, brightness and media keys through swayosd
 bind("XF86AudioRaiseVolume", dsp.exec_cmd("swayosd-client --output-volume raise"), {
 	locked = true,
 	repeating = true,

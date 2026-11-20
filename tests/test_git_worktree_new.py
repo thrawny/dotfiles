@@ -16,7 +16,6 @@ def test_rerun_seeds_missing_files_and_keeps_existing_ones(tmp_path: Path) -> No
         "GIT_AUTHOR_EMAIL": "test@example.com",
         "GIT_COMMITTER_NAME": "Test",
         "GIT_COMMITTER_EMAIL": "test@example.com",
-        "NIRI_SOCKET": "",
     }
     for name in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE"):
         environment.pop(name, None)

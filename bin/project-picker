@@ -9,7 +9,7 @@ show_failure() {
   if (( exit_code != 0 )); then
     printf '\nProject picker failed (exit %s).\n' "$exit_code" >&2
     case "${backend:-}" in
-      --hypr|--niri)
+      --hypr)
         # busctl is already available on NixOS; no extra notification CLI needed.
         busctl --user call org.freedesktop.Notifications /org/freedesktop/Notifications \
           org.freedesktop.Notifications Notify 'susssasa{sv}i' \
@@ -41,14 +41,14 @@ run_desktop_backend() {
 }
 
 usage() {
-  echo 'Usage: project-picker --niri|--hypr|--herdr|--list'
+  echo 'Usage: project-picker --hypr|--herdr|--list'
 }
 if [[ $# -ne 1 ]]; then
   usage >&2
   exit 2
 fi
 case "$1" in
-  --niri|--hypr|--herdr|--list) backend="$1" ;;
+  --hypr|--herdr|--list) backend="$1" ;;
   --help|-h) usage; exit 0 ;;
   *) usage >&2; exit 2 ;;
 esac
@@ -110,7 +110,6 @@ fi
 dir=$(realpath -- "$dir")
 
 case "$backend" in
-  --niri) run_desktop_backend niri-project --terminals 1 "$dir" ;;
   --hypr) run_desktop_backend hyprland-project --terminals 1 "$dir" ;;
   --herdr)
     herdr_bin="${HERDR_BIN_PATH:-herdr}"

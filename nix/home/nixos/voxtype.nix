@@ -23,7 +23,6 @@
         remote_timeout_secs = 30;
       };
       text.replacements = {
-        "neary" = "Niri";
         "veiland" = "Wayland";
         "neovim" = "Neovim";
         "nbin" = "nvim";

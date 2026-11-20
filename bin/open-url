@@ -25,8 +25,8 @@ fi
 # defer ProcessSingleton requests until that popup releases focus.
 unset XDG_ACTIVATION_TOKEN DESKTOP_STARTUP_ID
 
-# Outside niri, or before niri/jq are available, we cannot find or focus a
-# window. Open a fresh Helium window instead.
+# Outside Hyprland, or before hyprctl/jq are available, we cannot find or
+# focus a window. Open a fresh Helium window instead.
 open_detached() {
   exec helium --new-window "$url"
 }
@@ -93,7 +93,6 @@ hypr_move_window() {
   hypr_window_action "$1" 'window.move({window=w,workspace="name:web",follow=false})'
 }
 
-# Hyprland uses window addresses and workspace names rather than niri IDs.
 # Prefer a browser on the active workspace, then one on web.
 if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] && command -v hyprctl >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
   clients=$(hyprctl -j clients 2>/dev/null || true)
@@ -137,149 +136,4 @@ if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] && command -v hyprctl >/dev/null 
   fi
 fi
 
-if ! command -v niri >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
-  open_detached
-fi
-
-workspace_json=$(niri msg -j workspaces 2>/dev/null || true)
-windows_json=$(niri msg -j windows 2>/dev/null || true)
-
-if [[ -z "$workspace_json" || -z "$windows_json" ]]; then
-  open_detached
-fi
-
-focused_workspace_id=$(jq -r '.[] | select(.is_focused) | .id' <<<"$workspace_json" | head -n1)
-focused_window_id=$(
-  jq -r '.[] | select(.is_focused) | .active_window_id // empty' <<<"$workspace_json" | head -n1
-)
-if [[ -z "$focused_window_id" ]]; then
-  focused_window_id=$(jq -r '.[] | select(.is_focused) | .id' <<<"$windows_json" | head -n1)
-fi
-
-focused_col=$(
-  jq -r \
-    --argjson workspace_id "${focused_workspace_id:-0}" \
-    --argjson focused_window_id "${focused_window_id:-0}" '
-      map(select(.workspace_id == $workspace_id and .id == $focused_window_id))
-      | .[0].layout.pos_in_scrolling_layout[0] // 0
-    ' <<<"$windows_json"
-)
-
-open_in_window() {
-  local window_id="$1"
-
-  niri msg action focus-window --id "$window_id" >/dev/null
-  sleep 0.2
-
-  # Chromium's ProcessSingleton cannot target a specific existing window.
-  # Drive the focused window, but paste the URL because wtype drops characters
-  # from long strings under some keyboard layouts.
-  if command -v wtype >/dev/null 2>&1 \
-    && command -v wl-copy >/dev/null 2>&1 \
-    && command -v wl-paste >/dev/null 2>&1; then
-    open_url_with_wtype
-    exit 0
-  fi
-
-  exec helium --new-tab "$url"
-}
-
-nearest_browser=$(
-  jq -r \
-    --argjson workspace_id "${focused_workspace_id:-0}" \
-    --argjson focused_col "${focused_col:-0}" \
-    --argjson focused_window_id "${focused_window_id:-0}" '
-      def sq: . * .;
-      map(
-        select(.workspace_id == $workspace_id and .app_id == "helium")
-        | .column_distance = (((.layout.pos_in_scrolling_layout[0] // 0) - $focused_col) | sq)
-      )
-      # Row indexes are only meaningful within a column. Including them in
-      # the distance makes the top window in an adjacent browser stack win.
-      # Pick the nearest browser column, then its most recently focused window.
-      | sort_by(
-          .column_distance,
-          (if .id == $focused_window_id then 0 else 1 end),
-          -(.focus_timestamp.secs // 0),
-          -(.focus_timestamp.nanos // 0),
-          .id
-        )
-      | .[0]
-      | .id // empty
-    ' <<<"$windows_json"
-)
-
-if [[ -n "$nearest_browser" ]]; then
-  open_in_window "$nearest_browser"
-fi
-
-# No Helium window in the current workspace: use only the named "web"
-# workspace. Never route the URL to a browser on an unrelated workspace.
-web_workspace_id=$(jq -r '.[] | select(.name == "web") | .id' <<<"$workspace_json" | head -n1)
-web_active_window_id=$(
-  jq -r '.[] | select(.name == "web") | .active_window_id // 0' <<<"$workspace_json" | head -n1
-)
-
-if [[ -n "$web_workspace_id" ]]; then
-  web_helium=$(
-    jq -r \
-      --argjson workspace_id "$web_workspace_id" \
-      --argjson active_window_id "${web_active_window_id:-0}" '
-        map(select(.workspace_id == $workspace_id and .app_id == "helium"))
-        | sort_by(
-            (if .id == $active_window_id then 0 else 1 end),
-            .id
-          )
-        | .[0]
-        | .id // empty
-      ' <<<"$windows_json"
-  )
-
-  if [[ -n "$web_helium" ]]; then
-    open_in_window "$web_helium"
-  fi
-
-  # Chromium may reactivate a recently used workspace while its existing
-  # process creates the new window. Track the new niri window and move it to
-  # web explicitly rather than relying on the workspace focused at launch.
-  known_helium_ids=$(jq -c '[.[] | select(.app_id == "helium") | .id]' <<<"$windows_json")
-
-  niri msg action focus-workspace web >/dev/null
-  refreshed_workspaces=$(niri msg -j workspaces)
-  jq -e '.[] | select(.name == "web" and .is_focused)' \
-    <<<"$refreshed_workspaces" >/dev/null
-
-  helium --new-window "$url" >/dev/null 2>&1 &
-
-  for _ in {1..300}; do
-    refreshed_windows=$(niri msg -j windows 2>/dev/null || true)
-    new_window_id=$(
-      jq -r --argjson known_ids "$known_helium_ids" '
-        map(
-          select(
-            .app_id == "helium"
-            and (.id as $id | $known_ids | index($id) | not)
-          )
-        )
-        | sort_by(.id)
-        | last
-        | .id // empty
-      ' <<<"${refreshed_windows:-[]}" 2>/dev/null || true
-    )
-
-    if [[ -n "$new_window_id" ]]; then
-      niri msg action move-window-to-workspace \
-        --window-id "$new_window_id" --focus false web >/dev/null
-      niri msg action focus-window --id "$new_window_id" >/dev/null
-      exit 0
-    fi
-
-    sleep 0.1
-  done
-
-  echo "open-url: timed out waiting for a new Helium window" >&2
-  exit 1
-fi
-
-# If there is no named web workspace, the original workspace is still focused.
-exec helium --new-window "$url"
+open_detached

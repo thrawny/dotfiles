@@ -54,7 +54,7 @@ Python buffering cannot leave the inherited descriptor at the end of the file.
 - `just shell::dev` leaves an existing instance alone. To run in the foreground,
   first stop `dotfiles-shell.service` with `systemctl --user stop`.
 - Systemd owns the shell and the separate text/image clipboard watchers.
-  Reloading the UI must not start another watcher. Niri's startup remains independent.
+  Reloading the UI must not start another watcher.
 - Inspect logs with `journalctl --user -u dotfiles-shell.service` or
   `quickshell log -c dotfiles`. Check readiness with
   `quickshell ipc -c dotfiles call shell ping`.

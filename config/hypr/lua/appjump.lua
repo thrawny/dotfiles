@@ -1,6 +1,4 @@
--- Alt-a app-jump submap, the native counterpart of the xremap/nirius chords
--- used under niri (the Hyprland xremap variant omits them; see
--- nix/home/nixos/xremap.nix). Any bound key jumps and exits the submap
+-- Alt-a app-jump submap. Any bound key jumps and exits the submap
 -- (auto-reset); any other key just exits via catchall.
 
 local dsp = hl.dsp

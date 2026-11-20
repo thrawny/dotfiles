@@ -17,11 +17,6 @@ The flake lives in `nix/`, not the repo root — `nix flake update <input>` must
 
 `hosts/thrawnym1/linux-builder.nix` runs the Rosetta VM through launchd while leaving Determinate in charge of Nix. Its builder registration is included from `/etc/nix/nix.custom.conf`. `packages/linux-builder.nix` targets macOS 15 explicitly because the upstream cached VM launcher requires a newer macOS. The guest uses Linux 6.12 because Rosetta on macOS 15 crashes with Linux 6.13+. Bootstrapping this customized guest requires an ARM Linux builder (the unmodified upstream VM works for ARM builds). `just build-linux-builder` builds the launcher; after `just switch`, `just check-linux-builder` forces an x64 Linux smoke build.
 
-## Waybar quirks (Linux desktops)
-
-- The binary is nix-wrapped: the process comm is `.waybar-wrapped`, so `pgrep -x waybar` finds nothing — use `pgrep -o waybar`.
-- Waybar is spawned by niri, not systemd. To restart: kill it, then `niri msg action spawn -- waybar -c ~/.config/waybar/config-niri -s ~/.config/waybar/style-niri.css`.
-
 ## After changes
 
 - Non-trivial changes: `just check` from the repo root.

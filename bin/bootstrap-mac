@@ -194,7 +194,7 @@ main() {
 
   if ask 'Walk through the remaining app and account setup?'; then
     say 'Install Ghostty: https://ghostty.org/download'
-    say 'Install AeroSpace and follow its permission prompts: https://nikitabobko.github.io/AeroSpace/guide#installation'
+    say 'Install OmniWM and follow its permission prompts.'
     say 'The repo supplies their settings, but does not install these Mac apps.'
     pause 'Install and launch the apps you want.'
     say 'Install CaskaydiaMono Nerd Font through Font Book for the configured terminal font.'

@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-# Spawn a new Ghostty window in the focused workspace's directory.
-set -euo pipefail
-
-cwd=$(nirius get-workspace-directory)
-exec ghostty +new-window --working-directory="$cwd"

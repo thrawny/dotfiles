@@ -7,7 +7,7 @@ config/claude/CLAUDE.local.md
 
 config/pi/settings.json
 
-# Host-local Hyprland overrides (mirrors niri's local.kdl)
+# Host-local Hyprland overrides
 config/hypr/lua/host.lua
 
 result

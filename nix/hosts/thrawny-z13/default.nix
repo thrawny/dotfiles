@@ -18,13 +18,6 @@ let
             --set T3CODE_TELEMETRY_ENABLED false
         '';
       });
-  dotfilesBin = "${config.users.users.${config.dotfiles.username}.home}/dotfiles/bin";
-  niriLidOutputSync = [
-    "${pkgs.python3}/bin/python3"
-    "${dotfilesBin}/niri-lid-output-sync"
-    "--niri"
-    "${config.programs.niri.package}/bin/niri"
-  ];
 in
 {
   imports = [
@@ -269,75 +262,6 @@ in
     dotfiles.privateAgentSkills.enable = true;
     dotfiles.t3code.enable = true;
     programs.ghostty.settings.font-size = 11;
-
-    programs.niri.settings = lib.mkIf config.programs.niri.enable {
-      # Let the debounced lid event handler below control eDP-1 instead of
-      # niri's immediate lid-close handling, which can see close/open/close
-      # sensor bounce and crash GTK/Wayland clients.
-      debug.keep-laptop-panel-on-when-lid-is-closed = true;
-
-      "switch-events" = {
-        lid-close.action.spawn = niriLidOutputSync ++ [ "2" ];
-        lid-open.action.spawn = niriLidOutputSync ++ [ "0.5" ];
-      };
-
-      spawn-at-startup = lib.mkAfter [
-        { command = niriLidOutputSync ++ [ "0" ]; }
-      ];
-
-      outputs = {
-        # Laptop screen - centered below work ultrawide
-        "eDP-1" = {
-          scale = 1.75;
-          position = {
-            x = 898;
-            y = 1440;
-          };
-        };
-        # Home: LG 27GL850 - middle (main monitor)
-        # The dock can enumerate this monitor as either DP-8 or DP-9.
-        "DP-8" = {
-          scale = 1.0;
-          position = {
-            x = 1646;
-            y = 0;
-          };
-        };
-        "DP-9" = {
-          scale = 1.0;
-          position = {
-            x = 1646;
-            y = 0;
-          };
-        };
-        # Home: AOC Q27G2WG4 - right
-        "DP-2" = {
-          scale = 1.0;
-          mode = {
-            width = 2560;
-            height = 1440;
-            refresh = 143.912;
-          };
-          position = {
-            x = 4206;
-            y = 0;
-          };
-        };
-        # Work: Philips 346E2C ultrawide - above laptop
-        "DP-1" = {
-          scale = 1.0;
-          position = {
-            x = 0;
-            y = 0;
-          };
-        };
-      };
-      workspaces = {
-        "1-main".open-on-output = "DP-8";
-        "2-web".open-on-output = "DP-2";
-        "3-dotfiles".open-on-output = "DP-8";
-      };
-    };
 
     dotfiles.herdrApp.enable = true;
 

@@ -36,17 +36,10 @@ check-image-package:
 dev:
     nix shell --inputs-from ./nix nixpkgs#quickshell -c quickshell -c dotfiles --no-duplicate
 
-# Start the managed shell; stop Hyprland's Waybar only if IPC reports readiness
+# Start the managed shell and wait for IPC to report readiness
 use:
     systemctl --user start dotfiles-shell.service
     quickshell ipc -c dotfiles call shell ping | grep -qx ready
-    -pkill -u "$(id -u)" -f '^[^ ]*waybar[^ ]* .*config-hyprland'
-
-# Manually restore Waybar and stop Quickshell
-waybar:
-    hyprctl dispatch 'hl.dsp.exec_cmd("waybar -c " .. os.getenv("HOME") .. "/.config/waybar/config-hyprland -s " .. os.getenv("HOME") .. "/.config/waybar/style-hyprland.css")'
-    systemctl --user stop dotfiles-shell.service
-    -quickshell kill -c dotfiles
 
 # Format the editable QML components
 fmt:

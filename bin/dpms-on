@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
-# Turn on monitors - works with both Hyprland and niri
+# Turn on monitors in the Hyprland session.
 
 if [ -n "$HYPRLAND_INSTANCE_SIGNATURE" ]; then
     exec "$(dirname "$(readlink -f "$0")")/hypr-display-recover" --on-only
-elif [ -n "$NIRI_SOCKET" ]; then
-    niri msg action power-on-monitors
 fi

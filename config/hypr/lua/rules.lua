@@ -1,6 +1,6 @@
--- Workspace and window rules, ported from the niri config.
+-- Workspace and window rules.
 
--- Named workspaces matching niri's main/web/dotfiles.
+-- Named workspaces: main, web and dotfiles.
 hl.workspace_rule({ workspace = "1", default_name = "main", persistent = true })
 hl.workspace_rule({ workspace = "2", default_name = "web", persistent = true })
 hl.workspace_rule({ workspace = "3", default_name = "dotfiles", persistent = true })

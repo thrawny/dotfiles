@@ -2,7 +2,6 @@
 
 A Quickshell desktop bar and launcher for Hyprland, using the
 shared Monokai theme. Includes quota details and text/image clipboard history.
-Niri keeps its existing setup.
 
 ## Start
 
@@ -11,10 +10,7 @@ login. From the repository root:
 
 ```sh
 just shell::use       # Use Quickshell now
-just shell::waybar    # Restore Waybar
 ```
-
-Walker is still available manually with `walker`.
 
 ## Use
 
@@ -56,7 +52,6 @@ Quotabar and the clipboard image adapter are installed through Nix.
 Claude quota data remains visibly unavailable until login.
 
 For development, checks, and troubleshooting, see [AGENTS.md](AGENTS.md).
-The [Waybar parity checklist](PARITY.md) records the restored interactions.
 
 ## Keep awake
 

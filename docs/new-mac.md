@@ -111,7 +111,7 @@ just --version
 
 ## 5. Finish the Mac setup
 
-- Install [Ghostty](https://ghostty.org/download) and [AeroSpace](https://nikitabobko.github.io/AeroSpace/guide#installation). This repo configures them but does not install their Mac apps. Follow AeroSpace's permission prompts when launching it.
+- Install [Ghostty](https://ghostty.org/download) and OmniWM. This repo configures them but does not install their Mac apps. Follow OmniWM's permission prompts when launching it.
 - Install CaskaydiaMono Nerd Font through Font Book for the configured terminal font.
 - Sign in to your development services and restore any SSH keys or credentials you need. The first switch seeds local Claude, Codex, and Pi settings from the repo's examples; existing credentials and private local settings are not in Git.
 - Log out and back in to refresh the session and macOS settings.

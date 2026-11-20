@@ -239,7 +239,7 @@ sandbox() {
   if [[ -d "/run/user/${UID}" ]]; then
     args+=(--tmpfs "/run/user/${UID}")
 
-    # Only the broker protocol is exposed, never raw niri/Hyprland IPC. Bind
+    # Only the broker protocol is exposed, never raw Hyprland IPC. Bind
     # its directory so socket replacement survives in already-running sandboxes.
     args+=(
       --ro-bind-try

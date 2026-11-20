@@ -117,7 +117,6 @@ in
     mangohud # Gaming performance overlay (FPS, temps, etc.)
     nvtopPackages.nvidia # GPU monitoring (htop for NVIDIA GPU)
     pkgsi686Linux.gperftools # 32-bit tcmalloc for Source engine games (HL2, TF2, etc.)
-    xwayland-satellite # X11 compatibility for Niri
   ];
 
   # Gaming configuration
@@ -170,43 +169,5 @@ in
 
       programs.ghostty.settings.font-size = lib.mkForce 12;
 
-      # Desktop-specific Niri configuration
-      programs.niri.settings = lib.mkIf config.programs.niri.enable {
-        spawn-at-startup = [
-          {
-            command = [
-              "solaar"
-              "--window=hide"
-            ];
-          }
-        ];
-        outputs = {
-          "HDMI-A-1" = {
-            scale = 1.0;
-            position = {
-              x = 0;
-              y = 0;
-            };
-          };
-          "DP-1" = {
-            scale = 1.0;
-            position = {
-              x = 2560;
-              y = 0;
-            };
-            mode = {
-              width = 2560;
-              height = 1440;
-              refresh = 143.912;
-            };
-          };
-        };
-        # Bind named workspaces to monitors
-        workspaces = {
-          "1-main".open-on-output = "HDMI-A-1"; # Main on left monitor
-          "2-web".open-on-output = "DP-1"; # Browser on right monitor
-          "3-dotfiles".open-on-output = "HDMI-A-1"; # Dotfiles on left monitor
-        };
-      };
     };
 }

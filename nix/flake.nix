@@ -47,10 +47,6 @@
     helium-browser.url = "github:schembriaiden/helium-browser-nix-flake";
     helium-browser.inputs.nixpkgs.follows = "nixpkgs";
     linux-systems.url = "github:nix-systems/default-linux";
-    elephant.url = "github:abenz1267/elephant";
-    walker.url = "github:abenz1267/walker";
-    walker.inputs.elephant.follows = "elephant";
-    niri-flake.url = "github:epireyn/niri-flake";
     xremap-flake.url = "github:xremap/nix-flake";
     disko.url = "github:nix-community/disko";
     disko.inputs.nixpkgs.follows = "nixpkgs";
@@ -104,8 +100,6 @@
       nixos-hardware,
       nur,
       helium-browser,
-      walker,
-      niri-flake,
       xremap-flake,
       nixpkgs-xwayland,
       disko,
@@ -193,7 +187,6 @@
               agentAssets
               direnvAssets
               thrawny-pkgs
-              walker
               nurPkgs
               xremap-flake
               nixpkgs-xwayland
@@ -204,7 +197,6 @@
             srvos.nixosModules.desktop
             srvos.nixosModules.mixins-trusted-nix-caches
             home-manager.nixosModules.home-manager
-            niri-flake.nixosModules.niri # cached niri package + system setup
             zmx.nixosModules.cache
             {
               home-manager.extraSpecialArgs = flakeArgs;
@@ -236,7 +228,6 @@
               agentAssets
               direnvAssets
               thrawny-pkgs
-              walker
               nurPkgs
               xremap-flake
               zmx

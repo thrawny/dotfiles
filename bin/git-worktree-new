@@ -43,8 +43,4 @@ if [[ -f "${root}/.claude/settings.local.json" ]]; then
   copy_local_file .claude/settings.local.json
 fi
 
-if [[ -n "${NIRI_SOCKET:-}" ]] && command -v niri >/dev/null 2>&1; then
-  niri-project --terminals 1 "$wt_dir"
-else
-  printf '%s\n' "$wt_dir"
-fi
+printf '%s\n' "$wt_dir"

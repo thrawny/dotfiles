@@ -18,7 +18,7 @@ branch="$1"
 shift
 script_dir=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 
-NIRI_SOCKET= "$script_dir/git-worktree-new" "$branch"
+"$script_dir/git-worktree-new" "$branch"
 worktree_dir=$("$script_dir/git-worktree-go" "$branch")
 
 cd "$worktree_dir"

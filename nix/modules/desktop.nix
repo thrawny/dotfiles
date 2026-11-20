@@ -1,34 +1,15 @@
 {
   config,
   pkgs,
-  lib,
   helium-browser,
-  walker,
   xremap-flake,
   ...
 }:
 let
   cfg = config.dotfiles;
   inherit (cfg) username;
-  niriSessionCommand = pkgs.writeShellScript "niri-session-with-secrets" ''
-    set -e
-    if [ -f "$HOME/.secrets" ]; then
-      set -a
-      . "$HOME/.secrets"
-      set +a
-    fi
-    if [ -z "''${VOXTYPE_WHISPER_API_KEY:-}" ] && [ -n "''${GROQ_API_KEY:-}" ]; then
-      export VOXTYPE_WHISPER_API_KEY="$GROQ_API_KEY"
-    fi
-    if [ -n "''${VOXTYPE_WHISPER_API_KEY:-}" ]; then
-      systemctl --user import-environment VOXTYPE_WHISPER_API_KEY
-    fi
-    exec ${config.programs.niri.package}/bin/niri-session
-  '';
-
-  # uwsm gives Hyprland the systemd session niri-session provides natively:
-  # graphical-session.target lifecycle, so user services (xremap, hypridle,
-  # wpaperd) actually run in the Hyprland session.
+  # uwsm gives Hyprland a systemd session with the graphical-session.target
+  # lifecycle, so user services (xremap, hypridle, wpaperd) run in it.
   hyprlandSessionCommand = pkgs.writeShellScript "hyprland-session-with-secrets" ''
     set -e
     if [ -f "$HOME/.secrets" ]; then
@@ -45,7 +26,7 @@ let
     exec ${config.programs.uwsm.package}/bin/uwsm start -- hyprland-uwsm.desktop
   '';
 
-  # Session picker entries for tuigreet (F3 menu). Keep Niri available in source only.
+  # Session picker entries for tuigreet (F3 menu).
   mkGreeterSession =
     name: command:
     pkgs.writeTextDir "${name}.desktop" ''
@@ -58,8 +39,7 @@ let
     name = "greeter-sessions";
     paths = [
       (mkGreeterSession "hyprland" hyprlandSessionCommand)
-    ]
-    ++ lib.optional config.programs.niri.enable (mkGreeterSession "niri" niriSessionCommand);
+    ];
   };
 
   desktopPackages = with pkgs; [
@@ -74,7 +54,6 @@ let
     playerctl
     powertop
     spotify
-    waybar
     wl-clipboard
     wtype
     (helium-browser.packages.${pkgs.stdenv.hostPlatform.system}.default.overrideAttrs (old: {
@@ -116,14 +95,6 @@ in
 {
   environment.systemPackages = desktopPackages;
 
-  # Pre-trust niri cache so it works on first build (before niri-flake module applies)
-  nix.settings = {
-    trusted-substituters = [ "https://niri-epireyn.cachix.org" ];
-    trusted-public-keys = [
-      "niri-epireyn.cachix.org-1:tlVyFN7CtsDT+ZcLPS+ekFWeT1X6X4OqvWqbBMyIzFA="
-    ];
-  };
-
   users.users.${username}.extraGroups = [
     "video"
     "audio"
@@ -132,11 +103,6 @@ in
   ];
 
   programs = {
-    niri = {
-      enable = false;
-      package = pkgs.niri;
-    };
-
     # Hyprland 0.56+ (core scrolling layout, Lua config). Config lives in
     # config/hypr/ as Lua, symlinked by home/nixos/hyprland.nix.
     hyprland = {
@@ -226,28 +192,11 @@ in
 
   xdg.portal = {
     extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
-    # niri-flake sets configPackages = [ niri ] with default=gnome;gtk, but
-    # config.niri overrides that entirely, so replicate the defaults here.
-    # Keep the lightweight GTK portal for file chooser dialogs; Nautilus is
-    # configured separately as the default directory browser.
-    config.niri = lib.mkIf config.programs.niri.enable {
-      default = [
-        "gnome"
-        "gtk"
-      ];
-      "org.freedesktop.impl.portal.Access" = "gtk";
-      "org.freedesktop.impl.portal.FileChooser" = "gtk";
-      "org.freedesktop.impl.portal.Notification" = "gtk";
-      "org.freedesktop.impl.portal.Secret" = "gnome-keyring";
-    };
   };
 
   home-manager = {
     extraSpecialArgs = {
-      inherit
-        walker
-        xremap-flake
-        ;
+      inherit xremap-flake;
     };
     users.${username} = import ../home/nixos/default.nix;
   };

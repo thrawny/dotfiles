@@ -1,17 +1,11 @@
 # xremap configuration for Linux systems
 # Replaces keyd for key remapping with per-app exclusion support
 #
-# Two units, one per compositor, gated by ConditionEnvironment on
-# XDG_CURRENT_DESKTOP (value-matched, so it self-corrects when switching
-# sessions; socket vars like NIRI_SOCKET can linger in the user manager).
-# xremap can only be built with one WM feature, so each unit runs the
-# matching native build: withNiri for niri, xremap-hypr for Hyprland.
-# The keymaps share everything except the Alt-a app-jump chords, which are
-# nirius-based under niri and native Lua submaps under Hyprland.
+# One unit, gated by ConditionEnvironment on XDG_CURRENT_DESKTOP, runs the
+# native xremap-hypr build. Hyprland handles the Alt-a app-jump chords as Lua
+# submaps in config/hypr.
 {
   pkgs,
-  lib,
-  osConfig,
   xremap-flake,
   ...
 }:
@@ -99,71 +93,6 @@ let
     }
   ];
 
-  # niri-only: Hyprland handles these as native Lua submaps in config/hypr.
-  appJumpChord = {
-    name = "App jump chord (Alt-a prefix)";
-    remap = {
-      "Alt-a" = {
-        remap = {
-          "a" = {
-            launch = [
-              "nirius"
-              "focus"
-              "--title"
-              "k9s"
-            ];
-          };
-          "s" = {
-            launch = [
-              "nirius"
-              "focus"
-              "--app-id"
-              "(?i)slack"
-            ];
-          };
-          "d" = {
-            launch = [
-              "nirius"
-              "focus"
-              "--title"
-              "Microsoft Teams"
-            ];
-          };
-          "b" = {
-            launch = [
-              "nirius"
-              "scratchpad-show-or-spawn"
-              "--title"
-              "^btop\\+\\+$"
-              "--"
-              "ghostty"
-              "--title=btop++"
-              "-e"
-              "btop"
-            ];
-          };
-          "z" = {
-            launch = [
-              "nirius"
-              "focus"
-              "--title"
-              "(?i)discord"
-            ];
-          };
-          "t" = {
-            launch = [
-              "nirius"
-              "focus"
-              "--app-id"
-              "org.telegram.desktop"
-            ];
-          };
-        };
-        timeout_millis = 1000;
-      };
-    };
-  };
-
   hyprConfigFile = (pkgs.formats.yaml { }).generate "xremap-hypr.yml" {
     modmap = sharedModmap;
     keymap = sharedKeymap;
@@ -172,20 +101,6 @@ let
   xremapHypr = xremap-flake.packages.${pkgs.stdenv.hostPlatform.system}.xremap-hypr;
 in
 {
-  services.xremap = {
-    enable = osConfig.programs.niri.enable;
-    withNiri = true;
-    watch = true; # auto-detect newly connected devices (Bluetooth, USB hotplug)
-    config = {
-      modmap = sharedModmap;
-      keymap = [ appJumpChord ] ++ sharedKeymap;
-    };
-  };
-
-  systemd.user.services.xremap = lib.mkIf osConfig.programs.niri.enable {
-    Unit.ConditionEnvironment = "XDG_CURRENT_DESKTOP=niri";
-  };
-
   systemd.user.services.xremap-hypr = {
     Unit = {
       Description = "xremap (Hyprland variant)";

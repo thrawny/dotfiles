@@ -1,19 +1,15 @@
 # Quickshell implementation checkpoint
 
-Read [AGENTS.md](AGENTS.md). This is the current Hyprland implementation;
-`docs/quickshell-implementation-plan.md` is historical. Niri remains unchanged.
+Read [AGENTS.md](AGENTS.md). This is the current Hyprland implementation.
 
 ## Implemented and deployed
 
-- Waybar functional parity is recorded in [PARITY.md](PARITY.md), including
-  keyboard switching, network traffic/frequency, audio settings and mute,
-  battery power details, clock actions, and compact tray behavior.
 - Quota indicators and details use `quotabar snapshot` schema 1. The Rust backend
   retains caching, expiry, notifications, costs and credit policy. The flake pins
   `5d6b3811303276081f1c510f4c9f3255bd64dffa` from `~/code/quotabar`.
   The QML presentation follows the original compact indicators and stacked
   provider popup, including SVG logos and the orange Claude mark.
-- Workspace pills restore the original Waybar active gradient and state colors.
+- Workspace pills use the active gradient and state colors from the old Waybar theme.
 - Image clipboard history shows asynchronous thumbnails and copies original
   bytes through the approved Python adapter `bin/shell-clipboard-image`.
   Nix pins its interpreter and commands. Separate systemd text/image watchers

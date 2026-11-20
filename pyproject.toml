@@ -30,7 +30,6 @@ include = [
   "bin/env",
   "bin/herdr-prune-workspaces",
   "bin/incus-pull-sessions",
-  "bin/niri-lid-output-sync",
   "bin/telegram-notify",
   "bin/zmx-list",
 ]

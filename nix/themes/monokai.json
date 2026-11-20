@@ -143,20 +143,6 @@
       "border": "#3a3a3a",
       "progress": "#66d9ef"
     },
-    "niri": {
-      "active": "#f92672",
-      "inactive": "#3a3a3a",
-      "urgent": "#cc4444",
-      "shadow": "#0007"
-    },
-    "walker": {
-      "background": "#1c1c1c",
-      "accent": "#f92672",
-      "foreground": "#f8f8f2",
-      "selection": "#49483e",
-      "match": "#a6e22e",
-      "subtext": "#75715e"
-    },
     "waybar": {
       "bg": "#121418",
       "bgAlt": "#1a1c21",

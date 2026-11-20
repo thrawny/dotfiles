@@ -11,7 +11,6 @@
 
     # Darwin-specific modules
     ./ghostty.nix
-    ./aerospace.nix
     ./omniwm.nix
     ./setup.nix
     ./t3code.nix

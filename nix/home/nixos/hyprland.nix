@@ -21,10 +21,10 @@ in
   ];
 
   services.hyprpolkitagent.enable = true;
-  # Niri supplies its own agent; UWSM exports this before starting the session.
+  # UWSM exports XDG_CURRENT_DESKTOP before starting the session.
   systemd.user.services.hyprpolkitagent.Unit.ConditionEnvironment = "XDG_CURRENT_DESKTOP=Hyprland";
 
-  # Started by Hyprland, not Niri; stopped when the graphical session ends.
+  # Started by Hyprland; stopped when the graphical session ends.
   systemd.user.services.dotfiles-shell = {
     Unit = {
       Description = "Dotfiles Quickshell desktop shell";

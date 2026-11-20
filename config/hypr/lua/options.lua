@@ -1,4 +1,4 @@
--- Look, input, and layout options. Mirrors the niri setup where possible:
+-- Look, input, and layout options:
 -- Molokai borders, 8px gaps, rounded corners, flat mouse profile, au/se layout.
 
 local home = os.getenv("HOME")
@@ -101,7 +101,7 @@ hl.config({
 	},
 })
 
--- Match Niri's touchpad acceleration without changing the flat mouse profile.
+-- Raise touchpad acceleration without changing the flat mouse profile.
 hl.device({
 	name = "snsl0028:00-2c2f:0028-touchpad",
 	accel_profile = "adaptive",

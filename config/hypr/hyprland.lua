@@ -13,5 +13,5 @@ require("displays")
 require("appjump")
 require("autostart")
 
--- Optional host-local overrides (gitignored), mirrors niri's local.kdl.
+-- Optional host-local overrides (gitignored).
 pcall(require, "host")

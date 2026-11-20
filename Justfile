@@ -208,10 +208,6 @@ check-moto-docs:
 test-python *args:
     uv run --locked python -B -m pytest {{args}}
 
-# Validate the active AeroSpace config on macOS without applying it
-check-aerospace:
-    aerospace reload-config --dry-run --warnings-as-errors --no-gui
-
 # Run Neovim config tests
 test-nvim:
     nix run ./nix#nvim -- --headless \
