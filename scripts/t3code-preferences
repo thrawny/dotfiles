@@ -15,9 +15,18 @@ settings_tmp=$(mktemp "$settings.XXXXXX")
 bindings_tmp=$(mktemp "$bindings.XXXXXX")
 trap 'rm -f "$settings_tmp" "$bindings_tmp"' EXIT
 
-jq -en --slurpfile managed "$preferences" --slurpfile existing "$settings_input" \
-  '($existing[0] // {}) | if type != "object" then error("settings must be an object") else . + $managed[0].settings end' \
-  /dev/null > "$settings_tmp"
+# T3CODE_THEME, set by the Nix wrapper, is the Monokai theme built from nix/themes.
+theme_id=
+if [[ -n "${T3CODE_THEME:-}" ]]; then
+  theme_id=monokai
+  mkdir -p "$state/userdata/themes"
+  install -m 0600 "$T3CODE_THEME" "$state/userdata/themes/$theme_id.json"
+fi
+jq -en --slurpfile managed "$preferences" --slurpfile existing "$settings_input" --arg theme "$theme_id" '
+  ($existing[0] // {})
+  | if type != "object" then error("settings must be an object") else . + $managed[0].settings end
+  | if $theme == "" then . else .defaultTheme = $theme end
+' > "$settings_tmp"
 jq -en --slurpfile managed "$preferences" --slurpfile existing "$bindings_input" '
   $managed[0].keybindings as $rules
   | ($existing[0] // [])
