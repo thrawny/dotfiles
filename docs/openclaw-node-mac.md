@@ -63,10 +63,12 @@ The gateway denies `nodes` to turns whose sender is a known non-owner. The
 config named by `OPENCLAW_CONFIG_PATH` in `/srv/agents/openclaw/env` lists only
 a Discord ID in `commands.ownerAllowFrom`, so every Telegram turn, group or DM,
 is non-owner. A CLI agent probe runs as the owner and passes, so it does not
-show this. After changing those instructions, mention the bot in the shared
-group asking for `sonos discover --format json --timeout 5s`. The shared
-agent's trajectory should show a `node_exec` call on M1 that returns the
-speaker list, no `nodes` call or owner-authority rejection, and no approval DM.
+show this. Codex reads `AGENTS.md` only when its thread starts, so after
+changing those instructions send `/reset soft` in the shared group, then
+mention the bot there asking for `sonos discover --format json --timeout 5s`.
+The shared agent's trajectory should show a `node_exec` call on M1 that
+returns the speaker list, no `nodes` call or owner-authority rejection, and no
+approval DM.
 
 Inspect the service with:
 
