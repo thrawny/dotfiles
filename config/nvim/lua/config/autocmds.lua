@@ -217,7 +217,7 @@ vim.api.nvim_create_autocmd({ "BufReadPost", "BufEnter" }, {
   desc = "Restore dadbod-ui query buffer context on buffer open/enter",
 })
 
--- Detect nested SSH config files like ~/.ssh/kanel/config
+-- Detect nested SSH config files like ~/.ssh/acme/config
 vim.api.nvim_create_autocmd({ "BufRead", "BufNewFile" }, {
   pattern = "*/.ssh/*/config",
   callback = function()

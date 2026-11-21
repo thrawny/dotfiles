@@ -8,18 +8,18 @@ Config location: ~/.config/kpf/config.toml
 
 Example config:
     [[port_forwards]]
-    name = "timescaledb-prod"
-    context = "kanel-production"
-    namespace = "kanel-backend"
-    service = "asset-timescaledb-rw"
+    name = "widgets-db-prod"
+    context = "acme-production"
+    namespace = "widgets"
+    service = "widgets-db"
     local_port = 5434
     remote_port = 5432
 
     [[port_forwards]]
-    name = "river-ui-prod"
-    context = "kanel-production"
-    namespace = "kanel-backend"
-    service = "river-ui"
+    name = "widgets-ui-prod"
+    context = "acme-production"
+    namespace = "widgets"
+    service = "widgets-ui"
     local_port = 8081
     remote_port = 8080
 """
