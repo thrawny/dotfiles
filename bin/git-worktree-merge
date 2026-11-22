@@ -38,16 +38,34 @@ if ! git show-ref --verify --quiet "refs/heads/$branch"; then
 fi
 
 original_branch=$(git rev-parse --abbrev-ref HEAD)
+# Git refuses to switch to a branch checked out in another worktree, so rebase
+# it where it is checked out: normally its own worktree, from git-worktree-new.
+rebase_dir=$root
+while IFS= read -r line; do
+  case "$line" in
+    "worktree "*) listed_dir=${line#worktree } ;;
+    "branch refs/heads/$branch") rebase_dir=$listed_dir ;;
+  esac
+done < <(git worktree list --porcelain)
+
+rebase_in_progress() {
+  local state
+  for state in rebase-merge rebase-apply; do
+    [[ -d "$(git -C "$rebase_dir" rev-parse --path-format=absolute --git-path "$state" 2>/dev/null)" ]] && return 0
+  done
+  return 1
+}
+
 interrupted=true
+rebasing=false
 
 cleanup() {
   if [[ "$interrupted" == true ]]; then
     echo "Error occurred, cleaning up..." >&2
     
-    # Abort rebase if in progress
-    if [[ -d "$(git rev-parse --git-path rebase-merge 2>/dev/null)" ]] || \
-       [[ -d "$(git rev-parse --git-path rebase-apply 2>/dev/null)" ]]; then
-      git rebase --abort 2>/dev/null || true
+    # Abort the rebase this command started, never one already in progress.
+    if [[ "$rebasing" == true ]] && rebase_in_progress; then
+      git -C "$rebase_dir" rebase --abort 2>/dev/null || true
     fi
     
     # Return to original branch
@@ -79,9 +97,15 @@ if ! git rev-parse --verify --quiet origin/main >/dev/null; then
   exit 1
 fi
 
+if rebase_in_progress; then
+  echo "A rebase is already in progress in $rebase_dir" >&2
+  exit 1
+fi
+
 echo "Rebasing $branch onto origin/main..."
-if ! git rebase origin/main "$branch"; then
-  echo "Rebase failed (conflicts). Aborting..." >&2
+rebasing=true
+if ! git -C "$rebase_dir" rebase origin/main "$branch"; then
+  echo "Rebase failed. Aborting..." >&2
   exit 1
 fi
 
