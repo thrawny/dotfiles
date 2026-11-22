@@ -9,6 +9,7 @@ import pytest
 SCRIPT = Path(__file__).resolve().parents[1] / "bin/git-worktree-merge"
 
 
+@pytest.mark.parametrize("checkout", ["attached", "detached"])
 @pytest.mark.parametrize(
     "local_state",
     [
@@ -22,7 +23,7 @@ SCRIPT = Path(__file__).resolve().parents[1] / "bin/git-worktree-merge"
     ],
 )
 def test_merge_cleanup_preserves_refused_worktrees(
-    tmp_path: Path, local_state: str
+    tmp_path: Path, local_state: str, checkout: str
 ) -> None:
     environment = {
         **os.environ,
@@ -56,8 +57,13 @@ def test_merge_cleanup_preserves_refused_worktrees(
     git("-C", str(repo), "push", "-u", "origin", "main")
     git("-C", str(repo), "branch", "topic")
     worktree = tmp_path / "repo-worktrees/topic"
-    # A detached worktree lets the command rebase topic in the main checkout.
-    git("-C", str(repo), "worktree", "add", "--detach", str(worktree), "topic")
+    # git-worktree-new checks the branch out in its worktree; a detached
+    # worktree leaves the command to rebase topic in the main checkout.
+    if checkout == "attached":
+        git("-C", str(repo), "worktree", "add", str(worktree), "topic")
+        git("-C", str(worktree), "commit", "--allow-empty", "-m", "Topic work")
+    else:
+        git("-C", str(repo), "worktree", "add", "--detach", str(worktree), "topic")
     local_file = worktree / local_state
     if local_state in ("assume-unchanged", "skip-worktree"):
         git("-C", str(worktree), "update-index", f"--{local_state}", "tracked")
@@ -79,6 +85,7 @@ def test_merge_cleanup_preserves_refused_worktrees(
 
     if local_state == "clean":
         assert result.returncode == 0, result.stderr
+        assert git("-C", str(repo), "rev-parse", "main") == topic_head
         assert not worktree.exists()
         assert git("-C", str(repo), "branch", "--list", "topic") == ""
     else:
