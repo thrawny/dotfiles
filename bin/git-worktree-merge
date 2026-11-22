@@ -38,37 +38,43 @@ if ! git show-ref --verify --quiet "refs/heads/$branch"; then
 fi
 
 original_branch=$(git rev-parse --abbrev-ref HEAD)
+# Print the rebase state directory of worktree $1, if it is mid-rebase.
+rebase_state() {
+  local state state_dir
+  for state in rebase-merge rebase-apply; do
+    state_dir=$(git -C "$1" rev-parse --path-format=absolute --git-path "$state") || return 1
+    [[ -d "$state_dir" ]] && printf '%s\n' "$state_dir"
+  done
+  return 0
+}
+rebase_in_progress() {
+  [[ -n "$(rebase_state "$1")" ]]
+}
+
 # Git refuses to switch to a branch checked out in another worktree, so rebase
 # it where it is checked out: normally its own worktree, from git-worktree-new.
 # A worktree in the middle of rebasing the branch lists as detached; its rebase
 # state still names the branch.
-rebasing_branch() {
-  local state head_name
-  for state in rebase-merge rebase-apply; do
-    head_name=$(git -C "$1" rev-parse --path-format=absolute --git-path "$state/head-name" 2>/dev/null) || continue
-    [[ -r "$head_name" ]] && cat "$head_name"
-  done
-}
 rebase_dir=$root
 while IFS= read -r line; do
   case "$line" in
     "worktree "*) listed_dir=${line#worktree } ;;
     "branch refs/heads/$branch") rebase_dir=$listed_dir ;;
     detached)
-      if grep -qxF "refs/heads/$branch" < <(rebasing_branch "$listed_dir"); then
-        rebase_dir=$listed_dir
-      fi
+      while IFS= read -r state_dir; do
+        if [[ "$(<"$state_dir/head-name")" == "refs/heads/$branch" ]]; then
+          rebase_dir=$listed_dir
+        fi
+      done < <(rebase_state "$listed_dir" 2>/dev/null)
       ;;
   esac
 done < <(git worktree list --porcelain)
 
-rebase_in_progress() {
-  local state
-  for state in rebase-merge rebase-apply; do
-    [[ -d "$(git -C "$rebase_dir" rev-parse --path-format=absolute --git-path "$state" 2>/dev/null)" ]] && return 0
-  done
-  return 1
-}
+# --remove deletes wt_dir, so the branch must live there or in this checkout.
+if [[ "$rebase_dir" != "$root" && "$(cd "$rebase_dir" && pwd -P)" != "$(cd "$wt_dir" && pwd -P)" ]]; then
+  echo "Branch '$branch' is checked out at $rebase_dir, not $wt_dir" >&2
+  exit 1
+fi
 
 interrupted=true
 rebasing=false
@@ -78,7 +84,7 @@ cleanup() {
     echo "Error occurred, cleaning up..." >&2
     
     # Abort the rebase this command started, never one already in progress.
-    if [[ "$rebasing" == true ]] && rebase_in_progress; then
+    if [[ "$rebasing" == true ]] && rebase_in_progress "$rebase_dir"; then
       git -C "$rebase_dir" rebase --abort 2>/dev/null || true
     fi
     
@@ -111,10 +117,18 @@ if ! git rev-parse --verify --quiet origin/main >/dev/null; then
   exit 1
 fi
 
-if rebase_in_progress; then
-  echo "A rebase is already in progress in $rebase_dir" >&2
-  exit 1
-fi
+# This command rebases in rebase_dir and checks out main here. Either move
+# would strand a rebase already paused in that checkout.
+for checkout in "$root" "$rebase_dir"; do
+  if ! state_dirs=$(rebase_state "$checkout"); then
+    echo "Could not inspect rebase state in $checkout" >&2
+    exit 1
+  fi
+  if [[ -n "$state_dirs" ]]; then
+    echo "A rebase is already in progress in $checkout" >&2
+    exit 1
+  fi
+done
 
 echo "Rebasing $branch onto origin/main..."
 rebasing=true
