@@ -2,7 +2,16 @@
 
 import { View, div, svg, image } from "gpui-kit";
 import { h_flex } from "gpui-base";
-import { spaces, panes, terminals, run, theme, home, openOverlay, window as win } from "herdr";
+import { spaces, panes, terminals, run, theme, home, openOverlay, window as win, layout } from "herdr";
+
+function find(node, id) {
+  if (node?.id === id) return node;
+  for (const child of node?.children ?? []) {
+    const found = find(child, id);
+    if (found) return found;
+  }
+  return null;
+}
 
 function sessionName(terminal) {
   // Pi reports its session name directly; other agents set the terminal title.
@@ -138,8 +147,9 @@ export default class TerminalsBar extends View {
       .size_full()
       .gap(8)
       .items_center()
-      // macOS: the window buttons sit here (the layout's traffic_lights).
-      .when(w.platform === "macos" && w.titlebar === "none" && !w.fullscreen, (el) => el.pl(72))
+      // macOS: the window buttons sit over the sidebar, even a narrow one, so
+      // the bar makes room for them only while the sidebar is hidden.
+      .when(w.platform === "macos" && w.titlebar === "none" && !w.fullscreen && find(layout(), "sidebar")?.hidden === true, (el) => el.pl(72))
       .child(
         h_flex()
           .flex_shrink(1)
