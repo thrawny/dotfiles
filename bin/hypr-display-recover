@@ -59,6 +59,11 @@ lid_closed() {
 monitors=$(timeout 4s hyprctl monitors -j)
 selected=$(jq -r --arg requested "${1:-}" \
     '.[] | select(.disabled != true) | .name | select($requested == "" or . == $requested)' <<< "$monitors")
+# A named monitor that is absent or disabled would otherwise exit 0 untouched.
+if [[ -n "${1:-}" && -z "$selected" ]]; then
+    echo "Monitor not found or disabled: $1" >&2
+    exit 1
+fi
 restore=()
 
 power() {
