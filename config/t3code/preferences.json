@@ -1,11 +1,11 @@
 {
   "settings": {
     "defaultModelSelection": {
-      "instanceId": "codex",
-      "model": "gpt-6.2-sol",
+      "instanceId": "claudeAgent",
+      "model": "claude-opus-5-5",
       "options": [
         {
-          "id": "reasoningEffort",
+          "id": "effort",
           "value": "high"
         }
       ]
