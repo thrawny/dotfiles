@@ -619,6 +619,7 @@ def report_from(
     cwd: Path,
     pane_id: str = "w4:p2",
     session: str | None = "s7",
+    to_driver: bool = False,
     **fields: Any,
 ) -> MagicMock:
     """Run moto report in a Claude session the user started in cwd."""
@@ -633,7 +634,7 @@ def report_from(
         {"CLAUDE_CODE_SESSION_ID": session} if session else {}
     )
     args = argparse.Namespace(
-        kind=kind, text=["All", "done."], agent=None, to_driver=False
+        kind=kind, text=["All", "done."], agent=None, to_driver=to_driver
     )
     with (
         patch.dict("os.environ", env),
@@ -695,6 +696,22 @@ def test_wrap_from_a_session_the_user_started_adopts_it(
     assert moto.check(moto.read_tasks(), live("done", 10, "w4:p2"), now) == [
         "abc-7 wrap: All done."
     ]
+
+
+@pytest.mark.usefixtures("claude_home")
+def test_a_report_passed_on_from_a_session_the_user_started_reaches_the_driver(
+    moto: ModuleType, worktree: Path
+):
+    # Such as a PR review the user opened in its own worktree by hand.
+    report_from(moto, "question", worktree, to_driver=True)
+    saved = moto.read_tasks()["abc-7"]
+    assert (saved["adopted"], saved["owner"]) == (True, "user")
+    now, tasks = moto.time.time(), moto.read_tasks()
+    assert moto.check(tasks, live("done", 10, "w4:p2"), now) == [
+        "abc-7 question (passed on): All done."
+    ]
+    # The user keeps it, so a later turn without a report is no stall.
+    assert moto.check(tasks, live("done", 11, "w4:p2"), now + 60) == []
 
 
 @pytest.mark.usefixtures("claude_home")

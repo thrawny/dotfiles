@@ -54,9 +54,13 @@ def cmd_report(args: argparse.Namespace) -> int:
             task = find_task(tasks, args.agent)
         else:
             task = next((t for t in tasks.values() if t["pane_id"] == pane_id), None)
-            if task is None and args.kind in ADOPT_KINDS:
+            # A wrap or snooze hands the session to the driver. A report sent
+            # on with --to-driver leaves it with the user, who started it.
+            if task is None and (args.kind in ADOPT_KINDS or args.to_driver):
                 if adopted := adopt(tasks, pane_id):
                     task = tasks[adopted]
+                    if args.kind not in ADOPT_KINDS:
+                        task["owner"], task["owned_since"] = "user", task["started"]
                     print(f"moto now tracks this session as {adopted} for the driver.")
             if task is None:
                 # Dropped tasks keep the brief that asks for reports.

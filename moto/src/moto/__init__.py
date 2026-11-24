@@ -50,7 +50,9 @@ closes its own pane mid-turn.
 The user also runs those skills in Claude sessions they started by hand, which
 no task owns. A wrap or snooze from one adopts the session first: it
 becomes a task built from its Herdr pane, its git checkout and its Claude
-session id, logged as an adopt event, and the report lands as usual. moto made
+session id, logged as an adopt event, and the report lands as usual. A report
+sent with --to-driver adopts it too, as a task the user owns, so the driver
+then hears only what it hears from any task the user owns. moto made
 none of that session's surroundings, so close and snooze close only its tab,
 and remove its checkout only when it is a linked worktree that no other tab
 works in.

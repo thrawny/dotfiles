@@ -28,7 +28,8 @@ BACKGROUND_WORK = re.compile(
 )
 REPORT_KINDS = ("done", "question", "blocked", "wrap", "snooze", "phase")
 # Reports that make a session the user started, which no task owns, a task:
-# the user handing it to the driver to finish or park.
+# the user handing it to the driver to finish or park. A --to-driver report
+# adopts it too, but the user keeps it.
 ADOPT_KINDS = ("wrap", "snooze")
 # Reports that end the task's work, so it needs no watch once the driver saw them.
 FINISHED = ("done", "wrap")

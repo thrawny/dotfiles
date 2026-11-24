@@ -522,7 +522,8 @@ BRIEF
 # the driver cannot track beats no review. A spawn that fails after Claude
 # started leaves it alone, since typing `claude` would land in its input box.
 # Only --review sends the brief; a review the user opens starts idle and waits
-# for them to type.
+# for them to type. moto does not track that one until it reports: its first
+# `moto report --to-driver` adopts it as a task the user owns.
 start_review_agent() {
   local pane=$1 number=$2 repo=$3 branch=$4 title word='[a-z0-9][a-z0-9-]*'
   local claude_cmd=claude spawn_opts=()
