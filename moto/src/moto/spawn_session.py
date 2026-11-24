@@ -1,8 +1,9 @@
 """Start a new agent session in a Herdr tab and give it a task brief.
 
-Run inside the Herdr TUI, it opens a Herdr tab. Run inside an hc terminal,
-such as one in the Herdr desktop app, it starts an hc terminal labelled with
-the app space and tab it shows in. A worktree then comes from git, at
+Run inside the Herdr TUI, it opens a Herdr tab. Run inside a Rex terminal, it
+starts a Rex session of its own. Run inside an hc terminal, such as one in the
+Herdr desktop app, it starts an hc terminal labelled with the app space and tab
+it shows in. Under Rex and hc a worktree comes from git, at
 WORKTREES/<repo>/<branch>, where Herdr puts its own.
 
 The brief is read from stdin. The session opens in the repo's Herdr workspace,
@@ -27,6 +28,9 @@ import uuid
 from pathlib import Path
 from typing import Any
 
+from moto import rex_backend
+from moto.common import MotoError
+
 CODE_DIR = Path.home() / "code"
 # Local files a fresh worktree needs but git does not carry, as in git-worktree-new.
 LOCAL_FILES = r"^\.(env|env\..*|envrc|envrc\..*|secrets.*)$"
@@ -46,8 +50,9 @@ SUBMIT_TRIES = 3
 RULE = re.compile(r"─{10,}.*─")
 # Where Herdr puts linked worktrees, which code-sync cleans up.
 WORKTREES = Path.home() / ".herdr/worktrees"
-# How long a new hc agent may take to start working on its brief.
+# How long a new hc or Rex agent may take to start working on its brief.
 HC_START_SECONDS = 90
+TRUST_PROMPT = "Yes, I trust this folder"
 
 
 class SpawnError(Exception):
@@ -498,7 +503,7 @@ def hc_name(
     return agent_name(None, fallback, taken)
 
 
-def hc_command(
+def login_command(
     cwd: Path, env: list[str], agent_args: list[str], brief: str
 ) -> list[str]:
     """The login shell command that starts Claude with its brief as the first
@@ -530,24 +535,21 @@ def hc_start(address: str, brief: str) -> None:
             return
         if word == "blocked":
             raise SpawnError(f"Agent in {address} is blocked during startup")
-        if not trusted and "Yes, I trust this folder" in hc("read", address):
+        if not trusted and TRUST_PROMPT in hc("read", address):
             hc("keys", address, "enter")
             trusted = True
         time.sleep(1)
     raise SpawnError(f"Agent in {address} did not start within {HC_START_SECONDS}s")
 
 
-def hc_spawn(
-    args: argparse.Namespace, brief: str, agent_args: list[str]
-) -> dict[str, Any]:
-    """Start the agent in a new hc terminal, in a new tab of its checkout's
-    app space. A worker another worker starts is that worker's child, which
-    hc tells when it blocks or ends. Any other has no parent, so a driver or
-    job loop gets no notes. Either outlives whoever started it."""
+def new_checkout(args: argparse.Namespace, where: str) -> tuple[Path, Path, list[str]]:
+    """The repo, the folder the agent starts in, and the --env pairs, for a
+    backend that starts Claude itself in a new terminal. A worktree comes
+    from git."""
     if args.pane:
-        raise SpawnError("--pane is for Herdr panes, and hc has none")
+        raise SpawnError(f"--pane is for Herdr panes, and {where} has none")
     if args.kind != "claude":
-        raise SpawnError(f"Under hc, only --kind claude starts, not {args.kind}")
+        raise SpawnError(f"Under {where}, only --kind claude starts, not {args.kind}")
     env = [pair for pair in (args.env or []) if ENV_PATTERN.fullmatch(pair)]
     if len(env) != len(args.env or []):
         raise SpawnError("Every --env must be a KEY=VALUE pair")
@@ -561,6 +563,17 @@ def hc_spawn(
         cwd = repo
     if args.worktree:
         cwd = git_worktree(repo, args.worktree, args.base, args.path)
+    return repo, cwd, env
+
+
+def hc_spawn(
+    args: argparse.Namespace, brief: str, agent_args: list[str]
+) -> dict[str, Any]:
+    """Start the agent in a new hc terminal, in a new tab of its checkout's
+    app space. A worker another worker starts is that worker's child, which
+    hc tells when it blocks or ends. Any other has no parent, so a driver or
+    job loop gets no notes. Either outlives whoever started it."""
+    repo, cwd, env = new_checkout(args, "hc")
     terminals = hc_terminals()
     name = hc_name(args.name, args.worktree or repo.name, terminals)
     space = hc_space(cwd if args.worktree else repo, terminals)
@@ -583,7 +596,7 @@ def hc_spawn(
             "--label",
             f"moto.name={name}",
             "--",
-            *hc_command(cwd, env, agent_args, brief),
+            *login_command(cwd, env, agent_args, brief),
             timeout=60,
         )
     )
@@ -610,6 +623,99 @@ def hc_spawn(
         "pane_id": address,
         "tab_id": tab,
         "workspace_id": space,
+    }
+
+
+def rex_start(block: str, brief: str) -> None:
+    """Wait until the new agent works on its brief, or idles without one,
+    accepting Claude's folder trust prompt for a new worktree path."""
+    deadline = time.monotonic() + HC_START_SECONDS
+    trusted = False
+    while time.monotonic() < deadline:
+        found = {b["block_id"]: b for b in rex_backend.blocks()}
+        if block not in found:
+            raise SpawnError(f"Rex block {block} ended")
+        agent = rex_backend.agent(found[block])
+        word = agent and agent["agent_status"]
+        if word == "working" or (word == "idle" and not brief):
+            return
+        if not trusted and TRUST_PROMPT in rex_backend.screen(block):
+            # The prompt starts on "No, exit", as in start_agent.
+            rex_backend.rex("send-key", "-s", block, "-b", block, "down", "enter")
+            trusted = True
+        elif word == "blocked":
+            raise SpawnError(f"Agent in {block} is blocked during startup")
+        time.sleep(1)
+    raise SpawnError(f"Agent in {block} did not start within {HC_START_SECONDS}s")
+
+
+def rex_focus(session: str) -> None:
+    """Show the session in each Rex app, which only works while the app's
+    Remote Control setting is on."""
+    clients = json.loads(rex_backend.rex("api", "call", "client.list"))["clients"]
+    for client in clients:
+        if (client.get("info") or {}).get("kind") != "app":
+            continue
+        request = {
+            "client_id": client["client_id"],
+            "action": "session.select",
+            "args": {"session_id": session},
+        }
+        try:
+            rex_backend.rex("api", "call", "client.perform", json.dumps(request))
+        except MotoError:
+            pass  # Remote Control is off, or the app went away
+
+
+def rex_spawn(
+    args: argparse.Namespace, brief: str, agent_args: list[str]
+) -> dict[str, Any]:
+    """Start the agent in a Rex session of its own, which the Rex sidebar
+    shows as one row named after the agent. Rex has no parent terminals, so
+    no worker is another's child."""
+    if args.child:
+        raise SpawnError("--child is for hc terminals, and Rex has none")
+    repo, cwd, env = new_checkout(args, "Rex")
+    taken = {rex_backend.label_name(b.get("label")) for b in rex_backend.blocks()}
+    name = agent_name(args.name, args.worktree or repo.name, taken)
+    started = json.loads(
+        rex_backend.rex(
+            "new",
+            name,
+            "--cwd",
+            str(cwd),
+            "--window",
+            "claude",
+            # A failed start stays on screen to inspect, as hc's --keep does.
+            "--keep-open",
+            "--json",
+            "--",
+            *login_command(cwd, env, agent_args, brief),
+            timeout=60,
+        )
+    )
+    session = started["session_id"]
+    window = started["initial_windows"][0]
+    block = window["block_ids"][0]
+    try:
+        rex_backend.rename(block, name)
+        rex_start(block, brief)
+    except (SpawnError, MotoError, subprocess.TimeoutExpired) as error:
+        raise SpawnError(
+            f"Launch in Rex block {block} at {cwd} was not confirmed; inspect it"
+            + f" before retrying: {error}"
+        ) from error
+    if args.focus:
+        rex_focus(session)
+    return {
+        "agent": name,
+        "kind": args.kind,
+        "repo": str(repo),
+        "branch": args.worktree,
+        "cwd": str(cwd),
+        "pane_id": block,
+        "tab_id": window["window_id"],
+        "workspace_id": session,
     }
 
 
@@ -752,9 +858,13 @@ def main() -> int:
             raise SpawnError(
                 "Unavailable inside the container sandbox; run from the host"
             )
-        under_hc = os.environ.get("HERDR_ENV") != "1"
+        # The innermost terminal wins, as in moto's backend.here().
+        under_rex = os.environ.get("HERDR_ENV") != "1" and bool(
+            os.environ.get("REX_BLOCK")
+        )
+        under_hc = os.environ.get("HERDR_ENV") != "1" and not under_rex
         if under_hc and not os.environ.get("HC_TERMINAL_ID"):
-            raise SpawnError("Not running inside Herdr or an hc terminal")
+            raise SpawnError("Not running inside Herdr, Rex or an hc terminal")
         brief = sys.stdin.read().strip()
         if not brief and not args.resume:
             raise SpawnError("Pass the task brief on stdin")
@@ -763,13 +873,16 @@ def main() -> int:
             + title_args(args.title, args.kind, bool(args.resume))
             + model_args(args.model, args.effort, args.kind)
         )
-        if under_hc:
-            details = hc_spawn(args, brief, agent_args)
+        if under_rex or under_hc:
+            spawn, where = (
+                (rex_spawn, "Rex block") if under_rex else (hc_spawn, "hc terminal")
+            )
+            details = spawn(args, brief, agent_args)
             if args.json:
                 print(json.dumps(details))
             else:
                 print(
-                    f"Started {args.kind} agent {details['agent']} in hc terminal"
+                    f"Started {args.kind} agent {details['agent']} in {where}"
                     + f" {details['pane_id']} at {details['cwd']}"
                 )
             return 0
@@ -830,7 +943,7 @@ def main() -> int:
             "spawn-session: Herdr timed out; inspect it before retrying.",
             file=sys.stderr,
         )
-    except (SpawnError, OSError) as error:
+    except (SpawnError, MotoError, OSError) as error:
         print(f"spawn-session: {error}", file=sys.stderr)
     return 1
 

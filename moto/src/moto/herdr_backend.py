@@ -77,7 +77,7 @@ def rename(terminal: str, name: str | None) -> None:
     herdr("agent", "rename", terminal, *([name] if name else ["--clear"]))
 
 
-def name_tab(tab: str) -> None:
+def name_tab(_terminal: str, tab: str) -> None:
     herdr("tab", "rename", tab, "claude")
 
 
@@ -115,7 +115,7 @@ def close_keeping_group(close: tuple[str, ...], tab: str, gone: str) -> None:
             raise
 
 
-def close_tab(tab: str) -> None:
+def close_tab(_terminal: str, tab: str) -> None:
     close_keeping_group(("tab", "close", tab), tab, "tab_not_found")
 
 
@@ -165,7 +165,9 @@ def others_in(tab: str, top: str) -> bool | None:
     return False
 
 
-def remove_worktree(_tab: str, path: str, repo: str, force: bool) -> None:
+def remove_worktree(
+    _terminal: str, _tab: str, path: str, repo: str, force: bool
+) -> None:
     """Remove the worktree with its Herdr workspace, or with git when no
     workspace is open on it."""
     flags = ["--force"] if force else []
@@ -228,7 +230,7 @@ def focus_driver(
             )
         except MotoError:
             pass  # a first start stops at Claude's trust prompt, which is now in view
-        name_tab(pane["tab_id"])
+        name_tab(pane["pane_id"], pane["tab_id"])
     put_first(workspace)
     herdr("workspace", "focus", workspace)
     found = [

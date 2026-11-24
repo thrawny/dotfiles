@@ -27,7 +27,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -n \"${HERDR_PANE_ID:-}${HC_TERMINAL_ID:-}\" ]; then moto attach --hook; fi"
+            "command": "if [ -n \"${HERDR_PANE_ID:-}${HC_TERMINAL_ID:-}${REX_BLOCK:-}\" ]; then moto attach --hook; fi"
           }
         ]
       },
@@ -36,7 +36,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "if [ -n \"${MOTO_ROLE:-}${HERDR_PANE_ID:-}${HC_TERMINAL_ID:-}\" ]; then moto role --hook; fi"
+            "command": "if [ -n \"${MOTO_ROLE:-}${HERDR_PANE_ID:-}${HC_TERMINAL_ID:-}${REX_BLOCK:-}\" ]; then moto role --hook; fi"
           }
         ]
       }

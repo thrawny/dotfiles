@@ -1166,7 +1166,7 @@ def closing_with(moto: ModuleType, refusals: dict[tuple[str, ...], list[str]]):
     [
         (
             ("tab", "close", "w1:t1"),
-            lambda moto: herdr_backend(moto).close_tab("w1:t1"),
+            lambda moto: herdr_backend(moto).close_tab("w1:p1", "w1:t1"),
         ),
         (
             ("pane", "close", "w1:p1"),
@@ -1194,7 +1194,7 @@ def test_a_close_that_would_end_a_worktree_group_leaves_a_shell_tab_behind(
         (
             ("tab", "close", "w1:t1"),
             "tab_not_found",
-            lambda moto: herdr_backend(moto).close_tab("w1:t1"),
+            lambda moto: herdr_backend(moto).close_tab("w1:p1", "w1:t1"),
         ),
         (
             ("pane", "close", "w1:p1"),
@@ -1216,7 +1216,7 @@ def test_any_other_refused_close_raises_and_opens_no_tab(moto: ModuleType):
     close = ("tab", "close", "w1:t1")
     calls, herdr = closing_with(moto, {close: ["internal_error"]})
     with patch.object(moto, "herdr", herdr), pytest.raises(moto.MotoError):
-        herdr_backend(moto).close_tab("w1:t1")
+        herdr_backend(moto).close_tab("w1:p1", "w1:t1")
     assert calls == [close]
 
 

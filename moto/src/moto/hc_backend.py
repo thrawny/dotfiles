@@ -111,12 +111,12 @@ def rename(terminal: str, name: str | None) -> None:
     hc("label", terminal, f"{NAME_LABEL}={name or ''}")
 
 
-def name_tab(tab: str) -> None:
+def name_tab(_terminal: str, tab: str) -> None:
     if tab:
         app("tab.rename", id=tab, name="claude")
 
 
-def close_tab(tab: str) -> None:
+def close_tab(_terminal: str, tab: str) -> None:
     if not tab:
         return
     try:
@@ -152,9 +152,9 @@ def others_in(tab: str, top: str) -> bool | None:
     return False
 
 
-def remove_worktree(tab: str, path: str, repo: str, force: bool) -> None:
+def remove_worktree(terminal: str, tab: str, path: str, repo: str, force: bool) -> None:
     """Close the worker's tab, then remove its worktree with git."""
-    close_tab(tab)
+    close_tab(terminal, tab)
     if os.path.isdir(path):
         flags = ["--force"] if force else []
         run(["git", "worktree", "remove", *flags, path], cwd=repo, timeout=120)
