@@ -435,7 +435,7 @@ function Diff({ files, prUrl }: { files: PRFile[]; prUrl: string }) {
 			themeType: isDark() ? "dark" : "light",
 			diffStyle: "unified",
 			hunkSeparators: "metadata",
-			overflow: "scroll",
+			overflow: "wrap",
 			stickyHeaders: true,
 			layout: { paddingTop: 0, paddingBottom: 64, gap: 12 },
 			// The library mixes a little of each diff colour into the code
