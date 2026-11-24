@@ -3,6 +3,7 @@
 import {
 	CodeView,
 	type CodeViewDiffItem,
+	type CodeViewItem,
 	type CodeViewOptions,
 	type FileDiffMetadata,
 	processFile,
@@ -53,6 +54,16 @@ function toFileDiff(file: PRFile): FileDiffMetadata {
 		parsed.type = file.patch ? "rename-changed" : "rename-pure";
 	}
 	return parsed;
+}
+
+// The content of an added file, from its patch, which holds every line.
+function newFileText(file: PRFile): string | null {
+	if (file.status !== "added" || !file.patch) return null;
+	return file.patch
+		.split("\n")
+		.filter((line) => line.startsWith("+"))
+		.map((line) => line.slice(1))
+		.join("\n");
 }
 
 function isTyping(event: KeyboardEvent) {
@@ -544,6 +555,8 @@ function Diff({
 				const file = byPath.get(context.item.id);
 				if (!file) return null;
 				const box = el("span", "file-meta", "");
+				if (newFileText(file) !== null)
+					box.append(el("span", "added", `new file, ${file.additions} lines`));
 				if (file.generated) box.append(el("span", "gen", "generated"));
 				// GitHub sends no patch for a pure rename, a binary file or a
 				// diff too large to send. Only the last has lines to count.
@@ -601,18 +614,34 @@ function Diff({
 	// Items carry the collapsed state; a changed state bumps the version.
 	const versions = useRef(new Map<string, number>());
 	const diffs = useMemo(
-		() => new Map(files.map((f) => [f.path, toFileDiff(f)])),
+		() =>
+			new Map(
+				files
+					.filter((f) => !newFileText(f))
+					.map((f) => [f.path, toFileDiff(f)]),
+			),
 		[files],
 	);
 	useEffect(() => {
 		const view = viewer.current;
 		if (!view) return;
-		const items = files.map((f): CodeViewDiffItem => {
+		const items = files.map((f): CodeViewItem<undefined> => {
 			const isCollapsed = collapsed.has(f.path) || !f.patch;
 			const known = view.getItem(f.path);
 			let version = versions.current.get(f.path) ?? 0;
 			if (known && known.collapsed !== isCollapsed) version++;
 			versions.current.set(f.path, version);
+			// A new file reads as a file, as in codediff.nvim, not as a wall
+			// of added lines.
+			const text = newFileText(f);
+			if (text !== null)
+				return {
+					id: f.path,
+					type: "file",
+					file: { name: f.path, contents: text },
+					collapsed: isCollapsed,
+					version,
+				};
 			return {
 				id: f.path,
 				type: "diff",

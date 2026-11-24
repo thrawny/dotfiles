@@ -549,6 +549,9 @@ body.review-mode {
 	padding: 0 0.3rem;
 	color: inherit;
 }
+.file-meta .added {
+	color: var(--add);
+}
 .file-meta {
 	display: inline-flex;
 	gap: 0.6rem;
