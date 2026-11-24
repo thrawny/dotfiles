@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
+	checkReviewWrite,
 	GENERATED_GLOBS,
 	isGenerated,
 	jiraKey,
 	matchesGlob,
 	parseGitattributes,
 	type RawPR,
+	type ReviewWrite,
 	tonoState,
 	toPR,
 } from "./model.ts";
@@ -202,5 +204,56 @@ docs/ linguist-generated text
 		expect(
 			isGenerated(file("a.ts", `@@ -1,2 +0,0 @@\n-${header}\n-x`), []),
 		).toBe(false);
+	});
+});
+
+describe("checkReviewWrite", () => {
+	const write = (patch: Partial<ReviewWrite> = {}): ReviewWrite => ({
+		contentType: "application/json",
+		origin: "https://mc.localhost:1355",
+		token: "secret",
+		request: { event: "APPROVE", body: "", commitId: "abc" },
+		expectedToken: "secret",
+		allowedOrigins: ["https://mc.localhost:1355"],
+		viewer: "bob",
+		members: ["Alice", "bob"],
+		author: "alice",
+		headSha: "abc",
+		...patch,
+	});
+	const status = (w: ReviewWrite) => {
+		const verdict = checkReviewWrite(w);
+		return verdict.ok ? 200 : verdict.status;
+	};
+	test("an empty approve of a teammate's head commit passes", () => {
+		expect(checkReviewWrite(write())).toEqual({
+			ok: true,
+			event: "APPROVE",
+			body: "",
+			commitId: "abc",
+		});
+	});
+	test("only the page may write", () => {
+		expect(status(write({ token: null }))).toBe(403);
+		expect(status(write({ token: "guess" }))).toBe(403);
+		expect(status(write({ origin: "https://evil.example" }))).toBe(403);
+		expect(status(write({ origin: null }))).toBe(403);
+		expect(status(write({ contentType: "text/plain" }))).toBe(415);
+	});
+	test("only known events, and comments need a body", () => {
+		const req = (request: unknown) => status(write({ request }));
+		expect(req({ event: "DISMISS", body: "", commitId: "abc" })).toBe(400);
+		expect(req({ event: "COMMENT", body: "  ", commitId: "abc" })).toBe(400);
+		expect(req({ event: "REQUEST_CHANGES", body: "x", commitId: "abc" })).toBe(
+			200,
+		);
+		expect(req(null)).toBe(400);
+	});
+	test("never the viewer's own PR or a PR outside the team", () => {
+		expect(status(write({ author: "BOB" }))).toBe(403);
+		expect(status(write({ author: "mallory" }))).toBe(403);
+	});
+	test("refuses when the head moved since the page loaded", () => {
+		expect(status(write({ headSha: "def" }))).toBe(409);
 	});
 });

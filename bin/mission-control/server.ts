@@ -4,16 +4,20 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import {
+	type Client,
 	caseless,
 	client,
 	gitattributes,
 	openPRs,
+	postReview,
 	prFiles,
 	pullRequest,
 	teamMembers,
+	viewerLogin,
 } from "./github.ts";
 import index from "./index.html";
 import {
+	checkReviewWrite,
 	isGenerated,
 	type PR,
 	type PRFile,
@@ -58,6 +62,19 @@ function token(): string {
 	return value;
 }
 
+// The page sends this back on every write. Only a page this server served
+// can read it, because the server never answers cross-origin requests.
+const csrfToken = Buffer.from(
+	crypto.getRandomValues(new Uint8Array(32)),
+).toString("hex");
+
+let viewer: string | null = null;
+
+async function whoAmI(): Promise<string> {
+	viewer ??= await viewerLogin(client(token()));
+	return viewer;
+}
+
 type Snapshot = {
 	fetchedAt: string;
 	members: string[];
@@ -69,8 +86,7 @@ let last: Snapshot | null = null;
 let lastError: string | null = null;
 let inflight: Promise<void> | null = null;
 
-async function refresh() {
-	const gh = client(token());
+async function teamList(gh: Client): Promise<string[]> {
 	if (!members || Date.now() - members.at > MEMBERS_MS)
 		members = {
 			list: (await teamMembers(gh, org, team)).filter(
@@ -78,13 +94,19 @@ async function refresh() {
 			),
 			at: Date.now(),
 		};
+	return members.list;
+}
+
+async function refresh() {
+	const gh = client(token());
+	const team = await teamList(gh);
 	const now = Date.now();
 	const raw = (
-		await Promise.all(members.list.map((login) => openPRs(gh, org, login)))
+		await Promise.all(team.map((login) => openPRs(gh, org, login)))
 	).flat();
 	last = {
 		fetchedAt: new Date(now).toISOString(),
-		members: members.list,
+		members: team,
 		prs: raw
 			.map((pr) => toPR(pr, { readyLabel, jiraProjects, now }))
 			.sort(
@@ -114,6 +136,7 @@ async function snapshot(fresh: boolean) {
 		error: lastError,
 		readyLabel,
 		jiraBase,
+		csrfToken,
 	};
 }
 
@@ -152,9 +175,16 @@ async function changedFiles(
 
 const REPO_NAME = /^[\w.-]+$/;
 
-async function prDetail(repo: string, numberText: string) {
+function prNumber(repo: string, numberText: string): number | null {
 	const number = Number(numberText);
-	if (!REPO_NAME.test(repo) || !Number.isSafeInteger(number) || number < 1)
+	return REPO_NAME.test(repo) && Number.isSafeInteger(number) && number > 0
+		? number
+		: null;
+}
+
+async function prDetail(repo: string, numberText: string) {
+	const number = prNumber(repo, numberText);
+	if (!number)
 		return Response.json({ error: "Bad pull request" }, { status: 400 });
 	const secret = token();
 	const raw = await pullRequest(client(secret), org, repo, number);
@@ -167,7 +197,67 @@ async function prDetail(repo: string, numberText: string) {
 		headSha: raw.headRefOid,
 		files,
 		jiraBase,
+		viewer: await whoAmI(),
+		csrfToken,
 	});
+}
+
+// The origins the page runs on: the portless URL and the server's own.
+function pageOrigins(): string[] {
+	const origins = [server.url.origin];
+	if (Bun.env.PORTLESS_URL) origins.push(new URL(Bun.env.PORTLESS_URL).origin);
+	return origins;
+}
+
+async function postPRReview(req: Request, repo: string, numberText: string) {
+	const number = prNumber(repo, numberText);
+	if (!number)
+		return Response.json({ error: "Bad pull request" }, { status: 400 });
+	let request: unknown = null;
+	try {
+		request = await req.json();
+	} catch {
+		/* checkReviewWrite refuses a missing request. */
+	}
+	const secret = token();
+	const gh = client(secret);
+	const [raw, team, me] = await Promise.all([
+		pullRequest(gh, org, repo, number),
+		teamList(gh),
+		whoAmI(),
+	]);
+	if (!raw)
+		return Response.json({ error: "Pull request not found" }, { status: 404 });
+	const verdict = checkReviewWrite({
+		contentType: req.headers.get("content-type"),
+		origin: req.headers.get("origin"),
+		token: req.headers.get("x-mission-control-token"),
+		request,
+		expectedToken: csrfToken,
+		allowedOrigins: pageOrigins(),
+		viewer: me,
+		members: team,
+		author: raw.author?.login ?? "",
+		headSha: raw.headRefOid,
+	});
+	const where = `${repo}#${number}`;
+	if (!verdict.ok) {
+		console.log(`mission-control: review ${where} refused: ${verdict.reason}`);
+		return Response.json({ error: verdict.reason }, { status: verdict.status });
+	}
+	const result = await postReview(secret, org, repo, number, verdict);
+	const ok = result.status >= 200 && result.status < 300;
+	console.log(
+		`mission-control: review ${where} ${verdict.event}: ${ok ? "posted" : `GitHub HTTP ${result.status}`}`,
+	);
+	if (!ok)
+		return Response.json(
+			{ error: result.message ?? `GitHub HTTP ${result.status}` },
+			{ status: 502 },
+		);
+	// The list shows review state, so refresh it for the next visit.
+	void snapshot(true);
+	return Response.json({ state: result.state });
 }
 
 // The page takes its colours from blueprint's palette in the dotfiles theme,
@@ -249,6 +339,20 @@ const server = Bun.serve({
 		"/api/prs": async (req) => {
 			const fresh = new URL(req.url).searchParams.has("fresh");
 			return Response.json(await snapshot(fresh));
+		},
+		// POST only: other methods, a CORS preflight among them, get no route.
+		"/api/pr/:repo/:number/review": {
+			POST: async (req) => {
+				try {
+					return await postPRReview(req, req.params.repo, req.params.number);
+				} catch (error) {
+					console.error(`mission-control: ${(error as Error).message}`);
+					return Response.json(
+						{ error: (error as Error).message },
+						{ status: 502 },
+					);
+				}
+			},
 		},
 		"/api/pr/:repo/:number": async (req) => {
 			try {

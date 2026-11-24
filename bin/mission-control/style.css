@@ -550,3 +550,65 @@ body.review-mode {
 	align-items: center;
 	font-size: 0.8rem;
 }
+.verdict {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	gap: 0.6rem;
+}
+.verdict .link {
+	border: 0;
+	background: none;
+	color: var(--accent);
+	padding: 0;
+}
+.verdict .approve {
+	background: var(--add-bg);
+	color: var(--add);
+	border-color: var(--add);
+	font-weight: 600;
+}
+.verdict .changes.armed,
+.verdict .comment.armed,
+.verdict .approve.armed {
+	background: var(--add);
+	color: var(--bg);
+}
+.verdict .changes.armed {
+	background: var(--del);
+	border-color: var(--del);
+}
+.verdict .posted {
+	color: var(--add);
+}
+.verdict .refused {
+	color: var(--del);
+}
+.comment-box {
+	position: absolute;
+	top: calc(100% + 0.4rem);
+	right: 0;
+	z-index: 10;
+	width: min(32rem, 90vw);
+	display: grid;
+	gap: 0.4rem;
+	padding: 0.6rem;
+	background: var(--bg);
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	box-shadow: 0 6px 24px rgb(0 0 0 / 0.2);
+}
+.comment-box textarea {
+	font: inherit;
+	color: inherit;
+	background: var(--code-bg);
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	padding: 0.4rem;
+	resize: vertical;
+}
+.comment-box .row {
+	display: flex;
+	justify-content: flex-end;
+	gap: 0.4rem;
+}

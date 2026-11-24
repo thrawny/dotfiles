@@ -8,7 +8,7 @@ import {
 	processFile,
 } from "@pierre/diffs";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
-import { fileTotals, type PR, type PRFile } from "./model.ts";
+import { fileTotals, type PR, type PRFile, type ReviewEvent } from "./model.ts";
 import {
 	ago,
 	CI_TEXT,
@@ -25,6 +25,8 @@ type Detail = {
 	headSha: string;
 	files: PRFile[];
 	jiraBase: string;
+	viewer: string;
+	csrfToken: string;
 };
 
 // GitHub sends each file's hunks without the git header, so the header is
@@ -74,16 +76,24 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 	const [error, setError] = useState<string | null>(null);
 	const [now, setNow] = useState(Date.now());
 
-	useEffect(() => {
-		document.body.classList.add("review-mode");
+	// A reload after a review keeps the diff when the head is the same.
+	const load = () =>
 		fetch(`/api/pr/${repo}/${number}`)
 			.then(async (res) => {
-				const json = await res.json();
+				const json = (await res.json()) as Detail & { error?: string };
 				if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-				setData(json);
+				setData((old) =>
+					old && old.headSha === json.headSha
+						? { ...json, files: old.files }
+						: json,
+				);
 				setNow(Date.now());
 			})
 			.catch((e: Error) => setError(e.message));
+
+	useEffect(() => {
+		document.body.classList.add("review-mode");
+		load();
 	}, [repo, number]);
 
 	useEffect(() => {
@@ -102,16 +112,24 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 			)}
 			{data && (
 				<>
-					<Strip data={data} now={now} />
+					<Strip data={data} now={now} reload={load} />
 					<Description body={data.body} />
-					<Diff data={data} />
+					<Diff files={data.files} prUrl={data.pr.url} />
 				</>
 			)}
 		</div>
 	);
 }
 
-function Strip({ data, now }: { data: Detail; now: number }) {
+function Strip({
+	data,
+	now,
+	reload,
+}: {
+	data: Detail;
+	now: number;
+	reload: () => Promise<void>;
+}) {
 	const { pr } = data;
 	const totals = useMemo(() => fileTotals(data.files), [data.files]);
 	const [mark, markText] = REVIEW_MARK[pr.reviewed];
@@ -196,10 +214,165 @@ function Strip({ data, now }: { data: Detail; now: number }) {
 					GitHub ↗
 				</a>
 				<span class="strip-end">
+					{data.viewer.toLowerCase() !== pr.author.toLowerCase() && (
+						<Verdict data={data} reload={reload} />
+					)}
 					<ThemeButton />
 				</span>
 			</div>
 		</header>
+	);
+}
+
+const ARM_MS = 5000;
+
+const EVENT_TEXT: Record<ReviewEvent, [string, string]> = {
+	APPROVE: ["Approve", "Confirm approve"],
+	COMMENT: ["Comment", "Confirm comment"],
+	REQUEST_CHANGES: ["Request changes", "Confirm request changes"],
+};
+
+// Posting a review takes two clicks: the first arms the button for 5
+// seconds, the second posts. a arms the approve, Enter confirms what is
+// armed and Esc disarms it.
+function Verdict({
+	data,
+	reload,
+}: {
+	data: Detail;
+	reload: () => Promise<void>;
+}) {
+	const [armed, setArmed] = useState<ReviewEvent | null>(null);
+	const [boxOpen, setBoxOpen] = useState(false);
+	const [body, setBody] = useState("");
+	const [posting, setPosting] = useState(false);
+	const textarea = useRef<HTMLTextAreaElement>(null);
+	// The box opens on a click, so the cursor goes straight into it.
+	useEffect(() => {
+		if (boxOpen) textarea.current?.focus();
+	}, [boxOpen]);
+	const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(
+		null,
+	);
+
+	useEffect(() => {
+		if (!armed) return;
+		const timer = setTimeout(() => setArmed(null), ARM_MS);
+		return () => clearTimeout(timer);
+	}, [armed]);
+
+	const post = async (event: ReviewEvent) => {
+		setArmed(null);
+		setPosting(true);
+		setMessage(null);
+		try {
+			const res = await fetch(
+				`/api/pr/${data.pr.repo}/${data.pr.number}/review`,
+				{
+					method: "POST",
+					headers: {
+						"content-type": "application/json",
+						"x-mission-control-token": data.csrfToken,
+					},
+					body: JSON.stringify({
+						event,
+						body: event === "APPROVE" ? "" : body,
+						commitId: data.headSha,
+					}),
+				},
+			);
+			const json = await res.json().catch(() => ({}));
+			if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+			setMessage({ ok: true, text: `${EVENT_TEXT[event][0]} posted` });
+			setBody("");
+			setBoxOpen(false);
+			await reload();
+		} catch (error) {
+			setMessage({ ok: false, text: (error as Error).message });
+		} finally {
+			setPosting(false);
+		}
+	};
+
+	const press = (event: ReviewEvent) => {
+		if (posting) return;
+		if (event !== "APPROVE" && !body.trim()) {
+			setMessage({ ok: false, text: "Write a comment first" });
+			return;
+		}
+		if (armed === event) post(event);
+		else {
+			setMessage(null);
+			setArmed(event);
+		}
+	};
+
+	// Escape works in the comment box too; the other keys do not.
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				if (armed) setArmed(null);
+				else if (boxOpen) setBoxOpen(false);
+				else return;
+			} else if (
+				event.metaKey ||
+				event.ctrlKey ||
+				event.altKey ||
+				isTyping(event)
+			)
+				return;
+			else if (event.key === "a") press("APPROVE");
+			else if (event.key === "Enter" && armed) press(armed);
+			else return;
+			event.preventDefault();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	});
+
+	const button = (event: ReviewEvent, cls: string) => (
+		<button
+			type="button"
+			class={armed === event ? `${cls} armed` : cls}
+			disabled={posting}
+			onClick={() => press(event)}
+		>
+			{armed === event
+				? `${EVENT_TEXT[event][1]} as ${data.viewer}`
+				: EVENT_TEXT[event][0]}
+		</button>
+	);
+
+	return (
+		<span class="verdict">
+			{message && (
+				<span class={message.ok ? "posted" : "refused"}>{message.text}</span>
+			)}
+			<button
+				type="button"
+				class="link"
+				onClick={() => setBoxOpen(!boxOpen)}
+				disabled={posting}
+			>
+				Comment…
+			</button>
+			{button("APPROVE", "approve")}
+			{boxOpen && (
+				<div class="comment-box">
+					<textarea
+						rows={5}
+						placeholder="Write a comment"
+						value={body}
+						ref={textarea}
+						onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
+					/>
+					<div class="row">
+						{button("REQUEST_CHANGES", "changes")}
+						{button("COMMENT", "comment")}
+					</div>
+				</div>
+			)}
+		</span>
 	);
 }
 
@@ -230,20 +403,17 @@ function el(tag: string, cls: string, text: string) {
 	return node;
 }
 
-function Diff({ data }: { data: Detail }) {
+function Diff({ files, prUrl }: { files: PRFile[]; prUrl: string }) {
 	const root = useRef<HTMLDivElement>(null);
 	const viewer = useRef<CodeView | null>(null);
 	const [collapsed, setCollapsed] = useState(
-		() => new Set(data.files.filter((f) => f.generated).map((f) => f.path)),
+		() => new Set(files.filter((f) => f.generated).map((f) => f.path)),
 	);
 	const [current, setCurrent] = useState(0);
 	// A jump owns the current file until its scroll settles.
 	const jumpedAt = useRef(0);
 	const list = useRef<HTMLElement>(null);
-	const byPath = useMemo(
-		() => new Map(data.files.map((f) => [f.path, f])),
-		[data.files],
-	);
+	const byPath = useMemo(() => new Map(files.map((f) => [f.path, f])), [files]);
 	const toggleRef = useRef((_path: string) => {});
 
 	const toggle = (path: string) =>
@@ -296,7 +466,7 @@ function Diff({ data }: { data: Detail }) {
 					box.append(el("span", "muted", "Binary file"));
 				else if (!file.patch) {
 					const link = el("a", "", "Too large to show, open on GitHub");
-					(link as HTMLAnchorElement).href = `${data.pr.url}/files`;
+					(link as HTMLAnchorElement).href = `${prUrl}/files`;
 					(link as HTMLAnchorElement).target = "_blank";
 					box.append(link);
 				}
@@ -324,7 +494,7 @@ function Diff({ data }: { data: Detail }) {
 			frame = requestAnimationFrame(() => {
 				if (Date.now() - jumpedAt.current < 400) return;
 				let index = 0;
-				data.files.forEach((f, i) => {
+				files.forEach((f, i) => {
 					const at = view.getTopForItem(f.path);
 					if (at !== undefined && at <= top + 4) index = i;
 				});
@@ -339,18 +509,18 @@ function Diff({ data }: { data: Detail }) {
 			view.cleanUp();
 			viewer.current = null;
 		};
-	}, [data]);
+	}, [files]);
 
 	// Items carry the collapsed state; a changed state bumps the version.
 	const versions = useRef(new Map<string, number>());
 	const diffs = useMemo(
-		() => new Map(data.files.map((f) => [f.path, toFileDiff(f)])),
-		[data.files],
+		() => new Map(files.map((f) => [f.path, toFileDiff(f)])),
+		[files],
 	);
 	useEffect(() => {
 		const view = viewer.current;
 		if (!view) return;
-		const items = data.files.map((f): CodeViewDiffItem => {
+		const items = files.map((f): CodeViewDiffItem => {
 			const isCollapsed = collapsed.has(f.path) || !f.patch;
 			const known = view.getItem(f.path);
 			let version = versions.current.get(f.path) ?? 0;
@@ -365,10 +535,10 @@ function Diff({ data }: { data: Detail }) {
 			};
 		});
 		view.setItems(items);
-	}, [data, collapsed]);
+	}, [files, collapsed]);
 
 	const jump = (index: number) => {
-		const file = data.files[index];
+		const file = files[index];
 		if (!file) return;
 		setCurrent(index);
 		jumpedAt.current = Date.now();
@@ -391,10 +561,10 @@ function Diff({ data }: { data: Detail }) {
 		const onKey = (event: KeyboardEvent) => {
 			if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event))
 				return;
-			if (event.key === "j") jump(Math.min(current + 1, data.files.length - 1));
+			if (event.key === "j") jump(Math.min(current + 1, files.length - 1));
 			else if (event.key === "k") jump(Math.max(current - 1, 0));
 			else if (event.key === "x") {
-				const file = data.files[current];
+				const file = files[current];
 				if (file) toggle(file.path);
 			} else if (event.key === "g") goBack();
 			else return;
@@ -402,12 +572,12 @@ function Diff({ data }: { data: Detail }) {
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [current, data]);
+	}, [current, files]);
 
 	return (
 		<div class="review-body">
 			<nav class="file-list" ref={list}>
-				{data.files.map((f, i) => (
+				{files.map((f, i) => (
 					<button
 						type="button"
 						data-index={i}

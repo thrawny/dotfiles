@@ -403,3 +403,60 @@ export function fileTotals(files: PRFile[]) {
 		generatedLines: sum(gen, "additions") + sum(gen, "deletions"),
 	};
 }
+
+export const REVIEW_EVENTS = ["APPROVE", "REQUEST_CHANGES", "COMMENT"] as const;
+export type ReviewEvent = (typeof REVIEW_EVENTS)[number];
+
+export type ReviewWrite = {
+	// What the page sent.
+	contentType: string | null;
+	origin: string | null;
+	token: string | null;
+	request: unknown;
+	// What the server knows.
+	expectedToken: string;
+	allowedOrigins: string[];
+	viewer: string;
+	members: string[];
+	author: string;
+	headSha: string;
+};
+
+export type ReviewVerdict =
+	| { ok: true; event: ReviewEvent; body: string; commitId: string }
+	| { ok: false; status: number; reason: string };
+
+// Whether the page may post this review. Only the page itself may write:
+// it holds the startup token and runs on an allowed origin. The review goes
+// on a team member's PR, never the viewer's own, and only on the commit the
+// viewer read.
+export function checkReviewWrite(w: ReviewWrite): ReviewVerdict {
+	const refuse = (status: number, reason: string): ReviewVerdict => ({
+		ok: false,
+		status,
+		reason,
+	});
+	if (!w.token || w.token !== w.expectedToken)
+		return refuse(403, "bad or missing token");
+	if (!w.origin || !w.allowedOrigins.includes(w.origin))
+		return refuse(403, "origin not allowed");
+	if (!w.contentType?.toLowerCase().startsWith("application/json"))
+		return refuse(415, "body must be JSON");
+	const request = (w.request ?? {}) as Record<string, unknown>;
+	const { event, body, commitId } = request;
+	if (!REVIEW_EVENTS.includes(event as ReviewEvent))
+		return refuse(400, "unknown review event");
+	if (typeof body !== "string") return refuse(400, "body must be a string");
+	if (event !== "APPROVE" && !body.trim())
+		return refuse(400, "a comment or change request needs a body");
+	if (typeof commitId !== "string" || !commitId)
+		return refuse(400, "missing commit");
+	const same = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+	if (!w.members.some((m) => same(m, w.author)))
+		return refuse(403, "not a team pull request");
+	if (same(w.author, w.viewer))
+		return refuse(403, "cannot review your own pull request");
+	if (commitId !== w.headSha)
+		return refuse(409, "the pull request has new commits; reload the page");
+	return { ok: true, event: event as ReviewEvent, body, commitId };
+}

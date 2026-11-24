@@ -1,6 +1,6 @@
 // Reads the team's members and their open pull requests from GitHub.
 import { graphql } from "@octokit/graphql";
-import type { RawPR } from "./model.ts";
+import type { RawPR, ReviewEvent } from "./model.ts";
 
 const REST = "https://api.github.com";
 // GitHub lists at most 3000 files of a pull request, 100 to a page.
@@ -157,6 +157,50 @@ export async function gitattributes(
 	if (res.status === 404) return "";
 	if (!res.ok) throw new Error(`GitHub .gitattributes: HTTP ${res.status}`);
 	return res.text();
+}
+
+export async function viewerLogin(gh: Client): Promise<string> {
+	const result = await gh<{ viewer: { login: string } }>(
+		"query { viewer { login } }",
+	);
+	return result.viewer.login;
+}
+
+// Posts a review on the given commit. GitHub refuses it when the commit is
+// not in the pull request.
+export async function postReview(
+	token: string,
+	org: string,
+	repo: string,
+	number: number,
+	review: { event: ReviewEvent; body: string; commitId: string },
+): Promise<{ status: number; state: string | null; message: string | null }> {
+	const res = await fetch(
+		`${REST}/repos/${org}/${repo}/pulls/${number}/reviews`,
+		{
+			method: "POST",
+			headers: {
+				authorization: `token ${token}`,
+				accept: "application/vnd.github+json",
+				"content-type": "application/json",
+				"x-github-api-version": "2022-11-28",
+			},
+			body: JSON.stringify({
+				event: review.event,
+				body: review.body,
+				commit_id: review.commitId,
+			}),
+		},
+	);
+	const json = (await res.json().catch(() => ({}))) as {
+		state?: string;
+		message?: string;
+	};
+	return {
+		status: res.status,
+		state: json.state ?? null,
+		message: json.message ?? null,
+	};
 }
 
 export function caseless(a: string, b: string) {
