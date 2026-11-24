@@ -445,17 +445,22 @@ function Diff({
 	const treeHost = useRef<HTMLElement>(null);
 	const pick = useRef((_path: string) => {});
 
-	// The file tree. A click on a file jumps to it in the diff.
+	// The file tree, without generated files: they start collapsed and
+	// nobody reads them. A click on a file jumps to it in the diff.
+	const handwritten = useMemo(
+		() => changed.filter((f) => !f.generated),
+		[changed],
+	);
 	const tree = useMemo(
 		() =>
 			new FileTree({
-				paths: changed.map((f) => f.path),
+				paths: handwritten.map((f) => f.path),
 				flattenEmptyDirectories: true,
 				initialExpansion: "open",
 				density: "compact",
 				// Every file in a PR changed, so only the other statuses get a
 				// letter.
-				gitStatus: changed.flatMap((f) =>
+				gitStatus: handwritten.flatMap((f) =>
 					TREE_STATUS[f.status]
 						? [{ path: f.path, status: TREE_STATUS[f.status] }]
 						: [],
@@ -468,10 +473,11 @@ function Diff({
 					if (path) pick.current(path);
 				},
 			}),
-		[changed],
+		[handwritten],
 	);
 
 	// The diff lists the files in the tree's order, so j and k follow it.
+	// Generated files come last.
 	const files = useMemo(() => {
 		const byPath = new Map(changed.map((f) => [f.path, f]));
 		const order = tree
