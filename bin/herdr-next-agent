@@ -9,16 +9,25 @@ set -euo pipefail
 
 herdr="${HERDR_BIN_PATH:-herdr}"
 
-agents=$("$herdr" agent list 2>/dev/null) || exit 0
+# A plugin action has no terminal, so a failure must show up as a notification.
+# Without this, an unreadable agent list reads as "Nothing needs you".
+fail() {
+  echo "herdr-next-agent: $1" >&2
+  "$herdr" notification show "Next agent: $1" --sound none >/dev/null 2>&1 || true
+  exit 1
+}
+
+agents=$("$herdr" agent list) || fail "herdr agent list failed"
 
 # The pane that invoked the action is authoritative, and unlike the focused
 # agent it is set even when the current pane runs a plain shell.
 pivot="${HERDR_PANE_ID:-}"
 if [[ -z $pivot ]]; then
-  pivot=$(jq -r '[.result.agents[] | select(.focused) | .pane_id][0] // ""' <<<"$agents")
+  pivot=$(jq -r '[.result.agents[] | select(.focused) | .pane_id][0] // ""' <<<"$agents") ||
+    fail "could not read the agent list"
 fi
 
-read -r workspace tab pane <<<"$(jq -r --arg pivot "$pivot" '
+target=$(jq -r --arg pivot "$pivot" '
   def prio: ["blocked", "error", "done", "working"];
   [ .result.agents[] | select(.agent_status as $s | prio | index($s) != null) ]
   # Lowest state_change_seq first, so the agent that has been waiting longest
@@ -31,7 +40,8 @@ read -r workspace tab pane <<<"$(jq -r --arg pivot "$pivot" '
       | (if $i == null then .[0] else .[($i + 1) % length] end)
       | "\(.workspace_id) \(.tab_id) \(.pane_id)"
     end
-' <<<"$agents")"
+' <<<"$agents") || fail "could not read the agent list"
+read -r workspace tab pane <<<"$target"
 
 if [[ -z ${pane:-} ]]; then
   "$herdr" notification show "Nothing needs you" --sound none >/dev/null
