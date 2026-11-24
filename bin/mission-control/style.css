@@ -509,51 +509,28 @@ body.review-mode {
 	flex: 1;
 	min-height: 0;
 	display: grid;
-	grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
+	grid-template-columns: minmax(13rem, 18rem) minmax(0, 1fr);
 }
+/* The file tree draws in its own shadow root and reads these colours. */
 .file-list {
-	overflow: auto;
+	min-height: 0;
+	height: 100%;
 	border-right: 1px solid var(--line);
-	padding: 0.3rem 0;
-}
-.file-list .file {
-	display: flex;
-	width: 100%;
-	gap: 0.4rem;
-	justify-content: space-between;
-	border: 0;
-	border-radius: 0;
-	background: none;
-	padding: 0.15rem 0.6rem;
-	text-align: left;
-	font-size: 0.8rem;
-}
-.file-list .file:hover {
-	background: var(--code-bg);
-}
-.file-list .file.current {
-	background: var(--mod-bg);
-	box-shadow: inset 2px 0 var(--accent);
-}
-.file-list .file.generated {
-	opacity: 0.6;
-}
-.file-list .name {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-	direction: rtl;
-	text-align: left;
-}
-.file-list .dir {
-	color: var(--muted);
-}
-.file-list .counts {
-	display: flex;
-	gap: 0.3rem;
-	font-family: ui-monospace, monospace;
-	font-size: 0.75rem;
-	white-space: nowrap;
+	--trees-bg-override: var(--bg);
+	--trees-fg-override: var(--fg);
+	--trees-fg-muted-override: var(--muted);
+	--trees-bg-muted-override: var(--code-bg);
+	--trees-selected-bg-override: var(--mod-bg);
+	--trees-selected-fg-override: var(--fg);
+	--trees-border-color-override: var(--line);
+	--trees-accent-override: var(--accent);
+	--trees-focus-ring-color-override: var(--accent);
+	--trees-git-added-color-override: var(--add);
+	--trees-git-deleted-color-override: var(--del);
+	--trees-git-modified-color-override: var(--muted);
+	--trees-git-renamed-color-override: var(--accent);
+	--trees-font-family-override: system-ui, -apple-system, sans-serif;
+	--trees-font-size-override: 0.8rem;
 }
 .gen {
 	color: var(--muted);

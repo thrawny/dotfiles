@@ -7,6 +7,7 @@ import {
 	type FileDiffMetadata,
 	processFile,
 } from "@pierre/diffs";
+import { FileTree, type GitStatus } from "@pierre/trees";
 import type { ComponentChildren } from "preact";
 import { createPortal } from "preact/compat";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
@@ -412,8 +413,16 @@ function el(tag: string, cls: string, text: string) {
 	return node;
 }
 
+// The tree's statuses for GitHub's file statuses.
+const TREE_STATUS: Record<string, GitStatus> = {
+	added: "added",
+	removed: "deleted",
+	renamed: "renamed",
+	copied: "added",
+};
+
 function Diff({
-	files,
+	files: changed,
 	prUrl,
 	header,
 }: {
@@ -423,6 +432,65 @@ function Diff({
 }) {
 	// The viewer measures this element and scrolls it with the files.
 	const headerHost = useMemo(() => document.createElement("div"), []);
+	const treeHost = useRef<HTMLElement>(null);
+	const pick = useRef((_path: string) => {});
+
+	// The file tree, with each file's status and line counts. A click on a
+	// file jumps to it in the diff.
+	const tree = useMemo(() => {
+		const byPath = new Map(changed.map((f) => [f.path, f]));
+		return new FileTree({
+			paths: changed.map((f) => f.path),
+			flattenEmptyDirectories: true,
+			initialExpansion: "open",
+			density: "compact",
+			gitStatus: changed.map((f) => ({
+				path: f.path,
+				status: TREE_STATUS[f.status] ?? "modified",
+			})),
+			renderRowDecoration: ({ item }) => {
+				const file = byPath.get(item.path);
+				if (item.kind !== "file" || !file) return null;
+				const plus = `+${lines(file.additions)}`;
+				const minus = `−${lines(file.deletions)}`;
+				// A generated file's counts are muted, as it starts collapsed.
+				const muted = file.generated ? "var(--muted)" : undefined;
+				return {
+					text: `${plus} ${minus}`,
+					title: file.generated ? "Generated file" : undefined,
+					parts: [
+						{ text: plus, color: muted ?? "var(--add)" },
+						{ text: ` ${minus}`, color: muted ?? "var(--del)" },
+					],
+				};
+			},
+			// The line counts keep their width; a long name is cut instead.
+			unsafeCSS:
+				'[data-item-section="decoration"]{flex:0 0 auto;margin-inline-start:auto;padding-inline-start:0.5em;font-variant-numeric:tabular-nums}',
+			onSelectionChange: (paths) => {
+				const path = paths.at(-1);
+				if (path) pick.current(path);
+			},
+		});
+	}, [changed]);
+
+	// The diff lists the files in the tree's order, so j and k follow it.
+	const files = useMemo(() => {
+		const byPath = new Map(changed.map((f) => [f.path, f]));
+		const order = tree
+			.getVisibleRows(0, tree.getVisibleCount())
+			.filter((row) => row.kind === "file")
+			.map((row) => byPath.get(row.path))
+			.filter((f): f is PRFile => !!f);
+		const seen = new Set(order.map((f) => f.path));
+		return [...order, ...changed.filter((f) => !seen.has(f.path))];
+	}, [tree]);
+
+	useEffect(() => {
+		if (!treeHost.current) return;
+		tree.render({ containerWrapper: treeHost.current });
+		return () => tree.cleanUp();
+	}, [tree]);
 	const root = useRef<HTMLDivElement>(null);
 	const viewer = useRef<CodeView | null>(null);
 	const [collapsed, setCollapsed] = useState(
@@ -431,7 +499,6 @@ function Diff({
 	const [current, setCurrent] = useState(0);
 	// A jump owns the current file until its scroll settles.
 	const jumpedAt = useRef(0);
-	const list = useRef<HTMLElement>(null);
 	const byPath = useMemo(() => new Map(files.map((f) => [f.path, f])), [files]);
 	const toggleRef = useRef((_path: string) => {});
 
@@ -570,12 +637,21 @@ function Diff({
 		});
 	};
 
-	// Keep the current file visible in the file list.
+	pick.current = (path: string) => {
+		const index = files.findIndex((f) => f.path === path);
+		if (index >= 0 && index !== current) jump(index);
+	};
+
+	// The tree selects the current file and keeps it in view.
 	useEffect(() => {
-		list.current
-			?.querySelector(`[data-index="${current}"]`)
-			?.scrollIntoView({ block: "nearest" });
-	}, [current]);
+		const path = files[current]?.path;
+		if (!path) return;
+		for (const other of tree.getSelectedPaths())
+			if (other !== path) tree.getItem(other)?.deselect();
+		const item = tree.getItem(path);
+		if (item && !item.isSelected()) item.select();
+		tree.scrollToPath(path, { focus: false, offset: "nearest" });
+	}, [current, tree]);
 
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
@@ -596,35 +672,7 @@ function Diff({
 
 	return (
 		<div class="review-body">
-			<nav class="file-list" ref={list}>
-				{files.map((f, i) => (
-					<button
-						type="button"
-						data-index={i}
-						class={[
-							"file",
-							i === current && "current",
-							f.generated && "generated",
-						]
-							.filter(Boolean)
-							.join(" ")}
-						onClick={() => jump(i)}
-						title={f.prevPath ? `${f.prevPath} → ${f.path}` : f.path}
-					>
-						<span class="name">
-							<span class="dir">
-								{f.path.slice(0, f.path.lastIndexOf("/") + 1)}
-							</span>
-							{f.path.slice(f.path.lastIndexOf("/") + 1)}
-						</span>
-						<span class="counts">
-							{f.generated && <span class="gen">gen</span>}
-							<span class="plus">+{lines(f.additions)}</span>
-							<span class="minus">−{lines(f.deletions)}</span>
-						</span>
-					</button>
-				))}
-			</nav>
+			<nav class="file-list" ref={treeHost} />
 			<div class="diff-view" ref={root} />
 			{createPortal(header, headerHost)}
 		</div>

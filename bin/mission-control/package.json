@@ -5,6 +5,7 @@
 	"dependencies": {
 		"@octokit/graphql": "9.0.5",
 		"@pierre/diffs": "1.7.1",
+		"@pierre/trees": "1.0.0",
 		"preact": "11.2.0"
 	},
 	"devDependencies": {
