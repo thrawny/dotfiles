@@ -264,6 +264,12 @@ in
     programs.ghostty.settings.font-size = 11;
 
     dotfiles.herdrApp.enable = true;
+    # The M1's Rex app reaches this over ssh://thrawny@thrawny-z13. Linger,
+    # set above, keeps it running after logout.
+    dotfiles.rex = {
+      enable = true;
+      server = true;
+    };
 
     home.packages = [
       t3codeDesktop

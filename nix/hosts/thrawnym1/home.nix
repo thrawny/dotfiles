@@ -10,6 +10,8 @@
 
   dotfiles.privateAgentSkills.enable = true;
   dotfiles.herdrApp.enable = true;
+  # The Rex app itself is a DMG install that updates itself.
+  dotfiles.rex.enable = true;
   dotfiles.t3code.enable = true;
   dotfiles.t3code.port = 4773;
   dotfiles.t3code.httpsPort = 8445;

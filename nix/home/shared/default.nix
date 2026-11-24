@@ -24,6 +24,7 @@
     ./k9s.nix
     ./lazygit.nix
     ./npm.nix
+    ./rex.nix
     ./nvim.nix
     ./starship.nix
     ./zmx.nix

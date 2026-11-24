@@ -75,5 +75,6 @@ The configuration remains the source for the complete binding inventory:
 - [OmniWM bindings](../config/omniwm/settings.toml)
 - [Herdr bindings](../nix/home/shared/herdr.nix)
 - [Herdr desktop bindings](../config/herdr-app/keys.json)
+- [Rex agent bindings](../config/rex/init.lua), described in [the Rex guide](rex.md)
 - [Ghostty shared settings](../nix/home/shared/ghostty.nix) and [macOS settings](../nix/home/darwin/ghostty.nix)
 - [Linux device and app remapping](../nix/home/nixos/xremap.nix)

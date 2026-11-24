@@ -59,6 +59,12 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
     zmx.url = "github:thrawny/zmx-flake";
+    # Superlogical's Rex. Only the preview channel publishes releases so far;
+    # the lock pins the exact release the channel URL names.
+    rex = {
+      url = "https://pkgs.superlogical.com/rex/nix/preview.tar.gz";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     quotabar = {
       url = "github:thrawny/quotabar";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -112,6 +118,7 @@
       nix-openclaw,
       thrawny-pkgs,
       zmx,
+      rex,
       quotabar,
       agent-browser,
       cursor-plugins,
@@ -168,6 +175,7 @@
           nvim-monokai-pro
           thrawny-pkgs
           zmx
+          rex
           ;
         containerAssets = storeHomeAssets;
       };
