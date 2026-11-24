@@ -21,7 +21,7 @@ import {
 
 type Detail = {
 	pr: PR;
-	body: string;
+	bodyHTML: string;
 	headSha: string;
 	files: PRFile[];
 	jiraBase: string;
@@ -113,7 +113,7 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 			{data && (
 				<>
 					<Strip data={data} now={now} reload={load} />
-					<Description body={data.body} />
+					<Description html={data.bodyHTML} />
 					<Diff files={data.files} prUrl={data.pr.url} />
 				</>
 			)}
@@ -376,23 +376,36 @@ function Verdict({
 	);
 }
 
-function Description({ body }: { body: string }) {
+// The description as GitHub renders it, cut to a few lines until opened.
+// GitHub sanitizes the HTML, as it does on its own page.
+function Description({ html }: { html: string }) {
 	const [open, setOpen] = useState(false);
-	// Template comments are for the author, not the reader.
-	const text = body
-		.replace(/<!--[\s\S]*?-->/g, "")
-		.replace(/\n{3,}/g, "\n\n")
-		.trim();
-	if (!text) return <p class="description muted">No description.</p>;
+	const [long, setLong] = useState(false);
+	const box = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const node = box.current;
+		if (!node) return;
+		for (const link of node.querySelectorAll("a[href]")) {
+			link.setAttribute("target", "_blank");
+			link.setAttribute("rel", "noopener");
+		}
+		setLong(node.scrollHeight > node.clientHeight + 1);
+	}, [html]);
+	if (!html.trim()) return <p class="description muted">No description.</p>;
 	return (
-		<button
-			type="button"
-			class={open ? "description open" : "description"}
-			onClick={() => setOpen(!open)}
-			title={open ? "Collapse" : "Expand"}
-		>
-			<span class="text">{text}</span>
-		</button>
+		<div class={open ? "description open" : "description"}>
+			<div
+				class="markdown"
+				ref={box}
+				// GitHub sanitized this HTML when it rendered the PR body.
+				dangerouslySetInnerHTML={{ __html: html }}
+			/>
+			{(long || open) && (
+				<button type="button" class="link" onClick={() => setOpen(!open)}>
+					{open ? "Show less" : "Show all"}
+				</button>
+			)}
+		</div>
 	);
 }
 

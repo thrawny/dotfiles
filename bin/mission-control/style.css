@@ -452,30 +452,73 @@ body.review-mode {
 	gap: 0.5rem;
 }
 .description {
-	display: block;
-	width: 100%;
-	text-align: left;
 	margin: 0;
-	padding: 0.5rem 1rem;
-	border: 0;
+	padding: 0.4rem 1rem 0.5rem;
 	border-bottom: 1px solid var(--line);
-	border-radius: 0;
 	background: var(--code-bg);
-	color: var(--muted);
 	font-size: 0.85rem;
 }
-.description .text {
-	display: -webkit-box;
-	-webkit-line-clamp: 3;
-	-webkit-box-orient: vertical;
+.description .markdown {
+	max-height: 4.6rem;
 	overflow: hidden;
-	white-space: pre-wrap;
 }
-.description.open .text {
-	display: block;
-	max-height: 40vh;
+.description.open .markdown {
+	max-height: 45vh;
 	overflow: auto;
-	color: var(--fg);
+}
+.description .link {
+	border: 0;
+	background: none;
+	padding: 0;
+	color: var(--accent);
+	font-size: 0.8rem;
+}
+.markdown > :first-child {
+	margin-top: 0;
+}
+.markdown :is(h1, h2, h3, h4, h5, h6) {
+	margin: 0.6rem 0 0.2rem;
+	font-size: 0.95rem;
+}
+.markdown :is(p, ul, ol, pre, table, blockquote) {
+	margin: 0.3rem 0;
+}
+.markdown :is(ul, ol) {
+	padding-left: 1.3rem;
+}
+.markdown code {
+	font-family: ui-monospace, monospace;
+	font-size: 0.85em;
+	background: var(--bg);
+	padding: 0.05rem 0.25rem;
+	border-radius: 4px;
+}
+.markdown pre {
+	background: var(--bg);
+	padding: 0.5rem;
+	border-radius: 6px;
+	overflow: auto;
+}
+.markdown pre code {
+	padding: 0;
+}
+.markdown blockquote {
+	padding-left: 0.7rem;
+	border-left: 3px solid var(--line);
+	color: var(--muted);
+}
+.markdown table {
+	border-collapse: collapse;
+}
+.markdown :is(th, td) {
+	border: 1px solid var(--line);
+	padding: 0.15rem 0.5rem;
+}
+.description .markdown img {
+	max-width: 100%;
+}
+.markdown .task-list-item {
+	list-style: none;
 }
 .review-body {
 	flex: 1;

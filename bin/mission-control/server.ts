@@ -193,7 +193,8 @@ async function prDetail(repo: string, numberText: string) {
 	const files = await changedFiles(secret, repo, number, raw.headRefOid);
 	return Response.json({
 		pr: toPR(raw, { readyLabel, jiraProjects, now: Date.now() }),
-		body: raw.body,
+		// GitHub renders and sanitizes the Markdown, as on its own page.
+		bodyHTML: raw.bodyHTML,
 		headSha: raw.headRefOid,
 		files,
 		jiraBase,

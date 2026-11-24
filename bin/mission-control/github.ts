@@ -33,7 +33,7 @@ query($q: String!, $after: String) {
 const ONE_PR_QUERY = `
 query($org: String!, $repo: String!, $number: Int!) {
   repository(owner: $org, name: $repo) {
-    pullRequest(number: $number) { ${PR_FIELDS} body }
+    pullRequest(number: $number) { ${PR_FIELDS} bodyHTML }
   }
 }`;
 
@@ -95,9 +95,9 @@ export async function pullRequest(
 	org: string,
 	repo: string,
 	number: number,
-): Promise<(RawPR & { body: string }) | null> {
+): Promise<(RawPR & { bodyHTML: string }) | null> {
 	const result = await gh<{
-		repository: { pullRequest: (RawPR & { body: string }) | null } | null;
+		repository: { pullRequest: (RawPR & { bodyHTML: string }) | null } | null;
 	}>(ONE_PR_QUERY, { org, repo, number });
 	return result.repository?.pullRequest ?? null;
 }
