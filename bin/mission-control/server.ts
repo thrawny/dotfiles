@@ -3,12 +3,28 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { caseless, client, openPRs, teamMembers } from "./github.ts";
+import {
+	caseless,
+	client,
+	gitattributes,
+	openPRs,
+	prFiles,
+	pullRequest,
+	teamMembers,
+} from "./github.ts";
 import index from "./index.html";
-import { type PR, toPR } from "./model.ts";
+import {
+	isGenerated,
+	type PR,
+	type PRFile,
+	parseGitattributes,
+	toPR,
+} from "./model.ts";
 
 const CACHE_MS = 2 * 60 * 1000;
 const MEMBERS_MS = 24 * 60 * 60 * 1000;
+// Changed files of the pull requests opened lately, by head commit.
+const FILES_KEPT = 30;
 
 function workConfig(key: string): string[] {
 	const out = Bun.spawnSync(["work-config", key], { stderr: "ignore" });
@@ -101,8 +117,100 @@ async function snapshot(fresh: boolean) {
 	};
 }
 
+const filesCache = new Map<string, PRFile[]>();
+
+async function changedFiles(
+	secret: string,
+	repo: string,
+	number: number,
+	sha: string,
+): Promise<PRFile[]> {
+	const key = `${repo}#${number}@${sha}`;
+	const hit = filesCache.get(key);
+	if (hit) return hit;
+	const [raw, attributes] = await Promise.all([
+		prFiles(secret, org, repo, number),
+		gitattributes(secret, org, repo, sha),
+	]);
+	const rules = parseGitattributes(attributes);
+	const files = raw.map((f) => {
+		const file = {
+			path: f.filename,
+			prevPath: f.previous_filename ?? null,
+			status: f.status,
+			additions: f.additions,
+			deletions: f.deletions,
+			patch: f.patch ?? null,
+		};
+		return { ...file, generated: isGenerated(file, rules) };
+	});
+	filesCache.set(key, files);
+	if (filesCache.size > FILES_KEPT)
+		filesCache.delete(filesCache.keys().next().value as string);
+	return files;
+}
+
+const REPO_NAME = /^[\w.-]+$/;
+
+async function prDetail(repo: string, numberText: string) {
+	const number = Number(numberText);
+	if (!REPO_NAME.test(repo) || !Number.isSafeInteger(number) || number < 1)
+		return Response.json({ error: "Bad pull request" }, { status: 400 });
+	const secret = token();
+	const raw = await pullRequest(client(secret), org, repo, number);
+	if (!raw)
+		return Response.json({ error: "Pull request not found" }, { status: 404 });
+	const files = await changedFiles(secret, repo, number, raw.headRefOid);
+	return Response.json({
+		pr: toPR(raw, { readyLabel, jiraProjects, now: Date.now() }),
+		body: raw.body,
+		headSha: raw.headRefOid,
+		files,
+		jiraBase,
+	});
+}
+
 // The page takes its colours from blueprint's palette in the dotfiles theme,
-// so it follows the same light and dark scheme as the explainers.
+// so it follows the same light and dark scheme as the explainers. The diff
+// view takes the theme's diff colours in dark mode and blueprint's add and
+// delete colours in light mode.
+type Theme = {
+	diff?: Record<string, Record<string, string>>;
+	applications?: { blueprint?: Record<string, Record<string, string>> };
+};
+
+function diffVars(theme: Theme, mode: "light" | "dark"): string {
+	const vars: Record<string, string | undefined> = {};
+	if (mode === "dark") {
+		const { added, removed, changed } = theme.diff ?? {};
+		Object.assign(vars, {
+			"addition-color-override": added?.foreground,
+			"bg-addition-override": added?.lineBackground,
+			"bg-addition-emphasis-override": added?.emphasisBackground,
+			"bg-addition-number-override": added?.dimBackground,
+			"deletion-color-override": removed?.foreground,
+			"bg-deletion-override": removed?.lineBackground,
+			"bg-deletion-emphasis-override": removed?.emphasisBackground,
+			"bg-deletion-number-override": removed?.dimBackground,
+			"modified-color-override": changed?.foreground,
+		});
+	} else {
+		const light = theme.applications?.blueprint?.light ?? {};
+		Object.assign(vars, {
+			"addition-color-override": light.add,
+			"bg-addition-override": light["add-bg"],
+			"bg-addition-number-override": light["add-bg"],
+			"deletion-color-override": light.del,
+			"bg-deletion-override": light["del-bg"],
+			"bg-deletion-number-override": light["del-bg"],
+		});
+	}
+	return Object.entries(vars)
+		.filter(([, value]) => value)
+		.map(([key, value]) => `--diffs-${key}:${value};`)
+		.join("");
+}
+
 function themeCSS(): string {
 	for (const file of [
 		join(import.meta.dir, "../../nix/themes/monokai.json"),
@@ -112,13 +220,13 @@ function themeCSS(): string {
 		),
 	]) {
 		try {
-			const palette = JSON.parse(readFileSync(file, "utf8")).applications
-				?.blueprint as Record<string, Record<string, string>> | undefined;
+			const theme = JSON.parse(readFileSync(file, "utf8")) as Theme;
+			const palette = theme.applications?.blueprint;
 			if (!palette) continue;
-			const vars = (mode: string) =>
+			const vars = (mode: "light" | "dark") =>
 				Object.entries(palette[mode])
 					.map(([key, value]) => `--${key}:${value};`)
-					.join("");
+					.join("") + diffVars(theme, mode);
 			return `:root{${vars("light")}color-scheme:light}
 :root[data-theme="dark"]{${vars("dark")}color-scheme:dark}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){${vars("dark")}color-scheme:dark}}`;
@@ -135,11 +243,23 @@ const server = Bun.serve({
 	development: Bun.env.MISSION_CONTROL_DEV === "1",
 	routes: {
 		"/": index,
+		"/pr/*": index,
 		"/theme.css": () =>
 			new Response(theme, { headers: { "content-type": "text/css" } }),
 		"/api/prs": async (req) => {
 			const fresh = new URL(req.url).searchParams.has("fresh");
 			return Response.json(await snapshot(fresh));
+		},
+		"/api/pr/:repo/:number": async (req) => {
+			try {
+				return await prDetail(req.params.repo, req.params.number);
+			} catch (error) {
+				console.error(`mission-control: ${(error as Error).message}`);
+				return Response.json(
+					{ error: (error as Error).message },
+					{ status: 502 },
+				);
+			}
 		},
 	},
 });

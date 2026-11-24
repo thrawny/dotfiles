@@ -4,6 +4,7 @@
 	"type": "module",
 	"dependencies": {
 		"@octokit/graphql": "9.0.5",
+		"@pierre/diffs": "1.7.1",
 		"preact": "11.2.0"
 	},
 	"devDependencies": {

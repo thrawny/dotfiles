@@ -2,26 +2,38 @@
 import { graphql } from "@octokit/graphql";
 import type { RawPR } from "./model.ts";
 
+const REST = "https://api.github.com";
+// GitHub lists at most 3000 files of a pull request, 100 to a page.
+const FILE_PAGES = 30;
+
 // Pages of 100 with check and comment fields time out at GitHub (HTTP 502),
 // so each author's search pages through 30 at a time.
 const PAGE = 30;
+
+const PR_FIELDS = `
+  number title url isDraft createdAt updatedAt headRefName headRefOid
+  additions deletions changedFiles
+  reviewDecision
+  author { login }
+  repository { name }
+  labels(first: 20) { nodes { name color } }
+  commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+  latestReviews(first: 20) { nodes { author { login } state submittedAt } }
+  comments(last: 30) { nodes { body } }
+  reviews(last: 20) { nodes { body } }`;
 
 const PR_QUERY = `
 query($q: String!, $after: String) {
   search(type: ISSUE, query: $q, first: ${PAGE}, after: $after) {
     pageInfo { hasNextPage endCursor }
-    nodes { ... on PullRequest {
-      number title url isDraft createdAt updatedAt headRefName headRefOid
-      additions deletions changedFiles
-      reviewDecision
-      author { login }
-      repository { name }
-      labels(first: 20) { nodes { name color } }
-      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
-      latestReviews(first: 20) { nodes { author { login } state submittedAt } }
-      comments(last: 30) { nodes { body } }
-      reviews(last: 20) { nodes { body } }
-    } }
+    nodes { ... on PullRequest { ${PR_FIELDS} } }
+  }
+}`;
+
+const ONE_PR_QUERY = `
+query($org: String!, $repo: String!, $number: Int!) {
+  repository(owner: $org, name: $repo) {
+    pullRequest(number: $number) { ${PR_FIELDS} body }
   }
 }`;
 
@@ -76,6 +88,75 @@ export async function openPRs(
 			: null;
 	} while (after);
 	return prs;
+}
+
+export async function pullRequest(
+	gh: Client,
+	org: string,
+	repo: string,
+	number: number,
+): Promise<(RawPR & { body: string }) | null> {
+	const result = await gh<{
+		repository: { pullRequest: (RawPR & { body: string }) | null } | null;
+	}>(ONE_PR_QUERY, { org, repo, number });
+	return result.repository?.pullRequest ?? null;
+}
+
+export type RestFile = {
+	filename: string;
+	previous_filename?: string;
+	status: string;
+	additions: number;
+	deletions: number;
+	patch?: string;
+};
+
+async function rest(token: string, path: string, accept: string) {
+	return fetch(`${REST}${path}`, {
+		headers: {
+			authorization: `token ${token}`,
+			accept,
+			"x-github-api-version": "2022-11-28",
+		},
+	});
+}
+
+export async function prFiles(
+	token: string,
+	org: string,
+	repo: string,
+	number: number,
+): Promise<RestFile[]> {
+	const files: RestFile[] = [];
+	for (let page = 1; page <= FILE_PAGES; page++) {
+		const res = await rest(
+			token,
+			`/repos/${org}/${repo}/pulls/${number}/files?per_page=100&page=${page}`,
+			"application/vnd.github+json",
+		);
+		if (!res.ok) throw new Error(`GitHub files: HTTP ${res.status}`);
+		const batch = (await res.json()) as RestFile[];
+		files.push(...batch);
+		if (batch.length < 100) break;
+	}
+	return files;
+}
+
+// The repository's root .gitattributes at a commit, or "" without one.
+export async function gitattributes(
+	token: string,
+	org: string,
+	repo: string,
+	sha: string,
+): Promise<string> {
+	const res = await rest(
+		token,
+		`/repos/${org}/${repo}/contents/.gitattributes?ref=${sha}`,
+		"application/vnd.github.raw+json",
+	);
+	if (res.status === 404) return "";
+	if (!res.ok) throw new Error(`GitHub .gitattributes: HTTP ${res.status}`);
+	return res.text();
 }
 
 export function caseless(a: string, b: string) {

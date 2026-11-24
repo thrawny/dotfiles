@@ -244,3 +244,162 @@ export function toPR(
 			opts.now - approvedAt > APPROVED_IDLE_DAYS * DAY,
 	};
 }
+
+// A changed file in a pull request, as the review page shows it. `patch` is
+// GitHub's unified diff of the file, or null when GitHub leaves it out, as
+// for a binary file, a pure rename or a diff too large to send.
+export type PRFile = {
+	path: string;
+	prevPath: string | null;
+	status: string;
+	additions: number;
+	deletions: number;
+	patch: string | null;
+	generated: boolean;
+};
+
+// Generated files start collapsed. The rules port codediff.nvim's
+// (lua/codediff/ui/explorer/filter.lua) so a PR collapses the same files in
+// the browser as in Neovim: these globs, the root .gitattributes and Go's
+// generated-code header.
+export const GENERATED_GLOBS = [
+	"**/generated/**",
+	"**/gen/**",
+	"*.gen.go",
+	"*_gen.go",
+	"*_generated.go",
+	"*.pb.go",
+	"*.pb.gw.go",
+	"zz_generated.*",
+];
+
+// One glob as an anchored pattern. `**/` stands for one or more directories
+// here; globPatterns adds the variants with it dropped, for zero.
+function globPattern(glob: string): RegExp {
+	let out = "";
+	for (let i = 0; i < glob.length; i++) {
+		const c = glob[i];
+		if (glob.startsWith("**/", i)) {
+			out += ".*/";
+			i += 2;
+		} else if (glob.startsWith("**", i)) {
+			out += ".*";
+			i += 1;
+		} else if (c === "*") out += "[^/]*";
+		else if (c === "?") out += ".";
+		else out += escapeRegExp(c);
+	}
+	return new RegExp(`^${out}$`, "s");
+}
+
+// Every pattern a glob can match: each `**/` once kept and once dropped.
+function globPatterns(glob: string): RegExp[] {
+	const count = glob.split("**/").length - 1;
+	if (count === 0 || count > 8) return [globPattern(glob)];
+	let variants = [glob];
+	for (let n = 0; n < count; n++)
+		variants = variants.flatMap((v) => [
+			v.replace("**/", "\u0002"),
+			v.replace("**/", ""),
+		]);
+	return variants.map((v) => globPattern(v.replaceAll("\u0002", "**/")));
+}
+
+// gitignore-style matching: a glob without a slash matches the base name
+// anywhere, a glob with one matches the whole path, and a leading slash
+// anchors it to the root.
+export function matchesGlob(path: string, globs: string[]): boolean {
+	const base = path.slice(path.lastIndexOf("/") + 1);
+	return globs.some((glob) => {
+		if (glob.startsWith("/"))
+			return globPatterns(glob.slice(1)).some((p) => p.test(path));
+		const target = glob.includes("/") ? path : base;
+		return globPatterns(glob).some((p) => p.test(target));
+	});
+}
+
+export type GitattributesRule = { pattern: string; generated: boolean };
+
+// The .gitattributes lines that set or unset linguist-generated. Quoted
+// patterns are skipped, and a trailing slash means the whole directory.
+export function parseGitattributes(text: string): GitattributesRule[] {
+	const rules: GitattributesRule[] = [];
+	for (const raw of text.split("\n")) {
+		const line = raw.trim();
+		if (!line || line.startsWith("#")) continue;
+		const [first, ...attrs] = line.split(/\s+/);
+		if (first.startsWith('"') || !attrs.length) continue;
+		const pattern = first.endsWith("/") ? `${first}**` : first;
+		let generated: boolean | null = null;
+		for (const attr of attrs) {
+			if (attr === "linguist-generated" || attr === "linguist-generated=true")
+				generated = true;
+			else if (
+				attr === "-linguist-generated" ||
+				attr === "linguist-generated=false"
+			)
+				generated = false;
+		}
+		if (generated !== null) rules.push({ pattern, generated });
+	}
+	return rules;
+}
+
+// As in git, the last matching line wins.
+export function gitattributesGenerated(
+	path: string,
+	rules: GitattributesRule[],
+): boolean {
+	let generated = false;
+	for (const rule of rules)
+		if (matchesGlob(path, [rule.pattern])) generated = rule.generated;
+	return generated;
+}
+
+// Go's marker (https://go.dev/s/generatedcode), anywhere on a line of the
+// file's first 4 KB, since other generators put it behind their own comment.
+export function hasGeneratedHeader(head: string): boolean {
+	return /Code generated [^\n]*? DO NOT EDIT/.test(head.slice(0, 4096));
+}
+
+// The start of the new file, if the patch shows its line 1. A patch that
+// starts further down cannot show the header, so the check is skipped.
+export function patchHead(patch: string): string | null {
+	const lines = patch.split("\n");
+	const header = lines[0]?.match(/^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/);
+	if (header?.[1] !== "1" || header[2] === "0") return null;
+	const head: string[] = [];
+	for (const line of lines.slice(1)) {
+		if (line.startsWith("@@")) break;
+		if (line.startsWith("+") || line.startsWith(" ")) head.push(line.slice(1));
+	}
+	return head.join("\n");
+}
+
+export function isGenerated(
+	file: { path: string; prevPath: string | null; patch: string | null },
+	rules: GitattributesRule[],
+): boolean {
+	const byPath = (path: string) =>
+		matchesGlob(path, GENERATED_GLOBS) || gitattributesGenerated(path, rules);
+	if (byPath(file.path) || (file.prevPath && byPath(file.prevPath)))
+		return true;
+	const head = file.patch ? patchHead(file.patch) : null;
+	return head !== null && hasGeneratedHeader(head);
+}
+
+// The change a reviewer reads: lines and files outside generated files,
+// with the generated ones counted apart.
+export function fileTotals(files: PRFile[]) {
+	const own = files.filter((f) => !f.generated);
+	const gen = files.filter((f) => f.generated);
+	const sum = (list: PRFile[], key: "additions" | "deletions") =>
+		list.reduce((n, f) => n + f[key], 0);
+	return {
+		files: own.length,
+		additions: sum(own, "additions"),
+		deletions: sum(own, "deletions"),
+		generatedFiles: gen.length,
+		generatedLines: sum(gen, "additions") + sum(gen, "deletions"),
+	};
+}

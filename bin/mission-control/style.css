@@ -197,10 +197,20 @@ a.button {
 	white-space: nowrap;
 }
 .pr .title {
+	display: flex;
+	align-items: baseline;
+	gap: 0.35rem;
+	min-width: 0;
+}
+.pr .title > a:first-child {
 	color: var(--fg);
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+.pr .title .gh {
+	color: var(--muted);
+	font-size: 0.8rem;
 }
 .jira {
 	font-size: 0.8rem;
@@ -368,4 +378,175 @@ a.button {
 	.cards.side {
 		grid-template-columns: minmax(0, 1fr);
 	}
+}
+
+/* The review page fills the window: the strip and description on top, the
+   file list and the diff below, each scrolling on its own. */
+body.review-mode {
+	padding: 0;
+	overflow: hidden;
+	--diffs-font-family: ui-monospace, "SF Mono", Menlo, monospace;
+	--diffs-font-size: 12.5px;
+	--diffs-header-font-family: system-ui, -apple-system, sans-serif;
+}
+.review-page {
+	display: flex;
+	flex-direction: column;
+	height: 100vh;
+}
+.review-page > .error,
+.review-page > .muted {
+	margin: 1rem;
+}
+.strip {
+	display: grid;
+	gap: 0.35rem;
+	padding: 0.6rem 1rem 0.5rem;
+	border-bottom: 1px solid var(--line);
+}
+.strip-main {
+	display: flex;
+	align-items: baseline;
+	gap: 0.6rem;
+	min-width: 0;
+}
+.strip-main h1 {
+	margin: 0;
+	font-size: 1.15rem;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.strip-main .back {
+	padding: 0 0.5rem;
+}
+.strip-meta {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.3rem 0.9rem;
+	font-size: 0.85rem;
+}
+.strip-meta .author {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+.strip-meta .author img {
+	width: 20px;
+	height: 20px;
+	border-radius: 50%;
+}
+.strip-meta .ci {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+}
+.strip-meta .tono {
+	padding: 0 0.4rem;
+}
+.strip-end {
+	margin-left: auto;
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+}
+.description {
+	display: block;
+	width: 100%;
+	text-align: left;
+	margin: 0;
+	padding: 0.5rem 1rem;
+	border: 0;
+	border-bottom: 1px solid var(--line);
+	border-radius: 0;
+	background: var(--code-bg);
+	color: var(--muted);
+	font-size: 0.85rem;
+}
+.description .text {
+	display: -webkit-box;
+	-webkit-line-clamp: 3;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+	white-space: pre-wrap;
+}
+.description.open .text {
+	display: block;
+	max-height: 40vh;
+	overflow: auto;
+	color: var(--fg);
+}
+.review-body {
+	flex: 1;
+	min-height: 0;
+	display: grid;
+	grid-template-columns: minmax(14rem, 20rem) minmax(0, 1fr);
+}
+.file-list {
+	overflow: auto;
+	border-right: 1px solid var(--line);
+	padding: 0.3rem 0;
+}
+.file-list .file {
+	display: flex;
+	width: 100%;
+	gap: 0.4rem;
+	justify-content: space-between;
+	border: 0;
+	border-radius: 0;
+	background: none;
+	padding: 0.15rem 0.6rem;
+	text-align: left;
+	font-size: 0.8rem;
+}
+.file-list .file:hover {
+	background: var(--code-bg);
+}
+.file-list .file.current {
+	background: var(--mod-bg);
+	box-shadow: inset 2px 0 var(--accent);
+}
+.file-list .file.generated {
+	opacity: 0.6;
+}
+.file-list .name {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	direction: rtl;
+	text-align: left;
+}
+.file-list .dir {
+	color: var(--muted);
+}
+.file-list .counts {
+	display: flex;
+	gap: 0.3rem;
+	font-family: ui-monospace, monospace;
+	font-size: 0.75rem;
+	white-space: nowrap;
+}
+.gen {
+	color: var(--muted);
+	font-size: 0.7rem;
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+.diff-view {
+	height: 100%;
+	overflow: auto;
+	min-width: 0;
+}
+.fold {
+	border: 0;
+	background: none;
+	padding: 0 0.3rem;
+	color: inherit;
+}
+.file-meta {
+	display: inline-flex;
+	gap: 0.6rem;
+	align-items: center;
+	font-size: 0.8rem;
 }

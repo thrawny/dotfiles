@@ -1,6 +1,15 @@
 import { render } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { BUCKETS, type Bucket, OLD_DAYS, type PR, WARN_DAYS } from "./model.ts";
+import { Review } from "./review.tsx";
+import {
+	ago,
+	CI_TEXT,
+	jiraHref,
+	lines,
+	REVIEW_MARK,
+	ThemeButton,
+} from "./ui.tsx";
 
 type Data = {
 	fetchedAt: string | null;
@@ -94,18 +103,6 @@ function matches(pr: PR, f: Filters): boolean {
 		if (!text.includes(f.q.toLowerCase())) return false;
 	}
 	return true;
-}
-
-function lines(n: number) {
-	return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);
-}
-
-function ago(iso: string, now: number) {
-	const mins = Math.round((now - Date.parse(iso)) / 60000);
-	if (mins < 60) return `${mins}m`;
-	const hours = Math.round(mins / 60);
-	if (hours < 48) return `${hours}h`;
-	return `${Math.round(hours / 24)}d`;
 }
 
 function App() {
@@ -234,25 +231,6 @@ function App() {
 				))}
 			</main>
 		</>
-	);
-}
-
-function ThemeButton() {
-	const toggle = () => {
-		const root = document.documentElement;
-		const dark = root.dataset.theme
-			? root.dataset.theme === "dark"
-			: matchMedia("(prefers-color-scheme: dark)").matches;
-		const next = dark ? "light" : "dark";
-		root.dataset.theme = next;
-		try {
-			localStorage.setItem("bp-theme", next);
-		} catch {}
-	};
-	return (
-		<button type="button" onClick={toggle} title="Toggle light/dark">
-			◐
-		</button>
 	);
 }
 
@@ -401,20 +379,6 @@ function MemberCard(props: {
 	);
 }
 
-const CI_TEXT = {
-	success: "CI green",
-	failure: "CI failing",
-	pending: "CI running",
-	none: "No CI",
-};
-
-const REVIEW_MARK = {
-	approved: ["✓", "Approved"],
-	changes: ["✗", "Changes requested"],
-	commented: ["•", "Commented"],
-	none: ["", ""],
-};
-
 function Row({ pr, jiraBase, now }: { pr: PR; jiraBase: string; now: number }) {
 	const [mark, markText] = REVIEW_MARK[pr.reviewed];
 	const who = pr.reviewers
@@ -424,15 +388,27 @@ function Row({ pr, jiraBase, now }: { pr: PR; jiraBase: string; now: number }) {
 		<div class="pr">
 			<span class={`dot ci-${pr.ci}`} title={CI_TEXT[pr.ci]} />
 			<span class="repo">{pr.repo}</span>
-			<a class="title" href={pr.url} target="_blank" rel="noopener">
-				{pr.title}
-				<span class="muted"> #{pr.number}</span>
-			</a>
+			<span class="title">
+				<a href={`/pr/${pr.repo}/${pr.number}`}>
+					{pr.title}
+					<span class="muted"> #{pr.number}</span>
+				</a>
+				<a
+					class="gh"
+					href={pr.url}
+					target="_blank"
+					rel="noopener"
+					title="Open on GitHub"
+				>
+					↗
+				</a>
+			</span>
+			{!pr.jiraKey && <span class="jira" />}
 			{pr.jiraKey &&
 				(jiraBase ? (
 					<a
 						class="jira"
-						href={`${jiraBase.replace(/\/$/, "")}/${pr.jiraKey}`}
+						href={jiraHref(jiraBase, pr.jiraKey)}
 						target="_blank"
 						rel="noopener"
 					>
@@ -488,4 +464,9 @@ theme.rel = "stylesheet";
 theme.href = "/theme.css";
 document.head.prepend(theme);
 
-render(<App />, document.getElementById("app") as HTMLElement);
+// `/pr/<repo>/<number>` is the review page; everything else is the list.
+const route = location.pathname.match(/^\/pr\/([^/]+)\/(\d+)\/?$/);
+render(
+	route ? <Review repo={route[1]} number={Number(route[2])} /> : <App />,
+	document.getElementById("app") as HTMLElement,
+);
