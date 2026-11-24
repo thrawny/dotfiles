@@ -75,6 +75,10 @@
       url = "github:mattpocock/skills";
       flake = false;
     };
+    janestreet-skills = {
+      url = "github:janestreet/agent_skills";
+      flake = false;
+    };
     anthropic-skills = {
       url = "github:anthropics/skills";
       flake = false;
@@ -112,6 +116,7 @@
       agent-browser,
       cursor-plugins,
       mattpocock-skills,
+      janestreet-skills,
       anthropic-skills,
       ...
     }:
@@ -138,6 +143,7 @@
           cursor-plugins
           herdr
           herdr-core-skills
+          janestreet-skills
           lib
           mattpocock-skills
           ;

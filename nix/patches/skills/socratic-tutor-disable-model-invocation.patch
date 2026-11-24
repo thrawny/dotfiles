@@ -1,0 +1,20 @@
+diff --git a/SKILL.md b/SKILL.md
+index 93bb7be..b1c617d 100644
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -1,6 +1,7 @@
+ ---
+ name: "socratic-tutor"
+ description: "Structured Socratic tutoring when the user explicitly asks to be taught, quizzed, or drilled to mastery on a topic: diagnostic placement, a skill map with levels 0-5, spaced review, and a final assessment. Trigger phrases: 'teach me', 'tutor me', 'quiz me', 'drill me', 'help me master'. Not for one-off 'explain X' or 'what is X' questions."
++disable-model-invocation: true
+ ---
+ 
+ # Socratic Tutor
+diff --git a/agents/openai.yaml b/agents/openai.yaml
+new file mode 100644
+index 0000000..5b1f887
+--- /dev/null
++++ b/agents/openai.yaml
+@@ -0,0 +1,2 @@
++policy:
++  allow_implicit_invocation: false

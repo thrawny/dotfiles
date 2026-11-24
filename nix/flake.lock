@@ -431,6 +431,22 @@
         "type": "github"
       }
     },
+    "janestreet-skills": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794933351,
+        "narHash": "sha256-EuYu0C7d2T4Y3RlsTm5/22jZcCrrTPpdnGhcx7SOOeM=",
+        "owner": "janestreet",
+        "repo": "agent_skills",
+        "rev": "469868f4489cbdbe178c775a0af05bb6bef63689",
+        "type": "github"
+      },
+      "original": {
+        "owner": "janestreet",
+        "repo": "agent_skills",
+        "type": "github"
+      }
+    },
     "lazy-nvim-nix": {
       "inputs": {
         "nixpkgs": [
@@ -946,6 +962,7 @@
         "herdr-core-skills": "herdr-core-skills",
         "home-manager": "home-manager",
         "hunk": "hunk",
+        "janestreet-skills": "janestreet-skills",
         "lazy-nvim-nix": "lazy-nvim-nix",
         "linux-systems": "linux-systems",
         "llm-agents": "llm-agents",

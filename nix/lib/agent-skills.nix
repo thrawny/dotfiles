@@ -5,6 +5,7 @@
   cursor-plugins,
   herdr,
   herdr-core-skills,
+  janestreet-skills,
   lib,
   mattpocock-skills,
   ...
@@ -93,6 +94,11 @@ let
     herdr.skillCommand =
       pkgs: "${herdr.packages.${pkgs.stdenv.hostPlatform.system}.default}/bin/herdr --skill";
     herdr-core.source = herdr-core-skills + "/skills/herdr-core";
+    socratic-tutor = {
+      source = janestreet-skills + "/socratic-tutor";
+      # Tutoring starts only when the user asks for it.
+      patches = [ ../patches/skills/socratic-tutor-disable-model-invocation.patch ];
+    };
     retro.source = mattpocock-skills + "/skills/engineering/retro";
     writing-for-agents.source = mattpocock-skills + "/skills/productivity/writing-for-agents";
     to-tickets.source = mattpocock-skills + "/skills/engineering/to-tickets";
