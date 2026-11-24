@@ -282,8 +282,10 @@ def turn_end(
     """The stall line for a turn that ended without a report, or None to stay quiet.
 
     Quiet, and logged as an absorb event, when moto handoff is moving the worker
-    to a new session, when the worker reported since the driver last wrote to it, or when Herdr announces a turn
-    the watch already handled. A turn end stays pending while
+    to a new session, when the task's flow is grill (the worker ends each turn
+    with a question in its pane, and the worker's done report ends the grill, see
+    end_grill), when the worker reported since the driver last wrote to it, or
+    when Herdr announces a turn the watch already handled. A turn end stays pending while
     the worker's background work runs, however long, and is rechecked every
     poll. With no transcript to read, every turn end is news.
     """
@@ -295,6 +297,8 @@ def turn_end(
     told = task.get("told")
     if handoff := handoff_turn(task, now):
         reason = handoff
+    elif task.get("flow") == "grill":
+        reason = "grill turn ends with a question in the pane"
     elif turn is not None and turn == seen.get("turn"):
         if now - pending["since"] < TURN_SETTLE_SECONDS:
             return None  # the transcript may not hold the new turn yet

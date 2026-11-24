@@ -1530,6 +1530,20 @@ def test_herdr_announcing_a_handled_turn_again_is_absorbed(moto: ModuleType):
     ]
 
 
+def test_grill_turn_end_is_absorbed_and_turn_end_after_its_done_stalls(
+    moto: ModuleType,
+):
+    tasks = {"abc-1": task(flow="grill")}
+    turn_in(moto, "t1", "[driver] grill me")
+    assert moto.check(tasks, live("done", 2), 0) == []
+    assert absorbed(moto) == ["grill turn ends with a question in the pane"]
+    moto.end_grill(tasks["abc-1"], 50.0)
+    turn_in(moto, "t2", "[driver] now implement")
+    assert moto.check(tasks, live("done", 3), 100) == [
+        "abc-1: stalled, its turn ended without a report"
+    ]
+
+
 def test_turn_end_after_a_report_to_the_driver_is_absorbed(moto: ModuleType):
     report = {"kind": "question", "text": "Which base?", "at": 100.0}
     tasks = {"abc-1": task(report=report, told=50.0)}

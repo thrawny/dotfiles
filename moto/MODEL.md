@@ -31,7 +31,7 @@ A report means "this task changed state, and its owner must act". The kinds are:
 
 A revision in conversation with the user is not a report.
 
-From a task it owns, the driver hears only these: done, question, blocked, wrap, snooze, a closed pane, and one stall signal. The stall signal is a turn that ended with no report and no background work, or a worker waiting at an approval prompt. Phase handoffs stay between the worker and moto.
+From a task it owns, the driver hears only these: done, question, blocked, wrap, snooze, a closed pane, and one stall signal. The stall signal is a turn that ended with no report and no background work (not in a grill, where every turn ends with a question in the pane), or a worker waiting at an approval prompt. Phase handoffs stay between the worker and moto.
 
 While the user owns a task, the driver hears only a report sent with `--to-driver`, a wrap, a snooze and a closed pane.
 

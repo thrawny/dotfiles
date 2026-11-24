@@ -35,9 +35,9 @@ Each moto watch is one pass, printed as JSON. The moto-watch Claude Code mod,
 which moto focus loads into the driver, runs a pass every few seconds and
 prompts the driver with the lines. Notes that scheduled jobs left ride along.
 The watch stays quiet about everything else and logs it as an absorb event:
-a turn the worker already reported, a turn its background work outlives, and
-the turns of a running handoff. A closed pane is news once it has stayed gone
-for PANE_GONE_GRACE, so a session resumed in a new pane, which attach moves the
+a turn the worker already reported, a turn its background work outlives, the
+turns of a running handoff, and the turns of a grill. A closed pane is news
+once it has stayed gone for PANE_GONE_GRACE, so a session resumed in a new pane, which attach moves the
 task to, is never news. The task keeps a closed_at mark until a live pane
 clears it.
 
