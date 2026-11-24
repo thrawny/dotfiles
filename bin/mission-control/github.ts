@@ -33,7 +33,7 @@ query($q: String!, $after: String) {
 const ONE_PR_QUERY = `
 query($org: String!, $repo: String!, $number: Int!) {
   repository(owner: $org, name: $repo) {
-    pullRequest(number: $number) { ${PR_FIELDS} bodyHTML }
+    pullRequest(number: $number) { ${PR_FIELDS} bodyHTML baseRefOid }
   }
 }`;
 
@@ -90,14 +90,18 @@ export async function openPRs(
 	return prs;
 }
 
+// baseRefOid is the tip of the base branch, which can be ahead of the commit
+// the pull request branched from.
+export type OnePR = RawPR & { bodyHTML: string; baseRefOid: string };
+
 export async function pullRequest(
 	gh: Client,
 	org: string,
 	repo: string,
 	number: number,
-): Promise<(RawPR & { bodyHTML: string }) | null> {
+): Promise<OnePR | null> {
 	const result = await gh<{
-		repository: { pullRequest: (RawPR & { bodyHTML: string }) | null } | null;
+		repository: { pullRequest: OnePR | null } | null;
 	}>(ONE_PR_QUERY, { org, repo, number });
 	return result.repository?.pullRequest ?? null;
 }
@@ -157,6 +161,27 @@ export async function gitattributes(
 	if (res.status === 404) return "";
 	if (!res.ok) throw new Error(`GitHub .gitattributes: HTTP ${res.status}`);
 	return res.text();
+}
+
+// The commit a pull request's diff starts from: the newest commit its base
+// and head share.
+export async function mergeBase(
+	token: string,
+	org: string,
+	repo: string,
+	base: string,
+	head: string,
+): Promise<string> {
+	const res = await rest(
+		token,
+		`/repos/${org}/${repo}/compare/${base}...${head}?per_page=1`,
+		"application/vnd.github+json",
+	);
+	if (!res.ok) throw new Error(`GitHub compare: HTTP ${res.status}`);
+	const json = (await res.json()) as { merge_base_commit?: { sha?: string } };
+	const sha = json.merge_base_commit?.sha;
+	if (!sha) throw new Error("GitHub compare: no merge base");
+	return sha;
 }
 
 export async function viewerLogin(gh: Client): Promise<string> {

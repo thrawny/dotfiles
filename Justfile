@@ -158,6 +158,8 @@ mission-control-install:
 check-mission-control: mission-control-install
     biome check --write bin/mission-control
     bun run bin/mission-control/node_modules/typescript/bin/tsc --project bin/mission-control/tsconfig.json
+    test -z "$(gofmt -l bin/mission-control/api/goapi)"
+    cd bin/mission-control/api/goapi && go vet ./...
     cd bin/mission-control && bun test
 
 # Typecheck Python, optionally selecting files, with the locked environments

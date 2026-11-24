@@ -5,12 +5,18 @@ import {
 	type CodeViewItem,
 	type CodeViewOptions,
 	type FileDiffMetadata,
+	parseDiffFromFile,
 	processFile,
 } from "@pierre/diffs";
-import { FileTree, type GitStatus } from "@pierre/trees";
+import {
+	FileTree,
+	type FileTreeSortComparator,
+	type GitStatus,
+} from "@pierre/trees";
 import type { ComponentChildren } from "preact";
 import { createPortal } from "preact/compat";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import type { ApiModule, ApiSide, ApiView } from "./api/languages.ts";
 import { fileTotals, type PR, type PRFile, type ReviewEvent } from "./model.ts";
 import {
 	ago,
@@ -69,6 +75,105 @@ function newFileText(file: PRFile): string | null {
 		.join("\n");
 }
 
+// One item of the review: a changed file with its line diff, or a module
+// with the diff of what it exports.
+type Entry = {
+	// The path in the file tree, and the item's id in the viewer.
+	id: string;
+	// GitHub's status of the file. A module has added, removed, modified, or
+	// unchanged when its API is the same at both commits.
+	status: string;
+	generated: boolean;
+	file?: PRFile;
+	module?: ApiModule;
+};
+
+// Where to scroll once the diff shows: an item, or a line in it.
+type Focus = { id: string; line?: number; side?: "deletions" | "additions" };
+
+const apiText = (side: ApiSide | null) => (side ? side.lines.join("\n") : "");
+
+function moduleStatus(module: ApiModule) {
+	if (!module.base) return "added";
+	if (!module.head) return "removed";
+	return apiText(module.base) === apiText(module.head)
+		? "unchanged"
+		: "modified";
+}
+
+// The review's items. With an API view, each module stands in for the
+// changed files it covers, and the other files keep their line diffs.
+function reviewEntries(files: PRFile[], view: ApiView | null): Entry[] {
+	const byPath = new Map(files.map((f) => [f.path, f]));
+	const covered = new Set(view?.modules.flatMap((m) => m.files));
+	return [
+		...(view?.modules ?? []).map((module) => ({
+			id: module.id,
+			status: moduleStatus(module),
+			generated: module.files.every((path) => byPath.get(path)?.generated),
+			module,
+		})),
+		...files
+			.filter((f) => !covered.has(f.path))
+			.map((f) => ({
+				id: f.path,
+				status: f.status,
+				generated: f.generated,
+				file: f,
+			})),
+	];
+}
+
+// The text of an entry that reads as a file, without diff markup: a new
+// file, a new module, or a module whose API did not change.
+function plainText(entry: Entry): string | null {
+	if (entry.file) return newFileText(entry.file);
+	const head = entry.module?.head;
+	return head && entry.status !== "modified" ? apiText(head) : null;
+}
+
+function entryDiff(entry: Entry): FileDiffMetadata {
+	if (entry.file) return toFileDiff(entry.file);
+	const { id, language, base, head } = entry.module as ApiModule;
+	const side = (lines: ApiSide | null) =>
+		lines && { name: id, lang: language, contents: apiText(lines) };
+	return parseDiffFromFile(side(base), side(head));
+}
+
+// An entry with nothing to expand: a deleted file or module, or a file
+// GitHub sent no patch for.
+function staysShut(entry: Entry) {
+	return entry.status === "removed" || (!!entry.file && !entry.file.patch);
+}
+
+// Whether a file's line diff shows a line. GitHub's patch holds the changed
+// lines and three lines around them.
+function showsLine(file: PRFile, side: "base" | "head", line: number) {
+	if (file.status === "removed" || !file.patch) return false;
+	if (newFileText(file) !== null) return side === "head";
+	return toFileDiff(file).hunks.some((hunk) =>
+		side === "head"
+			? line >= hunk.additionStart &&
+				line < hunk.additionStart + hunk.additionCount
+			: line >= hunk.deletionStart &&
+				line < hunk.deletionStart + hunk.deletionCount,
+	);
+}
+
+function saved(key: string) {
+	try {
+		return localStorage.getItem(key);
+	} catch {
+		return null;
+	}
+}
+
+function save(key: string, value: string) {
+	try {
+		localStorage.setItem(key, value);
+	} catch {}
+}
+
 function isTyping(event: KeyboardEvent) {
 	const target = event.composedPath()[0] as HTMLElement | undefined;
 	return (
@@ -88,10 +193,36 @@ function goBack() {
 	else location.href = "/";
 }
 
+type Mode = "diff" | "api";
+
+type ApiState = {
+	// The newest view that arrived, and whether it holds comments.
+	view: ApiView | null;
+	comments: boolean;
+	loading: boolean;
+	error: string | null;
+};
+
 export function Review({ repo, number }: { repo: string; number: number }) {
 	const [data, setData] = useState<Detail | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [now, setNow] = useState(Date.now());
+	// The reviewer's choices hold for every pull request.
+	const [mode, setMode] = useState<Mode>(() =>
+		saved("mc-view") === "api" ? "api" : "diff",
+	);
+	const [comments, setComments] = useState(
+		() => saved("mc-api-comments") === "1",
+	);
+	const [api, setApi] = useState<ApiState>({
+		view: null,
+		comments: false,
+		loading: true,
+		error: null,
+	});
+	const [focus, setFocus] = useState<Focus | null>(null);
+	// The item at the top of the diff, or null above the first one.
+	const currentId = useRef<string | null>(null);
 
 	// A reload after a review keeps the diff when the head is the same.
 	const load = () =>
@@ -113,11 +244,166 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 		load();
 	}, [repo, number]);
 
+	// The API view loads beside the pull request, so the switch finds it
+	// ready. It loads again for the other comments setting, and when the pull
+	// request got new commits.
+	const apiKey = `${repo}#${number}:${comments}`;
+	const loadedKey = useRef("");
+	const behind = !!data && !!api.view && api.view.headSha !== data.headSha;
+	useEffect(() => {
+		if (loadedKey.current === apiKey && !behind) return;
+		loadedKey.current = apiKey;
+		let stale = false;
+		setApi((old) => ({ ...old, loading: true, error: null }));
+		fetch(`/api/pr/${repo}/${number}/api${comments ? "?comments=1" : ""}`)
+			.then(async (res) => {
+				const json = (await res.json()) as ApiView & { error?: string };
+				if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+				if (stale) return;
+				// The new view replaces the items, so the place is kept.
+				setFocus(currentId.current ? { id: currentId.current } : null);
+				setApi({ view: json, comments, loading: false, error: null });
+			})
+			.catch((e: Error) => {
+				if (!stale)
+					setApi((old) => ({ ...old, loading: false, error: e.message }));
+			});
+		return () => {
+			stale = true;
+		};
+	}, [apiKey, behind]);
+
 	useEffect(() => {
 		document.title = data
 			? `${data.pr.title} · ${repo}#${number}`
 			: `${repo}#${number}`;
 	}, [data]);
+
+	const view = api.view;
+	const modules = view?.modules ?? [];
+	// Without a module there is nothing the API view could show.
+	const shown: Mode | "wait" =
+		mode === "diff" || (!api.loading && modules.length === 0)
+			? "diff"
+			: modules.length > 0
+				? "api"
+				: "wait";
+	const entries = useMemo(
+		() => reviewEntries(data?.files ?? [], shown === "api" ? view : null),
+		[data?.files, view, shown],
+	);
+
+	// The other view opens at the item that was being read.
+	const show = (next: Mode) => {
+		const id = currentId.current;
+		const module =
+			next === "api"
+				? modules.find((m) => id && m.files.includes(id))
+				: modules.find((m) => m.id === id);
+		const target = next === "api" ? module?.id : module?.files[0];
+		setFocus(id ? { id: target ?? id } : null);
+		setMode(next);
+		save("mc-view", next);
+	};
+	const toggleComments = () => {
+		save("mc-api-comments", comments ? "0" : "1");
+		setComments(!comments);
+	};
+
+	// From a line of API text to its source: in the line diff when the diff
+	// shows that line, else on GitHub.
+	const openSource = (module: ApiModule, at: "base" | "head", line: number) => {
+		const side = module[at];
+		const target = side?.targets[line - 1];
+		if (!data || !view || !side || !target || target[0] < 0) return;
+		const path = side.sources[target[0]];
+		const file = data.files.find(
+			(f) => (at === "head" ? f.path : (f.prevPath ?? f.path)) === path,
+		);
+		if (file && showsLine(file, at, target[1])) {
+			setFocus({
+				id: file.path,
+				line: target[1],
+				side: at === "head" ? "additions" : "deletions",
+			});
+			// The saved choice stays: this is a visit to the line diff.
+			setMode("diff");
+			return;
+		}
+		const sha = at === "head" ? view.headSha : view.baseSha;
+		const repoUrl = data.pr.url.replace(/\/pull\/\d+$/, "");
+		window.open(
+			`${repoUrl}/blob/${sha}/${path.split("/").map(encodeURIComponent).join("/")}#L${target[1]}`,
+			"_blank",
+			"noopener",
+		);
+	};
+
+	useEffect(() => {
+		const onKey = (event: KeyboardEvent) => {
+			if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event))
+				return;
+			if (event.key === "v" && modules.length > 0)
+				show(mode === "api" ? "diff" : "api");
+			else if (event.key === "c" && shown === "api") toggleComments();
+			else return;
+			event.preventDefault();
+		};
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	});
+
+	const changed = modules.filter((m) => moduleStatus(m) !== "unchanged").length;
+	const switcher = (
+		<span class="view-switch">
+			{api.error && (
+				<span class="refused" title={api.error}>
+					No API view
+				</span>
+			)}
+			{view?.errors.map((message) => (
+				<span class="refused" title={message}>
+					{message.split(":")[0]} API failed
+				</span>
+			))}
+			{shown === "api" && (
+				<label title="Show comments in the API view (c)">
+					<input type="checkbox" checked={comments} onChange={toggleComments} />
+					Comments
+				</label>
+			)}
+			<span class="segments">
+				<button
+					type="button"
+					class={shown === "diff" ? "on" : ""}
+					aria-pressed={shown === "diff"}
+					onClick={() => show("diff")}
+					title="The line diff (v)"
+				>
+					Diff
+				</button>
+				<button
+					type="button"
+					class={shown === "diff" ? "" : "on"}
+					aria-pressed={shown !== "diff"}
+					disabled={!api.loading && modules.length === 0}
+					onClick={() => show("api")}
+					title={
+						api.loading || modules.length > 0
+							? "What each changed module exports, without bodies (v)"
+							: "No changed module has an API view"
+					}
+				>
+					API
+					{api.loading ? (
+						<i class="spinner" />
+					) : (
+						modules.length > 0 && <span class="count">{changed}</span>
+					)}
+				</button>
+			</span>
+		</span>
+	);
 
 	return (
 		<div class="review-page">
@@ -129,12 +415,23 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 			)}
 			{data && (
 				<>
-					<Strip data={data} now={now} reload={load} />
-					<Diff
-						files={data.files}
-						prUrl={data.pr.url}
-						header={<Description html={data.bodyHTML} />}
-					/>
+					<Strip data={data} now={now} reload={load} tools={switcher} />
+					{shown === "wait" ? (
+						<p class="muted">Reading the API of the changed modules…</p>
+					) : (
+						<Diff
+							// A view of its own for each set of items.
+							key={shown === "api" ? `api:${api.comments}` : "diff"}
+							entries={entries}
+							prUrl={data.pr.url}
+							header={<Description html={data.bodyHTML} />}
+							focus={focus}
+							onCurrent={(id) => {
+								currentId.current = id;
+							}}
+							openSource={openSource}
+						/>
+					)}
 				</>
 			)}
 		</div>
@@ -145,10 +442,12 @@ function Strip({
 	data,
 	now,
 	reload,
+	tools,
 }: {
 	data: Detail;
 	now: number;
 	reload: () => Promise<void>;
+	tools: ComponentChildren;
 }) {
 	const { pr } = data;
 	const totals = useMemo(() => fileTotals(data.files), [data.files]);
@@ -234,6 +533,7 @@ function Strip({
 					GitHub ↗
 				</a>
 				<span class="strip-end">
+					{tools}
 					{data.viewer.toLowerCase() !== pr.author.toLowerCase() && (
 						<Verdict data={data} reload={reload} />
 					)}
@@ -435,14 +735,46 @@ const TREE_STATUS: Record<string, GitStatus> = {
 	copied: "added",
 };
 
+// The tree's order with an API view: folders, then modules, then the files
+// that keep their line diffs, each by name.
+function modulesFirst(modules: Set<string>): FileTreeSortComparator {
+	return (left, right) => {
+		const shared = Math.min(left.segments.length, right.segments.length);
+		for (let i = 0; i < shared; i++) {
+			if (left.segments[i] === right.segments[i]) continue;
+			const leftFolder = left.isDirectory || i < left.segments.length - 1;
+			const rightFolder = right.isDirectory || i < right.segments.length - 1;
+			if (leftFolder !== rightFolder) return leftFolder ? -1 : 1;
+			if (!leftFolder && modules.has(left.path) !== modules.has(right.path))
+				return modules.has(left.path) ? -1 : 1;
+			return left.segments[i].localeCompare(right.segments[i]);
+		}
+		return left.segments.length - right.segments.length;
+	};
+}
+
+// A module's letter in the tree. One whose API did not change gets none.
+const MODULE_STATUS: Record<string, GitStatus> = {
+	added: "added",
+	removed: "deleted",
+	modified: "modified",
+};
+
 function Diff({
-	files: changed,
+	entries: all,
 	prUrl,
 	header,
+	focus,
+	onCurrent,
+	openSource,
 }: {
-	files: PRFile[];
+	entries: Entry[];
 	prUrl: string;
 	header: ComponentChildren;
+	// Where to open, read once when the view is made.
+	focus: Focus | null;
+	onCurrent: (id: string | null) => void;
+	openSource: (module: ApiModule, at: "base" | "head", line: number) => void;
 }) {
 	// The viewer measures this element and scrolls it with the files.
 	const headerHost = useMemo(() => document.createElement("div"), []);
@@ -451,24 +783,27 @@ function Diff({
 
 	// The file tree, without generated files: they start collapsed and
 	// nobody reads them. A click on a file jumps to it in the diff.
-	const handwritten = useMemo(
-		() => changed.filter((f) => !f.generated),
-		[changed],
-	);
+	const handwritten = useMemo(() => all.filter((e) => !e.generated), [all]);
 	const tree = useMemo(
 		() =>
 			new FileTree({
-				paths: handwritten.map((f) => f.path),
+				paths: handwritten.map((e) => e.id),
 				flattenEmptyDirectories: true,
 				initialExpansion: "open",
 				density: "compact",
+				sort: handwritten.some((e) => e.module)
+					? modulesFirst(
+							new Set(handwritten.flatMap((e) => (e.module ? [e.id] : []))),
+						)
+					: "default",
 				// Every file in a PR changed, so only the other statuses get a
-				// letter.
-				gitStatus: handwritten.flatMap((f) =>
-					TREE_STATUS[f.status]
-						? [{ path: f.path, status: TREE_STATUS[f.status] }]
-						: [],
-				),
+				// letter. A module gets one when its API changed.
+				gitStatus: handwritten.flatMap((e) => {
+					const status = e.module
+						? MODULE_STATUS[e.status]
+						: TREE_STATUS[e.status];
+					return status ? [{ path: e.id, status }] : [];
+				}),
 				// A folder's dot only repeats what its files show.
 				unsafeCSS:
 					'[data-item-section="git"] [data-icon-name="file-tree-icon-dot"]{display:none}',
@@ -482,15 +817,15 @@ function Diff({
 
 	// The diff lists the files in the tree's order, so j and k follow it.
 	// Generated files come last.
-	const files = useMemo(() => {
-		const byPath = new Map(changed.map((f) => [f.path, f]));
+	const entries = useMemo(() => {
+		const byId = new Map(all.map((e) => [e.id, e]));
 		const order = tree
 			.getVisibleRows(0, tree.getVisibleCount())
 			.filter((row) => row.kind === "file")
-			.map((row) => byPath.get(row.path))
-			.filter((f): f is PRFile => !!f);
-		const seen = new Set(order.map((f) => f.path));
-		return [...order, ...changed.filter((f) => !seen.has(f.path))];
+			.map((row) => byId.get(row.path))
+			.filter((e): e is Entry => !!e);
+		const seen = new Set(order.map((e) => e.id));
+		return [...order, ...all.filter((e) => !seen.has(e.id))];
 	}, [tree]);
 
 	useEffect(() => {
@@ -500,14 +835,32 @@ function Diff({
 	}, [tree]);
 	const root = useRef<HTMLDivElement>(null);
 	const viewer = useRef<CodeView | null>(null);
+	// Generated files start collapsed, and so does a module whose API did not
+	// change. The item to open at a line starts open.
 	const [collapsed, setCollapsed] = useState(
-		() => new Set(files.filter((f) => f.generated).map((f) => f.path)),
+		() =>
+			new Set(
+				entries
+					.filter((e) => e.generated || e.status === "unchanged")
+					.filter((e) => !(focus?.line && focus.id === e.id))
+					.map((e) => e.id),
+			),
 	);
-	const [current, setCurrent] = useState(0);
+	const [current, setCurrent] = useState(() =>
+		Math.max(
+			0,
+			entries.findIndex((e) => e.id === focus?.id),
+		),
+	);
 	// A jump owns the current file until its scroll settles.
 	const jumpedAt = useRef(0);
-	const byPath = useMemo(() => new Map(files.map((f) => [f.path, f])), [files]);
+	const byId = useMemo(() => new Map(entries.map((e) => [e.id, e])), [entries]);
 	const toggleRef = useRef((_path: string) => {});
+	const openSourceRef = useRef(openSource);
+	openSourceRef.current = openSource;
+	const onCurrentRef = useRef(onCurrent);
+	onCurrentRef.current = onCurrent;
+	const hasModules = useMemo(() => entries.some((e) => e.module), [entries]);
 
 	const toggle = (path: string) =>
 		setCollapsed((prev) => {
@@ -518,7 +871,7 @@ function Diff({
 		});
 	toggleRef.current = toggle;
 
-	// One viewer for the page. Header pieces read the file by the item's id.
+	// One viewer for the page. Header pieces read the entry by the item's id.
 	useEffect(() => {
 		if (!root.current) return;
 		// Header callbacks get the item as context, file or diff alike.
@@ -527,18 +880,21 @@ function Diff({
 			theme: { dark: "monokai", light: "github-light" },
 			themeType: isDark() ? "dark" : "light",
 			diffStyle: "unified",
-			hunkSeparators: "metadata",
+			// An API diff holds the whole text, so the lines between its hunks
+			// can open. GitHub's patches hold the hunks only.
+			hunkSeparators: hasModules ? "line-info" : "metadata",
 			overflow: "wrap",
 			stickyHeaders: true,
 			layout: { paddingTop: 0, paddingBottom: 64, gap: 12 },
 			// The library mixes a little of each diff colour into the code
 			// background. A mix of 0% shows the theme's diff colours as they are.
-			unsafeCSS:
-				"[data-line],[data-no-newline],[data-gutter-buffer],[data-column-number]{--mix-light:0%;--mix-dark:0%}",
+			// A line number of API text is a link to its source.
+			unsafeCSS: `[data-line],[data-no-newline],[data-gutter-buffer],[data-column-number]{--mix-light:0%;--mix-dark:0%}${hasModules ? "[data-column-number]{cursor:pointer}" : ""}`,
 			renderCodeViewHeader: () => headerHost,
 			renderHeaderPrefix: (_diff: unknown, context: Context) => {
+				const entry = byId.get(context.item.id);
 				// A deleted file has nothing to expand.
-				if (byPath.get(context.item.id)?.status === "removed") return null;
+				if (!entry || staysShut(entry)) return null;
 				const button = el(
 					"button",
 					"fold",
@@ -550,9 +906,23 @@ function Diff({
 				return button;
 			},
 			renderHeaderMetadata: (_diff: unknown, context: Context) => {
-				const file = byPath.get(context.item.id);
-				if (!file) return null;
+				const entry = byId.get(context.item.id);
+				if (!entry) return null;
 				const box = el("span", "file-meta", "");
+				if (entry.module) {
+					const lines = entry.module.head?.lines.length ?? 0;
+					if (entry.status === "added")
+						box.append(el("span", "added", `new module, ${lines} lines`));
+					if (entry.status === "removed")
+						box.append(el("span", "removed", "deleted module"));
+					if (entry.status === "unchanged")
+						box.append(el("span", "muted", "No API change"));
+					const tag = el("span", "gen", "API");
+					tag.title = `What ${entry.module.files.join(", ")} ${entry.module.files.length === 1 ? "is" : "are"} part of. A click on a line number opens the source.`;
+					box.append(tag);
+					return box;
+				}
+				const file = entry.file as PRFile;
 				if (file.status === "removed")
 					box.append(el("span", "removed", `deleted, ${file.deletions} lines`));
 				if (newFileText(file) !== null)
@@ -573,6 +943,21 @@ function Diff({
 					box.append(link);
 				}
 				return box;
+			},
+			// A line number of API text opens the line's source.
+			onLineNumberClick: (
+				line: { lineNumber: number; annotationSide?: string },
+				context: Context,
+			) => {
+				const module = byId.get(context.item.id)?.module;
+				if (module)
+					openSourceRef.current(
+						module,
+						line.annotationSide === "deletions" || !module.head
+							? "base"
+							: "head",
+						line.lineNumber,
+					);
 			},
 		});
 		const view = new CodeView(options());
@@ -596,11 +981,15 @@ function Diff({
 			frame = requestAnimationFrame(() => {
 				if (Date.now() - jumpedAt.current < 400) return;
 				let index = 0;
-				files.forEach((f, i) => {
-					const at = view.getTopForItem(f.path);
-					if (at !== undefined && at <= top + 4) index = i;
+				let above = true;
+				entries.forEach((e, i) => {
+					const at = view.getTopForItem(e.id);
+					if (at === undefined || at > top + 4) return;
+					index = i;
+					above = false;
 				});
 				setCurrent(index);
+				onCurrentRef.current(above ? null : (entries[index]?.id ?? null));
 			});
 		});
 		return () => {
@@ -611,73 +1000,104 @@ function Diff({
 			view.cleanUp();
 			viewer.current = null;
 		};
-	}, [files]);
+	}, [entries]);
 
 	// Items carry the collapsed state; a changed state bumps the version.
 	const versions = useRef(new Map<string, number>());
 	const diffs = useMemo(
 		() =>
 			new Map(
-				files
-					.filter((f) => !newFileText(f))
-					.map((f) => [f.path, toFileDiff(f)]),
+				entries
+					.filter((e) => plainText(e) === null)
+					.map((e) => [e.id, entryDiff(e)]),
 			),
-		[files],
+		[entries],
 	);
+	const focused = useRef(false);
 	useEffect(() => {
 		const view = viewer.current;
 		if (!view) return;
-		const items = files.map((f): CodeViewItem<undefined> => {
+		const items = entries.map((e): CodeViewItem<undefined> => {
 			// A deleted file shows as its header line only.
-			const isCollapsed =
-				collapsed.has(f.path) || !f.patch || f.status === "removed";
-			const known = view.getItem(f.path);
-			let version = versions.current.get(f.path) ?? 0;
+			const isCollapsed = collapsed.has(e.id) || staysShut(e);
+			const known = view.getItem(e.id);
+			let version = versions.current.get(e.id) ?? 0;
 			if (known && known.collapsed !== isCollapsed) version++;
-			versions.current.set(f.path, version);
+			versions.current.set(e.id, version);
 			// A new file reads as a file, as in codediff.nvim, not as a wall
 			// of added lines.
-			const text = newFileText(f);
+			const text = plainText(e);
 			if (text !== null)
 				return {
-					id: f.path,
+					id: e.id,
 					type: "file",
-					file: { name: f.path, contents: text },
+					file: { name: e.id, contents: text, lang: e.module?.language },
 					collapsed: isCollapsed,
 					version,
 				};
 			return {
-				id: f.path,
+				id: e.id,
 				type: "diff",
-				fileDiff: diffs.get(f.path) as FileDiffMetadata,
+				fileDiff: diffs.get(e.id) as FileDiffMetadata,
 				collapsed: isCollapsed,
 				version,
 			};
 		});
 		view.setItems(items);
-	}, [files, collapsed]);
+		if (focused.current || !focus || !byId.has(focus.id)) return;
+		focused.current = true;
+		jumpedAt.current = Date.now();
+		onCurrentRef.current(focus.id);
+		if (focus.line === undefined)
+			view.scrollTo({
+				type: "item",
+				id: focus.id,
+				align: "start",
+				behavior: "instant",
+			});
+		else {
+			// A file shown without diff markup has one side only.
+			const side =
+				items.find((item) => item.id === focus.id)?.type === "diff"
+					? focus.side
+					: undefined;
+			view.scrollTo({
+				type: "line",
+				id: focus.id,
+				lineNumber: focus.line,
+				side,
+				align: "center",
+				behavior: "instant",
+			});
+			view.setSelectedLines({
+				id: focus.id,
+				range: { start: focus.line, end: focus.line, side },
+			});
+		}
+	}, [entries, collapsed]);
 
 	const jump = (index: number) => {
-		const file = files[index];
-		if (!file) return;
+		const entry = entries[index];
+		if (!entry) return;
 		setCurrent(index);
+		onCurrentRef.current(entry.id);
 		jumpedAt.current = Date.now();
 		viewer.current?.scrollTo({
 			type: "item",
-			id: file.path,
+			id: entry.id,
 			align: "start",
 			behavior: "instant",
 		});
 	};
 
 	pick.current = (path: string) => {
-		const index = files.findIndex((f) => f.path === path);
+		const index = entries.findIndex((e) => e.id === path);
 		if (index >= 0 && index !== current) jump(index);
 	};
 
 	// The tree selects the current file and keeps it in view.
 	useEffect(() => {
-		const path = files[current]?.path;
+		const path = entries[current]?.id;
 		if (!path) return;
 		for (const other of tree.getSelectedPaths())
 			if (other !== path) tree.getItem(other)?.deselect();
@@ -690,21 +1110,21 @@ function Diff({
 		const onKey = (event: KeyboardEvent) => {
 			if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event))
 				return;
-			if (event.key === "j") jump(Math.min(current + 1, files.length - 1));
+			if (event.key === "j") jump(Math.min(current + 1, entries.length - 1));
 			else if (event.key === "k") jump(Math.max(current - 1, 0));
 			else if (event.key === "x") {
-				const file = files[current];
-				if (file) toggle(file.path);
+				const entry = entries[current];
+				if (entry) toggle(entry.id);
 			} else if (event.key === "g") goBack();
 			else return;
 			event.preventDefault();
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [current, files]);
+	}, [current, entries]);
 
 	return (
-		<div class="review-body">
+		<div class={hasModules ? "review-body api-view" : "review-body"}>
 			<nav class="file-list" ref={treeHost} />
 			<div class="diff-view" ref={root} />
 			{createPortal(header, headerHost)}

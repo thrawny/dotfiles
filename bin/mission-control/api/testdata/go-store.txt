@@ -1,0 +1,89 @@
+=== base internal/store/store.go
+// Package store keeps values.
+package store
+
+// Store keeps values by key.
+type Store struct {
+	// Name is shown in logs.
+	Name string // the display name
+	secret int
+	Size int
+}
+
+// Get returns the value of key.
+func (s *Store) Get(key string) (string, bool) {
+	return "", false
+}
+
+func hidden() {}
+=== head internal/store/store.go
+// Package store keeps values.
+package store
+
+import "errors"
+
+// DefaultSize is the size of a new store.
+const DefaultSize = 10
+
+const (
+	// ModeRead opens a store for reading.
+	ModeRead Mode = iota
+	ModeWrite
+	modeInternal
+)
+
+var ErrMissing = errors.New("missing")
+
+// Mode is how a store is opened.
+type Mode int
+
+// Store keeps values by key.
+type Store struct {
+	// Name is shown in logs.
+	Name string // the display name
+	secret int
+
+	Size int
+	mu   int
+}
+
+// New makes an empty store.
+func New() *Store { return nil }
+
+// Get returns the value of key, or fallback.
+func (s *Store) Get(key string, fallback string) (string, bool) {
+	return "", false
+}
+
+func (s *Store) Put(key, value string) {}
+
+func (s *Store) lock() {}
+
+type Reader interface {
+	Read() error
+	close()
+}
+
+func Open(path string) (*Store, error) { return nil, nil }
+
+func Parse(s string) error { return nil }
+
+func hidden() {}
+=== head internal/store/key.go
+package store
+
+type Key[T any] struct{ V T }
+
+func (k Key[T]) String() string { return "" }
+
+type unexported struct{ Exported int }
+
+func (u unexported) Method() {}
+=== head internal/store/store_test.go
+package store
+
+func TestStore() {}
+=== head cmd/tool/main.go
+package main
+
+func main() {}

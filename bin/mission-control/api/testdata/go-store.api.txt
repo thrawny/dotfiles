@@ -1,0 +1,123 @@
+# comments hidden
+
+## cmd/tool/package main
+files: cmd/tool/main.go
+-- base
+(none)
+-- head
+
+
+## internal/store/package store
+files: internal/store/key.go, internal/store/store.go
+-- base
+internal/store/store.go:2  | package store
+                           |
+internal/store/store.go:5  | type Store struct {
+internal/store/store.go:7  | 	Name string
+internal/store/store.go:9  | 	Size int
+internal/store/store.go:10 | }
+                           |
+internal/store/store.go:13 | func (s *Store) Get(key string) (string, bool)
+-- head
+internal/store/key.go:1    | package store
+                           |
+internal/store/store.go:7  | const DefaultSize = 10
+                           |
+internal/store/store.go:16 | var ErrMissing = errors.New("missing")
+                           |
+internal/store/store.go:50 | func Parse(s string) error
+                           |
+internal/store/key.go:3    | type Key[T any] struct{ V T }
+                           |
+internal/store/key.go:5    | func (k Key[T]) String() string
+                           |
+internal/store/store.go:19 | type Mode int
+                           |
+internal/store/store.go:9  | const (
+internal/store/store.go:11 | 	ModeRead Mode = iota
+internal/store/store.go:12 | 	ModeWrite
+internal/store/store.go:14 | )
+                           |
+internal/store/store.go:43 | type Reader interface {
+internal/store/store.go:44 | 	Read() error
+internal/store/store.go:46 | }
+                           |
+internal/store/store.go:22 | type Store struct {
+internal/store/store.go:24 | 	Name string
+                           |
+internal/store/store.go:27 | 	Size int
+internal/store/store.go:29 | }
+                           |
+internal/store/store.go:32 | func New() *Store
+internal/store/store.go:48 | func Open(path string) (*Store, error)
+internal/store/store.go:35 | func (s *Store) Get(key string, fallback string) (string, bool)
+internal/store/store.go:39 | func (s *Store) Put(key, value string)
+
+# comments shown
+
+## cmd/tool/package main
+files: cmd/tool/main.go
+-- base
+(none)
+-- head
+
+
+## internal/store/package store
+files: internal/store/key.go, internal/store/store.go
+-- base
+internal/store/store.go:2  | package store
+                           |
+internal/store/store.go:4  | // Store keeps values by key.
+internal/store/store.go:5  | type Store struct {
+internal/store/store.go:6  | 	// Name is shown in logs.
+internal/store/store.go:7  | 	Name string // the display name
+internal/store/store.go:9  | 	Size int
+internal/store/store.go:10 | }
+                           |
+internal/store/store.go:12 | // Get returns the value of key.
+internal/store/store.go:13 | func (s *Store) Get(key string) (string, bool)
+-- head
+internal/store/key.go:1    | package store
+                           |
+internal/store/store.go:6  | // DefaultSize is the size of a new store.
+internal/store/store.go:7  | const DefaultSize = 10
+                           |
+internal/store/store.go:16 | var ErrMissing = errors.New("missing")
+                           |
+internal/store/store.go:50 | func Parse(s string) error
+                           |
+internal/store/key.go:3    | type Key[T any] struct{ V T }
+                           |
+internal/store/key.go:5    | func (k Key[T]) String() string
+                           |
+internal/store/store.go:18 | // Mode is how a store is opened.
+internal/store/store.go:19 | type Mode int
+                           |
+internal/store/store.go:9  | const (
+internal/store/store.go:10 | 	// ModeRead opens a store for reading.
+internal/store/store.go:11 | 	ModeRead Mode = iota
+internal/store/store.go:12 | 	ModeWrite
+internal/store/store.go:14 | )
+                           |
+internal/store/store.go:43 | type Reader interface {
+internal/store/store.go:44 | 	Read() error
+internal/store/store.go:46 | }
+                           |
+internal/store/store.go:21 | // Store keeps values by key.
+internal/store/store.go:22 | type Store struct {
+internal/store/store.go:23 | 	// Name is shown in logs.
+internal/store/store.go:24 | 	Name string // the display name
+                           |
+internal/store/store.go:27 | 	Size int
+internal/store/store.go:29 | }
+                           |
+internal/store/store.go:31 | // New makes an empty store.
+internal/store/store.go:32 | func New() *Store
+                           |
+internal/store/store.go:48 | func Open(path string) (*Store, error)
+                           |
+internal/store/store.go:34 | // Get returns the value of key, or fallback.
+internal/store/store.go:35 | func (s *Store) Get(key string, fallback string) (string, bool)
+                           |
+internal/store/store.go:39 | func (s *Store) Put(key, value string)
+

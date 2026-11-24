@@ -1,0 +1,174 @@
+# comments hidden
+
+## shop/__init__.py
+files: shop/__init__.py, shop/client.py, shop/server.py
+-- base
+shop/__init__.py:3 | from .server import Server
+shop/server.py:1   | class Server:
+shop/server.py:2   |     def start(self): ...
+-- head
+shop/__init__.py:3  | import os
+                    |
+shop/__init__.py:5  | from shop.client import *
+shop/client.py:1    | def connect(url: str) -> "Client": ...
+                    |
+shop/client.py:6    | class Client: ...
+                    |
+shop/__init__.py:6  | from .server import Server, make_server as make
+shop/server.py:11   | @dataclass
+shop/server.py:12   | class Server(Base):
+shop/server.py:18   |     host: str
+shop/server.py:19   |     port: int = DEFAULT_PORT
+                    |
+shop/server.py:22   |     class Config:
+shop/server.py:23   |         strict = True
+                    |
+shop/server.py:25   |     def start(self, *, block: bool = True) -> None: ...
+                    |
+shop/server.py:30   |     async def stop(
+shop/server.py:31   |         self,
+shop/server.py:32   |         timeout: float | None = None,
+shop/server.py:33   |     ) -> bool: ...
+                    |
+shop/server.py:36   |     @property
+shop/server.py:37   |     def address(self) -> str: ...
+                    |
+shop/server.py:42   |     def __repr__(self) -> str: ...
+                    |
+shop/server.py:46   | def make_server(host: str, port: int = DEFAULT_PORT) -> Server: ...
+                    |
+shop/__init__.py:11 | VERSION = "2.0"
+
+## shop/base.py
+files: shop/base.py
+-- base
+(none)
+-- head
+shop/base.py:1 | class Base:
+shop/base.py:2 |     kind = "base"
+               |
+shop/base.py:5 | def helper(): ...
+
+## shop/util.py
+files: shop/util.py
+-- base
+(none)
+-- head
+shop/util.py:3  | Pair = tuple[str, str]
+                |
+shop/util.py:6  | type Lookup = dict[str, Pair]
+                |
+shop/util.py:9  | @typing.overload
+shop/util.py:10 | def find(key: int) -> int: ...
+shop/util.py:11 | @typing.overload
+shop/util.py:12 | def find(key: str) -> str: ...
+shop/util.py:13 | def find(key): ...
+
+## tools/cli.py
+files: tools/cli.py
+-- base
+tools/cli.py:1 | def run(argv): ...
+-- head
+tools/cli.py:5 | def run(argv: list[str], *, quiet=lambda: False) -> int: ...
+
+## tools/empty.py
+files: tools/empty.py
+-- base
+(none)
+-- head
+
+
+# comments shown
+
+## shop/__init__.py
+files: shop/__init__.py, shop/client.py, shop/server.py
+-- base
+shop/__init__.py:1 | """The shop package."""
+                   |
+shop/__init__.py:3 | from .server import Server
+shop/server.py:1   | class Server:
+shop/server.py:2   |     def start(self): ...
+-- head
+shop/__init__.py:1  | """The shop package."""
+                    |
+shop/__init__.py:3  | import os
+                    |
+shop/__init__.py:5  | from shop.client import *
+shop/client.py:1    | def connect(url: str) -> "Client":
+shop/client.py:2    |     """Connect to a shop."""
+                    |
+shop/client.py:6    | class Client: ...
+                    |
+shop/__init__.py:6  | from .server import Server, make_server as make
+shop/server.py:11   | @dataclass
+shop/server.py:12   | class Server(Base):
+shop/server.py:13   |     """A shop server.
+shop/server.py:14   |
+shop/server.py:15   |     It listens on one port.
+shop/server.py:16   |     """
+                    |
+shop/server.py:18   |     host: str
+shop/server.py:19   |     port: int = DEFAULT_PORT  # where it listens
+                    |
+shop/server.py:22   |     class Config:
+shop/server.py:23   |         strict = True
+                    |
+shop/server.py:25   |     def start(self, *, block: bool = True) -> None:
+shop/server.py:26   |         """Start listening."""
+                    |
+shop/server.py:29   |     # Stops at once.
+shop/server.py:30   |     async def stop(
+shop/server.py:31   |         self,
+shop/server.py:32   |         timeout: float | None = None,
+shop/server.py:33   |     ) -> bool: ...
+                    |
+shop/server.py:36   |     @property
+shop/server.py:37   |     def address(self) -> str: ...
+                    |
+shop/server.py:42   |     def __repr__(self) -> str: ...
+                    |
+shop/server.py:46   | def make_server(host: str, port: int = DEFAULT_PORT) -> Server: ...
+                    |
+shop/__init__.py:10 | # The release.
+shop/__init__.py:11 | VERSION = "2.0"
+
+## shop/base.py
+files: shop/base.py
+-- base
+(none)
+-- head
+shop/base.py:1 | class Base:
+shop/base.py:2 |     kind = "base"
+               |
+shop/base.py:5 | def helper(): ...
+
+## shop/util.py
+files: shop/util.py
+-- base
+(none)
+-- head
+shop/util.py:3  | Pair = tuple[str, str]
+shop/util.py:4  | """A key and its value."""
+                |
+shop/util.py:6  | type Lookup = dict[str, Pair]
+                |
+shop/util.py:9  | @typing.overload
+shop/util.py:10 | def find(key: int) -> int: ...
+shop/util.py:11 | @typing.overload
+shop/util.py:12 | def find(key: str) -> str: ...
+shop/util.py:13 | def find(key): ...
+
+## tools/cli.py
+files: tools/cli.py
+-- base
+tools/cli.py:1 | def run(argv): ...
+-- head
+tools/cli.py:5 | def run(argv: list[str], *, quiet=lambda: False) -> int: ...
+
+## tools/empty.py
+files: tools/empty.py
+-- base
+(none)
+-- head
+
+

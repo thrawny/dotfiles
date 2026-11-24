@@ -454,6 +454,72 @@ body.review-mode {
 	align-items: center;
 	gap: 0.5rem;
 }
+/* The switch between the line diff and the API view. */
+.view-switch {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.6rem;
+}
+.view-switch label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3rem;
+	color: var(--muted);
+	cursor: pointer;
+}
+.view-switch input {
+	margin: 0;
+	padding: 0;
+	accent-color: var(--accent);
+}
+.view-switch .refused {
+	color: var(--del);
+}
+.segments {
+	display: inline-flex;
+}
+.segments button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35rem;
+	color: var(--muted);
+	border-radius: 0;
+}
+.segments button:first-child {
+	border-radius: 6px 0 0 6px;
+}
+.segments button:last-child {
+	border-radius: 0 6px 6px 0;
+	margin-left: -1px;
+}
+.segments button.on {
+	color: var(--fg);
+	background: var(--mod-bg);
+	border-color: var(--accent);
+	position: relative;
+}
+.segments button:disabled {
+	cursor: default;
+	opacity: 0.5;
+}
+.segments .count {
+	font-size: 0.75rem;
+	font-variant-numeric: tabular-nums;
+	color: var(--muted);
+}
+.spinner {
+	width: 0.7rem;
+	height: 0.7rem;
+	border: 2px solid var(--line);
+	border-top-color: var(--accent);
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+}
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
 .description {
 	margin: 0;
 	padding: 0.8rem 1.2rem 1rem;

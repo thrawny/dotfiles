@@ -1,0 +1,118 @@
+=== base shop/index.ts
+export { Server } from "./server";
+=== base shop/server.ts
+export class Server {
+	start() {}
+}
+=== base tools/cli.ts
+export function run(argv: string[]) {
+	return 0;
+}
+=== head shop/index.ts
+import { connect } from "./client";
+import Cart from "./cart";
+
+/** The shop's entry points. */
+export { Server, makeServer as make } from "./server.js";
+export * from "./types";
+export { connect, Cart };
+export { readFile } from "node:fs";
+
+export const VERSION = "2.0";
+=== head shop/server.ts
+import { helper } from "./util";
+import type { Options } from "./types";
+
+const DEFAULT_PORT = 8080;
+
+/** A shop server. */
+export class Server {
+	/** Where it listens. */
+	readonly port: number = DEFAULT_PORT;
+	private started = false;
+	#secret = 1;
+
+	constructor(public host: string, options?: Options) {}
+
+	// Starts listening.
+	start(block = true): void {
+		this.started = block;
+	}
+
+	async stop(timeout?: number) {
+		return helper(timeout);
+	}
+
+	/** Only for tests. */
+	private reset() {}
+
+	get address(): string {
+		return `${this.host}:${this.port}`;
+	}
+}
+
+export function makeServer(host: string, port = DEFAULT_PORT): Server {
+	return new Server(host);
+}
+
+export function unlisted() {}
+=== head shop/types.ts
+export interface Options {
+	strict?: boolean;
+	retries: number;
+}
+
+export type Mode = "read" | "write";
+
+export enum Level {
+	Low,
+	High,
+}
+
+export default function fallback() {}
+=== head shop/client.ts
+export const connect = (url: string) => new Client(url);
+
+class Client {
+	constructor(readonly url: string) {}
+}
+=== head shop/cart.ts
+export default class Cart {
+	items: string[] = [];
+}
+=== head shop/util.ts
+import { other } from "./far/away";
+
+export function helper(timeout?: number) {
+	return other(timeout);
+}
+
+export const table = {
+	size: 1,
+	loaded: other(),
+};
+
+export function overloaded(key: number): number;
+export function overloaded(key: string): string;
+export function overloaded(key: any): any {
+	return key;
+}
+
+function hidden() {}
+=== head tools/cli.ts
+#!/usr/bin/env bun
+// Command line entry.
+
+export function run(argv: string[], quiet = false): number {
+	return 0;
+}
+
+run([]);
+=== head tools/widget.tsx
+type Props = { title: string };
+
+export function Widget({ title }: Props) {
+	return <h1>{title}</h1>;
+}
+=== head tools/script.ts
+console.log("no exports");

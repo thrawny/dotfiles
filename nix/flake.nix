@@ -335,6 +335,9 @@
                 bashInteractive
                 # `just check` must also work from launchd's minimal PATH.
                 bun
+                # Mission control's API view helpers and their tests.
+                go
+                python3
                 nodejs
                 pnpm
                 fd

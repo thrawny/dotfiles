@@ -1,0 +1,127 @@
+=== base shop/__init__.py
+"""The shop package."""
+
+from .server import Server
+
+__all__ = ["Server"]
+=== base shop/server.py
+class Server:
+    def start(self):
+        pass
+=== base tools/cli.py
+def run(argv):
+    return 0
+=== head shop/__init__.py
+"""The shop package."""
+
+import os
+
+from shop.client import *
+from .server import Server, make_server as make
+
+__all__ = ["Server", "make", "VERSION", "os"]
+
+# The release.
+VERSION = "2.0"
+_internal = 1
+=== head shop/server.py
+"""Serves the shop."""
+
+from dataclasses import dataclass
+
+from .base import Base, helper
+
+# Kept for old callers.
+DEFAULT_PORT = 8080  # the usual port
+
+
+@dataclass
+class Server(Base):
+    """A shop server.
+
+    It listens on one port.
+    """
+
+    host: str
+    port: int = DEFAULT_PORT  # where it listens
+    _started: bool = False
+
+    class Config:
+        strict = True
+
+    def start(self, *, block: bool = True) -> None:
+        """Start listening."""
+        self._started = True
+
+    # Stops at once.
+    async def stop(
+        self,
+        timeout: float | None = None,
+    ) -> bool:
+        return True
+
+    @property
+    def address(self) -> str: return f"{self.host}:{self.port}"
+
+    def _reset(self):
+        pass
+
+    def __repr__(self) -> str:
+        return "Server"
+
+
+def make_server(host: str, port: int = DEFAULT_PORT) -> Server:
+    return Server(host, port)
+
+
+def unlisted():
+    pass
+=== head shop/base.py
+class Base:
+    kind = "base"
+
+
+def helper():
+    pass
+=== head shop/client.py
+def connect(url: str) -> "Client":
+    """Connect to a shop."""
+    return Client()
+
+
+class Client:
+    pass
+=== head shop/util.py
+import typing
+
+Pair = tuple[str, str]
+"""A key and its value."""
+
+type Lookup = dict[str, Pair]
+
+
+@typing.overload
+def find(key: int) -> int: ...
+@typing.overload
+def find(key: str) -> str: ...
+def find(key):
+    # A comment in the body.
+    return key
+
+
+def _private():
+    pass
+=== head tools/cli.py
+#!/usr/bin/env python3
+# Command line entry.
+
+
+def run(argv: list[str], *, quiet=lambda: False) -> int:
+    return 0
+
+
+if __name__ == "__main__":
+    run([])
+=== head tools/empty.py
+def _only_private():
+    pass

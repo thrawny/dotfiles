@@ -1,10 +1,11 @@
-# Plan: an API view on the review page
+# The API view on the review page
 
-Status: planned, not started.
+Status: built, for Go, Python and TypeScript. This file records how it works,
+and where it left the first plan.
 
 ## Goal
 
-The review page gets a second way to read a pull request. Besides the line
+The review page has a second way to read a pull request. Besides the line
 diff, it shows a diff of what each changed module exports, without function
 bodies. A reviewer then sees first how a change affects other code, and reads
 the bodies second.
@@ -13,117 +14,137 @@ The model is the API state in [codediff.nvim](https://github.com/thrawny/codedif
 (`lua/codediff/api/`), which does this in Neovim for Go, Python and
 TypeScript. Mission control works on its own: it never calls Neovim.
 
-## Decision
+## On the page
 
-Each language reads its own API with its own toolchain. Mission control can
-run `go` and `python3`.
+- A "Diff / API" switch in the review strip, and the `v` key. The choice is
+  saved, so it holds for every pull request.
+- The number on the switch counts the modules whose API changed. A pull
+  request that changes bodies only shows 0.
+- In the API view, each module stands in for the changed files it covers.
+  The file tree lists the modules first in each folder, and marks the ones
+  whose API changed.
+- A module whose API did not change starts collapsed and says so. A new
+  module shows its API as plain text, as the page shows a new file.
+- A file without an API view keeps its line diff: a file in another
+  language, a test, or a file of a module that exports nothing.
+- Comments are hidden at first. The "Comments" switch and the `c` key show
+  them. Docstrings count as comments.
+- A click on a line number opens the line's source. It scrolls to the line in
+  the line diff when the diff shows that line. For a line outside every hunk,
+  such as an unchanged declaration, it opens the file on GitHub at that
+  commit and line.
+- The lines between the hunks of an API diff can open, because the page has
+  the whole text of both sides.
+- The API view loads beside the pull request, so the switch finds it ready.
 
-| Language   | Tool                                                                                                                                                                                              |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Go         | A small Go program. `go/parser` and `go/doc` find the exported names. `go/printer` prints them without bodies. Doc comments stay.                                                                 |
-| Python     | A Python script. `ast` finds the public names and `__all__`. The script slices the source text by each node's `lineno` and `end_lineno`, so `#` comments stay, and replaces each body with `...`. |
-| TypeScript | `ts.transpileDeclaration` (TypeScript 5.5 or newer) in the server makes a `.d.ts` per file. `typescript` is already a dependency.                                                                 |
+## Extraction
+
+Each language reads its own API with its own toolchain. Mission control
+needs `go` and `python3` on its `PATH`.
+
+| Language   | Tool                                                                                                                                                                                            |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Go         | `api/goapi/main.go`. `go/doc` finds what a package exports and sorts it, with each type's constructors and methods below it. `go/printer` prints each declaration without its body.             |
+| Python     | `api/pyapi.py`. `ast` finds the public names and `__all__`. The script copies the source lines of each signature, so the text reads as written, with `...` for a body.                          |
+| TypeScript | `api/typescript.ts`. `ts.transpileDeclaration` makes a declaration file from one source file, in the server process. It needs TypeScript 5, installed as `typescript5` beside the type checker. |
+
+The three take the same request and give the same answer, described in
+`api/languages.ts`. The request holds the comments setting, the changed
+files, and every file read at each commit. The answer is a list of modules.
+Each has the API text of both commits and, for each line, the source file and
+line it came from.
+
+- **Go** prints each declaration twice: once for the text, and once with
+  `//line` directives to learn where each line came from. The directives
+  upset the printer's indentation, so the second print gives no text.
+- **Python** runs with `python3 -I`, so it never imports code from the
+  reviewed repository. A file it cannot parse keeps its line diff.
+- **TypeScript** runs no type check. A type the file does not spell out comes
+  out as `any` or `unknown`, and the compiler reports where. The extractor
+  removes that type from a return type, a variable and a class property. It
+  stays in an object literal's members. Private class members are left out.
 
 Options we turned down:
 
 - **Run codediff's Lua in headless Neovim.** Mission control must work
   without Neovim.
 - **Port codediff's extractors to web-tree-sitter.** That would be about 1,700
-  lines of Lua to port, and two copies of the same rules would drift apart. The
-  language toolchains parse every piece of syntax, with far less code.
+  lines of Lua to port, and two copies of the same rules would drift apart.
 
-Mission control's API view will differ a little from codediff's, in
-formatting and in some comment details. That is accepted: the two tools never
-share a screen.
+The API text differs a little from codediff's, in formatting and in order.
+That is accepted: the two tools never share a screen.
 
-Known gap: a TypeScript function without a written return type shows no
-return type, because no type checker runs. codediff shows only what is
-written too, so nothing is lost compared with it.
+## Modules
 
-## Parts
+- **Go:** the package is the directory, without `_test.go` files. Its tree
+  entry is named `package store`.
+- **Python:** the module is the file. If the directory's `__init__.py`
+  re-exports from the file, the module is the package: the API of
+  `__init__.py`, with each re-exporting import followed by the definitions
+  it brings in.
+- **TypeScript:** the same, with `index.ts` or `index.tsx`.
+- The head commit decides which module a file belongs to. A deleted file
+  goes by the base commit.
+- A test is no part of a module's API. `api/languages.ts` holds the path
+  rules.
 
-### 1. Read the sources
+## Sources
 
-The API of a module needs every file of the module, at the base commit and at
-the head commit. GitHub's patches hold only the changed lines.
+The API of a module needs every file of the module, at both commits.
+GitHub's patches hold only the changed lines. `api/sources.ts` reads the
+files with git.
 
-- Keep a partial bare clone per repo, in `~/.cache/mission-control/repos/<repo>.git`,
-  made with `git clone --bare --filter=blob:none`.
-- For a pull request, `git fetch` the base commit and `pull/<n>/head`.
-- List a directory with `git ls-tree <commit> -- <dir>/`, and read all its
-  blobs in one `git cat-file --batch` call. codediff's `directory_sources`
-  does the same.
-- git gets the GitHub token through the environment, as
-  `GIT_CONFIG_COUNT=1`, `GIT_CONFIG_KEY_0=http.extraHeader` and
-  `GIT_CONFIG_VALUE_0`. The token never goes to disk or to a log.
-- Cap the cache folder's size. Remove the clone that was used least recently
+- The base commit is the merge base of the base branch and the head, from
+  GitHub's compare API. The tip of the base branch would show other people's
+  changes as the pull request's.
+- Each repository has a bare repository in
+  `~/.cache/mission-control/repos/<repo>.git`. It starts empty. No clone
+  runs.
+- One fetch at depth 1 with `--filter=blob:none` brings both commits and
+  their trees. One more fetch brings the blobs that are missing, for both
+  commits at once.
+- `git ls-tree` lists the directories, and one `git cat-file --batch` call
+  reads the blobs.
+- git gets the GitHub token as an `http.extraHeader` setting through the
+  environment. The token never goes to disk or to a log.
+- Credential helpers are off. One that asks, such as the macOS keychain,
+  would leave a refused fetch waiting.
+- The repositories together stay under 2 GiB. The one used longest ago goes
   first.
 
-### 2. Group changed files into modules
+Measured on three public repositories: reading the sources and extracting
+the API took 1.3 to 2.4 seconds the first time, and 0.1 to 0.3 seconds once
+the blobs were there.
 
-Several changed files of one module give one API diff.
+## Server
 
-- **Go:** the package is the directory, without `_test.go` files.
-- **Python:** the module is the file. If the directory's `__init__.py`
-  re-exports from the file, the module is the package.
-- **TypeScript:** the module is the file. If the directory's `index.ts` or
-  `index.tsx` re-exports from the file, the module is the directory.
-- A file in another language has no module. It keeps its line diff.
-
-### 3. Extract the API
-
-- Each helper takes JSON on stdin: a list of modules, each with its files as
-  `{ path, text }`. It returns the API text for each module on stdout.
-- Run one Go process and one Python process for each pull request, with every
-  module in it. Never start a process per file.
-- Build the Go program once, at server start, into the cache folder.
-- Run the Python script with `python3 -I`, so it never imports code from the
-  reviewed repo.
-- The helpers live next to the server, for example `api/goapi/main.go` and
-  `api/pyapi.py`. TypeScript runs in the server process.
-
-### 4. Diff and cache
-
-- Make a unified diff of each module's base and head API text, for example
-  with `git diff --no-index`.
-- Name the diff after the module, such as `internal/store (API)`, and pass it
-  to the existing `toFileDiff` and `CodeView`.
-- A new module shows its whole API as added. A removed module shows it as
-  deleted.
-- Cache the result by repo, base commit, head commit and module, like
-  `filesCache` in `server.ts`.
-- Serve it from a new endpoint, such as `/api/pr/<repo>/<n>/api`, so the line
-  diff never waits for it.
-
-### 5. Page
-
-- A "Diff / API" switch in the review strip. The choice stays when the
-  reviewer moves between files.
-- In API mode, the file tree lists modules in place of their files. A file
-  without an API view shows its line diff, as in codediff.
-- While the clone fetches, the switch shows a loading state.
-
-## Order of work
-
-1. Sources and module grouping (parts 1 and 2), with Go only.
-2. The Go helper, the diff, the cache and the endpoint (parts 3 and 4).
-3. The switch on the page (part 5). The feature is usable from here, for Go.
-4. The Python helper.
-5. TypeScript.
+- `GET /api/pr/<repo>/<n>/api` answers with the modules. `?comments` asks for
+  the text with comments.
+- The answer is cached by repository, base branch tip, head commit and
+  comments setting.
+- The Go helper is built once into `~/.cache/mission-control/bin`, under a
+  name that carries a hash of its source.
+- A language that fails, such as Go without a toolchain, is named in the
+  answer. Its files keep their line diffs, and the strip says which language
+  failed.
+- `mission-control-serve` installs the locked packages before it starts.
+  bun's fallback install cannot find a package under a second name.
 
 ## Tests
 
-The extractors and the module grouping are parsing logic that can be wrong
-while they still run cleanly. They qualify for tests under the repo rules.
+`api/view.test.ts` runs in `just check-mission-control`.
 
-- Golden files for each language: input sources and the expected API text.
-- Module grouping, with git driven in a temp directory.
-- The Go and Python helpers need their test commands in
-  `just check-mission-control`.
+- A case file per language in `api/testdata` holds the sources of both
+  commits. Its expected API text is beside it, for comments hidden and
+  shown. `UPDATE_GOLDEN=1 bun test` writes the expected text again.
+- One test builds a git repository in a temp directory and reads a pull
+  request's modules from it by fetch, as from GitHub.
 
-## Open questions
+## Not built
 
-- Should a line in the API diff link to its place in the line diff? Each
-  helper can return a map from API line to source file and line, as codediff's
-  `targets` does.
-- Should the API view hide comments by default, as codediff's `C` key can?
+- A switch for unexported declarations, as codediff's `P` key. The line diff
+  shows them.
+- Opening the lines between the hunks of a line diff. The viewer can load
+  whole files for that through its `loadDiffFiles` option, and
+  `api/sources.ts` can read them. A click on an API line could then always
+  stay on the page.

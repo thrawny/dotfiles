@@ -27,6 +27,9 @@ open_page() {
 }
 
 if [[ "${1:-}" == --run ]]; then
+  # The packages the lockfile names, so the server never runs on stale ones.
+  # Offline, bun's fallback install below covers what it can.
+  bun install --cwd "$app" --frozen-lockfile --ignore-scripts --silent || true
   exec portless "$name" bun run --install=fallback "$app/server.ts"
 fi
 

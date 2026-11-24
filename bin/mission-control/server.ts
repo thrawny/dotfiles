@@ -3,11 +3,14 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { ApiView } from "./api/languages.ts";
+import { apiView, buildGoHelper, CACHE_DIR } from "./api/view.ts";
 import {
 	type Client,
 	caseless,
 	client,
 	gitattributes,
+	mergeBase,
 	openPRs,
 	postReview,
 	prFiles,
@@ -146,9 +149,11 @@ async function snapshot(fresh: boolean) {
 	};
 }
 
-const filesCache = new Map<string, PRFile[]>();
+// The review page asks for the files and for the API view at once, so a
+// list in the making is here too.
+const filesCache = new Map<string, Promise<PRFile[]>>();
 
-async function changedFiles(
+function changedFiles(
 	secret: string,
 	repo: string,
 	number: number,
@@ -157,23 +162,26 @@ async function changedFiles(
 	const key = `${repo}#${number}@${sha}`;
 	const hit = filesCache.get(key);
 	if (hit) return hit;
-	const [raw, attributes] = await Promise.all([
-		prFiles(secret, org, repo, number),
-		gitattributes(secret, org, repo, sha),
-	]);
-	const rules = parseGitattributes(attributes);
-	const files = raw.map((f) => {
-		const file = {
-			path: f.filename,
-			prevPath: f.previous_filename ?? null,
-			status: f.status,
-			additions: f.additions,
-			deletions: f.deletions,
-			patch: f.patch ?? null,
-		};
-		return { ...file, generated: isGenerated(file, rules) };
-	});
+	const files = (async () => {
+		const [raw, attributes] = await Promise.all([
+			prFiles(secret, org, repo, number),
+			gitattributes(secret, org, repo, sha),
+		]);
+		const rules = parseGitattributes(attributes);
+		return raw.map((f) => {
+			const file = {
+				path: f.filename,
+				prevPath: f.previous_filename ?? null,
+				status: f.status,
+				additions: f.additions,
+				deletions: f.deletions,
+				patch: f.patch ?? null,
+			};
+			return { ...file, generated: isGenerated(file, rules) };
+		});
+	})();
 	filesCache.set(key, files);
+	files.catch(() => filesCache.delete(key));
 	if (filesCache.size > FILES_KEPT)
 		filesCache.delete(filesCache.keys().next().value as string);
 	return files;
@@ -188,12 +196,28 @@ function prNumber(repo: string, numberText: string): number | null {
 		: null;
 }
 
+// The review page asks for a pull request and for its API view at once.
+// Both read the pull request, and the second waits for the first's answer.
+const prLookups = new Map<string, ReturnType<typeof pullRequest>>();
+
+function lookUp(secret: string, repo: string, number: number) {
+	const key = `${repo}#${number}`;
+	let lookup = prLookups.get(key);
+	if (!lookup) {
+		lookup = pullRequest(client(secret), org, repo, number).finally(() =>
+			prLookups.delete(key),
+		);
+		prLookups.set(key, lookup);
+	}
+	return lookup;
+}
+
 async function prDetail(repo: string, numberText: string) {
 	const number = prNumber(repo, numberText);
 	if (!number)
 		return Response.json({ error: "Bad pull request" }, { status: 400 });
 	const secret = token();
-	const raw = await pullRequest(client(secret), org, repo, number);
+	const raw = await lookUp(secret, repo, number);
 	if (!raw)
 		return Response.json({ error: "Pull request not found" }, { status: 404 });
 	const files = await changedFiles(secret, repo, number, raw.headRefOid);
@@ -213,6 +237,48 @@ async function prDetail(repo: string, numberText: string) {
 		viewer: await whoAmI(),
 		csrfToken,
 	});
+}
+
+// API views of the pull requests opened lately. A view in the making is
+// here too, so a second request waits for the first.
+const apiCache = new Map<string, Promise<ApiView>>();
+
+async function prApi(repo: string, numberText: string, comments: boolean) {
+	const number = prNumber(repo, numberText);
+	if (!number)
+		return Response.json({ error: "Bad pull request" }, { status: 400 });
+	const secret = token();
+	const raw = await lookUp(secret, repo, number);
+	if (!raw)
+		return Response.json({ error: "Pull request not found" }, { status: 404 });
+	const head = raw.headRefOid;
+	const key = `${repo}@${raw.baseRefOid}...${head}:${comments}`;
+	let view = apiCache.get(key);
+	if (!view) {
+		view = (async () => {
+			const [files, base] = await Promise.all([
+				changedFiles(secret, repo, number, head),
+				mergeBase(secret, org, repo, raw.baseRefOid, head),
+			]);
+			return apiView(
+				{
+					dir: join(CACHE_DIR, "repos", `${repo}.git`),
+					url: `https://github.com/${org}/${repo}.git`,
+					auth: `Basic ${btoa(`x-access-token:${secret}`)}`,
+				},
+				base,
+				head,
+				files,
+				comments,
+			);
+		})();
+		apiCache.set(key, view);
+		// A failed view is built again on the next request.
+		view.catch(() => apiCache.delete(key));
+		if (apiCache.size > FILES_KEPT)
+			apiCache.delete(apiCache.keys().next().value as string);
+	}
+	return Response.json(await view);
 }
 
 // The origins the page runs on: the portless URL and the server's own.
@@ -367,6 +433,23 @@ const server = Bun.serve({
 				}
 			},
 		},
+		// Apart from the pull request itself, so the line diff never waits for
+		// it.
+		"/api/pr/:repo/:number/api": async (req) => {
+			try {
+				return await prApi(
+					req.params.repo,
+					req.params.number,
+					new URL(req.url).searchParams.has("comments"),
+				);
+			} catch (error) {
+				console.error(`mission-control: ${(error as Error).message}`);
+				return Response.json(
+					{ error: (error as Error).message },
+					{ status: 502 },
+				);
+			}
+		},
 		"/api/pr/:repo/:number": async (req) => {
 			try {
 				return await prDetail(req.params.repo, req.params.number);
@@ -382,3 +465,7 @@ const server = Bun.serve({
 });
 
 console.log(`mission-control: ${org}/${team} on ${server.url}`);
+
+// Build the Go helper now, so the first API view finds it ready. Without Go,
+// the view reports that when it is asked for.
+buildGoHelper().catch(() => {});
