@@ -535,6 +535,9 @@ body.review-mode {
 .file-meta .added {
 	color: var(--add);
 }
+.file-meta .removed {
+	color: var(--del);
+}
 .file-meta {
 	display: inline-flex;
 	gap: 0.6rem;

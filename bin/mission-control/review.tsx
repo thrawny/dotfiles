@@ -533,6 +533,8 @@ function Diff({
 				"[data-line],[data-no-newline],[data-gutter-buffer],[data-column-number]{--mix-light:0%;--mix-dark:0%}",
 			renderCodeViewHeader: () => headerHost,
 			renderHeaderPrefix: (_diff: unknown, context: Context) => {
+				// A deleted file has nothing to expand.
+				if (byPath.get(context.item.id)?.status === "removed") return null;
 				const button = el(
 					"button",
 					"fold",
@@ -547,12 +549,16 @@ function Diff({
 				const file = byPath.get(context.item.id);
 				if (!file) return null;
 				const box = el("span", "file-meta", "");
+				if (file.status === "removed")
+					box.append(el("span", "removed", `deleted, ${file.deletions} lines`));
 				if (newFileText(file) !== null)
 					box.append(el("span", "added", `new file, ${file.additions} lines`));
 				if (file.generated) box.append(el("span", "gen", "generated"));
 				// GitHub sends no patch for a pure rename, a binary file or a
 				// diff too large to send. Only the last has lines to count.
-				if (!file.patch && file.status === "renamed" && !file.additions)
+				if (file.status === "removed") {
+					/* The deleted line count says it all. */
+				} else if (!file.patch && file.status === "renamed" && !file.additions)
 					box.append(el("span", "muted", "Renamed, no changes"));
 				else if (!file.patch && file.additions + file.deletions === 0)
 					box.append(el("span", "muted", "Binary file"));
@@ -618,7 +624,9 @@ function Diff({
 		const view = viewer.current;
 		if (!view) return;
 		const items = files.map((f): CodeViewItem<undefined> => {
-			const isCollapsed = collapsed.has(f.path) || !f.patch;
+			// A deleted file shows as its header line only.
+			const isCollapsed =
+				collapsed.has(f.path) || !f.patch || f.status === "removed";
 			const known = view.getItem(f.path);
 			let version = versions.current.get(f.path) ?? 0;
 			if (known && known.collapsed !== isCollapsed) version++;
