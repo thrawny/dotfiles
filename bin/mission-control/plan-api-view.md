@@ -18,11 +18,11 @@ TypeScript. Mission control works on its own: it never calls Neovim.
 Each language reads its own API with its own toolchain. Mission control can
 run `go` and `python3`.
 
-| Language | Tool |
-|---|---|
-| Go | A small Go program. `go/parser` and `go/doc` find the exported names. `go/printer` prints them without bodies. Doc comments stay. |
-| Python | A Python script. `ast` finds the public names and `__all__`. The script slices the source text by each node's `lineno` and `end_lineno`, so `#` comments stay, and replaces each body with `...`. |
-| TypeScript | `ts.transpileDeclaration` (TypeScript 5.5 or newer) in the server makes a `.d.ts` per file. `typescript` is already a dependency. |
+| Language   | Tool                                                                                                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Go         | A small Go program. `go/parser` and `go/doc` find the exported names. `go/printer` prints them without bodies. Doc comments stay.                                                                 |
+| Python     | A Python script. `ast` finds the public names and `__all__`. The script slices the source text by each node's `lineno` and `end_lineno`, so `#` comments stay, and replaces each body with `...`. |
+| TypeScript | `ts.transpileDeclaration` (TypeScript 5.5 or newer) in the server makes a `.d.ts` per file. `typescript` is already a dependency.                                                                 |
 
 Options we turned down:
 
