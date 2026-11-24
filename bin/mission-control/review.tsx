@@ -7,6 +7,8 @@ import {
 	type FileDiffMetadata,
 	processFile,
 } from "@pierre/diffs";
+import type { ComponentChildren } from "preact";
+import { createPortal } from "preact/compat";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { fileTotals, type PR, type PRFile, type ReviewEvent } from "./model.ts";
 import {
@@ -113,8 +115,11 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 			{data && (
 				<>
 					<Strip data={data} now={now} reload={load} />
-					<Description html={data.bodyHTML} />
-					<Diff files={data.files} prUrl={data.pr.url} />
+					<Diff
+						files={data.files}
+						prUrl={data.pr.url}
+						header={<Description html={data.bodyHTML} />}
+					/>
 				</>
 			)}
 		</div>
@@ -378,34 +383,25 @@ function Verdict({
 
 // The description as GitHub renders it, cut to a few lines until opened.
 // GitHub sanitizes the HTML, as it does on its own page.
+// The description as GitHub renders it, in full. It sits at the top of the
+// diff's scroll area, so it scrolls away as on GitHub. GitHub sanitizes the
+// HTML, as it does on its own page.
 function Description({ html }: { html: string }) {
-	const [open, setOpen] = useState(false);
-	const [long, setLong] = useState(false);
 	const box = useRef<HTMLDivElement>(null);
 	useEffect(() => {
-		const node = box.current;
-		if (!node) return;
-		for (const link of node.querySelectorAll("a[href]")) {
+		for (const link of box.current?.querySelectorAll("a[href]") ?? []) {
 			link.setAttribute("target", "_blank");
 			link.setAttribute("rel", "noopener");
 		}
-		setLong(node.scrollHeight > node.clientHeight + 1);
 	}, [html]);
 	if (!html.trim()) return <p class="description muted">No description.</p>;
 	return (
-		<div class={open ? "description open" : "description"}>
-			<div
-				class="markdown"
-				ref={box}
-				// GitHub sanitized this HTML when it rendered the PR body.
-				dangerouslySetInnerHTML={{ __html: html }}
-			/>
-			{(long || open) && (
-				<button type="button" class="link" onClick={() => setOpen(!open)}>
-					{open ? "Show less" : "Show all"}
-				</button>
-			)}
-		</div>
+		<div
+			class="description markdown"
+			ref={box}
+			// GitHub sanitized this HTML when it rendered the PR body.
+			dangerouslySetInnerHTML={{ __html: html }}
+		/>
 	);
 }
 
@@ -416,7 +412,17 @@ function el(tag: string, cls: string, text: string) {
 	return node;
 }
 
-function Diff({ files, prUrl }: { files: PRFile[]; prUrl: string }) {
+function Diff({
+	files,
+	prUrl,
+	header,
+}: {
+	files: PRFile[];
+	prUrl: string;
+	header: ComponentChildren;
+}) {
+	// The viewer measures this element and scrolls it with the files.
+	const headerHost = useMemo(() => document.createElement("div"), []);
 	const root = useRef<HTMLDivElement>(null);
 	const viewer = useRef<CodeView | null>(null);
 	const [collapsed, setCollapsed] = useState(
@@ -455,6 +461,7 @@ function Diff({ files, prUrl }: { files: PRFile[]; prUrl: string }) {
 			// background. A mix of 0% shows the theme's diff colours as they are.
 			unsafeCSS:
 				"[data-line],[data-no-newline],[data-gutter-buffer],[data-column-number]{--mix-light:0%;--mix-dark:0%}",
+			renderCodeViewHeader: () => headerHost,
 			renderHeaderPrefix: (_diff: unknown, context: Context) => {
 				const button = el(
 					"button",
@@ -619,6 +626,7 @@ function Diff({ files, prUrl }: { files: PRFile[]; prUrl: string }) {
 				))}
 			</nav>
 			<div class="diff-view" ref={root} />
+			{createPortal(header, headerHost)}
 		</div>
 	);
 }

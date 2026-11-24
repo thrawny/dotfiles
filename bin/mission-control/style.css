@@ -380,7 +380,7 @@ a.button {
 	}
 }
 
-/* The review page fills the window: the strip and description on top, the
+/* The review page fills the window: the strip on top, the
    file list and the diff below, each scrolling on its own. */
 body.review-mode {
 	padding: 0;
@@ -453,25 +453,10 @@ body.review-mode {
 }
 .description {
 	margin: 0;
-	padding: 0.4rem 1rem 0.5rem;
+	padding: 0.8rem 1.2rem 1rem;
 	border-bottom: 1px solid var(--line);
-	background: var(--code-bg);
-	font-size: 0.85rem;
-}
-.description .markdown {
-	max-height: 4.6rem;
-	overflow: hidden;
-}
-.description.open .markdown {
-	max-height: 45vh;
-	overflow: auto;
-}
-.description .link {
-	border: 0;
-	background: none;
-	padding: 0;
-	color: var(--accent);
-	font-size: 0.8rem;
+	font-size: 0.9rem;
+	line-height: 1.5;
 }
 .markdown > :first-child {
 	margin-top: 0;
@@ -514,7 +499,7 @@ body.review-mode {
 	border: 1px solid var(--line);
 	padding: 0.15rem 0.5rem;
 }
-.description .markdown img {
+.description.markdown img {
 	max-width: 100%;
 }
 .markdown .task-list-item {
