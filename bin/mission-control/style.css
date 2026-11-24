@@ -279,23 +279,23 @@ a.button {
 .r-none {
 	color: var(--muted);
 }
-.tono {
+.review-bot {
 	font-size: 0.8rem;
 	text-align: center;
 	border-radius: 4px;
 	font-family: ui-monospace, monospace;
 	cursor: default;
 }
-.tono.lgtm {
+.review-bot.lgtm {
 	background: var(--add-bg);
 	color: var(--add);
 }
-.tono.findings {
+.review-bot.findings {
 	background: var(--mod-bg);
 	color: var(--mod);
 }
-.tono.stale,
-.tono.none {
+.review-bot.stale,
+.review-bot.none {
 	color: var(--muted);
 }
 .age {
@@ -342,7 +342,7 @@ a.button {
 	.pr {
 		grid-template-columns: 0.8rem auto auto auto 1fr 1.4rem 2.2rem 4rem;
 		grid-template-areas:
-			"dot title title title title review tono age"
+			"dot title title title title review review-bot age"
 			". repo jira size labels labels labels labels";
 		row-gap: 0.1rem;
 		padding: 0.3rem 0;
@@ -356,8 +356,8 @@ a.button {
 	.pr .review {
 		grid-area: review;
 	}
-	.pr .tono {
-		grid-area: tono;
+	.pr .review-bot {
+		grid-area: review-bot;
 	}
 	.pr .age {
 		grid-area: age;
@@ -445,7 +445,7 @@ body.review-mode {
 	align-items: center;
 	gap: 0.35rem;
 }
-.strip-meta .tono {
+.strip-meta .review-bot {
 	padding: 0 0.4rem;
 }
 .strip-end {

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+	botReviewState,
 	checkReviewWrite,
 	GENERATED_GLOBS,
 	isGenerated,
@@ -8,7 +9,6 @@ import {
 	parseGitattributes,
 	type RawPR,
 	type ReviewWrite,
-	tonoState,
 	toPR,
 } from "./model.ts";
 
@@ -42,7 +42,12 @@ function raw(patch: Partial<RawPR> = {}): RawPR {
 	};
 }
 
-const opts = { readyLabel: "ready-for-review", jiraProjects: [], now };
+const opts = {
+	readyLabel: "ready-for-review",
+	jiraProjects: [],
+	reviewMarker: "bot:review",
+	now,
+};
 
 describe("jiraKey", () => {
 	test("prefers the title, then the branch", () => {
@@ -59,18 +64,18 @@ describe("jiraKey", () => {
 	});
 });
 
-describe("tonoState", () => {
+describe("botReviewState", () => {
 	test("takes the highest review number and checks it against the head", () => {
 		const bodies = [
-			"<!-- tono:review n=2 sha=abc1234 verdict=lgtm passes=review -->",
-			"<!-- tono:review n=1 sha=0000000 verdict=findings -->",
+			"<!-- bot:review n=2 sha=abc1234 verdict=lgtm passes=review -->",
+			"<!-- bot:review n=1 sha=0000000 verdict=findings -->",
 		];
-		expect(tonoState(bodies, "abc1234def")).toEqual({
+		expect(botReviewState(bodies, "abc1234def", "bot:review")).toEqual({
 			n: 2,
 			verdict: "lgtm",
 			stale: false,
 		});
-		expect(tonoState(bodies, "fff9999")).toEqual({
+		expect(botReviewState(bodies, "fff9999", "bot:review")).toEqual({
 			n: 2,
 			verdict: "lgtm",
 			stale: true,
@@ -78,7 +83,11 @@ describe("tonoState", () => {
 	});
 	test("returns null without a marker", () => {
 		expect(
-			tonoState(["looks good", "<!-- tono:docs-check -->"], "abc"),
+			botReviewState(
+				["looks good", "<!-- bot:docs-check -->"],
+				"abc",
+				"bot:review",
+			),
 		).toBeNull();
 	});
 });

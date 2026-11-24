@@ -1,5 +1,7 @@
 // Pieces the list page and the review page share.
 
+import type { BotReview } from "./model.ts";
+
 export function lines(n: number) {
 	return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);
 }
@@ -28,6 +30,18 @@ export const REVIEW_MARK = {
 
 export function jiraHref(base: string, key: string) {
 	return `${base.replace(/\/$/, "")}/${key}`;
+}
+
+// The badge colour for the review bot's newest review.
+export function botClass(review: BotReview | null) {
+	if (!review) return "none";
+	if (review.stale) return "stale";
+	return review.verdict === "lgtm" ? "lgtm" : "findings";
+}
+
+export function botTitle(bot: string, review: BotReview | null) {
+	if (!review) return `No ${bot} review`;
+	return `${bot} review #${review.n}: ${review.verdict || "no verdict"}${review.stale ? ", new commits since" : ""}`;
 }
 
 // The page's scheme: a saved choice, else the system's.

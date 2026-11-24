@@ -42,7 +42,9 @@ export type Bucket =
 	| "draft";
 export type AgeLevel = "ok" | "warn" | "old";
 
-export type Tono = {
+// The newest review a review bot left on a pull request, read from the
+// marker it writes into its comments.
+export type BotReview = {
 	n: number;
 	verdict: string;
 	stale: boolean;
@@ -64,7 +66,7 @@ export type PR = {
 	reviewers: { login: string; state: string }[];
 	labels: { name: string; color: string }[];
 	ready: boolean;
-	tono: Tono | null;
+	botReview: BotReview | null;
 	bucket: Bucket;
 	ageDays: number;
 	ageLevel: AgeLevel;
@@ -135,12 +137,20 @@ export function ciState(state: string | null | undefined): CI {
 	}
 }
 
-// The newest tono review marker in the PR's comments and reviews. tono
-// numbers its reviews, so the highest number is the newest. The review is
-// stale when its commit is no longer the PR's head.
-export function tonoState(bodies: string[], headOid: string): Tono | null {
-	let best: Tono | null = null;
-	const marker = /<!--\s*tono:review\b([^>]*?)-->/g;
+// The newest review bot marker in the PR's comments and reviews. A marker is
+// an HTML comment such as `<!-- bot:review n=2 sha=abc1234 verdict=lgtm -->`,
+// where `bot:review` is the configured marker name. The bot numbers its
+// reviews, so the highest number is the newest. The review is stale when its
+// commit is no longer the PR's head. Without a marker name, there is no bot.
+export function botReviewState(
+	bodies: string[],
+	headOid: string,
+	markerName: string,
+): BotReview | null {
+	if (!markerName) return null;
+	let best: BotReview | null = null;
+	const escaped = markerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+	const marker = new RegExp(`<!--\\s*${escaped}\\b([^>]*?)-->`, "g");
 	for (const body of bodies) {
 		for (const match of body.matchAll(marker)) {
 			const fields = Object.fromEntries(
@@ -160,6 +170,12 @@ export function tonoState(bodies: string[], headOid: string): Tono | null {
 	return best;
 }
 
+// The name the page shows for the review bot: the marker name up to its
+// colon, so `bot:review` shows as `bot`.
+export function botName(markerName: string): string {
+	return markerName.split(":")[0];
+}
+
 export function reviewedState(states: string[]): Reviewed {
 	if (states.includes("CHANGES_REQUESTED")) return "changes";
 	if (states.includes("APPROVED")) return "approved";
@@ -175,7 +191,12 @@ export function ageLevel(days: number): AgeLevel {
 
 export function toPR(
 	raw: RawPR,
-	opts: { readyLabel: string; jiraProjects: string[]; now: number },
+	opts: {
+		readyLabel: string;
+		jiraProjects: string[];
+		reviewMarker: string;
+		now: number;
+	},
 ): PR {
 	const author = raw.author?.login ?? "ghost";
 	const reviews = raw.latestReviews.nodes.filter(
@@ -218,9 +239,10 @@ export function toPR(
 		})),
 		labels,
 		ready,
-		tono: tonoState(
+		botReview: botReviewState(
 			[...raw.comments.nodes, ...raw.reviews.nodes].map((c) => c.body),
 			raw.headRefOid,
+			opts.reviewMarker,
 		),
 		bucket: raw.isDraft
 			? "draft"

@@ -14,6 +14,8 @@ import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { fileTotals, type PR, type PRFile, type ReviewEvent } from "./model.ts";
 import {
 	ago,
+	botClass,
+	botTitle,
 	CI_TEXT,
 	isDark,
 	jiraHref,
@@ -28,6 +30,8 @@ type Detail = {
 	headSha: string;
 	files: PRFile[];
 	jiraBase: string;
+	// The review bot's name, or "" when none is configured.
+	reviewBot: string;
 	viewer: string;
 	csrfToken: string;
 };
@@ -205,12 +209,12 @@ function Strip({
 						{l.name}
 					</span>
 				))}
-				{pr.tono && (
+				{pr.botReview && (
 					<span
-						class={`tono ${pr.tono.stale ? "stale" : pr.tono.verdict === "lgtm" ? "lgtm" : "findings"}`}
-						title={`tono review #${pr.tono.n}: ${pr.tono.verdict || "no verdict"}${pr.tono.stale ? ", new commits since" : ""}`}
+						class={`review-bot ${botClass(pr.botReview)}`}
+						title={botTitle(data.reviewBot, pr.botReview)}
 					>
-						tono #{pr.tono.n}
+						{data.reviewBot} #{pr.botReview.n}
 					</span>
 				)}
 				{pr.jiraKey &&

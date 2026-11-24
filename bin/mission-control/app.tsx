@@ -4,6 +4,8 @@ import { BUCKETS, type Bucket, OLD_DAYS, type PR, WARN_DAYS } from "./model.ts";
 import { Review } from "./review.tsx";
 import {
 	ago,
+	botClass,
+	botTitle,
 	CI_TEXT,
 	jiraHref,
 	lines,
@@ -18,6 +20,8 @@ type Data = {
 	error: string | null;
 	readyLabel: string;
 	jiraBase: string;
+	// The review bot's name, or "" when none is configured.
+	reviewBot: string;
 };
 
 const POLL_MS = 2 * 60 * 1000;
@@ -30,7 +34,7 @@ type Filters = {
 	ci: string;
 	review: string;
 	age: string;
-	tono: string;
+	bot: string;
 	q: string;
 	drafts: boolean;
 	side: boolean;
@@ -58,7 +62,7 @@ function readFilters(): Filters {
 		ci: p.get("ci") ?? "",
 		review: p.get("review") ?? "",
 		age: p.get("age") ?? "",
-		tono: p.get("tono") ?? "",
+		bot: p.get("bot") ?? "",
 		q: p.get("q") ?? "",
 		drafts: p.get("drafts") === "1",
 		side: p.get("layout") === "side",
@@ -69,7 +73,7 @@ function writeFilters(f: Filters) {
 	const p = new URLSearchParams();
 	if (f.author.length) p.set("author", f.author.join(","));
 	if (f.label.length) p.set("label", f.label.join(","));
-	for (const key of ["repo", "ci", "review", "age", "tono", "q"] as const)
+	for (const key of ["repo", "ci", "review", "age", "bot", "q"] as const)
 		if (f[key]) p.set(key, f[key]);
 	if (f.drafts) p.set("drafts", "1");
 	// Layout is always written, so a view without filters keeps a query and
@@ -93,9 +97,10 @@ function matches(pr: PR, f: Filters): boolean {
 	if (f.age.startsWith("-")) {
 		if (pr.ageDays > -Number(f.age)) return false;
 	} else if (f.age && pr.ageDays <= Number(f.age)) return false;
-	if (f.tono === "none" && pr.tono) return false;
-	if (f.tono === "todo" && pr.tono && !pr.tono.stale) return false;
-	if (f.tono === "lgtm" && !(pr.tono?.verdict === "lgtm" && !pr.tono.stale))
+	const bot = pr.botReview;
+	if (f.bot === "none" && bot) return false;
+	if (f.bot === "todo" && bot && !bot.stale) return false;
+	if (f.bot === "lgtm" && !(bot?.verdict === "lgtm" && !bot.stale))
 		return false;
 	if (f.q) {
 		const text =
@@ -154,10 +159,13 @@ function App() {
 		setFilters((f) => ({ ...f, ...patch }));
 
 	const prs = data?.prs ?? [];
-	const visible = useMemo(
-		() => prs.filter((pr) => matches(pr, filters)),
-		[prs, filters],
-	);
+	// Without a review bot, its filter is hidden, so a bookmarked one is
+	// ignored.
+	const reviewBot = data?.reviewBot ?? "";
+	const visible = useMemo(() => {
+		const active = reviewBot ? filters : { ...filters, bot: "" };
+		return prs.filter((pr) => matches(pr, active));
+	}, [prs, filters, reviewBot]);
 	const repos = useMemo(
 		() => [...new Set(prs.map((p) => p.repo))].sort(),
 		[prs],
@@ -216,6 +224,7 @@ function App() {
 				members={data?.members ?? []}
 				repos={repos}
 				labels={labels}
+				reviewBot={reviewBot}
 			/>
 			{!data && <p class="muted">Loading pull requests…</p>}
 			<main class={filters.side ? "cards side" : "cards"}>
@@ -226,6 +235,7 @@ function App() {
 						prs={visible.filter((p) => p.author === m)}
 						all={prs.filter((p) => p.author === m)}
 						jiraBase={data?.jiraBase ?? ""}
+						reviewBot={reviewBot}
 						now={now}
 					/>
 				))}
@@ -244,10 +254,12 @@ function FilterBar(props: {
 	members: string[];
 	repos: string[];
 	labels: [string, string][];
+	reviewBot: string;
 }) {
 	const { filters: f, set } = props;
+	const bot = props.reviewBot;
 	const select = (
-		key: "repo" | "ci" | "review" | "age" | "tono",
+		key: "repo" | "ci" | "review" | "age" | "bot",
 		options: [string, string][],
 	) => (
 		<select
@@ -292,12 +304,13 @@ function FilterBar(props: {
 					[String(WARN_DAYS), `Older than ${WARN_DAYS} days`],
 					[String(OLD_DAYS), `Older than ${OLD_DAYS} days`],
 				])}
-				{select("tono", [
-					["", "Any tono"],
-					["todo", "No tono, or stale"],
-					["none", "No tono"],
-					["lgtm", "Tono LGTM on head"],
-				])}
+				{bot &&
+					select("bot", [
+						["", `Any ${bot}`],
+						["todo", `No ${bot}, or stale`],
+						["none", `No ${bot}`],
+						["lgtm", `${bot} LGTM on head`],
+					])}
 				<label class="check">
 					<input
 						type="checkbox"
@@ -341,6 +354,7 @@ function MemberCard(props: {
 	prs: PR[];
 	all: PR[];
 	jiraBase: string;
+	reviewBot: string;
 	now: number;
 }) {
 	const { login, prs } = props;
@@ -369,7 +383,12 @@ function MemberCard(props: {
 							{b.title} <span class="muted">{rows.length}</span>
 						</h3>
 						{rows.map((pr) => (
-							<Row pr={pr} jiraBase={props.jiraBase} now={props.now} />
+							<Row
+								pr={pr}
+								jiraBase={props.jiraBase}
+								reviewBot={props.reviewBot}
+								now={props.now}
+							/>
 						))}
 					</section>
 				);
@@ -379,7 +398,17 @@ function MemberCard(props: {
 	);
 }
 
-function Row({ pr, jiraBase, now }: { pr: PR; jiraBase: string; now: number }) {
+function Row({
+	pr,
+	jiraBase,
+	reviewBot,
+	now,
+}: {
+	pr: PR;
+	jiraBase: string;
+	reviewBot: string;
+	now: number;
+}) {
 	const [mark, markText] = REVIEW_MARK[pr.reviewed];
 	const who = pr.reviewers
 		.map((r) => `${r.login}: ${r.state.toLowerCase().replace("_", " ")}`)
@@ -433,20 +462,15 @@ function Row({ pr, jiraBase, now }: { pr: PR; jiraBase: string; now: number }) {
 				{mark || "–"}
 				<span class="sr">{markText}</span>
 			</span>
-			<span
-				class={
-					pr.tono
-						? `tono ${pr.tono.stale ? "stale" : pr.tono.verdict === "lgtm" ? "lgtm" : "findings"}`
-						: "tono none"
-				}
-				title={
-					pr.tono
-						? `tono review #${pr.tono.n}: ${pr.tono.verdict || "no verdict"}${pr.tono.stale ? ", new commits since" : ""}`
-						: "No tono review"
-				}
-			>
-				{pr.tono ? `#${pr.tono.n}` : "–"}
-			</span>
+			{!reviewBot && <span class="review-bot" />}
+			{reviewBot && (
+				<span
+					class={`review-bot ${botClass(pr.botReview)}`}
+					title={botTitle(reviewBot, pr.botReview)}
+				>
+					{pr.botReview ? `#${pr.botReview.n}` : "–"}
+				</span>
+			)}
 			<span
 				class={`age a-${pr.ageLevel}${pr.approvedIdle ? " idle" : ""}`}
 				title={`opened ${ago(pr.createdAt, now)} ago, updated ${ago(pr.updatedAt, now)} ago${pr.approvedIdle ? ", approved but not merged for over 2 days" : ""}`}

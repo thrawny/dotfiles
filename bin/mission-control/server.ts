@@ -17,6 +17,7 @@ import {
 } from "./github.ts";
 import index from "./index.html";
 import {
+	botName,
 	checkReviewWrite,
 	isGenerated,
 	type PR,
@@ -45,6 +46,10 @@ const [org, team] = teamSetting.split("/");
 const readyLabel = workConfig("github.review_label")[0] ?? "ready-for-review";
 const jiraBase = workConfig("jira.browse_url")[0] ?? "";
 const jiraProjects = workConfig("jira.projects");
+// The HTML comment a review bot writes into its PR comments, such as
+// `bot:review`. Without it, the page shows no review bot.
+const reviewMarker = workConfig("mission_control.review_marker")[0] ?? "";
+const reviewBot = botName(reviewMarker);
 // Team members who do not open pull requests, such as a manager.
 const skipMembers = new Set(
 	workConfig("mission_control.skip_members").map((m) => m.toLowerCase()),
@@ -108,7 +113,7 @@ async function refresh() {
 		fetchedAt: new Date(now).toISOString(),
 		members: team,
 		prs: raw
-			.map((pr) => toPR(pr, { readyLabel, jiraProjects, now }))
+			.map((pr) => toPR(pr, { readyLabel, jiraProjects, reviewMarker, now }))
 			.sort(
 				(a, b) =>
 					caseless(a.author, b.author) ||
@@ -136,6 +141,7 @@ async function snapshot(fresh: boolean) {
 		error: lastError,
 		readyLabel,
 		jiraBase,
+		reviewBot,
 		csrfToken,
 	};
 }
@@ -192,12 +198,18 @@ async function prDetail(repo: string, numberText: string) {
 		return Response.json({ error: "Pull request not found" }, { status: 404 });
 	const files = await changedFiles(secret, repo, number, raw.headRefOid);
 	return Response.json({
-		pr: toPR(raw, { readyLabel, jiraProjects, now: Date.now() }),
+		pr: toPR(raw, {
+			readyLabel,
+			jiraProjects,
+			reviewMarker,
+			now: Date.now(),
+		}),
 		// GitHub renders and sanitizes the Markdown, as on its own page.
 		bodyHTML: raw.bodyHTML,
 		headSha: raw.headRefOid,
 		files,
 		jiraBase,
+		reviewBot,
 		viewer: await whoAmI(),
 		csrfToken,
 	});
