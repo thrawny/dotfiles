@@ -633,8 +633,9 @@ def rex_start(block: str, brief: str) -> None:
     trusted = False
     while time.monotonic() < deadline:
         found = {b["block_id"]: b for b in rex_backend.blocks()}
-        if block not in found:
-            raise SpawnError(f"Rex block {block} ended")
+        # --keep-open keeps the block after Claude exits, without a child.
+        if not (found.get(block) or {}).get("child"):
+            raise SpawnError(f"Agent in Rex block {block} ended")
         agent = rex_backend.agent(found[block])
         word = agent and agent["agent_status"]
         if word == "working" or (word == "idle" and not brief):
@@ -651,8 +652,12 @@ def rex_start(block: str, brief: str) -> None:
 
 def rex_focus(session: str) -> None:
     """Show the session in each Rex app, which only works while the app's
-    Remote Control setting is on."""
-    clients = json.loads(rex_backend.rex("api", "call", "client.list"))["clients"]
+    Remote Control setting is on. The worker runs either way, so a failure
+    here never fails the spawn."""
+    try:
+        clients = json.loads(rex_backend.rex("api", "call", "client.list"))["clients"]
+    except (MotoError, ValueError, KeyError, subprocess.TimeoutExpired):
+        return
     for client in clients:
         if (client.get("info") or {}).get("kind") != "app":
             continue
@@ -663,7 +668,7 @@ def rex_focus(session: str) -> None:
         }
         try:
             rex_backend.rex("api", "call", "client.perform", json.dumps(request))
-        except MotoError:
+        except (MotoError, subprocess.TimeoutExpired):
             pass  # Remote Control is off, or the app went away
 
 
@@ -672,9 +677,8 @@ def rex_spawn(
 ) -> dict[str, Any]:
     """Start the agent in a Rex session of its own, which the Rex sidebar
     shows as one row named after the agent. Rex has no parent terminals, so
-    no worker is another's child."""
-    if args.child:
-        raise SpawnError("--child is for hc terminals, and Rex has none")
+    --child changes nothing and the watch carries child reports, as under
+    Herdr."""
     repo, cwd, env = new_checkout(args, "Rex")
     taken = {rex_backend.label_name(b.get("label")) for b in rex_backend.blocks()}
     name = agent_name(args.name, args.worktree or repo.name, taken)
@@ -940,7 +944,7 @@ def main() -> int:
         return 0
     except subprocess.TimeoutExpired:
         print(
-            "spawn-session: Herdr timed out; inspect it before retrying.",
+            "spawn-session: Herdr, Rex or hc timed out; inspect it before retrying.",
             file=sys.stderr,
         )
     except (SpawnError, MotoError, OSError) as error:

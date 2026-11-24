@@ -25,6 +25,11 @@ from moto.common import MotoError, run
 AGENTS_SCRIPT = Path(__file__).with_name("rex_agents.lua")
 # rex exits with this status when no server answers.
 UNREACHABLE = 4
+# The CLI inside the Rex app, which matches the app's own server outside a
+# Rex terminal, where the app updates itself past the Nix-pinned CLI.
+APP_BINARY = Path(
+    "/Applications/Rex.app/Contents/Helpers/Rex Server.rex/Contents/MacOS/rex"
+)
 # Labels Rex gives a block that nobody named.
 DEFAULT_LABELS = ("shell",)
 # Rex's status words, in the words Herdr uses. A turn that ends in an error
@@ -41,6 +46,8 @@ def installed_binary() -> str | None:
     folder = os.environ.get("REX_BIN_DIR")
     if folder and os.access(Path(folder) / "rex", os.X_OK):
         return str(Path(folder) / "rex")
+    if os.access(APP_BINARY, os.X_OK):
+        return str(APP_BINARY)
     return shutil.which("rex")
 
 
@@ -86,7 +93,10 @@ def label_name(label: str | None) -> str | None:
 
 def agent(block: dict[str, Any]) -> dict[str, Any] | None:
     """A terminal block in the shape of a Herdr agent, or None when no
-    program in it reports a status as an app."""
+    program in it reports a status as an app, or the program has exited.
+    A done record outlives its program, and --keep-open keeps the block."""
+    if not block.get("child"):
+        return None
     records = block.get("records")
     found = (
         [r for r in records if isinstance(r, dict)] if isinstance(records, list) else []
@@ -150,8 +160,10 @@ def close_tab(terminal: str, tab: str) -> None:
     in it, so the sidebar keeps no empty row."""
     try:
         view = json.loads(rex("window", "ls", "-s", terminal, "--json"))
-    except (MotoError, ValueError):
-        return  # the block, and with it the session, is already gone
+    except MotoError as error:
+        if "not found" in str(error):
+            return  # the block, and with it the session, is already gone
+        raise
     windows = [w.get("window_id") for w in view.get("windows") or []]
     if windows in ([], [tab]):
         rex("kill", terminal)
