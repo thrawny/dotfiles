@@ -26,8 +26,10 @@ import (
 
 type request struct {
 	// Comments keeps doc comments and field comments in the API text.
-	Comments bool          `json:"comments"`
-	Changed  []changedFile `json:"changed"`
+	Comments bool `json:"comments"`
+	// Private adds unexported declarations, fields and methods.
+	Private bool          `json:"private"`
+	Changed []changedFile `json:"changed"`
 	// Base and Head map a file's path to its text at that commit.
 	Base map[string]string `json:"base"`
 	Head map[string]string `json:"head"`
@@ -103,8 +105,8 @@ func modules(req request) []module {
 
 	out := []module{}
 	for _, dir := range dirs {
-		base, baseName := extract(dir, req.Base, req.Comments)
-		head, headName := extract(dir, req.Head, req.Comments)
+		base, baseName := extract(dir, req.Base, req)
+		head, headName := extract(dir, req.Head, req)
 		name := headName
 		if head == nil {
 			name = baseName
@@ -150,7 +152,7 @@ type pkg struct {
 
 // extract returns the API of the package in dir, and the package's name. The
 // side is nil when dir has no Go files.
-func extract(dir string, files map[string]string, comments bool) (*side, string) {
+func extract(dir string, files map[string]string, req request) (*side, string) {
 	var paths []string
 	for file := range files {
 		if path.Dir(file) == dir && inPackage(file) {
@@ -162,7 +164,7 @@ func extract(dir string, files map[string]string, comments bool) (*side, string)
 	}
 	sort.Strings(paths)
 
-	p := &pkg{fset: token.NewFileSet(), comments: comments}
+	p := &pkg{fset: token.NewFileSet(), comments: req.Comments}
 	parsed := make([]*ast.File, len(paths))
 	count := map[string]int{}
 	for i, file := range paths {
@@ -198,7 +200,11 @@ func extract(dir string, files map[string]string, comments bool) (*side, string)
 	clause := p.fset.Position(first.Package)
 
 	// PreserveAST keeps each declaration's doc comment on it, for the printer.
-	docs, err := doc.NewFromFiles(p.fset, own, "", doc.PreserveAST)
+	mode := doc.PreserveAST
+	if req.Private {
+		mode |= doc.AllDecls
+	}
+	docs, err := doc.NewFromFiles(p.fset, own, "", mode)
 	if err != nil {
 		return out, name
 	}

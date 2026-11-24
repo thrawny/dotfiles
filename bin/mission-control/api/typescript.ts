@@ -88,6 +88,9 @@ class Extractor {
 		private ts: typeof TS,
 		private sources: Record<string, string>,
 		private comments: boolean,
+		// Whether the view keeps declarations without `export`, and private
+		// class members.
+		private unexported: boolean,
 	) {}
 
 	// The declaration file of one source file, as entries.
@@ -109,7 +112,11 @@ class Extractor {
 			lines = text.trimEnd().split("\n");
 			rows = lines.map((_, i) => i + 1);
 		} else {
-			const out = ts.transpileDeclaration(text, {
+			// The compiler writes only what a file exports. To show the rest,
+			// every declaration is exported first, and the word is taken off
+			// its line again below.
+			const added = this.unexported ? this.exportAll(path, text) : null;
+			const out = ts.transpileDeclaration(added?.text ?? text, {
 				fileName: path,
 				reportDiagnostics: true,
 				compilerOptions: {
@@ -135,9 +142,13 @@ class Extractor {
 						: [],
 				),
 			);
-			lines = lines.map((line, i) =>
-				untyped.has(rows[i] ?? 0) ? line.replace(UNKNOWN_TYPE, "$1;") : line,
-			);
+			lines = lines.map((line, i) => {
+				const row = rows[i] ?? 0;
+				const typed = untyped.has(row)
+					? line.replace(UNKNOWN_TYPE, "$1;")
+					: line;
+				return added?.rows.has(row) ? typed.replace(/^export /, "") : typed;
+			});
 		}
 
 		const file = ts.createSourceFile(
@@ -171,7 +182,11 @@ class Extractor {
 				const textLine = lines[i];
 				// A private member's name is no part of the API. Its comment
 				// goes with it.
-				if (i > from && /^\s+(private\s|#private;)/.test(textLine)) {
+				if (
+					!this.unexported &&
+					i > from &&
+					/^\s+(private\s|#private;)/.test(textLine)
+				) {
 					pendingComment = [];
 					continue;
 				}
@@ -202,6 +217,50 @@ class Extractor {
 			});
 		}
 		return { path, source: text.split("\n"), entries };
+	}
+
+	// The source with `export` before each top-level declaration that has
+	// none, and the rows where it went. A name an export clause lists is
+	// left alone: exported twice, it would not compile.
+	private exportAll(path: string, text: string) {
+		const { ts } = this;
+		const file = ts.createSourceFile(path, text, ts.ScriptTarget.ESNext, true);
+		const listed = new Set<string>();
+		for (const node of file.statements)
+			if (
+				ts.isExportDeclaration(node) &&
+				!node.moduleSpecifier &&
+				node.exportClause &&
+				ts.isNamedExports(node.exportClause)
+			)
+				for (const spec of node.exportClause.elements)
+					listed.add((spec.propertyName ?? spec.name).text);
+		const rows = new Set<number>();
+		let out = text;
+		for (const node of [...file.statements].reverse()) {
+			const declares =
+				ts.isFunctionDeclaration(node) ||
+				ts.isClassDeclaration(node) ||
+				ts.isInterfaceDeclaration(node) ||
+				ts.isTypeAliasDeclaration(node) ||
+				ts.isEnumDeclaration(node) ||
+				ts.isModuleDeclaration(node) ||
+				ts.isVariableStatement(node);
+			if (!declares) continue;
+			const marked = ts
+				.getModifiers(node)
+				?.some(
+					(m) =>
+						m.kind === ts.SyntaxKind.ExportKeyword ||
+						m.kind === ts.SyntaxKind.DeclareKeyword,
+				);
+			if (marked || this.namesOf(node).some((name) => listed.has(name)))
+				continue;
+			const at = node.getStart(file);
+			out = `${out.slice(0, at)}export ${out.slice(at)}`;
+			rows.add(file.getLineAndCharacterOfPosition(at).line + 1);
+		}
+		return { text: out, rows };
 	}
 
 	private namesOf(node: TS.Statement): string[] {
@@ -432,13 +491,13 @@ export async function extractTypeScript(
 		throw new Error("typescript5 is not installed as TypeScript 5");
 	const sides = { base: request.base, head: request.head };
 	const extractors = {
-		base: new Extractor(ts, request.base, request.comments),
-		head: new Extractor(ts, request.head, request.comments),
+		base: new Extractor(ts, request.base, request.comments, request.private),
+		head: new Extractor(ts, request.head, request.comments, request.private),
 	};
-	// Which files a directory's API comes from never depends on comments.
+	// Which files a directory's API comes from never depends on the settings.
 	const plain = {
-		base: new Extractor(ts, request.base, false),
-		head: new Extractor(ts, request.head, false),
+		base: new Extractor(ts, request.base, false, false),
+		head: new Extractor(ts, request.head, false, false),
 	};
 	const inBarrel = (at: "base" | "head", path: string) => {
 		const barrel = barrelOf(sides[at], path);

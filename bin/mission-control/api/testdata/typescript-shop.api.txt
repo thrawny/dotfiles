@@ -173,3 +173,94 @@ tools/widget.tsx:1 | };
                    |
 tools/widget.tsx:3 | export declare function Widget({ title }: Props);
 
+# unexported shown
+
+## shop/index.ts
+files: shop/cart.ts, shop/client.ts, shop/index.ts, shop/server.ts, shop/types.ts
+-- base
+shop/index.ts:1  | export { Server } from "./server";
+shop/server.ts:1 | export declare class Server {
+shop/server.ts:2 |     start(): void;
+shop/server.ts:3 | }
+-- head
+shop/index.ts:5   | export { Server, makeServer as make } from "./server.js";
+shop/server.ts:7  | export declare class Server {
+shop/server.ts:13 |     #private;
+shop/server.ts:13 |     host: string;
+shop/server.ts:9  |     readonly port: number;
+shop/server.ts:10 |     private started;
+shop/server.ts:13 |     constructor(host: string, options?: Options);
+shop/server.ts:16 |     start(block?: boolean): void;
+shop/server.ts:20 |     stop(timeout?: number);
+shop/server.ts:25 |     private reset;
+shop/server.ts:27 |     get address(): string;
+shop/server.ts:30 | }
+                  |
+shop/server.ts:32 | export declare function makeServer(host: string, port?: number): Server;
+                  |
+shop/index.ts:6   | export * from "./types";
+shop/types.ts:1   | export interface Options {
+shop/types.ts:2   |     strict?: boolean;
+shop/types.ts:3   |     retries: number;
+shop/types.ts:4   | }
+                  |
+shop/types.ts:6   | export type Mode = "read" | "write";
+                  |
+shop/types.ts:8   | export declare enum Level {
+shop/types.ts:9   |     Low = 0,
+shop/types.ts:10  |     High = 1
+shop/types.ts:11  | }
+                  |
+shop/index.ts:7   | export { connect, Cart };
+shop/client.ts:1  | export declare const connect: (url: string) => Client;
+                  |
+shop/cart.ts:1    | export default class Cart {
+shop/cart.ts:2    |     items: string[];
+shop/cart.ts:3    | }
+                  |
+shop/index.ts:8   | export { readFile } from "node:fs";
+                  |
+shop/index.ts:10  | export declare const VERSION = "2.0";
+
+## shop/util.ts
+files: shop/util.ts
+-- base
+(none)
+-- head
+shop/util.ts:3  | export declare function helper(timeout?: number);
+                |
+shop/util.ts:7  | export declare const table: {
+shop/util.ts:10 |     size: number;
+shop/util.ts:10 |     loaded: any;
+shop/util.ts:10 | };
+                |
+shop/util.ts:12 | export declare function overloaded(key: number): number;
+shop/util.ts:13 | export declare function overloaded(key: string): string;
+                |
+shop/util.ts:18 | declare function hidden(): void;
+
+## tools/cli.ts
+files: tools/cli.ts
+-- base
+tools/cli.ts:1 | export declare function run(argv: string[]): number;
+-- head
+tools/cli.ts:4 | export declare function run(argv: string[], quiet?: boolean): number;
+
+## tools/script.ts
+files: tools/script.ts
+-- base
+(none)
+-- head
+
+
+## tools/widget.tsx
+files: tools/widget.tsx
+-- base
+(none)
+-- head
+tools/widget.tsx:1 | type Props = {
+tools/widget.tsx:1 |     title: string;
+tools/widget.tsx:1 | };
+                   |
+tools/widget.tsx:3 | export declare function Widget({ title }: Props);
+

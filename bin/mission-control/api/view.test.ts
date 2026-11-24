@@ -81,9 +81,18 @@ describe("extractors", async () => {
 				.sort()
 				.map((path) => ({ path, prevPath: null }));
 			let actual = "";
-			for (const comments of [false, true])
-				actual += `# comments ${comments ? "shown" : "hidden"}\n\n${render(
-					await extract({ ...sources, comments, changed }),
+			for (const [title, comments, unexported] of [
+				["comments hidden", false, false],
+				["comments shown", true, false],
+				["unexported shown", false, true],
+			] as const)
+				actual += `# ${title}\n\n${render(
+					await extract({
+						...sources,
+						comments,
+						private: unexported,
+						changed,
+					}),
 				)}\n`;
 			const golden = Bun.file(
 				join(TESTDATA, name.replace(/\.txt$/, ".api.txt")),
@@ -210,7 +219,7 @@ describe("apiView", () => {
 				{ path: "old/old.go", prevPath: null, status: "removed" },
 				{ path: "README.md", prevPath: null, status: "modified" },
 			],
-			false,
+			{ comments: false, private: false },
 		);
 
 		expect(view.errors).toEqual([]);

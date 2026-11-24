@@ -196,9 +196,9 @@ function goBack() {
 type Mode = "diff" | "api";
 
 type ApiState = {
-	// The newest view that arrived, and whether it holds comments.
+	// The newest view that arrived, and the settings it was made with.
 	view: ApiView | null;
-	comments: boolean;
+	settings: string;
 	loading: boolean;
 	error: string | null;
 };
@@ -214,9 +214,13 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 	const [comments, setComments] = useState(
 		() => saved("mc-api-comments") === "1",
 	);
+	// Whether the API view shows unexported declarations.
+	const [unexported, setUnexported] = useState(
+		() => saved("mc-api-private") === "1",
+	);
 	const [api, setApi] = useState<ApiState>({
 		view: null,
-		comments: false,
+		settings: "",
 		loading: true,
 		error: null,
 	});
@@ -245,9 +249,12 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 	}, [repo, number]);
 
 	// The API view loads beside the pull request, so the switch finds it
-	// ready. It loads again for the other comments setting, and when the pull
-	// request got new commits.
-	const apiKey = `${repo}#${number}:${comments}`;
+	// ready. It loads again when a setting changes, and when the pull request
+	// got new commits.
+	const settings = [comments && "comments", unexported && "private"]
+		.filter(Boolean)
+		.join("&");
+	const apiKey = `${repo}#${number}:${settings}`;
 	const loadedKey = useRef("");
 	const behind = !!data && !!api.view && api.view.headSha !== data.headSha;
 	useEffect(() => {
@@ -255,14 +262,14 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 		loadedKey.current = apiKey;
 		let stale = false;
 		setApi((old) => ({ ...old, loading: true, error: null }));
-		fetch(`/api/pr/${repo}/${number}/api${comments ? "?comments=1" : ""}`)
+		fetch(`/api/pr/${repo}/${number}/api?${settings}`)
 			.then(async (res) => {
 				const json = (await res.json()) as ApiView & { error?: string };
 				if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
 				if (stale) return;
 				// The new view replaces the items, so the place is kept.
 				setFocus(currentId.current ? { id: currentId.current } : null);
-				setApi({ view: json, comments, loading: false, error: null });
+				setApi({ view: json, settings, loading: false, error: null });
 			})
 			.catch((e: Error) => {
 				if (!stale)
@@ -309,6 +316,10 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 		save("mc-api-comments", comments ? "0" : "1");
 		setComments(!comments);
 	};
+	const toggleUnexported = () => {
+		save("mc-api-private", unexported ? "0" : "1");
+		setUnexported(!unexported);
+	};
 
 	// From a line of API text to its source: in the line diff when the diff
 	// shows that line, else on GitHub.
@@ -339,8 +350,8 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 		);
 	};
 
-	// The keys are codediff.nvim's: a and s switch the view, and C shows
-	// comments.
+	// The keys are codediff.nvim's: a and s switch the view, C shows comments
+	// and P shows unexported declarations.
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
 			if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event))
@@ -348,6 +359,7 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 			if ((event.key === "a" || event.key === "s") && modules.length > 0)
 				show(mode === "api" ? "diff" : "api");
 			else if (event.key === "C" && shown === "api") toggleComments();
+			else if (event.key === "P" && shown === "api") toggleUnexported();
 			else return;
 			event.preventDefault();
 		};
@@ -372,6 +384,16 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 				<label title="Show comments in the API view (C)">
 					<input type="checkbox" checked={comments} onChange={toggleComments} />
 					Comments
+				</label>
+			)}
+			{shown === "api" && (
+				<label title="Show unexported declarations in the API view (P)">
+					<input
+						type="checkbox"
+						checked={unexported}
+						onChange={toggleUnexported}
+					/>
+					Unexported
 				</label>
 			)}
 			<span class="segments">
@@ -423,7 +445,7 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 					) : (
 						<Diff
 							// A view of its own for each set of items.
-							key={shown === "api" ? `api:${api.comments}` : "diff"}
+							key={shown === "api" ? `api:${api.settings}` : "diff"}
 							entries={entries}
 							prUrl={data.pr.url}
 							header={<Description html={data.bodyHTML} />}

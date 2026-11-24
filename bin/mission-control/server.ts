@@ -243,7 +243,11 @@ async function prDetail(repo: string, numberText: string) {
 // here too, so a second request waits for the first.
 const apiCache = new Map<string, Promise<ApiView>>();
 
-async function prApi(repo: string, numberText: string, comments: boolean) {
+async function prApi(
+	repo: string,
+	numberText: string,
+	options: { comments: boolean; private: boolean },
+) {
 	const number = prNumber(repo, numberText);
 	if (!number)
 		return Response.json({ error: "Bad pull request" }, { status: 400 });
@@ -252,7 +256,7 @@ async function prApi(repo: string, numberText: string, comments: boolean) {
 	if (!raw)
 		return Response.json({ error: "Pull request not found" }, { status: 404 });
 	const head = raw.headRefOid;
-	const key = `${repo}@${raw.baseRefOid}...${head}:${comments}`;
+	const key = `${repo}@${raw.baseRefOid}...${head}:${options.comments}:${options.private}`;
 	let view = apiCache.get(key);
 	if (!view) {
 		view = (async () => {
@@ -269,7 +273,7 @@ async function prApi(repo: string, numberText: string, comments: boolean) {
 				base,
 				head,
 				files,
-				comments,
+				options,
 			);
 		})();
 		apiCache.set(key, view);
@@ -437,11 +441,11 @@ const server = Bun.serve({
 		// it.
 		"/api/pr/:repo/:number/api": async (req) => {
 			try {
-				return await prApi(
-					req.params.repo,
-					req.params.number,
-					new URL(req.url).searchParams.has("comments"),
-				);
+				const asked = new URL(req.url).searchParams;
+				return await prApi(req.params.repo, req.params.number, {
+					comments: asked.has("comments"),
+					private: asked.has("private"),
+				});
 			} catch (error) {
 				console.error(`mission-control: ${(error as Error).message}`);
 				return Response.json(

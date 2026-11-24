@@ -121,3 +121,73 @@ internal/store/store.go:35 | func (s *Store) Get(key string, fallback string) (s
                            |
 internal/store/store.go:39 | func (s *Store) Put(key, value string)
 
+# unexported shown
+
+## cmd/tool/package main
+files: cmd/tool/main.go
+-- base
+(none)
+-- head
+cmd/tool/main.go:1 | package main
+                   |
+cmd/tool/main.go:3 | func main()
+
+## internal/store/package store
+files: internal/store/key.go, internal/store/store.go
+-- base
+internal/store/store.go:2  | package store
+                           |
+internal/store/store.go:17 | func hidden()
+                           |
+internal/store/store.go:5  | type Store struct {
+internal/store/store.go:7  | 	Name   string
+internal/store/store.go:8  | 	secret int
+internal/store/store.go:9  | 	Size   int
+internal/store/store.go:10 | }
+                           |
+internal/store/store.go:13 | func (s *Store) Get(key string) (string, bool)
+-- head
+internal/store/key.go:1    | package store
+                           |
+internal/store/store.go:7  | const DefaultSize = 10
+                           |
+internal/store/store.go:16 | var ErrMissing = errors.New("missing")
+                           |
+internal/store/store.go:50 | func Parse(s string) error
+internal/store/store.go:52 | func hidden()
+                           |
+internal/store/key.go:3    | type Key[T any] struct{ V T }
+                           |
+internal/store/key.go:5    | func (k Key[T]) String() string
+                           |
+internal/store/store.go:19 | type Mode int
+                           |
+internal/store/store.go:9  | const (
+internal/store/store.go:11 | 	ModeRead Mode = iota
+internal/store/store.go:12 | 	ModeWrite
+internal/store/store.go:13 | 	modeInternal
+internal/store/store.go:14 | )
+                           |
+internal/store/store.go:43 | type Reader interface {
+internal/store/store.go:44 | 	Read() error
+internal/store/store.go:45 | 	close()
+internal/store/store.go:46 | }
+                           |
+internal/store/store.go:22 | type Store struct {
+internal/store/store.go:24 | 	Name   string
+internal/store/store.go:25 | 	secret int
+                           |
+internal/store/store.go:27 | 	Size int
+internal/store/store.go:28 | 	mu   int
+internal/store/store.go:29 | }
+                           |
+internal/store/store.go:32 | func New() *Store
+internal/store/store.go:48 | func Open(path string) (*Store, error)
+internal/store/store.go:35 | func (s *Store) Get(key string, fallback string) (string, bool)
+internal/store/store.go:39 | func (s *Store) Put(key, value string)
+internal/store/store.go:41 | func (s *Store) lock()
+                           |
+internal/store/key.go:7    | type unexported struct{ Exported int }
+                           |
+internal/store/key.go:9    | func (u unexported) Method()
+

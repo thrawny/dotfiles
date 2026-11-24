@@ -108,7 +108,7 @@ export async function apiView(
 	baseSha: string,
 	headSha: string,
 	files: Changed[],
-	comments: boolean,
+	options: { comments: boolean; private: boolean },
 ): Promise<ApiView> {
 	const view: ApiView = { baseSha, headSha, modules: [], errors: [] };
 	// Per language, its changed files that have an API view.
@@ -156,7 +156,7 @@ export async function apiView(
 		);
 		return wanted.map(
 			(w): ExtractRequest => ({
-				comments,
+				...options,
 				changed: [],
 				base: read(w.base, base),
 				head: read(w.head, head),

@@ -40,6 +40,8 @@ export type ChangedPath = { path: string; prevPath: string | null };
 // language, and every file read at each commit, by path.
 export type ExtractRequest = {
 	comments: boolean;
+	// Adds unexported declarations and private members.
+	private: boolean;
 	changed: ChangedPath[];
 	base: Record<string, string>;
 	head: Record<string, string>;

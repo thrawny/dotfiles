@@ -35,8 +35,13 @@ TypeScript. Mission control works on its own: it never calls Neovim.
   commit and line.
 - The lines between the hunks of an API diff can open, because the page has
   the whole text of both sides.
-- The keys are codediff's: `a` and `s` switch the view, and `C` shows
-  comments. Approving has no key.
+- Unexported declarations are hidden at first too. The "Unexported" switch
+  and the `P` key show them: unexported Go names, fields and methods, Python
+  names with a leading underscore or outside `__all__`, and TypeScript
+  declarations without `export` and private class members. A module that
+  exports nothing then has an API view.
+- The keys are codediff's: `a` and `s` switch the view, `C` shows comments
+  and `P` shows unexported declarations. Approving has no key.
 - The API view loads beside the pull request, so the switch finds it ready.
 
 ## Extraction
@@ -51,7 +56,7 @@ needs `go` and `python3` on its `PATH`.
 | TypeScript | `api/typescript.ts`. `ts.transpileDeclaration` makes a declaration file from one source file, in the server process. It needs TypeScript 5, installed as `typescript5` beside the type checker. |
 
 The three take the same request and give the same answer, described in
-`api/languages.ts`. The request holds the comments setting, the changed
+`api/languages.ts`. The request holds the two settings, the changed
 files, and every file read at each commit. The answer is a list of modules.
 Each has the API text of both commits and, for each line, the source file and
 line it came from.
@@ -65,6 +70,9 @@ line it came from.
   out as `any` or `unknown`, and the compiler reports where. The extractor
   removes that type from a return type, a variable and a class property. It
   stays in an object literal's members. Private class members are left out.
+  The compiler writes only what a file exports, so to show the rest the
+  extractor exports every declaration first and takes the word off again.
+  A private member shows its name without a type.
 
 Options we turned down:
 
@@ -121,9 +129,9 @@ the blobs were there.
 ## Server
 
 - `GET /api/pr/<repo>/<n>/api` answers with the modules. `?comments` asks for
-  the text with comments.
+  the text with comments, and `?private` for unexported declarations.
 - The answer is cached by repository, base branch tip, head commit and
-  comments setting.
+  the two settings.
 - The Go helper is built once into `~/.cache/mission-control/bin`, under a
   name that carries a hash of its source.
 - A language that fails, such as Go without a toolchain, is named in the
@@ -138,14 +146,12 @@ the blobs were there.
 
 - A case file per language in `api/testdata` holds the sources of both
   commits. Its expected API text is beside it, for comments hidden and
-  shown. `UPDATE_GOLDEN=1 bun test` writes the expected text again.
+  shown and for unexported declarations shown. `UPDATE_GOLDEN=1 bun test` writes the expected text again.
 - One test builds a git repository in a temp directory and reads a pull
   request's modules from it by fetch, as from GitHub.
 
 ## Not built
 
-- A switch for unexported declarations, as codediff's `P` key. The line diff
-  shows them.
 - Opening the lines between the hunks of a line diff. The viewer can load
   whole files for that through its `loadDiffFiles` option, and
   `api/sources.ts` can read them. A click on an API line could then always

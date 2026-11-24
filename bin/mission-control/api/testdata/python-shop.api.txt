@@ -172,3 +172,89 @@ files: tools/empty.py
 -- head
 
 
+# unexported shown
+
+## shop/__init__.py
+files: shop/__init__.py, shop/client.py, shop/server.py
+-- base
+shop/__init__.py:3 | from .server import Server
+shop/server.py:1   | class Server:
+shop/server.py:2   |     def start(self): ...
+-- head
+shop/__init__.py:3  | import os
+                    |
+shop/__init__.py:5  | from shop.client import *
+shop/client.py:1    | def connect(url: str) -> "Client": ...
+                    |
+shop/client.py:6    | class Client: ...
+                    |
+shop/__init__.py:6  | from .server import Server, make_server as make
+shop/server.py:11   | @dataclass
+shop/server.py:12   | class Server(Base):
+shop/server.py:18   |     host: str
+shop/server.py:19   |     port: int = DEFAULT_PORT
+shop/server.py:20   |     _started: bool = False
+                    |
+shop/server.py:22   |     class Config:
+shop/server.py:23   |         strict = True
+                    |
+shop/server.py:25   |     def start(self, *, block: bool = True) -> None: ...
+                    |
+shop/server.py:30   |     async def stop(
+shop/server.py:31   |         self,
+shop/server.py:32   |         timeout: float | None = None,
+shop/server.py:33   |     ) -> bool: ...
+                    |
+shop/server.py:36   |     @property
+shop/server.py:37   |     def address(self) -> str: ...
+                    |
+shop/server.py:39   |     def _reset(self): ...
+                    |
+shop/server.py:42   |     def __repr__(self) -> str: ...
+                    |
+shop/server.py:46   | def make_server(host: str, port: int = DEFAULT_PORT) -> Server: ...
+                    |
+shop/__init__.py:11 | VERSION = "2.0"
+shop/__init__.py:12 | _internal = 1
+
+## shop/base.py
+files: shop/base.py
+-- base
+(none)
+-- head
+shop/base.py:1 | class Base:
+shop/base.py:2 |     kind = "base"
+               |
+shop/base.py:5 | def helper(): ...
+
+## shop/util.py
+files: shop/util.py
+-- base
+(none)
+-- head
+shop/util.py:3  | Pair = tuple[str, str]
+                |
+shop/util.py:6  | type Lookup = dict[str, Pair]
+                |
+shop/util.py:9  | @typing.overload
+shop/util.py:10 | def find(key: int) -> int: ...
+shop/util.py:11 | @typing.overload
+shop/util.py:12 | def find(key: str) -> str: ...
+shop/util.py:13 | def find(key): ...
+                |
+shop/util.py:18 | def _private(): ...
+
+## tools/cli.py
+files: tools/cli.py
+-- base
+tools/cli.py:1 | def run(argv): ...
+-- head
+tools/cli.py:5 | def run(argv: list[str], *, quiet=lambda: False) -> int: ...
+
+## tools/empty.py
+files: tools/empty.py
+-- base
+(none)
+-- head
+tools/empty.py:1 | def _only_private(): ...
+

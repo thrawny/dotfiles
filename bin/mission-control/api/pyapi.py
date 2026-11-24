@@ -71,9 +71,14 @@ class Entry:
 
 
 class Extractor:
-    def __init__(self, comments: bool) -> None:
+    def __init__(self, comments: bool, private: bool) -> None:
         # Whether the view keeps comments and docstrings.
         self.comments = comments
+        # Whether the view keeps private names.
+        self.private = private
+
+    def member_shown(self, name: str) -> bool:
+        return self.private or public(name)
 
     def copy(
         self, module: Module, first: int, last: int, last_col: int | None = None
@@ -176,7 +181,7 @@ class Extractor:
         return Entry(lines, module, lines[0].row or 0, last)
 
     def members(self, module: Module, node: ast.ClassDef) -> list[Entry]:
-        return self.entries(module, node.body, public)
+        return self.entries(module, node.body, self.member_shown)
 
     def entries(
         self, module: Module, body: list[ast.stmt], shown: Shown
@@ -207,7 +212,9 @@ class Extractor:
 
     def module_entries(self, module: Module) -> list[Entry]:
         """The entries of a module's own top-level statements."""
-        return self.entries(module, module.tree.body, module_shown(module))
+        return self.entries(
+            module, module.tree.body, module_shown(module, self.private)
+        )
 
     def resolve(
         self,
@@ -251,7 +258,7 @@ class Extractor:
         Its own entries, and each import from another module of the package
         followed by the definitions it re-exports.
         """
-        shown = module_shown(init)
+        shown = module_shown(init, self.private)
         out: list[Entry] = []
         body = init.tree.body
         for index, node in enumerate(body):
@@ -390,16 +397,18 @@ def sibling_module(module: Module, node: ast.stmt) -> str | None:
     return None
 
 
-def module_shown(module: Module) -> Shown:
+def module_shown(module: Module, private: bool) -> Shown:
     """Whether a top-level name is in a module's API.
 
     A name is in it if __all__ lists it, or, without __all__, if it is
-    public. __all__ itself is not.
+    public. With private names shown, every name is. __all__ itself is not.
     """
 
     def shown(name: str) -> bool:
         if name == "__all__":
             return False
+        if private:
+            return True
         if module.exported is not None:
             return name in module.exported
         return public(name)
@@ -490,9 +499,9 @@ def side(lines: list[Line]) -> dict[str, Any]:
 
 
 def modules(request: dict[str, Any]) -> list[dict[str, Any]]:
-    extractor = Extractor(bool(request.get("comments")))
-    # Which files a package's API comes from never depends on comments.
-    plain = Extractor(False)
+    extractor = Extractor(bool(request.get("comments")), bool(request.get("private")))
+    # Which files a package's API comes from never depends on the settings.
+    plain = Extractor(False, False)
     sides: dict[str, dict[str, str]] = {
         "base": request["base"],
         "head": request["head"],
