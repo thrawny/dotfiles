@@ -1,3 +1,6 @@
+/* GitHub's own Markdown styles for the PR description. */
+@import "github-markdown-css/github-markdown.css";
+
 /* Colours come from /theme.css, built from blueprint's palette. */
 * {
 	box-sizing: border-box;
@@ -453,58 +456,26 @@ body.review-mode {
 }
 .description {
 	margin: 0;
-	background: var(--bg);
 	padding: 0.8rem 1.2rem 1rem;
 	border-bottom: 1px solid var(--line);
-	font-size: 0.9rem;
-	line-height: 1.5;
 }
-.markdown > :first-child {
-	margin-top: 0;
-}
-.markdown :is(h1, h2, h3, h4, h5, h6) {
-	margin: 0.6rem 0 0.2rem;
-	font-size: 0.95rem;
-}
-.markdown :is(p, ul, ol, pre, table, blockquote) {
-	margin: 0.3rem 0;
-}
-.markdown :is(ul, ol) {
-	padding-left: 1.3rem;
-}
-.markdown code {
-	font-family: ui-monospace, monospace;
-	font-size: 0.85em;
-	background: var(--bg);
-	padding: 0.05rem 0.25rem;
-	border-radius: 4px;
-}
-.markdown pre {
-	background: var(--bg);
-	padding: 0.5rem;
-	border-radius: 6px;
-	overflow: auto;
-}
-.markdown pre code {
-	padding: 0;
-}
-.markdown blockquote {
-	padding-left: 0.7rem;
-	border-left: 3px solid var(--line);
-	color: var(--muted);
-}
-.markdown table {
-	border-collapse: collapse;
-}
-.markdown :is(th, td) {
-	border: 1px solid var(--line);
-	padding: 0.15rem 0.5rem;
-}
-.description.markdown img {
-	max-width: 100%;
-}
-.markdown .task-list-item {
-	list-style: none;
+/* GitHub's styles with the page's palette, so they follow light and dark. */
+.description.markdown-body {
+	font-size: 14px;
+	--fgColor-default: var(--fg);
+	--fgColor-muted: var(--muted);
+	--fgColor-accent: var(--accent);
+	--fgColor-success: var(--add);
+	--fgColor-danger: var(--del);
+	--fgColor-done: var(--accent);
+	--bgColor-default: var(--bg);
+	--bgColor-muted: var(--code-bg);
+	--bgColor-neutral-muted: var(--mod-bg);
+	--borderColor-default: var(--line);
+	--borderColor-muted: var(--line);
+	--borderColor-neutral-muted: var(--line);
+	--borderColor-accent-emphasis: var(--accent);
+	--focus-outlineColor: var(--accent);
 }
 .review-body {
 	flex: 1;

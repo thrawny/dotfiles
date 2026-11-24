@@ -408,7 +408,7 @@ function Description({ html }: { html: string }) {
 	if (!html.trim()) return <p class="description muted">No description.</p>;
 	return (
 		<div
-			class="description markdown"
+			class="description markdown-body"
 			ref={box}
 			// GitHub sanitized this HTML when it rendered the PR body.
 			dangerouslySetInnerHTML={{ __html: html }}
