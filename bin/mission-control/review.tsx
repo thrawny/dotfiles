@@ -339,13 +339,15 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 		);
 	};
 
+	// The keys are codediff.nvim's: a and s switch the view, and C shows
+	// comments.
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
 			if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event))
 				return;
-			if (event.key === "v" && modules.length > 0)
+			if ((event.key === "a" || event.key === "s") && modules.length > 0)
 				show(mode === "api" ? "diff" : "api");
-			else if (event.key === "c" && shown === "api") toggleComments();
+			else if (event.key === "C" && shown === "api") toggleComments();
 			else return;
 			event.preventDefault();
 		};
@@ -367,7 +369,7 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 				</span>
 			))}
 			{shown === "api" && (
-				<label title="Show comments in the API view (c)">
+				<label title="Show comments in the API view (C)">
 					<input type="checkbox" checked={comments} onChange={toggleComments} />
 					Comments
 				</label>
@@ -378,7 +380,7 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 					class={shown === "diff" ? "on" : ""}
 					aria-pressed={shown === "diff"}
 					onClick={() => show("diff")}
-					title="The line diff (v)"
+					title="The line diff (a)"
 				>
 					Diff
 				</button>
@@ -390,7 +392,7 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 					onClick={() => show("api")}
 					title={
 						api.loading || modules.length > 0
-							? "What each changed module exports, without bodies (v)"
+							? "What each changed module exports, without bodies (a)"
 							: "No changed module has an API view"
 					}
 				>
@@ -553,8 +555,8 @@ const EVENT_TEXT: Record<ReviewEvent, [string, string]> = {
 };
 
 // Posting a review takes two clicks: the first arms the button for 5
-// seconds, the second posts. a arms the approve, Enter confirms what is
-// armed and Esc disarms it.
+// seconds, the second posts. Enter confirms what is armed and Esc disarms
+// it.
 function Verdict({
 	data,
 	reload,
@@ -641,7 +643,6 @@ function Verdict({
 				isTyping(event)
 			)
 				return;
-			else if (event.key === "a") press("APPROVE");
 			else if (event.key === "Enter" && armed) press(armed);
 			else return;
 			event.preventDefault();

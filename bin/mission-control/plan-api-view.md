@@ -16,7 +16,7 @@ TypeScript. Mission control works on its own: it never calls Neovim.
 
 ## On the page
 
-- A "Diff / API" switch in the review strip, and the `v` key. The choice is
+- A "Diff / API" switch in the review strip, and the `a` key. The choice is
   saved, so it holds for every pull request.
 - The number on the switch counts the modules whose API changed. A pull
   request that changes bodies only shows 0.
@@ -27,7 +27,7 @@ TypeScript. Mission control works on its own: it never calls Neovim.
   module shows its API as plain text, as the page shows a new file.
 - A file without an API view keeps its line diff: a file in another
   language, a test, or a file of a module that exports nothing.
-- Comments are hidden at first. The "Comments" switch and the `c` key show
+- Comments are hidden at first. The "Comments" switch and the `C` key show
   them. Docstrings count as comments.
 - A click on a line number opens the line's source. It scrolls to the line in
   the line diff when the diff shows that line. For a line outside every hunk,
@@ -35,6 +35,8 @@ TypeScript. Mission control works on its own: it never calls Neovim.
   commit and line.
 - The lines between the hunks of an API diff can open, because the page has
   the whole text of both sides.
+- The keys are codediff's: `a` and `s` switch the view, and `C` shows
+  comments. Approving has no key.
 - The API view loads beside the pull request, so the switch finds it ready.
 
 ## Extraction
