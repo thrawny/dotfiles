@@ -453,6 +453,7 @@ body.review-mode {
 }
 .description {
 	margin: 0;
+	background: var(--bg);
 	padding: 0.8rem 1.2rem 1rem;
 	border-bottom: 1px solid var(--line);
 	font-size: 0.9rem;
@@ -538,10 +539,21 @@ body.review-mode {
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
 }
+/* The gap between files shows this background. In light mode the page
+   background is as white as the code, so the gap takes the border colour. */
 .diff-view {
 	height: 100%;
 	overflow: auto;
 	min-width: 0;
+	background: var(--line);
+}
+:root[data-theme="dark"] .diff-view {
+	background: var(--bg);
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) .diff-view {
+		background: var(--bg);
+	}
 }
 .fold {
 	border: 0;

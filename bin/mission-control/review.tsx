@@ -2,7 +2,6 @@
 // and the diff, with a file list to jump between files.
 import {
 	CodeView,
-	type CodeViewDiffItem,
 	type CodeViewItem,
 	type CodeViewOptions,
 	type FileDiffMetadata,
