@@ -424,7 +424,7 @@ function el(tag: string, cls: string, text: string) {
 	return node;
 }
 
-// The tree's statuses for GitHub's file statuses.
+// The tree's statuses for GitHub's file statuses, other than modified.
 const TREE_STATUS: Record<string, GitStatus> = {
 	added: "added",
 	removed: "deleted",
@@ -446,44 +446,31 @@ function Diff({
 	const treeHost = useRef<HTMLElement>(null);
 	const pick = useRef((_path: string) => {});
 
-	// The file tree, with each file's status and line counts. A click on a
-	// file jumps to it in the diff.
-	const tree = useMemo(() => {
-		const byPath = new Map(changed.map((f) => [f.path, f]));
-		return new FileTree({
-			paths: changed.map((f) => f.path),
-			flattenEmptyDirectories: true,
-			initialExpansion: "open",
-			density: "compact",
-			gitStatus: changed.map((f) => ({
-				path: f.path,
-				status: TREE_STATUS[f.status] ?? "modified",
-			})),
-			renderRowDecoration: ({ item }) => {
-				const file = byPath.get(item.path);
-				if (item.kind !== "file" || !file) return null;
-				const plus = `+${lines(file.additions)}`;
-				const minus = `−${lines(file.deletions)}`;
-				// A generated file's counts are muted, as it starts collapsed.
-				const muted = file.generated ? "var(--muted)" : undefined;
-				return {
-					text: `${plus} ${minus}`,
-					title: file.generated ? "Generated file" : undefined,
-					parts: [
-						{ text: plus, color: muted ?? "var(--add)" },
-						{ text: ` ${minus}`, color: muted ?? "var(--del)" },
-					],
-				};
-			},
-			// The line counts keep their width; a long name is cut instead.
-			unsafeCSS:
-				'[data-item-section="decoration"]{flex:0 0 auto;margin-inline-start:auto;padding-inline-start:0.5em;font-variant-numeric:tabular-nums}',
-			onSelectionChange: (paths) => {
-				const path = paths.at(-1);
-				if (path) pick.current(path);
-			},
-		});
-	}, [changed]);
+	// The file tree. A click on a file jumps to it in the diff.
+	const tree = useMemo(
+		() =>
+			new FileTree({
+				paths: changed.map((f) => f.path),
+				flattenEmptyDirectories: true,
+				initialExpansion: "open",
+				density: "compact",
+				// Every file in a PR changed, so only the other statuses get a
+				// letter.
+				gitStatus: changed.flatMap((f) =>
+					TREE_STATUS[f.status]
+						? [{ path: f.path, status: TREE_STATUS[f.status] }]
+						: [],
+				),
+				// A folder's dot only repeats what its files show.
+				unsafeCSS:
+					'[data-item-section="git"] [data-icon-name="file-tree-icon-dot"]{display:none}',
+				onSelectionChange: (paths) => {
+					const path = paths.at(-1);
+					if (path) pick.current(path);
+				},
+			}),
+		[changed],
+	);
 
 	// The diff lists the files in the tree's order, so j and k follow it.
 	const files = useMemo(() => {
