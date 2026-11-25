@@ -218,8 +218,10 @@ export function toPR(
 	const approved =
 		raw.reviewDecision === "APPROVED" ||
 		(raw.reviewDecision === null && reviewed === "approved");
-	const ageDays = (opts.now - Date.parse(raw.createdAt)) / DAY;
 	const merged = raw.mergedAt !== null;
+	// A merged pull request's age counts from its merge, so the age filter
+	// picks recent merges.
+	const ageDays = (opts.now - Date.parse(raw.mergedAt ?? raw.createdAt)) / DAY;
 	const approvedAt = Math.max(
 		0,
 		...reviews

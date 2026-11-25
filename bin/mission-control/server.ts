@@ -33,8 +33,8 @@ import {
 const CACHE_MS = 2 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MEMBERS_MS = DAY_MS;
-// The list shows pull requests merged in this many days, behind its filter.
-const MERGED_DAYS = 7;
+// Without a window of days, the merged list goes back this many days.
+const MERGED_MAX_DAYS = 30;
 // Changed files of the pull requests opened lately, by head commit.
 const FILES_KEPT = 30;
 
@@ -94,20 +94,19 @@ type Snapshot = {
 };
 
 let members: { list: string[]; at: number } | null = null;
-// Open pull requests load on every visit. Merged ones are many more, so
-// they load only when the page asks for them, and are cached apart.
+
+// The list asks for one kind of pull request over one window of days, and
+// the server fetches only that. Open pull requests are counted from when
+// they were opened, merged ones from when they were merged. Without days,
+// all open pull requests load, and merged ones from the last
+// MERGED_MAX_DAYS. Each kind and window has its own cache.
 type Kind = "open" | "merged";
-const lists: Record<
-	Kind,
-	{
-		last: Snapshot | null;
-		error: string | null;
-		inflight: Promise<void> | null;
-	}
-> = {
-	open: { last: null, error: null, inflight: null },
-	merged: { last: null, error: null, inflight: null },
+type List = {
+	last: Snapshot | null;
+	error: string | null;
+	inflight: Promise<void> | null;
 };
+const lists = new Map<string, List>();
 
 async function teamList(gh: Client): Promise<string[]> {
 	if (!members || Date.now() - members.at > MEMBERS_MS)
@@ -120,21 +119,25 @@ async function teamList(gh: Client): Promise<string[]> {
 	return members.list;
 }
 
-async function refresh(kind: Kind) {
+async function refresh(list: List, kind: Kind, days: number | null) {
 	const gh = client(token());
 	const team = await teamList(gh);
 	const now = Date.now();
-	const since = new Date(now - MERGED_DAYS * DAY_MS).toISOString().slice(0, 10);
+	const window = kind === "merged" ? (days ?? MERGED_MAX_DAYS) : days;
+	const since =
+		window === null
+			? null
+			: new Date(now - window * DAY_MS).toISOString().slice(0, 10);
 	const raw = (
 		await Promise.all(
 			team.map((login) =>
 				kind === "merged"
-					? mergedPRs(gh, org, login, since)
-					: openPRs(gh, org, login),
+					? mergedPRs(gh, org, login, since as string)
+					: openPRs(gh, org, login, since),
 			),
 		)
 	).flat();
-	lists[kind].last = {
+	list.last = {
 		fetchedAt: new Date(now).toISOString(),
 		members: team,
 		prs: raw
@@ -145,24 +148,32 @@ async function refresh(kind: Kind) {
 					Date.parse(a.createdAt) - Date.parse(b.createdAt),
 			),
 	};
-	lists[kind].error = null;
+	list.error = null;
 }
 
-async function snapshot(fresh: boolean, kind: Kind = "open") {
-	const list = lists[kind];
+async function snapshot(fresh: boolean, kind: Kind, days: number | null) {
+	const key = `${kind}:${days ?? "all"}`;
+	let list = lists.get(key);
+	if (!list) {
+		list = { last: null, error: null, inflight: null };
+		lists.set(key, list);
+	}
 	const age = list.last
 		? Date.now() - Date.parse(list.last.fetchedAt)
 		: Infinity;
 	if (fresh || age > CACHE_MS) {
-		list.inflight ??= refresh(kind)
+		const target = list;
+		target.inflight ??= refresh(target, kind, days)
 			.catch((error: Error) => {
-				list.error = error.message;
+				target.error = error.message;
 				console.error(`mission-control: ${error.message}`);
 			})
 			.finally(() => {
-				list.inflight = null;
+				target.inflight = null;
 			});
-		await list.inflight;
+		// Old data answers at once while the refresh runs. The page polls,
+		// so it gets the new data on its next load. Refresh waits.
+		if (fresh || !list.last) await target.inflight;
 	}
 	return {
 		...(list.last ?? { fetchedAt: null, members: [], prs: [] }),
@@ -172,6 +183,15 @@ async function snapshot(fresh: boolean, kind: Kind = "open") {
 		reviewBot,
 		csrfToken,
 	};
+}
+
+// The window of days the page asks for: a whole number from 1 to 365, or
+// null for no window.
+function daysParam(value: string | null): number | null {
+	const days = Number(value);
+	return value && Number.isInteger(days) && days >= 1 && days <= 365
+		? days
+		: null;
 }
 
 // The review page asks for the files and for the API view at once, so a
@@ -364,7 +384,10 @@ async function postPRReview(req: Request, repo: string, numberText: string) {
 			{ status: 502 },
 		);
 	// The list shows review state, so refresh it for the next visit.
-	void snapshot(true);
+	for (const key of lists.keys()) {
+		const [kind, days] = key.split(":");
+		if (kind === "open") void snapshot(true, "open", daysParam(days));
+	}
 	return Response.json({ state: result.state });
 }
 
@@ -447,7 +470,8 @@ const server = Bun.serve({
 		"/api/prs": async (req) => {
 			const params = new URL(req.url).searchParams;
 			const kind = params.get("state") === "merged" ? "merged" : "open";
-			return Response.json(await snapshot(params.has("fresh"), kind));
+			const days = daysParam(params.get("days"));
+			return Response.json(await snapshot(params.has("fresh"), kind, days));
 		},
 		// POST only: other methods, a CORS preflight among them, get no route.
 		"/api/pr/:repo/:number/review": {
@@ -499,3 +523,7 @@ console.log(`mission-control: ${org}/${team} on ${server.url}`);
 // Build the Go helper now, so the first API view finds it ready. Without Go,
 // the view reports that when it is asked for.
 buildGoHelper().catch(() => {});
+
+// Fetch the default view, open pull requests of the last 7 days, now, so
+// the first visit finds it ready.
+void snapshot(false, "open", 7);

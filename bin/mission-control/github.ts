@@ -70,14 +70,18 @@ export async function teamMembers(
 	return found.members.nodes.map((m) => m.login).sort(caseless);
 }
 
+// The author's open pull requests, only those opened on or after the day
+// `since` when it is given.
 export function openPRs(
 	gh: Client,
 	org: string,
 	author: string,
+	since: string | null,
 ): Promise<RawPR[]> {
+	const opened = since ? ` created:>=${since}` : "";
 	return searchPRs(
 		gh,
-		`is:pr is:open archived:false org:${org} author:${author}`,
+		`is:pr is:open archived:false org:${org} author:${author}${opened}`,
 	);
 }
 

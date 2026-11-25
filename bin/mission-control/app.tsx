@@ -93,6 +93,15 @@ function writeFilters(f: Filters) {
 	history.replaceState(null, "", `?${p}`);
 }
 
+// What the list asks the server for: the state, and the age filter's
+// window of days when it keeps only recent pull requests, such as `-7`.
+function serverQuery(f: Filters): string {
+	const p = new URLSearchParams();
+	if (f.state === "merged") p.set("state", "merged");
+	if (f.age.startsWith("-")) p.set("days", f.age.slice(1));
+	return p.toString();
+}
+
 function matches(pr: PR, f: Filters): boolean {
 	if ((f.state === "merged") !== (pr.mergedAt !== null)) return false;
 	if (!f.drafts && pr.draft) return false;
@@ -103,16 +112,19 @@ function matches(pr: PR, f: Filters): boolean {
 	)
 		return false;
 	if (f.repo && pr.repo !== f.repo) return false;
-	if (f.ci && pr.ci !== f.ci) return false;
-	if (f.review && pr.reviewed !== f.review) return false;
+	// CI, review and review bot filters describe open pull requests, so the
+	// merged view hides them and ignores them.
+	const open = !pr.mergedAt;
+	if (open && f.ci && pr.ci !== f.ci) return false;
+	if (open && f.review && pr.reviewed !== f.review) return false;
 	// An age of `-30` keeps PRs up to 30 days old; `14` keeps older ones.
 	if (f.age.startsWith("-")) {
 		if (pr.ageDays > -Number(f.age)) return false;
 	} else if (f.age && pr.ageDays <= Number(f.age)) return false;
 	const bot = pr.botReview;
-	if (f.bot === "none" && bot) return false;
-	if (f.bot === "todo" && bot && !bot.stale) return false;
-	if (f.bot === "lgtm" && !(bot?.verdict === "lgtm" && !bot.stale))
+	if (open && f.bot === "none" && bot) return false;
+	if (open && f.bot === "todo" && bot && !bot.stale) return false;
+	if (open && f.bot === "lgtm" && !(bot?.verdict === "lgtm" && !bot.stale))
 		return false;
 	if (f.q) {
 		const text =
@@ -127,22 +139,23 @@ function App() {
 	const [loading, setLoading] = useState(false);
 	const [filters, setFilters] = useState(readFilters);
 	const [now, setNow] = useState(Date.now());
-	// Merged pull requests load only while their filter is on.
-	const [merged, setMerged] = useState<Data | null>(null);
-	const wantMerged = useRef(false);
-	wantMerged.current = filters.state === "merged";
-
-	const loadMerged = async (fresh = false) => {
-		const res = await fetch(`/api/prs?state=merged${fresh ? "&fresh=1" : ""}`);
-		setMerged(await res.json());
-	};
+	// The server fetches only what the filters show: open or merged pull
+	// requests, over the age filter's last N days when it has one. Another
+	// state or window is a new fetch.
+	const wanted = serverQuery(filters);
+	const want = useRef(wanted);
+	want.current = wanted;
 
 	const load = async (fresh = false) => {
+		const asked = want.current;
+		const params = new URLSearchParams(asked);
+		if (fresh) params.set("fresh", "1");
 		setLoading(true);
 		try {
-			const res = await fetch(fresh ? "/api/prs?fresh=1" : "/api/prs");
-			setData(await res.json());
-			if (wantMerged.current) await loadMerged(fresh);
+			const res = await fetch(`/api/prs?${params}`);
+			const json = await res.json();
+			// An answer for filters that have changed since is dropped.
+			if (asked === want.current) setData(json);
 		} catch (error) {
 			setData((d) => (d ? { ...d, error: String(error) } : d));
 		} finally {
@@ -154,7 +167,6 @@ function App() {
 	// Poll only while the tab is visible. On return, fetch at once when the
 	// data is older than one poll.
 	useEffect(() => {
-		load();
 		let lastLoad = Date.now();
 		const tick = () => {
 			setNow(Date.now());
@@ -173,14 +185,8 @@ function App() {
 
 	useEffect(() => writeFilters(filters), [filters]);
 	useEffect(() => {
-		if (filters.state !== "merged" || merged) return;
-		setLoading(true);
-		loadMerged()
-			.catch((error) =>
-				setMerged((d) => (d ? { ...d, error: String(error) } : d)),
-			)
-			.finally(() => setLoading(false));
-	}, [filters.state]);
+		load();
+	}, [wanted]);
 	useEffect(() => {
 		if (!data || !wantReadyLabel) return;
 		wantReadyLabel = false;
@@ -189,9 +195,9 @@ function App() {
 	const set = (patch: Partial<Filters>) =>
 		setFilters((f) => ({ ...f, ...patch }));
 
-	const shown = filters.state === "merged" ? merged : data;
-	const openPrs = data?.prs ?? [];
-	const prs = filters.state === "merged" ? (merged?.prs ?? []) : openPrs;
+	const shown = data;
+	const mergedView = filters.state === "merged";
+	const prs = data?.prs ?? [];
 	// Without a review bot, its filter is hidden, so a bookmarked one is
 	// ignored.
 	const reviewBot = data?.reviewBot ?? "";
@@ -211,7 +217,7 @@ function App() {
 	const members = (data?.members ?? []).filter(
 		(m) => !filters.author.length || filters.author.includes(m),
 	);
-	const open = openPrs.filter((p) => !p.draft);
+	const open = prs.filter((p) => !p.draft && !p.mergedAt);
 	const count = (bucket: Bucket) =>
 		open.filter((p) => p.bucket === bucket).length;
 
@@ -219,16 +225,22 @@ function App() {
 		<>
 			<header class="top">
 				<h1>Mission control</h1>
-				<div class="totals">
-					<span>{open.length} open</span>
-					<span class="b-waiting">{count("waiting")} waiting for review</span>
-					<span>
-						{open.filter((p) => p.ready).length} {data?.readyLabel}
-					</span>
-					<span class="b-failing">{count("failing")} CI failing</span>
-					<span class="b-changes">{count("changes")} changes requested</span>
-					<span class="b-approved">{count("approved")} approved</span>
-				</div>
+				{mergedView ? (
+					<div class="totals">
+						<span>{prs.filter((p) => p.mergedAt).length} merged</span>
+					</div>
+				) : (
+					<div class="totals">
+						<span>{open.length} open</span>
+						<span class="b-waiting">{count("waiting")} waiting for review</span>
+						<span>
+							{open.filter((p) => p.ready).length} {data?.readyLabel}
+						</span>
+						<span class="b-failing">{count("failing")} CI failing</span>
+						<span class="b-changes">{count("changes")} changes requested</span>
+						<span class="b-approved">{count("approved")} approved</span>
+					</div>
+				)}
 				<div class="status">
 					{data?.fetchedAt && (
 						<span>updated {ago(data.fetchedAt, now)} ago</span>
@@ -266,7 +278,7 @@ function App() {
 						key={m}
 						login={m}
 						prs={visible.filter((p) => p.author === m)}
-						all={openPrs.filter((p) => p.author === m)}
+						all={prs.filter((p) => p.author === m)}
 						jiraBase={data?.jiraBase ?? ""}
 						reviewBot={reviewBot}
 						now={now}
@@ -291,6 +303,8 @@ function FilterBar(props: {
 }) {
 	const { filters: f, set } = props;
 	const bot = props.reviewBot;
+	// The merged view hides the filters that describe open pull requests.
+	const merged = f.state === "merged";
 	const select = (
 		key: "repo" | "ci" | "review" | "age" | "bot" | "state",
 		options: [string, string][],
@@ -315,26 +329,28 @@ function FilterBar(props: {
 				/>
 				{select("state", [
 					["", "Open"],
-					["merged", "Merged, last 7 days"],
+					["merged", "Merged"],
 				])}
 				{select("repo", [
 					["", "All repos"],
 					...props.repos.map((r): [string, string] => [r, r]),
 				])}
-				{select("ci", [
-					["", "Any CI"],
-					["failure", "CI failing"],
-					["pending", "CI pending"],
-					["success", "CI green"],
-					["none", "No CI"],
-				])}
-				{select("review", [
-					["", "Any review"],
-					["none", "Not reviewed"],
-					["commented", "Commented"],
-					["changes", "Changes requested"],
-					["approved", "Approved"],
-				])}
+				{!merged &&
+					select("ci", [
+						["", "Any CI"],
+						["failure", "CI failing"],
+						["pending", "CI pending"],
+						["success", "CI green"],
+						["none", "No CI"],
+					])}
+				{!merged &&
+					select("review", [
+						["", "Any review"],
+						["none", "Not reviewed"],
+						["commented", "Commented"],
+						["changes", "Changes requested"],
+						["approved", "Approved"],
+					])}
 				{select("age", [
 					["", "Any age"],
 					["-7", "Last 7 days"],
@@ -343,6 +359,7 @@ function FilterBar(props: {
 					[String(OLD_DAYS), `Older than ${OLD_DAYS} days`],
 				])}
 				{bot &&
+					!merged &&
 					select("bot", [
 						["", `Any ${bot}`],
 						["todo", `No ${bot}, or stale`],
@@ -405,7 +422,11 @@ function MemberCard(props: {
 			<summary>
 				<img src={`https://github.com/${login}.png?size=48`} alt="" />
 				<strong>{login}</strong>
-				<span class="muted">{open.length} open</span>
+				<span class="muted">
+					{open.length || !props.all.length
+						? `${open.length} open`
+						: `${props.all.length} merged`}
+				</span>
 				{summary.map((b) => (
 					<span class={`pill b-${b.id}`}>
 						{b.n} {b.title}
