@@ -43,7 +43,7 @@ type Filters = {
 };
 
 // A visit with no query gets the default view: two columns, PRs with the
-// review label, opened in the last 30 days, that nobody has reviewed yet.
+// review label, opened in the last 7 days, that nobody has reviewed yet.
 // The label name comes with the data, so it is set once the first load
 // arrives.
 let wantReadyLabel = false;
@@ -53,7 +53,7 @@ function readFilters(): Filters {
 	if (!location.search) {
 		wantReadyLabel = true;
 		p.set("review", "none");
-		p.set("age", "-30");
+		p.set("age", "-7");
 		p.set("layout", "side");
 	}
 	const list = (key: string) => (p.get(key) ?? "").split(",").filter(Boolean);
@@ -337,6 +337,7 @@ function FilterBar(props: {
 				])}
 				{select("age", [
 					["", "Any age"],
+					["-7", "Last 7 days"],
 					["-30", "Last 30 days"],
 					[String(WARN_DAYS), `Older than ${WARN_DAYS} days`],
 					[String(OLD_DAYS), `Older than ${OLD_DAYS} days`],
