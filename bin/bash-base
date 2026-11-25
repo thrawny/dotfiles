@@ -44,8 +44,9 @@ existing-file() {
   temp_file="$(mktemp)"
 
   header > "${temp_file}"
-  # Remove shebang-line, indent with 2 spaces and clean up whitespace-only lines
-  grep -v "#!/" "$1" | sed -e 's/^/  /g' -e 's/[[:blank:]]*$//g' >> "${temp_file}"
+  # Drop the original shebang, indent with 2 spaces and clean up whitespace-only lines.
+  # Only line 1 is a shebang: a "#!/" later in the body is script content.
+  sed -e '1{/^#!/d;}' -e 's/^/  /' -e 's/[[:blank:]]*$//' "$1" >> "${temp_file}"
   footer >> "${temp_file}"
 
   mv "${temp_file}" "$1"
