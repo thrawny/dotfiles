@@ -889,11 +889,10 @@ function Diff({
 					.map((e) => e.id),
 			),
 	);
+	// The index of the current file, or -1 while the PR description at the
+	// top is in view.
 	const [current, setCurrent] = useState(() =>
-		Math.max(
-			0,
-			entries.findIndex((e) => e.id === focus?.id),
-		),
+		entries.findIndex((e) => e.id === focus?.id),
 	);
 	// A jump owns the current file until its scroll settles.
 	const jumpedAt = useRef(0);
@@ -1031,7 +1030,7 @@ function Diff({
 					index = i;
 					above = false;
 				});
-				setCurrent(index);
+				setCurrent(above ? -1 : index);
 				onCurrentRef.current(above ? null : (entries[index]?.id ?? null));
 			});
 		});
@@ -1120,6 +1119,17 @@ function Diff({
 	}, [entries, collapsed]);
 
 	const jump = (index: number) => {
+		if (index < 0) {
+			setCurrent(-1);
+			onCurrentRef.current(null);
+			jumpedAt.current = Date.now();
+			viewer.current?.scrollTo({
+				type: "position",
+				position: 0,
+				behavior: "instant",
+			});
+			return;
+		}
 		const entry = entries[index];
 		if (!entry) return;
 		setCurrent(index);
@@ -1141,9 +1151,9 @@ function Diff({
 	// The tree selects the current file and keeps it in view.
 	useEffect(() => {
 		const path = entries[current]?.id;
-		if (!path) return;
 		for (const other of tree.getSelectedPaths())
 			if (other !== path) tree.getItem(other)?.deselect();
+		if (!path) return;
 		const item = tree.getItem(path);
 		if (item && !item.isSelected()) item.select();
 		tree.scrollToPath(path, { focus: false, offset: "nearest" });
@@ -1154,7 +1164,7 @@ function Diff({
 			if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event))
 				return;
 			if (event.key === "j") jump(Math.min(current + 1, entries.length - 1));
-			else if (event.key === "k") jump(Math.max(current - 1, 0));
+			else if (event.key === "k") jump(Math.max(current - 1, -1));
 			else if (event.key === "x") {
 				const entry = entries[current];
 				if (entry) toggle(entry.id);
