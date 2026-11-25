@@ -174,25 +174,6 @@ function save(key: string, value: string) {
 	} catch {}
 }
 
-// How much two screens overlap when Space pages through the PR, in pixels.
-const PAGE_OVERLAP = 96;
-// How long a smooth page scroll takes to settle, in milliseconds.
-const PAGE_SETTLE_MS = 500;
-
-// A short-lived bar across the diff at y, measured from the diff's top. Space
-// puts it where the last screen ended, so the eye finds where to read on.
-function markRead(host: HTMLElement, y: number) {
-	for (const old of document.querySelectorAll(".read-mark")) old.remove();
-	const box = host.getBoundingClientRect();
-	const mark = document.createElement("div");
-	mark.className = "read-mark";
-	mark.style.top = `${box.top + y}px`;
-	mark.style.left = `${box.left}px`;
-	mark.style.width = `${box.width}px`;
-	mark.addEventListener("animationend", () => mark.remove());
-	document.body.append(mark);
-}
-
 function isTyping(event: KeyboardEvent) {
 	const target = event.composedPath()[0] as HTMLElement | undefined;
 	return (
@@ -237,6 +218,8 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 	const [unexported, setUnexported] = useState(
 		() => saved("mc-api-private") === "1",
 	);
+	// One file at a time, for a long pull request. Off when a page opens.
+	const [oneFile, setOneFile] = useState(false);
 	const [api, setApi] = useState<ApiState>({
 		view: null,
 		settings: "",
@@ -389,6 +372,15 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 	const changed = modules.filter((m) => moduleStatus(m) !== "unchanged").length;
 	const switcher = (
 		<span class="view-switch">
+			<button
+				type="button"
+				class={oneFile ? "one-file on" : "one-file"}
+				aria-pressed={oneFile}
+				onClick={() => setOneFile(!oneFile)}
+				title="Show one file at a time (f). Space or Tab goes to the next file, Shift goes back."
+			>
+				One file
+			</button>
 			{api.error && (
 				<span class="refused" title={api.error}>
 					No API view
@@ -472,6 +464,8 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 							onCurrent={(id) => {
 								currentId.current = id;
 							}}
+							oneFile={oneFile}
+							setOneFile={setOneFile}
 							openSource={openSource}
 						/>
 					)}
@@ -828,6 +822,8 @@ function Diff({
 	focus,
 	onCurrent,
 	openSource,
+	oneFile,
+	setOneFile,
 }: {
 	entries: Entry[];
 	prUrl: string;
@@ -836,6 +832,10 @@ function Diff({
 	focus: Focus | null;
 	onCurrent: (id: string | null) => void;
 	openSource: (module: ApiModule, at: "base" | "head", line: number) => void;
+	// One file at a time: the viewer holds the current file only, or the
+	// description alone before the first file.
+	oneFile: boolean;
+	setOneFile: (on: boolean) => void;
 }) {
 	// The viewer measures this element and scrolls it with the files.
 	const headerHost = useMemo(() => document.createElement("div"), []);
@@ -920,6 +920,8 @@ function Diff({
 	openSourceRef.current = openSource;
 	const onCurrentRef = useRef(onCurrent);
 	onCurrentRef.current = onCurrent;
+	const oneFileRef = useRef(oneFile);
+	oneFileRef.current = oneFile;
 	const hasModules = useMemo(() => entries.some((e) => e.module), [entries]);
 
 	const toggle = (path: string) =>
@@ -1040,6 +1042,8 @@ function Diff({
 		const unsubscribe = view.subscribeToScroll((top) => {
 			cancelAnimationFrame(frame);
 			frame = requestAnimationFrame(() => {
+				// With one file shown, the current file is the one shown.
+				if (oneFileRef.current) return;
 				if (Date.now() - jumpedAt.current < 400) return;
 				let index = 0;
 				let above = true;
@@ -1075,10 +1079,17 @@ function Diff({
 		[entries],
 	);
 	const focused = useRef(false);
+	const wasOneFile = useRef(oneFile);
 	useEffect(() => {
 		const view = viewer.current;
 		if (!view) return;
-		const items = entries.map((e): CodeViewItem<undefined> => {
+		// Before the first file, one file at a time shows the description only.
+		const shownEntries = oneFile
+			? current >= 0
+				? entries.slice(current, current + 1)
+				: []
+			: entries;
+		const items = shownEntries.map((e): CodeViewItem<undefined> => {
 			// A deleted file shows as its header line only.
 			const isCollapsed = collapsed.has(e.id) || staysShut(e);
 			const known = view.getItem(e.id);
@@ -1105,6 +1116,25 @@ function Diff({
 			};
 		});
 		view.setItems(items);
+		const left = wasOneFile.current && !oneFile;
+		wasOneFile.current = oneFile;
+		if (oneFile) {
+			// Each file starts at its top.
+			jumpedAt.current = Date.now();
+			view.scrollTo({ type: "position", position: 0, behavior: "instant" });
+			return;
+		}
+		if (left) {
+			// Back to all files, at the file that was shown.
+			jumpedAt.current = Date.now();
+			const entry = entries[current];
+			view.scrollTo(
+				entry
+					? { type: "item", id: entry.id, align: "start", behavior: "instant" }
+					: { type: "position", position: 0, behavior: "instant" },
+			);
+			return;
+		}
 		// The description takes the code's background in dark mode. The diff
 		// library sets that colour inside each file's shadow root, out of
 		// reach of the page's CSS, so it is copied out once a file renders.
@@ -1145,9 +1175,16 @@ function Diff({
 				range: { start: focus.line, end: focus.line, side },
 			});
 		}
-	}, [entries, collapsed]);
+	}, [entries, collapsed, oneFile, oneFile ? current : null]);
 
 	const jump = (index: number) => {
+		if (oneFile) {
+			// The viewer shows the new file when the items change.
+			if (index >= entries.length) return;
+			setCurrent(Math.max(index, -1));
+			onCurrentRef.current(entries[index]?.id ?? null);
+			return;
+		}
 		if (index < 0) {
 			setCurrent(-1);
 			onCurrentRef.current(null);
@@ -1188,35 +1225,21 @@ function Diff({
 		tree.scrollToPath(path, { focus: false, offset: "nearest" });
 	}, [current, tree]);
 
-	// Space scrolls the whole PR one screen down, and Shift+Space one screen
-	// up. The screens overlap by a few lines. A press during the smooth scroll
-	// pages on from where that scroll is going, not from where it is.
-	const paging = useRef({ target: 0, at: 0 });
-	// The diff element is the scroll box, and its scroll height includes the
-	// description, which the CodeView's own sizes leave out.
-	const page = (direction: 1 | -1) => {
-		const host = root.current;
-		if (!host) return;
-		const top =
-			Date.now() - paging.current.at < PAGE_SETTLE_MS
-				? paging.current.target
-				: host.scrollTop;
-		const height = host.clientHeight;
-		const step = Math.max(height - PAGE_OVERLAP, height / 2);
-		const max = Math.max(0, host.scrollHeight - height);
-		const target = Math.min(max, Math.max(0, top + direction * step));
-		if (target === top) return;
-		paging.current = { target, at: Date.now() };
-		host.scrollTo({ top: target, behavior: "smooth" });
-		// The old screen's bottom edge, or its top edge going back, lands here.
-		markRead(host, direction > 0 ? top + height - target : top - target);
-	};
-
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
 			if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event))
 				return;
-			if (event.key === " ") page(event.shiftKey ? -1 : 1);
+			// Space and Tab show the next file, and Shift the one before. Either
+			// turns on one file at a time.
+			if (event.key === " " || event.key === "Tab") {
+				const next = Math.min(
+					Math.max(current + (event.shiftKey ? -1 : 1), -1),
+					entries.length - 1,
+				);
+				if (!oneFile) setOneFile(true);
+				setCurrent(next);
+				onCurrentRef.current(entries[next]?.id ?? null);
+			} else if (event.key === "f") setOneFile(!oneFile);
 			// Home and End work without a click in the diff first.
 			else if (event.key === "Home") jump(-1);
 			else if (event.key === "End")
@@ -1233,13 +1256,13 @@ function Diff({
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [current, entries]);
+	}, [current, entries, oneFile]);
 
 	return (
 		<div class={hasModules ? "review-body api-view" : "review-body"}>
 			<nav class="file-list" ref={treeHost} />
 			<div class="diff-view" ref={root} />
-			{createPortal(header, headerHost)}
+			{createPortal(oneFile && current >= 0 ? null : header, headerHost)}
 		</div>
 	);
 }
