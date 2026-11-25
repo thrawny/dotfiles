@@ -161,23 +161,25 @@ rex.action{
 
 -- Home Manager writes Ghostty's colors, font and padding beside this file.
 -- The settings belong to the app, so this only offers an action that sets
--- them: run "Match Ghostty Look" from the command palette while the app shows
--- this Mac. A second import of the same theme fails, which leaves the theme
--- already selected.
+-- them, with Herdr's sidebar on the left: run "Apply Dotfiles Look" from the
+-- command palette while the app shows this Mac. A second import of the same
+-- theme fails, which leaves the theme already selected.
 local look_file = io.open((os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config"))
   .. "/rex/ghostty-look.json")
 if look_file then
   local look = rex.json.decode(look_file:read("*a"))
   look_file:close()
   rex.action{
-    name = "ghostty_look",
-    title = "Match Ghostty Look",
-    keywords = "ghostty theme font monokai appearance dark",
+    name = "dotfiles_look",
+    title = "Apply Dotfiles Look",
+    keywords = "ghostty theme font monokai appearance dark sidebar tabs left",
     run = function()
       local function set(name, value)
         rex.client.queue("client.setting." .. name, { value = value })
       end
       set("interface.appearance.scheme", "dark")
+      -- Tabs down the left side; the "above" layout shows no sidebar.
+      set("interface.toolbar.layout", "left")
       set("terminal.typography.font", look.font)
       set("terminal.typography.size", look.size)
       set("terminal.advanced_fonts.synthesize", look.synthesize)

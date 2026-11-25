@@ -39,9 +39,9 @@ These replace Rex's Cmd+1–9 tab keys and its Cmd+K session switcher. Cmd+P sti
 
 The sidebar's look, such as vertical tabs and the Activity grouping, stays an app setting.
 
-## Ghostty look
+## Look
 
-Home Manager writes Ghostty's colors to `~/.config/rex/themes/Dotfiles Monokai`, and its font, size and padding to `~/.config/rex/ghostty-look.json`. Both come from the Ghostty settings in `nix/home`. Run Match Ghostty Look from the command palette while the app shows the Mac. It sets the dark appearance, the font, size, padding, cursor and Option key, then imports and selects the theme.
+Home Manager writes Ghostty's colors to `~/.config/rex/themes/Dotfiles Monokai`, and its font, size and padding to `~/.config/rex/ghostty-look.json`. Both come from the Ghostty settings in `nix/home`. Run Apply Dotfiles Look from the command palette while the app shows the Mac. It puts the sidebar on the left, sets the dark appearance, the font, size, padding, cursor and Option key, then imports and selects the theme. Rex's default toolbar layout, tabs above the panes, shows no sidebar.
 
 The app keeps these settings, so a later change to the Ghostty theme needs the old theme deleted in the app and the action run again. Importing a theme whose name already exists fails.
 

@@ -26,7 +26,7 @@ let
     ++ map (entry: "palette = ${entry}") (lib.toList ghostty.palette)
   );
   themeName = "Dotfiles Monokai";
-  # What init.lua's Match Ghostty Look action applies in the Rex app.
+  # What init.lua's Apply Dotfiles Look action applies in the Rex app.
   ghosttyLook = {
     theme = "${config.xdg.configHome}/rex/themes/${themeName}";
     font = lib.head (lib.toList ghostty.font-family);
