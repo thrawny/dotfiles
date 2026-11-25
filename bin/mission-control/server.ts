@@ -34,7 +34,7 @@ const CACHE_MS = 2 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const MEMBERS_MS = DAY_MS;
 // The list shows pull requests merged in this many days, behind its filter.
-const MERGED_DAYS = 14;
+const MERGED_DAYS = 7;
 // Changed files of the pull requests opened lately, by head commit.
 const FILES_KEPT = 30;
 
@@ -94,9 +94,20 @@ type Snapshot = {
 };
 
 let members: { list: string[]; at: number } | null = null;
-let last: Snapshot | null = null;
-let lastError: string | null = null;
-let inflight: Promise<void> | null = null;
+// Open pull requests load on every visit. Merged ones are many more, so
+// they load only when the page asks for them, and are cached apart.
+type Kind = "open" | "merged";
+const lists: Record<
+	Kind,
+	{
+		last: Snapshot | null;
+		error: string | null;
+		inflight: Promise<void> | null;
+	}
+> = {
+	open: { last: null, error: null, inflight: null },
+	merged: { last: null, error: null, inflight: null },
+};
 
 async function teamList(gh: Client): Promise<string[]> {
 	if (!members || Date.now() - members.at > MEMBERS_MS)
@@ -109,20 +120,21 @@ async function teamList(gh: Client): Promise<string[]> {
 	return members.list;
 }
 
-async function refresh() {
+async function refresh(kind: Kind) {
 	const gh = client(token());
 	const team = await teamList(gh);
 	const now = Date.now();
 	const since = new Date(now - MERGED_DAYS * DAY_MS).toISOString().slice(0, 10);
 	const raw = (
 		await Promise.all(
-			team.flatMap((login) => [
-				openPRs(gh, org, login),
-				mergedPRs(gh, org, login, since),
-			]),
+			team.map((login) =>
+				kind === "merged"
+					? mergedPRs(gh, org, login, since)
+					: openPRs(gh, org, login),
+			),
 		)
 	).flat();
-	last = {
+	lists[kind].last = {
 		fetchedAt: new Date(now).toISOString(),
 		members: team,
 		prs: raw
@@ -133,25 +145,28 @@ async function refresh() {
 					Date.parse(a.createdAt) - Date.parse(b.createdAt),
 			),
 	};
-	lastError = null;
+	lists[kind].error = null;
 }
 
-async function snapshot(fresh: boolean) {
-	const age = last ? Date.now() - Date.parse(last.fetchedAt) : Infinity;
+async function snapshot(fresh: boolean, kind: Kind = "open") {
+	const list = lists[kind];
+	const age = list.last
+		? Date.now() - Date.parse(list.last.fetchedAt)
+		: Infinity;
 	if (fresh || age > CACHE_MS) {
-		inflight ??= refresh()
+		list.inflight ??= refresh(kind)
 			.catch((error: Error) => {
-				lastError = error.message;
+				list.error = error.message;
 				console.error(`mission-control: ${error.message}`);
 			})
 			.finally(() => {
-				inflight = null;
+				list.inflight = null;
 			});
-		await inflight;
+		await list.inflight;
 	}
 	return {
-		...(last ?? { fetchedAt: null, members: [], prs: [] }),
-		error: lastError,
+		...(list.last ?? { fetchedAt: null, members: [], prs: [] }),
+		error: list.error,
 		readyLabel,
 		jiraBase,
 		reviewBot,
@@ -430,8 +445,9 @@ const server = Bun.serve({
 		"/theme.css": () =>
 			new Response(theme, { headers: { "content-type": "text/css" } }),
 		"/api/prs": async (req) => {
-			const fresh = new URL(req.url).searchParams.has("fresh");
-			return Response.json(await snapshot(fresh));
+			const params = new URL(req.url).searchParams;
+			const kind = params.get("state") === "merged" ? "merged" : "open";
+			return Response.json(await snapshot(params.has("fresh"), kind));
 		},
 		// POST only: other methods, a CORS preflight among them, get no route.
 		"/api/pr/:repo/:number/review": {

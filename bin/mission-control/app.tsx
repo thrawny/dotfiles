@@ -1,5 +1,5 @@
 import { render } from "preact";
-import { useEffect, useMemo, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { BUCKETS, type Bucket, OLD_DAYS, type PR, WARN_DAYS } from "./model.ts";
 import { Review } from "./review.tsx";
 import {
@@ -127,12 +127,22 @@ function App() {
 	const [loading, setLoading] = useState(false);
 	const [filters, setFilters] = useState(readFilters);
 	const [now, setNow] = useState(Date.now());
+	// Merged pull requests load only while their filter is on.
+	const [merged, setMerged] = useState<Data | null>(null);
+	const wantMerged = useRef(false);
+	wantMerged.current = filters.state === "merged";
+
+	const loadMerged = async (fresh = false) => {
+		const res = await fetch(`/api/prs?state=merged${fresh ? "&fresh=1" : ""}`);
+		setMerged(await res.json());
+	};
 
 	const load = async (fresh = false) => {
 		setLoading(true);
 		try {
 			const res = await fetch(fresh ? "/api/prs?fresh=1" : "/api/prs");
 			setData(await res.json());
+			if (wantMerged.current) await loadMerged(fresh);
 		} catch (error) {
 			setData((d) => (d ? { ...d, error: String(error) } : d));
 		} finally {
@@ -163,6 +173,15 @@ function App() {
 
 	useEffect(() => writeFilters(filters), [filters]);
 	useEffect(() => {
+		if (filters.state !== "merged" || merged) return;
+		setLoading(true);
+		loadMerged()
+			.catch((error) =>
+				setMerged((d) => (d ? { ...d, error: String(error) } : d)),
+			)
+			.finally(() => setLoading(false));
+	}, [filters.state]);
+	useEffect(() => {
 		if (!data || !wantReadyLabel) return;
 		wantReadyLabel = false;
 		setFilters((f) => ({ ...f, label: [data.readyLabel] }));
@@ -170,7 +189,9 @@ function App() {
 	const set = (patch: Partial<Filters>) =>
 		setFilters((f) => ({ ...f, ...patch }));
 
-	const prs = data?.prs ?? [];
+	const shown = filters.state === "merged" ? merged : data;
+	const openPrs = data?.prs ?? [];
+	const prs = filters.state === "merged" ? (merged?.prs ?? []) : openPrs;
 	// Without a review bot, its filter is hidden, so a bookmarked one is
 	// ignored.
 	const reviewBot = data?.reviewBot ?? "";
@@ -190,7 +211,7 @@ function App() {
 	const members = (data?.members ?? []).filter(
 		(m) => !filters.author.length || filters.author.includes(m),
 	);
-	const open = prs.filter((p) => !p.draft && !p.mergedAt);
+	const open = openPrs.filter((p) => !p.draft);
 	const count = (bucket: Bucket) =>
 		open.filter((p) => p.bucket === bucket).length;
 
@@ -224,10 +245,10 @@ function App() {
 					<ThemeButton />
 				</div>
 			</header>
-			{data?.error && (
+			{shown?.error && (
 				<p class="error">
-					GitHub fetch failed: {data.error}
-					{data.fetchedAt ? " Showing the last good data." : ""}
+					GitHub fetch failed: {shown.error}
+					{shown.fetchedAt ? " Showing the last good data." : ""}
 				</p>
 			)}
 			<FilterBar
@@ -238,14 +259,14 @@ function App() {
 				labels={labels}
 				reviewBot={reviewBot}
 			/>
-			{!data && <p class="muted">Loading pull requests…</p>}
+			{!shown && <p class="muted">Loading pull requests…</p>}
 			<main class={filters.side ? "cards side" : "cards"}>
 				{members.map((m) => (
 					<MemberCard
 						key={m}
 						login={m}
 						prs={visible.filter((p) => p.author === m)}
-						all={prs.filter((p) => p.author === m)}
+						all={openPrs.filter((p) => p.author === m)}
 						jiraBase={data?.jiraBase ?? ""}
 						reviewBot={reviewBot}
 						now={now}
@@ -294,7 +315,7 @@ function FilterBar(props: {
 				/>
 				{select("state", [
 					["", "Open"],
-					["merged", "Merged, last 14 days"],
+					["merged", "Merged, last 7 days"],
 				])}
 				{select("repo", [
 					["", "All repos"],
