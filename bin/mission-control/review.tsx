@@ -1105,6 +1105,16 @@ function Diff({
 			};
 		});
 		view.setItems(items);
+		// The description takes the code's background in dark mode. The diff
+		// library sets that colour inside each file's shadow root, out of
+		// reach of the page's CSS, so it is copied out once a file renders.
+		requestAnimationFrame(() => {
+			const file = root.current?.querySelector("diffs-container");
+			const bg = file
+				? getComputedStyle(file).getPropertyValue("--diffs-dark-bg").trim()
+				: "";
+			if (bg) root.current?.style.setProperty("--code-dark-bg", bg);
+		});
 		if (focused.current || !focus || !byId.has(focus.id)) return;
 		focused.current = true;
 		jumpedAt.current = Date.now();

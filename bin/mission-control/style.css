@@ -547,6 +547,16 @@ body.review-mode {
 	--borderColor-accent-emphasis: var(--accent);
 	--focus-outlineColor: var(--accent);
 }
+/* In dark mode, the description has the same background as the code below
+   it. The review page copies the code's colour into --code-dark-bg. */
+:root[data-theme="dark"] .description.markdown-body {
+	--bgColor-default: var(--code-dark-bg, var(--bg));
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) .description.markdown-body {
+		--bgColor-default: var(--code-dark-bg, var(--bg));
+	}
+}
 .review-body {
 	flex: 1;
 	min-height: 0;
