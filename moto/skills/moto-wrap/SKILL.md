@@ -7,6 +7,8 @@ description: End a session's work, stop what it started, and report wrap to the 
 
 The user runs this, or asks for it in words, in a session whose work is over: a moto worker, or a session they started by hand, which `moto report` makes a task so the driver can clean up after it. Close out the work in order, then report `wrap` to the driver.
 
+In a T3 Code thread that the T3 driver supervises, the moto CLI does not know the task, and the moto-t3 skill says how its worker reports. Follow the same steps, but cancel the helpers you started with `task_cancel` instead of `moto close`, and end by sending the driver thread `report wrap: <summary>` with `t3_thread_send` instead of running `moto report wrap`.
+
 When the user makes the wrap depend on something, as in "push it, and wrap if CI is green", do the work first and check the condition. Wrap only if it holds. If it doesn't, don't wrap: say what failed and wait for the user, and report `question` with it if moto tracks this session. Leave the task's tickets as they are: the driver updates them.
 
 1. **Check the agreed work is finished.** Compare what you did against your brief, if the driver gave you one, and against everything you agreed with the user. If any of it is unfinished, stop and ask the user how to proceed, then start again from this step. Done when every agreed item is finished or the user has said what to do with it.

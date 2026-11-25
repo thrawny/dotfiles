@@ -64,7 +64,12 @@ RETIRED_SETTINGS = ("user_window_minutes",)
 # Character limits for the docs moto's rules live in, tentative. A [doc_limits]
 # table in MOTO_HOME/settings.toml adds files under MOTO_HOME, as in
 # "roles/driver.md" = 15000.
-DOC_LIMITS = {"MODEL.md": 6000, "skills/moto/SKILL.md": 6000}
+DOC_LIMITS = {
+    "MODEL.md": 6000,
+    "skills/moto/SKILL.md": 6000,
+    "skills/moto-t3/SKILL.md": 6000,
+    "skills/moto-t3-driver/SKILL.md": 6000,
+}
 # The context must grow this much after one /compact before the next.
 COMPACT_GROWTH = 200_000
 # The parts of a reply's usage that together are the context Claude sent.

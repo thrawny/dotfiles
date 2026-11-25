@@ -9,6 +9,8 @@ disable-model-invocation: true
 
 The user runs this in a moto worker's pane, or in a session they started by hand, when the task has to wait, for example on a review or on another team. Get the worker ready to park, then report `snooze` to the driver, which runs `moto snooze`. Never run `moto snooze` on yourself: it closes your own pane mid-turn.
 
+In a T3 Code thread that the T3 driver supervises, the moto CLI does not know the task, and the moto-t3 skill says how its worker reports. Follow the same steps, but cancel the helpers you started with `task_cancel` instead of `moto close`, and end by sending the driver thread `report snooze: <what it waits on>` with `t3_thread_send` instead of running `moto report snooze`. The driver snoozes the thread in T3, and the thread and its checkout stay.
+
 1. **Know what the task waits on.** The user's argument says it:
 
    $ARGUMENTS

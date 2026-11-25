@@ -70,3 +70,6 @@ moto adds nothing that Herdr already shows or does by itself.
 - `moto --help`: commands, state files, and how the watch works.
 - `skills/moto/SKILL.md`: the worker's side of each command.
 - `moto doc-sizes`: warns when this file or another moto doc grows past its limit.
+- `skills/moto-t3-driver/SKILL.md` and `skills/moto-t3/SKILL.md`: the same model in T3 Code, where T3's tools take the place of the moto CLI.
+
+A change to this model updates both mechanisms, the moto code and the T3 skills, or its commit says why one needs no change.
