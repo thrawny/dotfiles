@@ -174,6 +174,25 @@ function save(key: string, value: string) {
 	} catch {}
 }
 
+// How much two screens overlap when Space pages through the PR, in pixels.
+const PAGE_OVERLAP = 96;
+// How long a smooth page scroll takes to settle, in milliseconds.
+const PAGE_SETTLE_MS = 500;
+
+// A short-lived bar across the diff at y, measured from the diff's top. Space
+// puts it where the last screen ended, so the eye finds where to read on.
+function markRead(host: HTMLElement, y: number) {
+	for (const old of document.querySelectorAll(".read-mark")) old.remove();
+	const box = host.getBoundingClientRect();
+	const mark = document.createElement("div");
+	mark.className = "read-mark";
+	mark.style.top = `${box.top + y}px`;
+	mark.style.left = `${box.left}px`;
+	mark.style.width = `${box.width}px`;
+	mark.addEventListener("animationend", () => mark.remove());
+	document.body.append(mark);
+}
+
 function isTyping(event: KeyboardEvent) {
 	const target = event.composedPath()[0] as HTMLElement | undefined;
 	return (
@@ -1159,11 +1178,37 @@ function Diff({
 		tree.scrollToPath(path, { focus: false, offset: "nearest" });
 	}, [current, tree]);
 
+	// Space scrolls the whole PR one screen down, and Shift+Space one screen
+	// up. The screens overlap by a few lines. A press during the smooth scroll
+	// pages on from where that scroll is going, not from where it is.
+	const paging = useRef({ target: 0, at: 0 });
+	// The diff element is the scroll box, and its scroll height includes the
+	// description, which the CodeView's own sizes leave out.
+	const page = (direction: 1 | -1) => {
+		const host = root.current;
+		if (!host) return;
+		const top =
+			Date.now() - paging.current.at < PAGE_SETTLE_MS
+				? paging.current.target
+				: host.scrollTop;
+		const height = host.clientHeight;
+		const step = Math.max(height - PAGE_OVERLAP, height / 2);
+		const max = Math.max(0, host.scrollHeight - height);
+		const target = Math.min(max, Math.max(0, top + direction * step));
+		if (target === top) return;
+		paging.current = { target, at: Date.now() };
+		host.scrollTo({ top: target, behavior: "smooth" });
+		// The old screen's bottom edge, or its top edge going back, lands here.
+		markRead(host, direction > 0 ? top + height - target : top - target);
+	};
+
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
 			if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event))
 				return;
-			if (event.key === "j") jump(Math.min(current + 1, entries.length - 1));
+			if (event.key === " ") page(event.shiftKey ? -1 : 1);
+			else if (event.key === "j")
+				jump(Math.min(current + 1, entries.length - 1));
 			else if (event.key === "k") jump(Math.max(current - 1, -1));
 			else if (event.key === "x") {
 				const entry = entries[current];

@@ -675,3 +675,22 @@ body.review-mode {
 	justify-content: flex-end;
 	gap: 0.4rem;
 }
+
+/* The bar Space leaves where the last screen ended. */
+.read-mark {
+	position: fixed;
+	z-index: 20;
+	height: 2px;
+	background: var(--accent);
+	pointer-events: none;
+	animation: read-mark 1.6s ease-out forwards;
+}
+@keyframes read-mark {
+	0%,
+	60% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+	}
+}
