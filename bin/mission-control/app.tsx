@@ -35,6 +35,8 @@ type Filters = {
 	review: string;
 	age: string;
 	bot: string;
+	// "" shows open pull requests, "merged" the recently merged ones.
+	state: string;
 	q: string;
 	drafts: boolean;
 	side: boolean;
@@ -63,6 +65,7 @@ function readFilters(): Filters {
 		review: p.get("review") ?? "",
 		age: p.get("age") ?? "",
 		bot: p.get("bot") ?? "",
+		state: p.get("state") ?? "",
 		q: p.get("q") ?? "",
 		drafts: p.get("drafts") === "1",
 		side: p.get("layout") === "side",
@@ -73,7 +76,15 @@ function writeFilters(f: Filters) {
 	const p = new URLSearchParams();
 	if (f.author.length) p.set("author", f.author.join(","));
 	if (f.label.length) p.set("label", f.label.join(","));
-	for (const key of ["repo", "ci", "review", "age", "bot", "q"] as const)
+	for (const key of [
+		"repo",
+		"ci",
+		"review",
+		"age",
+		"bot",
+		"state",
+		"q",
+	] as const)
 		if (f[key]) p.set(key, f[key]);
 	if (f.drafts) p.set("drafts", "1");
 	// Layout is always written, so a view without filters keeps a query and
@@ -83,6 +94,7 @@ function writeFilters(f: Filters) {
 }
 
 function matches(pr: PR, f: Filters): boolean {
+	if ((f.state === "merged") !== (pr.mergedAt !== null)) return false;
 	if (!f.drafts && pr.draft) return false;
 	if (f.author.length && !f.author.includes(pr.author)) return false;
 	if (
@@ -178,7 +190,7 @@ function App() {
 	const members = (data?.members ?? []).filter(
 		(m) => !filters.author.length || filters.author.includes(m),
 	);
-	const open = prs.filter((p) => !p.draft);
+	const open = prs.filter((p) => !p.draft && !p.mergedAt);
 	const count = (bucket: Bucket) =>
 		open.filter((p) => p.bucket === bucket).length;
 
@@ -259,7 +271,7 @@ function FilterBar(props: {
 	const { filters: f, set } = props;
 	const bot = props.reviewBot;
 	const select = (
-		key: "repo" | "ci" | "review" | "age" | "bot",
+		key: "repo" | "ci" | "review" | "age" | "bot" | "state",
 		options: [string, string][],
 	) => (
 		<select
@@ -280,6 +292,10 @@ function FilterBar(props: {
 					value={f.q}
 					onInput={(e) => set({ q: (e.target as HTMLInputElement).value })}
 				/>
+				{select("state", [
+					["", "Open"],
+					["merged", "Merged, last 14 days"],
+				])}
 				{select("repo", [
 					["", "All repos"],
 					...props.repos.map((r): [string, string] => [r, r]),
@@ -358,8 +374,8 @@ function MemberCard(props: {
 	now: number;
 }) {
 	const { login, prs } = props;
-	const open = props.all.filter((p) => !p.draft);
-	const summary = BUCKETS.filter((b) => b.id !== "draft")
+	const open = props.all.filter((p) => !p.draft && !p.mergedAt);
+	const summary = BUCKETS.filter((b) => b.id !== "draft" && b.id !== "merged")
 		.map((b) => ({ ...b, n: open.filter((p) => p.bucket === b.id).length }))
 		.filter((b) => b.n);
 	return (
@@ -376,6 +392,11 @@ function MemberCard(props: {
 			</summary>
 			{BUCKETS.map((b) => {
 				const rows = prs.filter((p) => p.bucket === b.id);
+				// Merged pull requests list the newest merge first.
+				if (b.id === "merged")
+					rows.sort((x, y) =>
+						(y.mergedAt ?? "").localeCompare(x.mergedAt ?? ""),
+					);
 				if (!rows.length) return null;
 				return (
 					<section class="bucket">
@@ -477,9 +498,14 @@ function Row({
 			)}
 			<span
 				class={`age a-${pr.ageLevel}${pr.approvedIdle ? " idle" : ""}`}
-				title={`opened ${ago(pr.createdAt, now)} ago, updated ${ago(pr.updatedAt, now)} ago${pr.approvedIdle ? ", approved but not merged for over 2 days" : ""}`}
+				title={
+					pr.mergedAt
+						? `opened ${ago(pr.createdAt, now)} ago, merged ${ago(pr.mergedAt, now)} ago`
+						: `opened ${ago(pr.createdAt, now)} ago, updated ${ago(pr.updatedAt, now)} ago${pr.approvedIdle ? ", approved but not merged for over 2 days" : ""}`
+				}
 			>
-				{ago(pr.createdAt, now)}
+				{/* A merged pull request shows how long ago it was merged. */}
+				{ago(pr.mergedAt ?? pr.createdAt, now)}
 				{pr.approvedIdle && " ⏸"}
 			</span>
 		</div>

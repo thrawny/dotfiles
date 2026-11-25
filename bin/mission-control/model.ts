@@ -8,6 +8,8 @@ export type RawPR = {
 	isDraft: boolean;
 	createdAt: string;
 	updatedAt: string;
+	// When the pull request was merged, or null while it is open.
+	mergedAt: string | null;
 	headRefName: string;
 	headRefOid: string;
 	additions: number;
@@ -39,7 +41,8 @@ export type Bucket =
 	| "waiting"
 	| "approved"
 	| "open"
-	| "draft";
+	| "draft"
+	| "merged";
 export type AgeLevel = "ok" | "warn" | "old";
 
 // The newest review a review bot left on a pull request, read from the
@@ -60,6 +63,7 @@ export type PR = {
 	draft: boolean;
 	createdAt: string;
 	updatedAt: string;
+	mergedAt: string | null;
 	jiraKey: string | null;
 	ci: CI;
 	reviewed: Reviewed;
@@ -83,6 +87,7 @@ export const BUCKETS: { id: Bucket; title: string }[] = [
 	{ id: "approved", title: "Approved, not merged" },
 	{ id: "open", title: "Open, not marked ready" },
 	{ id: "draft", title: "Draft" },
+	{ id: "merged", title: "Merged" },
 ];
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -214,6 +219,7 @@ export function toPR(
 		raw.reviewDecision === "APPROVED" ||
 		(raw.reviewDecision === null && reviewed === "approved");
 	const ageDays = (opts.now - Date.parse(raw.createdAt)) / DAY;
+	const merged = raw.mergedAt !== null;
 	const approvedAt = Math.max(
 		0,
 		...reviews
@@ -230,6 +236,7 @@ export function toPR(
 		draft: raw.isDraft,
 		createdAt: raw.createdAt,
 		updatedAt: raw.updatedAt,
+		mergedAt: raw.mergedAt,
 		jiraKey: jiraKey(raw.title, raw.headRefName, opts.jiraProjects),
 		ci,
 		reviewed,
@@ -244,23 +251,27 @@ export function toPR(
 			raw.headRefOid,
 			opts.reviewMarker,
 		),
-		bucket: raw.isDraft
-			? "draft"
-			: changes
-				? "changes"
-				: ci === "failure"
-					? "failing"
-					: approved
-						? "approved"
-						: ready
-							? "waiting"
-							: "open",
+		bucket: merged
+			? "merged"
+			: raw.isDraft
+				? "draft"
+				: changes
+					? "changes"
+					: ci === "failure"
+						? "failing"
+						: approved
+							? "approved"
+							: ready
+								? "waiting"
+								: "open",
 		ageDays,
-		ageLevel: ageLevel(ageDays),
+		// A merged pull request is done, so its age is no warning.
+		ageLevel: merged ? "ok" : ageLevel(ageDays),
 		additions: raw.additions,
 		deletions: raw.deletions,
 		files: raw.changedFiles,
 		approvedIdle:
+			!merged &&
 			approved &&
 			approvedAt > 0 &&
 			opts.now - approvedAt > APPROVED_IDLE_DAYS * DAY,

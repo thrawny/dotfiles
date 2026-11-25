@@ -23,6 +23,7 @@ function raw(patch: Partial<RawPR> = {}): RawPR {
 		isDraft: false,
 		createdAt: daysAgo(1),
 		updatedAt: daysAgo(1),
+		mergedAt: null,
 		headRefName: "feat/foo",
 		headRefOid: "abc1234def",
 		additions: 10,
@@ -94,6 +95,18 @@ describe("botReviewState", () => {
 
 describe("toPR bucket", () => {
 	const ready = { nodes: [{ name: "ready-for-review", color: "0e8a16" }] };
+	test("a merged PR is merged, whatever its review and CI say", () => {
+		const pr = toPR(
+			raw({
+				mergedAt: daysAgo(0),
+				createdAt: daysAgo(40),
+				reviewDecision: "CHANGES_REQUESTED",
+			}),
+			opts,
+		);
+		expect(pr.bucket).toBe("merged");
+		expect(pr.ageLevel).toBe("ok");
+	});
 	test("draft wins over everything", () => {
 		expect(
 			toPR(raw({ isDraft: true, reviewDecision: "CHANGES_REQUESTED" }), opts)

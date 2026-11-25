@@ -11,6 +11,7 @@ import {
 	client,
 	gitattributes,
 	mergeBase,
+	mergedPRs,
 	openPRs,
 	postReview,
 	prFiles,
@@ -30,7 +31,10 @@ import {
 } from "./model.ts";
 
 const CACHE_MS = 2 * 60 * 1000;
-const MEMBERS_MS = 24 * 60 * 60 * 1000;
+const DAY_MS = 24 * 60 * 60 * 1000;
+const MEMBERS_MS = DAY_MS;
+// The list shows pull requests merged in this many days, behind its filter.
+const MERGED_DAYS = 14;
 // Changed files of the pull requests opened lately, by head commit.
 const FILES_KEPT = 30;
 
@@ -109,8 +113,14 @@ async function refresh() {
 	const gh = client(token());
 	const team = await teamList(gh);
 	const now = Date.now();
+	const since = new Date(now - MERGED_DAYS * DAY_MS).toISOString().slice(0, 10);
 	const raw = (
-		await Promise.all(team.map((login) => openPRs(gh, org, login)))
+		await Promise.all(
+			team.flatMap((login) => [
+				openPRs(gh, org, login),
+				mergedPRs(gh, org, login, since),
+			]),
+		)
 	).flat();
 	last = {
 		fetchedAt: new Date(now).toISOString(),

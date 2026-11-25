@@ -579,9 +579,8 @@ function Strip({
 				</a>
 				<span class="strip-end">
 					{tools}
-					{data.viewer.toLowerCase() !== pr.author.toLowerCase() && (
-						<Verdict data={data} reload={reload} />
-					)}
+					{data.viewer.toLowerCase() !== pr.author.toLowerCase() &&
+						!pr.mergedAt && <Verdict data={data} reload={reload} />}
 					<ThemeButton />
 				</span>
 			</div>

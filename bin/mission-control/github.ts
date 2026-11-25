@@ -11,7 +11,7 @@ const FILE_PAGES = 30;
 const PAGE = 30;
 
 const PR_FIELDS = `
-  number title url isDraft createdAt updatedAt headRefName headRefOid
+  number title url isDraft createdAt updatedAt mergedAt headRefName headRefOid
   additions deletions changedFiles
   reviewDecision
   author { login }
@@ -70,16 +70,37 @@ export async function teamMembers(
 	return found.members.nodes.map((m) => m.login).sort(caseless);
 }
 
-export async function openPRs(
+export function openPRs(
 	gh: Client,
 	org: string,
 	author: string,
 ): Promise<RawPR[]> {
+	return searchPRs(
+		gh,
+		`is:pr is:open archived:false org:${org} author:${author}`,
+	);
+}
+
+// The author's pull requests merged on or after the day `since`, such as
+// `2026-11-11`.
+export function mergedPRs(
+	gh: Client,
+	org: string,
+	author: string,
+	since: string,
+): Promise<RawPR[]> {
+	return searchPRs(
+		gh,
+		`is:pr is:merged archived:false org:${org} author:${author} merged:>=${since}`,
+	);
+}
+
+async function searchPRs(gh: Client, q: string): Promise<RawPR[]> {
 	const prs: RawPR[] = [];
 	let after: string | null = null;
 	do {
 		const result: SearchResult = await gh<SearchResult>(PR_QUERY, {
-			q: `is:pr is:open archived:false org:${org} author:${author}`,
+			q,
 			after,
 		});
 		prs.push(...result.search.nodes);
