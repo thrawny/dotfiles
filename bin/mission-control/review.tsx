@@ -1207,6 +1207,10 @@ function Diff({
 			if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event))
 				return;
 			if (event.key === " ") page(event.shiftKey ? -1 : 1);
+			// Home and End work without a click in the diff first.
+			else if (event.key === "Home") jump(-1);
+			else if (event.key === "End")
+				root.current?.scrollTo({ top: root.current.scrollHeight });
 			else if (event.key === "j")
 				jump(Math.min(current + 1, entries.length - 1));
 			else if (event.key === "k") jump(Math.max(current - 1, -1));
