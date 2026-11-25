@@ -946,6 +946,7 @@ function Diff({
 			hunkSeparators: hasModules ? "line-info" : "metadata",
 			overflow: "wrap",
 			stickyHeaders: true,
+			// The description's bottom margin in style.css matches this gap.
 			layout: { paddingTop: 0, paddingBottom: 64, gap: 12 },
 			// The library mixes a little of each diff colour into the code
 			// background. A mix of 0% shows the theme's diff colours as they are.

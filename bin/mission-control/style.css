@@ -524,10 +524,11 @@ body.review-mode {
 		transform: rotate(360deg);
 	}
 }
+/* The bottom margin matches the gap between files, layout.gap in
+   review.tsx, and shows the diff view's background as that gap does. */
 .description {
-	margin: 0;
+	margin: 0 0 12px;
 	padding: 0.8rem 1.2rem 1rem;
-	border-bottom: 1px solid var(--line);
 }
 /* GitHub's styles with the page's palette, so they follow light and dark. */
 .description.markdown-body {
