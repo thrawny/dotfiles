@@ -159,6 +159,40 @@ rex.action{
   end,
 }
 
+-- Home Manager writes Ghostty's colors, font and padding beside this file.
+-- The settings belong to the app, so this only offers an action that sets
+-- them: run "Match Ghostty Look" from the command palette while the app shows
+-- this Mac. A second import of the same theme fails, which leaves the theme
+-- already selected.
+local look_file = io.open((os.getenv("XDG_CONFIG_HOME") or (os.getenv("HOME") .. "/.config"))
+  .. "/rex/ghostty-look.json")
+if look_file then
+  local look = rex.json.decode(look_file:read("*a"))
+  look_file:close()
+  rex.action{
+    name = "ghostty_look",
+    title = "Match Ghostty Look",
+    keywords = "ghostty theme font monokai appearance dark",
+    run = function()
+      local function set(name, value)
+        rex.client.queue("client.setting." .. name, { value = value })
+      end
+      set("interface.appearance.scheme", "dark")
+      set("terminal.typography.font", look.font)
+      set("terminal.typography.size", look.size)
+      set("terminal.advanced_fonts.synthesize", look.synthesize)
+      set("interface.pane_padding.horizontal", look.padding_x)
+      set("interface.pane_padding.vertical", look.padding_y)
+      set("terminal.cursor.blink", look.cursor_blink and "normal" or "off")
+      if look.option_as_alt then
+        set("terminal.keyboard.option", "sends_alt")
+      end
+      -- Importing selects the theme for the dark appearance set above.
+      rex.client.queue("client.theme.import", { path = look.theme })
+    end,
+  }
+end
+
 for n = 1, 9 do
   rex.bind("cmd+[Digit" .. n .. "]", "agent_goto", { index = n })
 end

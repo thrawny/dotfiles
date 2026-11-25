@@ -39,6 +39,12 @@ These replace Rex's Cmd+1–9 tab keys and its Cmd+K session switcher. Cmd+P sti
 
 The sidebar's look, such as vertical tabs and the Activity grouping, stays an app setting.
 
+## Ghostty look
+
+Home Manager writes Ghostty's colors to `~/.config/rex/themes/Dotfiles Monokai`, and its font, size and padding to `~/.config/rex/ghostty-look.json`. Both come from the Ghostty settings in `nix/home`. Run Match Ghostty Look from the command palette while the app shows the Mac. It sets the dark appearance, the font, size, padding, cursor and Option key, then imports and selects the theme.
+
+The app keeps these settings, so a later change to the Ghostty theme needs the old theme deleted in the app and the action run again. Importing a theme whose name already exists fails.
+
 ## moto
 
 moto runs workers in Rex when it starts from a Rex terminal. Each worker gets a session of its own, named after the worker, so the sidebar shows one row per worker. Claude Code's status reports give moto the agent's state. `spawn-session --focus` switches the app only while Remote Control is on in the app's General settings.
