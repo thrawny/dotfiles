@@ -48,7 +48,7 @@ existing-file() {
   # Only line 1 is a shebang: a "#!/" later in the body is script content.
   # awk ends every line with a newline, so a file without a final one cannot
   # glue its last line to the footer's closing brace.
-  awk 'NR == 1 && /^#!/ { next } { line = "  " $0; sub(/[[:blank:]]+$/, "", line); print line }' "$1" >> "${temp_file}"
+  awk 'NR == 1 && /^#!/ { next } { line = "  " $0; sub(/[[:blank:]]+$/, "", line); print line }' < "$1" >> "${temp_file}"
   footer >> "${temp_file}"
 
   mv "${temp_file}" "$1"
