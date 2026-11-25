@@ -622,7 +622,9 @@ function Verdict({
 					},
 					body: JSON.stringify({
 						event,
-						body: event === "APPROVE" ? "" : body,
+						// The comment box holds the text, so an approval from the
+						// box carries it, and the plain Approve button sends none.
+						body: boxOpen ? body : "",
 						commitId: data.headSha,
 					}),
 				},
@@ -701,7 +703,7 @@ function Verdict({
 			>
 				Comment…
 			</button>
-			{button("APPROVE", "approve")}
+			{!boxOpen && button("APPROVE", "approve")}
 			{boxOpen && (
 				<div class="comment-box">
 					<textarea
@@ -714,6 +716,7 @@ function Verdict({
 					<div class="row">
 						{button("REQUEST_CHANGES", "changes")}
 						{button("COMMENT", "comment")}
+						{button("APPROVE", "approve")}
 					</div>
 				</div>
 			)}
