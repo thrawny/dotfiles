@@ -703,7 +703,7 @@ function Verdict({
 			>
 				Comment…
 			</button>
-			{!boxOpen && button("APPROVE", "approve")}
+			{button("APPROVE", "approve")}
 			{boxOpen && (
 				<div class="comment-box">
 					<textarea
