@@ -537,7 +537,9 @@ function Strip({
 						class={`review-bot ${botClass(pr.botReview)}`}
 						title={botTitle(data.reviewBot, pr.botReview)}
 					>
-						{data.reviewBot} #{pr.botReview.n}
+						{botClass(pr.botReview) === "lgtm"
+							? `✓ ${data.reviewBot} LGTM`
+							: `${data.reviewBot} #${pr.botReview.n}`}
 					</span>
 				)}
 				{pr.jiraKey &&

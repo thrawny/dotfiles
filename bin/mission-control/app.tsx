@@ -468,7 +468,11 @@ function Row({
 					class={`review-bot ${botClass(pr.botReview)}`}
 					title={botTitle(reviewBot, pr.botReview)}
 				>
-					{pr.botReview ? `#${pr.botReview.n}` : "–"}
+					{botClass(pr.botReview) === "lgtm"
+						? "✓ LGTM"
+						: pr.botReview
+							? `#${pr.botReview.n}`
+							: "–"}
 				</span>
 			)}
 			<span

@@ -187,7 +187,7 @@ a.button {
 }
 .pr {
 	display: grid;
-	grid-template-columns: 0.8rem 9rem minmax(10rem, 1fr) 5.5rem 6.5rem 11rem 1.4rem 2.2rem 4rem;
+	grid-template-columns: 0.8rem 9rem minmax(10rem, 1fr) 5.5rem 6.5rem 11rem 1.4rem 3.8rem 4rem;
 	align-items: center;
 	gap: 0.6rem;
 	padding: 0.2rem 0;
@@ -286,9 +286,13 @@ a.button {
 	font-family: ui-monospace, monospace;
 	cursor: default;
 }
+/* An LGTM on the head commit is the one state a reviewer acts on, so it is a
+   solid pill. The other states stay quiet. */
 .review-bot.lgtm {
-	background: var(--add-bg);
-	color: var(--add);
+	background: var(--add);
+	color: var(--bg);
+	font-weight: 700;
+	white-space: nowrap;
 }
 .review-bot.findings {
 	background: var(--mod-bg);
@@ -326,7 +330,7 @@ a.button {
 }
 @media (max-width: 720px) {
 	.pr {
-		grid-template-columns: 0.8rem 1fr 1.4rem 2.2rem 4rem;
+		grid-template-columns: 0.8rem 1fr 1.4rem 3.8rem 4rem;
 	}
 	.pr .repo,
 	.pr .labels,
@@ -340,7 +344,7 @@ a.button {
    the title and its status on top, the repo and details below. */
 @container (max-width: 56rem) {
 	.pr {
-		grid-template-columns: 0.8rem auto auto auto 1fr 1.4rem 2.2rem 4rem;
+		grid-template-columns: 0.8rem auto auto auto 1fr 1.4rem 3.8rem 4rem;
 		grid-template-areas:
 			"dot title title title title review review-bot age"
 			". repo jira size labels labels labels labels";
