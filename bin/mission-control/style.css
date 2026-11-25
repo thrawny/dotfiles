@@ -632,15 +632,14 @@ body.review-mode {
 	border-color: var(--add);
 	font-weight: 600;
 }
-.verdict .changes.armed,
-.verdict .comment.armed,
 .verdict .approve.armed {
 	background: var(--add);
 	color: var(--bg);
 }
-.verdict .changes.armed {
-	background: var(--del);
-	border-color: var(--del);
+.verdict button:disabled,
+.comment-box textarea:disabled {
+	opacity: 0.5;
+	cursor: default;
 }
 .verdict .posted {
 	color: var(--add);

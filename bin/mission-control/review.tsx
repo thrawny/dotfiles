@@ -578,9 +578,9 @@ const EVENT_TEXT: Record<ReviewEvent, [string, string]> = {
 	REQUEST_CHANGES: ["Request changes", "Confirm request changes"],
 };
 
-// Posting a review takes two clicks: the first arms the button for 5
+// The strip's Approve button takes two clicks: the first arms it for 5
 // seconds, the second posts. Enter confirms what is armed and Esc disarms
-// it.
+// it. The comment box's buttons post on one click.
 function Verdict({
 	data,
 	reload,
@@ -591,7 +591,11 @@ function Verdict({
 	const [armed, setArmed] = useState<ReviewEvent | null>(null);
 	const [boxOpen, setBoxOpen] = useState(false);
 	const [body, setBody] = useState("");
-	const [posting, setPosting] = useState(false);
+	// The review being posted. Every button waits until it is done.
+	const [posting, setPosting] = useState<ReviewEvent | null>(null);
+	// State updates land on the next render, so a fast second click could
+	// still see posting as null. The ref stops that second post.
+	const inFlight = useRef(false);
 	const textarea = useRef<HTMLTextAreaElement>(null);
 	// The box opens on a click, so the cursor goes straight into it.
 	useEffect(() => {
@@ -608,8 +612,10 @@ function Verdict({
 	}, [armed]);
 
 	const post = async (event: ReviewEvent) => {
+		if (inFlight.current) return;
+		inFlight.current = true;
 		setArmed(null);
-		setPosting(true);
+		setPosting(event);
 		setMessage(null);
 		try {
 			const res = await fetch(
@@ -638,17 +644,20 @@ function Verdict({
 		} catch (error) {
 			setMessage({ ok: false, text: (error as Error).message });
 		} finally {
-			setPosting(false);
+			inFlight.current = false;
+			setPosting(null);
 		}
 	};
 
-	const press = (event: ReviewEvent) => {
-		if (posting) return;
+	// A button in the comment box posts at once: writing the comment was
+	// the deliberate step. The strip's Approve button arms first.
+	const press = (event: ReviewEvent, now = false) => {
+		if (inFlight.current) return;
 		if (event !== "APPROVE" && !body.trim()) {
 			setMessage({ ok: false, text: "Write a comment first" });
 			return;
 		}
-		if (armed === event) post(event);
+		if (now || armed === event) post(event);
 		else {
 			setMessage(null);
 			setArmed(event);
@@ -677,18 +686,23 @@ function Verdict({
 		return () => window.removeEventListener("keydown", onKey);
 	});
 
-	const button = (event: ReviewEvent, cls: string) => (
-		<button
-			type="button"
-			class={armed === event ? `${cls} armed` : cls}
-			disabled={posting}
-			onClick={() => press(event)}
-		>
-			{armed === event
-				? `${EVENT_TEXT[event][1]} as ${data.viewer}`
-				: EVENT_TEXT[event][0]}
-		</button>
-	);
+	const button = (event: ReviewEvent, cls: string, now = false) => {
+		const isArmed = !now && armed === event;
+		return (
+			<button
+				type="button"
+				class={isArmed ? `${cls} armed` : cls}
+				disabled={posting !== null}
+				onClick={() => press(event, now)}
+			>
+				{posting === event
+					? `${EVENT_TEXT[event][0]}…`
+					: isArmed
+						? `${EVENT_TEXT[event][1]} as ${data.viewer}`
+						: EVENT_TEXT[event][0]}
+			</button>
+		);
+	};
 
 	return (
 		<span class="verdict">
@@ -699,7 +713,7 @@ function Verdict({
 				type="button"
 				class="link"
 				onClick={() => setBoxOpen(!boxOpen)}
-				disabled={posting}
+				disabled={posting !== null}
 			>
 				Comment…
 			</button>
@@ -711,12 +725,13 @@ function Verdict({
 						placeholder="Write a comment"
 						value={body}
 						ref={textarea}
+						disabled={posting !== null}
 						onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
 					/>
 					<div class="row">
-						{button("REQUEST_CHANGES", "changes")}
-						{button("COMMENT", "comment")}
-						{button("APPROVE", "approve")}
+						{button("REQUEST_CHANGES", "changes", true)}
+						{button("COMMENT", "comment", true)}
+						{button("APPROVE", "approve", true)}
 					</div>
 				</div>
 			)}
