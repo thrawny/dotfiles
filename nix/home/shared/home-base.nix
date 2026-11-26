@@ -90,6 +90,8 @@ in
     sessionPath = [
       "$HOME/.cargo/bin"
       "$HOME/.bun/bin"
+      # bun add -g puts commands here while XDG_CACHE_HOME is set.
+      "$HOME/.cache/.bun/bin"
       "$HOME/.local/share/nix-wrappers/bin"
       "$HOME/.npm-global/bin"
       "$HOME/.local/share/pnpm"

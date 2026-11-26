@@ -137,7 +137,7 @@ the blobs were there.
 - A language that fails, such as Go without a toolchain, is named in the
   answer. Its files keep their line diffs, and the strip says which language
   failed.
-- `mission-control-serve` installs the locked packages before it starts.
+- `mission-control run` installs the locked packages before it starts.
   bun's fallback install cannot find a package under a second name.
 
 ## Tests

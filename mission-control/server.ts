@@ -1,5 +1,5 @@
 // Serves the mission control page and the team's open pull requests as JSON.
-// The wrapper bin/mission-control runs it behind portless, which sets PORT.
+// The mission-control command (cli.ts) runs it behind portless, which sets PORT.
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -520,7 +520,7 @@ function diffVars(theme: Theme, mode: "light" | "dark"): string {
 
 function themeCSS(): string {
 	for (const file of [
-		join(import.meta.dir, "../../nix/themes/monokai.json"),
+		join(import.meta.dir, "../nix/themes/monokai.json"),
 		join(
 			Bun.env.XDG_CONFIG_HOME || join(homedir(), ".config"),
 			"dotfiles/theme.json",

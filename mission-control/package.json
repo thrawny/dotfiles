@@ -2,6 +2,9 @@
 	"name": "dotfiles-mission-control",
 	"private": true,
 	"type": "module",
+	"bin": {
+		"mission-control": "cli.ts"
+	},
 	"dependencies": {
 		"@octokit/graphql": "9.0.5",
 		"@pierre/diffs": "1.7.1",

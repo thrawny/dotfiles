@@ -48,7 +48,7 @@ scoped_files=(
   bin/blueprint/render.ts
   bin/blueprint/style.css
   bin/blueprint/index.css
-  bin/mission-control/style.css
+  mission-control/style.css
 )
 
 while IFS= read -r shell_file; do

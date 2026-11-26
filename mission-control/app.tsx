@@ -644,14 +644,28 @@ function Router() {
 	}, [path]);
 
 	// The server tells the page to show a pull request, when asked from the
-	// command line. The browser connects again after a server restart.
+	// command line. While the server is down, portless answers with an error
+	// status, and the browser then gives up on the stream for good. So the
+	// page connects again itself, every few seconds, until the server is back.
 	useEffect(() => {
-		const source = new EventSource("/api/events");
-		source.addEventListener("show", (event) => {
-			const target = (event as MessageEvent<string>).data;
-			if (routeOf(target) && target !== location.pathname) show(target);
-		});
-		return () => source.close();
+		let source: EventSource;
+		let retry = 0;
+		const connect = () => {
+			source = new EventSource("/api/events");
+			source.addEventListener("show", (event) => {
+				const target = (event as MessageEvent<string>).data;
+				if (routeOf(target) && target !== location.pathname) show(target);
+			});
+			source.onerror = () => {
+				if (source.readyState !== EventSource.CLOSED) return;
+				retry = window.setTimeout(connect, 3000);
+			};
+		};
+		connect();
+		return () => {
+			clearTimeout(retry);
+			source.close();
+		};
 	}, []);
 
 	// A plain click on a link to a review page switches in place. A click

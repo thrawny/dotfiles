@@ -152,15 +152,15 @@ check-blueprint: blueprint-install
 
 # Install mission control's pinned runtime and development dependencies
 mission-control-install:
-    bun install --cwd bin/mission-control --frozen-lockfile --ignore-scripts
+    bun install --cwd mission-control --frozen-lockfile --ignore-scripts
 
 # Format, typecheck and test mission control's server and page
 check-mission-control: mission-control-install
-    biome check --write bin/mission-control
-    bun run bin/mission-control/node_modules/typescript/bin/tsc --project bin/mission-control/tsconfig.json
-    test -z "$(gofmt -l bin/mission-control/api/goapi)"
-    cd bin/mission-control/api/goapi && go vet ./...
-    cd bin/mission-control && bun test
+    biome check --write mission-control
+    bun run mission-control/node_modules/typescript/bin/tsc --project mission-control/tsconfig.json
+    test -z "$(gofmt -l mission-control/api/goapi)"
+    cd mission-control/api/goapi && go vet ./...
+    cd mission-control && bun test
 
 # Typecheck Python, optionally selecting files, with the locked environments
 typecheck *files:
