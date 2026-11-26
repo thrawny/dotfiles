@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
+# Print SQL that creates a superuser and a database sharing one name, for
+# local development: create-psql-user NAME | psql
 
-[[ "${TRACE}" ]] && set -x
-set -eou pipefail
-shopt -s nullglob
+[[ "${TRACE:-}" ]] && set -x
+set -euo pipefail
+
+# The name goes into the SQL unquoted, so Postgres folds it to lowercase while
+# the password literal keeps its case. Accept only names that survive as typed.
+if [[ $# -ne 1 || ! "$1" =~ ^[a-z_][a-z0-9_]{0,62}$ ]]; then
+  echo 'Usage: create-psql-user NAME  (lowercase letters, digits and _, at most 63)' >&2
+  exit 2
+fi
 
 cat << EOF
 CREATE DATABASE $1;
