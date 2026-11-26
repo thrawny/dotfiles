@@ -1,14 +1,17 @@
-import { render } from "preact";
+import { type ComponentChildren, render } from "preact";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { BUCKETS, type Bucket, OLD_DAYS, type PR, WARN_DAYS } from "./model.ts";
 import { Review } from "./review.tsx";
 import {
+	Active,
 	ago,
 	botClass,
 	botTitle,
 	CI_TEXT,
 	jiraHref,
 	lines,
+	listHref,
+	navigate,
 	REVIEW_MARK,
 	ThemeButton,
 } from "./ui.tsx";
@@ -90,6 +93,8 @@ function writeFilters(f: Filters) {
 	// Layout is always written, so a view without filters keeps a query and
 	// is not replaced by the default view on reload.
 	p.set("layout", f.side ? "side" : "stack");
+	// The list can change in the background while a review page shows.
+	if (location.pathname.startsWith("/pr/")) return;
 	history.replaceState(null, "", `?${p}`);
 }
 
@@ -561,9 +566,117 @@ theme.rel = "stylesheet";
 theme.href = "/theme.css";
 document.head.prepend(theme);
 
+// Review pages kept open in the background, so going back to one keeps its
+// place and needs no reload. The oldest closes past this count.
+const REVIEWS_KEPT = 5;
+
+type Opened = { key: string; repo: string; number: number };
+
 // `/pr/<repo>/<number>` is the review page; everything else is the list.
-const route = location.pathname.match(/^\/pr\/([^/]+)\/(\d+)\/?$/);
-render(
-	route ? <Review repo={route[1]} number={Number(route[2])} /> : <App />,
-	document.getElementById("app") as HTMLElement,
-);
+function routeOf(path: string): Opened | null {
+	const match = path.match(/^\/pr\/([^/]+)\/(\d+)\/?$/);
+	return match
+		? {
+				key: `${match[1]}#${match[2]}`,
+				repo: match[1],
+				number: Number(match[2]),
+			}
+		: null;
+}
+
+// A page that stays open while another shows. It keeps its size, so the
+// diff viewer keeps its layout and scroll place.
+function Page({
+	active,
+	children,
+}: {
+	active: boolean;
+	children: ComponentChildren;
+}) {
+	return (
+		<Active.Provider value={active}>
+			<div class={active ? "page" : "page background"}>{children}</div>
+		</Active.Provider>
+	);
+}
+
+// The list and the review pages opened lately stay open. A link to a review
+// page switches pages in place.
+function Router() {
+	const [path, setPath] = useState(location.pathname);
+	const route = routeOf(path);
+	const [opened, setOpened] = useState<Opened[]>([]);
+	const [listOpened, setListOpened] = useState(!route);
+	const listScroll = useRef(0);
+
+	useEffect(() => {
+		const sync = () => {
+			// The list scrolls the window, which the review page does not.
+			if (!routeOf(path)) listScroll.current = scrollY;
+			setPath(location.pathname);
+		};
+		addEventListener("popstate", sync);
+		addEventListener("mc-navigate", sync);
+		return () => {
+			removeEventListener("popstate", sync);
+			removeEventListener("mc-navigate", sync);
+		};
+	}, [path]);
+
+	useEffect(() => {
+		document.body.classList.toggle("review-mode", !!route);
+		if (route) {
+			setOpened((old) =>
+				[...old.filter((o) => o.key !== route.key), route].slice(-REVIEWS_KEPT),
+			);
+			return;
+		}
+		setListOpened(true);
+		document.title = "Mission control";
+		requestAnimationFrame(() => scrollTo(0, listScroll.current));
+	}, [path]);
+
+	// A plain click on a link to a review page switches in place. A click
+	// with a modifier opens a new tab as usual.
+	useEffect(() => {
+		const onClick = (event: MouseEvent) => {
+			if (
+				event.button !== 0 ||
+				event.metaKey ||
+				event.ctrlKey ||
+				event.shiftKey ||
+				event.altKey
+			)
+				return;
+			const link = (event.target as Element).closest?.("a[href]");
+			if (!(link instanceof HTMLAnchorElement) || link.target) return;
+			const url = new URL(link.href);
+			if (url.origin !== location.origin || !routeOf(url.pathname)) return;
+			event.preventDefault();
+			if (!routeOf(location.pathname))
+				listHref.current = location.pathname + location.search;
+			navigate(url.pathname, { fromList: !routeOf(location.pathname) });
+		};
+		document.addEventListener("click", onClick);
+		return () => document.removeEventListener("click", onClick);
+	}, []);
+
+	return (
+		<>
+			{listOpened && (
+				<Page active={!route}>
+					<App />
+				</Page>
+			)}
+			{opened.map((o) => (
+				<Page key={o.key} active={route?.key === o.key}>
+					<Review repo={o.repo} number={o.number} />
+				</Page>
+			))}
+		</>
+	);
+}
+
+// The router puts the list's scroll place back itself.
+history.scrollRestoration = "manual";
+render(<Router />, document.getElementById("app") as HTMLElement);

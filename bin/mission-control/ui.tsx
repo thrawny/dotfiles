@@ -1,6 +1,29 @@
 // Pieces the list page and the review page share.
 
+import { createContext } from "preact";
 import type { BotReview } from "./model.ts";
+
+// Whether a page is the one on screen. Pages that stay open in the
+// background keep their state but leave the keys and the title alone.
+export const Active = createContext(true);
+
+// The list's address, with its filters, the last time it showed.
+export const listHref = { current: "/" };
+
+// Moves between the list and review pages without a page load, so pages
+// opened before keep their state.
+export function navigate(href: string, state: unknown = null) {
+	history.pushState(state, "", href);
+	dispatchEvent(new Event("mc-navigate"));
+}
+
+// Back to the list with its filters: a step back in history when the list
+// opened this page.
+export function goBack() {
+	if ((history.state as { fromList?: boolean } | null)?.fromList)
+		history.back();
+	else navigate(listHref.current);
+}
 
 export function lines(n: number) {
 	return n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);

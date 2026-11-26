@@ -392,9 +392,19 @@ a.button {
 body.review-mode {
 	padding: 0;
 	overflow: hidden;
-	--diffs-font-family: ui-monospace, "SF Mono", Menlo, monospace;
+	--diffs-font-family:
+		"CaskaydiaMono Nerd Font", ui-monospace, "SF Mono", Menlo, monospace;
 	--diffs-font-size: 12.5px;
 	--diffs-header-font-family: system-ui, -apple-system, sans-serif;
+}
+/* A page kept open behind the one on screen. It keeps the window's size,
+   so the diff viewer keeps its layout and scroll place. */
+.page.background {
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	visibility: hidden;
+	pointer-events: none;
 }
 .review-page {
 	display: flex;

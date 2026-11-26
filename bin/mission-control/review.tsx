@@ -15,7 +15,7 @@ import {
 } from "@pierre/trees";
 import type { ComponentChildren } from "preact";
 import { createPortal } from "preact/compat";
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useContext, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { ApiModule, ApiSide, ApiView } from "./api/languages.ts";
 import {
 	fileTotals,
@@ -26,10 +26,12 @@ import {
 	type ReviewEvent,
 } from "./model.ts";
 import {
+	Active,
 	ago,
 	botClass,
 	botTitle,
 	CI_TEXT,
+	goBack,
 	isDark,
 	jiraHref,
 	lines,
@@ -180,16 +182,6 @@ function isTyping(event: KeyboardEvent) {
 	);
 }
 
-// Back to the list with its filters, when the list opened this page.
-function goBack() {
-	const from = document.referrer.startsWith(`${location.origin}/`)
-		? new URL(document.referrer)
-		: null;
-	if (from && !from.pathname.startsWith("/pr/") && history.length > 1)
-		history.back();
-	else location.href = "/";
-}
-
 type Mode = "diff" | "api";
 
 type ApiState = {
@@ -224,6 +216,7 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 		error: null,
 	});
 	const [focus, setFocus] = useState<Focus | null>(null);
+	const active = useContext(Active);
 	// The item at the top of the diff, or null above the first one.
 	const currentId = useRef<string | null>(null);
 
@@ -243,9 +236,15 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 			.catch((e: Error) => setError(e.message));
 
 	useEffect(() => {
-		document.body.classList.add("review-mode");
 		load();
 	}, [repo, number]);
+	// A page shown again from the background catches up with GitHub. The
+	// diff stays when the head did not move.
+	const shownBefore = useRef(active);
+	useEffect(() => {
+		if (active && !shownBefore.current) load();
+		shownBefore.current = active;
+	}, [active]);
 
 	// The API view loads beside the pull request, so the switch finds it
 	// ready. It loads again when a setting changes, and when the pull request
@@ -280,10 +279,11 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 	}, [apiKey, behind]);
 
 	useEffect(() => {
+		if (!active) return;
 		document.title = data
 			? `${data.pr.title} · ${repo}#${number}`
 			: `${repo}#${number}`;
-	}, [data]);
+	}, [data, active]);
 
 	const view = api.view;
 	const modules = view?.modules ?? [];
@@ -352,6 +352,7 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 	// The keys are codediff.nvim's: a and s switch the view, C shows comments
 	// and P shows unexported declarations.
 	useEffect(() => {
+		if (!active) return;
 		const onKey = (event: KeyboardEvent) => {
 			if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event))
 				return;
@@ -675,7 +676,9 @@ function Verdict({
 	};
 
 	// Escape works in the comment box too; the other keys do not.
+	const active = useContext(Active);
 	useEffect(() => {
+		if (!active) return;
 		const onKey = (event: KeyboardEvent) => {
 			if (event.key === "Escape") {
 				if (armed) setArmed(null);
@@ -1327,7 +1330,9 @@ function Diff({
 		tree.scrollToPath(path, { focus: false, offset: "nearest" });
 	}, [current, tree]);
 
+	const active = useContext(Active);
 	useEffect(() => {
+		if (!active) return;
 		const onKey = (event: KeyboardEvent) => {
 			if (event.metaKey || event.ctrlKey || event.altKey || isTyping(event))
 				return;
@@ -1359,7 +1364,7 @@ function Diff({
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [current, entries, oneFile]);
+	}, [current, entries, oneFile, active]);
 
 	return (
 		<div class={hasModules ? "review-body api-view" : "review-body"}>
