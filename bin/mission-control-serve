@@ -4,6 +4,9 @@
 #
 #   mission-control-serve         start the server if needed, open the page
 #   mission-control-serve --run   run the server in this terminal
+#   mission-control-serve open <PR>
+#                                 show a pull request in the open page, in
+#                                 place: a GitHub URL, repo#123 or repo 123
 #
 # In herdr the server runs in a `mission-control` tab of the `background`
 # workspace. Outside herdr it runs in the current terminal.
@@ -25,6 +28,28 @@ open_page() {
     open-url "$url"
   fi
 }
+
+if [[ "${1:-}" == open ]]; then
+  shift
+  pr="$*"
+  if [[ "$pr" =~ github\.com/[^/]+/([^/]+)/pull/([0-9]+) ]] ||
+    [[ "$pr" =~ ^([A-Za-z0-9_.-]+)[#\ ]+([0-9]+)$ ]]; then
+    repo=${BASH_REMATCH[1]} number=${BASH_REMATCH[2]}
+  else
+    echo "usage: mission-control-serve open <GitHub PR URL | repo#123 | repo 123>" >&2
+    exit 2
+  fi
+  up || { echo "mission control is not running at $url" >&2; exit 1; }
+  answer=$(curl -skf --max-time 5 -H 'content-type: application/json' \
+    -d "{\"repo\":\"$repo\",\"number\":$number}" "$url/api/open")
+  pages=$(jq -r .pages <<<"$answer")
+  if [[ "$pages" == 0 ]]; then
+    echo "no mission control page is open" >&2
+    exit 1
+  fi
+  echo "showing $repo#$number in $pages open page(s)"
+  exit 0
+fi
 
 if [[ "${1:-}" == --run ]]; then
   # The packages the lockfile names, so the server never runs on stale ones.

@@ -366,6 +366,56 @@ async function prApi(
 	return Response.json(await view);
 }
 
+// Open pages, which a command can tell to show a pull request.
+const pages = new Set<ReadableStreamDefaultController<string>>();
+
+function events(req: Request, bun: { timeout(req: Request, s: number): void }) {
+	// The stream stays open for as long as the page does.
+	bun.timeout(req, 0);
+	let page: ReadableStreamDefaultController<string>;
+	const stream = new ReadableStream<string>({
+		start(controller) {
+			page = controller;
+			pages.add(page);
+			controller.enqueue(": open\n\n");
+		},
+		cancel() {
+			pages.delete(page);
+		},
+	});
+	return new Response(stream, {
+		headers: {
+			"content-type": "text/event-stream",
+			"cache-control": "no-cache",
+		},
+	});
+}
+
+// Shows a pull request in every open page, from the command line. A page
+// on another site cannot send JSON here: the browser would ask first, and
+// the route answers POST only.
+async function openInPages(req: Request) {
+	if (req.headers.get("content-type") !== "application/json")
+		return Response.json({ error: "Send JSON" }, { status: 415 });
+	const asked = (await req.json().catch(() => ({}))) as {
+		repo?: string;
+		number?: number;
+	};
+	const repo = asked.repo ?? "";
+	const number = prNumber(repo, String(asked.number));
+	if (!number)
+		return Response.json({ error: "Bad pull request" }, { status: 400 });
+	const message = `event: show\ndata: /pr/${repo}/${number}\n\n`;
+	for (const page of pages) {
+		try {
+			page.enqueue(message);
+		} catch {
+			pages.delete(page);
+		}
+	}
+	return Response.json({ pages: pages.size });
+}
+
 // The origins the page runs on: the portless URL and the server's own.
 function pageOrigins(): string[] {
 	const origins = [server.url.origin];
@@ -503,6 +553,8 @@ const server = Bun.serve({
 		"/pr/*": index,
 		"/theme.css": () =>
 			new Response(theme, { headers: { "content-type": "text/css" } }),
+		"/api/events": (req, bun) => events(req, bun),
+		"/api/open": { POST: (req) => openInPages(req) },
 		"/api/prs": async (req) => {
 			const params = new URL(req.url).searchParams;
 			const kind = params.get("state") === "merged" ? "merged" : "open";

@@ -600,6 +600,13 @@ function Page({
 	);
 }
 
+// Shows a review page. From the list, back returns to it.
+function show(path: string) {
+	const fromList = !routeOf(location.pathname);
+	if (fromList) listHref.current = location.pathname + location.search;
+	navigate(path, { fromList });
+}
+
 // The list and the review pages opened lately stay open. A link to a review
 // page switches pages in place.
 function Router() {
@@ -636,6 +643,17 @@ function Router() {
 		requestAnimationFrame(() => scrollTo(0, listScroll.current));
 	}, [path]);
 
+	// The server tells the page to show a pull request, when asked from the
+	// command line. The browser connects again after a server restart.
+	useEffect(() => {
+		const source = new EventSource("/api/events");
+		source.addEventListener("show", (event) => {
+			const target = (event as MessageEvent<string>).data;
+			if (routeOf(target) && target !== location.pathname) show(target);
+		});
+		return () => source.close();
+	}, []);
+
 	// A plain click on a link to a review page switches in place. A click
 	// with a modifier opens a new tab as usual.
 	useEffect(() => {
@@ -653,9 +671,7 @@ function Router() {
 			const url = new URL(link.href);
 			if (url.origin !== location.origin || !routeOf(url.pathname)) return;
 			event.preventDefault();
-			if (!routeOf(location.pathname))
-				listHref.current = location.pathname + location.search;
-			navigate(url.pathname, { fromList: !routeOf(location.pathname) });
+			show(url.pathname);
 		};
 		document.addEventListener("click", onClick);
 		return () => document.removeEventListener("click", onClick);
