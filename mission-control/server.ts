@@ -416,6 +416,30 @@ async function openInPages(req: Request) {
 	return Response.json({ pages: pages.size });
 }
 
+// Opens a web address in the default browser, for links in the page. An
+// app window would open them in its own browser instead. Like /api/open, it
+// takes JSON only, so a page on another site cannot call it.
+async function openUrl(req: Request) {
+	if (req.headers.get("content-type") !== "application/json")
+		return Response.json({ error: "Send JSON" }, { status: 415 });
+	const asked = (await req.json().catch(() => ({}))) as { url?: string };
+	let url: URL;
+	try {
+		url = new URL(asked.url ?? "");
+	} catch {
+		return Response.json({ error: "Bad address" }, { status: 400 });
+	}
+	if (url.protocol !== "https:" && url.protocol !== "http:")
+		return Response.json({ error: "Web addresses only" }, { status: 400 });
+	const opener = process.platform === "darwin" ? "open" : "xdg-open";
+	const code = await Bun.spawn([opener, url.href], {
+		stdio: ["ignore", "ignore", "ignore"],
+	}).exited;
+	return code === 0
+		? Response.json({ ok: true })
+		: Response.json({ error: `${opener} failed` }, { status: 502 });
+}
+
 // The origins the page runs on: the portless URL and the server's own.
 function pageOrigins(): string[] {
 	const origins = [server.url.origin];
@@ -555,6 +579,7 @@ const server = Bun.serve({
 			new Response(theme, { headers: { "content-type": "text/css" } }),
 		"/api/events": (req, bun) => events(req, bun),
 		"/api/open": { POST: (req) => openInPages(req) },
+		"/api/open-url": { POST: (req) => openUrl(req) },
 		"/api/prs": async (req) => {
 			const params = new URL(req.url).searchParams;
 			const kind = params.get("state") === "merged" ? "merged" : "open";

@@ -1,5 +1,5 @@
 import { type ComponentChildren, render } from "preact";
-import { useEffect, useMemo, useRef, useState } from "preact/hooks";
+import { useContext, useEffect, useMemo, useRef, useState } from "preact/hooks";
 import { BUCKETS, type Bucket, OLD_DAYS, type PR, WARN_DAYS } from "./model.ts";
 import { Review } from "./review.tsx";
 import {
@@ -187,6 +187,14 @@ function App() {
 			document.removeEventListener("visibilitychange", tick);
 		};
 	}, []);
+
+	// Back from a review page, a list older than one poll waits for GitHub,
+	// so it shows the current state at once.
+	const active = useContext(Active);
+	useEffect(() => {
+		if (!active || !data?.fetchedAt) return;
+		if (Date.now() - Date.parse(data.fetchedAt) > POLL_MS) load(true);
+	}, [active]);
 
 	useEffect(() => writeFilters(filters), [filters]);
 	useEffect(() => {
@@ -665,6 +673,41 @@ function Router() {
 		return () => {
 			clearTimeout(retry);
 			source.close();
+		};
+	}, []);
+
+	// A link to another site opens in the default browser, through the
+	// server, so it opens where the reviewer is logged in. An app window
+	// would open it in its own browser. If the server cannot, the browser
+	// opens it as usual.
+	useEffect(() => {
+		const onClick = (event: MouseEvent) => {
+			if (event.button > 1) return;
+			// The diff viewer draws its links in a shadow root, where the event
+			// target is the viewer, so the path finds the link.
+			const link = event
+				.composedPath()
+				.find((node) => node instanceof HTMLAnchorElement && node.href);
+			if (!(link instanceof HTMLAnchorElement)) return;
+			const url = new URL(link.href);
+			if (url.origin === location.origin || !url.protocol.startsWith("http"))
+				return;
+			event.preventDefault();
+			fetch("/api/open-url", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ url: url.href }),
+			})
+				.then((res) => {
+					if (!res.ok) throw new Error(`HTTP ${res.status}`);
+				})
+				.catch(() => window.open(url.href, "_blank", "noopener"));
+		};
+		document.addEventListener("click", onClick);
+		document.addEventListener("auxclick", onClick);
+		return () => {
+			document.removeEventListener("click", onClick);
+			document.removeEventListener("auxclick", onClick);
 		};
 	}, []);
 
