@@ -209,6 +209,28 @@ export async function mergeBase(
 	return sha;
 }
 
+// Markdown as GitHub renders and sanitizes it. The repository is the
+// context for links such as #12.
+export async function renderMarkdown(
+	token: string,
+	org: string,
+	repo: string,
+	text: string,
+): Promise<string> {
+	const res = await fetch(`${REST}/markdown`, {
+		method: "POST",
+		headers: {
+			authorization: `token ${token}`,
+			accept: "application/vnd.github+json",
+			"content-type": "application/json",
+			"x-github-api-version": "2022-11-28",
+		},
+		body: JSON.stringify({ text, mode: "gfm", context: `${org}/${repo}` }),
+	});
+	if (!res.ok) throw new Error(`GitHub markdown: HTTP ${res.status}`);
+	return res.text();
+}
+
 export async function viewerLogin(gh: Client): Promise<string> {
 	const result = await gh<{ viewer: { login: string } }>(
 		"query { viewer { login } }",

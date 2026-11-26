@@ -607,6 +607,34 @@ body.review-mode {
 		background: var(--bg);
 	}
 }
+/* A new Markdown file, rendered, in place of the viewer. It reads as one
+   page: a header line, then the text on the description's background. */
+.diff-view.rendered {
+	background: var(--bg);
+}
+:root[data-theme="dark"] .diff-view.rendered {
+	background: var(--code-dark-bg, var(--bg));
+}
+@media (prefers-color-scheme: dark) {
+	:root:not([data-theme="light"]) .diff-view.rendered {
+		background: var(--code-dark-bg, var(--bg));
+	}
+}
+.rendered-head {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	display: flex;
+	gap: 1rem;
+	align-items: center;
+	padding: 0.5rem 1.2rem;
+	background: inherit;
+	border-bottom: 1px solid var(--line);
+	font-size: 0.85rem;
+}
+.rendered-path {
+	font-family: ui-monospace, monospace;
+}
 .fold {
 	border: 0;
 	background: none;

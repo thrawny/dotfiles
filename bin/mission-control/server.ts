@@ -16,6 +16,7 @@ import {
 	postReview,
 	prFiles,
 	pullRequest,
+	renderMarkdown,
 	teamMembers,
 	viewerLogin,
 } from "./github.ts";
@@ -24,6 +25,8 @@ import {
 	botName,
 	checkReviewWrite,
 	isGenerated,
+	isMarkdown,
+	newFileText,
 	type PR,
 	type PRFile,
 	parseGitattributes,
@@ -284,6 +287,39 @@ async function prDetail(repo: string, numberText: string) {
 	});
 }
 
+// New Markdown files as GitHub renders them, by repository, head commit and
+// path. A render in the making is here too.
+const markdownCache = new Map<string, Promise<string>>();
+
+async function prMarkdown(repo: string, numberText: string, path: string) {
+	const number = prNumber(repo, numberText);
+	if (!number)
+		return Response.json({ error: "Bad pull request" }, { status: 400 });
+	const secret = token();
+	const raw = await lookUp(secret, repo, number);
+	if (!raw)
+		return Response.json({ error: "Pull request not found" }, { status: 404 });
+	const head = raw.headRefOid;
+	const key = `${repo}@${head}:${path}`;
+	let html = markdownCache.get(key);
+	if (!html) {
+		const files = await changedFiles(secret, repo, number, head);
+		const file = files.find((f) => f.path === path);
+		const text = file && isMarkdown(path) ? newFileText(file) : null;
+		if (text === null)
+			return Response.json(
+				{ error: "Not a new Markdown file in this pull request" },
+				{ status: 404 },
+			);
+		html = renderMarkdown(secret, org, repo, text);
+		markdownCache.set(key, html);
+		html.catch(() => markdownCache.delete(key));
+		if (markdownCache.size > FILES_KEPT)
+			markdownCache.delete(markdownCache.keys().next().value as string);
+	}
+	return Response.json({ html: await html, headSha: head });
+}
+
 // API views of the pull requests opened lately. A view in the making is
 // here too, so a second request waits for the first.
 const apiCache = new Map<string, Promise<ApiView>>();
@@ -496,6 +532,18 @@ const server = Bun.serve({
 					comments: asked.has("comments"),
 					private: asked.has("private"),
 				});
+			} catch (error) {
+				console.error(`mission-control: ${(error as Error).message}`);
+				return Response.json(
+					{ error: (error as Error).message },
+					{ status: 502 },
+				);
+			}
+		},
+		"/api/pr/:repo/:number/markdown": async (req) => {
+			try {
+				const path = new URL(req.url).searchParams.get("path") ?? "";
+				return await prMarkdown(req.params.repo, req.params.number, path);
 			} catch (error) {
 				console.error(`mission-control: ${(error as Error).message}`);
 				return Response.json(

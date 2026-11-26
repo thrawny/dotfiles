@@ -17,7 +17,14 @@ import type { ComponentChildren } from "preact";
 import { createPortal } from "preact/compat";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import type { ApiModule, ApiSide, ApiView } from "./api/languages.ts";
-import { fileTotals, type PR, type PRFile, type ReviewEvent } from "./model.ts";
+import {
+	fileTotals,
+	isMarkdown,
+	newFileText,
+	type PR,
+	type PRFile,
+	type ReviewEvent,
+} from "./model.ts";
 import {
 	ago,
 	botClass,
@@ -63,16 +70,6 @@ function toFileDiff(file: PRFile): FileDiffMetadata {
 		parsed.type = file.patch ? "rename-changed" : "rename-pure";
 	}
 	return parsed;
-}
-
-// The content of an added file, from its patch, which holds every line.
-function newFileText(file: PRFile): string | null {
-	if (file.status !== "added" || !file.patch) return null;
-	return file.patch
-		.split("\n")
-		.filter((line) => line.startsWith("+"))
-		.map((line) => line.slice(1))
-		.join("\n");
 }
 
 // One item of the review: a changed file with its line diff, or a module
@@ -459,6 +456,7 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 							key={shown === "api" ? `api:${api.settings}` : "diff"}
 							entries={entries}
 							prUrl={data.pr.url}
+							markdownUrl={`/api/pr/${repo}/${number}/markdown`}
 							header={<Description html={data.bodyHTML} />}
 							focus={focus}
 							onCurrent={(id) => {
@@ -751,12 +749,8 @@ function Verdict({
 	);
 }
 
-// The description as GitHub renders it, cut to a few lines until opened.
-// GitHub sanitizes the HTML, as it does on its own page.
-// The description as GitHub renders it, in full. It sits at the top of the
-// diff's scroll area, so it scrolls away as on GitHub. GitHub sanitizes the
-// HTML, as it does on its own page.
-function Description({ html }: { html: string }) {
+// Links in HTML from GitHub open in a new tab.
+function useNewTabLinks(html: string) {
 	const box = useRef<HTMLDivElement>(null);
 	useEffect(() => {
 		for (const link of box.current?.querySelectorAll("a[href]") ?? []) {
@@ -764,6 +758,14 @@ function Description({ html }: { html: string }) {
 			link.setAttribute("rel", "noopener");
 		}
 	}, [html]);
+	return box;
+}
+
+// The description as GitHub renders it, in full. It sits at the top of the
+// diff's scroll area, so it scrolls away as on GitHub. GitHub sanitizes the
+// HTML, as it does on its own page.
+function Description({ html }: { html: string }) {
+	const box = useNewTabLinks(html);
 	if (!html.trim()) return <p class="description muted">No description.</p>;
 	return (
 		<div
@@ -772,6 +774,93 @@ function Description({ html }: { html: string }) {
 			// GitHub sanitized this HTML when it rendered the PR body.
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
+	);
+}
+
+// A new Markdown file as GitHub renders it, in place of the viewer, when
+// one file shows at a time. The viewer takes files and diffs only.
+function RenderedFile({
+	url,
+	prUrl,
+	file,
+	paneRef,
+}: {
+	url: string;
+	prUrl: string;
+	file: PRFile;
+	paneRef: { current: HTMLDivElement | null };
+}) {
+	const [html, setHtml] = useState<string | null>(null);
+	const [head, setHead] = useState("");
+	const [error, setError] = useState<string | null>(null);
+	const box = useNewTabLinks(html ?? "");
+	// GitHub leaves relative links and images as written. They point into the
+	// repository at the head commit on GitHub, where the reviewer's login
+	// opens a private repository's files.
+	useEffect(() => {
+		if (!box.current || !head) return;
+		const repoUrl = prUrl.replace(/\/pull\/\d+$/, "");
+		const dir = file.path.split("/").slice(0, -1).join("/");
+		const resolve = (ref: string, kind: "blob" | "raw") => {
+			const root = `${repoUrl}/${kind}/${head}/`;
+			return ref.startsWith("/")
+				? new URL(ref.slice(1), root).href
+				: new URL(ref, root + (dir ? `${dir}/` : "")).href;
+		};
+		const relative = (ref: string | null): ref is string =>
+			!!ref && !ref.startsWith("#") && !/^[a-z][\w+.-]*:/i.test(ref);
+		for (const link of box.current.querySelectorAll("a[href]")) {
+			const ref = link.getAttribute("href");
+			if (relative(ref)) link.setAttribute("href", resolve(ref, "blob"));
+		}
+		for (const image of box.current.querySelectorAll("img[src]")) {
+			const ref = image.getAttribute("src");
+			if (relative(ref)) image.setAttribute("src", resolve(ref, "raw"));
+		}
+	}, [html, head]);
+	useEffect(() => {
+		let stale = false;
+		fetch(`${url}?path=${encodeURIComponent(file.path)}`)
+			.then(async (res) => {
+				const json = (await res.json()) as {
+					html?: string;
+					headSha?: string;
+					error?: string;
+				};
+				if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+				if (stale) return;
+				setHead(json.headSha ?? "");
+				setHtml(json.html ?? "");
+			})
+			.catch((e: Error) => {
+				if (!stale) setError(e.message);
+			});
+		return () => {
+			stale = true;
+		};
+	}, [url, file.path]);
+	return (
+		<div class="diff-view rendered" ref={paneRef}>
+			<div class="rendered-head">
+				<span class="rendered-path">{file.path}</span>
+				<span class="file-meta">
+					<span class="added">new file, {file.additions} lines</span>
+					<span class="gen">rendered</span>
+				</span>
+			</div>
+			{error ? (
+				<p class="description error">{error}</p>
+			) : html === null ? (
+				<p class="description muted">Rendering…</p>
+			) : (
+				<div
+					class="description markdown-body"
+					ref={box}
+					// GitHub sanitized this HTML when it rendered the file.
+					dangerouslySetInnerHTML={{ __html: html }}
+				/>
+			)}
+		</div>
 	);
 }
 
@@ -818,6 +907,7 @@ const MODULE_STATUS: Record<string, GitStatus> = {
 function Diff({
 	entries: all,
 	prUrl,
+	markdownUrl,
 	header,
 	focus,
 	onCurrent,
@@ -827,6 +917,8 @@ function Diff({
 }: {
 	entries: Entry[];
 	prUrl: string;
+	// Renders a new Markdown file of the pull request, given its path.
+	markdownUrl: string;
 	header: ComponentChildren;
 	// Where to open, read once when the view is made.
 	focus: Focus | null;
@@ -923,6 +1015,13 @@ function Diff({
 	const oneFileRef = useRef(oneFile);
 	oneFileRef.current = oneFile;
 	const hasModules = useMemo(() => entries.some((e) => e.module), [entries]);
+	// With one file shown, a new Markdown file shows rendered.
+	const shownFile = oneFile ? entries[current]?.file : undefined;
+	const renderedFile =
+		shownFile && isMarkdown(shownFile.path) && newFileText(shownFile) !== null
+			? shownFile
+			: null;
+	const pane = useRef<HTMLDivElement | null>(null);
 
 	const toggle = (path: string) =>
 		setCollapsed((prev) => {
@@ -1084,8 +1183,9 @@ function Diff({
 		const view = viewer.current;
 		if (!view) return;
 		// Before the first file, one file at a time shows the description only.
+		// A rendered file leaves the viewer empty.
 		const shownEntries = oneFile
-			? current >= 0
+			? current >= 0 && !renderedFile
 				? entries.slice(current, current + 1)
 				: []
 			: entries;
@@ -1143,7 +1243,9 @@ function Diff({
 			const bg = file
 				? getComputedStyle(file).getPropertyValue("--diffs-dark-bg").trim()
 				: "";
-			if (bg) root.current?.style.setProperty("--code-dark-bg", bg);
+			// The rendered Markdown pane, beside the viewer, reads it too.
+			if (bg)
+				root.current?.parentElement?.style.setProperty("--code-dark-bg", bg);
 		});
 		if (focused.current || !focus || !byId.has(focus.id)) return;
 		focused.current = true;
@@ -1242,9 +1344,10 @@ function Diff({
 			} else if (event.key === "f") setOneFile(!oneFile);
 			// Home and End work without a click in the diff first.
 			else if (event.key === "Home") jump(-1);
-			else if (event.key === "End")
-				root.current?.scrollTo({ top: root.current.scrollHeight });
-			else if (event.key === "j")
+			else if (event.key === "End") {
+				const box = pane.current ?? root.current;
+				box?.scrollTo({ top: box.scrollHeight });
+			} else if (event.key === "j")
 				jump(Math.min(current + 1, entries.length - 1));
 			else if (event.key === "k") jump(Math.max(current - 1, -1));
 			else if (event.key === "x") {
@@ -1261,7 +1364,16 @@ function Diff({
 	return (
 		<div class={hasModules ? "review-body api-view" : "review-body"}>
 			<nav class="file-list" ref={treeHost} />
-			<div class="diff-view" ref={root} />
+			<div class="diff-view" ref={root} hidden={!!renderedFile} />
+			{renderedFile && (
+				<RenderedFile
+					key={renderedFile.path}
+					url={markdownUrl}
+					prUrl={prUrl}
+					file={renderedFile}
+					paneRef={pane}
+				/>
+			)}
 			{createPortal(oneFile && current >= 0 ? null : header, headerHost)}
 		</div>
 	);

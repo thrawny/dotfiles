@@ -293,6 +293,18 @@ export type PRFile = {
 	generated: boolean;
 };
 
+// The content of an added file, from its patch, which holds every line.
+export function newFileText(file: PRFile): string | null {
+	if (file.status !== "added" || !file.patch) return null;
+	return file.patch
+		.split("\n")
+		.filter((line) => line.startsWith("+"))
+		.map((line) => line.slice(1))
+		.join("\n");
+}
+
+export const isMarkdown = (path: string) => /\.(md|markdown)$/i.test(path);
+
 // Generated files start collapsed. The rules port codediff.nvim's
 // (lua/codediff/ui/explorer/filter.lua) so a PR collapses the same files in
 // the browser as in Neovim: these globs, the root .gitattributes and Go's
