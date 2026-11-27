@@ -857,10 +857,7 @@ function RenderedFile({
 		};
 	}, [url, file.path]);
 	return (
-		<div
-			class={reading ? "diff-view rendered reading" : "diff-view rendered"}
-			ref={paneRef}
-		>
+		<div class="diff-view rendered" ref={paneRef}>
 			<div class="rendered-head">
 				<span class="rendered-path">{file.path}</span>
 				<span class="file-meta">
@@ -1050,8 +1047,8 @@ function Diff({
 			? shownFile
 			: null;
 	const pane = useRef<HTMLDivElement | null>(null);
-	// Rendered Markdown reads in a centred column unless the reviewer chose
-	// the full width. The choice holds for every pull request.
+	// The description and rendered Markdown read in a centred column unless
+	// the reviewer chose the full width. The choice holds for every pull request.
 	const [reading, setReading] = useState(() => saved("mc-reading") !== "0");
 	// The key handler keeps an old render's copy of this, so it reads the
 	// current state from the update.
@@ -1395,7 +1392,7 @@ function Diff({
 			else if (event.key === "x") {
 				const entry = entries[current];
 				if (entry) toggle(entry.id);
-			} else if (event.key === "w" && renderedFile) toggleReading();
+			} else if (event.key === "w") toggleReading();
 			else if (event.key === "g") goBack();
 			else return;
 			event.preventDefault();
@@ -1409,7 +1406,15 @@ function Diff({
 	}, [current, entries, oneFile, active]);
 
 	return (
-		<div class={hasModules ? "review-body api-view" : "review-body"}>
+		<div
+			class={[
+				"review-body",
+				hasModules && "api-view",
+				reading && "reading-width",
+			]
+				.filter(Boolean)
+				.join(" ")}
+		>
 			<nav class="file-list" ref={treeHost} />
 			<div class="diff-view" ref={root} hidden={!!renderedFile} />
 			{renderedFile && (
