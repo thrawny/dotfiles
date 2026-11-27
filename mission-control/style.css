@@ -577,10 +577,6 @@ body.review-mode {
 	--borderColor-accent-emphasis: var(--accent);
 	--focus-outlineColor: var(--accent);
 }
-/* Prose is hard to read in long lines, so text keeps to GitHub's width. */
-.description.markdown-body > * {
-	max-width: 980px;
-}
 /* In dark mode, the description has the same background as the code below
    it. The review page copies the code's colour into --code-dark-bg. */
 :root[data-theme="dark"] .description.markdown-body {
