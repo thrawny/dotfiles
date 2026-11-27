@@ -1054,7 +1054,9 @@ function Diff({
 			// The library mixes a little of each diff colour into the code
 			// background. A mix of 0% shows the theme's diff colours as they are.
 			// A line number of API text is a link to its source.
-			unsafeCSS: `[data-line],[data-no-newline],[data-gutter-buffer],[data-column-number]{--mix-light:0%;--mix-dark:0%}${hasModules ? "[data-column-number]{cursor:pointer}" : ""}`,
+			// The library stops sideways scrolling at the code's edge, which
+			// blocks the two-finger swipe back. Lines wrap, so it can go.
+			unsafeCSS: `[data-code]{overscroll-behavior-x:auto}[data-line],[data-no-newline],[data-gutter-buffer],[data-column-number]{--mix-light:0%;--mix-dark:0%}${hasModules ? "[data-column-number]{cursor:pointer}" : ""}`,
 			renderCodeViewHeader: () => headerHost,
 			renderHeaderPrefix: (_diff: unknown, context: Context) => {
 				const entry = byId.get(context.item.id);

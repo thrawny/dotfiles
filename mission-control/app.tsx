@@ -169,32 +169,39 @@ function App() {
 		}
 	};
 
-	// Poll only while the tab is visible. On return, fetch at once when the
-	// data is older than one poll.
+	// Poll only while the page shows. A window behind others counts as
+	// hidden. When the data is older than one poll, the load waits for
+	// GitHub: the server's copy can be as old as the last visit. A return to
+	// the window, or to the list from a review page, checks at once.
+	const active = useContext(Active);
+	const fetchedAt = useRef(0);
+	fetchedAt.current = data?.fetchedAt ? Date.parse(data.fetchedAt) : 0;
+	const activeRef = useRef(active);
+	activeRef.current = active;
+	const lastTry = useRef(0);
+	const tick = () => {
+		setNow(Date.now());
+		if (document.visibilityState !== "visible" || !activeRef.current) return;
+		if (!fetchedAt.current || Date.now() - fetchedAt.current < POLL_MS) return;
+		// A load that failed is not tried again before the next poll.
+		if (Date.now() - lastTry.current < POLL_MS) return;
+		lastTry.current = Date.now();
+		load(true);
+	};
+	const tickRef = useRef(tick);
+	tickRef.current = tick;
 	useEffect(() => {
-		let lastLoad = Date.now();
-		const tick = () => {
-			setNow(Date.now());
-			if (document.visibilityState !== "visible") return;
-			if (Date.now() - lastLoad < POLL_MS) return;
-			lastLoad = Date.now();
-			load();
-		};
-		const timer = setInterval(tick, 15000);
-		document.addEventListener("visibilitychange", tick);
+		const check = () => tickRef.current();
+		const timer = setInterval(check, 15000);
+		document.addEventListener("visibilitychange", check);
+		addEventListener("focus", check);
 		return () => {
 			clearInterval(timer);
-			document.removeEventListener("visibilitychange", tick);
+			document.removeEventListener("visibilitychange", check);
+			removeEventListener("focus", check);
 		};
 	}, []);
-
-	// Back from a review page, a list older than one poll waits for GitHub,
-	// so it shows the current state at once.
-	const active = useContext(Active);
-	useEffect(() => {
-		if (!active || !data?.fetchedAt) return;
-		if (Date.now() - Date.parse(data.fetchedAt) > POLL_MS) load(true);
-	}, [active]);
+	useEffect(() => tickRef.current(), [active]);
 
 	useEffect(() => writeFilters(filters), [filters]);
 	useEffect(() => {
