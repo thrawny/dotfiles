@@ -34,12 +34,14 @@ def send_message(token: str, chat_id: str, text: str) -> None:
         },
         timeout=10,
     )
-    response.raise_for_status()
-    payload = response.json()
-
-    if not payload.get("ok"):
-        description = payload.get("description", "unknown Telegram API error")
-        raise RuntimeError(description)
+    # Telegram explains rejections in the JSON body; the HTTP status alone does not.
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = {}
+    if not isinstance(payload, dict) or not payload.get("ok"):
+        description = isinstance(payload, dict) and payload.get("description")
+        raise RuntimeError(description or f"HTTP {response.status_code}")
 
 
 def main() -> int:
@@ -74,7 +76,9 @@ def main() -> int:
     try:
         send_message(token, chat_id, message)
     except (requests.RequestException, TimeoutError, RuntimeError) as error:
-        print(f"Telegram notification failed: {error}", file=sys.stderr)
+        # Request errors include the URL, and the URL contains the bot token.
+        reason = str(error).replace(token, "<token>")
+        print(f"Telegram notification failed: {reason}", file=sys.stderr)
         return 1
 
     return 0
