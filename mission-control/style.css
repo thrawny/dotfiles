@@ -387,6 +387,16 @@ a.button {
 	}
 }
 
+/* On a wide screen the list keeps to a width the eye can follow: two
+   columns get more room than one. */
+body:not(.review-mode) .page {
+	max-width: 1800px;
+	margin-inline: auto;
+}
+body:not(.review-mode) .page:has(.cards:not(.side)) {
+	max-width: 1200px;
+}
+
 /* The review page fills the window: the strip on top, the
    file list and the diff below, each scrolling on its own. */
 body.review-mode {
@@ -410,6 +420,13 @@ body.review-mode {
 	display: flex;
 	flex-direction: column;
 	height: 100vh;
+}
+/* On a wide screen the strip, file list and diff keep to this width,
+   centred. Lines wrap, so wider code would make long lines hard to follow. */
+.review-page > * {
+	width: 100%;
+	max-width: 1900px;
+	margin-inline: auto;
 }
 .review-page > .error,
 .review-page > .muted {
@@ -557,6 +574,10 @@ body.review-mode {
 	--borderColor-neutral-muted: var(--line);
 	--borderColor-accent-emphasis: var(--accent);
 	--focus-outlineColor: var(--accent);
+}
+/* Prose is hard to read in long lines, so text keeps to GitHub's width. */
+.description.markdown-body > * {
+	max-width: 980px;
 }
 /* In dark mode, the description has the same background as the code below
    it. The review page copies the code's colour into --code-dark-bg. */
