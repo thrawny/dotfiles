@@ -128,11 +128,10 @@ in
           if [[ -z "''${DRY_RUN_CMD:-}" ]]; then
             desktopSettings=${lib.escapeShellArg "${state}/userdata/desktop-settings.json"}
             desktopSettingsInput="$desktopSettings"
-            if [[ ! -f "$desktopSettingsInput" ]]; then
-              desktopSettingsInput=${pkgs.writeText "t3code-empty-desktop-settings.json" "{}"}
-            fi
+            [[ -f "$desktopSettingsInput" ]] || desktopSettingsInput=/dev/null
             desktopSettingsTmp=$(mktemp "$desktopSettings.XXXXXX")
-            ${lib.getExe pkgs.jq} '.localEnvironmentEnabled = false' \
+            # A missing, empty or malformed file starts from {}, so the key is always written.
+            ${lib.getExe pkgs.jq} -n '(input? // {}) | .localEnvironmentEnabled = false' \
               "$desktopSettingsInput" > "$desktopSettingsTmp"
             chmod 600 "$desktopSettingsTmp"
             mv "$desktopSettingsTmp" "$desktopSettings"
