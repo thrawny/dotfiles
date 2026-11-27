@@ -796,11 +796,16 @@ function RenderedFile({
 	prUrl,
 	file,
 	paneRef,
+	reading,
+	toggleReading,
 }: {
 	url: string;
 	prUrl: string;
 	file: PRFile;
 	paneRef: { current: HTMLDivElement | null };
+	// A centred column of reading width, or the pane's full width.
+	reading: boolean;
+	toggleReading: () => void;
 }) {
 	const [html, setHtml] = useState<string | null>(null);
 	const [head, setHead] = useState("");
@@ -852,13 +857,24 @@ function RenderedFile({
 		};
 	}, [url, file.path]);
 	return (
-		<div class="diff-view rendered" ref={paneRef}>
+		<div
+			class={reading ? "diff-view rendered reading" : "diff-view rendered"}
+			ref={paneRef}
+		>
 			<div class="rendered-head">
 				<span class="rendered-path">{file.path}</span>
 				<span class="file-meta">
 					<span class="added">new file, {file.additions} lines</span>
 					<span class="gen">rendered</span>
 				</span>
+				<button
+					type="button"
+					class="width-toggle"
+					onClick={toggleReading}
+					title="Reading width or full width (w)"
+				>
+					{reading ? "Full width" : "Reading width"}
+				</button>
 			</div>
 			{error ? (
 				<p class="description error">{error}</p>
@@ -1034,6 +1050,16 @@ function Diff({
 			? shownFile
 			: null;
 	const pane = useRef<HTMLDivElement | null>(null);
+	// Rendered Markdown reads in a centred column unless the reviewer chose
+	// the full width. The choice holds for every pull request.
+	const [reading, setReading] = useState(() => saved("mc-reading") !== "0");
+	// The key handler keeps an old render's copy of this, so it reads the
+	// current state from the update.
+	const toggleReading = () =>
+		setReading((on) => {
+			save("mc-reading", on ? "0" : "1");
+			return !on;
+		});
 
 	const toggle = (path: string) =>
 		setCollapsed((prev) => {
@@ -1369,7 +1395,8 @@ function Diff({
 			else if (event.key === "x") {
 				const entry = entries[current];
 				if (entry) toggle(entry.id);
-			} else if (event.key === "g") goBack();
+			} else if (event.key === "w" && renderedFile) toggleReading();
+			else if (event.key === "g") goBack();
 			else return;
 			event.preventDefault();
 			// The file tree gets no copy of a key the review used.
@@ -1392,6 +1419,8 @@ function Diff({
 					prUrl={prUrl}
 					file={renderedFile}
 					paneRef={pane}
+					reading={reading}
+					toggleReading={toggleReading}
 				/>
 			)}
 			{createPortal(oneFile && current >= 0 ? null : header, headerHost)}

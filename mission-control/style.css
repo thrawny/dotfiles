@@ -661,6 +661,37 @@ body.review-mode {
 	border-bottom: 1px solid var(--line);
 	font-size: 0.85rem;
 }
+.width-toggle {
+	margin-left: auto;
+	font-size: 0.8rem;
+	padding: 0.15rem 0.6rem;
+}
+/* The reading view: text in a centred column of about 80 characters, in a
+   larger size. Tables and code blocks start at the text's left edge and may
+   grow to the right, up to a wider limit, so they need not scroll. */
+.rendered.reading .markdown-body {
+	--text-width: 52rem;
+	--wide-width: 72rem;
+	--gutter: max(1.5rem, calc((100% - var(--text-width)) / 2));
+	font-size: 16px;
+	line-height: 1.6;
+	padding-block: 2rem 4rem;
+	padding-inline: 0;
+}
+.rendered.reading .markdown-body > * {
+	margin-left: var(--gutter);
+	max-width: min(var(--text-width), 100% - 3rem);
+}
+.rendered.reading
+	.markdown-body
+	> :is(table, pre, .highlight, markdown-accessiblity-table) {
+	max-width: min(var(--wide-width), 100% - var(--gutter) - 1.5rem);
+}
+/* GitHub wraps tables in this element, which shows inline by default, and
+   an inline box ignores the width rules above. */
+.rendered.reading markdown-accessiblity-table {
+	display: block;
+}
 .rendered-path {
 	font-family: ui-monospace, monospace;
 }
