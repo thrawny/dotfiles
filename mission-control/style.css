@@ -428,9 +428,11 @@ body.review-mode {
 	max-width: 1900px;
 	margin-inline: auto;
 }
+/* Inside the capped width, as the strip is. */
 .review-page > .error,
 .review-page > .muted {
-	margin: 1rem;
+	margin-block: 1rem;
+	padding-inline: 1rem;
 }
 .strip {
 	display: grid;
