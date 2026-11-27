@@ -504,10 +504,15 @@ def hc_name(
 
 
 def login_command(
-    cwd: Path, env: list[str], agent_args: list[str], brief: str
+    cwd: Path,
+    env: list[str],
+    agent_args: list[str],
+    brief: str,
+    interactive: bool = False,
 ) -> list[str]:
     """The login shell command that starts Claude with its brief as the first
-    prompt, in the folder's direnv environment, with env set."""
+    prompt, in the folder's direnv environment, with env set. An interactive
+    shell also reads ~/.zshrc, which loads Claude's token from ~/.secrets."""
     words = ["claude", *agent_args, *([brief] if brief else [])]
     if shutil.which("direnv") and any(
         (folder / ".envrc").is_file() for folder in (cwd, *cwd.parents)
@@ -516,7 +521,7 @@ def login_command(
     if env:
         words = ["env", *env, *words]
     shell = os.environ.get("SHELL") or "/bin/zsh"
-    return [shell, "-lc", "exec " + shlex.join(words)]
+    return [shell, "-ilc" if interactive else "-lc", "exec " + shlex.join(words)]
 
 
 def hc_start(address: str, brief: str) -> None:
@@ -694,7 +699,8 @@ def rex_spawn(
             "--keep-open",
             "--json",
             "--",
-            *login_command(cwd, env, agent_args, brief),
+            # The Rex app's server starts without the user's shell variables.
+            *login_command(cwd, env, agent_args, brief, interactive=True),
             timeout=60,
         )
     )
