@@ -21,6 +21,8 @@ import time
 import uuid
 
 DOMAIN = "com.superlogical.rex"
+# Home Manager activation runs with a PATH that lacks /usr/bin.
+DEFAULTS = "/usr/bin/defaults"
 THEMES_KEY = "Workspace.customThemes"
 # Foundation dates count seconds from 2001-01-01, not from 1970.
 APPLE_EPOCH = 978307200
@@ -73,7 +75,7 @@ def palette(colors: dict[str, str], ansi: list[str]) -> dict[str, object]:
 def current_themes() -> list[dict[str, object]]:
     """The app's custom themes, or none before the app first saved any."""
     result = subprocess.run(
-        ["defaults", "export", DOMAIN, "-"], capture_output=True, check=False
+        [DEFAULTS, "export", DOMAIN, "-"], capture_output=True, check=False
     )
     if result.returncode:
         return []
@@ -86,7 +88,7 @@ def current_themes() -> list[dict[str, object]]:
 
 def write(key: str, kind: str, value: object) -> None:
     text = ("true" if value else "false") if kind == "bool" else str(value)
-    subprocess.run(["defaults", "write", DOMAIN, key, f"-{kind}", text], check=True)
+    subprocess.run([DEFAULTS, "write", DOMAIN, key, f"-{kind}", text], check=True)
 
 
 def main() -> int:
