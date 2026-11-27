@@ -173,13 +173,16 @@ function save(key: string, value: string) {
 	} catch {}
 }
 
+// Inputs that take keys as text. A checkbox or a button does not, so the
+// review keys work after a click on one.
+const NOT_TEXT = new Set(["checkbox", "radio", "button", "submit", "reset"]);
+
 function isTyping(event: KeyboardEvent) {
 	const target = event.composedPath()[0] as HTMLElement | undefined;
-	return (
-		!!target &&
-		(target.isContentEditable ||
-			["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
-	);
+	if (!target) return false;
+	if (target.isContentEditable) return true;
+	if (target instanceof HTMLInputElement) return !NOT_TEXT.has(target.type);
+	return ["TEXTAREA", "SELECT"].includes(target.tagName);
 }
 
 type Mode = "diff" | "api";
@@ -362,9 +365,12 @@ export function Review({ repo, number }: { repo: string; number: number }) {
 			else if (event.key === "P" && shown === "api") toggleUnexported();
 			else return;
 			event.preventDefault();
+			event.stopPropagation();
 		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
+		// The capture phase sees a key before a focused button, checkbox or
+		// the file tree does, so the review keys work wherever focus is.
+		window.addEventListener("keydown", onKey, true);
+		return () => window.removeEventListener("keydown", onKey, true);
 	});
 
 	const changed = modules.filter((m) => moduleStatus(m) !== "unchanged").length;
@@ -694,9 +700,12 @@ function Verdict({
 			else if (event.key === "Enter" && armed) press(armed);
 			else return;
 			event.preventDefault();
+			event.stopPropagation();
 		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
+		// The capture phase sees a key before a focused button, checkbox or
+		// the file tree does, so the review keys work wherever focus is.
+		window.addEventListener("keydown", onKey, true);
+		return () => window.removeEventListener("keydown", onKey, true);
 	});
 
 	const button = (event: ReviewEvent, cls: string, now = false) => {
@@ -1363,9 +1372,13 @@ function Diff({
 			} else if (event.key === "g") goBack();
 			else return;
 			event.preventDefault();
+			// The file tree gets no copy of a key the review used.
+			event.stopPropagation();
 		};
-		window.addEventListener("keydown", onKey);
-		return () => window.removeEventListener("keydown", onKey);
+		// The capture phase sees a key before a focused button, checkbox or
+		// the file tree does, so the review keys work wherever focus is.
+		window.addEventListener("keydown", onKey, true);
+		return () => window.removeEventListener("keydown", onKey, true);
 	}, [current, entries, oneFile, active]);
 
 	return (
