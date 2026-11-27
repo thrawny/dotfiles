@@ -12,7 +12,7 @@ The written defaults leave out some valid IDs, such as `consumeOrExpelWindowLeft
 Differences from the Hyprland binds:
 
 - Every workspace uses the `niri` layout (scrolling columns). `toggleWorkspaceLayout` (Hyprland's Super+L) is unbound.
-- Option+F toggles the full-width column and Option+Shift+F is OmniWM fullscreen. Option+Minus and Option+Equal resize the column by 10 percent, Option+Backslash cycles the 1/3, 1/2 and 2/3 presets.
+- Option+F toggles the full-width column and Option+Shift+F is OmniWM fullscreen. Option+Minus and Option+Equal resize the column by 10 percent, Option+Backslash cycles the 1/3, 1/2 and 2/3 presets. Option+Shift+Backslash balances the column widths (`balanceSizes`).
 - Unavailable in 0.7.6: new Ghostty window (Option+Return), directional monitor focus, window groups' next (Option+Shift+G), Option+Shift+W (close the workspace) and Option+B.
 - Number keys use fixed workspace IDs, not Hyprland's position in the workspace list. OmniWM's `switchWorkspaceSlot.N` counts per monitor, so it would move `code` off Option+3.
 - Option+scroll has no workspace switch. Option+Shift+scroll scrolls columns (`scrollModifierKey`).

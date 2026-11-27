@@ -1039,7 +1039,7 @@ binding = "Unassigned"
 id = "resizeWindowSecondarySpan.grow"
 
 [[hotkeys]]
-binding = "Unassigned"
+binding = "Option+Shift+Backslash"
 id = "balanceSizes"
 
 [[hotkeys]]
