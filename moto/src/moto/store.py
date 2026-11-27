@@ -85,7 +85,7 @@ def tasks_for_update() -> Generator[dict[str, dict[str, Any]]]:
 
 
 def forked() -> bool:
-    """Whether this runs in a session fork-window forked, which owns no task."""
+    """Whether this runs in a fork-window fork that owns no task, such as the driver's."""
     return bool(os.environ.get("MOTO_FORK"))
 
 

@@ -1407,6 +1407,61 @@ def test_session_start_hook_skips_a_fork(moto: ModuleType):
     assert moto.read_tasks() == before
 
 
+@pytest.mark.usefixtures("claude_home")
+def test_a_fork_of_a_worker_is_a_task_the_user_owns(
+    moto: ModuleType, worktree: Path, capsys: pytest.CaptureFixture[str]
+):
+    with moto.tasks_for_update() as tasks:
+        tasks["abc-1"] = task(
+            session="s1", flow="grill", model="opus", effort="high", cwd=str(worktree)
+        )
+        tasks["abc-1-fork"] = task(pane_id="w1:p5", session="s5")
+    parent = moto.read_tasks()["abc-1"]
+    worker = {"HERDR_PANE_ID": "w1:p1"}
+    # fork-window asks moto, from the worker's pane, which task the fork takes.
+    with patch.object(moto, "live_agents", return_value={}):
+        for env, named in (
+            (worker, {"parent": "abc-1", "name": "abc-1-fork-2"}),
+            ({"HERDR_PANE_ID": "w9:p1"}, {}),  # the driver's pane, say
+        ):
+            with patch.dict("os.environ", env):
+                assert moto_main(moto, "fork") == 0
+            out = json.loads(capsys.readouterr().out)
+            assert {k: out[k] for k in named} == named
+    # Then it records the task once Herdr lists the fork in its pane.
+    pane = claude_in("w1:p7", cwd=str(worktree))
+    record = ["fork", "--pane", "w1:p7", "--name", "abc-1-fork-2", "--session", "s9"]
+    with (
+        patch.dict("os.environ", worker),
+        patch.object(moto, "live_agents", return_value={"w1:p7": pane}),
+        patch.object(moto, "herdr"),
+    ):
+        assert moto_main(moto, *record) == 0
+        assert moto_main(moto, *record) == 1  # the pane already has its task
+    tasks = moto.read_tasks()
+    fork = tasks["abc-1-fork-2"]
+    assert len(tasks) == 3
+    assert tasks["abc-1"] == parent
+    assert "parent" not in fork
+    assert {
+        k: fork.get(k) for k in ("pane_id", "session", "owner", "requested_by")
+    } == {
+        "pane_id": "w1:p7",
+        "session": "s9",
+        "owner": "user",
+        "requested_by": "abc-1",
+    }
+    assert (fork["flow"], fork["model"], fork["effort"]) == ("grill", "opus", "high")
+    assert (fork["cwd"], fork["adopted"]) == (str(worktree), True)
+    # The fork runs task commands, and its report reaches the driver.
+    here = {"HERDR_PANE_ID": "w1:p7", "CLAUDE_CODE_SESSION_ID": "s9"}
+    with patch.dict("os.environ", here):
+        assert moto_main(moto, "report", "--to-driver", "done", "Grill over.") == 0
+    now = moto.time.time()
+    news = moto.check(moto.read_tasks(), live("done", 10, "w1:p7"), now)
+    assert "abc-1-fork-2 done (passed on): Grill over." in news
+
+
 def test_transcript_is_the_recorded_session_not_a_fork_with_its_name(
     moto: ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ):

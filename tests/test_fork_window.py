@@ -110,7 +110,7 @@ def test_herdr_precedes_hypr_and_quotes_once(fork: ModuleType, tmp_path: Path):
         patch.object(fork, "executable", side_effect=identity),
         patch.object(fork, "run", side_effect=[response, ""]) as run,
     ):
-        assert "w3:p99" in fork.launch(command, tmp_path)
+        assert fork.launch(command, tmp_path)[1] == "w3:p99"
     assert run.call_args_list[0].args == (
         [
             "herdr",
@@ -157,3 +157,30 @@ def test_auto_detect_ambiguous(fork: ModuleType):
     ):
         with pytest.raises(fork.ForkError, match="Ambiguous"):
             fork.detect_harness()
+
+
+def test_a_fork_of_a_worker_starts_as_its_own_task(fork: ModuleType):
+    task = {
+        "name": "abc-1-fork",
+        "parent": "abc-1",
+        "effort": "low",
+        "session": SESSION,
+    }
+    with (
+        patch.dict("os.environ", {"MOTO_ROLE": "scout"}),
+        patch.object(fork.shutil, "which", side_effect=fake_binary),
+    ):
+        tasked = fork.fork_command("claude", SESSION, task)
+        untasked = fork.fork_command("claude", SESSION)
+    assert "MOTO_FORK=1" not in tasked
+    assert "MOTO_ROLE=scout" in tasked
+    # moto finds the fork by the session id it gave it.
+    claude = tasked[tasked.index("/bin/claude") :]
+    assert claude[claude.index("--session-id") + 1] == SESSION
+    assert claude[claude.index("--effort") + 1] == "low"
+    assert "moto task abc-1-fork" in tasked[-1]
+    assert "MOTO_FORK=1" in untasked
+    assert "--session-id" not in untasked
+    # Codex has no moto tasks, so moto is never asked.
+    with patch.object(fork.subprocess, "run", side_effect=AssertionError("no moto")):
+        assert fork.fork_task("codex", Path.cwd()) is None

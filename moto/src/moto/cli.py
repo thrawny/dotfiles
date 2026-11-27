@@ -6,6 +6,7 @@ import sys
 
 import moto
 from moto import backend
+from moto.adopting import cmd_fork
 from moto.afk import cmd_afk, cmd_back, cmd_log, cmd_log_action
 from moto.attaching import cmd_attach
 from moto.closing import cmd_close, cmd_drop
@@ -221,6 +222,22 @@ def parser() -> argparse.ArgumentParser:
         + " the task that ran it; silent, and always exits 0",
     )
     attach_.set_defaults(handler=cmd_attach)
+
+    fork = commands.add_parser(
+        "fork",
+        help="For fork-window: name the task a fork of this pane's worker takes,"
+        + " or with --pane record it",
+    )
+    fork.add_argument("--pane", help="The fork's Herdr pane, to record its task")
+    fork.add_argument("--name", help="The task name moto fork printed")
+    fork.add_argument("--session", help="The fork's Claude session id")
+    fork.add_argument(
+        "--wait",
+        type=int,
+        default=30,
+        help="Seconds to wait for Herdr to list Claude in the pane (default: %(default)s)",
+    )
+    fork.set_defaults(handler=cmd_fork)
 
     snooze = commands.add_parser(
         "snooze",

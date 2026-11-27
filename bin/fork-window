@@ -16,10 +16,21 @@ The original session remains active. You share its working directory and files,
 but not its running tools, background tasks, or ownership of those tasks.
 The inherited conversation is context, not a request to continue its pending work
 or to fork again. Acknowledge the fork briefly, then wait for the user's next
-instruction. Do not run tools or change files until that instruction arrives.
-This fork is neither a moto worker nor the moto driver, even if the conversation
-was one. Do not run moto report, moto tell, moto watch or any other moto task
-command; moto refuses them here. Answer the user in this pane."""
+instruction. Do not run tools or change files until that instruction arrives."""
+
+NO_TASK = """This fork is neither a moto worker nor the moto driver, even if the
+conversation was one. Do not run moto report, moto tell, moto watch or any other
+moto task command; moto refuses them here. Answer the user in this pane."""
+
+FORK_TASK = """This fork is the moto task {name}, forked from the worker {parent}.
+The user owns it, so answer and ask in this pane. To pass something to the
+driver, run moto report --to-driver done|question|blocked "<one line>". Wrap and
+snooze work as for any task. The worker {parent} keeps its own task and pane;
+do not report for it or moto tell it."""
+
+# Passed on to the fork, so it keeps the worker's role and worker marker.
+INHERITED = ("MOTO_ROLE", "MOTO_WORKER")
+MOTO_TIMEOUT = 45
 
 
 class ForkError(Exception):
@@ -90,21 +101,89 @@ def claude_title(ref: str) -> str | None:
     return title
 
 
-def fork_command(harness: str, ref: str) -> list[str]:
+def moto(*args: str, cwd: Path) -> subprocess.CompletedProcess[str] | None:
+    binary = shutil.which("moto")
+    if not binary:
+        return None
+    try:
+        return subprocess.run(
+            [binary, *args],
+            cwd=cwd,
+            capture_output=True,
+            text=True,
+            timeout=MOTO_TIMEOUT,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+
+def fork_task(harness: str, cwd: Path) -> dict[str, str] | None:
+    """The moto task a fork of this pane's worker takes, or None.
+
+    Only a Claude session in Herdr can be a task. moto prints {} for the
+    driver's pane or one no task owns, and refuses in a fork of those. The
+    task carries the session id fork-window gives the fork.
+    """
+    if harness != "claude" or os.environ.get("HERDR_ENV") != "1":
+        return None
+    result = moto("fork", cwd=cwd)
+    try:
+        task = json.loads(result.stdout) if result and not result.returncode else {}
+    except ValueError:
+        return None
+    if not isinstance(task, dict) or not task.get("name") or not task.get("parent"):
+        return None
+    return {k: str(v) for k, v in task.items()} | {"session": str(uuid.uuid4())}
+
+
+def record_fork(task: dict[str, str], pane: str, cwd: Path) -> str:
+    """Have moto record the fork's task, once Herdr lists the fork in its pane."""
+    args = [
+        "fork",
+        "--pane",
+        pane,
+        "--name",
+        task["name"],
+        "--session",
+        task["session"],
+    ]
+    result = moto(*args, cwd=cwd)
+    if result and not result.returncode:
+        return result.stdout.strip()
+    error = (result.stderr.strip() if result else "") or "moto did not answer"
+    return f"moto did not record the fork as {task['name']}: {error}"
+
+
+def fork_command(
+    harness: str, ref: str, task: dict[str, str] | None = None
+) -> list[str]:
     agent = executable(harness)
-    notice = f"{NOTICE}\n\nSource harness: {harness}\nSource session: {ref}"
+    about = FORK_TASK.format(**task) if task else NO_TASK
+    notice = f"{NOTICE}\n{about}\n\nSource harness: {harness}\nSource session: {ref}"
     if harness == "claude":
         # A fork copies the session's name, and moto finds a worker's transcript
         # by that name, so a fork under the same name would stand in for it.
         title = claude_title(ref)
         name = ["--name", f"{title} fork"] if title else []
-        args = [agent, "--resume", ref, "--fork-session", *name, notice]
+        # moto records a fork's task by this session id, because Claude runs
+        # no SessionStart hook when a fork starts.
+        extra = ["--session-id", task["session"]] if task else []
+        for flag in ("model", "effort"):
+            if task and task.get(flag):
+                extra += [f"--{flag}", task[flag]]
+        args = [agent, "--resume", ref, "--fork-session", *name, *extra, notice]
     elif harness == "codex":
         args = [agent, "fork", ref, notice]
     else:
         args = [agent, "--fork", ref, "--", notice]
     # A child terminal must not retain the parent's nested-agent/session markers.
-    # MOTO_FORK makes moto's hooks skip the fork and its task commands refuse it.
+    # MOTO_FORK makes moto's hooks skip a fork that is no task, and its task
+    # commands refuse it. A fork that is a task keeps the worker's role.
+    if task:
+        markers = [f"{k}={os.environ[k]}" for k in INHERITED if os.environ.get(k)]
+    else:
+        markers = ["MOTO_FORK=1"]
     return [
         executable("env"),
         "-u",
@@ -113,7 +192,7 @@ def fork_command(harness: str, ref: str) -> list[str]:
         "CLAUDE_CODE_SESSION_ID",
         "-u",
         "CODEX_THREAD_ID",
-        "MOTO_FORK=1",
+        *markers,
         *args,
     ]
 
@@ -129,7 +208,8 @@ def run(args: list[str], cwd: Path) -> str:
     return result.stdout
 
 
-def launch(command: list[str], cwd: Path) -> str:
+def launch(command: list[str], cwd: Path) -> tuple[str, str | None]:
+    """Start the fork, and say where: a message, and the Herdr pane if any."""
     if os.environ.get("HERDR_ENV") == "1":
         workspace = os.environ.get("HERDR_WORKSPACE_ID")
         if not workspace:
@@ -164,7 +244,7 @@ def launch(command: list[str], cwd: Path) -> str:
             raise ForkError(
                 f"Fork launch in {pane} was not confirmed; inspect that pane before retrying: {error}"
             ) from error
-        return f"Fork launch requested in Herdr pane {pane}."
+        return f"Fork launch requested in Herdr pane {pane}.", pane
     if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
         raise ForkError("Run inside Herdr or a Hyprland desktop session")
     # Ghostty's single-instance action opens a window without leaving a child
@@ -179,7 +259,7 @@ def launch(command: list[str], cwd: Path) -> str:
         ],
         cwd,
     )
-    return "Fork launch requested in a new Ghostty window."
+    return "Fork launch requested in a new Ghostty window.", None
 
 
 def main() -> int:
@@ -207,7 +287,11 @@ def main() -> int:
             raise ForkError(f"Working directory does not exist: {cwd}")
         harness = args.harness or detect_harness()
         ref = session_ref(harness, args.session)
-        print(launch(fork_command(harness, ref), cwd))
+        task = fork_task(harness, cwd)
+        message, pane = launch(fork_command(harness, ref, task), cwd)
+        print(message)
+        if task and pane:
+            print(record_fork(task, pane, cwd))
         return 0
     except subprocess.TimeoutExpired:
         print(

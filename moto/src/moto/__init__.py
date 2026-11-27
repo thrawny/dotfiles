@@ -146,9 +146,15 @@ worker's name instead of [driver]. A worker that hands work off instead runs
 moto spawn --to-driver: the task gets no parent, the driver watches it as its
 own, and requested_by records the worker that asked for it.
 
-fork-window starts a fork of a worker or the driver with MOTO_FORK set. A fork
-is neither: the hooks skip it, and every command that changes a task or speaks
-for the driver refuses to run in it.
+fork-window starts a fork of a worker as a task of its own. moto fork names it,
+as in abc-1-fork. fork-window picks the fork's session id, because Claude runs
+no SessionStart hook when a fork starts, and moto fork --pane records the task
+once Herdr lists the fork. The user owns it from the start. Its reports reach the driver, as for
+moto spawn --to-driver, and requested_by records the worker it forked from. It
+keeps that worker's flow, model, effort and role, and shares its checkout.
+A fork of the driver, or of a session no task owns, starts with MOTO_FORK set
+and is no task: the hooks skip it, and every command that changes a task or
+speaks for the driver refuses to run in it.
 
 A session that works inside MOTO_HOME takes a role, because MOTO_HOME's
 CLAUDE.md cannot tell the driver from a worker there. A role is a Markdown file
