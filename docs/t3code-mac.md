@@ -35,6 +35,33 @@ Manager configuration to use different ports. Remote project access requires
 pairing. When changing the HTTPS port, remove the old mapping with
 `tailscale serve --https=<old-port> off` after activating the new configuration.
 
+## Desktop app
+
+The desktop app is the Homebrew cask `t3-code@nightly`. It also uses
+`~/.t3` as its T3 home, and the server already owns that home. Home Manager
+writes `localEnvironmentEnabled: false` to `~/.t3/userdata/desktop-settings.json`,
+so the app starts no backend of its own and only connects to paired servers.
+Keep **Settings → Environments → Local environment** turned off. If you turn it on,
+the app finds the server's lock on `~/.t3`, shows an error and quits.
+
+Pair the app with each server through **Add environment**:
+
+- This Mac: run `t3 pair` and paste the `http://127.0.0.1:4773/pair#token=…` URL.
+- Obelisk: run `ssh obelisk sudo -u t3code t3 pair --base-dir /srv/t3code/.t3code`.
+  In the printed URL, replace `http://127.0.0.1:3773` with
+  `https://t3code.tailf85bba.ts.net`, then paste it.
+
+Don't add this Mac as an SSH environment, because the app would start a second
+server in `~/.t3`. The model default, shortcuts and Monokai theme are server
+settings, so the app picks them up from each paired server.
+
+Homebrew updates the app. A Home Manager launch agent sets
+`T3CODE_DISABLE_AUTO_UPDATE` and `T3CODE_TELEMETRY_ENABLED=false` in the login
+session with `launchctl setenv`, which turns off the app's own updater and
+telemetry. The cask declares its own updater, so `brew upgrade` skips it unless
+`HOMEBREW_UPGRADE_GREEDY_CASKS` names it. Home Manager sets that variable, so
+`brew upgrade` covers the app. Quit and reopen the app after an upgrade.
+
 ## Service maintenance
 
 Use dotfiles updates and `just switch-hm` to update the service. Do not use

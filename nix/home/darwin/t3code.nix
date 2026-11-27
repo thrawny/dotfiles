@@ -75,6 +75,8 @@ in
 
   config = lib.mkIf cfg.enable {
     home.packages = [ cfg.package ];
+    # The cask declares its own updater, so plain `brew upgrade` would skip it.
+    home.sessionVariables.HOMEBREW_UPGRADE_GREEDY_CASKS = "t3-code@nightly";
 
     programs.direnv.config.whitelist.prefix = [ "${state}/worktrees" ];
     # T3 command shells do not read the interactive .zshrc hook.
@@ -115,6 +117,25 @@ in
               ' "$settingsInput" > "$settingsTmp"
             chmod 600 "$settingsTmp"
             mv "$settingsTmp" "$settings"
+          fi
+        '';
+
+    # The desktop app (Homebrew cask) also defaults to ~/.t3. With its local
+    # environment off it starts no backend there and only connects to paired servers.
+    home.activation.t3codeDesktopClient =
+      lib.hm.dag.entryBetween [ "setupLaunchAgents" ] [ "t3codeDirectories" ]
+        ''
+          if [[ -z "''${DRY_RUN_CMD:-}" ]]; then
+            desktopSettings=${lib.escapeShellArg "${state}/userdata/desktop-settings.json"}
+            desktopSettingsInput="$desktopSettings"
+            if [[ ! -f "$desktopSettingsInput" ]]; then
+              desktopSettingsInput=${pkgs.writeText "t3code-empty-desktop-settings.json" "{}"}
+            fi
+            desktopSettingsTmp=$(mktemp "$desktopSettings.XXXXXX")
+            ${lib.getExe pkgs.jq} '.localEnvironmentEnabled = false' \
+              "$desktopSettingsInput" > "$desktopSettingsTmp"
+            chmod 600 "$desktopSettingsTmp"
+            mv "$desktopSettingsTmp" "$desktopSettings"
           fi
         '';
 
@@ -164,6 +185,23 @@ in
         '';
 
     launchd.agents = {
+      # GUI apps get launchd's environment. Homebrew updates the desktop app, so
+      # turn off its own updater and its telemetry. Only T3 reads these variables.
+      t3code-desktop-environment = {
+        enable = true;
+        config = {
+          ProgramArguments = [
+            "/bin/sh"
+            "-c"
+            ''
+              /bin/launchctl setenv T3CODE_DISABLE_AUTO_UPDATE true
+              /bin/launchctl setenv T3CODE_TELEMETRY_ENABLED false
+            ''
+          ];
+          RunAtLoad = true;
+        };
+      };
+
       t3code-recovery = {
         enable = true;
         config = {
