@@ -85,6 +85,7 @@ PanelWindow {
         QuotaButton {
             providerId: "codex"
             compact: barWindow.compact
+            visible: false // Codex hidden from the bar for now.
         }
         BarButton {
             text: Keyboard.label
