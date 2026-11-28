@@ -10,7 +10,17 @@ Button {
     readonly property string label: provider?.name || (providerId === "claude" ? "Claude" : "Codex")
     // Snapshot summaries use the same session / weekly preference and reset
     // rounding as the original Waybar output. Only trailing text is dimmed.
-    readonly property var summaryParts: provider?.available && provider.summary !== "—" ? provider.summary.split(" ") : ["--"]
+    readonly property var summaryParts: {
+        if (!provider?.available || provider.summary === "—")
+            return ["--"];
+        const parts = provider.summary.split(" ");
+        // The backend summary prefers Claude's Fable-only week; show the
+        // all-models week instead. Parts are session %, week %, time left.
+        const week = provider.windows.find(window => window.id === "secondary");
+        if (week && parts.length > 1 && provider.windows.some(window => window.id === "primary"))
+            parts[1] = week.expired ? "?" : Math.round(week.used_percent) + "%";
+        return parts;
+    }
     readonly property color statusColor: provider?.severity === "critical" ? Theme.quotaAccent : provider?.severity === "warning" ? Theme.quotaWarning : Theme.codexIcon
     readonly property string hint: [label, Quota.error || provider?.error || (provider?.stale ? "Stale quota data" : !provider?.available ? "No data available" : ""), ...(provider?.windows || []).map(window => window.title + ": " + (window.expired ? "unknown" : Math.round(window.used_percent) + "%") + " · " + window.reset_text)].filter(Boolean).join("\n")
     implicitHeight: Theme.barHeight
