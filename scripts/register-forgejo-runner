@@ -7,6 +7,18 @@ runner_uid=$(id -u "$runner_user")
 runner_url=https://forgejo.tailf85bba.ts.net
 runner_name=obelisk-thechalkboard
 
+# Each step's output goes to a log inside the registration directory, which
+# the EXIT trap removes. Show the log of a failed step before it goes.
+run_logged() {
+    local step=$1 log=$2
+    shift 2
+    if ! "$@" > "$log" 2>&1; then
+        echo "register-forgejo-runner: $step failed:" >&2
+        cat "$log" >&2
+        exit 1
+    fi
+}
+
 if [ -f "$runner_home/.runner" ]; then
     echo "Runner identity already exists; leaving it unchanged."
 else
@@ -14,22 +26,26 @@ else
     registration_dir=$(mktemp -d /run/forgejo-runner-register.XXXXXXXX)
     trap 'rm -rf "$registration_dir"' EXIT
     forgejo_pid=$(systemctl show forgejo.service -p MainPID --value)
-    forgejo_bin=$(readlink "/proc/$forgejo_pid/exe")
+    if [ "$forgejo_pid" = 0 ] || ! forgejo_bin=$(readlink "/proc/$forgejo_pid/exe"); then
+        echo "register-forgejo-runner: forgejo.service is not running" >&2
+        exit 1
+    fi
     head -c 20 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$registration_dir/secret"
     chmod 0750 "$registration_dir"
     chown root:forgejo "$registration_dir"
     chown forgejo:forgejo "$registration_dir/secret"
-    runuser -u forgejo -- env FORGEJO_WORK_DIR=/var/lib/forgejo \
+    run_logged "Forgejo registration" "$registration_dir/server.log" \
+        runuser -u forgejo -- env FORGEJO_WORK_DIR=/var/lib/forgejo \
         "$forgejo_bin" forgejo-cli actions register \
         --secret-file "$registration_dir/secret" \
         --scope thrawny/thechalkboard --name "$runner_name" \
-        --labels chalkboard > "$registration_dir/server.log" 2>&1
+        --labels chalkboard
     # This CLI writes the shared identity directly to .runner; never print it.
     cd "$runner_home"
-    runuser -u "$runner_user" -- forgejo-runner create-runner-file \
+    run_logged "Runner file creation" "$registration_dir/runner.log" \
+        runuser -u "$runner_user" -- forgejo-runner create-runner-file \
         --instance "$runner_url" --name "$runner_name" \
-        --secret "$(cat "$registration_dir/secret")" \
-        > "$registration_dir/runner.log" 2>&1
+        --secret "$(cat "$registration_dir/secret")"
     chmod 0600 "$runner_home/.runner"
     echo "Registered repository-scoped runner."
 fi
