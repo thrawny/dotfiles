@@ -12,7 +12,7 @@ The flake input tracks the preview channel, the only channel with releases so fa
 
 ## Connecting
 
-The app's local server declares z13 in `init.lua` as `ssh://thrawny@thrawny-z13`. If the app does not list it, choose Add Remote Host and enter that address. Rex then runs `rex` on z13 over SSH, so nothing listens on the network but sshd.
+The app's local server declares z13 in `init.lua` as `ssh://thrawny@thrawny-z13`. If the app does not list it, choose Add Remote Host and enter that address. Rex then runs `rex` on z13 over SSH. Both machines take SSH through Tailscale SSH, which signs you in by your tailnet identity, so Rex needs no key and no port of its own.
 
 After `just switch-hm` on z13, check the server:
 
@@ -22,6 +22,8 @@ rex server status
 ```
 
 From the M1, run `rex -S ssh://thrawny@thrawny-z13 ls`.
+
+Rex for iOS connects the same way. With the Tailscale app connected, add `ssh://thrawny@thrawny-z13` and `ssh://thrawny@thrawnym1` under Settings > Remote Hosts. The M1 address reaches the Rex app's own server, which keeps running with the app's window closed while the Mac is awake. To match the Mac's colors, paste the color lines of `~/.config/ghostty/config` into Settings > Themes > Import Theme: `background`, `foreground`, `cursor-color`, `cursor-text`, the two `selection-` lines and the 16 `palette` lines.
 
 ## Agent keys
 
