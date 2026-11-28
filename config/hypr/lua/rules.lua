@@ -9,7 +9,7 @@ hl.workspace_rule({ workspace = "3", default_name = "dotfiles", persistent = tru
 hl.window_rule({
 	name = "chat-on-main",
 	match = { class = "^(org\\.telegram\\.desktop|Slack|teams-for-linux|vesktop|discord)$" },
-	workspace = "name:main",
+	workspace = "1",
 })
 
 -- Floating control panels.
