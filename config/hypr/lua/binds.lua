@@ -159,7 +159,8 @@ local function workspace_at(index, move_window)
 	return function()
 		local workspaces = {}
 		for _, ws in ipairs(hl.get_workspaces()) do
-			if not ws.name:match("^special:") then
+			-- 0.57 can report a workspace without an id; it cannot be addressed by number.
+			if ws.id and not ws.name:match("^special:") then
 				table.insert(workspaces, ws)
 			end
 		end
